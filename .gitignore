@@ -1,0 +1,11 @@
+.git/*
+.idea/*
+.idea/inspectionProfiles/*
+.idea/inspectionProfiles/*.xml
+.idea/inspectionProfiles/*.iml
+venv/
+__pycache__/
+.pytest_cache/
+output/logs/*
+*.log
+*.ini
