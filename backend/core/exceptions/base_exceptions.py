@@ -43,3 +43,52 @@ class UndefinedConfigException(BaseExceptions):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE101)
         kwargs.setdefault("code", BaseErrorEnum.BASE101.code)
         super().__init__(**kwargs)
+
+
+class SerializerException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE102)
+        kwargs.setdefault("code", BaseErrorEnum.BASE102.code)
+        super().__init__(**kwargs)
+
+
+class MaxTimeoutException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE103)
+        kwargs.setdefault("code", BaseErrorEnum.BASE103.code)
+        super().__init__(**kwargs)
+
+
+class ReadFileException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE104)
+        kwargs.setdefault("code", BaseErrorEnum.BASE104.code)
+        super().__init__(**kwargs)
+
+
+class ParameterException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE400)
+        kwargs.setdefault("code", BaseErrorEnum.BASE400.code)
+        super().__init__(**kwargs)
+
+
+class NotFoundException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE404)
+        kwargs.setdefault("code", BaseErrorEnum.BASE404.code)
+        super().__init__(**kwargs)
+
+
+class ReqInvalidException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE500)
+        kwargs.setdefault("code", BaseErrorEnum.BASE500.code)
+        super().__init__(**kwargs)
+
+
+class ResInvalidException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE502)
+        kwargs.setdefault("code", BaseErrorEnum.BASE502.code)
+        super().__init__(**kwargs)
