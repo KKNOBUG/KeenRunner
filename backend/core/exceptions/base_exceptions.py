@@ -66,6 +66,13 @@ class ReadFileException(BaseExceptions):
         super().__init__(**kwargs)
 
 
+class TypeRejectException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE105)
+        kwargs.setdefault("code", BaseErrorEnum.BASE105.code)
+        super().__init__(**kwargs)
+
+
 class ParameterException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE400)
