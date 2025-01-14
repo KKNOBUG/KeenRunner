@@ -9,23 +9,26 @@
 import shutil, os
 import threading
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import Union
 
-from backend.core.exceptions.base_exceptions import TypeRejectException
+from backend.core.exceptions.base_exceptions import (
+    TypeRejectException, NotFoundException, NotImplementedException
+)
 
 
 class FileUtils:
     """
     FileUtils类提供了一系列用于文件和目录操作的静态方法，采用单例模式确保在整个应用程序中只有一个实例。
     """
-
+    __slots__ = []
     # 用于存储该类的唯一实例
     __private_instance = None
     __private_initialized = False
     __private_lock = threading.Lock()
 
-    def __new__(cls, *args, **kwargs) -> object:
+    def __new__(cls, *args, **kwargs):
         """
         创建并返回类的唯一实例。
 
@@ -46,11 +49,11 @@ class FileUtils:
     @staticmethod
     def str_to_path(abspath: Union[str, Path]):
         """
-        将字符串路径转换为Path对象。
+        将输入的绝对路径（字符串或 Path 对象）转换为 Path 对象。
 
-        :param abspath: 字符串或Path对象表示的绝对路径
-        :return: Path对象
-        :raises TypeRejectException: 如果输入的路径不是字符串或Path对象类型
+        :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
+        :return: 转换后的 Path 对象
+        :raises TypeRejectException: 如果输入的路径不是字符串或 Path 对象类型
         """
         if not isinstance(abspath, (str, Path)):
             raise TypeRejectException()
@@ -60,12 +63,32 @@ class FileUtils:
 
         return abspath
 
+    def is_file(self, abspath: Union[str, Path]) -> bool:
+        """
+        检查指定路径是否为文件。
+
+        :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
+        :return: 如果是文件返回 True，否则返回 False
+        """
+        abspath = self.str_to_path(abspath=abspath)
+        return abspath.is_file()
+
+    def is_dir(self, abspath: Union[str, Path]) -> bool:
+        """
+        检查指定路径是否为目录。
+
+        :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
+        :return: 如果是目录返回 True，否则返回 False
+        """
+        abspath = self.str_to_path(abspath=abspath)
+        return abspath.is_dir()
+
     def delete_file(self, abspath: Union[str, Path]) -> bool:
         """
         删除指定路径的文件。
 
-        :param abspath: 要删除的文件的绝对路径
-        :return: 如果文件成功删除返回True，否则返回False
+        :param abspath: 要删除的文件的绝对路径，可以是字符串或 Path 对象
+        :return: 如果文件成功删除返回 True，否则返回 False
         """
         abspath = self.str_to_path(abspath=abspath)
         if abspath.exists() and abspath.is_file():
@@ -77,8 +100,8 @@ class FileUtils:
         """
         删除指定路径的目录及其所有内容。
 
-        :param abspath: 要删除的目录的绝对路径
-        :return: 如果目录成功删除返回True，否则返回False
+        :param abspath: 要删除的目录的绝对路径，可以是字符串或 Path 对象
+        :return: 如果目录成功删除返回 True，否则返回 False
         """
         abspath = self.str_to_path(abspath=abspath)
         if abspath.exists() and abspath.is_dir():
@@ -90,9 +113,9 @@ class FileUtils:
         """
         创建一个新文件。
 
-        :param abspath: 要创建的文件的绝对路径
-        :param safe: 如果为True，且文件已存在则不覆盖；如果为False，且文件已存在则删除并重新创建
-        :return: 如果文件成功创建返回True，否则返回False
+        :param abspath: 要创建的文件的绝对路径，可以是字符串或 Path 对象
+        :param safe: 如果为 True，且文件已存在则不覆盖；如果为 False，且文件已存在则删除并重新创建
+        :return: 如果文件成功创建返回 True，否则返回 False
         """
         abspath = self.str_to_path(abspath=abspath)
 
@@ -115,9 +138,9 @@ class FileUtils:
         """
         创建一个新目录。
 
-        :param abspath: 要创建的目录的绝对路径
-        :param safe: 如果为True，且目录已存在则不覆盖；如果为False，且目录已存在则删除并重新创建
-        :return: 如果目录成功创建返回True，否则返回False
+        :param abspath: 要创建的目录的绝对路径，可以是字符串或 Path 对象
+        :param safe: 如果为 True，且目录已存在则不覆盖；如果为 False，且目录已存在则删除并重新创建
+        :return: 如果目录成功创建返回 True，否则返回 False
         """
         abspath = self.str_to_path(abspath=abspath)
 
@@ -137,25 +160,122 @@ class FileUtils:
         """
         获取指定目录下的所有文件路径。
 
-        :param abspath: 目录的绝对路径
+        :param abspath: 目录的绝对路径，可以是字符串或 Path 对象
         :return: 包含所有文件路径的列表
         """
         filename = []
+        abspath = FileUtils.str_to_path(abspath)
+        if not abspath.exists() or not abspath.is_dir():
+            return filename
+
         # 获取所有文件下的子文件名称
         for root, dirs, files in os.walk(abspath):
             for _file_path in files:
                 path = os.path.join(root, _file_path)
                 filename.append(path)
+
         return filename
+
+    def get_file_size(self, abspath: Union[str, Path], unit: str = 'B') -> float:
+        """
+        获取指定文件的大小，并将其转换为指定的单位。
+
+        :param abspath: 文件的绝对路径，可以是字符串或 Path 对象
+        :param unit: 要转换的目标单位，可选值包括 'B'（字节）、'KB'（千字节）、'MB'（兆字节）、'GB'（吉字节）等
+        :return: 转换为指定单位后的文件大小，保留两位小数，四舍五入
+        :raises NotFoundException: 如果文件不存在
+        :raises NotImplementedException: 如果指定的单位不在支持的转换单位列表中
+        """
+        abspath = self.str_to_path(abspath=abspath)
+        if not abspath.exists():
+            raise NotFoundException(message=f"文件或目录不存在: {abspath}")
+
+        file_size_bytes = os.path.getsize(abspath)
+
+        # 定义单位转换的映射
+        unit_mapping = {
+            'B': 1,
+            'KB': 1024,
+            'MB': 1024 * 1024,
+            'GB': 1024 * 1024 * 1024,
+            # 可以根据需要添加更多单位
+        }
+
+        if unit not in unit_mapping:
+            raise NotImplementedException(message=f"给定换算单位无效，必须是其中之一: {', '.join(unit_mapping.keys())}")
+
+        # 转换文件大小到指定单位
+        file_size_unit = round(file_size_bytes / unit_mapping[unit], 2)
+
+        return file_size_unit
+
+    def get_last_modified_time(self, abspath: Union[str, Path]) -> datetime:
+        """
+        获取指定文件的最后修改时间。
+
+        :param abspath: 文件的绝对路径，可以是字符串或 Path 对象
+        :return: 文件的最后修改时间
+        :raises NotFoundException: 如果文件不存在
+        """
+        abspath = self.str_to_path(abspath=abspath)
+        if not abspath.exists():
+            raise NotFoundException(message=f"文件或目录不存在: {abspath}")
+
+        return datetime.fromtimestamp(os.path.getmtime(abspath))
+
+    def get_last_file_name(self, abspath: Union[str, Path]) -> str:
+        """
+        获取指定目录中最后创建的文件的名称。
+
+        :param abspath: 目录的绝对路径，可以是字符串或 Path 对象
+        :return: 最后创建的文件的名称
+        :raises NotFoundException: 如果目录不存在或目录中没有文件
+        """
+        abspath = self.str_to_path(abspath=abspath)
+        if not abspath.exists():
+            raise NotFoundException(message=f"目录不存在: {abspath}")
+
+        # 获取目录中的所有文件
+        files = [f for f in os.listdir(abspath) if os.path.isfile(os.path.join(abspath, f))]
+        if not files:
+            raise NotFoundException(message=f"目录中不存在文件: {abspath}")
+
+        # 按创建时间排序，取最后创建的文件
+        last_file_name = max(files, key=lambda f: os.path.getctime(os.path.join(abspath, f)))
+        return last_file_name
+
+    def get_last_dir_name(self, abspath: Union[str, Path]) -> str:
+        """
+        获取指定目录中最后创建的目录的名称。
+
+        :param abspath: 父目录的绝对路径，可以是字符串或 Path 对象
+        :return: 最后创建的目录的名称
+        """
+        last_dir_name = ""
+        last_dir_time = 0
+
+        # 遍历指定目录下的所子目录
+        abspath = self.str_to_path(abspath=abspath)
+        for entry in os.scandir(abspath):
+            if entry.is_dir(follow_symlinks=False):
+                # 获取目录的创建时间
+                dir_time = entry.stat().st_ctime
+
+                # 比较时间，如果当前目录创建时间晚于之前记录的，则更新记录
+                if dir_time > last_dir_time:
+                    last_dir_time = dir_time
+                    last_dir_name = entry.name
+
+        return last_dir_name
 
     @staticmethod
     def copy_directory(src_abspath: Union[str, Path], dst_abspath: Union[str, Path]) -> bool:
         """
         复制目录或文件到指定目标路径。
 
-        :param src_abspath: 源文件或目录的绝对路径
-        :param dst_abspath: 目标文件或目录的绝对路径
-        :return: 如果复制成功返回True，否则返回False
+        :param src_abspath: 源文件或目录的绝对路径，可以是字符串或 Path 对象
+        :param dst_abspath: 目标文件或目录的绝对路径，可以是字符串或 Path 对象
+        :return: 如果复制成功返回 True，否则返回 False
         """
         if not os.path.exists(src_abspath):
             return False
@@ -173,10 +293,10 @@ class FileUtils:
     @staticmethod
     def zip_files(zip_file_name: str, zip_dir_path: str) -> str:
         """
-        压缩指定目录下的所有文件到一个zip文件。
+        压缩指定目录下的所有文件到一个 zip 文件。
 
         :param zip_file_name: 压缩文件的名称
-        :param zip_dir_path: 要压缩的目录路径
+        :param zip_dir_path: 要压缩的目录的路径
         :return: 压缩文件的名称
         """
         parent_name = os.path.dirname(zip_dir_path)
