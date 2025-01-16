@@ -15,6 +15,7 @@ def singleton(cls):
     # 使用字典存储类对象的实例
     instances = {}
 
+    @functools.wraps(cls)
     def _singleton(*args, **kwargs):
         if cls not in instances:
             # 如果类没有被创建过，那就new个新对象并存储到字典中
@@ -25,7 +26,7 @@ def singleton(cls):
 
 
 # 锁状态装饰器
-def ensure_lock_ok(func):
+def synchronized(func):
     lock = threading.Lock()
 
     @functools.wraps(func)
