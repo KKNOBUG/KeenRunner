@@ -14,7 +14,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 from backend.common.database.database_sync_pool import DatabaseSyncPool
-from backend.core.decorators.block import ensure_lock_ok
+from backend.core.decorators.block import synchronized
 
 filterwarnings("ignore", category=pymysql.Warning)
 
@@ -45,7 +45,7 @@ class DatabaseSyncOperator(object):
             cls.__instance = super().__new__(cls)
         return cls.__instance
 
-    @ensure_lock_ok
+    @synchronized
     def execute_sql(self, sql: str, params: Optional[Union[str, list, tuple]] = None,
                     exe_many: bool = False, is_query_one: bool = False, is_query_all: bool = False) -> Any:
         """
