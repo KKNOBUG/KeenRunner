@@ -6,8 +6,8 @@
 @Module  : app_enum.py
 @DateTime: 2025/1/16 16:15
 """
-from base_enum_cls import StringEnum
-from base_error_enum import BaseErrorEnum
+from .base_enum_cls import StringEnum
+from .base_error_enum import BaseErrorEnum
 
 
 class Code(StringEnum):
