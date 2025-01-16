@@ -6,7 +6,10 @@
 @Module  : backend_main.py
 @DateTime: 2025/1/12 19:41
 """
+import sys
+
 from fastapi import FastAPI
+from starlette.staticfiles import StaticFiles
 
 from backend.core.response.base_response import SuccessResponse
 
@@ -27,6 +30,13 @@ app = FastAPI(
     debug=PROJECT_CONFIG.SERVER_DEBUG,
 
 )
+
+# 挂载静态文件
+app.mount("/static", StaticFiles(directory="static"), name="static")
+static_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
+static_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL
+static_modules["swagger_css_url"] = PROJECT_CONFIG.APP_OPENAPI_CSS_URL
+static_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
 
 
 @app.get("/")
