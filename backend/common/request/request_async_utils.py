@@ -16,9 +16,9 @@ from httpx import Response
 from aiohttp import ClientSession, ClientTimeout, HttpVersion, TCPConnector, ClientResponse, FormData
 
 from backend.common.file_utils import FileUtils
-from backend.core.exceptions.base_exceptions import ResInvalidException, ReqInvalidException, ParameterException
+from backend.core.exceptions.base_exceptions import ResInvalidException, ReqInvalidException
 
-from backend.enums.http_enum import HTTPMethod, ResponseFormat
+from backend.enums.http_enum import HTTPMethod
 
 
 class AsyncHttpUtils:
@@ -313,19 +313,16 @@ class AioHttpClient:
 
 class HttpxClient:
 
-    def __init__(self, timeout: float = 300, headers: Dict[str, Any] = None,
-                 respfmt: ResponseFormat = ResponseFormat.JSON, **kwargs) -> None:
+    def __init__(self, timeout: float = 300, headers: Dict[str, Any] = None, **kwargs) -> None:
         """
         异步 HTTP 请求客户端构造方法。
 
         :param timeout: 时间类型；非必填项；默认接口请求超时时间，单位为秒。
         :param headers: 字典类型；非必填项；默认接口请求携带的头部信息。
-        :param respfmt: 枚举类型；非必填项；默认接口响应内容格式，json / text / bytes。
         :param kwargs: 其他关键字参数。
         """
         self.default_timeout: float = timeout
         self.default_headers: dict = headers or {}
-        self.default_respfmt: ResponseFormat = respfmt
         self.kwargs = kwargs
         self.session: Optional[httpx.AsyncClient] = None
         self.response: Optional[httpx.Response] = None
