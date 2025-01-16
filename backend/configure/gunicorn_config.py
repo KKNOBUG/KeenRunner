@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : backend.main.py
+@Module  : gunicorn_config.py
 @DateTime: 2025/1/12 19:41
 """
 
