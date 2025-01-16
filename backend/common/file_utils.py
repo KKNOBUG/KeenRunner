@@ -6,6 +6,7 @@
 @Module  : file_utils.py
 @DateTime: 2025/1/14 12:28
 """
+import mimetypes
 import shutil, os
 import threading
 import zipfile
@@ -175,6 +176,33 @@ class FileUtils:
                 filename.append(path)
 
         return filename
+
+    @staticmethod
+    def get_file_info(abspath: Union[str, bytes, Path], filename: str = None) -> Union[bytes, tuple]:
+        """
+        获取文件的信息，包括文件名、文件字节内容和 MIME 类型。
+
+        :param abspath: 输入的文件信息，可以是文件路径（str 或 Path）或文件字节数据（bytes）
+        :param filename: 当输入为字节数据时需要提供的文件名
+        :return: 如果输入是文件路径，返回 (文件名, 文件字节内容, MIME 类型) 的元组；如果输入是字节数据，返回 (文件名, 字节数据, MIME 类型) 的元组；其他情况抛出 NotImplementedException
+        """
+        if isinstance(abspath, (str, Path)):
+            filename = os.path.basename(str(abspath))
+            with open(file=abspath, mode="rb") as file:
+                file_bytes = file.read()
+
+            mime_type = mimetypes.guess_type(abspath)[0]
+            return filename, file_bytes, mime_type
+
+        elif isinstance(abspath, bytes):
+            if not filename:
+                raise ValueError("文件名称在传递字节数据时为必填")
+
+            mime_type = mimetypes.guess_type(filename)[0]
+            return filename, abspath, mime_type
+
+        else:
+            raise NotImplementedException(message="未实现非文件路径或字节以外的功能")
 
     def get_file_size(self, abspath: Union[str, Path], unit: str = 'B') -> float:
         """
