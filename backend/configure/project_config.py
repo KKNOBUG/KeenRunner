@@ -8,8 +8,27 @@
 """
 import os.path
 
+from backend.common.shell_utils import ShellUtils
+from backend.core.decorators.block import singleton
 
+
+@singleton
 class ProjectConfig:
+    # 项目描述
+    APP_VERSION = "0.0.1"
+    APP_TITLE = "FastAPI Application"
+    APP_DESCRIPTION = "FastAPI Application"
+    APP_DOCS_URL = "/docs"
+    APP_REDOC_URL = "/redoc"
+    APP_SWAGGER_URL = "/openapi_url"
+
+    # 调试配置
+    SERVER_APP = "backend.main:app"
+    SERVER_HOST = ShellUtils.acquire_localhost()
+    SERVER_PORT = 8518
+    SERVER_DEBUG = True
+    SERVER_DELAY = 5
+
     # 日志相关参数配置
     # 文件名称前缀
     LOGGER_FILE_NAME_PREFIX = "执行日志"
