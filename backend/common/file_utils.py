@@ -6,11 +6,7 @@
 @Module  : file_utils.py
 @DateTime: 2025/1/14 12:28
 """
-import glob
-import mimetypes
-import shutil, os
-import threading
-import zipfile
+import shutil, os, threading, glob, mimetypes, zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Union, Optional
@@ -162,14 +158,15 @@ class FileUtils:
                      startswith: Optional[str] = None, endswith: Optional[str] = None,
                      exclude_startswith: Optional[str] = None, exclude_endswith: Optional[str] = None) -> list:
         """
-        获取指定路径下所有的目录（不含子目录内容），支持条件过滤
-        :param abspath: 在指定路径下搜索
-        :param return_full_path: 是否返回目录目录的完整路径，布尔类型，默认为True表示返回完整路径
-        :param startswith: 查找以特定字符串开头的目录名，字符串类型，默认为None表示无目录名过滤
-        :param endswith: 查找以特定字符串结尾的目录名，字符串类型，默认为None表示无目录名过滤
-        :param exclude_startswith: 排除以特定字符串开头的目录名，字符串类型，默认为None表示无目录名过滤
-        :param exclude_endswith:排除以特定字符串结尾的目录名，字符串类型，默认为None表示无目录名过滤
-        :return: 过滤后的目录名列表
+        获取指定路径下的所有目录，并根据条件进行过滤。
+
+        :param abspath: 要查找目录的绝对路径，可以是字符串或 Path 对象。
+        :param return_full_path: 是否返回完整路径。默认为 True。
+        :param startswith: 仅返回以该字符串开头的目录名。默认为 None。
+        :param endswith: 仅返回以该字符串结尾的目录名。默认为 None。
+        :param exclude_startswith: 排除以该字符串开头的目录名。默认为 None。
+        :param exclude_endswith: 排除以该字符串结尾的目录名。默认为 None。
+        :return: 满足条件的目录列表，如果 return_full_path 为 True，则返回完整路径，否则返回目录的基本名称。
         """
         # 获取指定路径下所有的目录
         dirs = [d for d in glob.glob(os.path.join(abspath, "*")) if os.path.isdir(d)]
@@ -192,25 +189,49 @@ class FileUtils:
         return [os.path.basename(d) for d in dirs]
 
     @staticmethod
-    def get_all_files(abspath: Union[str, Path]) -> list:
+    def get_all_files(abspath: Union[str, Path], return_full_path: bool = True, return_precut_path: bool = False,
+                      startswith: Optional[str] = None, endswith: Optional[str] = None, extension: Optional[str] = None,
+                      exclude_startswith: Optional[str] = None, exclude_endswith: Optional[str] = None,
+                      exclude_extension: Optional[str] = None) -> list:
         """
-        获取指定目录下的所有文件路径。
+        获取指定路径下的所有文件，并根据条件进行过滤。
 
-        :param abspath: 目录的绝对路径，可以是字符串或 Path 对象
-        :return: 包含所有文件路径的列表
+        :param abspath: 要查找文件的绝对路径，可以是字符串或 Path 对象。
+        :param return_full_path: 是否返回完整路径。默认为 True。
+        :param return_precut_path: 是否返回包含额外前缀的路径，默认为 False。
+        :param startswith: 仅返回以该字符串开头的文件名。默认为 None。
+        :param endswith: 仅返回以该字符串结尾的文件名（不包括扩展名）。默认为 None。
+        :param extension: 仅返回具有该扩展名的文件。默认为 None。
+        :param exclude_startswith: 排除以该字符串开头的文件名。默认为 None。
+        :param exclude_endswith: 排除以该字符串结尾的文件名（不包括扩展名）。默认为 None。
+        :param exclude_extension: 排除具有该扩展名的文件。默认为 None。
+        :return: 满足条件的文件列表，如果 return_full_path 为 True，则返回完整路径；如果 return_precut_path 为 True，则返回带有额外前缀的文件名；否则返回文件的基本名称。
         """
-        filename = []
-        abspath = FileUtils.str_to_path(abspath)
-        if not abspath.exists() or not abspath.is_dir():
-            return filename
+        # 获取指定路径下所有的目录
+        files = [file for file in glob.glob(os.path.join(abspath, "*")) if os.path.isfile(file)]
 
-        # 获取所有文件下的子文件名称
-        for root, dirs, files in os.walk(abspath):
-            for _file_path in files:
-                path = os.path.join(root, _file_path)
-                filename.append(path)
+        # 过滤文件名
+        if startswith:
+            files = [file for file in files if os.path.basename(file).startswith(startswith)]
+        if endswith:
+            files = [file for file in files if os.path.splitext(os.path.basename(file))[0].endswith(endswith)]
+        if extension:
+            files = [file for file in files if file.endswith(extension)]
 
-        return filename
+        # 排除文件名
+        if exclude_startswith:
+            files = [file for file in files if os.path.basename(file).startswith(exclude_startswith)]
+        if exclude_endswith:
+            files = [file for file in files if os.path.splitext(os.path.basename(file))[0].endswith(exclude_endswith)]
+        if exclude_extension:
+            files = [file for file in files if file.endswith(exclude_extension)]
+
+        if return_full_path:
+            return files
+        elif return_precut_path:
+            return [return_precut_path + os.path.splitext(os.path.basename(file))[0] for file in files]
+
+        return [os.path.basename(file) for file in files]
 
     @staticmethod
     def get_file_info(abspath: Union[str, bytes, Path], filename: str = None) -> Union[bytes, tuple]:
