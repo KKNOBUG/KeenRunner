@@ -357,6 +357,7 @@ class HttpxClient:
         :param params: 字典类型；非必填项；请求参数（查询字符串：k1=v1&k2=v2）。
         :param data: 字典类型；非必填项；请求参数（表单）。
         :param json: 字典类型；非必填项；请求参数（对象）。
+        :param headers: 字典类型；非必填项；默认接口请求携带的头部信息。
         :param timeout: 接口超时时间。
         :param kwargs: 其他关键字参数（通过底层代码查看可传递关键字）。
         :return: httpx.Response 对象。
