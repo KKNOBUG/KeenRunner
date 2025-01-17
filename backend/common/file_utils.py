@@ -6,13 +6,14 @@
 @Module  : file_utils.py
 @DateTime: 2025/1/14 12:28
 """
+import glob
 import mimetypes
 import shutil, os
 import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
 
 from backend.core.exceptions.base_exceptions import (
     TypeRejectException, NotFoundException, NotImplementedException
@@ -155,6 +156,40 @@ class FileUtils:
             return True
 
         return False
+
+    @staticmethod
+    def get_all_dirs(abspath: Union[str, Path], return_full_path: bool = True,
+                     startswith: Optional[str] = None, endswith: Optional[str] = None,
+                     exclude_startswith: Optional[str] = None, exclude_endswith: Optional[str] = None) -> list:
+        """
+        获取指定路径下所有的目录（不含子目录内容），支持条件过滤
+        :param abspath: 在指定路径下搜索
+        :param return_full_path: 是否返回目录目录的完整路径，布尔类型，默认为True表示返回完整路径
+        :param startswith: 查找以特定字符串开头的目录名，字符串类型，默认为None表示无目录名过滤
+        :param endswith: 查找以特定字符串结尾的目录名，字符串类型，默认为None表示无目录名过滤
+        :param exclude_startswith: 排除以特定字符串开头的目录名，字符串类型，默认为None表示无目录名过滤
+        :param exclude_endswith:排除以特定字符串结尾的目录名，字符串类型，默认为None表示无目录名过滤
+        :return: 过滤后的目录名列表
+        """
+        # 获取指定路径下所有的目录
+        dirs = [d for d in glob.glob(os.path.join(abspath, "*")) if os.path.isdir(d)]
+
+        # 过滤目录名
+        if startswith:
+            dirs = [d for d in dirs if os.path.basename(d).startswith(startswith)]
+        if endswith:
+            dirs = [d for d in dirs if os.path.basename(d).endswith(endswith)]
+
+        # 排除目录名
+        if exclude_startswith:
+            dirs = [d for d in dirs if not os.path.basename(d).startswith(exclude_startswith)]
+        if exclude_endswith:
+            dirs = [d for d in dirs if not os.path.basename(d).endswith(exclude_endswith)]
+
+        if return_full_path:
+            return dirs
+
+        return [os.path.basename(d) for d in dirs]
 
     @staticmethod
     def get_all_files(abspath: Union[str, Path]) -> list:
