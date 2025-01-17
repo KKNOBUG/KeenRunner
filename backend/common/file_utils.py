@@ -189,8 +189,11 @@ class FileUtils:
         return [os.path.basename(d) for d in dirs]
 
     @staticmethod
-    def get_all_files(abspath: Union[str, Path], return_full_path: bool = True, return_precut_path: bool = False,
-                      startswith: Optional[str] = None, endswith: Optional[str] = None, extension: Optional[str] = None,
+    def get_all_files(abspath: Union[str, Path],
+                      return_full_path: bool = True,
+                      return_precut_path: Optional[str] = None,
+                      startswith: Optional[str] = None, endswith: Optional[str] = None,
+                      extension: Optional[str] = None,
                       exclude_startswith: Optional[str] = None, exclude_endswith: Optional[str] = None,
                       exclude_extension: Optional[str] = None) -> list:
         """

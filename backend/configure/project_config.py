@@ -7,7 +7,9 @@
 @DateTime: 2025/1/15 16:08
 """
 import os.path
+from pathlib import Path
 
+from backend.common.file_utils import FileUtils
 from backend.common.shell_utils import ShellUtils
 
 
@@ -64,6 +66,74 @@ class ProjectConfig:
     OUTPUT_XLSX_DIR = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
     SERVICES_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "services"))
     STATIC_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "static"))
+
+    # 跨域配置
+    CORS_ORIGINS = [
+        "http://localhost",
+        "http://localhost:5000",
+        "http://localhost:8000",
+        "http://localhost:8515",
+        "*",
+    ]
+    CORS_ALLOW_CREDENTIALS = True
+    CORS_ALLOW_METHODS = ["*"]
+    CORS_ALLOW_HEADERS = ["*"]
+    CORS_EXPOSE_METHODS = ["*"]
+    CORS_MAX_AGE = 600
+
+    # 应用注册
+    APPLICATIONS_MODULE = "applications"
+    APPLICATIONS_INSTALLED = FileUtils.get_all_dirs(abspath=APPLICATIONS_DIR, return_full_path=False)
+
+    @property
+    def APPLICATIONS_MODELS(self):
+        return [
+            models
+            for app in self.APPLICATIONS_INSTALLED
+            for models in FileUtils.get_all_files(
+                abspath=Path(f"{self.APPLICATIONS_DIR}\\{app}\\models"),
+                return_full_path=False,
+                return_precut_path=f"{self.APPLICATIONS_MODULE}.{app}.models.",
+                endswith="model",
+                exclude_startswith="__",
+                exclude_endswith="__",
+            )
+        ]
+
+    # 数据库配置
+    # DATABASE_USERNAME = quote("admin@usr")
+    # DATABASE_PASSWORD = quote("admin@Pwd123")
+    DATABASE_USERNAME = "admin@usr"
+    DATABASE_PASSWORD = "admin@Pwd123"
+    DATABASE_HOST = ""
+    DATABASE_PORT = ""
+    DATABASE_NAME = ""
+    DATABASE_URL = f"mysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}?charset=utf8mb4&time_zone=+08:00"
+    DATABASE_CONNECTIONS = {
+        "default": {
+            "engine": "tortoise.backends.mysql",  # 使用mysql引擎
+            "db_url": DATABASE_URL,
+            "credentials": {
+                "host": DATABASE_HOST,  # 数据库地址
+                "port": DATABASE_PORT,  # 数据库端口
+                "user": DATABASE_USERNAME,  # 数据库账户
+                "password": DATABASE_PASSWORD,  # 数据库密码
+                "database": DATABASE_NAME,  # 数据库名称
+                "minsize": 10,  # 连接池最小连接数
+                "maxsize": 40,  # 连接池最大连接数
+                "charset": "utf8mb4",  # 数据库字符编码
+                "echo": False,  # 数据库是否开启SQL语句回响
+                "autocommit": False  # 数据库是否开启SQL语句自动提交
+            }
+        }
+    }
+
+    # Redis 配置
+    REDIS_USERNAME = ""
+    REDIS_PASSWORD = ""
+    REDIS_HOST = ""
+    REDIS_PORT = ""
+    REDIS_URL = f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
 
 
 PROJECT_CONFIG = ProjectConfig()
