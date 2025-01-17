@@ -9,3 +9,7 @@ __pycache__/
 output/logs/*
 *.log
 *.ini
+
+# 前端
+.vscode/*
+.node_modules/*
