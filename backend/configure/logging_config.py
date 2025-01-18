@@ -9,7 +9,7 @@
 import logging.config
 from datetime import datetime
 from typing import Dict, Any
-from backend.core import PROJECT_CONFIG
+from backend import PROJECT_CONFIG
 
 DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
     'version': 1,

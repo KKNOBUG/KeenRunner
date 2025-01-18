@@ -30,6 +30,7 @@ class ProjectConfig:
     APP_OPENAPI_JS_URL = "/static/openapi/swagger-ui-bundle.js"
     APP_OPENAPI_CSS_URL = "/static/openapi/swagger-ui.css"
     APP_OPENAPI_FAVICON_URL = "/static/openapi/favicon.png"
+    APP_OPENAPI_VERSION = "3.0.2"
 
     # 调试配置
     SERVER_APP = "backend_main:app"

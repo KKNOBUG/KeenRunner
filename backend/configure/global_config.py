@@ -6,12 +6,10 @@
 @Module  : global_config.py
 @DateTime: 2025/1/16 15:30
 """
-from backend.core.decorators.block import singleton
 
 
-@singleton
 class GlobalConfig:
-    ...
+    ROUTE_ALIAS = {}
 
 
 GLOBAL_CONFIG = GlobalConfig()
