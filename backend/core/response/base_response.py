@@ -158,6 +158,16 @@ class MethodNotAllowedResponse(BaseResponse):
         super(MethodNotAllowedResponse, self).__init__(message=message, data=data)
 
 
+class RequestTimeoutResponse(BaseResponse):
+    code = Code.CODE408
+    status = Status.FAILURE
+    message = Message.MESSAGE408
+    data = {}
+
+    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
+        super(RequestTimeoutResponse, self).__init__(message=message, data=data)
+
+
 class LimiterResponse(BaseResponse):
     code = Code.CODE429
     status = Status.FAILURE
@@ -178,10 +188,20 @@ class InternalErrorResponse(BaseResponse):
         super(InternalErrorResponse, self).__init__(message=message, data=data)
 
 
-class GatewayTimeoutResponse(BaseResponse):
-    code = Code.CODE500
+class BadGatewayResponse(BaseResponse):
+    code = Code.CODE502
     status = Status.FAILURE
-    message = Message.MESSAGE500
+    message = Message.MESSAGE502
+    data = {}
+
+    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
+        super(BadGatewayResponse, self).__init__(message=message, data=data)
+
+
+class GatewayTimeoutResponse(BaseResponse):
+    code = Code.CODE504
+    status = Status.FAILURE
+    message = Message.MESSAGE504
     data = {}
 
     def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
