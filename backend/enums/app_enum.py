@@ -19,6 +19,7 @@ class Code(StringEnum):
     CODE403 = BaseErrorEnum.BASE403.code
     CODE404 = BaseErrorEnum.BASE404.code
     CODE405 = BaseErrorEnum.BASE405.code
+    CODE408 = BaseErrorEnum.BASE408.code
     CODE429 = BaseErrorEnum.BASE429.code
 
     CODE500 = BaseErrorEnum.BASE500.code
@@ -35,6 +36,7 @@ class Message(StringEnum):
     MESSAGE403 = BaseErrorEnum.BASE403.value
     MESSAGE404 = BaseErrorEnum.BASE404.value
     MESSAGE405 = BaseErrorEnum.BASE405.value
+    MESSAGE408 = BaseErrorEnum.BASE408.value
     MESSAGE429 = BaseErrorEnum.BASE429.value
 
     MESSAGE500 = BaseErrorEnum.BASE500.value
