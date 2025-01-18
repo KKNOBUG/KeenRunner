@@ -7,14 +7,18 @@
 @DateTime: 2025/1/12 19:41
 """
 import sys
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from starlette.staticfiles import StaticFiles
+from fastapi.routing import APIRoute
 
+from backend.core.initalization.app_initalization import (
+    register_logging, register_exceptions, register_routers
+)
 from backend.core.response.base_response import SuccessResponse
 
 try:
-    from backend.core import PROJECT_CONFIG
+    from backend import PROJECT_CONFIG, GLOBAL_CONFIG
 except ImportError as e:
     from backend.core.exceptions.base_exceptions import NotImplementedException
 
@@ -31,13 +35,18 @@ app = FastAPI(
 
 )
 
-# 挂载静态文件
-app.mount("/static", StaticFiles(directory="static"), name="static")
-static_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
-static_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL
-static_modules["swagger_css_url"] = PROJECT_CONFIG.APP_OPENAPI_CSS_URL
-static_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            GLOBAL_CONFIG.ROUTE_ALIAS[route.path] = route.summary
+
+    yield
+
+register_logging()
+register_exceptions(app)
+register_routers(app)
 
 @app.get("/")
 async def root():
@@ -53,5 +62,5 @@ if __name__ == '__main__':
         port=PROJECT_CONFIG.SERVER_PORT,
         reload=PROJECT_CONFIG.SERVER_DEBUG,
         reload_delay=PROJECT_CONFIG.SERVER_DELAY,
-        # log_config=None,
+        log_config=None,
     )
