@@ -10,6 +10,7 @@
 
 class GlobalConfig:
     ROUTE_ALIAS = {}
+    DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 GLOBAL_CONFIG = GlobalConfig()

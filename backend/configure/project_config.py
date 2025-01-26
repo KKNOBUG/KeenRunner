@@ -39,6 +39,11 @@ class ProjectConfig:
     SERVER_DEBUG = True
     SERVER_DELAY = 5
 
+    # 安全认证配置
+    AUTH_SECRET_KEY: str = "3488a63e1765035d386f05409663f55c83bfae3b3c61a932744b20ad14244dcf"  # openssl rand -hex 32
+    AUTH_JWT_ALGORITHM: str = "HS256"
+    AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
+
     # 日志相关参数配置
     # 文件名称前缀
     LOGGER_FILE_NAME_PREFIX = "执行日志"
@@ -83,32 +88,38 @@ class ProjectConfig:
     CORS_MAX_AGE = 600
 
     # 应用注册
-    APPLICATIONS_MODULE = "applications"
-    APPLICATIONS_INSTALLED = FileUtils.get_all_dirs(abspath=APPLICATIONS_DIR, return_full_path=False)
+    APPLICATIONS_MODULE = "backend.applications"
+    APPLICATIONS_INSTALLED = FileUtils.get_all_dirs(
+        abspath=APPLICATIONS_DIR,
+        return_full_path=False,
+        exclude_startswith="__",
+        exclude_endswith="__",
+    )
 
     @property
     def APPLICATIONS_MODELS(self):
-        return [
+        models = [
             models
             for app in self.APPLICATIONS_INSTALLED
             for models in FileUtils.get_all_files(
-                abspath=Path(f"{self.APPLICATIONS_DIR}\\{app}\\models"),
+                abspath=os.path.join(self.APPLICATIONS_DIR, app, "models"),
                 return_full_path=False,
                 return_precut_path=f"{self.APPLICATIONS_MODULE}.{app}.models.",
                 endswith="model",
                 exclude_startswith="__",
-                exclude_endswith="__",
+                exclude_endswith="__.py"
             )
         ]
+        return models
 
     # 数据库配置
     # DATABASE_USERNAME = quote("admin@usr")
     # DATABASE_PASSWORD = quote("admin@Pwd123")
-    DATABASE_USERNAME = "admin@usr"
-    DATABASE_PASSWORD = "admin@Pwd123"
-    DATABASE_HOST = ""
-    DATABASE_PORT = ""
-    DATABASE_NAME = ""
+    DATABASE_USERNAME = "root"
+    DATABASE_PASSWORD = "root"
+    DATABASE_HOST = "10.211.55.3"
+    DATABASE_PORT = "3306"
+    DATABASE_NAME = "krun"
     DATABASE_URL = f"mysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}?charset=utf8mb4&time_zone=+08:00"
     DATABASE_CONNECTIONS = {
         "default": {
