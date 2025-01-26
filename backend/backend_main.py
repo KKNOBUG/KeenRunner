@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
-from backend.core.initalization.app_initalization import (
-    register_logging, register_exceptions, register_routers
+from backend.core.initalization.app_initialization import (
+    register_logging, register_exceptions, register_routers, register_database, register_middlewares
 )
 from backend.core.response.base_response import SuccessResponse
 
@@ -44,9 +44,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
+
 register_logging()
+register_database(app)
 register_exceptions(app)
+register_middlewares(app)
 register_routers(app)
+
 
 @app.get("/")
 async def root():
