@@ -223,11 +223,11 @@ class FileUtils:
 
         # 排除文件名
         if exclude_startswith:
-            files = [file for file in files if os.path.basename(file).startswith(exclude_startswith)]
+            files = [file for file in files if not os.path.basename(file).startswith(exclude_startswith)]
         if exclude_endswith:
-            files = [file for file in files if os.path.splitext(os.path.basename(file))[0].endswith(exclude_endswith)]
+            files = [file for file in files if not os.path.splitext(os.path.basename(file))[0].endswith(exclude_endswith)]
         if exclude_extension:
-            files = [file for file in files if file.endswith(exclude_extension)]
+            files = [file for file in files if not file.endswith(exclude_extension)]
 
         if return_full_path:
             return files
