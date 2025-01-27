@@ -20,11 +20,12 @@ from tortoise.contrib.fastapi import register_tortoise
 from backend import PROJECT_CONFIG
 from backend.applications.example.views.example_view import example
 from backend.applications.base.views.token_view import base
-from backend.applications.users.views.users import user
+from backend.applications.users.views.user_view import user
 from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
 from backend.core.exceptions.http_exceptions import (
     validation_exception_handler, http_exception_handler, app_exception_handler
 )
+from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
 
 
 def register_logging() -> None:
@@ -80,6 +81,7 @@ def register_middlewares(app: FastAPI):
         expose_headers=PROJECT_CONFIG.CORS_EXPOSE_METHODS,
         max_age=PROJECT_CONFIG.CORS_MAX_AGE,
     )
+    app.add_middleware(ReqResLoggerMiddleware)
 
 
 def register_routers(app: FastAPI) -> None:
