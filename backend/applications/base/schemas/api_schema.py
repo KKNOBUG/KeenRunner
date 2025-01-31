@@ -15,6 +15,7 @@ class ApiCreate(BaseModel):
     path: str = Field(example="/getAccessToken")
     method: str = Field(example="POST")
     summary: str = Field(example="Base-用户鉴权")
+    description: str = Field(default=None, example="根据用户账号和密码生成token用于身份鉴权")
     tags: str = Field(example="基础服务")
     is_active: Optional[bool] = True
 
@@ -27,5 +28,6 @@ class ApiUpdate(BaseModel):
     path: Optional[str] = None
     method: Optional[str] = None
     summary: Optional[str] = None
+    description: Optional[str] = None
     tags: Optional[str] = None
     is_active: Optional[bool] = True

@@ -15,16 +15,14 @@ from backend.applications.base.schemas.token_schema import CredentialsSchema, JW
 from backend.applications.users.models.user_model import User
 from backend.applications.users.services.user_crud import USER_CRUD
 from backend.core.exceptions.base_exceptions import NotFoundException
-from backend.core.response.base_response import (
-    SuccessResponse,
-    FailureResponse, NotFoundResponse,
-)
+from backend.core.response.base_response import SuccessResponse, NotFoundResponse
+
 from backend.services.password import create_access_token
 
-base = APIRouter()
+auth = APIRouter()
 
 
-@base.post("/getAccessToken", summary="Base-用户鉴权")
+@auth.post("/getAccessToken", summary="Base-用户鉴权")
 async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)

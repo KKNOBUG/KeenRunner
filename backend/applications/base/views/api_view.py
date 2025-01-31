@@ -15,9 +15,8 @@ from tortoise.expressions import Q
 from backend.applications.base.schemas.api_schema import ApiCreate, ApiUpdate
 from backend.applications.base.services.api_crud import API_CRUD
 from backend.core.response.base_response import (
-    SuccessResponse,
-    FailureResponse,
-    DataAlreadyExistsResponse, NotFoundResponse, ParameterResponse,
+    SuccessResponse, FailureResponse, DataAlreadyExistsResponse,
+    NotFoundResponse, ParameterResponse,
 )
 
 api = APIRouter()

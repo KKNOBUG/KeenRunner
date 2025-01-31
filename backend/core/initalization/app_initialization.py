@@ -19,7 +19,8 @@ from tortoise.contrib.fastapi import register_tortoise
 
 from backend import PROJECT_CONFIG
 from backend.applications.example.views.example_view import example
-from backend.applications.base.views.auth_view import base
+from backend.applications.base.views.api_view import api
+from backend.applications.base.views.auth_view import auth
 from backend.applications.users.views.user_view import user
 from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
 from backend.core.exceptions.http_exceptions import (
@@ -94,5 +95,6 @@ def register_routers(app: FastAPI) -> None:
     static_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
     # 挂在路由蓝图
     app.include_router(router=example, prefix="/example", tags=["示例"])
-    app.include_router(router=base, prefix="/base", tags=["基础服务"])
+    app.include_router(router=auth, prefix="/auth", tags=["基础服务", "用户鉴权"])
+    app.include_router(router=api, prefix="/api", tags=["基础服务", "后台接口"])
     app.include_router(router=user, prefix="/user", tags=["用户服务"])
