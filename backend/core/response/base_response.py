@@ -6,6 +6,7 @@
 @Module  : base_response.py
 @DateTime: 2025/1/16 16:14
 """
+import json
 from typing import Optional, Union, List, Any, Dict
 
 from fastapi.encoders import jsonable_encoder
@@ -38,7 +39,8 @@ class BaseResponse(JSONResponse):
             self.status = status.value
 
         if message and isinstance(message, str):
-            self.message = message
+            status: bool = "错误代码" in message and "错误信息" in message
+            self.message = json.loads(message)["错误信息"] if status else message
         elif message and isinstance(message, Message):
             self.message = message.value
 

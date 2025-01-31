@@ -30,12 +30,12 @@ class UserCrud(BaseCrud[User, UserCreate, UserUpdate]):
     async def authenticate(self, credentials: CredentialsSchema) -> Optional[Union[BaseExceptions, User]]:
         user = await self.model.filter(username=credentials.username).first()
         if not user:
-            return NotFoundException(message="无效的用户名")
+            raise NotFoundException(message="用户名不存在")
         verified = verify_password(credentials.password, user.password)
         if not verified:
-            raise NotFoundException(message="密码错误!")
+            raise NotFoundException(message="用户名或密码错误")
         if not user.is_active:
-            raise NotFoundException(message="用户已被禁用")
+            raise NotFoundException(message="用户无效或已被禁用")
         return user
 
     async def update_last_login(self, id: int) -> None:

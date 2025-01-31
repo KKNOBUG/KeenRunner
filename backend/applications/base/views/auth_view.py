@@ -27,7 +27,7 @@ async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)
     except NotFoundException as e:
-        return NotFoundResponse(data=str(e))
+        return NotFoundResponse(message=str(e), data=credentials.dict())
 
     await USER_CRUD.update_last_login(user.id)
     access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -43,5 +43,10 @@ async def get_login_access_token(credentials: CredentialsSchema):
             )
         ),
         username=user.username,
+        alias=user.alias,
+        email=user.email,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        last_login=user.last_login
     )
     return SuccessResponse(data=data.model_dump())

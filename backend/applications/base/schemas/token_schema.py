@@ -19,6 +19,11 @@ class CredentialsSchema(BaseModel):
 class JWTOut(BaseModel):
     access_token: str
     username: str
+    alias: str
+    email: str
+    is_active: bool
+    is_superuser: bool
+    last_login: datetime
 
 
 class JWTPayload(BaseModel):
