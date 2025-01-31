@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import Request
 from starlette.types import ASGIApp, Scope, Receive, Send
 
-from backend import GLOBAL_CONFIG, LOGGER
+from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
 
 
 class ReqResLoggerMiddleware:
@@ -43,12 +43,12 @@ class ReqResLoggerMiddleware:
         request_url: str = str(request_instance.url)
         request_path: str = request_instance.scope.get("path")
         if request_path in (
-                "/docs",
-                "/openapi_url",
-                "/openapi.json",
-                "/static/swagger-ui/favicon-32x32.png",
-                "/static/swagger-ui/swagger-ui.css",
-                "/static/swagger-ui/swagger-ui-bundle.js",
+                PROJECT_CONFIG.APP_DOCS_URL,
+                PROJECT_CONFIG.APP_REDOC_URL,
+                PROJECT_CONFIG.APP_OPENAPI_URL,
+                PROJECT_CONFIG.APP_OPENAPI_JS_URL,
+                PROJECT_CONFIG.APP_OPENAPI_CSS_URL,
+                PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL,
         ):
             await self.app(scope, receive, send)
             return
