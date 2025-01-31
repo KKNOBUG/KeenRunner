@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : tokens_schema.py
+@Module  : token_schema.py
 @DateTime: 2025/1/18 12:07
 """
 from datetime import datetime
