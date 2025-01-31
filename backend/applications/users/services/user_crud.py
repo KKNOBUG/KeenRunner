@@ -9,7 +9,7 @@
 from datetime import datetime
 from typing import Optional, Union
 
-from backend.applications.base.schemas.tokens_schema import CredentialsSchema
+from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.users.models.user_model import User
 from backend.applications.users.schemas.user_schmea import UserCreate, UserUpdate
 from backend.core.exceptions.base_exceptions import NotFoundException, BaseExceptions
@@ -53,5 +53,6 @@ class UserCrud(BaseCrud[User, UserCreate, UserUpdate]):
         user_instance.is_active = 0
         await user_instance.save()
         return user_instance
+
 
 USER_CRUD = UserCrud()

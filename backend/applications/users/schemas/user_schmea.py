@@ -6,7 +6,7 @@
 @Module  : user_schmea.py
 @DateTime: 2025/1/18 11:58
 """
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
