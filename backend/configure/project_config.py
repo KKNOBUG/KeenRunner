@@ -27,9 +27,9 @@ class ProjectConfig:
     APP_DOCS_URL = "/krun/docs"
     APP_REDOC_URL = "/krun/redoc"
     APP_OPENAPI_URL = "/krun/openapi_url"
-    APP_OPENAPI_JS_URL = "/static/openapi/swagger-ui-bundle.js"
-    APP_OPENAPI_CSS_URL = "/static/openapi/swagger-ui.css"
-    APP_OPENAPI_FAVICON_URL = "/static/openapi/favicon.png"
+    APP_OPENAPI_JS_URL = "/static/swagger-ui/swagger-ui-bundle.js"
+    APP_OPENAPI_CSS_URL = "/static/swagger-ui/swagger-ui.css"
+    APP_OPENAPI_FAVICON_URL = "/static/swagger-ui/favicon-32x32.png"
     APP_OPENAPI_VERSION = "3.0.2"
 
     # 调试配置
