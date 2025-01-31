@@ -118,6 +118,16 @@ class FileTooManyResponse(BaseResponse):
         super(FileTooManyResponse, self).__init__(message=message, data=data)
 
 
+class DataAlreadyExistsResponse(BaseResponse):
+    code = Code.CODE400
+    status = Status.FAILURE
+    message = "数据或文件已存在"
+    data = {}
+
+    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
+        super(DataAlreadyExistsResponse, self).__init__(message=message, data=data)
+
+
 class UnauthorizedResponse(BaseResponse):
     code = Code.CODE401
     status = Status.FAILURE
