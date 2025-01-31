@@ -11,7 +11,7 @@ from passlib import pwd
 from passlib.context import CryptContext
 
 from backend import PROJECT_CONFIG
-from backend.applications.base.schemas.tokens_schema import JWTPayload
+from backend.applications.base.schemas.token_schema import JWTPayload
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
