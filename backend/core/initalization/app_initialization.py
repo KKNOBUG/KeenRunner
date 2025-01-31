@@ -19,7 +19,7 @@ from tortoise.contrib.fastapi import register_tortoise
 
 from backend import PROJECT_CONFIG
 from backend.applications.example.views.example_view import example
-from backend.applications.base.views.token_view import base
+from backend.applications.base.views.auth_view import base
 from backend.applications.users.views.user_view import user
 from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
 from backend.core.exceptions.http_exceptions import (
