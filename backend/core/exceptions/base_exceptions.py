@@ -31,6 +31,13 @@ class BaseExceptions(Exception):
         return self._error
 
 
+class ImportedException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE100)
+        kwargs.setdefault("code", BaseErrorEnum.BASE100.code)
+        super().__init__(**kwargs)
+
+
 class NotImplementedException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE100)

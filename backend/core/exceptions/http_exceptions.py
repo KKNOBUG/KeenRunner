@@ -29,21 +29,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # HTTP请求异常封装
 async def http_exception_handler(request: Request, exc: HTTPException):
-    print("request:", type(request), request)
-    print("exc:", type(exc), exc)
-    print("exc.status_code:", type(exc.status_code), exc.status_code)
 
     if exc.status_code == status.HTTP_403_FORBIDDEN:
-        return ForbiddenResponse(message=f"请求服务 {request.method} 不被接受")
+        return ForbiddenResponse(message=f"请求服务 {request.method} 未被授权")
 
     elif exc.status_code == status.HTTP_404_NOT_FOUND:
-        return NotFoundResponse(message=f"请求服务 {request.url.path} 不可访达")
+        return NotFoundResponse(message=f"请求资源 {request.url.path} 不可访达")
 
     elif exc.status_code == status.HTTP_405_METHOD_NOT_ALLOWED:
-        return MethodNotAllowedResponse(message=f"请求服务 {request.method} 不被允许")
+        return MethodNotAllowedResponse(message=f"请求方式 {request.method} 不被允许")
 
     elif exc.status_code == status.HTTP_408_REQUEST_TIMEOUT:
-        return RequestTimeoutResponse(message=f"请求服务 {request.method} 等待超时")
+        return RequestTimeoutResponse(message=f"请求数据 {request.method} 等待超时")
 
     elif exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
         return LimiterResponse(message=f"请求速度 {request.method} 不被允许")
