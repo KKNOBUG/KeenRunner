@@ -6,10 +6,10 @@
 @Module  : http_enum.py
 @DateTime: 2025/1/13 12:57
 """
-from backend.enums.base_enum_cls import BaseEnumCls
+from backend.enums.base_enum_cls import StringEnum
 
 
-class HTTPMethod(BaseEnumCls):
+class HTTPMethod(StringEnum):
     """
     HTTP请求方式枚举
     """
