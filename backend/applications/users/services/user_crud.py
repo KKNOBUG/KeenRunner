@@ -11,7 +11,7 @@ from typing import Optional, Union
 
 from backend.applications.base.schemas.tokens_schema import CredentialsSchema
 from backend.applications.users.models.user_model import User
-from backend.applications.users.schemas.user_schmeas import UserCreate, UserUpdate
+from backend.applications.users.schemas.user_schmea import UserCreate, UserUpdate
 from backend.core.exceptions.base_exceptions import NotFoundException, BaseExceptions
 from backend.services.password import verify_password, get_password_hash
 from backend.services.base_crud import BaseCrud
@@ -20,6 +20,9 @@ from backend.services.base_crud import BaseCrud
 class UserCrud(BaseCrud[User, UserCreate, UserUpdate]):
     def __init__(self):
         super().__init__(model=User)
+
+    async def get_by_id(self, user_id: int) -> Optional[User]:
+        return await self.model.filter(id=user_id).first()
 
     async def get_by_username(self, username: str) -> Optional[User]:
         return await self.model.filter(username=username).first()
@@ -45,5 +48,10 @@ class UserCrud(BaseCrud[User, UserCreate, UserUpdate]):
         user_instance = await self.create(user_in)
         return user_instance
 
+    async def delete_user(self, user_id: int) -> User:
+        user_instance = await self.get(user_id)
+        user_instance.is_active = 0
+        await user_instance.save()
+        return user_instance
 
 USER_CRUD = UserCrud()

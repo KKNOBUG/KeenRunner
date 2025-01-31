@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : token_view.py
+@Module  : auth_view.py
 @DateTime: 2025/1/18 10:03
 """
 from datetime import timedelta, datetime, timezone
