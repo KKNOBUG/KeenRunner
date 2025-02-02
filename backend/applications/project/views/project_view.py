@@ -11,8 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, Body, Form
 from tortoise.expressions import Q
 
-from backend.applications.base.schemas.project_schema import ProjectCreate, ProjectUpdate
-from backend.applications.base.services.project_crud import PROJECT_CRUD
+from backend.applications.project.schemas.project_schema import ProjectCreate, ProjectUpdate
+from backend.applications.project.services.project_crud import PROJECT_CRUD
 from backend.core.response.http_response import (
     DataAlreadyExistsResponse,
     SuccessResponse,
@@ -23,7 +23,7 @@ from backend.core.response.http_response import (
 project = APIRouter()
 
 
-@project.post("/createProject", summary="Base-新增项目信息")
+@project.post("/createProject", summary="Project-新增项目信息")
 async def create_project(
         project_in: ProjectCreate = Body()
 ):
@@ -40,7 +40,7 @@ async def create_project(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@project.post("/deleteProject", summary="Base-删除一个项目信息")
+@project.post("/deleteProject", summary="Project-删除一个项目信息")
 async def delete_api(
         project_id: int = Form(..., description="项目ID")
 ):
@@ -52,7 +52,7 @@ async def delete_api(
         return NotFoundResponse(message=f"项目(id={project_id})不存在")
 
 
-@project.post("/updateProject", summary="Base-更新项目信息")
+@project.post("/updateProject", summary="Project-更新项目信息")
 async def update_user(
         project_in: ProjectUpdate = Body(..., description="项目信息")
 ):
@@ -64,7 +64,7 @@ async def update_user(
         return NotFoundResponse(message=f"项目(id={project_in.id})不存在")
 
 
-@project.post("/getProject", summary="Base-查询一个项目信息")
+@project.post("/getProject", summary="Project-查询一个项目信息")
 async def get_user(
         project_id: int = Form(..., description="项目ID")
 ):
@@ -76,7 +76,7 @@ async def get_user(
     return SuccessResponse(data=data)
 
 
-@project.post("/getProjects", summary="Base-查询多个项目信息")
+@project.post("/getProjects", summary="Project-查询多个项目信息")
 async def get_apis(
         page: int = Form(1, description="页码"),
         page_size: int = Form(10, description="每页展示数量"),

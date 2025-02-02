@@ -6,11 +6,10 @@
 @Module  : project_crud.py
 @DateTime: 2025/2/2 13:37
 """
-from typing import Optional, List, Dict, Union
+from typing import Optional, List
 
-from backend.applications.base.models.project_model import Project
-from backend.applications.base.schemas.project_schema import ProjectCreate, ProjectUpdate
-from backend.core.exceptions.base_exceptions import ParameterException
+from backend.applications.project.models.project_model import Project
+from backend.applications.project.schemas.project_schema import ProjectCreate, ProjectUpdate
 from backend.services.base_crud import BaseCrud
 
 

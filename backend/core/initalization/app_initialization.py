@@ -22,6 +22,7 @@ from backend import PROJECT_CONFIG
 from backend.applications.base.views import base
 from backend.applications.example.views.example_view import example
 from backend.applications.users.views.user_view import user
+from backend.applications.project.views.project_view import project
 from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
@@ -109,3 +110,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=example, prefix="/example", tags=["示例"])
     app.include_router(router=base, prefix="/base", tags=["基础服务", "用户鉴权"])
     app.include_router(router=user, prefix="/user", tags=["用户服务"])
+    app.include_router(router=project, prefix="/project", tags=["项目服务"])
