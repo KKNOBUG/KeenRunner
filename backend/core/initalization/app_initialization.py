@@ -11,20 +11,24 @@ import sys
 from typing import Dict, Any
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from tortoise.contrib.fastapi import register_tortoise
+from tortoise.exceptions import DoesNotExist
 
 from backend import PROJECT_CONFIG
+from backend.applications.base.views import base
 from backend.applications.example.views.example_view import example
-from backend.applications.base.views.api_view import api
-from backend.applications.base.views.auth_view import auth
 from backend.applications.users.views.user_view import user
 from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
 from backend.core.exceptions.http_exceptions import (
-    validation_exception_handler, http_exception_handler, app_exception_handler
+    request_validation_exception_handler,
+    response_validation_exception_handler,
+    http_exception_handler,
+    null_point_exception_handler,
+    app_exception_handler
 )
 from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
 
@@ -55,17 +59,25 @@ def register_database(app: FastAPI):
 
 # 注册异常处理器
 def register_exceptions(app: FastAPI) -> None:
-    # 注册参数验证错误处理器
+    # 注册参数验证错误处理器（解析和验证请求数据时发现问题，就会触发）
     app.add_exception_handler(
         exc_class_or_status_code=RequestValidationError,
-        handler=validation_exception_handler
+        handler=request_validation_exception_handler
+    )
+    # 注册响应验证错误处理器（解析和验证响应数据时发现问题，就会触发）
+    app.add_exception_handler(
+        exc_class_or_status_code=ResponseValidationError,
+        handler=response_validation_exception_handler
     )
     # 验证HTTP通讯异常错误处理器
     app.add_exception_handler(
         exc_class_or_status_code=HTTPException,
         handler=http_exception_handler
     )
-
+    app.add_exception_handler(
+        exc_class_or_status_code=DoesNotExist,
+        handler=null_point_exception_handler
+    )
     app.add_exception_handler(
         exc_class_or_status_code=Exception,
         handler=app_exception_handler
@@ -95,6 +107,5 @@ def register_routers(app: FastAPI) -> None:
     static_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
     # 挂在路由蓝图
     app.include_router(router=example, prefix="/example", tags=["示例"])
-    app.include_router(router=auth, prefix="/auth", tags=["基础服务", "用户鉴权"])
-    app.include_router(router=api, prefix="/api", tags=["基础服务", "后台接口"])
+    app.include_router(router=base, prefix="/base", tags=["基础服务", "用户鉴权"])
     app.include_router(router=user, prefix="/user", tags=["用户服务"])

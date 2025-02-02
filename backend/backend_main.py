@@ -15,7 +15,7 @@ from fastapi.routing import APIRoute
 from backend.core.initalization.app_initialization import (
     register_logging, register_exceptions, register_routers, register_database, register_middlewares
 )
-from backend.core.response.base_response import SuccessResponse
+from backend.core.response.http_response import SuccessResponse
 
 try:
     from backend import PROJECT_CONFIG, GLOBAL_CONFIG

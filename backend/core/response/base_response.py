@@ -21,13 +21,15 @@ class BaseResponse(JSONResponse):
     status: Status = Status.SUCCESS
     message: Optional[str] = None
     data: Optional[Union[str, List, Dict[str, Any]]] = None
+    total: Optional[int] = None
 
     def __init__(self,
                  http_status_code: Optional[int] = None,
                  code: Optional[Code] = None,
                  status: Optional[Status] = None,
                  message: Optional[str] = None,
-                 data: Optional[dict] = None, **kwargs):
+                 data: Optional[dict] = None,
+                 total: Optional[int] = None, **kwargs):
 
         if http_status_code and isinstance(http_status_code, int):
             self.http_status_code = http_status_code
@@ -47,174 +49,24 @@ class BaseResponse(JSONResponse):
         if data and isinstance(data, (int, str, list, dict)):
             self.data = data
 
+        if total and isinstance(total, int):
+            self.total = total
+
         resp = dict(
             code=self.code,
             status=self.status,
             message=self.message,
-            data=self.data,
         )
+        if self.data not in ("", [], {}):
+            resp["data"] = self.data
+        if self.total is None and isinstance(self.data, (dict, list)):
+            resp["total"] = len(self.data)
+        elif self.total:
+            resp["total"] = self.total
+
         super(BaseResponse, self).__init__(
             status_code=self.http_status_code,
             content=jsonable_encoder(resp),
             **kwargs
         )
 
-
-class SuccessResponse(BaseResponse):
-    code = Code.CODE200
-    status = Status.SUCCESS
-    message = Message.MESSAGE200
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(SuccessResponse, self).__init__(message=message, data=data)
-
-
-class FailureResponse(BaseResponse):
-    code = Code.CODE999
-    status = Status.FAILURE
-    message = Message.MESSAGE999
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(FailureResponse, self).__init__(message=message, data=data)
-
-
-class BadReqResponse(BaseResponse):
-    code = Code.CODE400
-    status = Status.FAILURE
-    message = "请求失败"
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(BadReqResponse, self).__init__(message=message, data=data)
-
-
-class ParameterResponse(BaseResponse):
-    code = Code.CODE400
-    status = Status.FAILURE
-    message = Message.MESSAGE400
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(ParameterResponse, self).__init__(message=message, data=data)
-
-
-class FileExtensionResponse(BaseResponse):
-    code = Code.CODE400
-    status = Status.FAILURE
-    message = "文件扩展名不符合规范"
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(FileExtensionResponse, self).__init__(message=message, data=data)
-
-
-class FileTooManyResponse(BaseResponse):
-    code = Code.CODE400
-    status = Status.FAILURE
-    message = "文件数量过多或体积过大"
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(FileTooManyResponse, self).__init__(message=message, data=data)
-
-
-class DataAlreadyExistsResponse(BaseResponse):
-    code = Code.CODE400
-    status = Status.FAILURE
-    message = "数据或文件已存在"
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(DataAlreadyExistsResponse, self).__init__(message=message, data=data)
-
-
-class UnauthorizedResponse(BaseResponse):
-    code = Code.CODE401
-    status = Status.FAILURE
-    message = Message.MESSAGE401
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(UnauthorizedResponse, self).__init__(message=message, data=data)
-
-
-class ForbiddenResponse(BaseResponse):
-    code = Code.CODE403
-    status = Status.FAILURE
-    message = Message.MESSAGE403
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(ForbiddenResponse, self).__init__(message=message, data=data)
-
-
-class NotFoundResponse(BaseResponse):
-    code = Code.CODE404
-    status = Status.FAILURE
-    message = Message.MESSAGE404
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(NotFoundResponse, self).__init__(message=message, data=data)
-
-
-class MethodNotAllowedResponse(BaseResponse):
-    code = Code.CODE405
-    status = Status.FAILURE
-    message = Message.MESSAGE405
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(MethodNotAllowedResponse, self).__init__(message=message, data=data)
-
-
-class RequestTimeoutResponse(BaseResponse):
-    code = Code.CODE408
-    status = Status.FAILURE
-    message = Message.MESSAGE408
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(RequestTimeoutResponse, self).__init__(message=message, data=data)
-
-
-class LimiterResponse(BaseResponse):
-    code = Code.CODE429
-    status = Status.FAILURE
-    message = Message.MESSAGE429
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(LimiterResponse, self).__init__(message=message, data=data)
-
-
-class InternalErrorResponse(BaseResponse):
-    code = Code.CODE500
-    status = Status.FAILURE
-    message = Message.MESSAGE500
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(InternalErrorResponse, self).__init__(message=message, data=data)
-
-
-class BadGatewayResponse(BaseResponse):
-    code = Code.CODE502
-    status = Status.FAILURE
-    message = Message.MESSAGE502
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(BadGatewayResponse, self).__init__(message=message, data=data)
-
-
-class GatewayTimeoutResponse(BaseResponse):
-    code = Code.CODE504
-    status = Status.FAILURE
-    message = Message.MESSAGE504
-    data = {}
-
-    def __init__(self, message: Optional[str] = None, data: Optional[Union[int, str, List, Dict[str, Any]]] = None):
-        super(GatewayTimeoutResponse, self).__init__(message=message, data=data)

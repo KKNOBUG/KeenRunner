@@ -70,3 +70,8 @@ class UUIDModel:
 class TimestampMixin:
     created_at = fields.DatetimeField(auto_now_add=True, index=True)
     updated_at = fields.DatetimeField(auto_now=True, index=True)
+
+
+class MaintainMixin:
+    created_user = fields.CharField(max_length=32, description="创建人", index=True)
+    updated_user = fields.CharField(max_length=32, null=True, description="更新人", index=True)

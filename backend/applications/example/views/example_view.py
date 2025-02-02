@@ -8,7 +8,7 @@
 """
 from fastapi import APIRouter
 
-from backend.core.response.base_response import (
+from backend.core.response.http_response import (
     FailureResponse, SuccessResponse
 )
 

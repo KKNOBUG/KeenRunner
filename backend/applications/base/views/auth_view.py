@@ -15,7 +15,7 @@ from backend.applications.base.schemas.token_schema import CredentialsSchema, JW
 from backend.applications.users.models.user_model import User
 from backend.applications.users.services.user_crud import USER_CRUD
 from backend.core.exceptions.base_exceptions import NotFoundException
-from backend.core.response.base_response import SuccessResponse, NotFoundResponse
+from backend.core.response.http_response import SuccessResponse, NotFoundResponse
 
 from backend.services.password import create_access_token
 

@@ -13,7 +13,7 @@ from tortoise.expressions import Q
 
 from backend.applications.users.schemas.user_schmea import UserCreate, UserUpdate
 from backend.applications.users.services.user_crud import USER_CRUD
-from backend.core.response.base_response import NotFoundResponse, SuccessResponse
+from backend.core.response.http_response import NotFoundResponse, SuccessResponse
 
 user = APIRouter()
 

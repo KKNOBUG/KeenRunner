@@ -40,8 +40,8 @@ class ApiCrud(BaseCrud[Api, ApiCreate, ApiUpdate]):
         api_instance = await self.create(api_in)
         return api_instance
 
-    async def delete_api(self, api_in: int) -> Api:
-        api_instance = await self.get(api_in)
+    async def delete_api(self, api_id: int) -> Api:
+        api_instance = await self.get(api_id)
         api_instance.is_active = 0
         await api_instance.save()
         return api_instance
