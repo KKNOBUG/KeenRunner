@@ -27,17 +27,20 @@ class ProjectCrud(BaseCrud[Project, ProjectCreate, ProjectUpdate]):
     async def get_by_initiator(self, initiator: str) -> Optional[List[Project]]:
         return await self.model.filter(initiator=initiator).all()
 
+    async def get_by_created_user(self, created_user: str) -> Optional[List[Project]]:
+        return await self.model.filter(created_user=created_user).all()
+
     async def create_project(self, project_in: ProjectCreate) -> Project:
         project_instance = await self.create(project_in)
         return project_instance
 
-    async def delete_api(self, project_id: int) -> Project:
+    async def delete_project(self, project_id: int) -> Project:
         project_instance = await self.get(project_id)
         project_instance.is_active = 0
         await project_instance.save()
         return project_instance
 
-    async def update_api(self, project_in: ProjectUpdate) -> Project:
+    async def update_project(self, project_in: ProjectUpdate) -> Project:
         project_id: int = project_in.id
         project_if: dict = {
             key: value for key, value in project_in.items()

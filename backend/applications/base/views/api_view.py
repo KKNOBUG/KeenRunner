@@ -29,13 +29,13 @@ async def create_api(
     try:
         path: str = api_in.path
         method: str = api_in.method
-        api_instance = await API_CRUD.get_by_path(path=path, method=method)
-        if api_instance:
+        instance = await API_CRUD.get_by_path(path=path, method=method)
+        if instance:
             return DataAlreadyExistsResponse(message=f"接口(path={path},method={method})已存在")
 
-        new_api_instance = await API_CRUD.create_api(api_in=api_in)
-        new_api_data = await new_api_instance.to_dict()
-        return SuccessResponse(data=new_api_data)
+        new_instance = await API_CRUD.create_api(api_in=api_in)
+        data = await new_instance.to_dict()
+        return SuccessResponse(data=data)
     except Exception as e:
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
@@ -45,9 +45,9 @@ async def delete_api(
         api_id: int = Form(..., description="接口ID")
 ):
     try:
-        api_instance = await API_CRUD.delete_api(api_id)
-        api_data = await api_instance.to_dict()
-        return SuccessResponse(data=api_data)
+        instance = await API_CRUD.delete_api(api_id)
+        data = await instance.to_dict()
+        return SuccessResponse(data=data)
     except Exception as e:
         return NotFoundResponse(message=f"接口(id={api_id})不存在")
 
@@ -57,9 +57,9 @@ async def update_user(
         api_in: ApiUpdate = Body(..., description="接口信息")
 ):
     try:
-        api_instance = await API_CRUD.update_api(api_in)
-        api_data = await api_instance.to_dict()
-        return SuccessResponse(data=api_data)
+        instance = await API_CRUD.update_api(api_in)
+        data = await instance.to_dict()
+        return SuccessResponse(data=data)
     except Exception as e:
         return NotFoundResponse(message=f"接口(id={api_in.id})不存在")
 
@@ -78,12 +78,12 @@ async def get_user(
     else:
         return ParameterResponse("参数id和path不可同时为空")
 
-    api_instance = await API_CRUD.get(**where)
-    if not api_instance:
+    instance = await API_CRUD.get(**where)
+    if not instance:
         return NotFoundResponse(message="接口信息不存在")
 
-    api_data: dict = await api_instance.to_dict(exclude_fields=["is_active"])
-    return SuccessResponse(data=api_data)
+    data: dict = await instance.to_dict(exclude_fields=["is_active"])
+    return SuccessResponse(data=data)
 
 
 @api.post("/getApis", summary="Base-查询多个接口信息")
@@ -111,10 +111,10 @@ async def get_apis(
 
     q &= Q(is_active=is_active)
 
-    total, api_instances = await API_CRUD.list(
+    total, instances = await API_CRUD.list(
         page=page, page_size=page_size, search=q
     )
     data = [
-        await obj.to_dict() for obj in api_instances
+        await obj.to_dict() for obj in instances
     ]
     return SuccessResponse(data=data)
