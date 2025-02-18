@@ -12,8 +12,8 @@ from fastapi import APIRouter
 
 from backend import PROJECT_CONFIG
 from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
-from backend.applications.users.models.user_model import User
-from backend.applications.users.services.user_crud import USER_CRUD
+from backend.applications.user.models.user_model import User
+from backend.applications.user.services.user_crud import USER_CRUD
 from backend.core.exceptions.base_exceptions import NotFoundException
 from backend.core.response.http_response import SuccessResponse, NotFoundResponse
 
@@ -22,7 +22,7 @@ from backend.services.password import create_access_token
 auth = APIRouter()
 
 
-@auth.post("/getAccessToken", summary="Base-用户鉴权")
+@auth.post("/getAccessToken", summary="用户鉴权")
 async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)
@@ -38,15 +38,15 @@ async def get_login_access_token(credentials: CredentialsSchema):
             data=JWTPayload(
                 user_id=user.id,
                 username=user.username,
-                is_superuser=user.is_superuser,
+                is_admin=user.is_admin,
                 exp=expire,
             )
         ),
         username=user.username,
         alias=user.alias,
         email=user.email,
-        is_active=user.is_active,
-        is_superuser=user.is_superuser,
+        is_admin=user.is_admin,
+        is_deleted=user.is_deleted,
         last_login=user.last_login
     )
     return SuccessResponse(data=data.model_dump())

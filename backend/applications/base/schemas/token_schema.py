@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 class CredentialsSchema(BaseModel):
     username: str = Field(..., description="用户账号[电子邮箱或手机号码]", example="admin@test.com")
-    password: str = Field(..., description="用户密码[a-zZ-Z0-9_-.*@!]", example="admin@123456")
+    password: str = Field(..., description="用户密码[a-zZ-Z0-9_-.*@!]", example="123456")
 
 
 class JWTOut(BaseModel):
@@ -21,13 +21,13 @@ class JWTOut(BaseModel):
     username: str
     alias: str
     email: str
-    is_active: bool
-    is_superuser: bool
+    is_admin: bool
+    is_deleted: bool
     last_login: datetime
 
 
 class JWTPayload(BaseModel):
     user_id: int
     username: str
-    is_superuser: bool
+    is_admin: bool
     exp: datetime
