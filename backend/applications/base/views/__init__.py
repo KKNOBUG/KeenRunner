@@ -10,8 +10,10 @@ from fastapi import APIRouter
 
 from .api_view import api
 from .auth_view import auth
+from .menu_view import menu
 
 base = APIRouter()
 
 base.include_router(api, prefix="/api")
 base.include_router(auth, prefix="/auth")
+base.include_router(menu, prefix="/menu")

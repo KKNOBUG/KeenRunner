@@ -8,15 +8,17 @@
 """
 from typing import Optional, List
 
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from tortoise.exceptions import DoesNotExist
 
-from backend.applications.base.models.api_model import Api
+from backend.applications.base.models.base_model import Api
 from backend.applications.base.schemas.api_schema import ApiCreate, ApiUpdate
+from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
-from backend.services.base_crud import BaseCrud
 
 
-class ApiCrud(BaseCrud[Api, ApiCreate, ApiUpdate]):
+class ApiCrud(ScaffoldCrud[Api, ApiCreate, ApiUpdate]):
     def __init__(self):
         super().__init__(model=Api)
 
@@ -50,9 +52,9 @@ class ApiCrud(BaseCrud[Api, ApiCreate, ApiUpdate]):
         if not instance:
             raise NotFoundException(message=f"接口(id={api_id})信息不存在")
 
-        instance.is_active = 1
-        await instance.save()
-        return instance
+        await instance.delete()
+        data = await instance.to_dict()
+        return data
 
     async def update_api(self, api_in: ApiUpdate) -> Api:
         api_id: int = api_in.id
@@ -67,6 +69,38 @@ class ApiCrud(BaseCrud[Api, ApiCreate, ApiUpdate]):
 
         data = await instance.to_dict()
         return data
+
+    async def refresh_api(self, app: FastAPI) -> Optional[List[Api]]:
+        # 获取全部API数据
+        all_api_list = []
+        for route in app.routes:
+            # 只更新有鉴权的API
+            # if isinstance(route, APIRoute) and len(route.dependencies) > 0:
+            if isinstance(route, APIRoute) and route.methods not in ("OPTIONS",) and route.path_format not in ('/',):
+                all_api_list.append((list(route.methods)[0], route.path_format))
+
+        # 删除废弃API数据
+        for api in await self.model.all():
+            if (api.method, api.path) not in all_api_list:
+                await self.model.filter(method=api.method, path=api.path).delete()
+
+        # 更新API数据
+        for route in app.routes:
+            if isinstance(route, APIRoute) and route.methods not in ("OPTIONS",) and route.path_format not in ('/',):
+                data = {
+                    'path': route.path_format,
+                    'method': list(route.methods)[0],
+                    'summary': route.summary,
+                    'tags': ','.join(list(route.tags)),
+                    'description': route.description
+                }
+                instance = await self.model.filter(method=data["method"], path=data["path"]).first()
+                if instance:
+                    await instance.update_from_dict(data).save()
+                else:
+                    await self.model.create(**data)
+
+        return await self.model.all()
 
 
 API_CRUD = ApiCrud()

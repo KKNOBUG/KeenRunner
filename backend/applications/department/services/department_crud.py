@@ -13,10 +13,10 @@ from tortoise.exceptions import DoesNotExist
 from backend.applications.department.models.department_model import Department
 from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
-from backend.services.base_crud import BaseCrud
+from backend.applications.base.services.scaffold import ScaffoldCrud
 
 
-class DepartmentCrud(BaseCrud[Department, DepartmentCreate, DepartmentUpdate]):
+class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
     def __init__(self):
         super().__init__(model=Department)
 

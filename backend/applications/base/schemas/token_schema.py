@@ -21,13 +21,17 @@ class JWTOut(BaseModel):
     username: str
     alias: str
     email: str
-    is_admin: bool
-    is_deleted: bool
+    phone: str
+    image: str
+    state: int
+    is_active: bool
+    is_superuser: bool
     last_login: datetime
 
 
 class JWTPayload(BaseModel):
     user_id: int
     username: str
-    is_admin: bool
+    state: int
+    is_superuser: bool
     exp: datetime

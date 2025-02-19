@@ -16,10 +16,10 @@ from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate
 from backend.core.exceptions.base_exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException
 from backend.services.password import verify_password, get_password_hash
-from backend.services.base_crud import BaseCrud
+from backend.applications.base.services.scaffold import ScaffoldCrud
 
 
-class UserCrud(BaseCrud[User, UserCreate, UserUpdate]):
+class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     def __init__(self):
         super().__init__(model=User)
 
@@ -39,8 +39,8 @@ class UserCrud(BaseCrud[User, UserCreate, UserUpdate]):
         verified = verify_password(credentials.password, user.password)
         if not verified:
             raise NotFoundException(message="用户名或密码错误")
-        if not user.is_deleted:
-            raise NotFoundException(message="用户无效或已被禁用")
+        if user.state in (0, 3):
+            raise NotFoundException(message="用户待岗或已离职")
         return user
 
     async def update_last_login(self, id: int) -> None:

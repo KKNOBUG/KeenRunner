@@ -71,25 +71,27 @@ async def update_user(
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@user.post("/get", summary="查询一个用户")
-async def get_user(
-        user_id: int = Form(None, description="用户ID"),
-        username: str = Form(None, description="用户名称"),
+@user.post("/byId", summary="查询一个用户")
+async def get_user_by_id(
+        user_id: int = Form(..., description="用户ID"),
 ):
-    # 构建查询条件，用户ID或用户名称
-    where: Dict[str, Union[str, int]] = {}
-    if user_id:
-        where["id"] = user_id
-    elif username:
-        where["username"] = username
-    else:
-        return ParameterResponse("参数[id]和[path]不可同时为空")
-
-    instance = await USER_CRUD.select(**where)
+    instance = await USER_CRUD.select(id=user_id)
     if not instance:
         return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
 
-    data: dict = await instance.to_dict(exclude_fields=["id", "password"])
+    data: dict = await instance.to_dict(exclude_fields=["password"])
+    return SuccessResponse(data=data)
+
+
+@user.post("/byUsername", summary="查询一个用户")
+async def get_user_by_username(
+        username: str = Form(None, description="用户名称"),
+):
+    instance = await USER_CRUD.select(username=username)
+    if not instance:
+        return NotFoundResponse(message=f"用户(username={username})信息不存在")
+
+    data: dict = await instance.to_dict(exclude_fields=["password"])
     return SuccessResponse(data=data)
 
 
