@@ -6,23 +6,39 @@
 @Module  : backend_main.py
 @DateTime: 2025/1/12 19:41
 """
-import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from tortoise import Tortoise
 
 from backend.core.initalization.app_initialization import (
     register_logging, register_exceptions, register_routers, register_database, register_middlewares
 )
+from backend.core.initalization.data_initialization import init_database_table
 from backend.core.response.http_response import SuccessResponse
 
 try:
-    from backend import PROJECT_CONFIG, GLOBAL_CONFIG
+    from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
 except ImportError as e:
     from backend.core.exceptions.base_exceptions import NotImplementedException
 
     raise NotImplementedException(message="导入依赖配置失败,请检查 configure.project_config.py 文件")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await register_database(app)
+    await init_database_table(app)
+
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            GLOBAL_CONFIG.ROUTE_ALIAS[route.path] = route.summary
+
+    yield
+
+    await Tortoise.close_connections()
+
 
 app = FastAPI(
     title=PROJECT_CONFIG.APP_TITLE,
@@ -32,21 +48,10 @@ app = FastAPI(
     redoc_url=PROJECT_CONFIG.APP_REDOC_URL,
     openapi_url=PROJECT_CONFIG.APP_OPENAPI_URL,
     debug=PROJECT_CONFIG.SERVER_DEBUG,
-
+    lifespan=lifespan,
 )
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            GLOBAL_CONFIG.ROUTE_ALIAS[route.path] = route.summary
-
-    yield
-
-
 register_logging()
-register_database(app)
 register_exceptions(app)
 register_middlewares(app)
 register_routers(app)
