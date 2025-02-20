@@ -72,6 +72,8 @@ class ProjectConfig:
     OUTPUT_XLSX_DIR = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
     SERVICES_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "services"))
     STATIC_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "static"))
+    STATIC_IMG_DIR = os.path.abspath(os.path.join(STATIC_DIR, "image"))
+    MIGRATION_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "migrations"))
 
     # 跨域配置
     CORS_ORIGINS = [
@@ -111,6 +113,7 @@ class ProjectConfig:
                 exclude_endswith="__.py"
             )
         ]
+        models.append("aerich.models")
         return models
 
     # 数据库配置
@@ -119,6 +122,7 @@ class ProjectConfig:
     DATABASE_USERNAME = "root"
     DATABASE_PASSWORD = "root"
     DATABASE_HOST = "10.211.55.3"
+    # DATABASE_HOST = "43.156.105.196"
     DATABASE_PORT = "3306"
     DATABASE_NAME = "krun"
     DATABASE_URL = f"mysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}?charset=utf8mb4&time_zone=+08:00"
