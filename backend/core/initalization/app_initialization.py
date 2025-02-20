@@ -7,9 +7,13 @@
 @DateTime: 2025/1/17 21:55
 """
 import logging.config
+import os
+import shutil
 import sys
+from datetime import datetime
 from typing import Dict, Any
 
+from aerich import Command
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.middleware.cors import CORSMiddleware
@@ -19,10 +23,6 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
 from backend import PROJECT_CONFIG
-from backend.applications.base.views import base
-from backend.applications.example.views.example_view import example
-from backend.applications.users.views.user_view import user
-from backend.applications.project.views.project_view import project
 from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
@@ -38,7 +38,7 @@ def register_logging() -> None:
     logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
 
 
-def register_database(app: FastAPI):
+async def register_database(app: FastAPI):
     config: Dict[str, Any] = {
         "connections": PROJECT_CONFIG.DATABASE_CONNECTIONS,
         "apps": {
@@ -56,6 +56,38 @@ def register_database(app: FastAPI):
         generate_schemas=False,
         add_exception_handlers=PROJECT_CONFIG.SERVER_DEBUG,
     )
+
+    # 确保迁移目录存在
+    if not os.path.exists(PROJECT_CONFIG.MIGRATION_DIR):
+        os.makedirs(PROJECT_CONFIG.MIGRATION_DIR)
+
+    # 初始化Aerich命令
+    command = Command(
+        app='models',
+        tortoise_config=config,
+        location=PROJECT_CONFIG.MIGRATION_DIR,
+    )
+
+    # 初始化数据库和迁移
+    try:
+        # 当 safe 设置为 True 时，如果数据库中已经存在 Aerich 所需的迁移表（通常是 aerich 表），init_db 方法不会尝试去重新创建这些表，避免因为表已存在而抛出错误。
+        # 当 safe 设置为 False 时，如果数据库中已经存在 Aerich 所需的迁移表，init_db 方法会尝试重新创建这些表，这可能会导致现有表被删除并重新创建，从而丢失表中的数据。
+        await command.init_db(safe=True)
+    except FileExistsError:
+        pass
+
+    await command.init()
+
+    # 生成迁移文件
+    try:
+        await command.migrate(name=f"auto_{datetime.now().strftime('%Y%m%d%H%M%S')}")
+    except AttributeError as e:
+        print("无法从数据库中检索模型历史记录，模型历史记录将从头创建")
+        shutil.rmtree(PROJECT_CONFIG.MIGRATION_DIR)
+        await command.init_db(safe=True)
+
+    # 应用迁移
+    await command.upgrade(run_in_transaction=True)
 
 
 # 注册异常处理器
@@ -106,8 +138,13 @@ def register_routers(app: FastAPI) -> None:
     static_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL
     static_modules["swagger_css_url"] = PROJECT_CONFIG.APP_OPENAPI_CSS_URL
     static_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
+
+    # 导入路由蓝图
+    from backend.applications.base.views import base
+    from backend.applications.department.views.department_view import department
+    from backend.applications.user.views.user_view import user
+
     # 挂在路由蓝图
-    app.include_router(router=example, prefix="/example", tags=["示例"])
-    app.include_router(router=base, prefix="/base", tags=["基础服务", "用户鉴权"])
+    app.include_router(router=base, prefix="/base", tags=["基础服务"])
     app.include_router(router=user, prefix="/user", tags=["用户服务"])
-    app.include_router(router=project, prefix="/project", tags=["项目服务"])
+    app.include_router(router=department, prefix="/department", tags=["部门服务"])
