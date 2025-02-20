@@ -40,6 +40,16 @@ class ReqResLoggerMiddleware:
 
         # 创建请求对象，消费请求体
         request_instance = Request(scope, receive)
+
+        # 判断请求方式
+        request_method: str = request_instance.scope.get("method")
+        if request_method in (
+                "OPTIONS",
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        # 判断请求路径
         request_url: str = str(request_instance.url)
         request_path: str = request_instance.scope.get("path")
         if request_path in (
@@ -54,7 +64,6 @@ class ReqResLoggerMiddleware:
             return
 
         request_alias: str = GLOBAL_CONFIG.ROUTE_ALIAS.get(request_path or "未定义", "未定义")
-        request_method: str = request_instance.scope.get("method")
         request_client: str = request_instance.scope.get("client")[0]
         request_header: dict = dict(request_instance.headers)
         request_body: bytes = await request_instance.body()
