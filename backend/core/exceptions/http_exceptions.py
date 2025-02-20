@@ -30,7 +30,7 @@ from backend.core.response.http_response import (
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError) -> BaseResponse:
     error_message: str = ""
     for error in exc.errors():
-        error_message += ".".join(error.get("loc")) + ":" + error.get("msg")
+        error_message += ".".join(error.get("loc")) + ":" + error.get("msg") + " "
 
     return ParameterResponse(message=error_message.strip())
 

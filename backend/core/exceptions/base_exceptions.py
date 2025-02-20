@@ -80,6 +80,13 @@ class TypeRejectException(BaseExceptions):
         super().__init__(**kwargs)
 
 
+class DataAlreadyExistsException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE300)
+        kwargs.setdefault("code", BaseErrorEnum.BASE300.code)
+        super().__init__(**kwargs)
+
+
 class ParameterException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE400)
