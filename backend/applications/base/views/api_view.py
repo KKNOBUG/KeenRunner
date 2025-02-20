@@ -8,7 +8,7 @@
 """
 from typing import Dict, Union
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 from fastapi.params import Form
 from starlette.requests import Request
 from tortoise.expressions import Q
@@ -83,7 +83,7 @@ async def get_user(
     else:
         return ParameterResponse("参数[id]和[path]不可同时为空")
 
-    instance = await API_CRUD.select(**where)
+    instance = await API_CRUD.query(**where)
     if not instance:
         return NotFoundResponse(message=f"接口(id={api_id},path={path})信息不存在")
 
@@ -123,6 +123,26 @@ async def get_apis(
         await obj.to_dict() for obj in instances
     ]
     return SuccessResponse(data=data)
+
+
+@api.get("/list", summary="查看API列表")
+async def list_api(
+        page_num: int = Query(default=1, description="页码"),
+        page_size: int = Query(default=10, description="每页数量"),
+        path: str = Query(None, description="API路径"),
+        summary: str = Query(None, description="API简介"),
+        tags: str = Query(None, description="API模块"),
+):
+    q = Q()
+    if path:
+        q &= Q(path__contains=path)
+    if summary:
+        q &= Q(summary__contains=summary)
+    if tags:
+        q &= Q(tags__contains=tags)
+    total, api_objs = await API_CRUD.list(page=page_num, page_size=page_size, search=q, order=["tags", "id"])
+    data = [await obj.to_dict() for obj in api_objs]
+    return SuccessResponse(data=data, total=total)
 
 
 @api.post("/refresh", summary="刷新API列表", description="重新获取app中所有的APIRouter信息进行落库更新")

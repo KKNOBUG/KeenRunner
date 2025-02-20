@@ -8,7 +8,7 @@
 """
 from typing import Optional, List
 
-from backend.applications.base.models.base_model import Menu
+from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.schemas.api_schema import ApiCreate, ApiUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 

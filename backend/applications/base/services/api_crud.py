@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from tortoise.exceptions import DoesNotExist
 
-from backend.applications.base.models.base_model import Api
+from backend.applications.base.models.api_model import Api
 from backend.applications.base.schemas.api_schema import ApiCreate, ApiUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
@@ -48,7 +48,7 @@ class ApiCrud(ScaffoldCrud[Api, ApiCreate, ApiUpdate]):
         return instance
 
     async def delete_api(self, api_id: int) -> Api:
-        instance = await self.select(api_id)
+        instance = await self.query(api_id)
         if not instance:
             raise NotFoundException(message=f"接口(id={api_id})信息不存在")
 

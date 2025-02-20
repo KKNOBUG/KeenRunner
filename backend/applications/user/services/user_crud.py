@@ -59,7 +59,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         return instance
 
     async def delete_user(self, user_id: int) -> User:
-        instance = await self.select(user_id)
+        instance = await self.query(user_id)
         if not instance:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 

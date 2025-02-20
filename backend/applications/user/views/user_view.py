@@ -87,7 +87,7 @@ async def get_user_by_id(
 async def get_user_by_username(
         username: str = Form(None, description="用户名称"),
 ):
-    instance = await USER_CRUD.select(username=username)
+    instance = await USER_CRUD.model.filter(username=username).first()
     if not instance:
         return NotFoundResponse(message=f"用户(username={username})信息不存在")
 
@@ -99,14 +99,16 @@ async def get_user_by_username(
 async def get_users(
         user_in: UserSelect = Body()
 ):
-    page = user_in.page
+    page = user_in.page_num
     page_size = user_in.page_size
     page_order = user_in.page_order
     username = user_in.username
     alias = user_in.alias
+    email = user_in.email
     phone = user_in.phone
+    state = user_in.state
     is_admin = user_in.is_admin
-    is_deleted = user_in.is_deleted
+    is_superuser = user_in.is_superuser
     created_user = user_in.created_user
     updated_user = user_in.updated_user
 
@@ -115,12 +117,16 @@ async def get_users(
         q &= Q(username__contains=username)
     if alias:
         q &= Q(alias__contains=alias)
+    if email:
+        q &= Q(email__contains=email)
     if phone:
         q &= Q(phone__contains=phone)
     if is_admin is not None:
+        q &= Q(state=state)
+    if is_admin is not None:
         q &= Q(is_admin=is_admin)
-    if is_deleted is not None:
-        q &= Q(is_deleted=is_deleted)
+    if is_superuser is not None:
+        q &= Q(is_superuser=is_superuser)
     if created_user:
         q &= Q(created_user__contains=created_user)
     if updated_user:

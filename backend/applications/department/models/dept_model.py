@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : department_model.py
+@Module  : dept_model.py
 @DateTime: 2025/2/3 16:23
 """
 from tortoise import fields

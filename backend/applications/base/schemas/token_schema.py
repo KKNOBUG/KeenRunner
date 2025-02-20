@@ -7,6 +7,7 @@
 @DateTime: 2025/1/18 12:07
 """
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -22,11 +23,11 @@ class JWTOut(BaseModel):
     alias: str
     email: str
     phone: str
-    image: str
+    avatar: str
     state: int
     is_active: bool
     is_superuser: bool
-    last_login: datetime
+    last_login: Optional[datetime]
 
 
 class JWTPayload(BaseModel):

@@ -87,7 +87,7 @@ async def get_user(
     else:
         return ParameterResponse("参数[id]和[name]不可同时为空")
 
-    instance = await DEPARTMENT_CRUD.select(**where)
+    instance = await DEPARTMENT_CRUD.query(**where)
     if not instance:
         return NotFoundResponse(message=f"部门(id={department_id},name={name})信息不存在")
 

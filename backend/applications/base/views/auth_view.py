@@ -14,8 +14,9 @@ from fastapi import APIRouter
 from backend import PROJECT_CONFIG
 from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
 from backend.applications.user.services.user_crud import USER_CRUD
-from backend.applications.base.models.base_model import Menu, Api
-from backend.applications.user.models.role_model import Role
+from backend.applications.base.models.api_model import Api
+from backend.applications.base.models.menu_model import Menu
+from backend.applications.base.models.role_model import Role
 from backend.applications.user.models.user_model import User
 from backend.core.exceptions.base_exceptions import NotFoundException
 from backend.core.response.http_response import SuccessResponse, NotFoundResponse
@@ -51,7 +52,7 @@ async def get_login_access_token(credentials: CredentialsSchema):
         alias=user.alias,
         email=user.email,
         phone=user.phone,
-        image=user.image,
+        avatar=user.avatar,
         state=user.state,
         is_active=user.is_active,
         is_superuser=user.is_superuser,
@@ -86,6 +87,16 @@ async def get_user_menu():
                 parent_menu_dict["children"].append(await menu.to_dict())
         res.append(parent_menu_dict)
     return SuccessResponse(data=res)
+
+
+@auth.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
+async def get_userinfo():
+    user_id = CTX_USER_ID.get()
+    user_obj = await USER_CRUD.get(id=user_id)
+    data = await user_obj.to_dict(exclude_fields=["password"])
+    # 头像地址
+    # data["avatar"] = f'http://172.20.10.2:8518/static/avatar/admin/20250220204648.png'
+    return SuccessResponse(data=data)
 
 
 @auth.post("/userapi", summary="查看用户API", dependencies=[DependAuth])

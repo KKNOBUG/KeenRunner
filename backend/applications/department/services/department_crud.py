@@ -10,7 +10,7 @@ from typing import Optional
 
 from tortoise.exceptions import DoesNotExist
 
-from backend.applications.department.models.department_model import Department
+from backend.applications.department.models.dept_model import Department
 from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -40,7 +40,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def delete_department(self, department_id: int) -> Optional[Department]:
-        instance = await self.select(department_id)
+        instance = await self.query(department_id)
         if not instance:
             raise NotFoundException(message=f"部门(id={department_id})信息不存在")
 

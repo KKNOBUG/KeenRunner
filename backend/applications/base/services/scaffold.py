@@ -115,12 +115,19 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         return await self.model.get(id=id)
 
-    async def select(self, id: int) -> Optional[ModelType]:
+    async def query(self, id: int) -> Optional[ModelType]:
         """
         :param id: 要获取的对象的唯一标识符。
         :return: 与 ID 对应的数据库对象，如果不存在会返回None。
         """
         return await self.model.filter(id=id).first()
+
+    async def select(self, **kwargs) -> Optional[List[ModelType]]:
+        """
+        :param kwargs: 要获取的对象的关键字。
+        :return: 与 kwargs 对应的数据库对象，如果不存在会返回None。
+        """
+        return await self.model.filter(**kwargs).all()
 
     async def list(self, page: int, page_size: int, search: Q = Q(),
                    order: Optional[list] = None) -> Tuple[int, List[ModelType]]:

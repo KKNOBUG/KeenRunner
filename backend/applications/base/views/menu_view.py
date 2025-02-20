@@ -17,11 +17,11 @@ menu = APIRouter()
 
 @menu.post("/list", summary="查看菜单列表")
 async def list_menu(
-        page: int = Query(1, description="页码"),
-        page_size: int = Query(10, description="每页数量"),
+        page_num: int = Query(default=1, description="页码"),
+        page_size: int = Query(default=10, description="每页数量"),
 ):
     async def get_menu_with_children(menu_id: int):
-        menu = await MENU_CRUD.get_by_id(id=menu_id)
+        menu = await MENU_CRUD.get_by_id(menu_id=menu_id)
         if not menu:
             return NotFoundResponse(message=f"菜单(id={menu_id})信息不存在")
 

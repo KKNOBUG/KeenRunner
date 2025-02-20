@@ -21,7 +21,7 @@ class User(ScaffoldModel, TimestampMixin, MaintainMixin):
     alias = fields.CharField(max_length=64, index=True, description="用户姓名")
     email = fields.CharField(max_length=64, unique=True, description="用户邮箱")
     phone = fields.CharField(max_length=20, description="用户电话")
-    image = fields.CharField(max_length=255, default=None, null=True, description="用户头像")
+    avatar = fields.CharField(max_length=255, default=None, null=True, description="用户头像")
     state = fields.SmallIntField(default=2, index=True, description='用户状态(0:离职,1:正常,2:休假,3:出差,4:待岗)')
     is_active = fields.BooleanField(default=True, index=True, description="是否激活")
     is_superuser = fields.BooleanField(default=False, index=True, description="是否为超级管理员")
@@ -35,8 +35,3 @@ class User(ScaffoldModel, TimestampMixin, MaintainMixin):
 
     class Meta:
         table = "krun_user"
-
-    @classmethod
-    async def create_user(cls, user_data):
-        user_data["password"] = pwd_context.hash(user_data["password"])
-        return await cls.create(**user_data)
