@@ -1,0 +1,121 @@
+{
+  "lang": "中文",
+  "app_name": "Krun 测试管理系统",
+  "header": {
+    "label_profile": "个人信息",
+    "label_logout": "退出登录",
+    "label_logout_dialog_title": "提示",
+    "text_logout_confirm": "确认退出？",
+    "text_logout_success": "已退出登录"
+  },
+  "views": {
+    "login": {
+      "text_login": "登录",
+      "message_input_username_password": "请输入用户名和密码",
+      "message_verifying": "正在验证...",
+      "message_login_success": "登录成功"
+    },
+    "workbench": {
+      "label_workbench": "工作台",
+      "text_hello": "{timer}, {alias}({username})",
+      "text_last_login": "上次登录时间: {lastLogin}",
+      "text_welcome": "{welcome}",
+      "label_number_of_items": "项目数量",
+      "label_number_of_apis": "接口数量",
+      "label_number_of_ui_cases": "UI用例数量",
+      "label_number_of_api_cases": "API用例数量",
+      "label_number_of_tasks": "任务数量",
+      "label_project": "项目",
+      "label_more": "更多"
+    },
+    "profile": {
+      "label_profile": "个人中心",
+      "label_modify_information": "修改信息",
+      "label_change_password": "修改密码",
+      "label_avatar": "用户头像",
+      "label_username": "用户账号",
+      "label_email": "电子邮箱",
+      "label_alias": "用户姓名",
+      "label_phone": "手机号码",
+      "label_old_password": "旧密码",
+      "label_new_password": "新密码",
+      "label_confirm_password": "确认密码",
+      "placeholder_username": "请填写账号",
+      "placeholder_email": "请填写邮箱",
+      "placeholder_alias": "请填写姓名",
+      "placeholder_phone": "请填写手机号码",
+      "placeholder_old_password": "请输入旧密码",
+      "placeholder_new_password": "请输入新密码",
+      "placeholder_confirm_password": "请再次输入新密码",
+      "message_username_required": "请输入昵称",
+      "message_old_password_required": "请输入旧密码",
+      "message_new_password_required": "请输入新密码",
+      "message_password_confirmation_required": "请再次输入密码",
+      "message_password_confirmation_diff": "两次密码输入不一致"
+    },
+    "errors": {
+      "label_error": "错误页",
+      "text_back_to_home": "返回首页"
+    }
+  },
+  "common": {
+    "text": {
+      "update_success": "修改成功"
+    },
+    "buttons": {
+      "update": "修改"
+    }
+  },
+  "welcome": {
+    "1": "美景良辰，与君细赏",
+    "2": "最值得欣赏的风景，是自己奋斗的足迹",
+    "3": "收藏每一寸清风朗月，憧憬每一个想要的明天",
+    "4": "今天又是元气满满的一天",
+    "5": "心怀暖阳，不惧路漫长",
+    "6": "祝君能遇世间好风景",
+    "7": "汗水浇灌，梦想之花盛开",
+    "8": "努力当下，收获未来精彩",
+    "9": "心怀壮志，方能乘风破浪",
+    "10": "保持热爱，奔赴下一场山海",
+    "11": "逐梦之路，闪耀青春光芒",
+    "12": "乐观向上，生活充满阳光",
+    "13": "用努力，绘就绚烂未来",
+    "14": "奋进中，遇见更好自己",
+    "15": "看，星星在朝你眨眼，一切美好如你所愿",
+    "16": "华丽的跌倒，胜过无谓的徘徊",
+    "17": "勇敢点，做生活的小太阳",
+    "18": "追光的脚步，萌动又靠谱",
+    "19": "努力打卡，收获超甜梦想",
+    "20": "向着诗与远方，追寻自由曙光",
+    "21": "愿您心中梦想, 如星辰般璀璨闪耀",
+    "22": "愿生命之歌, 永远高昂激扬",
+    "23": "你看，很安静很美好，就像你，那么美好",
+    "24": "愿你前行的路上，阳光明媚，微风不燥",
+    "25": "用勤奋和才智创造美好未来",
+    "26": "保持乐观心态，勇往直前",
+    "27": "眼中有光，脚下有路",
+    "28": "来日方长，未来可期",
+    "29": "不要记住昨天，因为现在很好，未来会更好",
+    "30": "你努力的样子可爱极了",
+    "31": "人生海海，祝您有帆有岸",
+    "32": "跨过这道坎，你终究会遇到一个更好的自己",
+    "33": "去更远的地方，见更亮的光",
+    "34": "我们兵分两路然后顶峰相见",
+    "35": "我们终将会上岸，晴空万里",
+    "36": "不管怎样尽自己努力就好",
+    "37": "执着于理想，纯粹于当下",
+    "38": "你一定要走起来，走到灯火通明",
+    "39": "乾坤未定，你我皆黑马",
+    "40": "以梦为马，不负韶华",
+    "41": "所谓无底深渊，下去，也是前程万里",
+    "42": "山顶的风景才最好看",
+    "43": "满怀希望就会所向披靡",
+    "44": "同是寒窗苦读怎愿甘拜下风",
+    "45": "没有一个冬天不可逾越，没有一个春天不会来临",
+    "46": "过千山有行舟，顺风顺水上重楼",
+    "47": "并肩于雪山之巅",
+    "48": "希望整个苍穹都是你的",
+    "49": "未来不足惧，过往不须泣",
+    "50": "想一千次，不如去做一次"
+  }
+}
