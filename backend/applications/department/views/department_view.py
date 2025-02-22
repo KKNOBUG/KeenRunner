@@ -6,10 +6,7 @@
 @Module  : department_view.py
 @DateTime: 2025/2/3 18:21
 """
-from typing import Dict, Union
-
 from fastapi import APIRouter, Body, Query
-from fastapi.params import Form
 from tortoise.expressions import Q
 
 from backend.applications.department.schemas.department_schema import (
@@ -25,7 +22,6 @@ from backend.core.response.http_response import (
     FailureResponse,
     DataAlreadyExistsResponse,
     NotFoundResponse,
-    ParameterResponse,
 )
 
 dept = APIRouter()
@@ -45,7 +41,7 @@ async def create_dept(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@dept.delete("/delete", summary="删除一个部门信息")
+@dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
 async def delete_dept(
         department_id: int = Query(..., description="部门ID")
 ):
@@ -59,7 +55,7 @@ async def delete_dept(
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@dept.post("/update", summary="更新部门信息")
+@dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
 async def update_dept(
         department_in: DepartmentUpdate = Body(..., description="部门信息")
 ):
@@ -73,29 +69,19 @@ async def update_dept(
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@dept.post("/get", summary="查询一个部门信息")
+@dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
 async def get_dept(
-        department_id: int = Form(None, description="部门ID"),
-        name: str = Form(None, description="部门名称"),
+        department_id: int = Query(..., description="部门ID"),
 ):
-    # 构建查询条件，用户ID或用户名称
-    where: Dict[str, Union[str, int]] = {}
-    if department_id:
-        where["id"] = department_id
-    elif name:
-        where["name"] = name
-    else:
-        return ParameterResponse("参数[id]和[name]不可同时为空")
-
-    instance = await DEPT_CRUD.query(**where)
+    instance = await DEPT_CRUD.query(id=department_id)
     if not instance:
-        return NotFoundResponse(message=f"部门(id={department_id},name={name})信息不存在")
+        return NotFoundResponse(message=f"部门(id={department_id})信息不存在")
 
     data: dict = await instance.to_dict()
     return SuccessResponse(data=data)
 
 
-@dept.get("/list", summary="查看部门列表")
+@dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
 async def list_dept(
         name: str = Query(default=None, description="部门名称"),
 ):
@@ -103,7 +89,7 @@ async def list_dept(
     return SuccessResponse(data=dept_tree)
 
 
-@dept.post("/search", summary="查询多个部门信息")
+@dept.post("/search", summary="查询部门列表", description="支持分页按条件查询部门列表信息（Body）")
 async def search_dept(
         department_in: DepartmentSelect = Body()
 ):
