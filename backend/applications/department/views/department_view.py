@@ -32,7 +32,7 @@ dept = APIRouter()
 
 
 @dept.post("/create", summary="新增部门信息")
-async def create_api(
+async def create_dept(
         department_in: DepartmentCreate = Body()
 ):
     try:
@@ -45,9 +45,9 @@ async def create_api(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@dept.post("/delete", summary="删除一个部门信息")
-async def delete_api(
-        department_id: int = Form(..., description="部门ID")
+@dept.delete("/delete", summary="删除一个部门信息")
+async def delete_dept(
+        department_id: int = Query(..., description="部门ID")
 ):
     try:
         instance = await DEPT_CRUD.delete_department(department_id)
@@ -60,7 +60,7 @@ async def delete_api(
 
 
 @dept.post("/update", summary="更新部门信息")
-async def update_user(
+async def update_dept(
         department_in: DepartmentUpdate = Body(..., description="部门信息")
 ):
     try:
@@ -74,7 +74,7 @@ async def update_user(
 
 
 @dept.post("/get", summary="查询一个部门信息")
-async def get_user(
+async def get_dept(
         department_id: int = Form(None, description="部门ID"),
         name: str = Form(None, description="部门名称"),
 ):
@@ -104,23 +104,23 @@ async def list_dept(
 
 
 @dept.post("/search", summary="查询多个部门信息")
-async def get_apis(
+async def search_dept(
         department_in: DepartmentSelect = Body()
 ):
     page = department_in.page
     page_size = department_in.page_size
     order = department_in.order
+    code = department_in.code
     name = department_in.name
-    initiator = department_in.initiator
     is_deleted = department_in.is_deleted
     created_user = department_in.created_user
     updated_user = department_in.updated_user
 
     q = Q()
+    if code:
+        q &= Q(code__contains=code)
     if name:
         q &= Q(name__contains=name)
-    if initiator:
-        q &= Q(initiator_contains=initiator)
     if is_deleted is not None:
         q &= Q(is_deleted=is_deleted)
     if created_user:

@@ -14,9 +14,9 @@ from pydantic import BaseModel, Field
 class DepartmentCreate(BaseModel):
     code: str = Field(example="DT-CS01", description="部门代码")
     name: str = Field(example="测试一部", description="部门名称")
-    description: Optional[str] = Field(example="测试部门，测试一部", description="部门描述")
-    order: int = Field(example=0, description="排序")
-    parent_id: int = Field(example=0, description="父部门ID")
+    description: Optional[str] = Field(default=None, example="测试部门，测试一部", description="部门描述")
+    order: int = Field(default=0, example=0, description="排序")
+    parent_id: int = Field(default=0, example=0, description="父部门ID")
 
     def create_dict(self):
         return self.model_dump(exclude_unset=True)
@@ -24,12 +24,15 @@ class DepartmentCreate(BaseModel):
 
 class DepartmentUpdate(BaseModel):
     id: int
-    code: Optional[int] = None
+    code: Optional[str] = None
     name: Optional[str] = None
-    leader_id: Optional[int] = None
     description: Optional[str] = None
-    state: Optional[int] = None
+    order: int = 0
+    parent_id: int = 0
     updated_user: Optional[str] = None
+
+    def update_dict(self):
+        return self.model_dump(exclude_unset=True, exclude={"id"})
 
 
 class DepartmentSelect(BaseModel):
