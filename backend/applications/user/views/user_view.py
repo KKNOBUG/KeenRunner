@@ -6,11 +6,10 @@
 @Module  : user_model.py
 @DateTime: 2025/1/18 10:28
 """
-from typing import Dict, Union
-
 from fastapi import APIRouter, Body, Query, Form
 from tortoise.expressions import Q
 
+from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserSelect
 from backend.applications.user.services.user_crud import USER_CRUD
 from backend.core.exceptions.base_exceptions import (
@@ -21,7 +20,6 @@ from backend.core.response.http_response import (
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,
-    ParameterResponse,
     DataAlreadyExistsResponse,
 )
 
@@ -42,7 +40,7 @@ async def create_user(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@user.post("/delete", summary="删除一个用户")
+@user.delete("/delete", summary="删除用户")
 async def delete_user(
         user_id: int = Query(..., description="用户ID")
 ):
@@ -64,6 +62,7 @@ async def update_user(
     try:
         instance = await USER_CRUD.update(id=user_id, obj_in=user_in)
         data = await instance.to_dict()
+        await USER_CRUD.update_roles(instance, user_in.role_ids)
         return SuccessResponse(data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
@@ -71,9 +70,9 @@ async def update_user(
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@user.post("/byId", summary="查询一个用户")
-async def get_user_by_id(
-        user_id: int = Form(..., description="用户ID"),
+@user.get("/get", summary="查看用户")
+async def get_user(
+        user_id: int = Query(..., description="用户ID"),
 ):
     instance = await USER_CRUD.select(id=user_id)
     if not instance:
@@ -95,13 +94,40 @@ async def get_user_by_username(
     return SuccessResponse(data=data)
 
 
+@user.get("/list", summary="查看用户列表")
+async def list_user(
+        page: int = Query(default=1, ge=1, description="页码"),
+        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        order: list = Query(default=["id"], description="排序字段"),
+        username: str = Query(default=None, description="用户名称，用于搜索"),
+        email: str = Query(default=None, description="邮箱地址"),
+        dept_id: int = Query(default=None, description="部门ID"),
+):
+    q = Q()
+    if username:
+        q &= Q(username__contains=username)
+    if email:
+        q &= Q(email__contains=email)
+    if dept_id is not None:
+        q &= Q(dept_id=dept_id)
+    total, user_objs = await USER_CRUD.list(
+        page=page, page_size=page_size, order=order, search=q
+    )
+    data = [await obj.to_dict(m2m=True, exclude_fields=["password"]) for obj in user_objs]
+    for item in data:
+        dept_id = item.pop("dept_id", None)
+        item["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
+
+    return SuccessResponse(data=data, total=total)
+
+
 @user.post("/search", summary="查询多个用户")
 async def get_users(
         user_in: UserSelect = Body()
 ):
-    page = user_in.page_num
+    page = user_in.page
     page_size = user_in.page_size
-    page_order = user_in.page_order
+    order = user_in.order
     username = user_in.username
     alias = user_in.alias
     email = user_in.email
@@ -133,9 +159,15 @@ async def get_users(
         q &= Q(updated_user__contains=updated_user)
 
     total, instances = await USER_CRUD.list(
-        page=page, page_size=page_size, search=q, order=page_order
+        page=page, page_size=page_size, search=q, order=order
     )
     data = [
         await obj.to_dict() for obj in instances
     ]
+    return SuccessResponse(data=data)
+
+
+@user.post("/reset_password", summary="重置密码")
+async def reset_password(user_id: int = Body(..., description="用户ID", embed=True)):
+    data = await USER_CRUD.reset_password(user_id)
     return SuccessResponse(data=data)

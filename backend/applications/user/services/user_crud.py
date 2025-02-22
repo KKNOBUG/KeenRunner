@@ -12,9 +12,11 @@ from typing import Optional, Union, List
 from tortoise.exceptions import DoesNotExist
 
 from backend.applications.base.schemas.token_schema import CredentialsSchema
+from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate
 from backend.core.exceptions.base_exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException
+from backend.core.response.http_response import ForbiddenResponse
 from backend.services.password import verify_password, get_password_hash
 from backend.applications.base.services.scaffold import ScaffoldCrud
 
@@ -63,7 +65,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if not instance:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 
-        instance.is_deleted = 1
+        instance.state = 0
+        instance.is_active = 0
         await instance.save()
         return instance
 
@@ -79,6 +82,23 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 
         data = await instance.to_dict()
+        return data
+
+    @classmethod
+    async def update_roles(cls, user: User, role_ids: List[int]) -> None:
+        await user.roles.clear()
+        for role_id in role_ids:
+            role_obj = await ROLE_CRUD.get(id=role_id)
+            await user.roles.add(role_obj)
+
+    async def reset_password(self, user_id: int):
+        instance = await self.get(id=user_id)
+        if instance.is_superuser:
+            return ForbiddenResponse(message="不允许重置超级管理员密码")
+
+        instance.password = get_password_hash(password="123456")
+        await instance.save()
+        data = await instance.to_dict(exclude_fields=["id", "password"])
         return data
 
 
