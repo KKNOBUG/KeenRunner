@@ -8,14 +8,14 @@
 """
 from typing import Dict, Union
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 from fastapi.params import Form
 from tortoise.expressions import Q
 
 from backend.applications.department.schemas.department_schema import (
     DepartmentCreate, DepartmentUpdate, DepartmentSelect
 )
-from backend.applications.department.services.department_crud import DEPARTMENT_CRUD
+from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.core.exceptions.base_exceptions import (
     DataAlreadyExistsException,
     NotFoundException
@@ -28,15 +28,15 @@ from backend.core.response.http_response import (
     ParameterResponse,
 )
 
-department = APIRouter()
+dept = APIRouter()
 
 
-@department.post("/create", summary="新增部门信息")
+@dept.post("/create", summary="新增部门信息")
 async def create_api(
         department_in: DepartmentCreate = Body()
 ):
     try:
-        instance = await DEPARTMENT_CRUD.create_department(department_in=department_in)
+        instance = await DEPT_CRUD.create_department(department_in=department_in)
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except DataAlreadyExistsException as e:
@@ -45,12 +45,12 @@ async def create_api(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@department.post("/delete", summary="删除一个部门信息")
+@dept.post("/delete", summary="删除一个部门信息")
 async def delete_api(
         department_id: int = Form(..., description="部门ID")
 ):
     try:
-        instance = await DEPARTMENT_CRUD.delete_department(department_id)
+        instance = await DEPT_CRUD.delete_department(department_id)
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except NotFoundException as e:
@@ -59,12 +59,12 @@ async def delete_api(
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@department.post("/update", summary="更新部门信息")
+@dept.post("/update", summary="更新部门信息")
 async def update_user(
         department_in: DepartmentUpdate = Body(..., description="部门信息")
 ):
     try:
-        instance = await DEPARTMENT_CRUD.update_department(department_in)
+        instance = await DEPT_CRUD.update_department(department_in)
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except NotFoundException as e:
@@ -73,7 +73,7 @@ async def update_user(
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@department.post("/get", summary="查询一个部门信息")
+@dept.post("/get", summary="查询一个部门信息")
 async def get_user(
         department_id: int = Form(None, description="部门ID"),
         name: str = Form(None, description="部门名称"),
@@ -87,7 +87,7 @@ async def get_user(
     else:
         return ParameterResponse("参数[id]和[name]不可同时为空")
 
-    instance = await DEPARTMENT_CRUD.query(**where)
+    instance = await DEPT_CRUD.query(**where)
     if not instance:
         return NotFoundResponse(message=f"部门(id={department_id},name={name})信息不存在")
 
@@ -95,13 +95,21 @@ async def get_user(
     return SuccessResponse(data=data)
 
 
-@department.post("/search", summary="Department-查询多个部门信息")
+@dept.get("/list", summary="查看部门列表")
+async def list_dept(
+        name: str = Query(default=None, description="部门名称"),
+):
+    dept_tree = await DEPT_CRUD.get_dept_tree(name)
+    return SuccessResponse(data=dept_tree)
+
+
+@dept.post("/search", summary="查询多个部门信息")
 async def get_apis(
         department_in: DepartmentSelect = Body()
 ):
     page = department_in.page
     page_size = department_in.page_size
-    page_order = department_in.page_order
+    order = department_in.order
     name = department_in.name
     initiator = department_in.initiator
     is_deleted = department_in.is_deleted
@@ -120,8 +128,8 @@ async def get_apis(
     if updated_user:
         q &= Q(updated_user__contains=updated_user)
 
-    total, instances = await DEPARTMENT_CRUD.list(
-        page=page, page_size=page_size, search=q, order=page_order
+    total, instances = await DEPT_CRUD.list(
+        page=page, page_size=page_size, search=q, order=order
     )
     data = [
         await obj.to_dict() for obj in instances
