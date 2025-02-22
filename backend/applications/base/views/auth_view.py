@@ -27,7 +27,7 @@ from backend.services.password import create_access_token
 auth = APIRouter()
 
 
-@auth.post("/access_token", summary="用户鉴权")
+@auth.post("/access_token", summary="用户鉴权", description="验证用户密码和状态并生成令牌")
 async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)
