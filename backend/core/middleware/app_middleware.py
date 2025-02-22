@@ -88,7 +88,8 @@ class ReqResLoggerMiddleware:
                 self.response_headers = {k.decode(): v.decode() for k, v in message.get("headers", {})}
             elif message["type"] == "http.response.body":
                 body = message.get("body", "")
-                self.response_body = body.decode()
+                if "image" not in self.response_headers["content-type"]:
+                    self.response_body = body.decode(errors='ignore')
             await original_send(message)
 
         # 中间件传递
