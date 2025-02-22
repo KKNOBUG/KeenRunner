@@ -7,13 +7,17 @@ venv/
 __pycache__/
 .pytest_cache/
 output/logs/*.log
+backend/output/logs/*.log
+backend/.idea/*
 *.pyc
 *.log
 *.ini
 *.txt
+*.lock
 
 # 前端
 .vscode/*
-frontend/vscode/*
 .node_modules/*
-frontend/node_modules/*
+frontend/vscode/*
+frontend/.idea/*
+frontend/.node_modules/*
