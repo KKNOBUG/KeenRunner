@@ -41,7 +41,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         verified = verify_password(credentials.password, user.password)
         if not verified:
             raise NotFoundException(message="用户名或密码错误")
-        if user.state in (0, 3):
+        if user.state in (0, 4):
             raise NotFoundException(message="用户待岗或已离职")
         return user
 
