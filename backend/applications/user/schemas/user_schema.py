@@ -37,16 +37,15 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     id: int
-    password: Optional[str] = None
+    avatar: Optional[str] = None
     alias: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    avatar: Optional[str] = None
     state: Optional[int] = None
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
-    role_ids: Optional[List[int]] = None
-    dept_id: Optional[int] = None
+    role_ids: Optional[List[int]] = []
+    dept_id: Optional[int] = 0
     updated_user: Optional[str] = None
 
 
@@ -65,3 +64,8 @@ class UserSelect(BaseModel):
     updated_user: Optional[bool] = None
     created_time: Optional[str] = None
     updated_time: Optional[str] = None
+
+
+class UpdatePassword(BaseModel):
+    old_password: str = Field(description="旧密码")
+    new_password: str = Field(description="新密码")
