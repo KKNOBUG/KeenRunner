@@ -6,10 +6,7 @@
 @Module  : api_view.py
 @DateTime: 2025/1/27 10:15
 """
-from typing import Dict, Union
-
 from fastapi import APIRouter, Body, Query
-from fastapi.params import Form
 from starlette.requests import Request
 from tortoise.expressions import Q
 
@@ -21,13 +18,12 @@ from backend.core.response.http_response import (
     FailureResponse,
     DataAlreadyExistsResponse,
     NotFoundResponse,
-    ParameterResponse,
 )
 
 api = APIRouter()
 
 
-@api.post("/create", summary="新增API信息", description="")
+@api.post("/create", summary="新增API信息")
 async def create_api(
         api_in: ApiCreate = Body()
 ):
@@ -41,57 +37,45 @@ async def create_api(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@api.post("/delete", summary="删除API信息", description="")
+@api.delete("/delete", summary="删除API信息", description="根据id删除API信息")
 async def delete_api(
-        api_id: int = Form(..., description="接口ID")
+        api_id: int = Query(..., description="接口ID")
 ):
     try:
         instance = await API_CRUD.delete_api(api_id)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        return SuccessResponse(data=instance)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
     except Exception as e:
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@api.post("/update", summary="更新API信息", description="")
+@api.post("/update", summary="更新API信息", description="根据id更新API信息")
 async def update_user(
         api_in: ApiUpdate = Body(..., description="接口信息")
 ):
     try:
         instance = await API_CRUD.update_api(api_in)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        return SuccessResponse(data=instance)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
     except Exception as e:
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@api.post("/get", summary="查询API信息", description="根据id或path查询API信息")
+@api.get("/get", summary="查询API信息", description="根据id查询API信息")
 async def get_user(
-        api_id: int = Form(None, description="接口ID"),
-        path: str = Form(None, description="接口路径"),
+        api_id: int = Query(None, description="接口ID"),
 ):
-    # 构建查询条件，用户ID或用户名称
-    where: Dict[str, Union[str, int]] = {}
-    if api_id:
-        where["id"] = api_id
-    elif path:
-        where["path"] = path
-    else:
-        return ParameterResponse("参数[id]和[path]不可同时为空")
-
-    instance = await API_CRUD.query(**where)
+    instance = await API_CRUD.query(id=api_id)
     if not instance:
-        return NotFoundResponse(message=f"接口(id={api_id},path={path})信息不存在")
+        return NotFoundResponse(message=f"接口(id={api_id})信息不存在")
 
     data: dict = await instance.to_dict()
     return SuccessResponse(data=data)
 
 
-@api.post("/search", summary="查询API信息", description="根据条件查询多个API信息")
+@api.post("/search", summary="查询API列表", description="支持分页按条件查询API列表信息（Body）")
 async def get_apis(
         api_in: ApiSelect = Body()
 ):
@@ -125,7 +109,7 @@ async def get_apis(
     return SuccessResponse(data=data)
 
 
-@api.get("/list", summary="查看API列表")
+@api.get("/list", summary="查询API列表", description="支持分页按条件查询API列表信息（Query）")
 async def list_api(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -148,7 +132,7 @@ async def list_api(
     return SuccessResponse(data=data, total=total)
 
 
-@api.post("/refresh", summary="刷新API列表", description="重新获取app中所有的APIRouter信息进行落库更新")
+@api.post("/refresh", summary="刷新API列表", description="重新获取项目中所有的APIRouter信息进行数据库更新")
 async def refresh_api(request: Request):
     app = request.app
     data = await API_CRUD.refresh_api(app=app)
