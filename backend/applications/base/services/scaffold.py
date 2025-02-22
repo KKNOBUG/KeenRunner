@@ -170,17 +170,19 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await obj.save()
         return obj
 
-    async def remove(self, id: int) -> None:
+    async def remove(self, id: int) -> ModelType:
         """
         :param id: 要删除的对象的唯一标识符（如果不存在可能会抛出异常）。
         """
         obj = await self.get(id=id)
         await obj.delete()
+        return obj
 
-    async def delete(self, id: int) -> None:
+    async def delete(self, id: int) -> ModelType:
         """
         :param id: 要删除的对象的唯一标识符。
         """
         obj = await self.model.filter(id=id).first()
         if obj:
             await obj.delete()
+        return obj

@@ -34,9 +34,9 @@ class ApiUpdate(BaseModel):
 
 
 class ApiSelect(BaseModel):
-    page_num: int = Field(default=1, ge=1, description="数据页码")
+    page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="数据数量")
-    page_order: Optional[list] = Field(default=["id"], description="数据排序")
+    order: Optional[list] = Field(default=["id"], description="排序字段")
     id: Optional[int] = None
     path: Optional[str] = None
     method: Optional[str] = None

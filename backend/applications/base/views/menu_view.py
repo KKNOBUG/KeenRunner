@@ -17,8 +17,9 @@ menu = APIRouter()
 
 @menu.post("/list", summary="查看菜单列表")
 async def list_menu(
-        page_num: int = Query(default=1, description="页码"),
-        page_size: int = Query(default=10, description="每页数量"),
+        page: int = Query(default=1, ge=1, description="页码"),
+        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        order: list = Query(default=["id"], description="排序字段"),
 ):
     async def get_menu_with_children(menu_id: int):
         menu = await MENU_CRUD.get_by_id(menu_id=menu_id)

@@ -95,9 +95,9 @@ async def get_user(
 async def get_apis(
         api_in: ApiSelect = Body()
 ):
-    page_num = api_in.page_num
+    page = api_in.page
     page_size = api_in.page_size
-    page_order = api_in.page_order
+    order = api_in.order
     id = api_in.id
     path = api_in.path
     method = api_in.method
@@ -117,7 +117,7 @@ async def get_apis(
         q &= Q(tags__contains=tags)
 
     total, instances = await API_CRUD.list(
-        page=page_num, page_size=page_size, search=q, order=page_order
+        page=page, page_size=page_size, search=q, order=order
     )
     data = [
         await obj.to_dict() for obj in instances
@@ -127,8 +127,9 @@ async def get_apis(
 
 @api.get("/list", summary="查看API列表")
 async def list_api(
-        page_num: int = Query(default=1, description="页码"),
-        page_size: int = Query(default=10, description="每页数量"),
+        page: int = Query(default=1, ge=1, description="页码"),
+        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        order: list = Query(default=["id"], description="排序字段"),
         path: str = Query(None, description="API路径"),
         summary: str = Query(None, description="API简介"),
         tags: str = Query(None, description="API模块"),
@@ -140,7 +141,9 @@ async def list_api(
         q &= Q(summary__contains=summary)
     if tags:
         q &= Q(tags__contains=tags)
-    total, api_objs = await API_CRUD.list(page=page_num, page_size=page_size, search=q, order=["tags", "id"])
+    total, api_objs = await API_CRUD.list(
+        page=page, page_size=page_size, search=q, order=order
+    )
     data = [await obj.to_dict() for obj in api_objs]
     return SuccessResponse(data=data, total=total)
 

@@ -8,6 +8,8 @@
 """
 from typing import Optional, List
 
+from backend.applications.base.models.api_model import Api
+from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.role_schema import (
     BaseRole,
@@ -16,6 +18,7 @@ from backend.applications.base.schemas.role_schema import (
     RoleUpdateMenusApis
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.core.exceptions.base_exceptions import DataAlreadyExistsException
 
 
 class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
@@ -30,6 +33,31 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
     async def get_by_name(self, name: str) -> Optional[Role]:
         return await self.model.filter(name=name).first()
+
+    async def is_exist(self, name: str) -> bool:
+        return await self.model.filter(name=name).exists()
+
+    async def create_role(self, role_in: RoleCreate) -> Role:
+        code = role_in.code
+        name = role_in.name
+        instances = await self.model.filter(code=code, name=name).all()
+        if instances:
+            raise DataAlreadyExistsException(message=f"角色(code={code},name={name})信息已存在")
+
+        instance = await self.create(role_in)
+        return instance
+
+    @classmethod
+    async def update_roles(cls, role: Role, menu_ids: List[int], api_infos: List[dict]) -> None:
+        await role.menus.clear()
+        for menu_id in menu_ids:
+            menu_obj = await Menu.filter(id=menu_id).first()
+            await role.menus.add(menu_obj)
+
+        await role.apis.clear()
+        for item in api_infos:
+            api_obj = await Api.filter(path=item.get("path"), method=item.get("method")).first()
+            await role.apis.add(api_obj)
 
 
 ROLE_CRUD = RoleCrud()
