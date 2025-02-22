@@ -40,7 +40,7 @@ class ApiCrud(ScaffoldCrud[Api, ApiCreate, ApiUpdate]):
     async def create_api(self, api_in: ApiCreate) -> Api:
         path = api_in.path
         method = api_in.method
-        instances = self.model.filter(path=path, method=method).all()
+        instances = await self.model.filter(path=path, method=method).all()
         if instances:
             raise DataAlreadyExistsException(message=f"接口(path={path},method={method})信息已存在")
 
@@ -59,7 +59,7 @@ class ApiCrud(ScaffoldCrud[Api, ApiCreate, ApiUpdate]):
     async def update_api(self, api_in: ApiUpdate) -> Api:
         api_id: int = api_in.id
         api_if: dict = {
-            key: value for key, value in api_in.items()
+            key: value for key, value in api_in.dict().items()
             if value is not None
         }
         try:
@@ -67,8 +67,7 @@ class ApiCrud(ScaffoldCrud[Api, ApiCreate, ApiUpdate]):
         except DoesNotExist as e:
             raise NotFoundException(message=f"接口(id={api_id})信息不存在")
 
-        data = await instance.to_dict()
-        return data
+        return instance
 
     async def refresh_api(self, app: FastAPI) -> Optional[List[Api]]:
         # 获取全部API数据
