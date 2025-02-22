@@ -6,9 +6,9 @@
 @Module  : api_schema.py
 @DateTime: 2025/1/31 17:36
 """
-from typing import Optional
+from typing import Optional, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.enums.http_enum import HTTPMethod
 
