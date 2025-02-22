@@ -6,11 +6,11 @@
 @Module  : user_model.py
 @DateTime: 2025/1/18 10:28
 """
-from fastapi import APIRouter, Body, Query, Form
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from backend.applications.department.services.department_crud import DEPT_CRUD
-from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserSelect
+from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserSelect, UpdatePassword
 from backend.applications.user.services.user_crud import USER_CRUD
 from backend.core.exceptions.base_exceptions import (
     DataAlreadyExistsException,
@@ -22,6 +22,9 @@ from backend.core.response.http_response import (
     FailureResponse,
     DataAlreadyExistsResponse,
 )
+from backend.services.ctx import CTX_USER_ID
+from backend.services.dependency import DependAuth
+from backend.services.password import verify_password, get_password_hash
 
 user = APIRouter()
 
@@ -40,7 +43,7 @@ async def create_user(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@user.delete("/delete", summary="删除用户")
+@user.delete("/delete", summary="删除用户", description="根据id删除用户信息")
 async def delete_user(
         user_id: int = Query(..., description="用户ID")
 ):
@@ -54,15 +57,15 @@ async def delete_user(
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@user.post("/update", summary="更新用户")
+@user.post("/update", summary="更新用户", description="根据id更新用户信息")
 async def update_user(
         user_in: UserUpdate = Body(..., description="用户信息")
 ):
     user_id: int = user_in.id
     try:
         instance = await USER_CRUD.update(id=user_id, obj_in=user_in)
-        data = await instance.to_dict()
         await USER_CRUD.update_roles(instance, user_in.role_ids)
+        data = await instance.to_dict()
         return SuccessResponse(data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
@@ -70,7 +73,7 @@ async def update_user(
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@user.get("/get", summary="查看用户")
+@user.get("/get", summary="查询用户信息", description="根据id查询用户信息")
 async def get_user(
         user_id: int = Query(..., description="用户ID"),
 ):
@@ -82,9 +85,9 @@ async def get_user(
     return SuccessResponse(data=data)
 
 
-@user.post("/byUsername", summary="查询一个用户")
+@user.get("/byUsername", summary="查询用户信息", description="根据id查询用户信息")
 async def get_user_by_username(
-        username: str = Form(None, description="用户名称"),
+        username: str = Query(..., description="用户名称"),
 ):
     instance = await USER_CRUD.model.filter(username=username).first()
     if not instance:
@@ -94,7 +97,7 @@ async def get_user_by_username(
     return SuccessResponse(data=data)
 
 
-@user.get("/list", summary="查看用户列表")
+@user.get("/list", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Query）")
 async def list_user(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -121,7 +124,7 @@ async def list_user(
     return SuccessResponse(data=data, total=total)
 
 
-@user.post("/search", summary="查询多个用户")
+@user.post("/search", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Body）")
 async def get_users(
         user_in: UserSelect = Body()
 ):
@@ -165,6 +168,19 @@ async def get_users(
         await obj.to_dict() for obj in instances
     ]
     return SuccessResponse(data=data)
+
+
+@user.post("/update_password", summary="修改密码", dependencies=[DependAuth])
+async def update_user_password(req_in: UpdatePassword):
+    user_id = CTX_USER_ID.get()
+    instance = await USER_CRUD.get(user_id)
+    verified = verify_password(req_in.old_password, instance.password)
+    if not verified:
+        return FailureResponse(message="旧密码验证错误")
+
+    instance.password = get_password_hash(req_in.new_password)
+    await instance.save()
+    return SuccessResponse(message="修改成功")
 
 
 @user.post("/reset_password", summary="重置密码")
