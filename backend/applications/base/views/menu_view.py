@@ -36,7 +36,7 @@ async def list_menu(
     return SuccessResponse(data=res_menu, total=len(res_menu))
 
 
-@menu.post("/get", summary="查看菜单")
+@menu.get("/get", summary="查看菜单", description="根据id查询菜单信息")
 async def get_menu(
         menu_id: int = Query(..., description="菜单id"),
 ):
@@ -52,7 +52,7 @@ async def create_menu(
     return SuccessResponse(data=data)
 
 
-@menu.post("/update", summary="更新菜单")
+@menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
 async def update_menu(
         menu_in: MenuUpdate,
 ):
@@ -60,14 +60,15 @@ async def update_menu(
     return SuccessResponse(data=data)
 
 
-@menu.post("/delete", summary="删除菜单")
+@menu.delete("/delete", summary="删除菜单", description="根据id删除菜单信息")
 async def delete_menu(
         id: int = Query(..., description="菜单id"),
 ):
     child_menu_count = await MENU_CRUD.model.filter(parent_id=id).count()
     if child_menu_count > 0:
         return FailureResponse(message="不能删除带有子菜单的菜单")
-    await MENU_CRUD.remove(id=id)
-    return SuccessResponse(data="Deleted Success")
+    instance = await MENU_CRUD.remove(id=id)
+    data = await instance.to_dict()
+    return SuccessResponse(data=data)
 
 
