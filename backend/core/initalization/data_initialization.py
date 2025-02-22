@@ -16,6 +16,8 @@ from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.schemas.menu_schema import MenuType
 from backend.applications.base.services.api_crud import API_CRUD
 from backend.applications.base.models.role_model import Role
+from backend.applications.department.schemas.department_schema import DepartmentCreate
+from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import USER_CRUD
 
@@ -54,6 +56,56 @@ async def init_database_role():
         await normal_role.apis.add(*basic_apis)
 
 
+async def init_database_dept():
+    depts = await DEPT_CRUD.model.exists()
+    if not depts:
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DT-QT",
+                name="其他",
+                description="系统默认部门，超级用户挂在此处",
+                order="0",
+                parent_id="0"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DT-KF",
+                name="开发部门",
+                description="软件开发部门",
+                order="0",
+                parent_id="0"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DT-CS",
+                name="测试部门",
+                description="软件测试部门",
+                order="0",
+                parent_id="0"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DT-KF01",
+                name="开一已部",
+                description="软件开发部门，开发一部",
+                order="1",
+                parent_id="2"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DT-CS01",
+                name="测试一部",
+                description="软件测试部门，测试一部",
+                order="1",
+                parent_id="3"
+            )
+        )
+
+
 async def init_database_user():
     user = await USER_CRUD.model.exists()
     if not user:
@@ -65,6 +117,7 @@ async def init_database_user():
                 email="admin@test.com",
                 phone="18888888888",
                 avatar="/static/avatar/20250220204648.png",
+                dept_id="1",
                 state=2,
                 is_active=True,
                 is_superuser=True,
@@ -171,7 +224,8 @@ async def init_database_menu():
 
 
 async def init_database_table(app: FastAPI):
+    await init_database_role()
+    await init_database_dept()
     await init_database_user()
     await init_database_menu()
     await init_database_api(app)
-    await init_database_role()
