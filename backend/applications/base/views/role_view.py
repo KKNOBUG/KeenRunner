@@ -27,7 +27,7 @@ async def create_role(role_in: RoleCreate):
     return SuccessResponse(data=data)
 
 
-@role.delete("/delete", summary="删除角色")
+@role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
 async def delete_role(
         role_id: int = Query(..., description="角色ID"),
 ):
@@ -36,7 +36,7 @@ async def delete_role(
     return SuccessResponse(data=data)
 
 
-@role.post("/update", summary="更新角色")
+@role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(role_in: RoleUpdate):
     instance = await ROLE_CRUD.update(id=role_in.id, obj_in=role_in)
     data: dict = await instance.to_dict()
