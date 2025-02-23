@@ -24,7 +24,7 @@ class BaseExceptions(Exception):
             self.message = self.message or errenum.value
 
         self._error = json.dumps(
-            {"错误代码": self.code, "错误信息": self.message}, ensure_ascii=False
+            {"code": self.code, "message": self.message}, ensure_ascii=False
         )
 
     def __str__(self):
@@ -112,4 +112,11 @@ class ResInvalidException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE502)
         kwargs.setdefault("code", BaseErrorEnum.BASE502.code)
+        super().__init__(**kwargs)
+
+
+class SyntaxException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE999)
+        kwargs.setdefault("code", BaseErrorEnum.BASE999.code)
         super().__init__(**kwargs)

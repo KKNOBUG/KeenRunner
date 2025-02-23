@@ -47,6 +47,17 @@ class BadReqResponse(BaseResponse):
         super(BadReqResponse, self).__init__(message=message, data=data, total=total)
 
 
+class SyntaxErrorResponse(BaseResponse):
+    code = Code.CODE999
+    status = Status.FAILURE
+    message = "语法错误"
+    data = {}
+    total = None
+
+    def __init__(self, message: Optional[str] = None, data: DataType = None, total: Optional[int] = None):
+        super(SyntaxErrorResponse, self).__init__(message=message, data=data, total=total)
+
+
 class ParameterResponse(BaseResponse):
     code = Code.CODE400
     status = Status.FAILURE
