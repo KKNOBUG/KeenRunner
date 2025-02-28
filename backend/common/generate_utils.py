@@ -74,6 +74,10 @@ class GenerateUtils:
         return self.faker_cn.company()
 
     @property
+    def generate_bank_account_number(self):
+        return self.faker_cn.credit_card_number()
+
+    @property
     def generate_email(self):
         return self.faker_cn.email()
 
@@ -240,19 +244,22 @@ class GenerateUtils:
         ident_card_gender: str = self.generate_ident_card_gender(ident_card_number)
         ident_card_birthday: str = self.generate_ident_card_birthday(ident_card_number)
         ident_card_age: int = int(self.generate_datetime(fmt=11)) - int(ident_card_birthday[:4])
+        bank_card_name: str = self.generate_bank_account_number
         resp: dict = {
             "name": ident_card_name,
             "alias": self.generate_pinyin(chars=ident_card_name, convert=convert),
-            "ssn": ident_card_number,
-            "job": self.generate_job,
-            "company": self.generate_company,
-            "gender": ident_card_gender,
             "age": str(ident_card_age),
-            "birthday1": ident_card_birthday,
-            "birthday2": ident_card_birthday[:4] + "-" + ident_card_birthday[4:-2] + "-" + ident_card_birthday[-2:],
+            "gender": ident_card_gender,
+            "ssn": ident_card_number,
+            "card": bank_card_name,
             "phone": self.generate_phone,
             "email": self.generate_email,
-            "address": self.generate_address
+            "address": self.generate_address,
+            "company": self.generate_company,
+            "company_address": self.generate_address,
+            "job": self.generate_job,
+            "birthday1": ident_card_birthday,
+            "birthday2": ident_card_birthday[:4] + "-" + ident_card_birthday[4:-2] + "-" + ident_card_birthday[-2:],
         }
         return resp
 
@@ -282,11 +289,14 @@ class GenerateUtils:
         return int(delta.total_seconds())
 
 
+GENERATE = GenerateUtils()
+
 if __name__ == '__main__':
     vd = GenerateUtils()
     # print("国家：", vd.generate_country)
     # print("地址：", vd.generate_address)
     # print("姓名：", vd.generate_name)
+    print("银行卡号：", vd.generate_bank_account_number)
     print("身份证号码：", vd.generate_ident_card_number)
     print("身份证号码：", vd.generate_ident_card_number_condition(1, 10))
     # print("身份证生日：", vd.generate_ident_card_birthday(idn))
