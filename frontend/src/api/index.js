@@ -41,4 +41,10 @@ export default {
   deleteDept: (params = {}) => request.delete('/dept/delete', { params }),
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
+
+  // 工具箱相关
+  runPyCode: (data = {}) => request.post('/toolbox/runcode/python', data),
+  fakerPerson: (data = {}) => request.post('/toolbox/generate/person', data),
+  fakerDateTime: (data = {}) => request.post('/toolbox/generate/datetime', data),
+  fakerRandom: (data = {}) => request.post('/toolbox/generate/random', data),
 }
