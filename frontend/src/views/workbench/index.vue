@@ -58,8 +58,8 @@ import {currentTimePeriod} from "@/utils";
 const dummyText = '一个基于 Vue3.0、FastAPI、Naive UI 的轻量级后台管理模板'
 const {t} = useI18n({useScope: 'global'})
 
-// 生成 1 到 50 之间的随机数字字符串
-const randomNumber = Math.floor(Math.random() * 50) + 1
+// 生成 1 到 100 之间的随机数字字符串
+const randomNumber = Math.floor(Math.random() * 100) + 1
 const randomNumberStr = randomNumber.toString()
 
 // 拼接字符串
