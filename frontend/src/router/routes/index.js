@@ -116,6 +116,47 @@ export const basicRoutes = [
       title: '登录页',
     },
   },
+
+  // 便捷工具
+  {
+    name: 'toolbox',
+    path: '/toolbox',
+    component: Layout,
+    meta: {
+      title: t('views.toolbox.label_toolbox'),
+      icon: 'fluent:box-toolbox-24-regular',
+      order: 2,
+    },
+    children: [
+      {
+        name: 'runCode',
+        path: 'runCode',
+        component: () => import('@/views/toolbox/runcode/index.vue'),
+        meta: {
+          title: 'Python编辑器',
+          icon: 'vscode-icons:file-type-python',
+        },
+      },
+      {
+        name: 'generate',
+        path: 'generate',
+        component: () => import('@/views/toolbox/generate/index.vue'),
+        meta: {
+          title: '虚拟数据生成',
+          icon: 'carbon:data-volume',
+        },
+      },
+      {
+        name: 'jsons',
+        path: 'jsons',
+        component: () => import('@/views/toolbox/jsons/index.vue'),
+        meta: {
+          title: 'JSON编辑器',
+          icon: 'tabler:json',
+        },
+      },
+    ],
+  },
 ]
 
 export const NOT_FOUND_ROUTE = {
