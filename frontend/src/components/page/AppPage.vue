@@ -9,6 +9,8 @@
 </template>
 
 <script setup>
+import AppFooter from "@/components/common/AppFooter.vue";
+
 defineProps({
   showFooter: {
     type: Boolean,
