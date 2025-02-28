@@ -17,7 +17,7 @@ dnspython==2.6.1
 email_validator==2.2.0
 et_xmlfile==2.0.0
 exceptiongroup==1.2.2
-Faker==35.2.2
+Faker==18.10.1
 fastapi==0.115.6
 h11==0.14.0
 idna==3.10
