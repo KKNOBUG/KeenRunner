@@ -12,6 +12,8 @@
     "prettier": "npx prettier --write ."
   },
   "dependencies": {
+    "@codemirror/lang-python": "^6.1.7",
+    "@codemirror/theme-one-dark": "^6.1.2",
     "@iconify/json": "^2.2.228",
     "@iconify/vue": "^4.1.1",
     "@unocss/eslint-config": "^0.55.0",
@@ -23,6 +25,7 @@
     "dotenv": "^16.3.1",
     "eslint": "^8.46.0",
     "fs-extra": "^11.3.0",
+    "highlight.js": "^11.11.1",
     "lodash-es": "^4.17.21",
     "naive-ui": "^2.34.4",
     "pinia": "^2.1.6",
@@ -38,6 +41,7 @@
     "vite-plugin-html": "^3.2.0",
     "vite-plugin-svg-icons": "^2.0.1",
     "vue": "^3.3.4",
+    "vue-codemirror": "^6.1.1",
     "vue-i18n": "9",
     "vue-router": "^4.2.4"
   },
