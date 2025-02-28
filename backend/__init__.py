@@ -10,6 +10,7 @@ import logging
 
 from backend.configure.project_config import PROJECT_CONFIG
 from backend.configure.global_config import GLOBAL_CONFIG
+from backend.common.generate_utils import GENERATE
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,5 +18,6 @@ __all__ = (
     PROJECT_CONFIG,
     GLOBAL_CONFIG,
     LOGGER,
+    GENERATE,
 
 )
