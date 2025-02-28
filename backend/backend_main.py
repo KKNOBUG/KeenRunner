@@ -73,3 +73,5 @@ if __name__ == '__main__':
         reload_delay=PROJECT_CONFIG.SERVER_DELAY,
         log_config=None,
     )
+
+    # 记录依赖：pip list --format=freeze > requirements.txt
