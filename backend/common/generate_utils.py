@@ -9,6 +9,7 @@
 import random
 import string
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Literal, Union
@@ -48,6 +49,32 @@ class GenerateUtils:
         self.faker_cn = Faker(locale="zh_CN")
         self.faker_en = Faker(locale="en_US")
         self.pinyin = Pinyin()
+        self.formats: dict = {
+            11: "%Y",
+            12: "%m",
+            13: "%d",
+            14: "%H",
+            15: "%M",
+            16: "%S",
+
+            21: "%Y%m%d",
+            22: "%Y-%m-%d",
+            23: "%Y{0}%m{1}%d{2}".format("年", "月", "日"),
+
+            31: "%H%M%S",
+            32: "%H:%M:%S",
+            33: "%H{0}%M{1}%S{2}".format("时", "分", "秒"),
+
+            41: "%Y%m%d%H%M%S",
+            42: "%Y-%m-%d %H:%M:%S",
+            43: "%Y/%m/%d %H:%M:%S",
+            44: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}".format("年", "月", "日", "时", "分", "秒"),
+
+            51: "%Y%m%d%H%M%S%f",
+            52: "%Y-%m-%d %H:%M:%S:%f",
+            53: "%Y/%m/%d %H:%M:%S:%f",
+            54: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}%f{6}".format("年", "月", "日", "时", "分", "秒", "毫秒"),
+        }
 
     @property
     def generate_country(self):
@@ -129,6 +156,10 @@ class GenerateUtils:
         return getattr(eval("self.faker_" + funclocale), funcname)(**funcargs or {})
 
     @staticmethod
+    def generate_random_number(min: int, max: int) -> int:
+        return random.randint(min, max)
+
+    @staticmethod
     def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
         try:
             length: int = int(length)
@@ -164,8 +195,7 @@ class GenerateUtils:
 
         return generate_string[::-1]
 
-    @staticmethod
-    def generate_datetime(year: int = None, month: int = None, day: int = None,
+    def generate_datetime(self, year: int = None, month: int = None, day: int = None,
                           hour: int = None, minute: int = None, second: int = None,
                           fmt: Optional[Union[int, str]] = None, isMicrosecond: bool = False) -> Union[datetime, str]:
         """
@@ -200,35 +230,11 @@ class GenerateUtils:
             current_datetime = current_datetime + relativedelta(seconds=second)
         # 格式化
         if fmt:
-            formats: dict = {
-                11: "%Y",
-                12: "%m",
-                13: "%d",
-                14: "%H",
-                15: "%M",
-                16: "%S",
-
-                21: "%Y%m%d",
-                22: "%Y-%m-%d",
-                23: "%Y{0}%m{1}%d{2}".format("年", "月", "日"),
-
-                31: "%H%M%S",
-                32: "%H:%M:%S",
-                33: "%H{0}%M{1}%S{2}".format("时", "分", "秒"),
-
-                41: "%Y%m%d%H%M%S",
-                42: "%Y-%m-%d %H:%M:%S",
-                43: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}".format("年", "月", "日", "时", "分", "秒"),
-
-                51: "%Y%m%d%H%M%S%f",
-                52: "%Y-%m-%d %H:%M:%S:%f",
-                53: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}%f{6}".format("年", "月", "日", "时", "分", "秒", "毫秒"),
-            }
             if fmt not in (23, 33, 43, 53):
-                current_datetime = current_datetime.strftime(formats.get(fmt, fmt))
+                current_datetime = current_datetime.strftime(self.formats.get(fmt, fmt))
             else:
                 current_datetime = current_datetime.strftime(
-                    formats.get(fmt, fmt).encode("unicode_escape").decode('utf-8')
+                    self.formats.get(fmt, fmt).encode("unicode_escape").decode('utf-8')
                 ).encode("utf-8").decode("unicode_escape")
         return current_datetime
 
@@ -269,15 +275,19 @@ class GenerateUtils:
         全局流水号，28位（年 + 月 + 日 + 时 + 分 + 秒 + 毫秒 + 9999 + 4位随机数）
         """
         stamp = self.generate_datetime(fmt=51, isMicrosecond=True)
-        point = self.generate_string(length=4)
-        g1 = stamp + "9999" + point
-        g2 = stamp + "9999" + point[::-1]
-        g3 = stamp + "9999" + point[::2] + point[::3]
+        g1 = stamp + "9999" + self.generate_string(length=4)
+        g2 = stamp + "9999" + self.generate_string(length=4)
+        g3 = stamp + "9999" + self.generate_string(length=4)
         return g1, g2, g3
 
     @property
     def generate_uuid(self):
         return uuid.uuid4().__str__()
+
+    @property
+    def generate_timestamp(self):
+        timestamp = int(time.time() * 1000)
+        return str(timestamp)
 
     @property
     def generate_seconds_until_22h(self):
@@ -296,9 +306,9 @@ if __name__ == '__main__':
     # print("国家：", vd.generate_country)
     # print("地址：", vd.generate_address)
     # print("姓名：", vd.generate_name)
-    print("银行卡号：", vd.generate_bank_account_number)
-    print("身份证号码：", vd.generate_ident_card_number)
-    print("身份证号码：", vd.generate_ident_card_number_condition(1, 10))
+    # print("银行卡号：", vd.generate_bank_account_number)
+    # print("身份证号码：", vd.generate_ident_card_number)
+    # print("身份证号码：", vd.generate_ident_card_number_condition(1, 10))
     # print("身份证生日：", vd.generate_ident_card_birthday(idn))
     # print("身份证性别：", vd.generate_ident_card_gender(idn))
     # print("周名：", vd.generate_week_name)
@@ -315,8 +325,9 @@ if __name__ == '__main__':
     # print("时间：", vd.generate_datetime(fmt=31))
     # print("时间：", vd.generate_datetime(fmt=41))
     # print("时间：", vd.generate_datetime(fmt="%Y----%m"))
-    print("时间：", vd.generate_datetime(year=int("-1"), fmt=23))
+    # print("时间：", vd.generate_datetime(year=int("-1"), fmt=23))
     # print("时间：", vd.generate_datetime(fmt="%Y----%23"))
+    print("时间戳：", vd.generate_timestamp)
     # print("拼音：", vd.generate_pinyin("上海银行"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-", convert="upper"))
