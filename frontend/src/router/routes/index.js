@@ -124,7 +124,7 @@ export const basicRoutes = [
     component: Layout,
     meta: {
       title: t('views.toolbox.label_toolbox'),
-      icon: 'fluent:box-toolbox-24-regular',
+      icon: 'streamline:desktop-favorite-star',
       order: 2,
     },
     children: [
