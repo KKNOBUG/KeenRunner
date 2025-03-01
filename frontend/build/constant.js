@@ -8,7 +8,8 @@ export const PROXY_CONFIG = {
    */
   '/api': {
     // target: 'http://localhost:8518/',
-    target: 'http://192.168.94.229:8518',
+    // target: 'http://192.168.94.229:8518',
+    target: 'http://192.168.94.230:8518',
     // target: 'http://172.20.10.2:8518',
     changeOrigin: true,
     rewrite: (path) => path.replace(new RegExp('^/api'), ''),
