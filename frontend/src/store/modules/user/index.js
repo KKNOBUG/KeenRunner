@@ -27,7 +27,7 @@ export const useUserStore = defineStore('user', {
       return this.userInfo?.phone
     },
     avatar() {
-      return "http://172.20.10.2:8518" + this.userInfo?.avatar
+      return "http://192.168.94.230:8518" + this.userInfo?.avatar
     },
     state() {
       return this.userInfo?.state
