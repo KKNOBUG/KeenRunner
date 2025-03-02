@@ -17,8 +17,8 @@ from backend import GENERATE
 generate = APIRouter()
 
 
-@generate.post("/person", summary="随机生成虚拟信息")
-async def generate_person(rq_in: GenerateVirtualInfo = Body(...)):
+@generate.post("/info", summary="随机生成虚拟信息")
+async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
     data: Dict[str, Any] = {}
     number: int = rq_in.number
     minAge: int = rq_in.minAge
@@ -92,17 +92,15 @@ async def generate_person(rq_in: GenerateVirtualInfo = Body(...)):
     # 随机数字
     for z in randomOption:
         if z == "uuid":
-            number: int = GENERATE.generate_random_number(3, 10)
-            data[z] = [GENERATE.generate_uuid for _ in range(number)]
+            data[z] = [GENERATE.generate_uuid for _ in range(5)]
         elif z == "timestamp":
             data[z] = GENERATE.generate_timestamp
         elif z == "global":
             data[z] = GENERATE.generate_global_serial_number
         elif z == "random":
             series: list = []
-            number: int = GENERATE.generate_random_number(3, 10)
-            for i in range(number):
-                length: int = GENERATE.generate_random_number(8, 20)
+            for i in range(5):
+                length: int = GENERATE.generate_random_number(6, 30)
                 series.append(GENERATE.generate_string(length=length))
 
             data[z] = series
