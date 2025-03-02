@@ -70,6 +70,7 @@ class ProjectConfig:
     OUTPUT_DATAGRAM_DIR = os.path.abspath(os.path.join(OUTPUT_DIR, "datagram"))
     OUTPUT_JMX_DIR = os.path.abspath(os.path.join(OUTPUT_DIR, "jmx"))
     OUTPUT_XLSX_DIR = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
+    OUTPUT_DOCS_DIR = os.path.abspath(os.path.join(OUTPUT_DIR, "docs"))
     SERVICES_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "services"))
     STATIC_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "static"))
     STATIC_IMG_DIR = os.path.abspath(os.path.join(STATIC_DIR, "image"))
