@@ -92,17 +92,12 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
     # 随机数字
     for z in randomOption:
         if z == "uuid":
-            data[z] = [GENERATE.generate_uuid for _ in range(5)]
+            data[z] = [GENERATE.generate_uuid for _ in range(number)]
         elif z == "timestamp":
-            data[z] = GENERATE.generate_timestamp
+            data[z] = [GENERATE.generate_timestamp for _ in range(number)]
         elif z == "global":
-            data[z] = GENERATE.generate_global_serial_number
+            data[z] = [GENERATE.generate_global_serial_number for _ in range(number)]
         elif z == "random":
-            series: list = []
-            for i in range(5):
-                length: int = GENERATE.generate_random_number(6, 30)
-                series.append(GENERATE.generate_string(length=length))
-
-            data[z] = series
+            data[z] = [GENERATE.generate_string(length=GENERATE.generate_random_number(6, 30))]
 
     return SuccessResponse(data=data)
