@@ -278,7 +278,7 @@ class GenerateUtils:
         g1 = stamp + "9999" + self.generate_string(length=4)
         g2 = stamp + "9999" + self.generate_string(length=4)
         g3 = stamp + "9999" + self.generate_string(length=4)
-        return g1, g2, g3
+        return stamp + "9999" + self.generate_string(length=4)
 
     @property
     def generate_uuid(self):
@@ -286,8 +286,9 @@ class GenerateUtils:
 
     @property
     def generate_timestamp(self):
-        timestamp = int(time.time() * 1000)
-        return str(timestamp)
+        now = datetime.now()
+        timestamp = (now - datetime(1970, 1, 1)).total_seconds() * 1000000
+        return int(timestamp)
 
     @property
     def generate_seconds_until_22h(self):
