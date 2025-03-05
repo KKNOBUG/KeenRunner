@@ -8,8 +8,10 @@
 """
 from typing import Dict, Any
 
+from pydantic_settings import BaseSettings
 
-class GlobalConfig:
+
+class GlobalConfig(BaseSettings):
     ROUTE_ALIAS: Dict[str, Any] = {}
     DATE_FORMAT: str = "%Y-%m-%d"
     TIME_FORMAT: str = "%H:%M:%S"
