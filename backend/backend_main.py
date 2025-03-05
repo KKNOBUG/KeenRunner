@@ -51,7 +51,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-register_logging()
+logger = register_logging()
 register_exceptions(app)
 register_middlewares(app)
 register_routers(app)
