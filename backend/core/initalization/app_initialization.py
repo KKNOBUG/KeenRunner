@@ -6,13 +6,13 @@
 @Module  : app_initialization.py
 @DateTime: 2025/1/17 21:55
 """
-import logging.config
 import os
-import shutil
 import sys
+import shutil
 from datetime import datetime
 from typing import Dict, Any
 
+from loguru import logger
 from aerich import Command
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
@@ -23,7 +23,7 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
 from backend import PROJECT_CONFIG
-from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
+from backend.configure.logging_config import loguru_logging
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
@@ -34,11 +34,18 @@ from backend.core.exceptions.http_exceptions import (
 from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
 
 
-def register_logging() -> None:
-    logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
+def register_logging() -> logger:
+    # logging属于同步存在阻塞问题
+    # import logging
+    # from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
+    # logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
+
+    loguru_logging()
+
+    return logger
 
 
-async def register_database(app: FastAPI):
+async def register_database(app: FastAPI) -> None:
     config: Dict[str, Any] = {
         "connections": PROJECT_CONFIG.DATABASE_CONNECTIONS,
         "apps": {
