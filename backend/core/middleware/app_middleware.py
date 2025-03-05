@@ -7,7 +7,6 @@
 @DateTime: 2025/1/17 22:29
 """
 import time
-from typing import Any
 
 from fastapi import Request
 from starlette.types import ASGIApp, Scope, Receive, Send
