@@ -7,7 +7,8 @@
 @DateTime: 2025/1/18 10:48
 """
 import asyncio
-from datetime import datetime
+from decimal import Decimal
+from datetime import datetime, date, time
 from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional
 
 from pydantic import BaseModel
@@ -29,8 +30,16 @@ class ScaffoldModel(models.Model):
         for field in self._meta.db_fields:
             if field not in exclude_fields:
                 value = getattr(self, field)
-                if isinstance(value, datetime):
+                if isinstance(value, date):
+                    value = value.strftime(GLOBAL_CONFIG.DATE_FORMAT)
+                elif isinstance(value, time):
+                    value = value.strftime(GLOBAL_CONFIG.TIME_FORMAT)
+                elif isinstance(value, datetime):
                     value = value.strftime(GLOBAL_CONFIG.DATETIME_FORMAT)
+                elif isinstance(value, bytes):
+                    value = value.decode("utf-8")
+                elif isinstance(value, Decimal):
+                    value = float(value)
                 d[field] = value
 
         if m2m:
@@ -67,7 +76,11 @@ class ScaffoldModel(models.Model):
 
 
 class UUIDModel:
-    uuid = fields.UUIDField(unique=True, pk=False, index=True, description="唯一标识符")
+    uuid = fields.UUIDField(unique=True, description="唯一标识符")
+
+
+class PacketModel:
+    pid = fields.BigIntField(index=True, description="分组标识符")
 
 
 class TimestampMixin:
