@@ -1,0 +1,361 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>图形用户界面（GUI）常见问题 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="“为什么我的电脑上安装了 Python ？”" href="installed.html" />
+    <link rel="prev" title="Python在Windows上的常见问题" href="windows.html" />
+    <link rel="canonical" href="https://docs.python.org/3/faq/gui.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">图形用户界面（GUI）常见问题</a><ul>
+<li><a class="reference internal" href="#general-gui-questions">图形界面常见问题</a></li>
+<li><a class="reference internal" href="#what-platform-independent-gui-toolkits-exist-for-python">Python 是否有平台无关的图形界面工具包？</a></li>
+<li><a class="reference internal" href="#what-platform-specific-gui-toolkits-exist-for-python">有哪些Python的GUI工具是某个平台专用的？</a></li>
+<li><a class="reference internal" href="#tkinter-questions">有关Tkinter的问题</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="windows.html"
+                        title="上一章">Python在Windows上的常见问题</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="installed.html"
+                        title="下一章">“为什么我的电脑上安装了 Python ？”</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/faq/gui.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="installed.html" title="“为什么我的电脑上安装了 Python ？”"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="windows.html" title="Python在Windows上的常见问题"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Python 常见问题</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="graphic-user-interface-faq">
+<h1><a class="toc-backref" href="#id3">图形用户界面（GUI）常见问题</a><a class="headerlink" href="#graphic-user-interface-faq" title="永久链接至标题">¶</a></h1>
+<div class="contents topic" id="id1">
+<p class="topic-title">目录</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#graphic-user-interface-faq" id="id3">图形用户界面（GUI）常见问题</a></p>
+<ul>
+<li><p><a class="reference internal" href="#general-gui-questions" id="id4">图形界面常见问题</a></p></li>
+<li><p><a class="reference internal" href="#what-platform-independent-gui-toolkits-exist-for-python" id="id5">Python 是否有平台无关的图形界面工具包？</a></p>
+<ul>
+<li><p><a class="reference internal" href="#tkinter" id="id6">Tkinter</a></p></li>
+<li><p><a class="reference internal" href="#wxwidgets" id="id7">wxWidgets</a></p></li>
+<li><p><a class="reference internal" href="#qt" id="id8">Qt</a></p></li>
+<li><p><a class="reference internal" href="#gtk" id="id9">Gtk+</a></p></li>
+<li><p><a class="reference internal" href="#kivy" id="id10">Kivy</a></p></li>
+<li><p><a class="reference internal" href="#fltk" id="id11">FLTK</a></p></li>
+<li><p><a class="reference internal" href="#opengl" id="id12">OpenGL</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#what-platform-specific-gui-toolkits-exist-for-python" id="id13">有哪些Python的GUI工具是某个平台专用的？</a></p></li>
+<li><p><a class="reference internal" href="#tkinter-questions" id="id14">有关Tkinter的问题</a></p>
+<ul>
+<li><p><a class="reference internal" href="#how-do-i-freeze-tkinter-applications" id="id15">我怎样“冻结”Tkinter程序？</a></p></li>
+<li><p><a class="reference internal" href="#can-i-have-tk-events-handled-while-waiting-for-i-o" id="id16">在等待 I/O 操作时能够处理 Tk 事件吗？</a></p></li>
+<li><p><a class="reference internal" href="#i-can-t-get-key-bindings-to-work-in-tkinter-why" id="id17">在Tkinter中键绑定不工作：为什么？</a></p></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="general-gui-questions">
+<h2><a class="toc-backref" href="#id4">图形界面常见问题</a><a class="headerlink" href="#general-gui-questions" title="永久链接至标题">¶</a></h2>
+</section>
+<section id="what-platform-independent-gui-toolkits-exist-for-python">
+<h2><a class="toc-backref" href="#id5">Python 是否有平台无关的图形界面工具包？</a><a class="headerlink" href="#what-platform-independent-gui-toolkits-exist-for-python" title="永久链接至标题">¶</a></h2>
+<p>针对不同的（操作系统或）平台，有多种工具包可供选择。虽然有些工具包还没有移植到 Python 3 上，但至少目前 <a class="reference internal" href="#tkinter">Tkinter</a> 以及 <a class="reference internal" href="#qt">Qt</a> 是兼容 Python 3 的。</p>
+<section id="tkinter">
+<h3><a class="toc-backref" href="#id6">Tkinter</a><a class="headerlink" href="#tkinter" title="永久链接至标题">¶</a></h3>
+<p>Python 的标准编译包含了 <a class="reference internal" href="../library/tk.html#tkinter"><span class="std std-ref">tkinter</span></a>。这是一个面向对象的接口，指向  Tcl/Tk 微件包。 该接口大概是最容易安装（因为该接口包含在 Python 的大部分 <a class="reference external" href="https://www.python.org/downloads/">二进制发行版</a> 中）和使用的工具包。要了解 Tk 的详情，比如源代码等，可访问 <a class="reference external" href="https://www.tcl.tk">Tcl/Tk 项目主页</a>。 Tcl/Tk 可完整移植至 Mac OS X，Windows 和 Unix 操作系统上。</p>
+</section>
+<section id="wxwidgets">
+<h3><a class="toc-backref" href="#id7">wxWidgets</a><a class="headerlink" href="#wxwidgets" title="永久链接至标题">¶</a></h3>
+<p>wxWidgets (<a class="reference external" href="https://www.wxwidgets.org">https://www.wxwidgets.org</a>) 是一个自由、可移植的 GUI 图形用户界面类库，使用 C++ 编写。它可以在多个操作系统平台上提供原生自然的界面观感。包括Windows、Mac OS X、 GTK 和 X11 平台在内，都是wxWidgets 当前稳定支持的平台。在语言绑定适配方面，wxWidgets 类库可用于较多语言，包括 Python，Perl，Ruby等。</p>
+<p><a class="reference external" href="https://www.wxpython.org">wxPython</a> 是 wxWidgets 的 Python 适配。虽然该绑定在更新进度上经常会稍稍落后于 wxWidgets，但它利用纯 Python 扩展，提供了许多其他语言绑定没有实现的特性。wxPython 有一个活跃的用户和开发者社区。</p>
+<p>wxWidgets 和 wxPython 都是自由开源库。宽松的许可证允许人们在商业软件、自由软件和共享软件中使用它们。</p>
+</section>
+<section id="qt">
+<h3><a class="toc-backref" href="#id8">Qt</a><a class="headerlink" href="#qt" title="永久链接至标题">¶</a></h3>
+<p>Qt 工具包 (可使用 <a class="reference external" href="https://riverbankcomputing.com/software/pyqt/intro">PyQt</a> 或 <a class="reference external" href="https://wiki.qt.io/PySide">PySide</a>) 及 KDE (<a class="reference external" href="https://techbase.kde.org/Languages/Python/Using_PyKDE_4">PyKDE4</a>) 有多个绑定适配可供选择。 PyQt 当前相较 PySide 更成熟，但如果你想编写专有软件，就必须要从 <a class="reference external" href="https://www.riverbankcomputing.com/commercial/license-faq">Riverbank Computing</a> 购买 PyQt 许可证。 PySide 则可以自由使用于各类软件。</p>
+<p>Qt 4.5 以上版本使用 LGPL 进行许可；此外，商业许可证可从 <a class="reference external" href="https://www.qt.io/licensing/">Qt 公司</a> 那里获得。</p>
+</section>
+<section id="gtk">
+<h3><a class="toc-backref" href="#id9">Gtk+</a><a class="headerlink" href="#gtk" title="永久链接至标题">¶</a></h3>
+<p>针对 Python 的 <a class="reference external" href="https://wiki.gnome.org/Projects/PyGObject">GObject 内省绑定</a> 可以用于编写 GTK+ 3 应用。 另请参阅 <a class="reference external" href="https://python-gtk-3-tutorial.readthedocs.io">Python GTK+ 3 教程</a>。</p>
+<p>更早的、针对 <a class="reference external" href="https://www.gtk.org">Gtk+ 2 工具包</a> 的 PyGtk 绑定，是由 James Henstridge 实现的。具体请参考 &lt;<a class="reference external" href="http://www.pygtk.org">http://www.pygtk.org</a>&gt;。</p>
+</section>
+<section id="kivy">
+<h3><a class="toc-backref" href="#id10">Kivy</a><a class="headerlink" href="#kivy" title="永久链接至标题">¶</a></h3>
+<p><a class="reference external" href="https://kivy.org/">Kivy</a> 是一种跨平台图形用户界面库，同时支持桌面操作系统（Windows，macOS 和 Linux）以及移动设备（Android，iOS）。该库使用 Python 和 Cython 编写，可以使用一系列窗口后端。</p>
+<p>Kivy 是自由的开源软件，使用 MIT 许可证分发。</p>
+</section>
+<section id="fltk">
+<h3><a class="toc-backref" href="#id11">FLTK</a><a class="headerlink" href="#fltk" title="永久链接至标题">¶</a></h3>
+<p><a class="reference external" href="http://www.fltk.org">the FLTK toolkit</a> 的Python绑定是简单却功能强大且成熟的跨平台窗口系统，可以在  <a class="reference external" href="http://pyfltk.sourceforge.net">the PyFLTK project</a> 里获得相关信息。</p>
+</section>
+<section id="opengl">
+<h3><a class="toc-backref" href="#id12">OpenGL</a><a class="headerlink" href="#opengl" title="永久链接至标题">¶</a></h3>
+<p>对于OpenGL绑定，请参阅 <a class="reference external" href="http://pyopengl.sourceforge.net">PyOpenGL</a>。</p>
+</section>
+</section>
+<section id="what-platform-specific-gui-toolkits-exist-for-python">
+<h2><a class="toc-backref" href="#id13">有哪些Python的GUI工具是某个平台专用的？</a><a class="headerlink" href="#what-platform-specific-gui-toolkits-exist-for-python" title="永久链接至标题">¶</a></h2>
+<p>通过安装 <a class="reference external" href="https://pypi.org/project/pyobjc/">PyObjc Objective-C bridge</a>，Python程序可以使用Mac OS X的Cocoa库。</p>
+<p>Mark Hammond的 <a class="reference internal" href="windows.html#windows-faq"><span class="std std-ref">Pythonwin</span></a> 包括一个微软基础类(MFC)的接口和一个绝大多数由使用MFC类的Python写成的Python编程环境。</p>
+</section>
+<section id="tkinter-questions">
+<h2><a class="toc-backref" href="#id14">有关Tkinter的问题</a><a class="headerlink" href="#tkinter-questions" title="永久链接至标题">¶</a></h2>
+<section id="how-do-i-freeze-tkinter-applications">
+<h3><a class="toc-backref" href="#id15">我怎样“冻结”Tkinter程序？</a><a class="headerlink" href="#how-do-i-freeze-tkinter-applications" title="永久链接至标题">¶</a></h3>
+<p>Freeze （意为 “冻结”）是一个用来创建独立应用程序的工具。 当 “冻结” Tkinter 程序时，程序并不是真的能够独立运行，因为程序仍然需要 Tcl 和 Tk 库。</p>
+<p>一种解决方法是将程序与 Tcl 和 Tk 库一同发布，并且在运行时使用环境变量 <span class="target" id="index-4"></span><code class="xref std std-envvar docutils literal notranslate"><span class="pre">TCL_LIBRARY</span></code> 和 <span class="target" id="index-5"></span><code class="xref std std-envvar docutils literal notranslate"><span class="pre">TK_LIBRARY</span></code> 指向他们的位置。</p>
+<p>为了获得真正能独立运行的应用程序，来自库里的 Tcl 脚本也需要被整合进应用程序。 一个做这种事情的工具叫 SAM (stand-alone modules，独立模块) ，它是 Tix distribution (<a class="reference external" href="http://tix.sourceforge.net/">http://tix.sourceforge.net/</a>) 的一部分。</p>
+<p>在启用 SAM 时编译 Tix ，在 Python 文件  <code class="file docutils literal notranslate"><span class="pre">Modules/tkappinit.c</span></code> 中执行对 <code class="xref c c-func docutils literal notranslate"><span class="pre">Tclsam_init()</span></code> 等的适当调用，并且将程序与 libtclsam 和 libtksam 相链接（可能也要包括 Tix 的库）。</p>
+</section>
+<section id="can-i-have-tk-events-handled-while-waiting-for-i-o">
+<h3><a class="toc-backref" href="#id16">在等待 I/O 操作时能够处理 Tk 事件吗？</a><a class="headerlink" href="#can-i-have-tk-events-handled-while-waiting-for-i-o" title="永久链接至标题">¶</a></h3>
+<p>在 Windows 以外的其他平台上可以，你甚至不需要使用线程！ 但是你必须稍微修改一下你的 I/O 代码。 Tk 有与 Xt 的 <code class="xref c c-func docutils literal notranslate"><span class="pre">XtAddInput()</span></code> 对应的调用，它允许你注册一个回调函数，当一个文件描述符可以进行 I/O 操作的时候，Tk 主循环将会调用这个回调函数。 参见 <a class="reference internal" href="../library/tkinter.html#tkinter-file-handlers"><span class="std std-ref">文件处理程序</span></a>。</p>
+</section>
+<section id="i-can-t-get-key-bindings-to-work-in-tkinter-why">
+<h3><a class="toc-backref" href="#id17">在Tkinter中键绑定不工作：为什么？</a><a class="headerlink" href="#i-can-t-get-key-bindings-to-work-in-tkinter-why" title="永久链接至标题">¶</a></h3>
+<p>经常听到的抱怨是：已经通过  <code class="xref py py-meth docutils literal notranslate"><span class="pre">bind()</span></code> 方法绑定了事件的处理程序，但是，当按下相关的按键后，这个处理程序却没有执行。</p>
+<p>最常见的原因是，那个绑定的控件没有“键盘焦点”。请在 Tk 文档中查找 focus 指令。通常一个控件要获得“键盘焦点”，需要点击那个控件（而不是标签；请查看 takefocus 选项）。</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">图形用户界面（GUI）常见问题</a><ul>
+<li><a class="reference internal" href="#general-gui-questions">图形界面常见问题</a></li>
+<li><a class="reference internal" href="#what-platform-independent-gui-toolkits-exist-for-python">Python 是否有平台无关的图形界面工具包？</a></li>
+<li><a class="reference internal" href="#what-platform-specific-gui-toolkits-exist-for-python">有哪些Python的GUI工具是某个平台专用的？</a></li>
+<li><a class="reference internal" href="#tkinter-questions">有关Tkinter的问题</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="windows.html"
+                        title="上一章">Python在Windows上的常见问题</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="installed.html"
+                        title="下一章">“为什么我的电脑上安装了 Python ？”</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/faq/gui.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="installed.html" title="“为什么我的电脑上安装了 Python ？”"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="windows.html" title="Python在Windows上的常见问题"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 常见问题</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>

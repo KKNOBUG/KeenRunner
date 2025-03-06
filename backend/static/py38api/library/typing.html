@@ -1,0 +1,1579 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>typing —— 对类型提示的支持 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="pydoc --- 文档生成器和在线帮助系统" href="pydoc.html" />
+    <link rel="prev" title="开发工具" href="development.html" />
+    <link rel="canonical" href="https://docs.python.org/3/library/typing.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">typing</span></code> —— 对类型提示的支持</a><ul>
+<li><a class="reference internal" href="#type-aliases">类型别名</a></li>
+<li><a class="reference internal" href="#newtype">NewType</a></li>
+<li><a class="reference internal" href="#callable">可调对象（Callable）</a></li>
+<li><a class="reference internal" href="#generics">泛型（Generic）</a></li>
+<li><a class="reference internal" href="#user-defined-generic-types">用户定义的泛型类型</a></li>
+<li><a class="reference internal" href="#the-any-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code> 类型</a></li>
+<li><a class="reference internal" href="#nominal-vs-structural-subtyping">名义子类型 vs 结构子类型</a></li>
+<li><a class="reference internal" href="#classes-functions-and-decorators">类,函数和修饰器.</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="development.html"
+                        title="上一章">开发工具</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="pydoc.html"
+                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pydoc</span></code> --- 文档生成器和在线帮助系统</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/typing.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="pydoc.html" title="pydoc --- 文档生成器和在线帮助系统"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="development.html" title="开发工具"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="development.html" accesskey="U">开发工具</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-typing">
+<span id="typing-support-for-type-hints"></span><h1><a class="reference internal" href="#module-typing" title="typing: Support for type hints (see :pep:`484`)."><code class="xref py py-mod docutils literal notranslate"><span class="pre">typing</span></code></a> —— 对类型提示的支持<a class="headerlink" href="#module-typing" title="永久链接至标题">¶</a></h1>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5 新版功能.</span></p>
+</div>
+<p><strong>源代码：</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/typing.py">Lib/typing.py</a></p>
+<div class="admonition note">
+<p class="admonition-title">注解</p>
+<p>Python 运行时不强制要求函数与变量类型注解。它们可被类型检查器、IDE、错误检查器等第三方工具使用。</p>
+</div>
+<hr class="docutils" />
+<p>此模块为运行时提供了 <span class="target" id="index-48"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a> 、 <span class="target" id="index-49"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0526"><strong>PEP 526</strong></a> 、 <span class="target" id="index-50"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0544"><strong>PEP 544</strong></a> 、 <span class="target" id="index-51"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0586"><strong>PEP 586</strong></a> 、 <span class="target" id="index-52"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0589"><strong>PEP 589</strong></a> 和 <span class="target" id="index-53"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0591"><strong>PEP 591</strong></a> 规定的类型提示。最基本的支持由 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>，<a class="reference internal" href="#typing.Union" title="typing.Union"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code></a>，<a class="reference internal" href="#typing.Tuple" title="typing.Tuple"><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code></a>，<a class="reference internal" href="#typing.Callable" title="typing.Callable"><code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code></a>，<a class="reference internal" href="#typing.TypeVar" title="typing.TypeVar"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypeVar</span></code></a> 和 <a class="reference internal" href="#typing.Generic" title="typing.Generic"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generic</span></code></a> 类型组成。有关完整的规范，请参阅 <span class="target" id="index-54"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a>。有关类型提示的简单介绍，请参阅 <span class="target" id="index-55"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0483"><strong>PEP 483</strong></a>。</p>
+<p>下面的函数接收与返回的都是字符串，注解方式如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">greeting</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="s1">&#39;Hello &#39;</span> <span class="o">+</span> <span class="n">name</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">greeting</span></code> 函数中，参数 <code class="docutils literal notranslate"><span class="pre">name</span></code> 的类型应是 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>，返回类型是 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>。子类型也可以作为参数。</p>
+<section id="type-aliases">
+<h2>类型别名<a class="headerlink" href="#type-aliases" title="永久链接至标题">¶</a></h2>
+<p>类型别名通过将类型分配给别名来定义。在这个例子中， <code class="docutils literal notranslate"><span class="pre">Vector</span></code> 和 <code class="docutils literal notranslate"><span class="pre">List[float]</span></code> 将被视为可互换的同义词:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="n">Vector</span> <span class="o">=</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
+
+<span class="k">def</span> <span class="nf">scale</span><span class="p">(</span><span class="n">scalar</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">vector</span><span class="p">:</span> <span class="n">Vector</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Vector</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">scalar</span> <span class="o">*</span> <span class="n">num</span> <span class="k">for</span> <span class="n">num</span> <span class="ow">in</span> <span class="n">vector</span><span class="p">]</span>
+
+<span class="c1"># typechecks; a list of floats qualifies as a Vector.</span>
+<span class="n">new_vector</span> <span class="o">=</span> <span class="n">scale</span><span class="p">(</span><span class="mf">2.0</span><span class="p">,</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">4.2</span><span class="p">,</span> <span class="mf">5.4</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>类型别名适用于简化复杂的类型签名。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Sequence</span>
+
+<span class="n">ConnectionOptions</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+<span class="n">Address</span> <span class="o">=</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span>
+<span class="n">Server</span> <span class="o">=</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Address</span><span class="p">,</span> <span class="n">ConnectionOptions</span><span class="p">]</span>
+
+<span class="k">def</span> <span class="nf">broadcast_message</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">servers</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Server</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="o">...</span>
+
+<span class="c1"># The static type checker will treat the previous type signature as</span>
+<span class="c1"># being exactly equivalent to this one.</span>
+<span class="k">def</span> <span class="nf">broadcast_message</span><span class="p">(</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">servers</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>注意，<code class="docutils literal notranslate"><span class="pre">None</span></code> 能作为类型提示是一个特例，它会被自动替换为 <code class="docutils literal notranslate"><span class="pre">type(None)</span></code>。</p>
+</section>
+<section id="newtype">
+<span id="distinct"></span><h2>NewType<a class="headerlink" href="#newtype" title="永久链接至标题">¶</a></h2>
+<p>使用 <a class="reference internal" href="#typing.NewType" title="typing.NewType"><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code></a> 辅助函数创建不同的类型:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">NewType</span>
+
+<span class="n">UserId</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;UserId&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">some_id</span> <span class="o">=</span> <span class="n">UserId</span><span class="p">(</span><span class="mi">524313</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>静态类型检查器把新类型当作原始类型的子类，这种方式适用于捕捉逻辑错误：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">get_user_name</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="n">UserId</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="o">...</span>
+
+<span class="c1"># typechecks</span>
+<span class="n">user_a</span> <span class="o">=</span> <span class="n">get_user_name</span><span class="p">(</span><span class="n">UserId</span><span class="p">(</span><span class="mi">42351</span><span class="p">))</span>
+
+<span class="c1"># does not typecheck; an int is not a UserId</span>
+<span class="n">user_b</span> <span class="o">=</span> <span class="n">get_user_name</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">UserId</span></code> 类型的变量可执行所有 <code class="docutils literal notranslate"><span class="pre">int</span></code> 操作，但返回结果都是 <code class="docutils literal notranslate"><span class="pre">int</span></code> 类型。这种方式允许在预期 <code class="docutils literal notranslate"><span class="pre">int</span></code> 时传入 <code class="docutils literal notranslate"><span class="pre">UserId</span></code>，还能防止意外创建无效的 <code class="docutils literal notranslate"><span class="pre">UserId</span></code>：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># &#39;output&#39; is of type &#39;int&#39;, not &#39;UserId&#39;</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">UserId</span><span class="p">(</span><span class="mi">23413</span><span class="p">)</span> <span class="o">+</span> <span class="n">UserId</span><span class="p">(</span><span class="mi">54341</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>注意，这些检查只由静态类型检查器强制执行。 在运行时，语句 <code class="docutils literal notranslate"><span class="pre">Derived</span> <span class="pre">=</span> <span class="pre">NewType('Derived',</span> <span class="pre">Base)</span></code> 将产生一个 <code class="docutils literal notranslate"><span class="pre">Derived</span></code> 函数，该函数立即返回你传递给它的任何参数。 这意味着表达式 <code class="docutils literal notranslate"><span class="pre">Derived(some_value)</span></code> 不会创建一个新的类，也不会引入超出常规函数调用的很多开销。</p>
+<p>更确切地说，在运行时，<code class="docutils literal notranslate"><span class="pre">some_value</span> <span class="pre">is</span> <span class="pre">Derived(some_value)</span></code> 表达式总为 True。</p>
+<p>也就是说，不能创建 <code class="docutils literal notranslate"><span class="pre">Derived</span></code> 的子类型，因为，在运行时，它是标识函数，不是真正的类型：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">NewType</span>
+
+<span class="n">UserId</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;UserId&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+
+<span class="c1"># Fails at runtime and does not typecheck</span>
+<span class="k">class</span> <span class="nc">AdminUserId</span><span class="p">(</span><span class="n">UserId</span><span class="p">):</span> <span class="k">pass</span>
+</pre></div>
+</div>
+<p>然而，我们可以在 &quot;派生的&quot; <code class="docutils literal notranslate"><span class="pre">NewType</span></code> 的基础上创建一个 <a class="reference internal" href="#typing.NewType" title="typing.NewType"><code class="xref py py-class docutils literal notranslate"><span class="pre">NewType</span></code></a>。</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">NewType</span>
+
+<span class="n">UserId</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;UserId&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+
+<span class="n">ProUserId</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;ProUserId&#39;</span><span class="p">,</span> <span class="n">UserId</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>同时，<code class="docutils literal notranslate"><span class="pre">ProUserId</span></code> 的类型检查也可以按预期执行。</p>
+<p>详见 <span class="target" id="index-56"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a>。</p>
+<div class="admonition note">
+<p class="admonition-title">注解</p>
+<p>请记住使用类型别名将声明两个类型是相互 <em>等价</em> 的。 使用 <code class="docutils literal notranslate"><span class="pre">Alias</span> <span class="pre">=</span> <span class="pre">Original</span></code> 将使静态类型检查器在任何情况下都把 <code class="docutils literal notranslate"><span class="pre">Alias</span></code> 视为与 <code class="docutils literal notranslate"><span class="pre">Original</span></code> <em>完全等价</em>。 这在你想要简化复杂的类型签名时会很有用处。</p>
+<p>反之，<code class="docutils literal notranslate"><span class="pre">NewType</span></code> 声明把一种类型当作另一种类型的 <em>子类型</em>。<code class="docutils literal notranslate"><span class="pre">Derived</span> <span class="pre">=</span> <span class="pre">NewType('Derived',</span> <span class="pre">Original)</span></code> 时，静态类型检查器把 <code class="docutils literal notranslate"><span class="pre">Derived</span></code> 当作 <code class="docutils literal notranslate"><span class="pre">Original</span></code> 的 <em>子类</em> ，即，<code class="docutils literal notranslate"><span class="pre">Original</span></code> 类型的值不能用在预期 <code class="docutils literal notranslate"><span class="pre">Derived</span></code> 类型的位置。这种方式适用于以最小运行时成本防止逻辑错误。</p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</section>
+<section id="callable">
+<h2>可调对象（Callable）<a class="headerlink" href="#callable" title="永久链接至标题">¶</a></h2>
+<p>预期特定签名回调函数的框架可以用 <code class="docutils literal notranslate"><span class="pre">Callable[[Arg1Type,</span> <span class="pre">Arg2Type],</span> <span class="pre">ReturnType]</span></code> 实现类型提示。</p>
+<p>例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span>
+
+<span class="k">def</span> <span class="nf">feeder</span><span class="p">(</span><span class="n">get_next_item</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="c1"># Body</span>
+
+<span class="k">def</span> <span class="nf">async_query</span><span class="p">(</span><span class="n">on_success</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">],</span>
+                <span class="n">on_error</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">],</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="c1"># Body</span>
+</pre></div>
+</div>
+<p>无需指定调用签名，用省略号字面量替换类型提示里的参数列表： <code class="docutils literal notranslate"><span class="pre">Callable[...,</span> <span class="pre">ReturnType]</span></code>，就可以声明可调对象的返回类型。</p>
+</section>
+<section id="generics">
+<span id="id1"></span><h2>泛型（Generic）<a class="headerlink" href="#generics" title="永久链接至标题">¶</a></h2>
+<p>容器中，对象的类型信息不能以泛型方式静态推断，因此，抽象基类扩展支持下标，用于表示容器元素的预期类型。</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Mapping</span><span class="p">,</span> <span class="n">Sequence</span>
+
+<span class="k">def</span> <span class="nf">notify_by_email</span><span class="p">(</span><span class="n">employees</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Employee</span><span class="p">],</span>
+                    <span class="n">overrides</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>泛型可以通过使用typing模块中名为 <a class="reference internal" href="#typing.TypeVar" title="typing.TypeVar"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypeVar</span></code></a> 的新工厂进行参数化。</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">TypeVar</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>      <span class="c1"># Declare type variable</span>
+
+<span class="k">def</span> <span class="nf">first</span><span class="p">(</span><span class="n">l</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">T</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>   <span class="c1"># Generic function</span>
+    <span class="k">return</span> <span class="n">l</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="user-defined-generic-types">
+<h2>用户定义的泛型类型<a class="headerlink" href="#user-defined-generic-types" title="永久链接至标题">¶</a></h2>
+<p>用户定义的类可以定义为泛型类。</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Generic</span>
+<span class="kn">from</span> <span class="nn">logging</span> <span class="kn">import</span> <span class="n">Logger</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">LoggedVar</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">T</span><span class="p">]):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Set &#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">new</span>
+
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Get &#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+
+    <span class="k">def</span> <span class="nf">log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Generic[T]</span></code> 是定义类 <code class="docutils literal notranslate"><span class="pre">LoggedVar</span></code> 的基类，该类使用单类型参数 <code class="docutils literal notranslate"><span class="pre">T</span></code>。在该类体内，<code class="docutils literal notranslate"><span class="pre">T</span></code> 是有效的类型。</p>
+<p><a class="reference internal" href="#typing.Generic" title="typing.Generic"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generic</span></code></a> 基类定义了 <a class="reference internal" href="../reference/datamodel.html#object.__class_getitem__" title="object.__class_getitem__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__class_getitem__()</span></code></a> ，使得 <code class="docutils literal notranslate"><span class="pre">LoggedVar[t]</span></code> 作为类型有效：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Iterable</span>
+
+<span class="k">def</span> <span class="nf">zero_all_vars</span><span class="p">(</span><span class="nb">vars</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">LoggedVar</span><span class="p">[</span><span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">:</span>
+        <span class="n">var</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>泛型类型可以有任意数量的类型变量，并且类型变量可能会受到限制:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Generic</span>
+<span class="o">...</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;S&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">StrangePair</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">T</span><span class="p">,</span> <span class="n">S</span><span class="p">]):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="#typing.Generic" title="typing.Generic"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generic</span></code></a> 类型变量的参数应各不相同。下列代码就是无效的：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Generic</span>
+<span class="o">...</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Pair</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">]):</span>   <span class="c1"># INVALID</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>您可以通过 <a class="reference internal" href="#typing.Generic" title="typing.Generic"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generic</span></code></a> 来使用多重继承：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">Sized</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">LinkedList</span><span class="p">(</span><span class="n">Sized</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">T</span><span class="p">]):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>继承自泛型类时，可以修正某些类型变量：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Mapping</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">MyDict</span><span class="p">(</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">T</span><span class="p">]):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>在这个例子中，<code class="docutils literal notranslate"><span class="pre">MyDict</span></code> 就只有一个参数 <code class="docutils literal notranslate"><span class="pre">T</span></code>。</p>
+<p>未指定泛型类的类型参数时，每个位置的类型都预设为 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>。下例中，<code class="docutils literal notranslate"><span class="pre">MyIterable</span></code> 不是泛型，但却隐式继承了 <code class="docutils literal notranslate"><span class="pre">Iterable[Any]</span></code>：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Iterable</span>
+
+<span class="k">class</span> <span class="nc">MyIterable</span><span class="p">(</span><span class="n">Iterable</span><span class="p">):</span> <span class="c1"># Same as Iterable[Any]</span>
+</pre></div>
+</div>
+<p>还支持用户定义的泛型类型别名。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;S&#39;</span><span class="p">)</span>
+<span class="n">Response</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="n">S</span><span class="p">],</span> <span class="nb">int</span><span class="p">]</span>
+
+<span class="c1"># Return type here is same as Union[Iterable[str], int]</span>
+<span class="k">def</span> <span class="nf">response</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="o">...</span>
+
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">)</span>
+<span class="n">Vec</span> <span class="o">=</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">]]</span>
+
+<span class="k">def</span> <span class="nf">inproduct</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span> <span class="c1"># Same as Iterable[Tuple[T, T]]</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">y</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">v</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.7 版更改: </span><a class="reference internal" href="#typing.Generic" title="typing.Generic"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generic</span></code></a> 不再支持自定义元类。</p>
+</div>
+<p>抽象基类可作为用户定义的泛型类的基类，且不会与元类冲突。现已不再支持泛型元类。参数化泛型的输出结果会被缓存，typing 模块的大多数类型都可哈希、可进行等价对比。</p>
+</section>
+<section id="the-any-type">
+<h2><a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 类型<a class="headerlink" href="#the-any-type" title="永久链接至标题">¶</a></h2>
+<p><a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 是一种特殊的类型。静态类型检查器认为所有类型均与 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 兼容，同样，<a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 也与所有类型兼容。</p>
+<p>也就是说，可对 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 类型的值执行任何操作或方法调用，并赋值给任意变量：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="kc">None</span>    <span class="c1"># type: Any</span>
+<span class="n">a</span> <span class="o">=</span> <span class="p">[]</span>      <span class="c1"># OK</span>
+<span class="n">a</span> <span class="o">=</span> <span class="mi">2</span>       <span class="c1"># OK</span>
+
+<span class="n">s</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>      <span class="c1"># type: str</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">a</span>       <span class="c1"># OK</span>
+
+<span class="k">def</span> <span class="nf">foo</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="c1"># Typechecks; &#39;item&#39; could be any type,</span>
+    <span class="c1"># and that type might have a &#39;bar&#39; method</span>
+    <span class="n">item</span><span class="o">.</span><span class="n">bar</span><span class="p">()</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>注意，<a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 类型的值赋给更精确的类型时，不执行类型检查。例如，把 <code class="docutils literal notranslate"><span class="pre">a</span></code> 赋给 <code class="docutils literal notranslate"><span class="pre">s</span></code>，在运行时，即便 <code class="docutils literal notranslate"><span class="pre">s</span></code> 已声明为 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a> 类型，但接收 <a class="reference internal" href="functions.html#int" title="int"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a> 值时，静态类型检查器也不会报错。</p>
+<p>此外，未指定返回值与参数类型的函数，都隐式地默认使用 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">legacy_parser</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">return</span> <span class="n">data</span>
+
+<span class="c1"># A static type checker will treat the above</span>
+<span class="c1"># as having the same signature as:</span>
+<span class="k">def</span> <span class="nf">legacy_parser</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="o">...</span>
+    <span class="k">return</span> <span class="n">data</span>
+</pre></div>
+</div>
+<p>需要混用动态与静态类型代码时，此操作把 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 当作 <em>应急出口</em>。</p>
+<p><a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 和 <a class="reference internal" href="functions.html#object" title="object"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a> 的区别。与 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 相似，所有类型都是 <a class="reference internal" href="functions.html#object" title="object"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a> 的子类型。然而，与 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 不同，object 不可逆：<a class="reference internal" href="functions.html#object" title="object"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a> <em>不是</em> 其它类型的子类型。</p>
+<p>就是说，值的类型是 <a class="reference internal" href="functions.html#object" title="object"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a> 时，类型检查器几乎会拒绝所有对它的操作，并且，把它赋给更精确的类型变量（或返回值）属于类型错误。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">hash_a</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="c1"># Fails; an object does not have a &#39;magic&#39; method.</span>
+    <span class="n">item</span><span class="o">.</span><span class="n">magic</span><span class="p">()</span>
+    <span class="o">...</span>
+
+<span class="k">def</span> <span class="nf">hash_b</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="c1"># Typechecks</span>
+    <span class="n">item</span><span class="o">.</span><span class="n">magic</span><span class="p">()</span>
+    <span class="o">...</span>
+
+<span class="c1"># Typechecks, since ints and strs are subclasses of object</span>
+<span class="n">hash_a</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">hash_a</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">)</span>
+
+<span class="c1"># Typechecks, since Any is compatible with all types</span>
+<span class="n">hash_b</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">hash_b</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>使用 <a class="reference internal" href="functions.html#object" title="object"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a>，说明值能以类型安全的方式转为任何类型。使用 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>，说明值是动态类型。</p>
+</section>
+<section id="nominal-vs-structural-subtyping">
+<h2>名义子类型 vs 结构子类型<a class="headerlink" href="#nominal-vs-structural-subtyping" title="永久链接至标题">¶</a></h2>
+<p>最初 <span class="target" id="index-57"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a> 将 Python 的静态类型系统定义为使用 <em>名义性子类型</em>。即是说，当且仅当 <code class="docutils literal notranslate"><span class="pre">A</span></code> 是 <code class="docutils literal notranslate"><span class="pre">B</span></code> 的子类时，可在需要 <code class="docutils literal notranslate"><span class="pre">B</span></code> 类时提供 <code class="docutils literal notranslate"><span class="pre">A</span></code> 类。</p>
+<p>此项要求以前也适用于抽象基类，例如，<a class="reference internal" href="collections.abc.html#collections.abc.Iterable" title="collections.abc.Iterable"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterable</span></code></a> 。这种方式的问题在于，定义类时必须显式说明，既不 Pythonic，也不是动态类型式 Python 代码的惯用写法。例如，下列代码就遵从了 <span class="target" id="index-58"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a> 的规范：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Sized</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Iterator</span>
+
+<span class="k">class</span> <span class="nc">Bucket</span><span class="p">(</span><span class="n">Sized</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p><span class="target" id="index-59"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0544"><strong>PEP 544</strong></a> 允许用户在类定义时不显式说明基类，从而解决了这一问题，静态类型检查器隐式认为 <code class="docutils literal notranslate"><span class="pre">Bucket</span></code> 既是 <code class="docutils literal notranslate"><span class="pre">Sized</span></code> 的子类型，又是 <code class="docutils literal notranslate"><span class="pre">Iterable[int]</span></code> 的子类型。这就是 <em>结构子类型</em> （又称为静态鸭子类型）：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Iterable</span>
+
+<span class="k">class</span> <span class="nc">Bucket</span><span class="p">:</span>  <span class="c1"># Note: no base classes</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span> <span class="o">...</span>
+
+<span class="k">def</span> <span class="nf">collect</span><span class="p">(</span><span class="n">items</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span> <span class="o">...</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">collect</span><span class="p">(</span><span class="n">Bucket</span><span class="p">())</span>  <span class="c1"># Passes type check</span>
+</pre></div>
+</div>
+<p>此外，结构子类型的优势在于，通过继承特殊类 <a class="reference internal" href="#typing.Protocol" title="typing.Protocol"><code class="xref py py-class docutils literal notranslate"><span class="pre">Protocol</span></code></a> ，用户可以定义新的自定义协议（见下文中的例子）。</p>
+</section>
+<section id="classes-functions-and-decorators">
+<h2>类,函数和修饰器.<a class="headerlink" href="#classes-functions-and-decorators" title="永久链接至标题">¶</a></h2>
+<p>这个模块定义了如下的类,模块和修饰器.</p>
+<dl class="class">
+<dt id="typing.TypeVar">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">TypeVar</code><a class="headerlink" href="#typing.TypeVar" title="永久链接至目标">¶</a></dt>
+<dd><p>类型变量。</p>
+<p>用法：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span>  <span class="c1"># Can be anything</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;A&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)</span>  <span class="c1"># Must be str or bytes</span>
+</pre></div>
+</div>
+<p>Type variables exist primarily for the benefit of static type
+checkers.  They serve as the parameters for generic types as well
+as for generic function definitions.  See class Generic for more
+information on generic types.  Generic functions work as follows:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">repeat</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a list containing n references to x.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">*</span><span class="n">n</span>
+
+<span class="k">def</span> <span class="nf">longest</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">A</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">A</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">A</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the longest of two strings.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="k">else</span> <span class="n">y</span>
+</pre></div>
+</div>
+<p>本质上，后例的签名重载了 <code class="docutils literal notranslate"><span class="pre">(str,</span> <span class="pre">str)</span> <span class="pre">-&gt;</span> <span class="pre">str</span></code> 与 <code class="docutils literal notranslate"><span class="pre">(bytes,</span> <span class="pre">bytes)</span> <span class="pre">-&gt;</span> <span class="pre">bytes</span></code>。注意，参数是 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a> 子类的实例时，返回类型仍是纯 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>。</p>
+<p>在运行时，<code class="docutils literal notranslate"><span class="pre">isinstance(x,</span> <span class="pre">T)</span></code> 会触发 <a class="reference internal" href="exceptions.html#TypeError" title="TypeError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">TypeError</span></code></a> 异常。一般而言，<a class="reference internal" href="functions.html#isinstance" title="isinstance"><code class="xref py py-func docutils literal notranslate"><span class="pre">isinstance()</span></code></a> 和 <a class="reference internal" href="functions.html#issubclass" title="issubclass"><code class="xref py py-func docutils literal notranslate"><span class="pre">issubclass()</span></code></a> 不应与类型搭配使用。</p>
+<p>通过 <code class="docutils literal notranslate"><span class="pre">covariant=True</span></code> 或 <code class="docutils literal notranslate"><span class="pre">contravariant=True</span></code> 可以把类型变量标记为协变量或逆变量。详见 <span class="target" id="index-60"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a>。默认情况下，类型变量是不变量。类型变量还可以用 <code class="docutils literal notranslate"><span class="pre">bound=&lt;type&gt;</span></code> 指定上限。这里的意思是，（显式或隐式地）取代类型变量的实际类型必须是限定类型的子类，详见 <span class="target" id="index-61"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a>。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Generic">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Generic</code><a class="headerlink" href="#typing.Generic" title="永久链接至目标">¶</a></dt>
+<dd><p>用于泛型类型的抽象基类。</p>
+<p>泛型类型一般通过继承含一个或多个类型变量的类实例进行声明。例如，泛型映射类型定义如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Mapping</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">KT</span><span class="p">,</span> <span class="n">VT</span><span class="p">]):</span>
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="n">KT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VT</span><span class="p">:</span>
+        <span class="o">...</span>
+        <span class="c1"># Etc.</span>
+</pre></div>
+</div>
+<p>该类的用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">X</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;X&#39;</span><span class="p">)</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;Y&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">lookup_name</span><span class="p">(</span><span class="n">mapping</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="n">X</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="n">Y</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Y</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">mapping</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">default</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Protocol">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Protocol</code><span class="sig-paren">(</span><em class="sig-param">Generic</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Protocol" title="永久链接至目标">¶</a></dt>
+<dd><p>Protocol 类的基类。Protocol 类的定义如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Proto</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">meth</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>这些类主要与静态类型检查器搭配使用，用来识别结构子类型（静态鸭子类型），例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">C</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">meth</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+<span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Proto</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">meth</span><span class="p">()</span>
+
+<span class="n">func</span><span class="p">(</span><span class="n">C</span><span class="p">())</span>  <span class="c1"># Passes static type check</span>
+</pre></div>
+</div>
+<p>详见 <span class="target" id="index-62"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0544"><strong>PEP 544</strong></a>。Protocol 类用 <a class="reference internal" href="#typing.runtime_checkable" title="typing.runtime_checkable"><code class="xref py py-func docutils literal notranslate"><span class="pre">runtime_checkable()</span></code></a> （见下文）装饰，忽略类型签名，仅检查给定属性是否存在，充当简要的运行时协议。</p>
+<p>Protocol 类可以是泛型，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">GenProto</span><span class="p">(</span><span class="n">Protocol</span><span class="p">[</span><span class="n">T</span><span class="p">]):</span>
+    <span class="k">def</span> <span class="nf">meth</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Type">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Type</code><span class="sig-paren">(</span><em class="sig-param">Generic[CT_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Type" title="永久链接至目标">¶</a></dt>
+<dd><p>用 <code class="docutils literal notranslate"><span class="pre">C</span></code> 注解的变量可以接受类型 <code class="docutils literal notranslate"><span class="pre">C</span></code> 的值。反之，用 <code class="docutils literal notranslate"><span class="pre">Type[C]</span></code> 注解的变量可以接受类自身的值 — 准确地说，是接受 <code class="docutils literal notranslate"><span class="pre">C</span></code> 的 <em>类对象</em>，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="mi">3</span>         <span class="c1"># Has type &#39;int&#39;</span>
+<span class="n">b</span> <span class="o">=</span> <span class="nb">int</span>       <span class="c1"># Has type &#39;Type[int]&#39;</span>
+<span class="n">c</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>   <span class="c1"># Also has type &#39;Type[int]&#39;</span>
+</pre></div>
+</div>
+<p>注意，<code class="docutils literal notranslate"><span class="pre">Type[C]</span></code> 为协变量：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">User</span><span class="p">:</span> <span class="o">...</span>
+<span class="k">class</span> <span class="nc">BasicUser</span><span class="p">(</span><span class="n">User</span><span class="p">):</span> <span class="o">...</span>
+<span class="k">class</span> <span class="nc">ProUser</span><span class="p">(</span><span class="n">User</span><span class="p">):</span> <span class="o">...</span>
+<span class="k">class</span> <span class="nc">TeamUser</span><span class="p">(</span><span class="n">User</span><span class="p">):</span> <span class="o">...</span>
+
+<span class="c1"># Accepts User, BasicUser, ProUser, TeamUser, ...</span>
+<span class="k">def</span> <span class="nf">make_new_user</span><span class="p">(</span><span class="n">user_class</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">User</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">User</span><span class="p">:</span>
+    <span class="c1"># ...</span>
+    <span class="k">return</span> <span class="n">user_class</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Type[C]</span></code> 为协变量的意思是指， <code class="docutils literal notranslate"><span class="pre">C</span></code> 的所有子类都应使用与 <code class="docutils literal notranslate"><span class="pre">C</span></code> 相同的构造器签名及类方法签名。类型检查器应标记违反此项规定的内容，但也应允许符合指定基类构造器调用的子类进行构造器调用。<span class="target" id="index-63"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a>  修订版将来可能会调整类型检查器对这种特例的处理方式。</p>
+<p> <a class="reference internal" href="#typing.Type" title="typing.Type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Type</span></code></a> 合法的参数仅有类、<a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 、<a class="reference internal" href="#generics"><span class="std std-ref">类型变量</span></a> 以及上述类型的联合类型。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">new_non_team_user</span><span class="p">(</span><span class="n">user_class</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">BasicUser</span><span class="p">,</span> <span class="n">ProUser</span><span class="p">]]):</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p> <code class="docutils literal notranslate"><span class="pre">Type[Any]</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">Type</span></code>，进而等价于 Python 元类架构的根基，<code class="docutils literal notranslate"><span class="pre">type</span></code>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Iterable">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Iterable</code><span class="sig-paren">(</span><em class="sig-param">Generic[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Iterable" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Iterable" title="collections.abc.Iterable"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Iterable</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Iterator">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Iterator</code><span class="sig-paren">(</span><em class="sig-param">Iterable[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Iterator" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Iterator" title="collections.abc.Iterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Iterator</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Reversible">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Reversible</code><span class="sig-paren">(</span><em class="sig-param">Iterable[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Reversible" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Reversible" title="collections.abc.Reversible"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Reversible</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsInt">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsInt</code><a class="headerlink" href="#typing.SupportsInt" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__int__</span></code>。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsFloat">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsFloat</code><a class="headerlink" href="#typing.SupportsFloat" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__float__</span></code>。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsComplex">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsComplex</code><a class="headerlink" href="#typing.SupportsComplex" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__complex__</span></code>。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsBytes">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsBytes</code><a class="headerlink" href="#typing.SupportsBytes" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__bytes__</span></code>。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsIndex">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsIndex</code><a class="headerlink" href="#typing.SupportsIndex" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__index__</span></code>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsAbs">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsAbs</code><a class="headerlink" href="#typing.SupportsAbs" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__abs__</span></code>，该方法与其返回类型协变。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.SupportsRound">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">SupportsRound</code><a class="headerlink" href="#typing.SupportsRound" title="永久链接至目标">¶</a></dt>
+<dd><p>一个抽象基类，含一个抽象方法 <code class="docutils literal notranslate"><span class="pre">__round__</span></code>，该方法与其返回类型协变。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Container">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Container</code><span class="sig-paren">(</span><em class="sig-param">Generic[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Container" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Container" title="collections.abc.Container"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Container</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Hashable">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Hashable</code><a class="headerlink" href="#typing.Hashable" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Hashable" title="collections.abc.Hashable"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Hashable</span></code></a> 的别名。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Sized">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Sized</code><a class="headerlink" href="#typing.Sized" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Sized" title="collections.abc.Sized"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Sized</span></code></a> 的别名。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Collection">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Collection</code><span class="sig-paren">(</span><em class="sig-param">Sized, Iterable[T_co], Container[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Collection" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Collection" title="collections.abc.Collection"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Collection</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.0 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.AbstractSet">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">AbstractSet</code><span class="sig-paren">(</span><em class="sig-param">Sized, Collection[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.AbstractSet" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Set" title="collections.abc.Set"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Set</span></code></a>  的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.MutableSet">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">MutableSet</code><span class="sig-paren">(</span><em class="sig-param">AbstractSet[T]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.MutableSet" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.MutableSet" title="collections.abc.MutableSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.MutableSet</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Mapping">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Mapping</code><span class="sig-paren">(</span><em class="sig-param">Sized, Collection[KT], Generic[VT_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Mapping" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Mapping" title="collections.abc.Mapping"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Mapping</span></code></a> 的泛型版本。用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">get_position_in_index</span><span class="p">(</span><span class="n">word_list</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">word</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">word_list</span><span class="p">[</span><span class="n">word</span><span class="p">]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.MutableMapping">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">MutableMapping</code><span class="sig-paren">(</span><em class="sig-param">Mapping[KT, VT]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.MutableMapping" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.MutableMapping" title="collections.abc.MutableMapping"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.MutableMapping</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Sequence">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Sequence</code><span class="sig-paren">(</span><em class="sig-param">Reversible[T_co], Collection[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Sequence" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Sequence" title="collections.abc.Sequence"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Sequence</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.MutableSequence">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">MutableSequence</code><span class="sig-paren">(</span><em class="sig-param">Sequence[T]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.MutableSequence" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.MutableSequence" title="collections.abc.MutableSequence"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.MutableSequence</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.ByteString">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ByteString</code><span class="sig-paren">(</span><em class="sig-param">Sequence[int]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.ByteString" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.ByteString" title="collections.abc.ByteString"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.ByteString</span></code></a> 的泛型版本。</p>
+<p>该类型代表了 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a>、<a class="reference internal" href="stdtypes.html#bytearray" title="bytearray"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytearray</span></code></a>、<a class="reference internal" href="stdtypes.html#memoryview" title="memoryview"><code class="xref py py-class docutils literal notranslate"><span class="pre">memoryview</span></code></a> 等字节序列类型。</p>
+<p>作为该类型的简称，<a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 可用于标注上述任意类型的参数。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Deque">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Deque</code><span class="sig-paren">(</span><em class="sig-param">deque, MutableSequence[T]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Deque" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.html#collections.deque" title="collections.deque"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.deque</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.4 新版功能.</span></p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.1 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.List">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">List</code><span class="sig-paren">(</span><em class="sig-param">list, MutableSequence[T]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.List" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="stdtypes.html#list" title="list"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a> 的泛型版本。适用于注解返回类型。注解参数时，最好使用 <a class="reference internal" href="#typing.Sequence" title="typing.Sequence"><code class="xref py py-class docutils literal notranslate"><span class="pre">Sequence</span></code></a> 或 <a class="reference internal" href="#typing.Iterable" title="typing.Iterable"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterable</span></code></a> 等抽象容器类型。</p>
+<p>该类型用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">vec2</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">]</span>
+
+<span class="k">def</span> <span class="nf">keep_positives</span><span class="p">(</span><span class="n">vector</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">T</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">vector</span> <span class="k">if</span> <span class="n">item</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Set">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Set</code><span class="sig-paren">(</span><em class="sig-param">set, MutableSet[T]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Set" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="stdtypes.html#set" title="set"><code class="xref py py-class docutils literal notranslate"><span class="pre">builtins.set</span></code></a> 的泛型版本。适用于注解返回类型。注解参数时，最好使用 <a class="reference internal" href="#typing.AbstractSet" title="typing.AbstractSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractSet</span></code></a> 等抽象容器类型。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.FrozenSet">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">FrozenSet</code><span class="sig-paren">(</span><em class="sig-param">frozenset, AbstractSet[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.FrozenSet" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="stdtypes.html#frozenset" title="frozenset"><code class="xref py py-class docutils literal notranslate"><span class="pre">builtins.frozenset</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.MappingView">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">MappingView</code><span class="sig-paren">(</span><em class="sig-param">Sized, Iterable[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.MappingView" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.MappingView" title="collections.abc.MappingView"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.MappingView</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.KeysView">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">KeysView</code><span class="sig-paren">(</span><em class="sig-param">MappingView[KT_co], AbstractSet[KT_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.KeysView" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.KeysView" title="collections.abc.KeysView"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.KeysView</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.ItemsView">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ItemsView</code><span class="sig-paren">(</span><em class="sig-param">MappingView, Generic[KT_co, VT_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.ItemsView" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.ItemsView" title="collections.abc.ItemsView"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.ItemsView</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.ValuesView">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ValuesView</code><span class="sig-paren">(</span><em class="sig-param">MappingView[VT_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.ValuesView" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.ValuesView" title="collections.abc.ValuesView"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.ValuesView</span></code></a> 的泛型版本。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Awaitable">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Awaitable</code><span class="sig-paren">(</span><em class="sig-param">Generic[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Awaitable" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Awaitable" title="collections.abc.Awaitable"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Awaitable</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Coroutine">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Coroutine</code><span class="sig-paren">(</span><em class="sig-param">Awaitable[V_co], Generic[T_co, T_contra, V_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Coroutine" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.Coroutine" title="collections.abc.Coroutine"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Coroutine</span></code></a> 的泛型版本。类型变量的差异和顺序与 <a class="reference internal" href="#typing.Generator" title="typing.Generator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generator</span></code></a> 的内容相对应，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Coroutine</span>
+<span class="n">c</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1"># type: Coroutine[List[str], str, int]</span>
+<span class="o">...</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s1">&#39;hi&#39;</span><span class="p">)</span> <span class="c1"># type: List[str]</span>
+<span class="k">async</span> <span class="k">def</span> <span class="nf">bar</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="k">await</span> <span class="n">c</span> <span class="c1"># type: int</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.3 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.AsyncIterable">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">AsyncIterable</code><span class="sig-paren">(</span><em class="sig-param">Generic[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.AsyncIterable" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.AsyncIterable" title="collections.abc.AsyncIterable"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.AsyncIterable</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.AsyncIterator">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">AsyncIterator</code><span class="sig-paren">(</span><em class="sig-param">AsyncIterable[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.AsyncIterator" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.abc.html#collections.abc.AsyncIterator" title="collections.abc.AsyncIterator"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.AsyncIterator</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.ContextManager">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ContextManager</code><span class="sig-paren">(</span><em class="sig-param">Generic[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.ContextManager" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="contextlib.html#contextlib.AbstractContextManager" title="contextlib.AbstractContextManager"><code class="xref py py-class docutils literal notranslate"><span class="pre">contextlib.AbstractContextManager</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.4 新版功能.</span></p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.0 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.AsyncContextManager">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">AsyncContextManager</code><span class="sig-paren">(</span><em class="sig-param">Generic[T_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.AsyncContextManager" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="contextlib.html#contextlib.AbstractAsyncContextManager" title="contextlib.AbstractAsyncContextManager"><code class="xref py py-class docutils literal notranslate"><span class="pre">contextlib.AbstractAsyncContextManager</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.4 新版功能.</span></p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Dict">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Dict</code><span class="sig-paren">(</span><em class="sig-param">dict, MutableMapping[KT, VT]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Dict" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="stdtypes.html#dict" title="dict"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a> 的泛型版本。适用于注解返回类型。注解参数时，最好使用 <a class="reference internal" href="#typing.Mapping" title="typing.Mapping"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mapping</span></code></a> 等抽象容器类型。</p>
+<p>该类型用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">count_words</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.DefaultDict">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">DefaultDict</code><span class="sig-paren">(</span><em class="sig-param">collections.defaultdict, MutableMapping[KT, VT]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.DefaultDict" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.html#collections.defaultdict" title="collections.defaultdict"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.defaultdict</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.OrderedDict">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">OrderedDict</code><span class="sig-paren">(</span><em class="sig-param">collections.OrderedDict, MutableMapping[KT, VT]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.OrderedDict" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.html#collections.OrderedDict" title="collections.OrderedDict"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.OrderedDict</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.7.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Counter">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Counter</code><span class="sig-paren">(</span><em class="sig-param">collections.Counter, Dict[T, int]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Counter" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.html#collections.Counter" title="collections.Counter"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.Counter</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.4 新版功能.</span></p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.1 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.ChainMap">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ChainMap</code><span class="sig-paren">(</span><em class="sig-param">collections.ChainMap, MutableMapping[KT, VT]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.ChainMap" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.html#collections.ChainMap" title="collections.ChainMap"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.ChainMap</span></code></a> 的泛型版本。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.4 新版功能.</span></p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.1 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Generator">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Generator</code><span class="sig-paren">(</span><em class="sig-param">Iterator[T_co], Generic[T_co, T_contra, V_co]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.Generator" title="永久链接至目标">¶</a></dt>
+<dd><p>生成器可以由泛型类型 <code class="docutils literal notranslate"><span class="pre">Generator[YieldType,</span> <span class="pre">SendType,</span> <span class="pre">ReturnType]</span></code> 注解。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">echo_round</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">sent</span> <span class="o">=</span> <span class="k">yield</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="n">sent</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">sent</span> <span class="o">=</span> <span class="k">yield</span> <span class="nb">round</span><span class="p">(</span><span class="n">sent</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s1">&#39;Done&#39;</span>
+</pre></div>
+</div>
+<p>注意，与 typing 模块里的其他泛型不同， <a class="reference internal" href="#typing.Generator" title="typing.Generator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generator</span></code></a> 的 <code class="docutils literal notranslate"><span class="pre">SendType</span></code> 属于逆变行为，不是协变或不变行为。</p>
+<p>如果生成器只产生值，可将 <code class="docutils literal notranslate"><span class="pre">SendType</span></code> 与 <code class="docutils literal notranslate"><span class="pre">ReturnType</span></code> 设为 <code class="docutils literal notranslate"><span class="pre">None</span></code>：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">infinite_stream</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">start</span>
+        <span class="n">start</span> <span class="o">+=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>此外，还可以把生成器的返回类型注解为 <code class="docutils literal notranslate"><span class="pre">Iterable[YieldType]</span></code> 或 <code class="docutils literal notranslate"><span class="pre">Iterator[YieldType]</span></code>：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">infinite_stream</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">start</span>
+        <span class="n">start</span> <span class="o">+=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.AsyncGenerator">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">AsyncGenerator</code><span class="sig-paren">(</span><em class="sig-param">AsyncIterator[T_co], Generic[T_co, T_contra]</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.AsyncGenerator" title="永久链接至目标">¶</a></dt>
+<dd><p>异步生成器可由泛型类型 <code class="docutils literal notranslate"><span class="pre">AsyncGenerator[YieldType,</span> <span class="pre">SendType]</span></code> 注解。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span> <span class="nf">echo_round</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">AsyncGenerator</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+    <span class="n">sent</span> <span class="o">=</span> <span class="k">yield</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="n">sent</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="n">rounded</span> <span class="o">=</span> <span class="k">await</span> <span class="nb">round</span><span class="p">(</span><span class="n">sent</span><span class="p">)</span>
+        <span class="n">sent</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">rounded</span>
+</pre></div>
+</div>
+<p>与常规生成器不同，异步生成器不能返回值，因此没有 <code class="docutils literal notranslate"><span class="pre">ReturnType</span></code> 类型参数。 与 <a class="reference internal" href="#typing.Generator" title="typing.Generator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generator</span></code></a> 类似，<code class="docutils literal notranslate"><span class="pre">SendType</span></code> 也属于逆变行为。</p>
+<p>如果生成器只产生值，可将 <code class="docutils literal notranslate"><span class="pre">SendType</span></code> 设置为 <code class="docutils literal notranslate"><span class="pre">None</span></code>：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span> <span class="nf">infinite_stream</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncGenerator</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">start</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="k">await</span> <span class="n">increment</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>此外，可用 <code class="docutils literal notranslate"><span class="pre">AsyncIterable[YieldType]</span></code> 或 <code class="docutils literal notranslate"><span class="pre">AsyncIterator[YieldType]</span></code> 注解生成器的返回类型：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span> <span class="nf">infinite_stream</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">start</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="k">await</span> <span class="n">increment</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.1 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Text">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Text</code><a class="headerlink" href="#typing.Text" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">Text</span></code> 是 <code class="docutils literal notranslate"><span class="pre">str</span></code> 的别名。提供了对 Python 2 代码的向下兼容：Python 2 中，<code class="docutils literal notranslate"><span class="pre">Text</span></code> 是 <code class="docutils literal notranslate"><span class="pre">unicode</span></code> 的别名。</p>
+<p>使用 <code class="docutils literal notranslate"><span class="pre">Text</span></code> 时，值中必须包含 unicode 字符串，以兼容 Python 2 和 Python 3：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">add_unicode_checkmark</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="n">Text</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Text</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">text</span> <span class="o">+</span> <span class="sa">u</span><span class="s1">&#39; </span><span class="se">\u2713</span><span class="s1">&#39;</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.IO">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">IO</code><a class="headerlink" href="#typing.IO" title="永久链接至目标">¶</a></dt>
+<dt id="typing.TextIO">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">TextIO</code><a class="headerlink" href="#typing.TextIO" title="永久链接至目标">¶</a></dt>
+<dt id="typing.BinaryIO">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">BinaryIO</code><a class="headerlink" href="#typing.BinaryIO" title="永久链接至目标">¶</a></dt>
+<dd><p>泛型 <code class="docutils literal notranslate"><span class="pre">IO[AnyStr]</span></code> 及其子类 <code class="docutils literal notranslate"><span class="pre">TextIO(IO[str])</span></code>、<code class="docutils literal notranslate"><span class="pre">BinaryIO(IO[bytes])</span></code> 表示 I/O 流——例如 <a class="reference internal" href="functions.html#open" title="open"><code class="xref py py-func docutils literal notranslate"><span class="pre">open()</span></code></a> 返回的对象——的类型。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.Pattern">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Pattern</code><a class="headerlink" href="#typing.Pattern" title="永久链接至目标">¶</a></dt>
+<dt id="typing.Match">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Match</code><a class="headerlink" href="#typing.Match" title="永久链接至目标">¶</a></dt>
+<dd><p>这些类型对应的是从 <a class="reference internal" href="re.html#re.compile" title="re.compile"><code class="xref py py-func docutils literal notranslate"><span class="pre">re.compile()</span></code></a> 和 <a class="reference internal" href="re.html#re.match" title="re.match"><code class="xref py py-func docutils literal notranslate"><span class="pre">re.match()</span></code></a> 返回的类型。 这些类型（及相应的函数）是 <code class="docutils literal notranslate"><span class="pre">AnyStr</span></code> 中的泛型并可通过编写 <code class="docutils literal notranslate"><span class="pre">Pattern[str]</span></code>, <code class="docutils literal notranslate"><span class="pre">Pattern[bytes]</span></code>, <code class="docutils literal notranslate"><span class="pre">Match[str]</span></code> 或 <code class="docutils literal notranslate"><span class="pre">Match[bytes]</span></code> 来具体指定。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.NamedTuple">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">NamedTuple</code><a class="headerlink" href="#typing.NamedTuple" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="collections.html#collections.namedtuple" title="collections.namedtuple"><code class="xref py py-func docutils literal notranslate"><span class="pre">collections.namedtuple()</span></code></a> 的类型版本。</p>
+<p>用法：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Employee</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+</pre></div>
+</div>
+<p>这相当于：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Employee</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;Employee&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>为字段提供默认值，要在类体内赋值：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Employee</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
+
+<span class="n">employee</span> <span class="o">=</span> <span class="n">Employee</span><span class="p">(</span><span class="s1">&#39;Guido&#39;</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">employee</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="mi">3</span>
+</pre></div>
+</div>
+<p>带默认值的字段必须在不带默认值的字段后面。</p>
+<p>生成的类具有 <code class="docutils literal notranslate"><span class="pre">__annotations__</span></code> 这个附加属性，提供了映射字段名与字段类型的字典。（字段名在 ）</p>
+<p><code class="docutils literal notranslate"><span class="pre">NamedTuple</span></code> 子类也支持文档字符串与方法：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Employee</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Represents an employee.&quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;&lt;Employee </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1">, id=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">&gt;&#39;</span>
+</pre></div>
+</div>
+<p>反向兼容用法：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Employee</span> <span class="o">=</span> <span class="n">NamedTuple</span><span class="p">(</span><span class="s1">&#39;Employee&#39;</span><span class="p">,</span> <span class="p">[(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)])</span>
+</pre></div>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.6 版更改: </span>添加了对 <span class="target" id="index-64"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0526"><strong>PEP 526</strong></a> 中变量注解句法的支持。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.6.1 版更改: </span>添加了对默认值、方法、文档字符串的支持。</p>
+</div>
+<div class="deprecated-removed">
+<p><span class="versionmodified">Deprecated since version 3.8, will be removed in version 3.9: </span>Deprecated the <code class="docutils literal notranslate"><span class="pre">_field_types</span></code> attribute in favor of the more
+standard <code class="docutils literal notranslate"><span class="pre">__annotations__</span></code> attribute which has the same information.</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.8 版更改: </span><code class="docutils literal notranslate"><span class="pre">_field_types</span></code> 和 <code class="docutils literal notranslate"><span class="pre">__annotations__</span></code> 属性现已使用常规字典，不再使用 <code class="docutils literal notranslate"><span class="pre">OrderedDict</span></code> 实例。</p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.TypedDict">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">TypedDict</code><span class="sig-paren">(</span><em class="sig-param">dict</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.TypedDict" title="永久链接至目标">¶</a></dt>
+<dd><p>A simple typed namespace. At runtime it is equivalent to
+a plain <a class="reference internal" href="stdtypes.html#dict" title="dict"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">TypedDict</span></code> creates a dictionary type that expects all of its
+instances to have a certain set of keys, where each key is
+associated with a value of a consistent type. This expectation
+is not checked at runtime but is only enforced by type checkers.
+Usage:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Point2D</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+    <span class="n">x</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">y</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="n">a</span><span class="p">:</span> <span class="n">Point2D</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="s1">&#39;good&#39;</span><span class="p">}</span>  <span class="c1"># OK</span>
+<span class="n">b</span><span class="p">:</span> <span class="n">Point2D</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;z&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="s1">&#39;bad&#39;</span><span class="p">}</span>           <span class="c1"># Fails type check</span>
+
+<span class="k">assert</span> <span class="n">Point2D</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;first&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="nb">dict</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;first&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>用于内省的类型信息可通过 <code class="docutils literal notranslate"><span class="pre">Point2D.__annotations__</span></code> 和 <code class="docutils literal notranslate"><span class="pre">Point2D.__total__</span></code> 访问。为了让不支持 <span class="target" id="index-65"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0526"><strong>PEP 526</strong></a> 的老版 Python 也能使用此功能，<code class="docutils literal notranslate"><span class="pre">TypedDict</span></code> 支持两个附加的等价句法形式：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Point2D</span> <span class="o">=</span> <span class="n">TypedDict</span><span class="p">(</span><span class="s1">&#39;Point2D&#39;</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
+<span class="n">Point2D</span> <span class="o">=</span> <span class="n">TypedDict</span><span class="p">(</span><span class="s1">&#39;Point2D&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>默认情况下，所有键都必须列在 TypedDict 里。不过，也可以通过指定 total 参数进行重写。用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">point2D</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="n">x</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">y</span><span class="p">:</span> <span class="nb">int</span>
+</pre></div>
+</div>
+<p>这段代码的意思是，可以省略 point2D 这个 TypedDict 中的任意键。类型核查器只支持字面量 False 或 True 作为 total 参数的值。True 是默认值，表明在类体中，必须定义所有项目。</p>
+<p>更多示例与 <code class="docutils literal notranslate"><span class="pre">TypedDict</span></code> 的详细规则，详见 <span class="target" id="index-66"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0589"><strong>PEP 589</strong></a>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="typing.ForwardRef">
+<em class="property">class </em><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ForwardRef</code><a class="headerlink" href="#typing.ForwardRef" title="永久链接至目标">¶</a></dt>
+<dd><p>用于字符串前向引用的内部类型表示的类。 例如，<code class="docutils literal notranslate"><span class="pre">List[&quot;SomeClass&quot;]</span></code> 会被隐式转换为 <code class="docutils literal notranslate"><span class="pre">List[ForwardRef(&quot;SomeClass&quot;)]</span></code>。 这个类不应由用户来实例化，但可以由内省工具使用。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.7.4 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.NewType">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">NewType</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">tp</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.NewType" title="永久链接至目标">¶</a></dt>
+<dd><p>用于为类型检查器标明不同类型的辅助函数，详见 <a class="reference internal" href="#distinct"><span class="std std-ref">NewType</span></a>。在运行时，它返回一个返回其参数的函数。用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">UserId</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;UserId&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">first_user</span> <span class="o">=</span> <span class="n">UserId</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.cast">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">cast</code><span class="sig-paren">(</span><em class="sig-param">typ</em>, <em class="sig-param">val</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.cast" title="永久链接至目标">¶</a></dt>
+<dd><p>把一个值转换为指定的类型。</p>
+<p>这会把值原样返回。对类型检查器而言这代表了返回值具有指定的类型，在运行时我们故意没有设计任何检查（我们希望让这尽量快）。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.get_type_hints">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">get_type_hints</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="optional">[</span>, <em class="sig-param">globals</em><span class="optional">[</span>, <em class="sig-param">locals</em><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#typing.get_type_hints" title="永久链接至目标">¶</a></dt>
+<dd><p>返回函数、方法、模块、类对象的类型提示的字典。</p>
+<p>一般情况下，与 <code class="docutils literal notranslate"><span class="pre">obj.__annotations__</span></code> 相同。此外，可通过在 <code class="docutils literal notranslate"><span class="pre">globals</span></code> 与 <code class="docutils literal notranslate"><span class="pre">locals</span></code> 命名空间里进行评估，以此来处理编码为字符串字面量的前向引用。如有需要，在默认值设置为 <code class="docutils literal notranslate"><span class="pre">None</span></code> 时，可为函数或方法注解添加 <code class="docutils literal notranslate"><span class="pre">Optional[t]</span></code>。对于类 <code class="docutils literal notranslate"><span class="pre">C</span></code>，则返回由所有 <code class="docutils literal notranslate"><span class="pre">__annotations__</span></code> 与 <code class="docutils literal notranslate"><span class="pre">C.__mro__</span></code> 逆序合并而成的字典。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.get_origin">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">get_origin</code><span class="sig-paren">(</span><em class="sig-param">tp</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.get_origin" title="永久链接至目标">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="typing.get_args">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">get_args</code><span class="sig-paren">(</span><em class="sig-param">tp</em><span class="sig-paren">)</span><a class="headerlink" href="#typing.get_args" title="永久链接至目标">¶</a></dt>
+<dd><p>为泛型类型与特殊类型形式提供了基本的内省功能。</p>
+<p>For a typing object of the form <code class="docutils literal notranslate"><span class="pre">X[Y,</span> <span class="pre">Z,</span> <span class="pre">...]</span></code> these functions return
+<code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">(Y,</span> <span class="pre">Z,</span> <span class="pre">...)</span></code>. If <code class="docutils literal notranslate"><span class="pre">X</span></code> is a generic alias for a builtin or
+<a class="reference internal" href="collections.html#module-collections" title="collections: Container datatypes"><code class="xref py py-mod docutils literal notranslate"><span class="pre">collections</span></code></a> class, it gets normalized to the original class.
+For unsupported objects return <code class="docutils literal notranslate"><span class="pre">None</span></code> and <code class="docutils literal notranslate"><span class="pre">()</span></code> correspondingly.
+Examples:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">assert</span> <span class="n">get_origin</span><span class="p">(</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="ow">is</span> <span class="nb">dict</span>
+<span class="k">assert</span> <span class="n">get_args</span><span class="p">(</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">==</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+<span class="k">assert</span> <span class="n">get_origin</span><span class="p">(</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="ow">is</span> <span class="n">Union</span>
+<span class="k">assert</span> <span class="n">get_args</span><span class="p">(</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">==</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.overload">
+<code class="sig-prename descclassname">&#64;</code><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">overload</code><a class="headerlink" href="#typing.overload" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">&#64;overload</span></code> 装饰器可以修饰支持多个不同参数类型组合的函数或方法。<code class="docutils literal notranslate"><span class="pre">&#64;overload</span></code> - 装饰定义的系列必须紧跟一个非 <code class="docutils literal notranslate"><span class="pre">&#64;overload</span></code>-装饰定义（用于同一个函数/方法）。<code class="docutils literal notranslate"><span class="pre">&#64;overload</span></code>-装饰定义仅是为了协助类型检查器， 因为该装饰器会被非 <code class="docutils literal notranslate"><span class="pre">&#64;overload</span></code>-装饰定义覆盖，后者用于运行时，而且会被类型检查器忽略。在运行时直接调用 <code class="docutils literal notranslate"><span class="pre">&#64;overload</span></code> 装饰的函数会触发 <a class="reference internal" href="exceptions.html#NotImplementedError" title="NotImplementedError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">NotImplementedError</span></code></a>。下面的重载示例给出了比联合类型或类型变量更精准的类型：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">response</span><span class="p">:</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="o">...</span>
+<span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">response</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="o">...</span>
+<span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">response</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="o">...</span>
+<span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">response</span><span class="p">):</span>
+    <span class="o">&lt;</span><span class="n">actual</span> <span class="n">implementation</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>详见 <span class="target" id="index-67"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0484"><strong>PEP 484</strong></a>，与其他类型语义进行对比。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.final">
+<code class="sig-prename descclassname">&#64;</code><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">final</code><a class="headerlink" href="#typing.final" title="永久链接至目标">¶</a></dt>
+<dd><p>告知类型检查器被装饰的方法不能被覆盖，且被装饰的类不能作为子类的装饰器，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Base</span><span class="p">:</span>
+    <span class="nd">@final</span>
+    <span class="k">def</span> <span class="nf">done</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="o">...</span>
+<span class="k">class</span> <span class="nc">Sub</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">done</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># Error reported by type checker</span>
+          <span class="o">...</span>
+
+<span class="nd">@final</span>
+<span class="k">class</span> <span class="nc">Leaf</span><span class="p">:</span>
+    <span class="o">...</span>
+<span class="k">class</span> <span class="nc">Other</span><span class="p">(</span><span class="n">Leaf</span><span class="p">):</span>  <span class="c1"># Error reported by type checker</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>这些属性没有运行时检查。详见 <span class="target" id="index-68"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0591"><strong>PEP 591</strong></a>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.no_type_check">
+<code class="sig-prename descclassname">&#64;</code><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">no_type_check</code><a class="headerlink" href="#typing.no_type_check" title="永久链接至目标">¶</a></dt>
+<dd><p>标明注解不是类型提示的装饰器。</p>
+<p>用作类或函数的 <a class="reference internal" href="../glossary.html#term-decorator"><span class="xref std std-term">decorator</span></a>。用于类时，递归地应用于该类中定义的所有方法，（但不影响超类或子类中定义的方法）。</p>
+<p>本方法可直接修改函数。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.no_type_check_decorator">
+<code class="sig-prename descclassname">&#64;</code><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">no_type_check_decorator</code><a class="headerlink" href="#typing.no_type_check_decorator" title="永久链接至目标">¶</a></dt>
+<dd><p>让其他装饰器具有 <a class="reference internal" href="#typing.no_type_check" title="typing.no_type_check"><code class="xref py py-func docutils literal notranslate"><span class="pre">no_type_check()</span></code></a> 效果的装饰器。</p>
+<p>本装饰器用 <a class="reference internal" href="#typing.no_type_check" title="typing.no_type_check"><code class="xref py py-func docutils literal notranslate"><span class="pre">no_type_check()</span></code></a> 里的装饰函数打包其他装饰器。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.type_check_only">
+<code class="sig-prename descclassname">&#64;</code><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">type_check_only</code><a class="headerlink" href="#typing.type_check_only" title="永久链接至目标">¶</a></dt>
+<dd><p>标记类或函数内不可用于运行时的装饰器。</p>
+<p>在运行时，该装饰器本身不可用。实现返回的是私有类实例时，它主要是用于标记在类型存根文件中定义的类。</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="nd">@type_check_only</span>
+<span class="k">class</span> <span class="nc">Response</span><span class="p">:</span>  <span class="c1"># private or not available at runtime</span>
+    <span class="n">code</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="k">def</span> <span class="nf">get_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+
+<span class="k">def</span> <span class="nf">fetch_response</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Response</span><span class="p">:</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>注意，建议不要返回私有类实例，最好将之设为公共类。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="typing.runtime_checkable">
+<code class="sig-prename descclassname">&#64;</code><code class="sig-prename descclassname">typing.</code><code class="sig-name descname">runtime_checkable</code><a class="headerlink" href="#typing.runtime_checkable" title="永久链接至目标">¶</a></dt>
+<dd><p>用于把 Protocol 类标记为运行时协议。</p>
+<p>该协议可以与 <a class="reference internal" href="functions.html#isinstance" title="isinstance"><code class="xref py py-func docutils literal notranslate"><span class="pre">isinstance()</span></code></a> 和 <a class="reference internal" href="functions.html#issubclass" title="issubclass"><code class="xref py py-func docutils literal notranslate"><span class="pre">issubclass()</span></code></a> 一起使用。应用于非协议的类时，会触发 <a class="reference internal" href="exceptions.html#TypeError" title="TypeError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">TypeError</span></code></a>。该指令支持简易结构检查，与 <a class="reference internal" href="collections.abc.html#module-collections.abc" title="collections.abc: Abstract base classes for containers"><code class="xref py py-mod docutils literal notranslate"><span class="pre">collections.abc</span></code></a> 的 <a class="reference internal" href="collections.abc.html#collections.abc.Iterable" title="collections.abc.Iterable"><code class="xref py py-class docutils literal notranslate"><span class="pre">Iterable</span></code></a> 非常类似，只擅长做一件事。  例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="nd">@runtime_checkable</span>
+<span class="k">class</span> <span class="nc">Closable</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="o">...</span>
+
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s1">&#39;/some/file&#39;</span><span class="p">),</span> <span class="n">Closable</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>警告:</strong> 这将只检查所需方法是否存在，而不检查其类型签名！</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Any">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Any</code><a class="headerlink" href="#typing.Any" title="永久链接至目标">¶</a></dt>
+<dd><p>特殊类型，表示没有约束的类型。</p>
+<ul class="simple">
+<li><p>所有类型都与 <a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 兼容。</p></li>
+<li><p><a class="reference internal" href="#typing.Any" title="typing.Any"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a> 与所有类型都兼容。</p></li>
+</ul>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.NoReturn">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">NoReturn</code><a class="headerlink" href="#typing.NoReturn" title="永久链接至目标">¶</a></dt>
+<dd><p>标记没有返回值的函数的特殊类型。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">NoReturn</span>
+
+<span class="k">def</span> <span class="nf">stop</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;no way&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.4 新版功能.</span></p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Union">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Union</code><a class="headerlink" href="#typing.Union" title="永久链接至目标">¶</a></dt>
+<dd><p>联合类型；<code class="docutils literal notranslate"><span class="pre">Union[X,</span> <span class="pre">Y]</span></code> 的意思是，非 X 即 Y。</p>
+<p>可用 <code class="docutils literal notranslate"><span class="pre">Union[int,</span> <span class="pre">str]</span></code> 等形式定义联合类型。 具体如下：</p>
+<ul>
+<li><p>参数必须是某种类型，且至少有一个。</p></li>
+<li><p>联合类型之联合类型会被展平，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Union</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">float</span><span class="p">]</span> <span class="o">==</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
+</pre></div>
+</div>
+</li>
+<li><p>单参数之联合类型就是该参数自身，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">==</span> <span class="nb">int</span>  <span class="c1"># The constructor actually returns int</span>
+</pre></div>
+</div>
+</li>
+<li><p>冗余的参数会被跳过，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">==</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+</pre></div>
+</div>
+</li>
+<li><p>比较联合类型，不涉及参数顺序，例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">==</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span>
+</pre></div>
+</div>
+</li>
+<li><p>联合类型不能作为子类，也不能实例化。</p></li>
+<li><p>没有 <code class="docutils literal notranslate"><span class="pre">Union[X][Y]</span></code> 这种写法。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Optional[X]</span></code> 是 <code class="docutils literal notranslate"><span class="pre">Union[X,</span> <span class="pre">None]</span></code> 的缩写。</p></li>
+</ul>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.7 版更改: </span>在运行时，不要移除联合类型中的显式子类。</p>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Optional">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Optional</code><a class="headerlink" href="#typing.Optional" title="永久链接至目标">¶</a></dt>
+<dd><p>可选类型。</p>
+<p> <code class="docutils literal notranslate"><span class="pre">Optional[X]</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">Union[X,</span> <span class="pre">None]</span></code> 。</p>
+<p>注意，可选类型与含默认值的可选参数不同。含默认值的可选参数不需要在类型注解上添加 <code class="docutils literal notranslate"><span class="pre">Optional</span></code> 限定符，因为它仅是可选的。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">foo</span><span class="p">(</span><span class="n">arg</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>另一方面，显式应用 <code class="docutils literal notranslate"><span class="pre">None</span></code> 值时，不管该参数是否可选， <code class="docutils literal notranslate"><span class="pre">Optional</span></code> 都适用。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">foo</span><span class="p">(</span><span class="n">arg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Tuple">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Tuple</code><a class="headerlink" href="#typing.Tuple" title="永久链接至目标">¶</a></dt>
+<dd><p>元组类型； <code class="docutils literal notranslate"><span class="pre">Tuple[X,</span> <span class="pre">Y]</span></code> 是二项元组类型，第一个元素的类型是 X，第二个元素的类型是 Y。空元组的类型可写为 <code class="docutils literal notranslate"><span class="pre">Tuple[()]</span></code>。</p>
+<p>例：<code class="docutils literal notranslate"><span class="pre">Tuple[T1,</span> <span class="pre">T2]</span></code> 是二项元组，类型变量分别为 T1 和 T2。<code class="docutils literal notranslate"><span class="pre">Tuple[int,</span> <span class="pre">float,</span> <span class="pre">str]</span></code> 是由整数、浮点数、字符串组成的三项元组。</p>
+<p>可用省略号字面量指定同质变长元组，例如，<code class="docutils literal notranslate"><span class="pre">Tuple[int,</span> <span class="pre">...]</span></code> 。<a class="reference internal" href="#typing.Tuple" title="typing.Tuple"><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code></a> 与 <code class="docutils literal notranslate"><span class="pre">Tuple[Any,</span> <span class="pre">...]</span></code> 等价，也与 <a class="reference internal" href="stdtypes.html#tuple" title="tuple"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code></a> 等价。</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Callable">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Callable</code><a class="headerlink" href="#typing.Callable" title="永久链接至目标">¶</a></dt>
+<dd><p>可调类型； <code class="docutils literal notranslate"><span class="pre">Callable[[int],</span> <span class="pre">str]</span></code> 是把（int）转为 str 的函数。</p>
+<p>下标句法必须与参数列表和返回类型这两个值一起使用。参数列表只能是类型列表或省略号；返回类型只能是单一类型。</p>
+<p>没有说明可选参数或关键字参数的句法；这类函数类型很少用作回调类型。<code class="docutils literal notranslate"><span class="pre">Callable[...,</span> <span class="pre">ReturnType]</span></code> （省略号字面量）可用于为接受任意数量参数，并返回 <code class="docutils literal notranslate"><span class="pre">ReturnType</span></code> 的可调对象提供类型提示。纯 <a class="reference internal" href="#typing.Callable" title="typing.Callable"><code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code></a> 等价于 <code class="docutils literal notranslate"><span class="pre">Callable[...,</span> <span class="pre">Any]</span></code>，进而等价于 <a class="reference internal" href="collections.abc.html#collections.abc.Callable" title="collections.abc.Callable"><code class="xref py py-class docutils literal notranslate"><span class="pre">collections.abc.Callable</span></code></a> 。</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Literal">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Literal</code><a class="headerlink" href="#typing.Literal" title="永久链接至目标">¶</a></dt>
+<dd><p>表示类型检查器对应变量或函数参数的值等价于给定字面量（或多个字面量之一）的类型。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">validate_simple</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">[</span><span class="kc">True</span><span class="p">]:</span>  <span class="c1"># always returns True</span>
+    <span class="o">...</span>
+
+<span class="n">MODE</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">]</span>
+<span class="k">def</span> <span class="nf">open_helper</span><span class="p">(</span><span class="n">file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="n">MODE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="o">...</span>
+
+<span class="n">open_helper</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span>  <span class="c1"># Passes type check</span>
+<span class="n">open_helper</span><span class="p">(</span><span class="s1">&#39;/other/path&#39;</span><span class="p">,</span> <span class="s1">&#39;typo&#39;</span><span class="p">)</span>  <span class="c1"># Error in type checker</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Literal[...]</span></code> 不能创建子类。在运行时，任意值均可作为 <code class="docutils literal notranslate"><span class="pre">Literal[...]</span></code> 的类型参数，但类型检查器可以对此加以限制。字面量类型详见 <span class="target" id="index-69"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0586"><strong>PEP 586</strong></a> 。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.ClassVar">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">ClassVar</code><a class="headerlink" href="#typing.ClassVar" title="永久链接至目标">¶</a></dt>
+<dd><p>特殊类型注解构造，用于标注类变量。</p>
+<p>如 <span class="target" id="index-70"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0526"><strong>PEP 526</strong></a> 所述，打包在 ClassVar 内的变量注解是指，给定属性应当用作类变量，而不应设置在类实例上。用法如下：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Starship</span><span class="p">:</span>
+    <span class="n">stats</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># class variable</span>
+    <span class="n">damage</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>                     <span class="c1"># instance variable</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="#typing.ClassVar" title="typing.ClassVar"><code class="xref py py-data docutils literal notranslate"><span class="pre">ClassVar</span></code></a> 仅接受类型，也不能使用下标。</p>
+<p><a class="reference internal" href="#typing.ClassVar" title="typing.ClassVar"><code class="xref py py-data docutils literal notranslate"><span class="pre">ClassVar</span></code></a> 本身不是类，不应用于 <a class="reference internal" href="functions.html#isinstance" title="isinstance"><code class="xref py py-func docutils literal notranslate"><span class="pre">isinstance()</span></code></a> 或 <a class="reference internal" href="functions.html#issubclass" title="issubclass"><code class="xref py py-func docutils literal notranslate"><span class="pre">issubclass()</span></code></a>。<a class="reference internal" href="#typing.ClassVar" title="typing.ClassVar"><code class="xref py py-data docutils literal notranslate"><span class="pre">ClassVar</span></code></a> 不改变 Python 运行时行为，但可以用于第三方类型检查器。例如，类型检查器会认为以下代码有错：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">enterprise_d</span> <span class="o">=</span> <span class="n">Starship</span><span class="p">(</span><span class="mi">3000</span><span class="p">)</span>
+<span class="n">enterprise_d</span><span class="o">.</span><span class="n">stats</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># Error, setting class variable on instance</span>
+<span class="n">Starship</span><span class="o">.</span><span class="n">stats</span> <span class="o">=</span> <span class="p">{}</span>     <span class="c1"># This is OK</span>
+</pre></div>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.3 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.Final">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">Final</code><a class="headerlink" href="#typing.Final" title="永久链接至目标">¶</a></dt>
+<dd><p>告知类型检查器某名称不能再次赋值或在子类中重写的特殊类型构造器。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">MAX_SIZE</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="mi">9000</span>
+<span class="n">MAX_SIZE</span> <span class="o">+=</span> <span class="mi">1</span>  <span class="c1"># Error reported by type checker</span>
+
+<span class="k">class</span> <span class="nc">Connection</span><span class="p">:</span>
+    <span class="n">TIMEOUT</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">10</span>
+
+<span class="k">class</span> <span class="nc">FastConnector</span><span class="p">(</span><span class="n">Connection</span><span class="p">):</span>
+    <span class="n">TIMEOUT</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Error reported by type checker</span>
+</pre></div>
+</div>
+<p>这些属性没有运行时检查。详见 <span class="target" id="index-71"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0591"><strong>PEP 591</strong></a>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.AnyStr">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">AnyStr</code><a class="headerlink" href="#typing.AnyStr" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">AnyStr</span></code> 类型变量的定义为 <code class="docutils literal notranslate"><span class="pre">AnyStr</span> <span class="pre">=</span> <span class="pre">TypeVar('AnyStr',</span> <span class="pre">str,</span> <span class="pre">bytes)</span></code>。</p>
+<p>这里指的是，它可以接受任意同类字符串，但不支持混用不同类别的字符串。例如：</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">concat</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">AnyStr</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">AnyStr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AnyStr</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+
+<span class="n">concat</span><span class="p">(</span><span class="sa">u</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="sa">u</span><span class="s2">&quot;bar&quot;</span><span class="p">)</span>  <span class="c1"># Ok, output has type &#39;unicode&#39;</span>
+<span class="n">concat</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;bar&quot;</span><span class="p">)</span>  <span class="c1"># Ok, output has type &#39;bytes&#39;</span>
+<span class="n">concat</span><span class="p">(</span><span class="sa">u</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;bar&quot;</span><span class="p">)</span>  <span class="c1"># Error, cannot mix unicode and bytes</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="data">
+<dt id="typing.TYPE_CHECKING">
+<code class="sig-prename descclassname">typing.</code><code class="sig-name descname">TYPE_CHECKING</code><a class="headerlink" href="#typing.TYPE_CHECKING" title="永久链接至目标">¶</a></dt>
+<dd><p>被第三方静态类型检查器假定为 <code class="docutils literal notranslate"><span class="pre">True</span></code> 的特殊常量。 在运行时为 <code class="docutils literal notranslate"><span class="pre">False</span></code>。 用法如下:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">expensive_mod</span>
+
+<span class="k">def</span> <span class="nf">fun</span><span class="p">(</span><span class="n">arg</span><span class="p">:</span> <span class="s1">&#39;expensive_mod.SomeType&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">local_var</span><span class="p">:</span> <span class="n">expensive_mod</span><span class="o">.</span><span class="n">AnotherType</span> <span class="o">=</span> <span class="n">other_fun</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Note that the first type annotation must be enclosed in quotes, making it a
+&quot;forward reference&quot;, to hide the <code class="docutils literal notranslate"><span class="pre">expensive_mod</span></code> reference from the
+interpreter runtime.  Type annotations for local variables are not
+evaluated, so the second annotation does not need to be enclosed in quotes.</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5.2 新版功能.</span></p>
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">typing</span></code> —— 对类型提示的支持</a><ul>
+<li><a class="reference internal" href="#type-aliases">类型别名</a></li>
+<li><a class="reference internal" href="#newtype">NewType</a></li>
+<li><a class="reference internal" href="#callable">可调对象（Callable）</a></li>
+<li><a class="reference internal" href="#generics">泛型（Generic）</a></li>
+<li><a class="reference internal" href="#user-defined-generic-types">用户定义的泛型类型</a></li>
+<li><a class="reference internal" href="#the-any-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code> 类型</a></li>
+<li><a class="reference internal" href="#nominal-vs-structural-subtyping">名义子类型 vs 结构子类型</a></li>
+<li><a class="reference internal" href="#classes-functions-and-decorators">类,函数和修饰器.</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="development.html"
+                        title="上一章">开发工具</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="pydoc.html"
+                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pydoc</span></code> --- 文档生成器和在线帮助系统</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/typing.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="pydoc.html" title="pydoc --- 文档生成器和在线帮助系统"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="development.html" title="开发工具"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="development.html" >开发工具</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>

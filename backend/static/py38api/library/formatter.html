@@ -1,0 +1,512 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>formatter --- 通用格式化输出 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="Windows系统相关模块" href="windows.html" />
+    <link rel="prev" title="杂项服务" href="misc.html" />
+    <link rel="canonical" href="https://docs.python.org/3/library/formatter.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">formatter</span></code> --- 通用格式化输出</a><ul>
+<li><a class="reference internal" href="#the-formatter-interface">格式化程序接口</a></li>
+<li><a class="reference internal" href="#formatter-implementations">实现格式化程序</a></li>
+<li><a class="reference internal" href="#the-writer-interface">编写器界面</a></li>
+<li><a class="reference internal" href="#writer-implementations">编写器实现</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="misc.html"
+                        title="上一章">杂项服务</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="windows.html"
+                        title="下一章">Windows系统相关模块</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/formatter.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="windows.html" title="Windows系统相关模块"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="misc.html" title="杂项服务"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="misc.html" accesskey="U">杂项服务</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-formatter">
+<span id="formatter-generic-output-formatting"></span><h1><a class="reference internal" href="#module-formatter" title="formatter: Generic output formatter and device interface. (已移除)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">formatter</span></code></a> --- 通用格式化输出<a class="headerlink" href="#module-formatter" title="永久链接至标题">¶</a></h1>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">3.4 版后已移除: </span>因为被使用的次数很少，此格式化模块已经被弃用了。</p>
+</div>
+<hr class="docutils" />
+<p>此模块支持两个接口定义，每个定义具有多个实现：<em>formatter</em> 接口和格式化程序接口所需的 <em>writer</em> 接口。</p>
+<p>格式化程序对象将格式化事件的抽象流转换为编写器对象上的特定输出事件。 格式化程序管理多个堆栈结构，以允许更改和还原编写器对象的各种属性;编写器不需要能够处理相对更改或任何类型的“更改回来”操作。 可通过格式化程序对象控制的特定编写器属性包括水平对齐方式、字体和左边距缩进。 提供了一种机制，该机制还支持向编写器提供任意的非独占样式设置。 其他接口有助于格式化不可逆的事件，例如段落分隔。</p>
+<p>编写器对象封装设备接口。 支持抽象设备（如文件格式）以及物理设备。 提供的实现都适用于抽象设备。 该接口提供了用于设置格式化程序对象管理的属性以及将数据插入输出的机制。</p>
+<section id="the-formatter-interface">
+<span id="formatter-interface"></span><h2>格式化程序接口<a class="headerlink" href="#the-formatter-interface" title="永久链接至标题">¶</a></h2>
+<p>用于创建格式化程序的接口取决于要实例化的特定格式化程序类。 下面描述的接口是所有格式化程序在初始化后必须支持的必需接口。</p>
+<p>在模块级别定义一个数据元素：</p>
+<dl class="data">
+<dt id="formatter.AS_IS">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">AS_IS</code><a class="headerlink" href="#formatter.AS_IS" title="永久链接至目标">¶</a></dt>
+<dd><p>可以在传递给下面描述的``push_font()`` 方法的字体规范中使用的值，或作为任何其他 <code class="docutils literal notranslate"><span class="pre">push_property()``方法的新值使用。</span> <span class="pre">推送</span> <span class="pre">``AS_IS</span></code> 值允许调用相应的``pop_property()`` 方法，而无需跟踪属性是否已更改。</p>
+</dd></dl>
+
+<p>为格式化程序实例对象定义了以下属性：</p>
+<dl class="attribute">
+<dt id="formatter.formatter.writer">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">writer</code><a class="headerlink" href="#formatter.formatter.writer" title="永久链接至目标">¶</a></dt>
+<dd><p>格式化程序与之交互的编写器实例。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.end_paragraph">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">end_paragraph</code><span class="sig-paren">(</span><em class="sig-param">blanklines</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.end_paragraph" title="永久链接至目标">¶</a></dt>
+<dd><p>关闭所有打开的段落，并在下一段之前至少插入*blanklines* （空白行 ）。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.add_line_break">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">add_line_break</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.add_line_break" title="永久链接至目标">¶</a></dt>
+<dd><p>如果尚不存在硬换行符，请添加硬换行符。 这不会破坏逻辑段落。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.add_hor_rule">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">add_hor_rule</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kw</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.add_hor_rule" title="永久链接至目标">¶</a></dt>
+<dd><p>在输出中插入水平线。 如果当前段落中有数据，但逻辑段落未中断，则插入硬中断。 参数和关键字被传递给作者的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">send_line_break()</span></code> 方法。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.add_flowing_data">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">add_flowing_data</code><span class="sig-paren">(</span><em class="sig-param">data</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.add_flowing_data" title="永久链接至目标">¶</a></dt>
+<dd><p>提供应使用折叠空格设置格式的数据。在执行空格折叠时，也会考虑之前和连续调用 <a class="reference internal" href="#formatter.formatter.add_flowing_data" title="formatter.formatter.add_flowing_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">add_flowing_data()</span></code></a> 的空格。 传递给此方法的数据应由输出设备进行自动换行。 请注意，由于需要依赖设备和字体信息，任何自动换行仍必须由编写器对象执行。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.add_literal_data">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">add_literal_data</code><span class="sig-paren">(</span><em class="sig-param">data</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.add_literal_data" title="永久链接至目标">¶</a></dt>
+<dd><p>提供应原封不动地传递给编写器的数据。空格（包括换行符和制表符）在 <em>data</em> 的值中被认为是合法的。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.add_label_data">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">add_label_data</code><span class="sig-paren">(</span><em class="sig-param">format</em>, <em class="sig-param">counter</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.add_label_data" title="永久链接至目标">¶</a></dt>
+<dd><p>插入一个标签，该标签应放置在当前左边距的左侧。这应该用于构造项目符号列表或编号列表。 如果 <em>format</em> 值是字符串，则将其解释为 <em>counter</em> 的格式规范，该规范应为整数。此格式设置的结果将成为标签的值;如果 <em>format</em> 不是字符串，则直接用作标签值。标签值作为唯一的参数传递给编写器的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">send_label_data()</span></code> 方法。 非字符串标签值的解释取决于关联的编写器。</p>
+<p>格式规范是字符串，与计数器值结合使用，用于计算标签值。 格式字符串中的每个字符都将复制到标签值，并识别某些字符以指示计数器值上的转换。 具体来说，字符``'1'`` 表示计数器值格式化程序为阿拉伯数字，字符``'A'<code class="docutils literal notranslate"><span class="pre">和</span></code>'a'<code class="docutils literal notranslate"><span class="pre">分别表示计数器值的字母表示形式，大写和小写，</span></code>'I'`` 和``'i'`` 表示罗马数字中的计数器值，大写和小写。 请注意，字母和罗马变换要求计数器值大于零。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.flush_softspace">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">flush_softspace</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.flush_softspace" title="永久链接至目标">¶</a></dt>
+<dd><p>将从上一次调用 <a class="reference internal" href="#formatter.formatter.add_flowing_data" title="formatter.formatter.add_flowing_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">add_flowing_data()</span></code></a> 缓冲的任何挂起空格发送到关联的编写器对象。 这应该在直接操作编写器对象之前调用。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.push_alignment">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">push_alignment</code><span class="sig-paren">(</span><em class="sig-param">align</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.push_alignment" title="永久链接至目标">¶</a></dt>
+<dd><p>将新的对齐设置推送到对齐堆栈上。 如果不需要更改，这可能是 <a class="reference internal" href="#formatter.AS_IS" title="formatter.AS_IS"><code class="xref py py-const docutils literal notranslate"><span class="pre">AS_IS</span></code></a> 。 如果对齐值与以前的设置相比发生了更改，则使用 <em>align</em> 值调用编写器的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">new_alignment()</span></code> 方法。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.pop_alignment">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">pop_alignment</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.pop_alignment" title="永久链接至目标">¶</a></dt>
+<dd><p>恢复以前的对齐方式。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.push_font">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">push_font</code><span class="sig-paren">(</span><em class="sig-param">(size</em>, <em class="sig-param">italic</em>, <em class="sig-param">bold</em>, <em class="sig-param">teletype)</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.push_font" title="永久链接至目标">¶</a></dt>
+<dd><p>更改编写器对象的部分或全部字体属性。未设置为 <a class="reference internal" href="#formatter.AS_IS" title="formatter.AS_IS"><code class="xref py py-const docutils literal notranslate"><span class="pre">AS_IS</span></code></a> 的属性设置为传入的值，而其他属性则保持其当前设置。编写器的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">new_font()</span></code> 方法是使用完全解析的字体规范调用的。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.pop_font">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">pop_font</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.pop_font" title="永久链接至目标">¶</a></dt>
+<dd><p>恢复以前的字体。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.push_margin">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">push_margin</code><span class="sig-paren">(</span><em class="sig-param">margin</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.push_margin" title="永久链接至目标">¶</a></dt>
+<dd><p>将左边距缩进数增加 1，将逻辑标记 <em>margin</em> 与新缩进相关联。 初始保证金水平为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。逻辑标记的更改值必须是真值;除 <a class="reference internal" href="#formatter.AS_IS" title="formatter.AS_IS"><code class="xref py py-const docutils literal notranslate"><span class="pre">AS_IS</span></code></a> 以外的 false 值不足以更改边距。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.pop_margin">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">pop_margin</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.pop_margin" title="永久链接至目标">¶</a></dt>
+<dd><p>恢复以前的边距。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.push_style">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">push_style</code><span class="sig-paren">(</span><em class="sig-param">*styles</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.push_style" title="永久链接至目标">¶</a></dt>
+<dd><p>推送任意数量的任意样式规范。 所有样式都按顺序推送到样式堆栈上。 表示整个堆栈的元组（包括 <a class="reference internal" href="#formatter.AS_IS" title="formatter.AS_IS"><code class="xref py py-const docutils literal notranslate"><span class="pre">AS_IS</span></code></a> 值）将传递给编写器的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">new_styles()</span></code> 方法。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.pop_style">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">pop_style</code><span class="sig-paren">(</span><em class="sig-param">n=1</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.pop_style" title="永久链接至目标">¶</a></dt>
+<dd><p>弹出传递给 <a class="reference internal" href="#formatter.formatter.push_style" title="formatter.formatter.push_style"><code class="xref py py-meth docutils literal notranslate"><span class="pre">push_style()</span></code></a> 的最后一个 <em>n</em> 样式规范。 表示修订后的堆栈的元组（包括 <a class="reference internal" href="#formatter.AS_IS" title="formatter.AS_IS"><code class="xref py py-const docutils literal notranslate"><span class="pre">AS_IS</span></code></a> 值）将传递给编写器的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">new_styles()</span></code> 方法。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.set_spacing">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">set_spacing</code><span class="sig-paren">(</span><em class="sig-param">spacing</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.set_spacing" title="永久链接至目标">¶</a></dt>
+<dd><p>设置编写器的间距样式。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.formatter.assert_line_data">
+<code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">assert_line_data</code><span class="sig-paren">(</span><em class="sig-param">flag=1</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.formatter.assert_line_data" title="永久链接至目标">¶</a></dt>
+<dd><p>通知格式化程序数据已添加到带外当前段落。 当编写器被直接操作时，应使用此方法。 如果编写器操作在输出末尾生成了硬换行符，则可以将可选的 <em>flag</em> 参数设置为 false。</p>
+</dd></dl>
+
+</section>
+<section id="formatter-implementations">
+<span id="formatter-impls"></span><h2>实现格式化程序<a class="headerlink" href="#formatter-implementations" title="永久链接至标题">¶</a></h2>
+<p>此模块提供了格式化程序对象的两种实现。大多数应用程序可以使用这些类之一，而无需修改或子类化。</p>
+<dl class="class">
+<dt id="formatter.NullFormatter">
+<em class="property">class </em><code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">NullFormatter</code><span class="sig-paren">(</span><em class="sig-param">writer=None</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.NullFormatter" title="永久链接至目标">¶</a></dt>
+<dd><p>什么都不做的格式化程序。 如果省略 <em>writer</em> ，则会创建一个 <a class="reference internal" href="#formatter.NullWriter" title="formatter.NullWriter"><code class="xref py py-class docutils literal notranslate"><span class="pre">NullWriter</span></code></a> 实例。 编写器的任何方法都不会被 <a class="reference internal" href="#formatter.NullFormatter" title="formatter.NullFormatter"><code class="xref py py-class docutils literal notranslate"><span class="pre">NullFormatter</span></code></a> 实例调用。 如果实现编写器接口，则实现应从此类继承，但不需要继承任何实现。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="formatter.AbstractFormatter">
+<em class="property">class </em><code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">AbstractFormatter</code><span class="sig-paren">(</span><em class="sig-param">writer</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.AbstractFormatter" title="永久链接至目标">¶</a></dt>
+<dd><p>标准格式化程序。 此实现已证明对许多编写器具有广泛的适用性，并且在大多数情况下可以直接使用。 它已被用于实现功能齐全的万维网浏览器。</p>
+</dd></dl>
+
+</section>
+<section id="the-writer-interface">
+<span id="writer-interface"></span><h2>编写器界面<a class="headerlink" href="#the-writer-interface" title="永久链接至标题">¶</a></h2>
+<p>用于创建编写器的接口取决于要实例化的特定编写器类。 下面描述的接口是所有编写器初始化后必须支持的必需接口。请注意，虽然大多数应用程序可以使用 <a class="reference internal" href="#formatter.AbstractFormatter" title="formatter.AbstractFormatter"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractFormatter</span></code></a> 类作为格式化程序，但编写器通常必须由应用程序提供。</p>
+<dl class="method">
+<dt id="formatter.writer.flush">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">flush</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.flush" title="永久链接至目标">¶</a></dt>
+<dd><p>刷新任何缓冲输出或设备控制事件。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.new_alignment">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">new_alignment</code><span class="sig-paren">(</span><em class="sig-param">align</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.new_alignment" title="永久链接至目标">¶</a></dt>
+<dd><p>设置对齐样式。  <em>align</em> 值可以是任何对象，但按照惯例是字符串或 <code class="docutils literal notranslate"><span class="pre">None</span></code>，其中 <code class="docutils literal notranslate"><span class="pre">None</span></code> 表示应使用编写器的“首选”对齐方式。常规的*对齐*值为 <code class="docutils literal notranslate"><span class="pre">'left'</span></code>、 <code class="docutils literal notranslate"><span class="pre">'center'</span></code>、<code class="docutils literal notranslate"><span class="pre">'right'</span></code> 和 <code class="docutils literal notranslate"><span class="pre">'justify'</span></code>。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.new_font">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">new_font</code><span class="sig-paren">(</span><em class="sig-param">font</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.new_font" title="永久链接至目标">¶</a></dt>
+<dd><p>设置字体样式。 <em>font</em> 的值将为 <code class="docutils literal notranslate"><span class="pre">None</span></code>，表示应使用设备的默认字体或格式为 <code class="docutils literal notranslate"><span class="pre">(size,</span> <span class="pre">italic,</span> <span class="pre">bold,</span> <span class="pre">teletype)</span></code> 的元组。 大小将是一个字符串，指示应使用的字体大小;特定字符串及其解释必须由应用程序定义。 <em>italic</em>、<em>bold</em> 和 <em>teletype</em> 值是布尔值，指定应使用哪些字体属性。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.new_margin">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">new_margin</code><span class="sig-paren">(</span><em class="sig-param">margin</em>, <em class="sig-param">level</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.new_margin" title="永久链接至目标">¶</a></dt>
+<dd><p>将边距级别设置为整数 <em>level</em>，将逻辑标记设置为 <em>margin</em>。逻辑标签的解释由作者自行决定;对逻辑标记值的唯一限制是，对于 <em>level</em> 的非零值，它不是假值。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.new_spacing">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">new_spacing</code><span class="sig-paren">(</span><em class="sig-param">spacing</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.new_spacing" title="永久链接至目标">¶</a></dt>
+<dd><p>将间距样式设置为  <em>spacing</em>。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.new_styles">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">new_styles</code><span class="sig-paren">(</span><em class="sig-param">styles</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.new_styles" title="永久链接至目标">¶</a></dt>
+<dd><p>设置其他样式。<em>styles</em> 值是任意值的元组;值 <a class="reference internal" href="#formatter.AS_IS" title="formatter.AS_IS"><code class="xref py py-const docutils literal notranslate"><span class="pre">AS_IS</span></code></a> 应忽略。<em>styles</em> 元组可以解释为集合或堆栈，具体取决于应用程序和编写器实现的要求。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.send_line_break">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">send_line_break</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.send_line_break" title="永久链接至目标">¶</a></dt>
+<dd><p>断开当前行。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.send_paragraph">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">send_paragraph</code><span class="sig-paren">(</span><em class="sig-param">blankline</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.send_paragraph" title="永久链接至目标">¶</a></dt>
+<dd><p>生成至少空白行 <em>blankline</em> 或等效行的段落分隔。<em>blankline</em> 值将是一个整数。 请注意，如果需要换行符，实现将在此调用之前收到对 <a class="reference internal" href="#formatter.writer.send_line_break" title="formatter.writer.send_line_break"><code class="xref py py-meth docutils literal notranslate"><span class="pre">send_line_break()</span></code></a> 的调用; 此方法不应包括结束段落的最后一行。它只负责段落之间的垂直间距。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.send_hor_rule">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">send_hor_rule</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kw</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.send_hor_rule" title="永久链接至目标">¶</a></dt>
+<dd><p>在输出设备上显示水平线。 此方法的参数完全特定于应用程序和编写器，应谨慎解释。 该方法实现可能假定已通过 <a class="reference internal" href="#formatter.writer.send_line_break" title="formatter.writer.send_line_break"><code class="xref py py-meth docutils literal notranslate"><span class="pre">send_line_break()</span></code></a> 发出换行符。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.send_flowing_data">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">send_flowing_data</code><span class="sig-paren">(</span><em class="sig-param">data</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.send_flowing_data" title="永久链接至目标">¶</a></dt>
+<dd><p>输出字符数据，可以根据需要进行自动换行和重排。 在对此方法的任何调用序列中，编写器可能假定多个空格字符的范围已折叠为单个空格字符。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.send_literal_data">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">send_literal_data</code><span class="sig-paren">(</span><em class="sig-param">data</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.send_literal_data" title="永久链接至目标">¶</a></dt>
+<dd><p>输出已格式化为显示的字符数据。 通常，这应解释为应保留由换行符指示的换行符，并且不应引入新的换行符。 数据可能包含嵌入的换行符和制表符，这与提供给 <code class="xref py py-meth docutils literal notranslate"><span class="pre">send_formatted_data()</span></code> 接口的数据不同。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="formatter.writer.send_label_data">
+<code class="sig-prename descclassname">writer.</code><code class="sig-name descname">send_label_data</code><span class="sig-paren">(</span><em class="sig-param">data</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.writer.send_label_data" title="永久链接至目标">¶</a></dt>
+<dd><p>如果可能，将  <em>data</em> 设置为当前左边距的左侧。 <em>data</em> 的值不受限制;非字符串值的处理完全取决于应用程序和编写器。 此方法仅在行首调用。</p>
+</dd></dl>
+
+</section>
+<section id="writer-implementations">
+<span id="writer-impls"></span><h2>编写器实现<a class="headerlink" href="#writer-implementations" title="永久链接至标题">¶</a></h2>
+<p>本模块提供了编写器对象接口的三个实现作为示例。 大多数应用程序需要从 <a class="reference internal" href="#formatter.NullWriter" title="formatter.NullWriter"><code class="xref py py-class docutils literal notranslate"><span class="pre">NullWriter</span></code></a> 类派生新的编写器类。</p>
+<dl class="class">
+<dt id="formatter.NullWriter">
+<em class="property">class </em><code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">NullWriter</code><a class="headerlink" href="#formatter.NullWriter" title="永久链接至目标">¶</a></dt>
+<dd><p>仅提供接口定义的编写器;不会对任何方法执行任何操作。 这应该是不需要继承任何实现方法的所有编写器的基类。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="formatter.AbstractWriter">
+<em class="property">class </em><code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">AbstractWriter</code><a class="headerlink" href="#formatter.AbstractWriter" title="永久链接至目标">¶</a></dt>
+<dd><p>一个可用于调试格式化程序的编写器，但不能用于其他很多。 每个方法只是通过在标准输出上打印其名称和参数来宣布自己。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="formatter.DumbWriter">
+<em class="property">class </em><code class="sig-prename descclassname">formatter.</code><code class="sig-name descname">DumbWriter</code><span class="sig-paren">(</span><em class="sig-param">file=None</em>, <em class="sig-param">maxcol=72</em><span class="sig-paren">)</span><a class="headerlink" href="#formatter.DumbWriter" title="永久链接至目标">¶</a></dt>
+<dd><p>简单的编写器类，它将输出写入作为  <em>file</em> 传入的 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a> ，或者，如果省略 <em>file</em> ，则写入标准输出。 输出只是自动换行为 <em>maxcol</em> 指定的列数。 此类适用于重排段落序列。</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">formatter</span></code> --- 通用格式化输出</a><ul>
+<li><a class="reference internal" href="#the-formatter-interface">格式化程序接口</a></li>
+<li><a class="reference internal" href="#formatter-implementations">实现格式化程序</a></li>
+<li><a class="reference internal" href="#the-writer-interface">编写器界面</a></li>
+<li><a class="reference internal" href="#writer-implementations">编写器实现</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="misc.html"
+                        title="上一章">杂项服务</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="windows.html"
+                        title="下一章">Windows系统相关模块</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/formatter.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="windows.html" title="Windows系统相关模块"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="misc.html" title="杂项服务"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="misc.html" >杂项服务</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>

@@ -1,0 +1,930 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>operator --- 标准运算符替代函数 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="文件和目录访问" href="filesys.html" />
+    <link rel="prev" title="functools --- 高阶函数和可调用对象上的操作" href="functools.html" />
+    <link rel="canonical" href="https://docs.python.org/3/library/operator.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">operator</span></code> --- 标准运算符替代函数</a><ul>
+<li><a class="reference internal" href="#mapping-operators-to-functions">将运算符映射到函数</a></li>
+<li><a class="reference internal" href="#in-place-operators">原地运算符</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="functools.html"
+                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">functools</span></code> --- 高阶函数和可调用对象上的操作</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="filesys.html"
+                        title="下一章">文件和目录访问</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/operator.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="filesys.html" title="文件和目录访问"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="functools.html" title="functools --- 高阶函数和可调用对象上的操作"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="functional.html" accesskey="U">函数式编程模块</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-operator">
+<span id="operator-standard-operators-as-functions"></span><h1><a class="reference internal" href="#module-operator" title="operator: Functions corresponding to the standard operators."><code class="xref py py-mod docutils literal notranslate"><span class="pre">operator</span></code></a> --- 标准运算符替代函数<a class="headerlink" href="#module-operator" title="永久链接至标题">¶</a></h1>
+<p><strong>源代码:</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/operator.py">Lib/operator.py</a></p>
+<hr class="docutils" />
+<p><a class="reference internal" href="#module-operator" title="operator: Functions corresponding to the standard operators."><code class="xref py py-mod docutils literal notranslate"><span class="pre">operator</span></code></a> 模块提供了一套与Python的内置运算符对应的高效率函数。例如，<code class="docutils literal notranslate"><span class="pre">operator.add(x,</span> <span class="pre">y)</span></code> 与表达式 <code class="docutils literal notranslate"><span class="pre">x+y</span></code> 相同。 许多函数名与特殊方法名相同，只是没有双下划线。为了向后兼容性，也保留了许多包含双下划线的函数。为了表述清楚，建议使用没有双下划线的函数。</p>
+<p>函数包含的种类有：对象的比较运算、逻辑运算、数学运算以及序列运算。</p>
+<p>对象比较函数适用于所有的对象，函数名根据它们对应的比较运算符命名。</p>
+<dl class="function">
+<dt id="operator.lt">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">lt</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.lt" title="永久链接至目标">¶</a></dt>
+<dt id="operator.le">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">le</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.le" title="永久链接至目标">¶</a></dt>
+<dt id="operator.eq">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">eq</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.eq" title="永久链接至目标">¶</a></dt>
+<dt id="operator.ne">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ne</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ne" title="永久链接至目标">¶</a></dt>
+<dt id="operator.ge">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ge</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ge" title="永久链接至目标">¶</a></dt>
+<dt id="operator.gt">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">gt</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.gt" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__lt__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__lt__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__lt__" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__le__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__le__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__le__" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__eq__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__eq__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__eq__" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ne__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ne__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ne__" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ge__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ge__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ge__" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__gt__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__gt__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__gt__" title="永久链接至目标">¶</a></dt>
+<dd><p>在 <em>a</em> 和 <em>b</em> 之间进行全比较。具体的，<code class="docutils literal notranslate"><span class="pre">lt(a,</span> <span class="pre">b)</span></code> 与 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;</span> <span class="pre">b</span></code> 相同， <code class="docutils literal notranslate"><span class="pre">le(a,</span> <span class="pre">b)</span></code> 与 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;=</span> <span class="pre">b</span></code> 相同，<code class="docutils literal notranslate"><span class="pre">eq(a,</span> <span class="pre">b)</span></code> 与 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code> 相同，<code class="docutils literal notranslate"><span class="pre">ne(a,</span> <span class="pre">b)</span></code> 与 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">!=</span> <span class="pre">b</span></code> 相同，<code class="docutils literal notranslate"><span class="pre">gt(a,</span> <span class="pre">b)</span></code> 与 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&gt;</span> <span class="pre">b</span></code> 相同，<code class="docutils literal notranslate"><span class="pre">ge(a,</span> <span class="pre">b)``与</span> <span class="pre">``a</span> <span class="pre">&gt;=</span> <span class="pre">b</span></code> 相同。注意这些函数可以返回任何值，无论它是否可当作布尔值。关于全比较的更多信息请参考 <a class="reference internal" href="../reference/expressions.html#comparisons"><span class="std std-ref">比较运算</span></a> 。</p>
+</dd></dl>
+
+<p>逻辑运算通常也适用于所有对象，并且支持真值检测、标识检测和布尔运算：</p>
+<dl class="function">
+<dt id="operator.not_">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">not_</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.not_" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__not__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__not__</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__not__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <a class="reference internal" href="../reference/expressions.html#not"><code class="xref std std-keyword docutils literal notranslate"><span class="pre">not</span></code></a> <em>obj</em> 的结果。 （请注意对象实例并没有 <a class="reference internal" href="#operator.__not__" title="operator.__not__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__not__()</span></code></a> 方法；只有解释器核心可定义此操作。 结果会受 <a class="reference internal" href="../reference/datamodel.html#object.__bool__" title="object.__bool__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__bool__()</span></code></a> 和 <a class="reference internal" href="../reference/datamodel.html#object.__len__" title="object.__len__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__len__()</span></code></a> 方法影响。）</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.truth">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">truth</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.truth" title="永久链接至目标">¶</a></dt>
+<dd><p>如果 <em>obj</em> 为真值则返回 <a class="reference internal" href="constants.html#True" title="True"><code class="xref py py-const docutils literal notranslate"><span class="pre">True</span></code></a>，否则返回 <a class="reference internal" href="constants.html#False" title="False"><code class="xref py py-const docutils literal notranslate"><span class="pre">False</span></code></a>。 这等价于使用 <a class="reference internal" href="functions.html#bool" title="bool"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></a> 构造器。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.is_">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">is_</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.is_" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">is</span> <span class="pre">b</span></code>。 检测对象标识。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.is_not">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">is_not</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.is_not" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">b</span></code>。 检测对象标识。</p>
+</dd></dl>
+
+<p>数学和按位运算的种类是最多的：</p>
+<dl class="function">
+<dt id="operator.abs">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">abs</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.abs" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__abs__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__abs__</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__abs__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>obj</em> 的绝对值。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.add">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">add</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.add" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__add__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__add__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__add__" title="永久链接至目标">¶</a></dt>
+<dd><p>对于数字 <em>a</em> 和 <em>b</em>，返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.and_">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">and_</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.and_" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__and__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__and__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__and__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>x</em> 和 <em>y</em> 按位与的结果。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.floordiv">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">floordiv</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.floordiv" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__floordiv__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__floordiv__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__floordiv__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">//</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.index">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">index</code><span class="sig-paren">(</span><em class="sig-param">a</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.index" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__index__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__index__</code><span class="sig-paren">(</span><em class="sig-param">a</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__index__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>a</em> 转换为整数的结果。 等价于 <code class="docutils literal notranslate"><span class="pre">a.__index__()</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.inv">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">inv</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.inv" title="永久链接至目标">¶</a></dt>
+<dt id="operator.invert">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">invert</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.invert" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__inv__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__inv__</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__inv__" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__invert__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__invert__</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__invert__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回数字 <em>obj</em> 按位取反的结果。 这等价于 <code class="docutils literal notranslate"><span class="pre">~obj</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.lshift">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">lshift</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.lshift" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__lshift__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__lshift__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__lshift__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>a</em> 左移 <em>b</em> 位的结果。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.mod">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">mod</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.mod" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__mod__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__mod__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__mod__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">%</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.mul">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">mul</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.mul" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__mul__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__mul__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__mul__" title="永久链接至目标">¶</a></dt>
+<dd><p>对于数字 <em>a</em> 和 <em>b</em>，返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">*</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.matmul">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">matmul</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.matmul" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__matmul__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__matmul__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__matmul__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&#64;</span> <span class="pre">b</span></code>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.neg">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">neg</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.neg" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__neg__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__neg__</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__neg__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>obj</em> 取负的结果 (<code class="docutils literal notranslate"><span class="pre">-obj</span></code>)。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.or_">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">or_</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.or_" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__or__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__or__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__or__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>a</em> 和 <em>b</em> 按位或的结果。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.pos">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">pos</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.pos" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__pos__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__pos__</code><span class="sig-paren">(</span><em class="sig-param">obj</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__pos__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>obj</em> 取正的结果 (<code class="docutils literal notranslate"><span class="pre">+obj</span></code>)。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.pow">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">pow</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.pow" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__pow__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__pow__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__pow__" title="永久链接至目标">¶</a></dt>
+<dd><p>对于数字 <em>a</em> 和 <em>b</em>，返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">**</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.rshift">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">rshift</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.rshift" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__rshift__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__rshift__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__rshift__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>a</em> 右移 <em>b</em> 位的结果。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.sub">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">sub</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.sub" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__sub__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__sub__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__sub__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">-</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.truediv">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">truediv</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.truediv" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__truediv__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__truediv__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__truediv__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">/</span> <span class="pre">b</span></code> 例如 2/3 将等于 .66 而不是 0。 这也被称为“真”除法。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.xor">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">xor</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.xor" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__xor__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__xor__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__xor__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>a</em> 和 <em>b</em> 按位异或的结果。</p>
+</dd></dl>
+
+<p>适用于序列的操作（其中一些也适用于映射）包括：</p>
+<dl class="function">
+<dt id="operator.concat">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">concat</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.concat" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__concat__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__concat__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__concat__" title="永久链接至目标">¶</a></dt>
+<dd><p>对于序列 <em>a</em> 和 <em>b</em>，返回 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.contains">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">contains</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.contains" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__contains__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__contains__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__contains__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <code class="docutils literal notranslate"><span class="pre">b</span> <span class="pre">in</span> <span class="pre">a</span></code> 检测的结果。 请注意操作数是反序的。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.countOf">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">countOf</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.countOf" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>b</em> 在 <em>a</em> 中的出现次数。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.delitem">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">delitem</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.delitem" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__delitem__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__delitem__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__delitem__" title="永久链接至目标">¶</a></dt>
+<dd><p>移除 <em>a</em> 中索引号为 <em>b</em> 的值。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.getitem">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">getitem</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.getitem" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__getitem__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__getitem__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__getitem__" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>a</em> 中索引为 <em>b</em> 的值。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.indexOf">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">indexOf</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.indexOf" title="永久链接至目标">¶</a></dt>
+<dd><p>返回 <em>b</em> 在 <em>a</em> 中首次出现所在的索引号。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.setitem">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">setitem</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em>, <em class="sig-param">c</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.setitem" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__setitem__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__setitem__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em>, <em class="sig-param">c</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__setitem__" title="永久链接至目标">¶</a></dt>
+<dd><p>将 <em>a</em> 中索引号为 <em>b</em> 的值设为 <em>c</em>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.length_hint">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">length_hint</code><span class="sig-paren">(</span><em class="sig-param">obj</em>, <em class="sig-param">default=0</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.length_hint" title="永久链接至目标">¶</a></dt>
+<dd><p>返回对象 <em>o</em> 的估计长度。 首先尝试返回其实际长度，再使用 <a class="reference internal" href="../reference/datamodel.html#object.__length_hint__" title="object.__length_hint__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">object.__length_hint__()</span></code></a> 得出估计值，最后返回默认值。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.4 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<p><a class="reference internal" href="#module-operator" title="operator: Functions corresponding to the standard operators."><code class="xref py py-mod docutils literal notranslate"><span class="pre">operator</span></code></a> 模块还定义了一些用于常规属性和条目查找的工具。 这些工具适合用来编写快速字段提取器作为 <a class="reference internal" href="functions.html#map" title="map"><code class="xref py py-func docutils literal notranslate"><span class="pre">map()</span></code></a>, <a class="reference internal" href="functions.html#sorted" title="sorted"><code class="xref py py-func docutils literal notranslate"><span class="pre">sorted()</span></code></a>, <a class="reference internal" href="itertools.html#itertools.groupby" title="itertools.groupby"><code class="xref py py-meth docutils literal notranslate"><span class="pre">itertools.groupby()</span></code></a> 或其他需要相应函数参数的函数的参数。</p>
+<dl class="function">
+<dt id="operator.attrgetter">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">attrgetter</code><span class="sig-paren">(</span><em class="sig-param">attr</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.attrgetter" title="永久链接至目标">¶</a></dt>
+<dt>
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">attrgetter</code><span class="sig-paren">(</span><em class="sig-param">*attrs</em><span class="sig-paren">)</span></dt>
+<dd><p>返回一个可从操作数中获取 <em>attr</em> 的可调用对象。 如果请求了一个以上的属性，则返回一个属性元组。 属性名称还可包含点号。 例如：</p>
+<ul class="simple">
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">attrgetter('name')</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">f(b)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">b.name</span></code>。</p></li>
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">attrgetter('name',</span> <span class="pre">'date')</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">f(b)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">(b.name,</span> <span class="pre">b.date)</span></code>。</p></li>
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">attrgetter('name.first',</span> <span class="pre">'name.last')</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">f(b)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">(b.name.first,</span> <span class="pre">b.name.last)</span></code>。</p></li>
+</ul>
+<p>等价于:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">attrgetter</span><span class="p">(</span><span class="o">*</span><span class="n">items</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;attribute name must be a string&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">attr</span> <span class="o">=</span> <span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">def</span> <span class="nf">g</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">resolve_attr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">def</span> <span class="nf">g</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">resolve_attr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span> <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">g</span>
+
+<span class="k">def</span> <span class="nf">resolve_attr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">attr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">obj</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.itemgetter">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">itemgetter</code><span class="sig-paren">(</span><em class="sig-param">item</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.itemgetter" title="永久链接至目标">¶</a></dt>
+<dt>
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">itemgetter</code><span class="sig-paren">(</span><em class="sig-param">*items</em><span class="sig-paren">)</span></dt>
+<dd><p>返回一个使用操作数的 <a class="reference internal" href="#operator.__getitem__" title="operator.__getitem__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__getitem__()</span></code></a> 方法从操作数中获取 <em>item</em> 的可调用对象。 如果指定了多个条目，则返回一个查找值的元组。 例如：</p>
+<ul class="simple">
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">itemgetter(2)</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">f(r)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">r[2]</span></code>。</p></li>
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">=</span> <span class="pre">itemgetter(2,</span> <span class="pre">5,</span> <span class="pre">3)</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">g(r)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">(r[2],</span> <span class="pre">r[5],</span> <span class="pre">r[3])</span></code>。</p></li>
+</ul>
+<p>等价于:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">itemgetter</span><span class="p">(</span><span class="o">*</span><span class="n">items</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">item</span> <span class="o">=</span> <span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">def</span> <span class="nf">g</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">obj</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">def</span> <span class="nf">g</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">obj</span><span class="p">[</span><span class="n">item</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">g</span>
+</pre></div>
+</div>
+<p>传入的条目可以为操作数的 <a class="reference internal" href="#operator.__getitem__" title="operator.__getitem__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__getitem__()</span></code></a> 所接受的任何类型。 字典接受任意可哈希的值。 列表、元组和字符串接受 index 或 slice 对象：</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">)(</span><span class="s1">&#39;ABCDEFG&#39;</span><span class="p">)</span>
+<span class="go">&#39;B&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">)(</span><span class="s1">&#39;ABCDEFG&#39;</span><span class="p">)</span>
+<span class="go">(&#39;B&#39;, &#39;D&#39;, &#39;F&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">itemgetter</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="kc">None</span><span class="p">))(</span><span class="s1">&#39;ABCDEFG&#39;</span><span class="p">)</span>
+<span class="go">&#39;CDEFG&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">soldier</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">rank</span><span class="o">=</span><span class="s1">&#39;captain&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;dotterbart&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">itemgetter</span><span class="p">(</span><span class="s1">&#39;rank&#39;</span><span class="p">)(</span><span class="n">soldier</span><span class="p">)</span>
+<span class="go">&#39;captain&#39;</span>
+</pre></div>
+</div>
+<p>使用 <a class="reference internal" href="#operator.itemgetter" title="operator.itemgetter"><code class="xref py py-func docutils literal notranslate"><span class="pre">itemgetter()</span></code></a> 从元组的记录中提取特定字段的例子：</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">inventory</span> <span class="o">=</span> <span class="p">[(</span><span class="s1">&#39;apple&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;banana&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;pear&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;orange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">getcount</span> <span class="o">=</span> <span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">getcount</span><span class="p">,</span> <span class="n">inventory</span><span class="p">))</span>
+<span class="go">[3, 2, 5, 1]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">inventory</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">getcount</span><span class="p">)</span>
+<span class="go">[(&#39;orange&#39;, 1), (&#39;banana&#39;, 2), (&#39;apple&#39;, 3), (&#39;pear&#39;, 5)]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.methodcaller">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">methodcaller</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">/</em>, <em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.methodcaller" title="永久链接至目标">¶</a></dt>
+<dd><p>返回一个在操作数上调用 <em>name</em> 方法的可调用对象。 如果给出额外的参数和/或关键字参数，它们也将被传给该方法。 例如：</p>
+<ul class="simple">
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">methodcaller('name')</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">f(b)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">b.name()</span></code>。</p></li>
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">methodcaller('name',</span> <span class="pre">'foo',</span> <span class="pre">bar=1)</span></code> 之后，调用 <code class="docutils literal notranslate"><span class="pre">f(b)</span></code> 将返回 <code class="docutils literal notranslate"><span class="pre">b.name('foo',</span> <span class="pre">bar=1)</span></code>。</p></li>
+</ul>
+<p>等价于:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">methodcaller</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">/</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">caller</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">name</span><span class="p">)(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">caller</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<section id="mapping-operators-to-functions">
+<span id="operator-map"></span><h2>将运算符映射到函数<a class="headerlink" href="#mapping-operators-to-functions" title="永久链接至标题">¶</a></h2>
+<p>以下表格显示了抽象运算是如何对应于 Python 语法中的运算符和 <a class="reference internal" href="#module-operator" title="operator: Functions corresponding to the standard operators."><code class="xref py py-mod docutils literal notranslate"><span class="pre">operator</span></code></a> 模块中的函数的。</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 29%" />
+<col style="width: 45%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>运算</p></th>
+<th class="head"><p>语法</p></th>
+<th class="head"><p>函数</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>加法</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">add(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>字符串拼接</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">seq1</span> <span class="pre">+</span> <span class="pre">seq2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">concat(seq1,</span> <span class="pre">seq2)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>包含测试</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">obj</span> <span class="pre">in</span> <span class="pre">seq</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">contains(seq,</span> <span class="pre">obj)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>除法</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">/</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">truediv(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>除法</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">//</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">floordiv(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>按位与</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&amp;</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">and_(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>按位异或</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">^</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">xor(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>按位取反</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~</span> <span class="pre">a</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">invert(a)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>按位或</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">|</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">or_(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>取幂</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">**</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pow(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>标识</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">is</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">is_(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>标识</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">is_not(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>索引赋值</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">obj[k]</span> <span class="pre">=</span> <span class="pre">v</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">setitem(obj,</span> <span class="pre">k,</span> <span class="pre">v)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>索引删除</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">obj[k]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">delitem(obj,</span> <span class="pre">k)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>索引取值</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">obj[k]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">getitem(obj,</span> <span class="pre">k)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>左移</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;&lt;</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lshift(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>取模</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">%</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mod(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>乘法</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">*</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mul(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>矩阵乘法</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&#64;</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">matmul(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>取反（算术）</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-</span> <span class="pre">a</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">neg(a)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>取反（逻辑）</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">a</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">not_(a)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>正数</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">+</span> <span class="pre">a</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pos(a)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>右移</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&gt;&gt;</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rshift(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>切片赋值</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">seq[i:j]</span> <span class="pre">=</span> <span class="pre">values</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">setitem(seq,</span> <span class="pre">slice(i,</span> <span class="pre">j),</span> <span class="pre">values)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>切片删除</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">seq[i:j]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">delitem(seq,</span> <span class="pre">slice(i,</span> <span class="pre">j))</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>切片取值</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">seq[i:j]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">getitem(seq,</span> <span class="pre">slice(i,</span> <span class="pre">j))</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>字符串格式化</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">%</span> <span class="pre">obj</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mod(s,</span> <span class="pre">obj)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>减法</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">-</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sub(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>真值测试</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">obj</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">truth(obj)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>比较</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lt(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>比较</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;=</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">le(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>相等</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">eq(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>不等</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">!=</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ne(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>比较</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&gt;=</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ge(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>比较</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&gt;</span> <span class="pre">b</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gt(a,</span> <span class="pre">b)</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="in-place-operators">
+<h2>原地运算符<a class="headerlink" href="#in-place-operators" title="永久链接至标题">¶</a></h2>
+<p>许多运算都有“原地”版本。 以下列出的是提供对原地运算符相比通常语法更底层访问的函数，例如 <a class="reference internal" href="../glossary.html#term-statement"><span class="xref std std-term">statement</span></a> <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">+=</span> <span class="pre">y</span></code> 相当于 <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">operator.iadd(x,</span> <span class="pre">y)</span></code>。 换一种方式来讲就是 <code class="docutils literal notranslate"><span class="pre">z</span> <span class="pre">=</span> <span class="pre">operator.iadd(x,</span> <span class="pre">y)</span></code> 等价于语句块 <code class="docutils literal notranslate"><span class="pre">z</span> <span class="pre">=</span> <span class="pre">x;</span> <span class="pre">z</span> <span class="pre">+=</span> <span class="pre">y</span></code>。</p>
+<p>在这些例子中，请注意当调用一个原地方法时，运算和赋值是分成两个步骤来执行的。 下面列出的原地函数只执行第一步即调用原地方法。 第二步赋值则不加处理。</p>
+<p>对于不可变的目标例如字符串、数字和元组，更新的值会被计算，但不会被再被赋值给输入变量：</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="s1">&#39;hello&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iadd</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="s1">&#39; world&#39;</span><span class="p">)</span>
+<span class="go">&#39;hello world&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span>
+<span class="go">&#39;hello&#39;</span>
+</pre></div>
+</div>
+<p>对于可变的目标例如列表和字典，原地方法将执行更新，因此不需要后续赋值操作：</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">s</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;e&#39;</span><span class="p">,</span> <span class="s1">&#39;l&#39;</span><span class="p">,</span> <span class="s1">&#39;l&#39;</span><span class="p">,</span> <span class="s1">&#39;o&#39;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iadd</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="s1">&#39;l&#39;</span><span class="p">,</span> <span class="s1">&#39;d&#39;</span><span class="p">])</span>
+<span class="go">[&#39;h&#39;, &#39;e&#39;, &#39;l&#39;, &#39;l&#39;, &#39;o&#39;, &#39; &#39;, &#39;w&#39;, &#39;o&#39;, &#39;r&#39;, &#39;l&#39;, &#39;d&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">s</span>
+<span class="go">[&#39;h&#39;, &#39;e&#39;, &#39;l&#39;, &#39;l&#39;, &#39;o&#39;, &#39; &#39;, &#39;w&#39;, &#39;o&#39;, &#39;r&#39;, &#39;l&#39;, &#39;d&#39;]</span>
+</pre></div>
+</div>
+<dl class="function">
+<dt id="operator.iadd">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">iadd</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.iadd" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__iadd__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__iadd__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__iadd__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">iadd(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.iand">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">iand</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.iand" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__iand__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__iand__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__iand__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">iand(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&amp;=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.iconcat">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">iconcat</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.iconcat" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__iconcat__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__iconcat__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__iconcat__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">iconcat(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+=</span> <span class="pre">b</span></code> 其中 <em>a</em> 和 <em>b</em> 为序列。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.ifloordiv">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ifloordiv</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ifloordiv" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ifloordiv__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ifloordiv__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ifloordiv__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">ifloordiv(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">//=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.ilshift">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ilshift</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ilshift" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ilshift__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ilshift__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ilshift__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">ilshift(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;&lt;=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.imod">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">imod</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.imod" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__imod__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__imod__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__imod__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">imod(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">%=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.imul">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">imul</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.imul" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__imul__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__imul__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__imul__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">imul(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">*=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.imatmul">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">imatmul</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.imatmul" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__imatmul__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__imatmul__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__imatmul__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">imatmul(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&#64;=</span> <span class="pre">b</span></code>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.5 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.ior">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ior</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ior" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ior__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ior__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ior__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">ior(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">|=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.ipow">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ipow</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ipow" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ipow__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ipow__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ipow__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">ipow(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">**=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.irshift">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">irshift</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.irshift" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__irshift__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__irshift__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__irshift__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">irshift(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&gt;&gt;=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.isub">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">isub</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.isub" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__isub__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__isub__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__isub__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">isub(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">-=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.itruediv">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">itruediv</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.itruediv" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__itruediv__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__itruediv__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__itruediv__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">itruediv(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">/=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="operator.ixor">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">ixor</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.ixor" title="永久链接至目标">¶</a></dt>
+<dt id="operator.__ixor__">
+<code class="sig-prename descclassname">operator.</code><code class="sig-name descname">__ixor__</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#operator.__ixor__" title="永久链接至目标">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">ixor(a,</span> <span class="pre">b)</span></code> 等价于 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">^=</span> <span class="pre">b</span></code>。</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">operator</span></code> --- 标准运算符替代函数</a><ul>
+<li><a class="reference internal" href="#mapping-operators-to-functions">将运算符映射到函数</a></li>
+<li><a class="reference internal" href="#in-place-operators">原地运算符</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="functools.html"
+                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">functools</span></code> --- 高阶函数和可调用对象上的操作</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="filesys.html"
+                        title="下一章">文件和目录访问</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/operator.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="filesys.html" title="文件和目录访问"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="functools.html" title="functools --- 高阶函数和可调用对象上的操作"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="functional.html" >函数式编程模块</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>

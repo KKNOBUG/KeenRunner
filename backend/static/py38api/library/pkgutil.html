@@ -1,0 +1,403 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>pkgutil --- 包扩展工具 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="modulefinder --- 查找脚本使用的模块" href="modulefinder.html" />
+    <link rel="prev" title="zipimport --- 从 Zip 存档中导入模块" href="zipimport.html" />
+    <link rel="canonical" href="https://docs.python.org/3/library/pkgutil.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="zipimport.html"
+                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zipimport</span></code> --- 从 Zip 存档中导入模块</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="modulefinder.html"
+                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">modulefinder</span></code> --- 查找脚本使用的模块</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/pkgutil.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="modulefinder.html" title="modulefinder --- 查找脚本使用的模块"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="zipimport.html" title="zipimport --- 从 Zip 存档中导入模块"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="modules.html" accesskey="U">导入模块</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-pkgutil">
+<span id="pkgutil-package-extension-utility"></span><h1><a class="reference internal" href="#module-pkgutil" title="pkgutil: Utilities for the import system."><code class="xref py py-mod docutils literal notranslate"><span class="pre">pkgutil</span></code></a> --- 包扩展工具<a class="headerlink" href="#module-pkgutil" title="永久链接至标题">¶</a></h1>
+<p><strong>源代码:</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/pkgutil.py">Lib/pkgutil.py</a></p>
+<hr class="docutils" />
+<p>该模块为导入系统提供了工具，尤其是在包支持方面。</p>
+<dl class="class">
+<dt id="pkgutil.ModuleInfo">
+<em class="property">class </em><code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">ModuleInfo</code><span class="sig-paren">(</span><em class="sig-param">module_finder</em>, <em class="sig-param">name</em>, <em class="sig-param">ispkg</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.ModuleInfo" title="永久链接至目标">¶</a></dt>
+<dd><p>一个包含模块信息的简短摘要的命名元组。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.6 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.extend_path">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">extend_path</code><span class="sig-paren">(</span><em class="sig-param">path</em>, <em class="sig-param">name</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.extend_path" title="永久链接至目标">¶</a></dt>
+<dd><p>扩展组成包的模块的搜索路径。 预期用途是将以下代码放到包的 <code class="file docutils literal notranslate"><span class="pre">__init__.py</span></code> 中:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pkgutil</span> <span class="kn">import</span> <span class="n">extend_path</span>
+<span class="n">__path__</span> <span class="o">=</span> <span class="n">extend_path</span><span class="p">(</span><span class="n">__path__</span><span class="p">,</span> <span class="vm">__name__</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will add to the package's <code class="docutils literal notranslate"><span class="pre">__path__</span></code> all subdirectories of directories
+on <code class="docutils literal notranslate"><span class="pre">sys.path</span></code> named after the package.  This is useful if one wants to
+distribute different parts of a single logical package as multiple
+directories.</p>
+<p>它还会查找开头部分 <code class="docutils literal notranslate"><span class="pre">*</span></code> 与 <em>name</em> 参数相匹配的 <code class="file docutils literal notranslate"><span class="pre">*.pkg</span></code> 文件。 此特性与 <code class="file docutils literal notranslate"><span class="pre">*.pth</span></code> 文件类似（请参阅 <a class="reference internal" href="site.html#module-site" title="site: Module responsible for site-specific configuration."><code class="xref py py-mod docutils literal notranslate"><span class="pre">site</span></code></a> 模块了解更多信息），区别在于它不会对以 <code class="docutils literal notranslate"><span class="pre">import</span></code> 开头的行做特别对待。 将按外在值对 <code class="file docutils literal notranslate"><span class="pre">*.pkg</span></code> 文件添加信任：除了检查重复项，，所有在 <code class="file docutils literal notranslate"><span class="pre">*.pkg</span></code> 文件中找到的条目都会被添加到路径中，不管它们是否存在于文件系统中。 （这是特性而非缺陷。）</p>
+<p>如果输入路径不是一个列表（已冻结包就是这种情况）则它将被原样返回。 输入路径不会被修改；将返回一个扩展的副本。 条目将被添加到副本的末尾。</p>
+<p><a class="reference internal" href="sys.html#sys.path" title="sys.path"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.path</span></code></a> 会被假定为一个序列。 <a class="reference internal" href="sys.html#sys.path" title="sys.path"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.path</span></code></a> 中的条目如果不是指向现有目录的字符串则会被忽略。 <a class="reference internal" href="sys.html#sys.path" title="sys.path"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.path</span></code></a> 上当用作文件名时会导致错误的 Unicode 条目可以会使得此函数引发异常（与 <a class="reference internal" href="os.path.html#os.path.isdir" title="os.path.isdir"><code class="xref py py-func docutils literal notranslate"><span class="pre">os.path.isdir()</span></code></a> 的行为一致）。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pkgutil.ImpImporter">
+<em class="property">class </em><code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">ImpImporter</code><span class="sig-paren">(</span><em class="sig-param">dirname=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.ImpImporter" title="永久链接至目标">¶</a></dt>
+<dd><p>包装了 Python 的 &quot;经典&quot; 导入算法的 <span class="target" id="index-26"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 查找器</p>
+<p>如果 <em>dirname</em> 是一个字符串，将创建一个 <span class="target" id="index-27"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 查找器来搜索该目录。 如果 <em>dirname</em> 为 <code class="docutils literal notranslate"><span class="pre">None</span></code>，则将创建一个 <span class="target" id="index-28"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 来搜索当前 <a class="reference internal" href="sys.html#sys.path" title="sys.path"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.path</span></code></a>，加上任何已冻结或内置的模块。</p>
+<p>请注意 <a class="reference internal" href="#pkgutil.ImpImporter" title="pkgutil.ImpImporter"><code class="xref py py-class docutils literal notranslate"><span class="pre">ImpImporter</span></code></a> 目前并不支持放置在 <a class="reference internal" href="sys.html#sys.meta_path" title="sys.meta_path"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.meta_path</span></code></a> 上使用。</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">3.3 版后已移除: </span>这种模拟已不再必要，因为标准的导入机制现在完全兼容 <span class="target" id="index-29"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 并且在 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 中可用。</p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="pkgutil.ImpLoader">
+<em class="property">class </em><code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">ImpLoader</code><span class="sig-paren">(</span><em class="sig-param">fullname</em>, <em class="sig-param">file</em>, <em class="sig-param">filename</em>, <em class="sig-param">etc</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.ImpLoader" title="永久链接至目标">¶</a></dt>
+<dd><p>包装了 Python 的 &quot;经典&quot; 导入算法的 <a class="reference internal" href="../glossary.html#term-loader"><span class="xref std std-term">加载器</span></a>。</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">3.3 版后已移除: </span>这种模拟已不再必要，因为标准的导入机制现在完全兼容 <span class="target" id="index-30"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 并且在 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 中可用。</p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.find_loader">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">find_loader</code><span class="sig-paren">(</span><em class="sig-param">fullname</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.find_loader" title="永久链接至目标">¶</a></dt>
+<dd><p>为给定的 <em>fullname</em> 获取一个模块 <a class="reference internal" href="../glossary.html#term-loader"><span class="xref std std-term">loader</span></a>。</p>
+<p>这是针对 <a class="reference internal" href="importlib.html#importlib.util.find_spec" title="importlib.util.find_spec"><code class="xref py py-func docutils literal notranslate"><span class="pre">importlib.util.find_spec()</span></code></a> 的向下兼容包装器，它将大多数失败转换为 <a class="reference internal" href="exceptions.html#ImportError" title="ImportError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">ImportError</span></code></a> 并且只返回加载器而不是完整的 <code class="xref py py-class docutils literal notranslate"><span class="pre">ModuleSpec</span></code>。</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.3 版更改: </span>更新为直接基于 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 而不是依赖于包内部的 <span class="target" id="index-31"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 导入模拟。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.4 版更改: </span>更新为基于 <span class="target" id="index-32"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0451"><strong>PEP 451</strong></a></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.get_importer">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">get_importer</code><span class="sig-paren">(</span><em class="sig-param">path_item</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.get_importer" title="永久链接至目标">¶</a></dt>
+<dd><p>为给定的 <em>path_item</em> 获取一个 <a class="reference internal" href="../glossary.html#term-finder"><span class="xref std std-term">finder</span></a>。</p>
+<p>返回的查找器如果是由一个路径钩子新建的则会被缓存至 <a class="reference internal" href="sys.html#sys.path_importer_cache" title="sys.path_importer_cache"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.path_importer_cache</span></code></a>。</p>
+<p>如果需要重新扫描 <a class="reference internal" href="sys.html#sys.path_hooks" title="sys.path_hooks"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.path_hooks</span></code></a> 则缓存（或其一部分）可以被手动清空。</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.3 版更改: </span>更新为直接基于 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 而不是依赖于包内部的 <span class="target" id="index-33"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 导入模拟。</p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.get_loader">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">get_loader</code><span class="sig-paren">(</span><em class="sig-param">module_or_name</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.get_loader" title="永久链接至目标">¶</a></dt>
+<dd><p>为 <em>module_or_name</em> 获取一个 <a class="reference internal" href="../glossary.html#term-loader"><span class="xref std std-term">loader</span></a>。</p>
+<p>如果模块或包可通过正常导入机制来访问，则会返回该机制相关部分的包装器。 如果模块无法找到或导入则返回 <code class="docutils literal notranslate"><span class="pre">None</span></code>。 如果指定的模块尚未被导入，则包含它的包（如果存在）会被导入，以便建立包 <code class="docutils literal notranslate"><span class="pre">__path__</span></code>。</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.3 版更改: </span>更新为直接基于 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 而不是依赖于包内部的 <span class="target" id="index-34"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 导入模拟。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.4 版更改: </span>更新为基于 <span class="target" id="index-35"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0451"><strong>PEP 451</strong></a></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.iter_importers">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">iter_importers</code><span class="sig-paren">(</span><em class="sig-param">fullname=''</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.iter_importers" title="永久链接至目标">¶</a></dt>
+<dd><p>为给定的模块名称产生 <a class="reference internal" href="../glossary.html#term-finder"><span class="xref std std-term">finder</span></a> 对象。</p>
+<p>If fullname contains a '.', the finders will be for the package
+containing fullname, otherwise they will be all registered top level
+finders (i.e. those on both sys.meta_path and sys.path_hooks).</p>
+<p>如果指定的模块位于一个包内，则该包会作为发起调用此函数的附带影响被导入。</p>
+<p>如果未指定模块名称，则会产生所有的最高层级查找器。</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.3 版更改: </span>更新为直接基于 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 而不是依赖于包内部的 <span class="target" id="index-36"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 导入模拟。</p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.iter_modules">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">iter_modules</code><span class="sig-paren">(</span><em class="sig-param">path=None</em>, <em class="sig-param">prefix=''</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.iter_modules" title="永久链接至目标">¶</a></dt>
+<dd><p>Yields <a class="reference internal" href="#pkgutil.ModuleInfo" title="pkgutil.ModuleInfo"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModuleInfo</span></code></a> for all submodules on <em>path</em>, or, if
+<em>path</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code>, all top-level modules on <code class="docutils literal notranslate"><span class="pre">sys.path</span></code>.</p>
+<p><em>path</em> 应当为 <code class="docutils literal notranslate"><span class="pre">None</span></code> 或一个作为查找模块目标的路径的列表。</p>
+<p><em>prefix</em> 是要在输出时输出到每个模块名称之前的字符串。</p>
+<div class="admonition note">
+<p class="admonition-title">注解</p>
+<p>只适用于定义了 <code class="docutils literal notranslate"><span class="pre">iter_modules()</span></code> 方法的 <a class="reference internal" href="../glossary.html#term-finder"><span class="xref std std-term">finder</span></a>。 该接口是非标准的，因此本模块还提供了针对 <a class="reference internal" href="importlib.html#importlib.machinery.FileFinder" title="importlib.machinery.FileFinder"><code class="xref py py-class docutils literal notranslate"><span class="pre">importlib.machinery.FileFinder</span></code></a> 和 <a class="reference internal" href="zipimport.html#zipimport.zipimporter" title="zipimport.zipimporter"><code class="xref py py-class docutils literal notranslate"><span class="pre">zipimport.zipimporter</span></code></a> 的实现。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.3 版更改: </span>更新为直接基于 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 而不是依赖于包内部的 <span class="target" id="index-37"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 导入模拟。</p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.walk_packages">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">walk_packages</code><span class="sig-paren">(</span><em class="sig-param">path=None</em>, <em class="sig-param">prefix=''</em>, <em class="sig-param">onerror=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.walk_packages" title="永久链接至目标">¶</a></dt>
+<dd><p>在 <em>path</em> 上递归地为所有模块产生 <a class="reference internal" href="#pkgutil.ModuleInfo" title="pkgutil.ModuleInfo"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModuleInfo</span></code></a>，或者如果 <em>path</em> 为 <code class="docutils literal notranslate"><span class="pre">None</span></code>，则为所有可访问的模块产生。</p>
+<p><em>path</em> 应当为 <code class="docutils literal notranslate"><span class="pre">None</span></code> 或一个作为查找模块目标的路径的列表。</p>
+<p><em>prefix</em> 是要在输出时输出到每个模块名称之前的字符串。</p>
+<p>请注意此函数必须导入给定 <em>path</em> 上所有的 <em>packages</em> (<em>而不是</em> 所有的模块！)，以便能访问 <code class="docutils literal notranslate"><span class="pre">__path__</span></code> 属性来查找子模块。</p>
+<p><em>onerror</em> 是在当试图导入包如果发生任何异常则将附带一个参数（被导入的包的名称）被调用的函数。 如果没有提供 <em>onerror</em> 函数，则 <a class="reference internal" href="exceptions.html#ImportError" title="ImportError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">ImportError</span></code></a> 会被捕获并被忽略，而其他异常则会被传播，导致模块搜索的终结。</p>
+<p>示例:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># list all modules python can access</span>
+<span class="n">walk_packages</span><span class="p">()</span>
+
+<span class="c1"># list all submodules of ctypes</span>
+<span class="n">walk_packages</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">__path__</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">注解</p>
+<p>只适用于定义了 <code class="docutils literal notranslate"><span class="pre">iter_modules()</span></code> 方法的 <a class="reference internal" href="../glossary.html#term-finder"><span class="xref std std-term">finder</span></a>。 该接口是非标准的，因此本模块还提供了针对 <a class="reference internal" href="importlib.html#importlib.machinery.FileFinder" title="importlib.machinery.FileFinder"><code class="xref py py-class docutils literal notranslate"><span class="pre">importlib.machinery.FileFinder</span></code></a> 和 <a class="reference internal" href="zipimport.html#zipimport.zipimporter" title="zipimport.zipimporter"><code class="xref py py-class docutils literal notranslate"><span class="pre">zipimport.zipimporter</span></code></a> 的实现。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.3 版更改: </span>更新为直接基于 <a class="reference internal" href="importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a> 而不是依赖于包内部的 <span class="target" id="index-38"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-0302"><strong>PEP 302</strong></a> 导入模拟。</p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pkgutil.get_data">
+<code class="sig-prename descclassname">pkgutil.</code><code class="sig-name descname">get_data</code><span class="sig-paren">(</span><em class="sig-param">package</em>, <em class="sig-param">resource</em><span class="sig-paren">)</span><a class="headerlink" href="#pkgutil.get_data" title="永久链接至目标">¶</a></dt>
+<dd><p>从包中获取一个资源。</p>
+<p>这是一个针对 <a class="reference internal" href="../glossary.html#term-loader"><span class="xref std std-term">loader</span></a> <a class="reference internal" href="importlib.html#importlib.abc.ResourceLoader.get_data" title="importlib.abc.ResourceLoader.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data</span></code></a> API 的包装器。 <em>package</em> 参数应为一个标准模块格式 (<code class="docutils literal notranslate"><span class="pre">foo.bar</span></code>) 的包名称。 <em>resource</em> 参数应为相对路径文件名的形式，使用 <code class="docutils literal notranslate"><span class="pre">/</span></code> 作为路径分隔符。 父目录名 <code class="docutils literal notranslate"><span class="pre">..</span></code>，以及根目录名 (以 <code class="docutils literal notranslate"><span class="pre">/</span></code> 打头) 均不允许使用。</p>
+<p>返回指定资源内容的二进制串。</p>
+<p>对于位于文件系统中，已经被导入的包来说，这大致等价于:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">d</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">package</span><span class="p">]</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">resource</span><span class="p">),</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>如果指定的包无法被定位或加载，或者如果它使用了不支持 <a class="reference internal" href="importlib.html#importlib.abc.ResourceLoader.get_data" title="importlib.abc.ResourceLoader.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data</span></code></a> 的 <a class="reference internal" href="../glossary.html#term-loader"><span class="xref std std-term">loader</span></a>，则将返回 <code class="docutils literal notranslate"><span class="pre">None</span></code>。 特别地，针对 <a class="reference internal" href="../glossary.html#term-namespace-package"><span class="xref std std-term">命名空间包</span></a> 的 <a class="reference internal" href="../glossary.html#term-loader"><span class="xref std std-term">loader</span></a> 不支持 <a class="reference internal" href="importlib.html#importlib.abc.ResourceLoader.get_data" title="importlib.abc.ResourceLoader.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data</span></code></a>。</p>
+</dd></dl>
+
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="zipimport.html"
+                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zipimport</span></code> --- 从 Zip 存档中导入模块</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="modulefinder.html"
+                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">modulefinder</span></code> --- 查找脚本使用的模块</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/pkgutil.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="modulefinder.html" title="modulefinder --- 查找脚本使用的模块"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="zipimport.html" title="zipimport --- 从 Zip 存档中导入模块"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="modules.html" >导入模块</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>

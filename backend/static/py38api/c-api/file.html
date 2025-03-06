@@ -1,0 +1,301 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>文件对象 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="模块对象" href="module.html" />
+    <link rel="prev" title="代码对象" href="code.html" />
+    <link rel="canonical" href="https://docs.python.org/3/c-api/file.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="code.html"
+                        title="上一章">代码对象</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="module.html"
+                        title="下一章">模块对象</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/c-api/file.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="module.html" title="模块对象"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="code.html" title="代码对象"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python/C API 参考手册</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="concrete.html" accesskey="U">具体的对象层</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="file-objects">
+<span id="fileobjects"></span><h1>文件对象<a class="headerlink" href="#file-objects" title="永久链接至标题">¶</a></h1>
+<p id="index-0">这此 API 是对内置文件对象的 Python 2 C API 的最小仿真，它过去依赖于 C 标准库的缓冲 I/O (<code class="xref c c-type docutils literal notranslate"><span class="pre">FILE*</span></code>) 支持。 在 Python 3 中，文件和流使用新的 <a class="reference internal" href="../library/io.html#module-io" title="io: Core tools for working with streams."><code class="xref py py-mod docutils literal notranslate"><span class="pre">io</span></code></a> 模块，该模块在操作系统的低层级无缓冲  I/O 之上定义了几个层。 下面所描述的函数是针对这些新 API 的便捷 C 包装器，主要用于解释器的内部错误报告；建议第三方代码改为访问 <a class="reference internal" href="../library/io.html#module-io" title="io: Core tools for working with streams."><code class="xref py py-mod docutils literal notranslate"><span class="pre">io</span></code></a> API。</p>
+<dl class="function">
+<dt id="c.PyFile_FromFd">
+<a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a>* <code class="sig-name descname">PyFile_FromFd</code><span class="sig-paren">(</span>int<em> fd</em>, const char<em> *name</em>, const char<em> *mode</em>, int<em> buffering</em>, const char<em> *encoding</em>, const char<em> *errors</em>, const char<em> *newline</em>, int<em> closefd</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyFile_FromFd" title="永久链接至目标">¶</a></dt>
+<dd><em class="refcount">Return value: New reference.</em><p>根据已打开文件 <em>fd</em> 的文件描述符创建一个 Python 文件对象。 参数 <em>name</em>, <em>encoding</em>, <em>errors</em> 和 <em>newline</em> 可以为 <code class="docutils literal notranslate"><span class="pre">NULL</span></code> 表示使用默认值；<em>buffering</em> 可以为 <em>-1</em> 表示使用默认值。 <em>name</em> 会被忽略仅保留用于向下兼容。 失败时返回 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>。 有关参数的更全面描述，请参阅 <a class="reference internal" href="../library/io.html#io.open" title="io.open"><code class="xref py py-func docutils literal notranslate"><span class="pre">io.open()</span></code></a> 函数的文档。</p>
+<div class="admonition warning">
+<p class="admonition-title">警告</p>
+<p>由于Python流具有自己的缓冲层，因此将它们与 OS 级文件描述符混合会产生各种问题（例如数据的意外排序）。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.2 版更改: </span>忽略 <em>name</em> 属性。</p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.PyObject_AsFileDescriptor">
+int <code class="sig-name descname">PyObject_AsFileDescriptor</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *p</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_AsFileDescriptor" title="永久链接至目标">¶</a></dt>
+<dd><p>将与 <em>p</em> 关联的文件描述器返回为 <code class="xref c c-type docutils literal notranslate"><span class="pre">int</span></code> 。 如果对象是整数，则返回其值。 如果没有，则调用对象的 <a class="reference internal" href="../library/io.html#io.IOBase.fileno" title="io.IOBase.fileno"><code class="xref py py-meth docutils literal notranslate"><span class="pre">fileno()</span></code></a> 方法（如果存在）; 该方法必须返回一个整数，该整数作为文件描述器值返回。 设置异常并在失败时返回 <code class="docutils literal notranslate"><span class="pre">-1</span></code>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.PyFile_GetLine">
+<a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a>* <code class="sig-name descname">PyFile_GetLine</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *p</em>, int<em> n</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyFile_GetLine" title="永久链接至目标">¶</a></dt>
+<dd><em class="refcount">Return value: New reference.</em><p id="index-1">等价于 <code class="docutils literal notranslate"><span class="pre">p.readline([n])</span></code> ，这个函数从对象 <em>p</em> 中读取一行。 <em>p</em> 可以是文件对象或具有 <a class="reference internal" href="../library/io.html#io.IOBase.readline" title="io.IOBase.readline"><code class="xref py py-meth docutils literal notranslate"><span class="pre">readline()</span></code></a> 方法的任何对象。 如果 <em>n</em> 是 <code class="docutils literal notranslate"><span class="pre">0</span></code> ，则无论该行的长度如何，都会读取一行。 如果 <em>n</em> 大于 <code class="docutils literal notranslate"><span class="pre">0</span></code>，则从文件中读取不超过 <em>n</em> 个字节；可以返回行的一部分。 在这两种情况下，如果立即到达文件末尾，则返回空字符串。 但是，如果 <em>n</em> 小于 <code class="docutils literal notranslate"><span class="pre">0</span></code> ，则无论长度如何都会读取一行，但是如果立即到达文件末尾，则引发 <a class="reference internal" href="../library/exceptions.html#EOFError" title="EOFError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">EOFError</span></code></a>。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.PyFile_SetOpenCodeHook">
+int <code class="sig-name descname">PyFile_SetOpenCodeHook</code><span class="sig-paren">(</span>Py_OpenCodeHookFunction<em> handler</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyFile_SetOpenCodeHook" title="永久链接至目标">¶</a></dt>
+<dd><p>重写 <a class="reference internal" href="../library/io.html#io.open_code" title="io.open_code"><code class="xref py py-func docutils literal notranslate"><span class="pre">io.open_code()</span></code></a> 的正常行为，将其形参通过所提供的处理程序来传递。</p>
+<p>处理程序是一个类型为 <code class="xref c c-type docutils literal notranslate"><span class="pre">PyObject</span> <span class="pre">*(*)(PyObject</span> <span class="pre">*path,</span> <span class="pre">void</span> <span class="pre">*userData)</span></code> 的函数，其中 <em>path</em> 确保为 <a class="reference internal" href="unicode.html#c.PyUnicodeObject" title="PyUnicodeObject"><code class="xref c c-type docutils literal notranslate"><span class="pre">PyUnicodeObject</span></code></a>。</p>
+<p><em>userData</em> 指针会被传入钩子函数。 因于钩子函数可能由不同的运行时调用，该指针不应直接指向 Python 状态。</p>
+<p>鉴于这个钩子专门在导入期间使用的，请避免在新模块执行期间进行导入操作，除非已知它们为冻结状态或者是在 <code class="docutils literal notranslate"><span class="pre">sys.modules</span></code> 中可用。</p>
+<p>一旦钩子被设定，它就不能被移除或替换，之后对 <a class="reference internal" href="#c.PyFile_SetOpenCodeHook" title="PyFile_SetOpenCodeHook"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyFile_SetOpenCodeHook()</span></code></a> 的调用也将失败，如果解释器已经被初始化，函数将返回 -1 并设置一个异常。</p>
+<p>此函数可以安全地在 <a class="reference internal" href="init.html#c.Py_Initialize" title="Py_Initialize"><code class="xref c c-func docutils literal notranslate"><span class="pre">Py_Initialize()</span></code></a> 之前调用。</p>
+<p class="audit-hook">引发一个不带参数的 <a class="reference internal" href="../library/sys.html#auditing"><span class="std std-ref">审计事件</span></a> <code class="docutils literal notranslate"><span class="pre">setopencodehook</span></code>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">3.8 新版功能.</span></p>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.PyFile_WriteObject">
+int <code class="sig-name descname">PyFile_WriteObject</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *obj</em>, <a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *p</em>, int<em> flags</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyFile_WriteObject" title="永久链接至目标">¶</a></dt>
+<dd><p id="index-2">将对象 <em>obj</em> 写入文件对象 <em>p</em> 。 <em>flags</em> 唯一支持的标志是 <code class="xref py py-const docutils literal notranslate"><span class="pre">Py_PRINT_RAW</span></code>；如果给定，则写入对象的 <a class="reference internal" href="../library/stdtypes.html#str" title="str"><code class="xref py py-func docutils literal notranslate"><span class="pre">str()</span></code></a> 而不是 <a class="reference internal" href="../library/functions.html#repr" title="repr"><code class="xref py py-func docutils literal notranslate"><span class="pre">repr()</span></code></a>。成功时返回 <code class="docutils literal notranslate"><span class="pre">0</span></code>，失败时返回 <code class="docutils literal notranslate"><span class="pre">-1</span></code>。 将设置适当的例外。</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.PyFile_WriteString">
+int <code class="sig-name descname">PyFile_WriteString</code><span class="sig-paren">(</span>const char<em> *s</em>, <a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *p</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyFile_WriteString" title="永久链接至目标">¶</a></dt>
+<dd><p>将字符串 <em>s</em> 写入文件对象 <em>p</em>。 成功返回 <code class="docutils literal notranslate"><span class="pre">0</span></code> 失败返回 <code class="docutils literal notranslate"><span class="pre">-1</span></code>；将设定相应的异常。</p>
+</dd></dl>
+
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="code.html"
+                        title="上一章">代码对象</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="module.html"
+                        title="下一章">模块对象</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/c-api/file.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="module.html" title="模块对象"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="code.html" title="代码对象"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python/C API 参考手册</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="concrete.html" >具体的对象层</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>
