@@ -45,6 +45,4 @@ export default {
   // 工具箱相关
   runPyCode: (data = {}) => request.post('/toolbox/runcode/python', data),
   fakerPerson: (data = {}) => request.post('/toolbox/generate/person', data),
-  fakerDateTime: (data = {}) => request.post('/toolbox/generate/datetime', data),
-  fakerRandom: (data = {}) => request.post('/toolbox/generate/random', data),
 }

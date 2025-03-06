@@ -3,6 +3,7 @@ import { resetRouter } from '@/router'
 import { useTagsStore, usePermissionStore } from '@/store'
 import { removeToken, toLogin } from '@/utils'
 import api from '@/api'
+import {BACKEND_URL} from "~/build/constant";
 
 export const useUserStore = defineStore('user', {
   state() {
@@ -27,7 +28,7 @@ export const useUserStore = defineStore('user', {
       return this.userInfo?.phone
     },
     avatar() {
-      return "http://192.168.94.230:8518" + this.userInfo?.avatar
+      return BACKEND_URL + this.userInfo?.avatar
     },
     state() {
       return this.userInfo?.state

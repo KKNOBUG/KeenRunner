@@ -31,7 +31,7 @@ from backend.core.exceptions.http_exceptions import (
     null_point_exception_handler,
     app_exception_handler
 )
-from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
+from backend.core.middleware.app_middleware import ReqResLoggerMiddleware, logging_middleware
 
 
 def register_logging() -> logger:
@@ -134,7 +134,8 @@ def register_middlewares(app: FastAPI):
         expose_headers=PROJECT_CONFIG.CORS_EXPOSE_METHODS,
         max_age=PROJECT_CONFIG.CORS_MAX_AGE,
     )
-    app.add_middleware(ReqResLoggerMiddleware)
+    # app.add_middleware(ReqResLoggerMiddleware)    # 文件上传下载偶现阻塞
+    app.middleware('http')(logging_middleware)
 
 
 def register_routers(app: FastAPI) -> None:

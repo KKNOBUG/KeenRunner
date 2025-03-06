@@ -24,11 +24,11 @@ export function currentTimePeriod(regards= false) {
     const currentHour = currentTime.getHours()
     if (currentHour >= 0 && currentHour < 6) {
         return regards ? "凌晨啦" : "凌晨"
-    } else if (currentHour >= 6 && currentHour < 8) {
+    } else if (currentHour >= 6 && currentHour < 9) {
         return regards ? "早上好" : "早上"
-    } else if (currentHour >= 8 && currentHour < 11) {
+    } else if (currentHour >= 9 && currentHour < 12) {
         return regards ? "上午好" : "上午"
-    } else if (currentHour >= 11 && currentHour < 13) {
+    } else if (currentHour >= 12 && currentHour < 13) {
         return regards ? "中午好" : "中午"
     } else if (currentHour >= 13 && currentHour < 17) {
         return regards ? "下午好" : "下午"
