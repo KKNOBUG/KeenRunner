@@ -12,7 +12,8 @@ from pydantic_settings import BaseSettings
 
 
 class GlobalConfig(BaseSettings):
-    ROUTE_ALIAS: Dict[str, Any] = {}
+    ROUTER_SUMMARY: Dict[str, Any] = {}
+    ROUTER_TAGS: Dict[str, Any] = {}
     DATE_FORMAT: str = "%Y-%m-%d"
     TIME_FORMAT: str = "%H:%M:%S"
     DATETIME_SCHEMA: str = "%Y%m%d%H%M%S"
