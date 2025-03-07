@@ -178,7 +178,7 @@ const columns = [
                       // 使用 Promise.all 来同时发送所有请求
                       const [menusResponse, apisResponse, roleAuthorizedResponse] = await Promise.all([
                         api.getMenus({page: 1, page_size: 9999}),
-                        api.getApis({page: 1, page_size: 9999}),
+                        api.getRouters({page: 1, page_size: 9999}),
                         api.getRoleAuthorized({id: row.id}),
                       ])
 

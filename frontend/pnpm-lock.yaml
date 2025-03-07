@@ -3222,7 +3222,7 @@ snapshots:
       '@vueuse/shared': 10.11.0(vue@3.4.34(typescript@5.5.4))
       vue-demi: 0.14.10(vue@3.4.34(typescript@5.5.4))
     transitivePeerDependencies:
-      - '@vue/composition-api'
+      - '@vue/composition-router'
       - vue
 
   '@vueuse/metadata@10.11.0': {}
@@ -3231,7 +3231,7 @@ snapshots:
     dependencies:
       vue-demi: 0.14.10(vue@3.4.34(typescript@5.5.4))
     transitivePeerDependencies:
-      - '@vue/composition-api'
+      - '@vue/composition-router'
       - vue
 
   '@zclzone/eslint-config@0.0.4':

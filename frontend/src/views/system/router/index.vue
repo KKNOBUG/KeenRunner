@@ -32,9 +32,9 @@ const {
 } = useCRUD({
   name: 'API',
   initForm: {},
-  doCreate: api.createApi,
-  doUpdate: api.updateApi,
-  doDelete: api.deleteApi,
+  doCreate: api.createRouter,
+  doUpdate: api.updateRouter,
+  doDelete: api.deleteRouter,
   refresh: () => $table.value?.handleSearch(),
 })
 
@@ -42,13 +42,13 @@ onMounted(() => {
   $table.value?.handleSearch()
 })
 
-async function handleRefreshApi() {
+async function handleRefreshRouter() {
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
     content: '此操作会根据后端 app.routes 进行路由更新，确定继续刷新 API 操作？',
     async confirm() {
-      await api.refreshApi()
+      await api.refreshRouter()
       $message.success('刷新完成')
       $table.value?.handleSearch()
     },
@@ -168,7 +168,7 @@ const columns = [
               icon: renderIcon('material-symbols:edit', { size: 16 }),
             }
           ),
-          [[vPermission, 'post/api/v1/api/update']]
+          [[vPermission, 'post/api/v1/router/update']]
         ),
         h(
           NPopconfirm,
@@ -191,7 +191,7 @@ const columns = [
                     icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                   }
                 ),
-                [[vPermission, 'delete/api/v1/api/delete']]
+                [[vPermission, 'delete/api/v1/router/delete']]
               ),
             default: () => h('div', {}, '确定删除该API吗?'),
           }
@@ -208,7 +208,7 @@ const columns = [
     <template #action>
       <div>
         <NButton
-          v-permission="'post/api/v1/api/create'"
+          v-permission="'post/api/v1/router/create'"
           class="float-right mr-15"
           type="primary"
           @click="handleAdd"
@@ -216,10 +216,10 @@ const columns = [
           <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />新建API
         </NButton>
         <NButton
-          v-permission="'post/api/v1/api/refresh'"
+          v-permission="'post/api/v1/router/refresh'"
           class="float-right mr-15"
           type="warning"
-          @click="handleRefreshApi"
+          @click="handleRefreshRouter"
         >
           <TheIcon icon="material-symbols:refresh" :size="18" class="mr-5" />刷新API
         </NButton>
@@ -230,7 +230,7 @@ const columns = [
       ref="$table"
       v-model:query-items="queryItems"
       :columns="columns"
-      :get-data="api.getApis"
+      :get-data="api.getRouters"
     >
       <template #queryBar>
         <QueryBarItem label="API简介" :label-width="auto">
