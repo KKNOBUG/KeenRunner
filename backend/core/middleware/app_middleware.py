@@ -6,14 +6,20 @@
 @Module  : app_middleware.py
 @DateTime: 2025/1/17 22:29
 """
+import ast
+import json
 import time
 from io import BytesIO
+from typing import Dict, Any, Optional
 from urllib.parse import unquote
 
 from fastapi import Request, Response
 from starlette.types import ASGIApp, Scope, Receive, Send
 
 from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
+from backend.applications.base.models.audit_model import Audit
+from backend.applications.user.models.user_model import User
+from backend.services.dependency import AuthControl
 
 
 def is_upload_request(request: Request) -> bool:
@@ -43,7 +49,7 @@ async def logging_middleware(request: Request, call_next):
     request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(start_time))
 
     # 变量初始化
-    request_body, response_body = b'', b''
+    request_body, response_params = b'', b''
     is_html, is_upload, is_download = False, False, False
 
     # 判断是否为文件上传清洁
@@ -61,7 +67,8 @@ async def logging_middleware(request: Request, call_next):
     request_router: str = request.url.path
     request_header: dict = dict(request.headers)
     request_client: str = request.client.host if request.client else "127.0.0.1"
-    request_alias: str = GLOBAL_CONFIG.ROUTE_ALIAS.get(request_router or "未定义", "未定义")
+    request_tags: str = GLOBAL_CONFIG.ROUTER_TAGS.get(request_router or "未定义", "未定义")
+    request_summary: str = GLOBAL_CONFIG.ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
     request_body: bytes = request_body if is_upload else request_body.decode("utf-8", errors="ignore")
     request_params: str = unquote(request.query_params.__str__())
 
@@ -73,54 +80,90 @@ async def logging_middleware(request: Request, call_next):
     is_html: bool = is_html_response(response)
     is_image: bool = is_image_response(response)
 
-    response_headers: dict = dict(response.headers)
+    response_header: dict = dict(response.headers)
 
     # 消费响应体
     if is_download:
-        response_body = b"<FILE DOWNLOAD>"
+        response_params = b"<FILE DOWNLOAD>"
     elif is_html:
-        response_body = b"<HTML CONTENT>"
+        response_params = b"<HTML CONTENT>"
     elif is_image:
-        response_body = b"IMAGE CONTENT"
+        response_params = b"IMAGE CONTENT"
     else:
         body_chunks = []
         async for chunk in response.body_iterator:
             body_chunks.append(chunk)
 
-        response_body = b"".join(body_chunks).decode("utf-8", errors="ignore")
+        response_params = b"".join(body_chunks).decode("utf-8", errors="ignore")
 
         # 重置响应体
         response = Response(
-            content=response_body,
+            content=response_params,
             status_code=response.status_code,
-            headers=response_headers,
+            headers=response_header,
             media_type=response.media_type
         )
 
     # 接口服务结束时间
     end_time = time.time()
     response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(end_time))
-    elapsed_time = end_time - start_time
+    response_elapsed = f"{end_time - start_time:.4f}s"
 
     # 记录日志
+    audit_log: Dict[str, Any] = {
+        "request_time": request_time,
+        "request_tags": request_tags,
+        "request_summary": request_summary,
+        "request_method": request_method,
+        "request_router": request_router,
+        "request_client": request_client,
+        "request_header": request_header,
+        "request_params": request_body or request_params,
+        "response_time": response_time,
+        "response_header": response_header,
+        "response_elapsed": response_elapsed
+    }
+    if isinstance(response_params, str):
+        _response = json.loads(response_params)
+        audit_log["response_code"] = _response.get("code", "")
+        audit_log["response_message"] = _response.get("message", "")
+        audit_log["response_params"] = response_params
+        del _response
+
     request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
-                           f"请求时间：{request_time}\n" \
-                           f"请求接口：{request_alias}\n" \
-                           f"请求方式：{request_method}\n" \
-                           f"请求路由：{request_router}\n" \
-                           f"请求来源：{request_client}\n" \
-                           f"请求头部：{request_header}\n" \
-                           f"请求参数：{request_body or request_params}\n" \
-                           f"响应头部：{response_headers}\n" \
-                           f"响应参数：{response_body}\n" \
-                           f"响应时间：{response_time}\n" \
-                           f"响应耗时：{elapsed_time:.4f}s\n" \
+                           f"请求时间：{audit_log.get('request_time')}\n" \
+                           f"请求模块：{audit_log.get('request_tags')}\n" \
+                           f"请求接口：{audit_log.get('request_summary')}\n" \
+                           f"请求方式：{audit_log.get('request_method')}\n" \
+                           f"请求路由：{audit_log.get('request_router')}\n" \
+                           f"请求来源：{audit_log.get('request_client')}\n" \
+                           f"请求头部：{audit_log.get('request_header')}\n" \
+                           f"请求参数：{audit_log.get('request_params')}\n" \
+                           f"响应头部：{audit_log.get('response_header')}\n" \
+                           f"响应代码：{audit_log.get('response_code')}\n" \
+                           f"响应消息：{audit_log.get('response_message')}\n" \
+                           f"响应参数：{audit_log.get('response_params')}\n" \
+                           f"响应时间：{audit_log.get('response_time')}\n" \
+                           f"响应耗时：{audit_log.get('response_elapsed')}\n" \
                            f"< < < < < < < < < < < < < < < < < < < < "
 
     LOGGER.info(request_message)
 
-    # 审计落库
-    ...
+    if not request_router.startswith("/static/") and request_router not in ('/', ):
+        # 获取用户信息
+        try:
+            user_obj: Optional[User] = None
+            token = request.headers.get("token")
+            if token:
+                user_obj: User = await AuthControl.is_authed(token)
+            audit_log["user_id"] = user_obj.id if user_obj else 0
+            audit_log["username"] = user_obj.username if user_obj else ""
+        except Exception as e:
+            audit_log["user_id"] = 0
+            audit_log["username"] = ""
+
+        # 审计落库
+        await Audit.create(**audit_log)
 
     return response
 
@@ -130,7 +173,7 @@ class ReqResLoggerMiddleware:
     def __init__(self, app: ASGIApp):
         self.app: ASGIApp = app
         self.response_body = {}
-        self.response_headers = {}
+        self.response_header = {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send, *args, **kwargs):
         # 仅处理HTTP请求
@@ -161,8 +204,8 @@ class ReqResLoggerMiddleware:
 
         # 判断请求路径
         request_url: str = str(request_instance.url)
-        request_path: str = request_instance.scope.get("path")
-        if request_path in (
+        request_router: str = request_instance.scope.get("path")
+        if request_router in (
                 PROJECT_CONFIG.APP_DOCS_URL,
                 PROJECT_CONFIG.APP_REDOC_URL,
                 PROJECT_CONFIG.APP_OPENAPI_URL,
@@ -173,7 +216,8 @@ class ReqResLoggerMiddleware:
             await self.app(scope, receive, send)
             return
 
-        request_alias: str = GLOBAL_CONFIG.ROUTE_ALIAS.get(request_path or "未定义", "未定义")
+        request_tags: str = GLOBAL_CONFIG.ROUTER_TAGS.get(request_router or "未定义", "未定义")
+        request_summary: str = GLOBAL_CONFIG.ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
         request_client: str = request_instance.scope.get("client")[0]
         request_header: dict = dict(request_instance.headers)
         request_body: bytes = await request_instance.body()
@@ -195,10 +239,10 @@ class ReqResLoggerMiddleware:
         # 响应体处理
         async def send_process(message):
             if message["type"] == "http.response.start":
-                self.response_headers = {k.decode(): v.decode() for k, v in message.get("headers", {})}
+                self.response_header = {k.decode(): v.decode() for k, v in message.get("headers", {})}
             elif message["type"] == "http.response.body":
                 body = message.get("body", "")
-                if "image" not in self.response_headers["content-type"]:
+                if "image" not in self.response_header["content-type"]:
                     self.response_body = body.decode(errors='ignore')
             await original_send(message)
 
@@ -210,18 +254,19 @@ class ReqResLoggerMiddleware:
         response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(end_time))
 
         # 计算耗时
-        elapsed_time = end_time - start_time
+        response_elapsed = end_time - start_time
         request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
                                f"请求时间：{request_time}\n" \
-                               f"请求接口：{request_alias}\n" \
+                               f"请求模块：{request_tags}\n" \
+                               f"请求接口：{request_summary}\n" \
                                f"请求方式：{request_method}\n" \
                                f"请求地址：{request_url}\n" \
                                f"请求来源：{request_client}\n" \
                                f"请求头部：{request_header}\n" \
                                f"请求参数：{request_json or request_body}\n" \
-                               f"响应头部：{self.response_headers}\n" \
+                               f"响应头部：{self.response_header}\n" \
                                f"响应参数：{self.response_body}\n" \
                                f"响应时间：{response_time}\n" \
-                               f"响应耗时：{elapsed_time:.4f}s\n" \
+                               f"响应耗时：{response_elapsed:.4f}s\n" \
                                f"> > > > > > > > > > > > > > > > > > > >"
         LOGGER.info(request_message)
