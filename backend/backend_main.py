@@ -33,7 +33,8 @@ async def lifespan(app: FastAPI):
 
     for route in app.routes:
         if isinstance(route, APIRoute):
-            GLOBAL_CONFIG.ROUTE_ALIAS[route.path] = route.summary
+            GLOBAL_CONFIG.ROUTER_SUMMARY[route.path] = route.summary
+            GLOBAL_CONFIG.ROUTER_TAGS[route.path] = route.tags
 
     yield
 

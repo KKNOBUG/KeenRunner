@@ -33,7 +33,7 @@ class AuthControl:
                 user_id = decode_data.get("user_id")
             user = await User.filter(id=user_id).first()
             if not user:
-                raise HTTPException(status_code=401, detail="Authentication failed")
+                raise HTTPException(status_code=401, detail="身份验证失败")
             CTX_USER_ID.set(int(user_id))
             return user
         except jwt.DecodeError:
