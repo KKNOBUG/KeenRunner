@@ -11,13 +11,17 @@ from tortoise.expressions import Q
 
 from backend.applications.base.models.router_model import Router
 from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.schemas.menu_schema import MenuType
-from backend.applications.base.services.router_crud import ROUTER_CRUD
+from backend.applications.base.schemas.menu_schema import MenuCreate
+from backend.applications.base.services.menu_crud import MENU_CRUD
 from backend.applications.base.models.role_model import Role
+from backend.applications.base.schemas.role_schema import RoleCreate
+from backend.applications.base.services.role_crud import ROLE_CRUD
+from backend.applications.base.services.router_crud import ROUTER_CRUD
 from backend.applications.department.schemas.department_schema import DepartmentCreate
 from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import USER_CRUD
+from backend.enums.menu_enum import MenuType
 
 
 async def init_database_router(app: FastAPI):
@@ -29,22 +33,26 @@ async def init_database_router(app: FastAPI):
 async def init_database_role():
     roles = await Role.exists()
     if not roles:
-        admin_role = await Role.create(
-            code="AD-9001",
-            name="管理员",
-            description="管理员角色",
+        admin_role = await ROLE_CRUD.create_role(
+            RoleCreate(
+                code="ROLE-9999",
+                name="超级用户",
+                description="超级用户角色"
+            )
         )
-        normal_role = await Role.create(
-            code="AD-1001",
-            name="普通用户",
-            description="普通用户角色",
+        normal_role = await ROLE_CRUD.create_role(
+            RoleCreate(
+                code="ROLE-1001",
+                name="普通用户",
+                description="普通用户角色"
+            )
         )
 
-        # 分配所有路由给管理员角色
+        # 为超级用户角色分配所有的路由
         all_routers = await Router.all()
         await admin_role.routers.add(*all_routers)
 
-        # 分配所有菜单给管理员和普通用户
+        # 为超级用户角色和普通用户角色分配所有的菜单
         all_menus = await Menu.all()
         await admin_role.menus.add(*all_menus)
         await normal_role.menus.add(*all_menus)
@@ -59,16 +67,16 @@ async def init_database_dept():
     if not depts:
         await DEPT_CRUD.create_department(
             DepartmentCreate(
-                code="DT-QT",
-                name="其他",
-                description="系统默认部门，超级用户挂在此处",
+                code="DEPT-9999",
+                name="默认部门",
+                description="系统默认配置，无具体部门",
                 order="0",
                 parent_id="0"
             )
         )
         await DEPT_CRUD.create_department(
             DepartmentCreate(
-                code="DT-KF",
+                code="DEPT-KF",
                 name="开发部门",
                 description="软件开发部门",
                 order="0",
@@ -77,16 +85,7 @@ async def init_database_dept():
         )
         await DEPT_CRUD.create_department(
             DepartmentCreate(
-                code="DT-CS",
-                name="测试部门",
-                description="软件测试部门",
-                order="0",
-                parent_id="0"
-            )
-        )
-        await DEPT_CRUD.create_department(
-            DepartmentCreate(
-                code="DT-KF01",
+                code="DEPT-KF01",
                 name="开发一部",
                 description="软件开发部门，开发一部",
                 order="1",
@@ -95,11 +94,38 @@ async def init_database_dept():
         )
         await DEPT_CRUD.create_department(
             DepartmentCreate(
-                code="DT-CS01",
+                code="DEPT-KF02",
+                name="开发二部",
+                description="软件开发部门，开发二部",
+                order="1",
+                parent_id="2"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DEPT-CS",
+                name="测试部门",
+                description="软件测试部门",
+                order="0",
+                parent_id="0"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DEPT-CS01",
                 name="测试一部",
                 description="软件测试部门，测试一部",
                 order="1",
-                parent_id="3"
+                parent_id="5"
+            )
+        )
+        await DEPT_CRUD.create_department(
+            DepartmentCreate(
+                code="DEPT-CS02",
+                name="测试二部",
+                description="软件测试部门，测试二部",
+                order="1",
+                parent_id="5"
             )
         )
 
@@ -111,14 +137,30 @@ async def init_database_user():
             UserCreate(
                 username="admin",
                 password="123456",
-                alias="管理员",
+                alias="系统管理员",
                 email="admin@test.com",
                 phone="18888888888",
-                avatar="/static/avatar/20250220204648.png",
+                avatar="/static/avatar/default/20250101010101.png",
                 dept_id="1",
                 state=2,
                 is_active=True,
                 is_superuser=True,
+                role_ids=["1", ]
+            )
+        )
+        await USER_CRUD.create_user(
+            UserCreate(
+                username="tester",
+                password="123456",
+                alias="测试用户",
+                email="tester@test.com",
+                phone="18888888888",
+                avatar="/static/avatar/default/20250101010101.png",
+                dept_id="1",
+                state=2,
+                is_active=True,
+                is_superuser=False,
+                role_ids=["2", ]
             )
         )
 
@@ -126,98 +168,201 @@ async def init_database_user():
 async def init_database_menu():
     menus = await Menu.exists()
     if not menus:
-        parent_menu = await Menu.create(
-            menu_type=MenuType.CATALOG,
-            name="系统管理",
-            path="/system",
-            order=1,
-            parent_id=0,
-            icon="carbon:gui-management",
-            is_hidden=False,
-            component="Layout",
-            keepalive=False,
-            redirect="/system/user",
+        # 系统设置菜单配置
+        system_parent_menu = await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.CATALOG,
+                name="系统管理",
+                path="/system",
+                order=1,
+                parent_id=0,
+                icon="famicons:settings-outline",
+                is_hidden=False,
+                component="Layout",
+                keepalive=False,
+                redirect="/system/user"
+            )
         )
-        children_menu = [
+        system_children_menu = [
             Menu(
                 menu_type=MenuType.MENU,
                 name="用户管理",
                 path="user",
                 order=1,
-                parent_id=parent_menu.id,
-                icon="material-symbols:person-outline-rounded",
+                parent_id=system_parent_menu.id,
+                icon="tdesign:user-setting",
                 is_hidden=False,
                 component="/system/user",
-                keepalive=False,
+                keepalive=False
             ),
             Menu(
                 menu_type=MenuType.MENU,
                 name="角色管理",
                 path="role",
                 order=2,
-                parent_id=parent_menu.id,
-                icon="carbon:user-role",
+                parent_id=system_parent_menu.id,
+                icon="tdesign:user-transmit",
                 is_hidden=False,
                 component="/system/role",
-                keepalive=False,
+                keepalive=False
             ),
             Menu(
                 menu_type=MenuType.MENU,
                 name="菜单管理",
                 path="menu",
                 order=3,
-                parent_id=parent_menu.id,
-                icon="material-symbols:list-alt-outline",
+                parent_id=system_parent_menu.id,
+                icon="fluent:text-grammar-settings-24-filled",
                 is_hidden=False,
                 component="/system/menu",
-                keepalive=False,
+                keepalive=False
             ),
             Menu(
                 menu_type=MenuType.MENU,
                 name="路由管理",
                 path="router",
                 order=4,
-                parent_id=parent_menu.id,
-                icon="ant-design:api-outlined",
+                parent_id=system_parent_menu.id,
+                icon="carbon:data-vis-1",
                 is_hidden=False,
                 component="/system/router",
-                keepalive=False,
+                keepalive=False
             ),
             Menu(
                 menu_type=MenuType.MENU,
                 name="部门管理",
                 path="dept",
                 order=5,
-                parent_id=parent_menu.id,
+                parent_id=system_parent_menu.id,
                 icon="mingcute:department-line",
                 is_hidden=False,
                 component="/system/dept",
-                keepalive=False,
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="缓存数据库管理",
+                path="redis",
+                order=6,
+                parent_id=system_parent_menu.id,
+                icon="devicon:redis-wordmark",
+                is_hidden=False,
+                component="/system/redis",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="外部数据库管理",
+                path="database",
+                order=7,
+                parent_id=system_parent_menu.id,
+                icon="streamline:database-setting",
+                is_hidden=False,
+                component="/system/database",
+                keepalive=False
             ),
             Menu(
                 menu_type=MenuType.MENU,
                 name="审计日志",
                 path="auditlog",
-                order=6,
-                parent_id=parent_menu.id,
+                order=8,
+                parent_id=system_parent_menu.id,
                 icon="ph:clipboard-text-bold",
                 is_hidden=False,
                 component="/system/auditlog",
-                keepalive=False,
+                keepalive=False
             ),
         ]
-        await Menu.bulk_create(children_menu)
-        await Menu.create(
-            menu_type=MenuType.MENU,
-            name="一级菜单",
-            path="/top-menu",
-            order=2,
-            parent_id=0,
-            icon="material-symbols:featured-play-list-outline",
-            is_hidden=False,
-            component="/top-menu",
-            keepalive=False,
-            redirect="",
+        await Menu.bulk_create(system_children_menu)
+
+        # 便捷工具菜单配置
+        toolbox_parent_menu = await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.CATALOG,
+                name="便捷工具",
+                path="/toolbox",
+                order=1,
+                parent_id=0,
+                icon="tdesign:tools",
+                is_hidden=False,
+                component="Layout",
+                keepalive=False,
+                redirect="/toolbox/runcode"
+            )
+        )
+        toolbox_children_menu = [
+            Menu(
+                menu_type=MenuType.MENU,
+                name="Python帮助文档",
+                path="pythonHelpDoc",
+                order=1,
+                parent_id=toolbox_parent_menu.id,
+                icon="solar:documents-linear",
+                is_hidden=False,
+                component="/toolbox/pythonHelpDoc",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="Python在线编码",
+                path="runcode",
+                order=2,
+                parent_id=toolbox_parent_menu.id,
+                icon="vscode-icons:file-type-python",
+                is_hidden=False,
+                component="/toolbox/runcode",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="虚拟数据生成",
+                path="generate",
+                order=2,
+                parent_id=toolbox_parent_menu.id,
+                icon="carbon:data-volume",
+                is_hidden=False,
+                component="/toolbox/generate",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="文本解析",
+                path="textAnalysis",
+                order=3,
+                parent_id=toolbox_parent_menu.id,
+                icon="carbon:package-text-analysis",
+                is_hidden=False,
+                component="/toolbox/textAnalysis",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="数据查询",
+                path="databaseSearch",
+                order=4,
+                parent_id=toolbox_parent_menu.id,
+                icon="material-symbols:database-search",
+                is_hidden=False,
+                component="/toolbox/databaseSearch",
+                keepalive=False
+            ),
+        ]
+        await Menu.bulk_create(toolbox_children_menu)
+
+        # 一级菜单配置
+        await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.MENU,
+                name="一级菜单",
+                path="/top-menu",
+                order=2,
+                parent_id=0,
+                icon="material-symbols:featured-play-list-outline",
+                is_hidden=False,
+                component="/top-menu",
+                keepalive=False,
+                redirect=""
+            )
         )
 
 
