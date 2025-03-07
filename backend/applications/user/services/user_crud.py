@@ -51,13 +51,15 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         await user.save()
 
     async def create_user(self, user_in: UserCreate) -> User:
+        email = user_in.email
         username = user_in.username
-        instances = await self.model.filter(username=username).all()
+        instances = await self.model.filter(email=email, username=username).all()
         if instances:
-            raise DataAlreadyExistsException(message=f"用户(username={username})信息已存在")
+            raise DataAlreadyExistsException(message=f"用户(email={email},username={username})信息已存在")
 
         user_in.password = get_password_hash(password=user_in.password)
         instance = await self.create(user_in)
+        await self.update_roles(instance, user_in.role_ids)
         return instance
 
     async def delete_user(self, user_id: int) -> User:
@@ -94,7 +96,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     async def reset_password(self, user_id: int):
         instance = await self.get(id=user_id)
         if instance.is_superuser:
-            return ForbiddenResponse(message="不允许重置超级管理员密码")
+            return ForbiddenResponse(message="不允许重置超级用户密码")
 
         instance.password = get_password_hash(password="123456")
         await instance.save()
