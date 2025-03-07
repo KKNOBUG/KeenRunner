@@ -99,7 +99,7 @@ async def get_userinfo():
     return SuccessResponse(data=data)
 
 
-@auth.post("/userRouter", summary="查看用户路由", dependencies=[DependAuth])
+@auth.post("/getUserRouters", summary="查看用户路由", dependencies=[DependAuth])
 async def get_user_router():
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
