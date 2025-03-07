@@ -10,12 +10,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
-from backend.enums.base_enum_cls import StringEnum
-
-
-class MenuType(StringEnum):
-    CATALOG = "catalog"
-    MENU = "menu"
+from backend.enums.menu_enum import MenuType
 
 
 class BaseMenu(BaseModel):
