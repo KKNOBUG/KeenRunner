@@ -18,7 +18,7 @@ class Audit(ScaffoldModel, TimestampMixin):
     summary = fields.CharField(max_length=128, default="", index=True, description="请求描述")
     method = fields.CharField(max_length=16, default="", index=True, description="请求方法")
     path = fields.CharField(max_length=255, default="", index=True, description="请求路径")
-    status = fields.SmallIntField(default=-1, index=True, description="状态码")
+    state = fields.SmallIntField(default=-1, index=True, description="状态码")
     response_time = fields.IntField(default=0, index=True, description="响应时间(单位ms)")
 
     class Meta:

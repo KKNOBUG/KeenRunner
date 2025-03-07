@@ -8,14 +8,14 @@
 """
 from typing import Optional, List
 
-from backend.applications.base.models.api_model import Api
+from backend.applications.base.models.router_model import Router
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.role_schema import (
     BaseRole,
     RoleCreate,
     RoleUpdate,
-    RoleUpdateMenusApis
+    RoleUpdateMenusRouters
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException
@@ -48,16 +48,16 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         return instance
 
     @classmethod
-    async def update_roles(cls, role: Role, menu_ids: List[int], api_infos: List[dict]) -> None:
+    async def update_roles(cls, role: Role, menu_ids: List[int], router_infos: List[dict]) -> None:
         await role.menus.clear()
         for menu_id in menu_ids:
             menu_obj = await Menu.filter(id=menu_id).first()
             await role.menus.add(menu_obj)
 
-        await role.apis.clear()
-        for item in api_infos:
-            api_obj = await Api.filter(path=item.get("path"), method=item.get("method")).first()
-            await role.apis.add(api_obj)
+        await role.routers.clear()
+        for item in router_infos:
+            router_obj = await Router.filter(path=item.get("path"), method=item.get("method")).first()
+            await role.routers.add(router_obj)
 
 
 ROLE_CRUD = RoleCrud()

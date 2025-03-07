@@ -18,7 +18,7 @@ class BaseRole(BaseModel):
     desc: str = ""
     users: Optional[list] = []
     menus: Optional[list] = []
-    apis: Optional[list] = []
+    routers: Optional[list] = []
     created_time: Optional[datetime]
     updated_time: Optional[datetime]
 
@@ -36,7 +36,7 @@ class RoleUpdate(BaseModel):
     description: str = Field(default="", example="管理员角色")
 
 
-class RoleUpdateMenusApis(BaseModel):
+class RoleUpdateMenusRouters(BaseModel):
     id: int
     menu_ids: List[int] = []
-    api_infos: List[dict] = []
+    router_infos: List[dict] = []

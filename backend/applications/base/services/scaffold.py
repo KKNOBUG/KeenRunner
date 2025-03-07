@@ -83,6 +83,16 @@ class PacketModel:
     pid = fields.BigIntField(index=True, description="分组标识符")
 
 
+class StateModel:
+    state = fields.SmallIntField(default=-1, index=True, description="状态")
+
+
+class ClassModel:
+    code = fields.CharField(max_length=16, unique=True, description="代码")
+    name = fields.CharField(max_length=64, unique=True, description="名称")
+    description = fields.TextField(null=True, description="描述")
+
+
 class TimestampMixin:
     created_time = fields.DatetimeField(auto_now_add=True, description="创建时间")
     updated_time = fields.DatetimeField(auto_now=True, description="更新时间")

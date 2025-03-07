@@ -3,15 +3,15 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : api_view.py
+@Module  : router_view.py
 @DateTime: 2025/1/27 10:15
 """
 from fastapi import APIRouter, Body, Query
 from starlette.requests import Request
 from tortoise.expressions import Q
 
-from backend.applications.base.schemas.api_schema import ApiCreate, ApiUpdate, ApiSelect
-from backend.applications.base.services.api_crud import API_CRUD
+from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate, RouterSelect
+from backend.applications.base.services.router_crud import ROUTER_CRUD
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
 from backend.core.response.http_response import (
     SuccessResponse,
@@ -20,15 +20,15 @@ from backend.core.response.http_response import (
     NotFoundResponse,
 )
 
-api = APIRouter()
+router = APIRouter()
 
 
-@api.post("/create", summary="新增API信息")
-async def create_api(
-        api_in: ApiCreate = Body()
+@router.post("/create", summary="新增路由信息")
+async def create_router(
+        router_in: RouterCreate = Body()
 ):
     try:
-        instance = await API_CRUD.create_api(api_in=api_in)
+        instance = await ROUTER_CRUD.create_router(router_in=router_in)
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except DataAlreadyExistsException as e:
@@ -37,12 +37,12 @@ async def create_api(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@api.delete("/delete", summary="删除API信息", description="根据id删除API信息")
-async def delete_api(
-        api_id: int = Query(..., description="接口ID")
+@router.delete("/delete", summary="删除路由信息", description="根据id删除路由信息")
+async def delete_router(
+        router_id: int = Query(..., description="接口ID")
 ):
     try:
-        instance = await API_CRUD.delete_api(api_id)
+        instance = await ROUTER_CRUD.delete_router(router_id)
         return SuccessResponse(data=instance)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
@@ -50,12 +50,12 @@ async def delete_api(
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@api.post("/update", summary="更新API信息", description="根据id更新API信息")
+@router.post("/update", summary="更新路由信息", description="根据id更新路由信息")
 async def update_user(
-        api_in: ApiUpdate = Body(..., description="接口信息")
+        router_in: RouterUpdate = Body(..., description="接口信息")
 ):
     try:
-        instance = await API_CRUD.update_api(api_in)
+        instance = await ROUTER_CRUD.update_router(router_in)
         return SuccessResponse(data=instance)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
@@ -63,30 +63,30 @@ async def update_user(
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 
 
-@api.get("/get", summary="查询API信息", description="根据id查询API信息")
+@router.get("/get", summary="查询路由信息", description="根据id查询路由信息")
 async def get_user(
-        api_id: int = Query(None, description="接口ID"),
+        router_id: int = Query(None, description="接口ID"),
 ):
-    instance = await API_CRUD.query(id=api_id)
+    instance = await ROUTER_CRUD.query(id=router_id)
     if not instance:
-        return NotFoundResponse(message=f"接口(id={api_id})信息不存在")
+        return NotFoundResponse(message=f"接口(id={router_id})信息不存在")
 
     data: dict = await instance.to_dict()
     return SuccessResponse(data=data)
 
 
-@api.post("/search", summary="查询API列表", description="支持分页按条件查询API列表信息（Body）")
-async def get_apis(
-        api_in: ApiSelect = Body()
+@router.post("/search", summary="查询路由列表", description="支持分页按条件查询路由列表信息（Body）")
+async def get_routers(
+        router_in: RouterSelect = Body()
 ):
-    page = api_in.page
-    page_size = api_in.page_size
-    order = api_in.order
-    id = api_in.id
-    path = api_in.path
-    method = api_in.method
-    summary = api_in.summary
-    tags = api_in.tags
+    page = router_in.page
+    page_size = router_in.page_size
+    order = router_in.order
+    id = router_in.id
+    path = router_in.path
+    method = router_in.method
+    summary = router_in.summary
+    tags = router_in.tags
 
     q = Q()
     if id:
@@ -100,7 +100,7 @@ async def get_apis(
     if tags:
         q &= Q(tags__contains=tags)
 
-    total, instances = await API_CRUD.list(
+    total, instances = await ROUTER_CRUD.list(
         page=page, page_size=page_size, search=q, order=order
     )
     data = [
@@ -109,14 +109,14 @@ async def get_apis(
     return SuccessResponse(data=data)
 
 
-@api.get("/list", summary="查询API列表", description="支持分页按条件查询API列表信息（Query）")
-async def list_api(
+@router.get("/list", summary="查询路由列表", description="支持分页按条件查询路由列表信息（Query）")
+async def list_router(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
-        path: str = Query(None, description="API路径"),
-        summary: str = Query(None, description="API简介"),
-        tags: str = Query(None, description="API模块"),
+        path: str = Query(None, description="路由请求路径"),
+        summary: str = Query(None, description="路由作用简介"),
+        tags: str = Query(None, description="路由所属标签"),
 ):
     q = Q()
     if path:
@@ -125,15 +125,15 @@ async def list_api(
         q &= Q(summary__contains=summary)
     if tags:
         q &= Q(tags__contains=tags)
-    total, api_objs = await API_CRUD.list(
+    total, router_objs = await ROUTER_CRUD.list(
         page=page, page_size=page_size, search=q, order=order
     )
-    data = [await obj.to_dict() for obj in api_objs]
+    data = [await obj.to_dict() for obj in router_objs]
     return SuccessResponse(data=data, total=total)
 
 
-@api.post("/refresh", summary="刷新API列表", description="重新获取项目中所有的APIRouter信息进行数据库更新")
-async def refresh_api(request: Request):
+@router.post("/refresh", summary="刷新路由列表", description="重新获取项目中所有的APIRouter信息进行数据库更新")
+async def refresh_router(request: Request):
     app = request.app
-    data = await API_CRUD.refresh_api(app=app)
+    data = await ROUTER_CRUD.refresh_router(app=app)
     return SuccessResponse(data=data)

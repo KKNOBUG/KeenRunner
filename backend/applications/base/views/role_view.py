@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from fastapi.params import Query, Form
 from tortoise.expressions import Q
 
-from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate, RoleUpdateMenusApis
+from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate, RoleUpdateMenusRouters
 from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.core.response.http_response import SuccessResponse, DataAlreadyExistsResponse
 
@@ -83,7 +83,7 @@ async def get_role_authorized(id: int = Query(..., description="角色ID")):
 
 
 @role.post("/authorized", summary="更新角色权限")
-async def update_role_authorized(role_in: RoleUpdateMenusApis):
+async def update_role_authorized(role_in: RoleUpdateMenusRouters):
     role_obj = await ROLE_CRUD.get(id=role_in.id)
-    await ROLE_CRUD.update_roles(role=role_obj, menu_ids=role_in.menu_ids, api_infos=role_in.api_infos)
+    await ROLE_CRUD.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
     return SuccessResponse()

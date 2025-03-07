@@ -6,14 +6,14 @@
 @Module  : menu_crud.py
 @DateTime: 2025/2/19 12:48
 """
-from typing import Optional, List
+from typing import Optional
 
 from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.schemas.api_schema import ApiCreate, ApiUpdate
+from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 
 
-class MenuCrud(ScaffoldCrud[Menu, ApiCreate, ApiUpdate]):
+class MenuCrud(ScaffoldCrud[Menu, RouterCreate, RouterUpdate]):
     def __init__(self):
         super().__init__(model=Menu)
 

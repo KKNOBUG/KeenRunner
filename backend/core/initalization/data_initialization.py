@@ -6,15 +6,13 @@
 @Module  : data_initialization.py
 @DateTime: 2025/2/19 22:12
 """
-import os
-
 from fastapi import FastAPI
 from tortoise.expressions import Q
 
-from backend.applications.base.models.api_model import Api
+from backend.applications.base.models.router_model import Router
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.schemas.menu_schema import MenuType
-from backend.applications.base.services.api_crud import API_CRUD
+from backend.applications.base.services.router_crud import ROUTER_CRUD
 from backend.applications.base.models.role_model import Role
 from backend.applications.department.schemas.department_schema import DepartmentCreate
 from backend.applications.department.services.department_crud import DEPT_CRUD
@@ -22,10 +20,10 @@ from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import USER_CRUD
 
 
-async def init_database_api(app: FastAPI):
-    apis = await API_CRUD.model.exists()
-    if not apis:
-        await API_CRUD.refresh_api(app)
+async def init_database_router(app: FastAPI):
+    routers = await ROUTER_CRUD.model.exists()
+    if not routers:
+        await ROUTER_CRUD.refresh_router(app)
 
 
 async def init_database_role():
@@ -42,18 +40,18 @@ async def init_database_role():
             description="普通用户角色",
         )
 
-        # 分配所有API给管理员角色
-        all_apis = await Api.all()
-        await admin_role.apis.add(*all_apis)
+        # 分配所有路由给管理员角色
+        all_routers = await Router.all()
+        await admin_role.routers.add(*all_routers)
 
         # 分配所有菜单给管理员和普通用户
         all_menus = await Menu.all()
         await admin_role.menus.add(*all_menus)
         await normal_role.menus.add(*all_menus)
 
-        # 为普通用户分配基本API
-        basic_apis = await Api.filter(Q(method__in=["GET"]) | Q(tags="基础模块"))
-        await normal_role.apis.add(*basic_apis)
+        # 为普通用户分配基本路由
+        basic_routers = await Router.filter(Q(method__in=["GET"]) | Q(tags="基础模块"))
+        await normal_role.routers.add(*basic_routers)
 
 
 async def init_database_dept():
@@ -176,13 +174,13 @@ async def init_database_menu():
             ),
             Menu(
                 menu_type=MenuType.MENU,
-                name="API管理",
-                path="api",
+                name="路由管理",
+                path="router",
                 order=4,
                 parent_id=parent_menu.id,
                 icon="ant-design:api-outlined",
                 is_hidden=False,
-                component="/system/api",
+                component="/system/router",
                 keepalive=False,
             ),
             Menu(
@@ -228,4 +226,4 @@ async def init_database_table(app: FastAPI):
     await init_database_dept()
     await init_database_user()
     await init_database_menu()
-    await init_database_api(app)
+    await init_database_router(app)

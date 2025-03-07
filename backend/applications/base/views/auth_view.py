@@ -14,7 +14,7 @@ from fastapi import APIRouter
 from backend import PROJECT_CONFIG
 from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
 from backend.applications.user.services.user_crud import USER_CRUD
-from backend.applications.base.models.api_model import Api
+from backend.applications.base.models.router_model import Router
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.user.models.user_model import User
@@ -99,18 +99,18 @@ async def get_userinfo():
     return SuccessResponse(data=data)
 
 
-@auth.post("/userapi", summary="查看用户API", dependencies=[DependAuth])
-async def get_user_api():
+@auth.post("/userRouter", summary="查看用户路由", dependencies=[DependAuth])
+async def get_user_router():
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
     if user_obj.is_superuser:
-        api_objs: List[Api] = await Api.all()
-        apis = [api.method.lower() + api.path for api in api_objs]
-        return SuccessResponse(data=apis)
+        router_objs: List[Router] = await Router.all()
+        routers = [router.method.lower() + router.path for router in router_objs]
+        return SuccessResponse(data=routers)
     role_objs: List[Role] = await user_obj.roles
-    apis = []
+    routers = []
     for role_obj in role_objs:
-        api_objs: List[Api] = await role_obj.apis
-        apis.extend([api.method.lower() + api.path for api in api_objs])
-    apis = list(set(apis))
-    return SuccessResponse(data=apis)
+        router_objs: List[Router] = await role_obj.routers
+        routers.extend([router.method.lower() + router.path for router in router_objs])
+    routers = list(set(routers))
+    return SuccessResponse(data=routers)
