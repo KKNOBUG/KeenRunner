@@ -7,7 +7,7 @@ export default {
   login: (data) => request.post('/base/auth/access_token', data, { noNeedToken: true }),
   getUserInfo: () => request.post('/base/auth/userinfo'),
   getUserMenu: () => request.post('/base/auth/usermenu'),
-  getUserApi: () => request.post('/base/auth/userapi'),
+  getUserRouters: () => request.post('/base/auth/getUserRouters'),
   // 用户相关
   getUserList: (params = {}) => request.get('/user/list', { params }),
   getUserById: (params = {}) => request.get('/user/get', { params }),
@@ -29,11 +29,11 @@ export default {
   updateMenu: (data = {}) => request.post('/base/menu/update', data),
   deleteMenu: (params = {}) => request.delete('/base/menu/delete', { params }),
   // API相关
-  getApis: (params = {}) => request.get('/base/api/list', { params }),
-  createApi: (data = {}) => request.post('/base/api/create', data),
-  updateApi: (data = {}) => request.post('/base/api/update', data),
-  deleteApi: (params = {}) => request.delete('/base/api/delete', { params }),
-  refreshApi: (data = {}) => request.post('/base/api/refresh', data),
+  getRouters: (params = {}) => request.get('/base/router/list', { params }),
+  createRouter: (data = {}) => request.post('/base/router/create', data),
+  updateRouter: (data = {}) => request.post('/base/router/update', data),
+  deleteRouter: (params = {}) => request.delete('/base/router/delete', { params }),
+  refreshRouter: (data = {}) => request.post('/base/router/refresh', data),
   // 部门相关
   getDepts: (params = {}) => request.get('/dept/list', { params }),
   createDept: (data = {}) => request.post('/dept/create', data),

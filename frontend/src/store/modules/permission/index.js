@@ -82,7 +82,7 @@ export const usePermissionStore = defineStore('permission', {
       return this.accessRoutes
     },
     async getAccessApis() {
-      const res = await api.getUserApi()
+      const res = await api.getUserRouters()
       this.accessApis = res.data
       return this.accessApis
     },

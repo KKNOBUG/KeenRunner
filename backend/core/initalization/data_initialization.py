@@ -87,7 +87,7 @@ async def init_database_dept():
         await DEPT_CRUD.create_department(
             DepartmentCreate(
                 code="DT-KF01",
-                name="开一已部",
+                name="开发一部",
                 description="软件开发部门，开发一部",
                 order="1",
                 parent_id="2"
