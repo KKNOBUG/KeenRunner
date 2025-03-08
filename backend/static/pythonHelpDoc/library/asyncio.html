@@ -1,0 +1,329 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>asyncio --- 异步 I/O &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="协程与任务" href="asyncio-task.html" />
+    <link rel="prev" title="网络和进程间通信" href="ipc.html" />
+    <link rel="canonical" href="https://docs.python.org/3/library/asyncio.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="ipc.html"
+                        title="上一章">网络和进程间通信</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="asyncio-task.html"
+                        title="下一章">协程与任务</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/asyncio.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="asyncio-task.html" title="协程与任务"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="ipc.html" title="网络和进程间通信"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="ipc.html" accesskey="U">网络和进程间通信</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-asyncio">
+<span id="asyncio-asynchronous-i-o"></span><h1><a class="reference internal" href="#module-asyncio" title="asyncio: Asynchronous I/O."><code class="xref py py-mod docutils literal notranslate"><span class="pre">asyncio</span></code></a> --- 异步 I/O<a class="headerlink" href="#module-asyncio" title="永久链接至标题">¶</a></h1>
+<hr class="docutils" />
+<aside class="sidebar">
+<p class="sidebar-title">Hello World!</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">asyncio</span>
+
+<span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Hello ...&#39;</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... World!&#39;</span><span class="p">)</span>
+
+<span class="c1"># Python 3.7+</span>
+<span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</pre></div>
+</div>
+</aside>
+<p>asyncio 是用来编写 <strong>并发</strong> 代码的库，使用 <strong>async/await</strong> 语法。</p>
+<p>asyncio 被用作多个提供高性能 Python 异步框架的基础，包括网络和网站服务，数据库连接库，分布式任务队列等等。</p>
+<p>asyncio 往往是构建 IO 密集型和高层级 <strong>结构化</strong> 网络代码的最佳选择。</p>
+<p>asyncio 提供一组 <strong>高层级</strong> API 用于:</p>
+<ul class="simple">
+<li><p>并发地 <a class="reference internal" href="asyncio-task.html#coroutine"><span class="std std-ref">运行 Python 协程</span></a> 并对其执行过程实现完全控制;</p></li>
+<li><p>执行 <a class="reference internal" href="asyncio-stream.html#asyncio-streams"><span class="std std-ref">网络 IO 和 IPC</span></a>;</p></li>
+<li><p>控制 <a class="reference internal" href="asyncio-subprocess.html#asyncio-subprocess"><span class="std std-ref">子进程</span></a>;</p></li>
+<li><p>通过 <a class="reference internal" href="asyncio-queue.html#asyncio-queues"><span class="std std-ref">队列</span></a> 实现分布式任务;</p></li>
+<li><p><a class="reference internal" href="asyncio-sync.html#asyncio-sync"><span class="std std-ref">同步</span></a> 并发代码;</p></li>
+</ul>
+<p>此外，还有一些 <strong>低层级</strong> API 以支持 <em>库和框架的开发者</em> 实现:</p>
+<ul class="simple">
+<li><p>创建和管理 <a class="reference internal" href="asyncio-eventloop.html#asyncio-event-loop"><span class="std std-ref">事件循环</span></a>，以提供异步 API 用于 <a class="reference internal" href="asyncio-eventloop.html#asyncio.loop.create_server" title="asyncio.loop.create_server"><code class="xref py py-meth docutils literal notranslate"><span class="pre">网络化</span></code></a>, 运行 <a class="reference internal" href="asyncio-eventloop.html#asyncio.loop.subprocess_exec" title="asyncio.loop.subprocess_exec"><code class="xref py py-meth docutils literal notranslate"><span class="pre">子进程</span></code></a>，处理 <a class="reference internal" href="asyncio-eventloop.html#asyncio.loop.add_signal_handler" title="asyncio.loop.add_signal_handler"><code class="xref py py-meth docutils literal notranslate"><span class="pre">OS</span> <span class="pre">信号</span></code></a> 等等;</p></li>
+<li><p>使用 <a class="reference internal" href="asyncio-protocol.html#asyncio-transports-protocols"><span class="std std-ref">transports</span></a> 实现高效率协议;</p></li>
+<li><p>通过 async/await 语法 <a class="reference internal" href="asyncio-future.html#asyncio-futures"><span class="std std-ref">桥接</span></a> 基于回调的库和代码。</p></li>
+</ul>
+<p class="rubric" id="asyncio-cli">asyncio REPL</p>
+<p>你可以在 REPL 中尝试使用 <code class="docutils literal notranslate"><span class="pre">asyncio</span></code> 并发上下文:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="go">$ python -m asyncio</span>
+<span class="go">asyncio REPL ...</span>
+<span class="go">Use &quot;await&quot; directly instead of &quot;asyncio.run()&quot;.</span>
+<span class="go">Type &quot;help&quot;, &quot;copyright&quot;, &quot;credits&quot; or &quot;license&quot; for more information.</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">asyncio</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="s1">&#39;hello&#39;</span><span class="p">)</span>
+<span class="go">&#39;hello&#39;</span>
+</pre></div>
+</div>
+<p class="audit-hook" id="audit_event_cpython_run_stdin_0">引发一个不带参数的 <a class="reference internal" href="sys.html#auditing"><span class="std std-ref">审计事件</span></a> <code class="docutils literal notranslate"><span class="pre">cpython.run_stdin</span></code>。</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.8.20 版更改: </span>Emits audit events.</p>
+</div>
+<p class="rubric">参考</p>
+<div class="toctree-wrapper compound">
+<p><span class="caption-text">高层级 API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-task.html">协程与任务</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-stream.html">流</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-sync.html">同步原语</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-subprocess.html">子进程集</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-queue.html">队列集</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-exceptions.html">异常</a></li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p><span class="caption-text">低层级 API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-eventloop.html">事件循环</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-future.html">Futures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-protocol.html">传输和协议</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-policy.html">策略</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-platforms.html">平台支持</a></li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p><span class="caption-text">指南与教程</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-api-index.html">高级API索引</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-llapi-index.html">底层API目录</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asyncio-dev.html">用 asyncio 开发</a></li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">注解</p>
+<p>asyncio 的源代码可以在 <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/asyncio/">Lib/asyncio/</a> 中找到。</p>
+</div>
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="ipc.html"
+                        title="上一章">网络和进程间通信</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="asyncio-task.html"
+                        title="下一章">协程与任务</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/asyncio.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="asyncio-task.html" title="协程与任务"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="ipc.html" title="网络和进程间通信"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="ipc.html" >网络和进程间通信</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>

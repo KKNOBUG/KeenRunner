@@ -1,0 +1,592 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>tkinter.tix --- TK扩展包 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../_static/translations.js"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.8.20 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="next" title="tkinter.scrolledtext --- 滚动文字控件" href="tkinter.scrolledtext.html" />
+    <link rel="prev" title="tkinter.ttk --- Tk 风格的控件" href="tkinter.ttk.html" />
+    <link rel="canonical" href="https://docs.python.org/3/library/tkinter.tix.html" />
+    
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script> 
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
+    <label for="menuToggler" class="toggler__label">
+        <span></span>
+    </label>
+    <nav class="nav-content" role="navigation">
+         <a href="https://www.python.org/" class="nav-logo">
+             <img src="../_static/py.svg" alt="Logo"/>
+         </a>
+        <div class="version_switcher_placeholder"></div>
+        <form role="search" class="search" action="../search.html" method="get">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                <path fill-rule="nonzero"
+                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
+            </svg>
+            <input type="text" name="q" aria-label="快速搜索"/>
+            <input type="submit" value="转向"/>
+        </form>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code> --- TK扩展包</a><ul>
+<li><a class="reference internal" href="#using-tix">使用 Tix</a></li>
+<li><a class="reference internal" href="#tix-widgets">Tix 部件</a><ul>
+<li><a class="reference internal" href="#basic-widgets">基本部件</a></li>
+<li><a class="reference internal" href="#file-selectors">文件选择器</a></li>
+<li><a class="reference internal" href="#hierarchical-listbox">层级式列表框</a></li>
+<li><a class="reference internal" href="#tabular-listbox">表格式列表框</a></li>
+<li><a class="reference internal" href="#manager-widgets">管理器部件</a></li>
+<li><a class="reference internal" href="#image-types">图像类型</a></li>
+<li><a class="reference internal" href="#miscellaneous-widgets">其他部件</a></li>
+<li><a class="reference internal" href="#form-geometry-manager">表单布局管理器</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tix-commands">Tix 命令</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="tkinter.ttk.html"
+                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.ttk</span></code> --- Tk 风格的控件</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="tkinter.scrolledtext.html"
+                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.scrolledtext</span></code> --- 滚动文字控件</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/tkinter.tix.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="tkinter.scrolledtext.html" title="tkinter.scrolledtext --- 滚动文字控件"
+             accesskey="N">下一页</a> |</li>
+        <li class="right" >
+          <a href="tkinter.ttk.html" title="tkinter.ttk --- Tk 风格的控件"
+             accesskey="P">上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="tk.html" accesskey="U">Tk图形用户界面(GUI)</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-tkinter.tix">
+<span id="tkinter-tix-extension-widgets-for-tk"></span><h1><a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> --- TK扩展包<a class="headerlink" href="#module-tkinter.tix" title="永久链接至标题">¶</a></h1>
+<p><strong>源代码:</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/tkinter/tix.py">Lib/tkinter/tix.py</a></p>
+<div class="deprecated" id="index-0">
+<p><span class="versionmodified deprecated">3.6 版后已移除: </span>这个 TK 扩展已无人维护所以请不要在新代码中使用。 请改用 <a class="reference internal" href="tkinter.ttk.html#module-tkinter.ttk" title="tkinter.ttk: Tk themed widget set"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.ttk</span></code></a>。</p>
+</div>
+<hr class="docutils" />
+<p><a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> (Tk Interface Extension) 模块提供了更丰富的额外可视化部件集。 虽然标准 Tk 库包含许多有用的部件，但还远不够完备。 <a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 库提供了标准 Tk 所缺少的大量常用部件: <a class="reference internal" href="#tkinter.tix.HList" title="tkinter.tix.HList"><code class="xref py py-class docutils literal notranslate"><span class="pre">HList</span></code></a>, <a class="reference internal" href="#tkinter.tix.ComboBox" title="tkinter.tix.ComboBox"><code class="xref py py-class docutils literal notranslate"><span class="pre">ComboBox</span></code></a>, <a class="reference internal" href="#tkinter.tix.Control" title="tkinter.tix.Control"><code class="xref py py-class docutils literal notranslate"><span class="pre">Control</span></code></a> (即 SpinBox) 以及一系列可滚动的部件。 <a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 还包括了大量在多种不同领域的应用中很常用的部件: <a class="reference internal" href="#tkinter.tix.NoteBook" title="tkinter.tix.NoteBook"><code class="xref py py-class docutils literal notranslate"><span class="pre">NoteBook</span></code></a>, <a class="reference internal" href="#tkinter.tix.FileEntry" title="tkinter.tix.FileEntry"><code class="xref py py-class docutils literal notranslate"><span class="pre">FileEntry</span></code></a>, <a class="reference internal" href="#tkinter.tix.PanedWindow" title="tkinter.tix.PanedWindow"><code class="xref py py-class docutils literal notranslate"><span class="pre">PanedWindow</span></code></a> 等等；总共有超过 40 种。</p>
+<p>使用这些新增部件，你可以为应用程序引入新的交互技术，创建更好用且更直观的用户界面。 你在设计应用程序时可以通过选择最适合的部件来匹配你的应用程序和用户的特殊需求。</p>
+<div class="admonition seealso">
+<p class="admonition-title">参见</p>
+<dl class="simple">
+<dt><a class="reference external" href="http://tix.sourceforge.net/">Tix 主页</a></dt><dd><p><code class="xref py py-mod docutils literal notranslate"><span class="pre">Tix</span></code> 的主页。 其中包括附加文档和下载资源的链接。</p>
+</dd>
+<dt><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/">Tix Man Pages</a></dt><dd><p>在线版本的指南页面和参考材料。</p>
+</dd>
+<dt><a class="reference external" href="http://tix.sourceforge.net/dist/current/docs/tix-book/tix.book.html">Tix Programming Guide</a></dt><dd><p>在线版本的程序员参考材料。</p>
+</dd>
+<dt><a class="reference external" href="http://tix.sourceforge.net/Tixapps/src/Tide.html">Tix Development Applications</a></dt><dd><p>开发 Tix 和 Tkinter 程序的 Tix 应用。 Tide 应用在 Tk 在 Tkinter 下工作，并包括了 <strong class="program">TixInspect</strong>，这是一个可远程修改和调试 Tix/Tk/Tkinter 应用的检查工具。</p>
+</dd>
+</dl>
+</div>
+<section id="using-tix">
+<h2>使用 Tix<a class="headerlink" href="#using-tix" title="永久链接至标题">¶</a></h2>
+<dl class="class">
+<dt id="tkinter.tix.Tk">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Tk</code><span class="sig-paren">(</span><em class="sig-param">screenName=None</em>, <em class="sig-param">baseName=None</em>, <em class="sig-param">className='Tix'</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.Tk" title="永久链接至目标">¶</a></dt>
+<dd><p>最常用于代表应用主窗口的最高层级部件。 它具有一个相关联的 Tcl 解释器。interpreter.</p>
+<p><a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 模块中的类子类化了 <a class="reference internal" href="tkinter.html#module-tkinter" title="tkinter: Interface to Tcl/Tk for graphical user interfaces"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter</span></code></a> 中的类。 前者会导入后者，因此 <a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 要使用 Tkinter，你所要做的就是导入一个模块。 通常，你可以只导入 <a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a>，并将最高层级调用由 <a class="reference internal" href="tkinter.html#tkinter.Tk" title="tkinter.Tk"><code class="xref py py-class docutils literal notranslate"><span class="pre">tkinter.Tk</span></code></a> 替换为 <code class="xref py py-class docutils literal notranslate"><span class="pre">tix.Tk</span></code>:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">tkinter</span> <span class="kn">import</span> <span class="n">tix</span>
+<span class="kn">from</span> <span class="nn">tkinter.constants</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="n">root</span> <span class="o">=</span> <span class="n">tix</span><span class="o">.</span><span class="n">Tk</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<p>要使用 <a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a>，你必须安装有 Tix 部件，通常会与你的 Tk 部分一起安装。 要测试你的安装，请尝试以下代码:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">tkinter</span> <span class="kn">import</span> <span class="n">tix</span>
+<span class="n">root</span> <span class="o">=</span> <span class="n">tix</span><span class="o">.</span><span class="n">Tk</span><span class="p">()</span>
+<span class="n">root</span><span class="o">.</span><span class="n">tk</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="s1">&#39;package require Tix&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="tix-widgets">
+<h2>Tix 部件<a class="headerlink" href="#tix-widgets" title="永久链接至标题">¶</a></h2>
+<p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/TixIntro.htm">Tix</a> 将 40 多个部件类引入到 <a class="reference internal" href="tkinter.html#module-tkinter" title="tkinter: Interface to Tcl/Tk for graphical user interfaces"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter</span></code></a> 工具集中。</p>
+<section id="basic-widgets">
+<h3>基本部件<a class="headerlink" href="#basic-widgets" title="永久链接至标题">¶</a></h3>
+<dl class="class">
+<dt id="tkinter.tix.Balloon">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Balloon</code><a class="headerlink" href="#tkinter.tix.Balloon" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixBalloon.htm">Balloon</a> 会在部件上弹出以提供帮助信息。 当用户将光标移到一个与 Balloon 部件绑定的部件内时，将在屏幕上弹出一个显示描述性消息的小窗口。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.ButtonBox">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">ButtonBox</code><a class="headerlink" href="#tkinter.tix.ButtonBox" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixButtonBox.htm">ButtonBox</a> 部件会创建一组按钮框，例如常用的 <code class="docutils literal notranslate"><span class="pre">Ok</span> <span class="pre">Cancel</span></code> 按钮框。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.ComboBox">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">ComboBox</code><a class="headerlink" href="#tkinter.tix.ComboBox" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixComboBox.htm">ComboBox</a> 部件类似于 MS Windows 中的组合框控件。 用户可以通过在输入框子部件中输入或是在列表框子部件中选择来选定一个选项。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.Control">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Control</code><a class="headerlink" href="#tkinter.tix.Control" title="永久链接至目标">¶</a></dt>
+<dd><p>The <a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixControl.htm">Control</a> 控件又名 <code class="xref py py-class docutils literal notranslate"><span class="pre">SpinBox</span></code> 控件。 用户可通过点按两个方向键或直接输入内容来调整数值。 更新的数值将被检查是否在用户定义的上下限之内。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.LabelEntry">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">LabelEntry</code><a class="headerlink" href="#tkinter.tix.LabelEntry" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixLabelEntry.htm">LabelEntry</a> 部件将输入框部件和标签打包为一个部件。 它可被用来简化 &quot;输入表单&quot; 类界面的创建。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.LabelFrame">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">LabelFrame</code><a class="headerlink" href="#tkinter.tix.LabelFrame" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixLabelFrame.htm">LabelFrame</a> 部件将框架部件和标签打包为一个部件。 要在一个 LabelFrame 部件中创建部件，应当创建与 <code class="xref py py-attr docutils literal notranslate"><span class="pre">frame</span></code> 子部件相关联的新部件并在 <code class="xref py py-attr docutils literal notranslate"><span class="pre">frame</span></code> 子部件中管理它们。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.Meter">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Meter</code><a class="headerlink" href="#tkinter.tix.Meter" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixMeter.htm">Meter</a> 部件可用来显示可能会耗费很长时间运行的后台任务的进度。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.OptionMenu">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">OptionMenu</code><a class="headerlink" href="#tkinter.tix.OptionMenu" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixOptionMenu.htm">OptionMenu</a> 可创建一个选项按钮菜单。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.PopupMenu">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">PopupMenu</code><a class="headerlink" href="#tkinter.tix.PopupMenu" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixPopupMenu.htm">PopupMenu</a> 部件可被用来替代 <code class="docutils literal notranslate"><span class="pre">tk_popup</span></code> 命令。 <code class="xref py py-mod docutils literal notranslate"><span class="pre">Tix</span></code> <a class="reference internal" href="#tkinter.tix.PopupMenu" title="tkinter.tix.PopupMenu"><code class="xref py py-class docutils literal notranslate"><span class="pre">PopupMenu</span></code></a> 部件的优势在于它所需要的应用操纵代码较少。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.Select">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Select</code><a class="headerlink" href="#tkinter.tix.Select" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixSelect.htm">Select</a> 控件是一组按钮子控件的容器。 它可被用来为用户提供单选钮或复选钮形式的选项。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.StdButtonBox">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">StdButtonBox</code><a class="headerlink" href="#tkinter.tix.StdButtonBox" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixStdButtonBox.htm">StdButtonBox</a> 部件是一个用于 Motif 风格对话框的标准按钮组。</p>
+</dd></dl>
+
+</section>
+<section id="file-selectors">
+<h3>文件选择器<a class="headerlink" href="#file-selectors" title="永久链接至标题">¶</a></h3>
+<dl class="class">
+<dt id="tkinter.tix.DirList">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">DirList</code><a class="headerlink" href="#tkinter.tix.DirList" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixDirList.htm">DirList</a> 部件显示一个目录、它的上级目录和子目录的列表视图。 用户可以选择列表中显示的某个目录或切换到另一个目录。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.DirTree">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">DirTree</code><a class="headerlink" href="#tkinter.tix.DirTree" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixDirTree.htm">DirTree</a> 部件显示一个目录、它的上级目录和子目录的树状视图。 用户可以选择其中显示的某个目录或切换到另一个目录。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.DirSelectDialog">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">DirSelectDialog</code><a class="headerlink" href="#tkinter.tix.DirSelectDialog" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixDirSelectDialog.htm">DirSelectDialog</a> 部件以对话框窗口形式表示文件系统中的目录。 用户可以使用该对话框窗口在文件系统中漫游以选择所需的目录。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.DirSelectBox">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">DirSelectBox</code><a class="headerlink" href="#tkinter.tix.DirSelectBox" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference internal" href="#tkinter.tix.DirSelectBox" title="tkinter.tix.DirSelectBox"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirSelectBox</span></code></a> 类似于标准的 Motif(TM) 目录选择框。 它通常用于让用户选择一个目录。 DirSelectBox 会将最近选择的目录存放在一个 ComboBox 部件中以便可以再次快速地选择它们。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.ExFileSelectBox">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">ExFileSelectBox</code><a class="headerlink" href="#tkinter.tix.ExFileSelectBox" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixExFileSelectBox.htm">ExFileSelectBox</a> 部件通常是嵌入在 tixExFileSelectDialog 部件中。 它为用户提供了一种方便的选择文件方法。 <a class="reference internal" href="#tkinter.tix.ExFileSelectBox" title="tkinter.tix.ExFileSelectBox"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExFileSelectBox</span></code></a> 部件的风格非常类似于 MS Windows 3.1 中的标准文件对话框。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.FileSelectBox">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">FileSelectBox</code><a class="headerlink" href="#tkinter.tix.FileSelectBox" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixFileSelectBox.htm">FileSelectBox</a> 类似于标准的 Motif(TM) 文件选择框。 它通常用于让用户选择一个文件。 FileSelectBox 会将最近选择的文件存放在一个 <a class="reference internal" href="#tkinter.tix.ComboBox" title="tkinter.tix.ComboBox"><code class="xref py py-class docutils literal notranslate"><span class="pre">ComboBox</span></code></a> 部件中以便可以再次快速地选择它们。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.FileEntry">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">FileEntry</code><a class="headerlink" href="#tkinter.tix.FileEntry" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixFileEntry.htm">FileEntry</a> 部件可被用于输入一个文件名。 用户可以手动输入文件名。 或者用户也可以按输入框旁边的按钮控件，这将打开一个文件选择对话框。</p>
+</dd></dl>
+
+</section>
+<section id="hierarchical-listbox">
+<h3>层级式列表框<a class="headerlink" href="#hierarchical-listbox" title="永久链接至标题">¶</a></h3>
+<dl class="class">
+<dt id="tkinter.tix.HList">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">HList</code><a class="headerlink" href="#tkinter.tix.HList" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixHList.htm">HList</a> 部件可被用于显示任何具有层级结构的数据，例如文件系统目录树。 其中的列表条目带有缩进并按照它们在层级中的位置以分支线段相连。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.CheckList">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">CheckList</code><a class="headerlink" href="#tkinter.tix.CheckList" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixCheckList.htm">CheckList</a> 部件可显示一个供用户选择的条目列表。 CheckList 的功能类似于 Tk 复选钮或单选钮部件，不同之处在于它能够处理比复选钮或单选钮多得多的条目。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.Tree">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Tree</code><a class="headerlink" href="#tkinter.tix.Tree" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixTree.htm">Tree</a> 部件可被用于以树形显示具有层级结构的数据。 用户可以通过打开或关闭部分树枝来调整树形视图。</p>
+</dd></dl>
+
+</section>
+<section id="tabular-listbox">
+<h3>表格式列表框<a class="headerlink" href="#tabular-listbox" title="永久链接至标题">¶</a></h3>
+<dl class="class">
+<dt id="tkinter.tix.TList">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">TList</code><a class="headerlink" href="#tkinter.tix.TList" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixTList.htm">TList</a> 部件可被用于以表格形式显示数据。 <a class="reference internal" href="#tkinter.tix.TList" title="tkinter.tix.TList"><code class="xref py py-class docutils literal notranslate"><span class="pre">TList</span></code></a> 部件中的列表条目类似于 Tk 列表框部件中的条目。 主要差异在于 (1) <a class="reference internal" href="#tkinter.tix.TList" title="tkinter.tix.TList"><code class="xref py py-class docutils literal notranslate"><span class="pre">TList</span></code></a> 部件能以二维格式显示列表条目 (2) 你可以在列表条目中使用图片以及多种颜色和字体。</p>
+</dd></dl>
+
+</section>
+<section id="manager-widgets">
+<h3>管理器部件<a class="headerlink" href="#manager-widgets" title="永久链接至标题">¶</a></h3>
+<dl class="class">
+<dt id="tkinter.tix.PanedWindow">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">PanedWindow</code><a class="headerlink" href="#tkinter.tix.PanedWindow" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixPanedWindow.htm">PanedWindow</a> 部件允许用户交互式地控制多个面板的大小。 这些面板可以垂直或水平地排列。 用户通过拖动两个面板间的控制柄来改变面板的大小。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.ListNoteBook">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">ListNoteBook</code><a class="headerlink" href="#tkinter.tix.ListNoteBook" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixListNoteBook.htm">ListNoteBook</a> 部件非常类似于 <code class="xref py py-class docutils literal notranslate"><span class="pre">TixNoteBook</span></code> 部件：它可被用于在有限空间内显示多个窗口，就像是一个“笔记本”。 笔记本可分为许多页面（窗口）。 同一时刻只能显示其中一个页面。 用户可以通过在 <code class="xref py py-attr docutils literal notranslate"><span class="pre">hlist</span></code> 子部件中选择所需页面的名称来切换这些页面。</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tkinter.tix.NoteBook">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">NoteBook</code><a class="headerlink" href="#tkinter.tix.NoteBook" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixNoteBook.htm">NoteBook</a> 部件可被用于在有限空间内显示多个窗口，就像是一个“笔记本”。 笔记本可分为许多页面。 同一时刻只能显示其中一个页面。 用户可以通过选择 NoteBook 部件顶端的可视化“选项卡”来切换这些页面。</p>
+</dd></dl>
+
+</section>
+<section id="image-types">
+<h3>图像类型<a class="headerlink" href="#image-types" title="永久链接至标题">¶</a></h3>
+<p><a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 模块增加了:</p>
+<ul class="simple">
+<li><p>将 <a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/pixmap.htm">pixmap</a> 功能提供给所有 <a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 和 <a class="reference internal" href="tkinter.html#module-tkinter" title="tkinter: Interface to Tcl/Tk for graphical user interfaces"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter</span></code></a> 部件以使用 XPM 文件创建彩色图像。</p>
+</li>
+<li><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/compound.htm">Compound</a> 图像类型可被用于创建由许多横行构成的图像；每一行都包含从左至右排列的一组条目（文本、位图、图像或空白）。 例如，某个组合图像可被用于在一个 Tk <code class="xref py py-class docutils literal notranslate"><span class="pre">Button</span></code> 部件内同时显示一张位图和一个文本字符串。</p>
+</li>
+</ul>
+</section>
+<section id="miscellaneous-widgets">
+<h3>其他部件<a class="headerlink" href="#miscellaneous-widgets" title="永久链接至标题">¶</a></h3>
+<dl class="class">
+<dt id="tkinter.tix.InputOnly">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">InputOnly</code><a class="headerlink" href="#tkinter.tix.InputOnly" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixInputOnly.htm">InputOnly</a> 部件可接收来自用户的输入，此功能可通过 <code class="docutils literal notranslate"><span class="pre">bind</span></code> 命令实现（仅限 Unix）。</p>
+</dd></dl>
+
+</section>
+<section id="form-geometry-manager">
+<h3>表单布局管理器<a class="headerlink" href="#form-geometry-manager" title="永久链接至标题">¶</a></h3>
+<p><a class="reference internal" href="#module-tkinter.tix" title="tkinter.tix: Tk Extension Widgets for Tkinter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code></a> 还额外提供了以下部件来增强 <a class="reference internal" href="tkinter.html#module-tkinter" title="tkinter: Interface to Tcl/Tk for graphical user interfaces"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter</span></code></a> 的功能:</p>
+<dl class="class">
+<dt id="tkinter.tix.Form">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">Form</code><a class="headerlink" href="#tkinter.tix.Form" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tixForm.htm">Form</a> 布局管理器是以针对所有 Tk 部件的附加规则为基础的。</p>
+</dd></dl>
+
+</section>
+</section>
+<section id="tix-commands">
+<h2>Tix 命令<a class="headerlink" href="#tix-commands" title="永久链接至标题">¶</a></h2>
+<dl class="class">
+<dt id="tkinter.tix.tixCommand">
+<em class="property">class </em><code class="sig-prename descclassname">tkinter.tix.</code><code class="sig-name descname">tixCommand</code><a class="headerlink" href="#tkinter.tix.tixCommand" title="永久链接至目标">¶</a></dt>
+<dd><p><a class="reference external" href="http://tix.sourceforge.net/dist/current/man/html/TixCmd/tix.htm">Tix 命令</a> 提供了对 <code class="xref py py-mod docutils literal notranslate"><span class="pre">Tix</span></code> 内部状态和 <code class="xref py py-mod docutils literal notranslate"><span class="pre">Tix</span></code> 应用程序上下文等杂项元素的访问。 大部分由这些方法控制的信息作为一个整体被发给应用程序，或是发给一个屏幕或显示区域，而不是某个特定窗口。</p>
+<p>要查看当前的设置，通常的用法是:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">tkinter</span> <span class="kn">import</span> <span class="n">tix</span>
+<span class="n">root</span> <span class="o">=</span> <span class="n">tix</span><span class="o">.</span><span class="n">Tk</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">tix_configure</span><span class="p">())</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_configure">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_configure</code><span class="sig-paren">(</span><em class="sig-param">cnf=None</em>, <em class="sig-param">**kw</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_configure" title="永久链接至目标">¶</a></dt>
+<dd><p>查询或修改 Tix 应用程序上下文的配置选项。 如果未指定任何选项，则返回包含所有选项的字典。 如果指定了不带值的选项，则该方法返回描述指定选项的列表（如果未指定选项则此列表与所返回值对应的子列表相同）。 如果指定了一个或多个选项-值对，则该方法会将指定的选项修改为指定的值；在此情况下该方法将返回一个空字符串。 选项可以是配置选项中的任何一个。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_cget">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_cget</code><span class="sig-paren">(</span><em class="sig-param">option</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_cget" title="永久链接至目标">¶</a></dt>
+<dd><p>返回由 <em>option</em> 给出的配置选项的当前值。 选项可以是配置选项中的任何一个。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_getbitmap">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_getbitmap</code><span class="sig-paren">(</span><em class="sig-param">name</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_getbitmap" title="永久链接至目标">¶</a></dt>
+<dd><p>在某个位图目录中定位名称为 <code class="docutils literal notranslate"><span class="pre">name.xpm</span></code> 或 <code class="docutils literal notranslate"><span class="pre">name</span></code> 的位图文件（位图目录参见 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_addbitmapdir" title="tkinter.tix.tixCommand.tix_addbitmapdir"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_addbitmapdir()</span></code></a> 方法）。 通过使用 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_getbitmap" title="tkinter.tix.tixCommand.tix_getbitmap"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_getbitmap()</span></code></a>，你可以避免在你的应用程序中硬编码位图文件的路径名。 执行成功时，它返回位图文件的完整路径名，并带有前缀字符 <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>。 返回值可被用于配置 Tk 和 Tix 部件的 <code class="docutils literal notranslate"><span class="pre">bitmap</span></code> 选项。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_addbitmapdir">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_addbitmapdir</code><span class="sig-paren">(</span><em class="sig-param">directory</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_addbitmapdir" title="永久链接至目标">¶</a></dt>
+<dd><p>Tix 维护了一个列表以供 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_getimage" title="tkinter.tix.tixCommand.tix_getimage"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_getimage()</span></code></a> 和 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_getbitmap" title="tkinter.tix.tixCommand.tix_getbitmap"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_getbitmap()</span></code></a> 方法在其中搜索图像文件。 标准位图目录是 <code class="file docutils literal notranslate"><span class="pre">$TIX_LIBRARY/bitmaps</span></code>。 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_addbitmapdir" title="tkinter.tix.tixCommand.tix_addbitmapdir"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_addbitmapdir()</span></code></a> 方法向该列表添加了 <em>directory</em>。 通过使用此方法，应用程序的图像文件也可使用 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_getimage" title="tkinter.tix.tixCommand.tix_getimage"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_getimage()</span></code></a> 或 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_getbitmap" title="tkinter.tix.tixCommand.tix_getbitmap"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_getbitmap()</span></code></a> 方法来定位。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_filedialog">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_filedialog</code><span class="sig-paren">(</span><span class="optional">[</span><em class="sig-param">dlgclass</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_filedialog" title="永久链接至目标">¶</a></dt>
+<dd><p>返回可在来自该应用程序的同不调用之间共享的选择对话框。 此方法将在首次被调用时创建一个选择对话框部件。 此后对 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_filedialog" title="tkinter.tix.tixCommand.tix_filedialog"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_filedialog()</span></code></a> 的所有调用都将返回该对话框。 可以传入一个字符串形式的可选形参 dlgclass 来指明所需的选择对话框类型。 可用的选项有 <code class="docutils literal notranslate"><span class="pre">tix</span></code>, <code class="docutils literal notranslate"><span class="pre">FileSelectDialog</span></code> 或 <code class="docutils literal notranslate"><span class="pre">tixExFileSelectDialog</span></code>。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_getimage">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_getimage</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">name</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_getimage" title="永久链接至目标">¶</a></dt>
+<dd><p>在某个位图目录（参见上文的 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_addbitmapdir" title="tkinter.tix.tixCommand.tix_addbitmapdir"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_addbitmapdir()</span></code></a> 方法）中定位名为 <code class="file docutils literal notranslate"><span class="pre">name.xpm</span></code>, <code class="file docutils literal notranslate"><span class="pre">name.xbm</span></code> 或 <code class="file docutils literal notranslate"><span class="pre">name.ppm</span></code> 的图像文件。 如果存在多个同名文件（但扩展名不同），则会按照 X 显示的深度选择图像类型：单色显示选择 xbm 图像而彩色显示则选择彩色图像。 通过使用 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_getimage" title="tkinter.tix.tixCommand.tix_getimage"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_getimage()</span></code></a>，你可以避免在你的应用程序中硬编码图像文件的路径名。 当执行成功时，此方法将返回新创建图像的名称，它可被用于配置 Tk 和 Tix 部件的 <code class="docutils literal notranslate"><span class="pre">image</span></code> 选项。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_option_get">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_option_get</code><span class="sig-paren">(</span><em class="sig-param">name</em><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_option_get" title="永久链接至目标">¶</a></dt>
+<dd><p>获取由 Tix 规格机制维护的选项。</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tkinter.tix.tixCommand.tix_resetoptions">
+<code class="sig-prename descclassname">tixCommand.</code><code class="sig-name descname">tix_resetoptions</code><span class="sig-paren">(</span><em class="sig-param">newScheme</em>, <em class="sig-param">newFontSet</em><span class="optional">[</span>, <em class="sig-param">newScmPrio</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#tkinter.tix.tixCommand.tix_resetoptions" title="永久链接至目标">¶</a></dt>
+<dd><p>将 Tix 应用程序的规格设置与字体设置分别重置为 <em>newScheme</em> 和 <em>newFontSet</em>。 这只会影响调用此方法之后创建的部件。 因此，最好是在 Tix 应用程序的任何部件被创建之前调用 resetoptions 方法。</p>
+<p>可以给出可选的形参 <em>newScmPrio</em> 来重置由 Tix 规格所设置的 Tk 选项的优先级。</p>
+<p>由于 Tk 处理 X 选项数据库的特别方式，在 Tix 被导入并初始化之后，将无法再使用 <code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_config()</span></code> 方法来重置颜色方案和字体集。 而必须要使用 <a class="reference internal" href="#tkinter.tix.tixCommand.tix_resetoptions" title="tkinter.tix.tixCommand.tix_resetoptions"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tix_resetoptions()</span></code></a> 方法。</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../contents.html">目录</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.tix</span></code> --- TK扩展包</a><ul>
+<li><a class="reference internal" href="#using-tix">使用 Tix</a></li>
+<li><a class="reference internal" href="#tix-widgets">Tix 部件</a><ul>
+<li><a class="reference internal" href="#basic-widgets">基本部件</a></li>
+<li><a class="reference internal" href="#file-selectors">文件选择器</a></li>
+<li><a class="reference internal" href="#hierarchical-listbox">层级式列表框</a></li>
+<li><a class="reference internal" href="#tabular-listbox">表格式列表框</a></li>
+<li><a class="reference internal" href="#manager-widgets">管理器部件</a></li>
+<li><a class="reference internal" href="#image-types">图像类型</a></li>
+<li><a class="reference internal" href="#miscellaneous-widgets">其他部件</a></li>
+<li><a class="reference internal" href="#form-geometry-manager">表单布局管理器</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tix-commands">Tix 命令</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>上一个主题</h4>
+  <p class="topless"><a href="tkinter.ttk.html"
+                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.ttk</span></code> --- Tk 风格的控件</a></p>
+  <h4>下一个主题</h4>
+  <p class="topless"><a href="tkinter.scrolledtext.html"
+                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tkinter.scrolledtext</span></code> --- 滚动文字控件</a></p>
+  <div role="note" aria-label="source link">
+    <h3>本页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/tkinter.tix.rst"
+            rel="nofollow">显示源代码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总目录"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+        <li class="right" >
+          <a href="tkinter.scrolledtext.html" title="tkinter.scrolledtext --- 滚动文字控件"
+             >下一页</a> |</li>
+        <li class="right" >
+          <a href="tkinter.ttk.html" title="tkinter.ttk --- Tk 风格的控件"
+             >上一页</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.8.20 Documentation</a> &#187;
+    </li>
+
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="tk.html" >Tk图形用户界面(GUI)</a> &#187;</li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
+          <input type="submit" value="转向" />
+          <input type="hidden" name="check_keywords" value="yes" />
+          <input type="hidden" name="area" value="default" />
+        </form>
+    </div>
+                     |
+                </li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
+    <br />
+    This page is licensed under the Python Software Foundation License Version 2.
+    <br />
+    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
+    <br />
+    
+    <br />
+
+    The Python Software Foundation is a non-profit corporation.
+<a href="https://www.python.org/psf/donations/">Please donate.</a>
+<br />
+    <br />
+
+    最后更新于 12月 09, 2024.
+    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
+    <br />
+
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    </div>
+
+  </body>
+</html>
