@@ -43,6 +43,11 @@ def is_download_response(response: Response) -> bool:
     return "attachment" in content_disposition.lower()
 
 
+def is_supertext_response(response: Response) -> bool:
+    content_length: int = response.headers.get("content-length", 0)
+    return content_length > 5000
+
+
 async def logging_middleware(request: Request, call_next):
     # 接口服务时间
     start_time = time.time()
@@ -82,76 +87,83 @@ async def logging_middleware(request: Request, call_next):
 
     response_header: dict = dict(response.headers)
 
-    # 消费响应体
-    if is_download:
-        response_params = b"<FILE DOWNLOAD>"
-    elif is_html:
-        response_params = b"<HTML CONTENT>"
-    elif is_image:
-        response_params = b"IMAGE CONTENT"
-    else:
-        body_chunks = []
-        async for chunk in response.body_iterator:
-            body_chunks.append(chunk)
+    # 路由排除（静态文件&OpenApi文档）
+    if not request_router.startswith("/static/") and request_router not in (
+            '/',
+            '/base/audit/list',
+            PROJECT_CONFIG.APP_DOCS_URL,
+            PROJECT_CONFIG.APP_REDOC_URL,
+            PROJECT_CONFIG.APP_OPENAPI_URL,
+    ):
+        # 消费响应体
+        if is_download:
+            response_params = b"<FILE DOWNLOAD>"
+        elif is_html:
+            response_params = b"<HTML CONTENT>"
+        elif is_image:
+            response_params = b"IMAGE CONTENT"
+        else:
+            body_chunks = []
+            async for chunk in response.body_iterator:
+                body_chunks.append(chunk)
 
-        response_params = b"".join(body_chunks).decode("utf-8", errors="ignore")
+            response_params = b"".join(body_chunks).decode("utf-8", errors="ignore")
 
-        # 重置响应体
-        response = Response(
-            content=response_params,
-            status_code=response.status_code,
-            headers=response_header,
-            media_type=response.media_type
-        )
+            # 重置响应体
+            response = Response(
+                content=response_params,
+                status_code=response.status_code,
+                headers=response_header,
+                media_type=response.media_type
+            )
 
-    # 接口服务结束时间
-    end_time = time.time()
-    response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(end_time))
-    response_elapsed = f"{end_time - start_time:.4f}s"
+        # 接口服务结束时间
+        end_time = time.time()
+        response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(end_time))
+        response_elapsed = f"{end_time - start_time:.4f}s"
 
-    # 记录日志
-    audit_log: Dict[str, Any] = {
-        "request_time": request_time,
-        "request_tags": request_tags,
-        "request_summary": request_summary,
-        "request_method": request_method,
-        "request_router": request_router,
-        "request_client": request_client,
-        "request_header": request_header,
-        "request_params": request_body or request_params,
-        "response_time": response_time,
-        "response_header": response_header,
-        "response_elapsed": response_elapsed
-    }
-    if isinstance(response_params, str):
-        _response = json.loads(response_params)
-        audit_log["response_code"] = _response.get("code", "")
-        audit_log["response_message"] = _response.get("message", "")
-        audit_log["response_params"] = response_params
-        del _response
+        # 记录日志
+        audit_log: Dict[str, Any] = {
+            "request_time": request_time,
+            "request_tags": request_tags,
+            "request_summary": request_summary,
+            "request_method": request_method,
+            "request_router": request_router,
+            "request_client": request_client,
+            "request_header": request_header,
+            "request_params": request_body or request_params,
+            "response_time": response_time,
+            "response_header": response_header,
+            "response_elapsed": response_elapsed
+        }
+        if isinstance(response_params, str):
+            _response = json.loads(response_params)
+            audit_log["response_code"] = _response.get("code", "")
+            audit_log["response_message"] = _response.get("message", "")
+            audit_log["response_params"] = response_params
+            del _response
 
-    request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
-                           f"请求时间：{audit_log.get('request_time')}\n" \
-                           f"请求模块：{audit_log.get('request_tags')}\n" \
-                           f"请求接口：{audit_log.get('request_summary')}\n" \
-                           f"请求方式：{audit_log.get('request_method')}\n" \
-                           f"请求路由：{audit_log.get('request_router')}\n" \
-                           f"请求来源：{audit_log.get('request_client')}\n" \
-                           f"请求头部：{audit_log.get('request_header')}\n" \
-                           f"请求参数：{audit_log.get('request_params')}\n" \
-                           f"响应头部：{audit_log.get('response_header')}\n" \
-                           f"响应代码：{audit_log.get('response_code')}\n" \
-                           f"响应消息：{audit_log.get('response_message')}\n" \
-                           f"响应参数：{audit_log.get('response_params')}\n" \
-                           f"响应时间：{audit_log.get('response_time')}\n" \
-                           f"响应耗时：{audit_log.get('response_elapsed')}\n" \
-                           f"< < < < < < < < < < < < < < < < < < < < "
+        request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
+                               f"请求时间：{audit_log.get('request_time')}\n" \
+                               f"请求模块：{audit_log.get('request_tags')}\n" \
+                               f"请求接口：{audit_log.get('request_summary')}\n" \
+                               f"请求方式：{audit_log.get('request_method')}\n" \
+                               f"请求路由：{audit_log.get('request_router')}\n" \
+                               f"请求来源：{audit_log.get('request_client')}\n" \
+                               f"请求头部：{audit_log.get('request_header')}\n" \
+                               f"请求参数：{audit_log.get('request_params')}\n" \
+                               f"响应头部：{audit_log.get('response_header')}\n" \
+                               f"响应代码：{audit_log.get('response_code')}\n" \
+                               f"响应消息：{audit_log.get('response_message')}\n" \
+                               f"响应参数：{audit_log.get('response_params')}\n" \
+                               f"响应时间：{audit_log.get('response_time')}\n" \
+                               f"响应耗时：{audit_log.get('response_elapsed')}\n" \
+                               f"< < < < < < < < < < < < < < < < < < < < "
 
-    LOGGER.info(request_message)
+        LOGGER.info(request_message)
 
-    if not request_router.startswith("/static/") and request_router not in ('/', ):
-        # 获取用户信息
         try:
+            # 获取用户信息
             user_obj: Optional[User] = None
             token = request.headers.get("token")
             if token:
