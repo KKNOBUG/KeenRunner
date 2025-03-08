@@ -151,7 +151,7 @@ class ProjectConfig(BaseSettings):
                 "maxsize": 40,  # 连接池最大连接数
                 "charset": "utf8mb4",  # 数据库字符编码
                 "echo": False,  # 数据库是否开启SQL语句回响
-                "autocommit": False  # 数据库是否开启SQL语句自动提交
+                "autocommit": True  # 数据库是否开启SQL语句自动提交
             }
         }
     }
