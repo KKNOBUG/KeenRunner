@@ -129,7 +129,7 @@ async function handleReset() {
   emit('update:queryItems', { ...queryItems, ...initQuery })
   await nextTick()
   pagination.page = 1
-  handleQuery()
+  await handleQuery()
 }
 function onPageChange(currentPage) {
   pagination.page = currentPage
