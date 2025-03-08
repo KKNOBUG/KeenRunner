@@ -43,6 +43,6 @@ export default {
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
 
   // 工具箱相关
-  runPyCode: (data = {}) => request.post('/toolbox/runcode/python', data),
-  fakerPerson: (data = {}) => request.post('/toolbox/generate/person', data),
+  runcodePython: (data = {}) => request.post('/toolbox/runcode/python', data),
+  generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
 }
