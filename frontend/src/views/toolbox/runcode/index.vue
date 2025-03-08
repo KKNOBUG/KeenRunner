@@ -84,7 +84,7 @@ const formatCode = () => {
 const runCode = async () => {
   try {
     isLoading.value = true
-    const response = await api.runPyCode({
+    const response = await api.runcodePython({
       code: code.value
     })
     result.value = response.data.result || response.data.error

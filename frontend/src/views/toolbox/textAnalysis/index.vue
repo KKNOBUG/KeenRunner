@@ -1,6 +1,6 @@
 <template>
   <AppPage>
-    <h3>1111</h3>
+    <h3>文本解析</h3>
   </AppPage>
 </template>
 <script setup>

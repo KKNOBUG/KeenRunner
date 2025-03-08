@@ -16,5 +16,5 @@ import {ref} from 'vue';
 import AppPage from "@/components/page/AppPage.vue";
 import {BACKEND_URL} from "~/build/constant";
 
-const htmlContent = ref(BACKEND_URL + "/static/py38api/index.html");
+const htmlContent = ref(BACKEND_URL + "/static/pythonHelpDoc/index.html");
 </script>

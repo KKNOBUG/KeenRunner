@@ -147,7 +147,7 @@ export default defineComponent({
           minAge,
           maxAge
         };
-        const response = await api.fakerPerson(requestData);
+        const response = await api.generateInfo(requestData);
         console.log("提交成功", response.data);
         // 处理接口返回数据
         setResultData(response.data);
