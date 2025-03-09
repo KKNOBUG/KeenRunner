@@ -176,7 +176,7 @@ async def init_database_menu():
                 path="/system",
                 order=1,
                 parent_id=0,
-                icon="famicons:settings-outline",
+                icon="garden:gear-stroke-12",
                 is_hidden=False,
                 component="Layout",
                 keepalive=False,
@@ -275,13 +275,149 @@ async def init_database_menu():
         ]
         await Menu.bulk_create(system_children_menu)
 
+        # 项目&模块设置菜单配置
+        program_parent_menu = await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.CATALOG,
+                name="应用管理",
+                path="/program",
+                order=2,
+                parent_id=0,
+                icon="fluent:app-folder-28-filled",
+                is_hidden=False,
+                component="Layout",
+                keepalive=False,
+                redirect="/program/project"
+            )
+        )
+        program_children_menu = [
+            Menu(
+                menu_type=MenuType.MENU,
+                name="项目管理",
+                path="project",
+                order=1,
+                parent_id=program_parent_menu.id,
+                icon="fluent:apps-28-filled",
+                is_hidden=False,
+                component="/program/project",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="模块管理",
+                path="module",
+                order=2,
+                parent_id=program_parent_menu.id,
+                icon="fluent:apps-add-in-28-regular",
+                is_hidden=False,
+                component="/program/module",
+                keepalive=False
+            ),
+        ]
+        await Menu.bulk_create(program_children_menu)
+
+        # 自动化测试菜单配置
+        autotest_parent_menu = await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.CATALOG,
+                name="自动化测试",
+                path="/autotest",
+                order=3,
+                parent_id=0,
+                icon="garden:bot-sparkle-stroke-12",
+                is_hidden=False,
+                component="Layout",
+                keepalive=False,
+                redirect="/autotest/testcase"
+            )
+        )
+        # carbon:query
+        autotest_children_menu = [
+            Menu(
+                menu_type=MenuType.MENU,
+                name="测试步骤",
+                path="step",
+                order=1,
+                parent_id=autotest_parent_menu.id,
+                icon="garden:arrow-retweet-stroke-12",
+                is_hidden=False,
+                component="/autotest/step",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="测试用例",
+                path="testcase",
+                order=2,
+                parent_id=autotest_parent_menu.id,
+                icon="garden:file-document-stroke-12",
+                is_hidden=False,
+                component="/autotest/testcase",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="测试报告",
+                path="report",
+                order=1,
+                parent_id=autotest_parent_menu.id,
+                icon="garden:document-search-stroke-12",
+                is_hidden=False,
+                component="/autotest/report",
+                keepalive=False
+            ),
+        ]
+        await Menu.bulk_create(autotest_children_menu)
+
+        # 任务管理菜单配置
+        task_parent_menu = await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.CATALOG,
+                name="任务管理",
+                path="/task",
+                order=4,
+                parent_id=0,
+                # icon="material-symbols:alarm-outline-rounded",
+                icon="fluent:clock-alarm-24-regular",
+                is_hidden=False,
+                component="Layout",
+                keepalive=False,
+                redirect="/task/record"
+            )
+        )
+        task_children_menu = [
+            Menu(
+                menu_type=MenuType.MENU,
+                name="执行记录",
+                path="record",
+                order=1,
+                parent_id=task_parent_menu.id,
+                icon="fluent:document-checkmark-24-regular",
+                is_hidden=False,
+                component="/task/record",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="任务列表",
+                path="list",
+                order=2,
+                parent_id=task_parent_menu.id,
+                icon="fluent:document-text-clock-24-regular",
+                is_hidden=False,
+                component="/task/list",
+                keepalive=False
+            ),
+        ]
+        await Menu.bulk_create(task_children_menu)
+
         # 便捷工具菜单配置
         toolbox_parent_menu = await MENU_CRUD.create_menu(
             MenuCreate(
                 menu_type=MenuType.CATALOG,
                 name="便捷工具",
                 path="/toolbox",
-                order=1,
+                order=5,
                 parent_id=0,
                 icon="tdesign:tools",
                 is_hidden=False,
@@ -297,7 +433,7 @@ async def init_database_menu():
                 path="pythonHelpDoc",
                 order=1,
                 parent_id=toolbox_parent_menu.id,
-                icon="solar:documents-linear",
+                icon="vscode-icons:file-type-python",
                 is_hidden=False,
                 component="/toolbox/pythonHelpDoc",
                 keepalive=False
@@ -355,7 +491,7 @@ async def init_database_menu():
                 menu_type=MenuType.MENU,
                 name="一级菜单",
                 path="/top-menu",
-                order=2,
+                order=6,
                 parent_id=0,
                 icon="material-symbols:featured-play-list-outline",
                 is_hidden=False,
