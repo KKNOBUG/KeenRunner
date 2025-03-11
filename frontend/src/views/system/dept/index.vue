@@ -63,6 +63,20 @@ async function addDepts() {
 
 const columns = [
   {
+    title: '部门代码',
+    key: 'code',
+    width: 'auto',
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return h(
+          NTag,
+          {type: 'info', style: {margin: '2px 3px'}},
+          {default: () => row.code}
+      )
+    },
+  },
+  {
     title: '部门名称',
     key: 'name',
     width: 'auto',

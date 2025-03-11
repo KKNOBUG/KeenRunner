@@ -95,20 +95,10 @@ const columns = [
     },
   },
   {
-    title: '请求时间',
-    key: 'request_time',
-    align: 'center',
-    width: '100px',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', formatDateTime(row.request_time))
-    },
-  },
-  {
     title: '功能模块',
     key: 'request_tags',
     align: 'center',
-    width: '100px',
+    width: '150px',
     ellipsis: { tooltip: true },
     render(row) {
       return h(NTag, {type: 'info'}, {default: () => row.request_tags})
@@ -139,10 +129,20 @@ const columns = [
     ellipsis: { tooltip: true },
   },
   {
+    title: '请求时间',
+    key: 'request_time',
+    align: 'center',
+    width: '200px',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return h('span', formatDateTime(row.request_time))
+    },
+  },
+  {
     title: '请求来源',
     key: 'request_client',
     align: 'center',
-    width: '100px',
+    width: '150px',
     ellipsis: { tooltip: true },
   },
   {
@@ -151,6 +151,9 @@ const columns = [
     align: 'center',
     width: '100px',
     ellipsis: { tooltip: true },
+    render(row) {
+      return h('span', JSON.stringify(row.request_header, null, 2))
+    },
   },
   {
     title: '请求参数',
@@ -158,12 +161,21 @@ const columns = [
     align: 'center',
     width: '100px',
     ellipsis: { tooltip: true },
+    render(row) {
+      try {
+        if (row.request_params === null) return;
+        const parsed = JSON.parse(row.request_params);
+        return h('span', JSON.stringify(parsed));
+      } catch (error) {
+        return h('span', row.request_params)
+      }
+    },
   },
   {
     title: '响应时间',
     key: 'response_time',
     align: 'center',
-    width: '100px',
+    width: '200px',
     ellipsis: { tooltip: true },
     render(row) {
       return h('span', formatDateTime(row.response_time))
@@ -175,6 +187,9 @@ const columns = [
     align: 'center',
     width: '100px',
     ellipsis: { tooltip: true },
+    render(row) {
+      return h('span', JSON.stringify(row.request_header, null, 2))
+    },
   },
   {
     title: '响应代码',
@@ -199,6 +214,9 @@ const columns = [
     align: 'center',
     width: '100px',
     ellipsis: { tooltip: true },
+    render(row) {
+      return h('span', JSON.stringify(row.request_header, null, 2))
+    },
   },
   {
     title: '响应耗时',
@@ -224,7 +242,6 @@ const columns = [
       :get-data="api.getAuditLogList"
       :single-line="true"
       :scroll-x="1800"
-      virtual-scroll
     >
       <template #queryBar>
         <QueryBarItem label="用户名称" :label-width="70">
@@ -274,7 +291,7 @@ const columns = [
         </QueryBarItem>
         <QueryBarItem label="响应代码" :label-width="60">
           <NInput
-            v-model:value="queryItems.request_code"
+            v-model:value="queryItems.response_code"
             clearable
             type="text"
             placeholder="请输入响应代码"

@@ -36,6 +36,7 @@ const {
   doUpdate: api.updateRouter,
   doDelete: api.deleteRouter,
   refresh: () => $table.value?.handleSearch(),
+
 })
 
 onMounted(() => {
@@ -95,35 +96,7 @@ const addAPIRules = {
 
 const columns = [
   {
-    title: 'API简介',
-    key: 'summary',
-    width: 'auto',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: 'API路径',
-    key: 'path',
-    width: 'auto',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: 'API方式',
-    key: 'method',
-    align: 'center',
-    width: 'auto',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h(
-          NTag,
-          {type: 'info', style: {margin: '2px 3px'}},
-          {default: () => row.method}
-      )
-    },
-  },
-  {
-    title: 'API标签',
+    title: '路由所属模块',
     key: 'tags',
     width: 'auto',
     align: 'center',
@@ -137,7 +110,35 @@ const columns = [
     },
   },
   {
-    title: 'API描述',
+    title: '路由作用简介',
+    key: 'summary',
+    width: 'auto',
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '路由请求路径',
+    key: 'path',
+    width: 'auto',
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '路由请求方式',
+    key: 'method',
+    align: 'center',
+    width: 'auto',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return h(
+          NTag,
+          {type: 'info', style: {margin: '2px 3px'}},
+          {default: () => row.method}
+      )
+    },
+  },
+  {
+    title: '路由功能描述',
     key: 'description',
     width: 'auto',
     align: 'center',
@@ -233,7 +234,7 @@ const columns = [
       :get-data="api.getRouters"
     >
       <template #queryBar>
-        <QueryBarItem label="API简介" :label-width="auto">
+        <QueryBarItem label="API简介" :label-width="70">
           <NInput
               v-model:value="queryItems.summary"
               clearable
@@ -242,7 +243,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="API路径" :label-width="auto">
+        <QueryBarItem label="API路径" :label-width="70">
           <NInput
             v-model:value="queryItems.path"
             clearable
@@ -251,7 +252,7 @@ const columns = [
             @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="API标签" :label-width="auto">
+        <QueryBarItem label="API标签" :label-width="70">
           <NInput
             v-model:value="queryItems.tags"
             clearable

@@ -272,7 +272,7 @@ async function handleUpdateDisable(row) {
     return
   }
   row.publishing = true
-  row.is_active = row.is_active === false ? true : false
+  row.is_active = row.is_active === false
   row.publishing = false
   const role_ids = []
   row.roles.forEach((e) => {
@@ -286,7 +286,7 @@ async function handleUpdateDisable(row) {
     $table.value?.handleSearch()
   } catch (err) {
     // 有异常恢复原来的状态
-    row.is_active = row.is_active === false ? true : false
+    row.is_active = row.is_active === false
   } finally {
     row.publishing = false
   }

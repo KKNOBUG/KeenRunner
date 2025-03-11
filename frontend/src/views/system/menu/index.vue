@@ -239,7 +239,7 @@ const columns = [
 async function handleUpdateKeepalive(row) {
   if (!row.id) return
   row.publishing = true
-  row.keepalive = row.keepalive === false ? true : false
+  row.keepalive = row.keepalive === false
   await api.updateMenu(row)
   row.publishing = false
   $message?.success(row.keepalive ? '已开启' : '已关闭')
@@ -249,7 +249,7 @@ async function handleUpdateKeepalive(row) {
 async function handleUpdateHidden(row) {
   if (!row.id) return
   row.publishing = true
-  row.is_hidden = row.is_hidden === false ? true : false
+  row.is_hidden = row.is_hidden === false
   await api.updateMenu(row)
   row.publishing = false
   $message?.success(row.is_hidden ? '已隐藏' : '已取消隐藏')
@@ -322,7 +322,7 @@ async function getTreeSelect() {
               key-field="id"
               label-field="name"
               :options="menuOptions"
-              default-expand-all="true"
+              :default-expand-all="true"
           />
         </NFormItem>
         <NFormItem
