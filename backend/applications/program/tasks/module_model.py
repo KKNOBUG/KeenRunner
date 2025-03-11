@@ -8,14 +8,22 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from backend.applications.base.services.scaffold import (
+    ScaffoldModel,
+    StateModel,
+    MaintainMixin,
+    TimestampMixin
+)
 
 
-class Module(ScaffoldModel, MaintainMixin, TimestampMixin):
+class Module(ScaffoldModel, StateModel, MaintainMixin, TimestampMixin):
     code = fields.CharField(max_length=16, unique=True, description="模块代码")
     name = fields.CharField(max_length=64, unique=True, description="模块名称")
-    state = fields.SmallIntField(default=1, index=True, description='模块状态')
     description = fields.TextField(null=True, description="模块描述")
+    project = fields.ForeignKeyField(
+        model_name="project_model.Project",
+        related_name="modules"
+    )
 
     class Meta:
         table = "krun_module"
