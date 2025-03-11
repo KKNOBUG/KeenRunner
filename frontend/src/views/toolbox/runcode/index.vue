@@ -1,7 +1,6 @@
 <template>
   <AppPage>
-<!--    <n-layout has-sider class="h-screen">-->
-    <n-layout content-style="padding: 25px;" :native-scrollbar="false">
+    <n-layout has-sider content-style="padding: 18px;" :native-scrollbar="false">
       <n-layout-sider bordered collapse-mode="width" :width="sideWidth">
         <n-space vertical class="p-4" size="large">
 
