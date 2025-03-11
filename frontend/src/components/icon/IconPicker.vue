@@ -41,7 +41,7 @@ watchDebounced(
             <span class="i-mdi:magnify text-18" />
           </template>
           <template #suffix>
-            <TheIcon :icon="choosed" :size="18" />
+            <TheIcon :icon="choosed || ''" :size="18" />
           </template>
         </NInput>
       </template>
