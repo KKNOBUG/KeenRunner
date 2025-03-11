@@ -331,7 +331,6 @@ async def init_database_menu():
                 redirect="/autotest/testcase"
             )
         )
-        # carbon:query
         autotest_children_menu = [
             Menu(
                 menu_type=MenuType.MENU,
@@ -377,7 +376,6 @@ async def init_database_menu():
                 path="/task",
                 order=4,
                 parent_id=0,
-                # icon="material-symbols:alarm-outline-rounded",
                 icon="fluent:clock-alarm-24-regular",
                 is_hidden=False,
                 component="Layout",
@@ -466,7 +464,7 @@ async def init_database_menu():
                 path="textAnalysis",
                 order=3,
                 parent_id=toolbox_parent_menu.id,
-                icon="carbon:package-text-analysis",
+                icon="fluent:text-underline-double-24-filled",
                 is_hidden=False,
                 component="/toolbox/textAnalysis",
                 keepalive=False
