@@ -63,11 +63,11 @@ async def list_role(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
-        role_name: str = Query(default="", description="角色名称，用于查询"),
+        name: str = Query(default="", description="角色名称，用于查询"),
 ):
     q = Q()
-    if role_name:
-        q = Q(name__contains=role_name)
+    if name:
+        q = Q(name__contains=name)
     total, role_objs = await ROLE_CRUD.list(
         page=page, page_size=page_size, search=q, order=order
     )
