@@ -7,7 +7,6 @@ const WHITE_LIST = ['/login', '/404'];
 export function createAuthGuard(router) {
     router.beforeEach(async (to) => {
         const token = getToken()
-        console.log('原路径:', to.path);
 
         /** 没有 token 的情况 */
         if (isNullOrWhitespace(token)) {
