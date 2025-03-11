@@ -28,7 +28,7 @@ export default {
   createMenu: (data = {}) => request.post('/base/menu/create', data),
   updateMenu: (data = {}) => request.post('/base/menu/update', data),
   deleteMenu: (params = {}) => request.delete('/base/menu/delete', { params }),
-  // API相关
+  // 路由相关
   getRouters: (params = {}) => request.get('/base/router/list', { params }),
   createRouter: (data = {}) => request.post('/base/router/create', data),
   updateRouter: (data = {}) => request.post('/base/router/update', data),
