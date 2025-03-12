@@ -195,8 +195,8 @@ class GenerateUtils:
 
         return generate_string[::-1]
 
-    def generate_datetime(self, year: int = None, month: int = None, day: int = None,
-                          hour: int = None, minute: int = None, second: int = None,
+    def generate_datetime(self, year: int = 0, month: int = 0, day: int = 0,
+                          hour: int = 0, minute: int = 0, second: int = 0,
                           fmt: Optional[Union[int, str]] = None, isMicrosecond: bool = False) -> Union[datetime, str]:
         """
         根据当前日期时间自定义修改年、月、日、时、分、秒和格式
@@ -211,23 +211,16 @@ class GenerateUtils:
         :return: 默认以XXXX-XX-XX XX:XX:XX格式返回当前日期时间
         """
         # 获取当前日期时间
-        if isMicrosecond:
-            current_datetime = datetime.now()
-        else:
-            current_datetime = datetime.now().replace(microsecond=0)
+        current_datetime = datetime.now()
+        if not isMicrosecond:
+            current_datetime = current_datetime.replace(microsecond=0)
 
-        if year:
-            current_datetime = current_datetime + relativedelta(years=year)
-        if month:
-            current_datetime = current_datetime + relativedelta(months=month)
-        if day:
-            current_datetime = current_datetime + relativedelta(days=day)
-        if hour:
-            current_datetime = current_datetime + relativedelta(hours=hour)
-        if minute:
-            current_datetime = current_datetime + relativedelta(minutes=minute)
-        if second:
-            current_datetime = current_datetime + relativedelta(seconds=second)
+        # 计算偏移量
+        current_datetime = current_datetime + relativedelta(**{
+            "years": year, "months": month, "days": day,
+            "hours": hour, "minutes": minute, "seconds": second
+        })
+
         # 格式化
         if fmt:
             if fmt not in (23, 33, 43, 53):
@@ -236,6 +229,7 @@ class GenerateUtils:
                 current_datetime = current_datetime.strftime(
                     self.formats.get(fmt, fmt).encode("unicode_escape").decode('utf-8')
                 ).encode("utf-8").decode("unicode_escape")
+
         return current_datetime
 
     def generate_pinyin(self, chars: str, splitter: str = "",
@@ -278,7 +272,7 @@ class GenerateUtils:
         g1 = stamp + "9999" + self.generate_string(length=4)
         g2 = stamp + "9999" + self.generate_string(length=4)
         g3 = stamp + "9999" + self.generate_string(length=4)
-        return stamp + "9999" + self.generate_string(length=4)
+        return g1, g2, g3
 
     @property
     def generate_uuid(self):
@@ -298,6 +292,23 @@ class GenerateUtils:
             midnight += timedelta(days=1)
         delta = midnight - now
         return int(delta.total_seconds())
+
+    @classmethod
+    def generate_seconds_until(cls, year: int = 0, month: int = 0, day: int = 0,
+                               hour: int = 0, minute: int = 0, second: int = 0) -> int:
+        # 当前时间
+        current_datetime: datetime = datetime.now()
+        target_datetime: datetime = current_datetime
+        # 时间偏移
+        target_datetime = target_datetime + relativedelta(**{
+            "years": year, "months": month, "days": day,
+            "hours": hour, "minutes": minute, "seconds": second
+        })
+        # 计算时间差
+        time_difference: timedelta = target_datetime - current_datetime
+        if time_difference.total_seconds() > 0:
+            return int(time_difference.total_seconds())
+        return 0
 
 
 GENERATE = GenerateUtils()
@@ -339,3 +350,5 @@ if __name__ == '__main__':
     # print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
     print(vd.generate_global_serial_number)
     print(vd.generate_seconds_until_22h)
+    print(vd.generate_seconds_until())
+    print(vd.generate_seconds_until(minute=3, second=59))
