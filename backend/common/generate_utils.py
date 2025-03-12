@@ -306,9 +306,8 @@ class GenerateUtils:
         })
         # 计算时间差
         time_difference: timedelta = target_datetime - current_datetime
-        if time_difference.total_seconds() > 0:
-            return int(time_difference.total_seconds())
-        return 0
+        total_seconds: int = int(time_difference.total_seconds())
+        return total_seconds if total_seconds > 0 else 0
 
 
 GENERATE = GenerateUtils()
