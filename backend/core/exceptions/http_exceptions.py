@@ -26,15 +26,16 @@ from backend.core.response.http_response import (
 )
 
 
-# 请求参数验证错误异常封装
+# 当 FastAPI 在解析和验证请求数据时发现问题，会触发 RequestValidationError 异常
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError) -> BaseResponse:
     error_message: str = ""
     for error in exc.errors():
-        error_message += ".".join(error.get("loc")) + ":" + error.get("msg") + " "
+        error_message += ".".join(map(str, error.get("loc"))) + ":" + error.get("msg") + " "
 
     return ParameterResponse(message=error_message.strip())
 
 
+# 当 FastAPI 在解析和验证响应数据时发现问题，会触发 ResponseValidationError 异常
 async def response_validation_exception_handler(request: Request, exc: ResponseValidationError) -> BaseResponse:
     error_message: str = ""
     for error in exc.errors():
@@ -43,13 +44,7 @@ async def response_validation_exception_handler(request: Request, exc: ResponseV
     return ParameterResponse(message=error_message.strip())
 
 
-# 数据库空指针异常封装
-async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> BaseResponse:
-    message: str = f'空指针异常：{exc.__str__()}'
-    return NotFoundResponse(message=message.replace('"', "'"))
-
-
-# HTTP请求异常封装
+# 当发生 HTTP 相关的异常时，如 403 禁止访问、404 未找到等，会触发 HTTPException 异常
 async def http_exception_handler(request: Request, exc: HTTPException) -> BaseResponse:
     if exc.status_code == status.HTTP_403_FORBIDDEN:
         return ForbiddenResponse(message=f"请求服务 {request.method} 未被授权")
@@ -72,12 +67,20 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> BaseRe
     elif exc.status_code == status.HTTP_502_BAD_GATEWAY:
         return BadGatewayResponse()
 
-    elif exc.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR:
+    elif exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
         return GatewayTimeoutResponse()
 
     else:
         return FailureResponse(message=str(exc))
 
 
+# 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
+async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> BaseResponse:
+    message: str = f'空指针异常：{exc.__str__()}'
+    return NotFoundResponse(message=message.replace('"', "'"))
+
+
+# 当发生未被其他特定异常处理器处理的异常时，会触发此函数
 async def app_exception_handler(request: Request, exc: Exception) -> BaseResponse:
-    return FailureResponse(message="服务器发生未知错误，请稍后重试，或点击右上角加入答疑群")
+    error_message = f"服务器发生未知错误，请稍后重试，或点击右上角二维码加入答疑群。具体错误信息: {str(exc)}"
+    return FailureResponse(message=error_message)
