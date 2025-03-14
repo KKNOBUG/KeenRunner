@@ -12,10 +12,14 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from tortoise import Tortoise
 
-from backend.core.initalization.app_initialization import (
-    register_logging, register_exceptions, register_routers, register_database, register_middlewares
+from backend.core.initialization.app_initialization import (
+    register_database,
+    register_logging,
+    register_exceptions,
+    register_middlewares,
+    register_routers,
 )
-from backend.core.initalization.data_initialization import init_database_table
+from backend.core.initialization.data_initialization import init_database_table
 from backend.core.response.http_response import SuccessResponse
 
 try:
