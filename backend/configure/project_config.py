@@ -86,7 +86,7 @@ class ProjectConfig(BaseSettings):
     STATIC_IMG_DIR: str = os.path.abspath(os.path.join(STATIC_DIR, "image"))
     MIGRATION_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "migrations"))
 
-    # 跨域配置
+    # # 允许访问的源（域名）列表
     CORS_ORIGINS: List[str] = [
         "http://localhost",
         "http://localhost:5000",
@@ -95,10 +95,15 @@ class ProjectConfig(BaseSettings):
         "http://localhost:8515",
         "*",
     ]
+    # 是否允许携带凭证（如 cookies）
     CORS_ALLOW_CREDENTIALS: bool = True
+    # 允许的 HTTP 方法列表
     CORS_ALLOW_METHODS: List[str] = ["*"]
+    # 允许的请求头列表
     CORS_ALLOW_HEADERS: List[str] = ["*"]
+    # 允许客户端访问的响应头列表
     CORS_EXPOSE_METHODS: List[str] = ["*"]
+    # 预检请求的缓存时间（秒）
     CORS_MAX_AGE: int = 600
 
     # 应用注册
