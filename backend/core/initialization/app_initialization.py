@@ -31,7 +31,8 @@ from backend.core.exceptions.http_exceptions import (
     null_point_exception_handler,
     app_exception_handler
 )
-from backend.core.middleware.app_middleware import ReqResLoggerMiddleware, logging_middleware
+# from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
+from backend.core.middleware.app_middleware import logging_middleware
 
 
 def register_logging() -> logger:
@@ -99,25 +100,27 @@ async def register_database(app: FastAPI) -> None:
 
 # 注册异常处理器
 def register_exceptions(app: FastAPI) -> None:
-    # 注册参数验证错误处理器（解析和验证请求数据时发现问题，就会触发）
+    # 当 FastAPI 在解析和验证请求数据时发现问题，会触发 RequestValidationError 异常
     app.add_exception_handler(
         exc_class_or_status_code=RequestValidationError,
         handler=request_validation_exception_handler
     )
-    # 注册响应验证错误处理器（解析和验证响应数据时发现问题，就会触发）
+    # 当 FastAPI 在解析和验证响应数据时发现问题，会触发 ResponseValidationError 异常
     app.add_exception_handler(
         exc_class_or_status_code=ResponseValidationError,
         handler=response_validation_exception_handler
     )
-    # 验证HTTP通讯异常错误处理器
+    # 当发生 HTTP 相关的异常时，如 403 禁止访问、404 未找到等，会触发 HTTPException 异常
     app.add_exception_handler(
         exc_class_or_status_code=HTTPException,
         handler=http_exception_handler
     )
+    # 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
     app.add_exception_handler(
         exc_class_or_status_code=DoesNotExist,
         handler=null_point_exception_handler
     )
+    # 当发生未被其他特定异常处理器处理的异常时，会触发此函数
     app.add_exception_handler(
         exc_class_or_status_code=Exception,
         handler=app_exception_handler
@@ -125,6 +128,7 @@ def register_exceptions(app: FastAPI) -> None:
 
 
 def register_middlewares(app: FastAPI):
+    # 注册 CORS 中间件，CORS（跨域资源共享）中间件用于处理跨域请求，允许不同域名的客户端访问服务器资源
     app.add_middleware(
         CORSMiddleware,
         allow_origins=PROJECT_CONFIG.CORS_ORIGINS,
@@ -135,6 +139,7 @@ def register_middlewares(app: FastAPI):
         max_age=PROJECT_CONFIG.CORS_MAX_AGE,
     )
     # app.add_middleware(ReqResLoggerMiddleware)    # 文件上传下载偶现阻塞
+    # 注册 HTTP 请求中间件
     app.middleware('http')(logging_middleware)
 
 
