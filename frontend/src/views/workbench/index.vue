@@ -100,7 +100,7 @@ const userStore = useUserStore()
 
 <style scoped>
 .statistic-container {
-  max-width: 65%; /* 设置最大宽度 */
+  max-width: 55%; /* 设置最大宽度 */
   overflow-x: auto; /* 超出宽度时显示横向滚动条 */
 }
 
