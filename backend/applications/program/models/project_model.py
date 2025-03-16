@@ -8,15 +8,10 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    StateModel,
-    MaintainMixin,
-    TimestampMixin, ClassModel
-)
+from backend.applications.base.services.scaffold import ScaffoldModel, StateModel, ClassModel, TimestampMixin
 
 
-class Project(ScaffoldModel, ClassModel, StateModel, MaintainMixin, TimestampMixin):
+class Project(ScaffoldModel, ClassModel, StateModel, TimestampMixin):
     dev_owner = fields.ForeignKeyField(
         model_name="models.User",
         related_name="project_dev_owner",
