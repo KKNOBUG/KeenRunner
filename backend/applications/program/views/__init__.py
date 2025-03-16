@@ -6,11 +6,10 @@
 @Module  : __init__.py.py
 @DateTime: 2025/3/7 12:28
 """
+from fastapi import APIRouter
 
+from .project_view import project
 
-def print_hi(name):
-    print(f'Hi, {name}')
+program = APIRouter()
 
-
-if __name__ == '__main__':
-    print_hi('Python')
+program.include_router(project, prefix="/project")
