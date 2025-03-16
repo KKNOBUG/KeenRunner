@@ -157,9 +157,11 @@ def register_routers(app: FastAPI) -> None:
     from backend.applications.department.views.department_view import dept
     from backend.applications.user.views.user_view import user
     from backend.applications.toolbox.views import toolbox
+    from backend.applications.program.views import program
 
     # 挂在路由蓝图
     app.include_router(router=base, prefix="/base", tags=["基础服务"])
     app.include_router(router=user, prefix="/user", tags=["用户服务"])
     app.include_router(router=dept, prefix="/dept", tags=["部门服务"])
     app.include_router(router=toolbox, prefix="/toolbox", tags=["工具箱服务"])
+    app.include_router(router=program, prefix="/program", tags=["应用管理服务"])
