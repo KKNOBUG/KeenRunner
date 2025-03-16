@@ -116,7 +116,12 @@ async def list_user(
     total, user_objs = await USER_CRUD.list(
         page=page, page_size=page_size, order=order, search=q
     )
-    data = [await obj.to_dict(m2m=True, exclude_fields=["password"]) for obj in user_objs]
+    data = [
+        await obj.to_dict(
+            m2m=True,
+            exclude_fields=["password"],
+        ) for obj in user_objs
+    ]
     for item in data:
         dept_id = item.pop("dept_id", None)
         item["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
