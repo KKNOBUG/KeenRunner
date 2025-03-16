@@ -42,6 +42,14 @@ export default {
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
 
+  // 应用管理修改
+  getProject: (params = {}) => request.get('/program/project/get', { params }),
+  createProject: (data = {}) => request.post('/program/project/create', data),
+  deleteProject: (params = {}) => request.delete('/program/project/delete', { params }),
+  updateProject: (data = {}) => request.post('/program/project/update', data),
+  getProjectList: (params = {}) => request.get('/program/project/list', { params }),
+
+
   // 工具箱相关
   runcodePython: (data = {}) => request.post('/toolbox/runcode/python', data),
   generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
