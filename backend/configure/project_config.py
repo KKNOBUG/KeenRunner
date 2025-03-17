@@ -58,7 +58,9 @@ class ProjectConfig(BaseSettings):
     # 保留的备份日志文件的数量，当超过超过这个数量时，最旧的备份文件将被删除，默认值为0，标识不保留备份
     LOGGER_BACKUP_COUNT: int = 0
     # 文件大小轮转
-    LOGGER_ROTATION: str = '10 MB'
+    # 日期轮转："1 day"、"1 week"、"1 month"
+    # 时间轮转："HH:MM:SS"、"00:00"、"00:00:00"
+    LOGGER_ROTATION: str = '00:00:00'
     # 保留30天
     LOGGER_RETENTION: str = '30 days'
     # 压缩格式
@@ -105,6 +107,22 @@ class ProjectConfig(BaseSettings):
     CORS_EXPOSE_METHODS: List[str] = ["*"]
     # 预检请求的缓存时间（秒）
     CORS_MAX_AGE: int = 600
+
+    # 文件上传设置
+    UPLOAD_FILE_MAX_SIZE: int = 1024 * 1024 * 30  # 30MB
+    UPLOAD_FILE_SUFFIX: List[str] = [
+        'image/jepg',
+        'image/png',
+        'text/csv',
+        'text/plain',
+        'text/markdown',
+        'applicaton/pdf',
+        'applicaton/zip',
+        'application/vnd.ms-excel',  # xls
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # xlsx
+        'application/msword',  # doc
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'  # docx
+    ]
 
     # 应用注册
     APPLICATIONS_MODULE: str = "backend.applications"
