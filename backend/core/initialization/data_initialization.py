@@ -334,6 +334,28 @@ async def init_database_menu():
         autotest_children_menu = [
             Menu(
                 menu_type=MenuType.MENU,
+                name="接口测试",
+                path="api",
+                order=1,
+                parent_id=autotest_parent_menu.id,
+                icon="simple-icons:aiohttp",
+                is_hidden=False,
+                component="/autotest/api",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="WebUI测试",
+                path="ui",
+                order=2,
+                parent_id=autotest_parent_menu.id,
+                icon="mdi:television-guide",
+                is_hidden=False,
+                component="/autotest/ui",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
                 name="测试步骤",
                 path="step",
                 order=1,
