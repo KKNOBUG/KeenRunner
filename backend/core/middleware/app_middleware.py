@@ -45,7 +45,7 @@ def is_download_response(response: Response) -> bool:
 
 def is_supertext_response(response: Response) -> bool:
     content_length: int = response.headers.get("content-length", 0)
-    return content_length > 5000
+    return int(content_length) > 5000
 
 
 async def logging_middleware(request: Request, call_next):
