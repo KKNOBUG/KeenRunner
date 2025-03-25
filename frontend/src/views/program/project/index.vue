@@ -109,7 +109,7 @@ const columns = [
                 {style: {margin: '2px 3px', cursor: 'pointer'}},
                 row.dev_owner.alias
             ),
-            default: () => `ID: ${row.dev_owner.id}, 名称: ${row.dev_owner.alias}, 电话: ${row.dev_owner.phone}, 邮箱: ${row.test_owner.email}`
+            default: () => `工号: ${row.dev_owner.username}, 名称: ${row.dev_owner.alias}, 电话: ${row.dev_owner.phone}, 邮箱: ${row.test_owner.email}`
           },
       )
     },
@@ -130,7 +130,7 @@ const columns = [
                 {style: {margin: '2px 3px', cursor: 'pointer'}},
                 row.test_owner.alias
             ),
-            default: () => `ID: ${row.test_owner.id}, 名称: ${row.test_owner.alias}, 电话: ${row.test_owner.phone}, 邮箱: ${row.test_owner.email}`
+            default: () => `工号: ${row.test_owner.username}, 名称: ${row.test_owner.alias}, 电话: ${row.test_owner.phone}, 邮箱: ${row.test_owner.email}`
           },
       )
     },
@@ -170,10 +170,6 @@ const columns = [
                   style: 'margin-right: 8px;',
                   onClick: () => {
                     handleEdit(row)
-                    console.log('-1111--->')
-                    console.log(row.test_owner)
-                    console.log(row.test_owner?.id)
-                    console.log('-1111--->')
                     modalForm.value.test_owner = row.test_owner?.id
                     modalForm.value.dev_owner = row.dev_owner?.id
                     modalForm.value.state = row.state
@@ -227,11 +223,7 @@ const stateOptions = [
 
 const renderOptionLabel = (option) => {
   const innerOption = option.option
-  console.log('option--1>', innerOption)
-  console.log('option--2>', innerOption.id)
-  console.log('option--3>', innerOption.alias)
-  console.log('option--4>', innerOption.phone)
-  return `[${innerOption.id}] - ${innerOption.alias}[${innerOption.username}] - ${innerOption.phone}`
+  return `工号: ${innerOption.username}, 名称: ${innerOption.alias}, 电话: ${innerOption.phone}, 邮箱: ${innerOption.email}`
 }
 
 </script>
