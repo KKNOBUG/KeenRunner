@@ -27,7 +27,6 @@ export default defineConfig(({command, mode}) => {
         define: viteDefine,
         plugins:[
             createVitePlugins(viteEnv, isBuild),
-
             monacoEditorPlugin({
                 languageWorkers: ['editorWorkerService', 'json', 'typescript'],
             }),
