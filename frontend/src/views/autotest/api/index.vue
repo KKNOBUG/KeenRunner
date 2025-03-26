@@ -85,11 +85,21 @@
       <n-card title="Request" size="small" hoverable>
         <n-tabs type="line" animated>
           <n-tab-pane name="headers" tab="请求头">
+            <template #tab>
+              <n-badge :value="state.form.headers.length" :max="99" show-zero>
+                <span>请求头</span>
+              </n-badge>
+            </template>
             <KeyValueEditor
                 v-model:items="state.form.headers"
             />
           </n-tab-pane>
           <n-tab-pane name="params" tab="请求体">
+            <template #tab>
+              <n-badge :value="getBodyCount" :max="99" show-zero>
+                <span>请求体</span>
+              </n-badge>
+            </template>
             <n-radio-group v-model:value="state.form.bodyType" name="bodyType">
               <n-space>
                 <n-radio value="none">none</n-radio>
@@ -109,20 +119,30 @@
               />
             </div>
             <div v-if="state.form.bodyType === 'json'" class="mt-4">
-              <n-input
-                  v-model:value="state.form.jsonBody"
-                  type="textarea"
-                  placeholder="输入JSON内容"
-                  :rows="10"
+<!--              <n-input-->
+<!--                  v-model:value="state.form.jsonBody"-->
+<!--                  type="textarea"-->
+<!--                  placeholder="输入JSON内容"-->
+<!--                  :rows="10"-->
+<!--                  class="json-editor"-->
+<!--              />-->
+
+              <monaco-editor
+                  v-model="state.form.jsonBody"
+                  :options="editorOptions"
                   class="json-editor"
+                  style="min-height: 300px; height: auto;"
               />
             </div>
           </n-tab-pane>
-          <n-tab-pane name="body" tab="变量">
+          <n-tab-pane name="variables" tab="变量">
+            <template #tab>
+              <n-badge :value="state.form.variables.length" :max="99" show-zero>
+                <span>变量</span>
+              </n-badge>
+            </template>
             <KeyValueEditor
                 v-model:items="state.form.variables"
-                @add="addVariable"
-                @remove="removeVariable"
             />
           </n-tab-pane>
         </n-tabs>
@@ -153,13 +173,13 @@
                 />
               </n-tab-pane>
               <n-tab-pane name="headers" tab="Headers">
-                <KeyValueView :items="response.headers" />
+                <KeyValueView :items="response.headers"/>
               </n-tab-pane>
             </n-tabs>
           </n-space>
         </div>
         <div v-else class="empty-response">
-          <n-empty description="点击调试按钮发送请求查看响应结果" />
+          <n-empty description="点击调试按钮发送请求查看响应结果"/>
         </div>
       </n-card>
 
@@ -175,10 +195,30 @@ import { NCode, NTag } from 'naive-ui'
 import axios from 'axios'
 import AppPage from "@/components/page/AppPage.vue";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
+import MonacoEditor from "@/components/monaco/index.vue";
 
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
 
+
+const editorOptions = {
+  theme: 'vs-dark',
+  language: 'json',
+  automaticLayout: true,
+  minimap: {
+    enabled: true
+  },
+  folding: true,
+  foldingStrategy: 'auto',
+  scrollBeyondLastLine: false,
+  fontSize: 14,
+  lineNumbers: 'on',
+  roundedSelection: false,
+  readOnly: false,
+  cursorStyle: 'line',
+  tabSize: 4,
+  wordWrap: 'on'
+}
 
 // 键值对查看组件
 const KeyValueView = {
@@ -243,19 +283,21 @@ const rules = {
 // 状态管理
 const state = reactive({
   form: {
-    method: 'GET',
-    priority: '中',
     url: 'https://api.example.com',
-    params: [],
+    method: 'GET',
     headers: [
-        { key: 'Accept', value: '*/*' },
-        { key: 'Accept-Encoding', value: 'gzip, deflate, br' },
-        { key: 'Connection', value: 'keep-alive' },
-        { key: 'Content-Type', value: 'application/json' },
+      {key: 'Accept', value: '*/*'},
+      {key: 'Accept-Encoding', value: 'gzip, deflate, br'},
+      {key: 'Connection', value: 'keep-alive'},
+      {key: 'Content-Type', value: 'application/json'},
     ],
+    params: [],
+    variables: [],
     bodyType: 'none',
+    bodyForm: [],
     bodyParams: [],
-    jsonBody: ''
+    jsonBody: '{\n \n}',
+    priority: '中'
   }
 })
 
@@ -264,15 +306,15 @@ const response = ref(null)
 
 // 请求方式下拉框
 const methodOptions = [
-  { label: 'GET', value: 'GET', color: '#49CC90' },
-  { label: 'POST', value: 'POST', color: '#61AFFE' },
-  { label: 'PUT', value: 'PUT', color: '#FFA500' },
-  { label: 'DELETE', value: 'DELETE', color: '#F4511E' }
+  {label: 'GET', value: 'GET', color: '#49CC90'},
+  {label: 'POST', value: 'POST', color: '#61AFFE'},
+  {label: 'PUT', value: 'PUT', color: '#FFA500'},
+  {label: 'DELETE', value: 'DELETE', color: '#F4511E'}
 ]
 const renderMethodLabel = (option) => {
   return h(
       'span',
-      { style: { color: option.color, fontWeight: '600' } },
+      {style: {color: option.color, fontWeight: '600'}},
       option.label
   )
 }
@@ -280,15 +322,15 @@ const renderMethodLabel = (option) => {
 
 // 优先级下拉框
 const priorityOptions = [
-  { label: '低', value: '低', color: '#61AFFE' },
-  { label: '中', value: '中', color: '#FFA500' },
-  { label: '高', value: '高', color: '#F4511E' },
-  { label: '危', value: '危', color: '#800000' }
+  {label: '低', value: '低', color: '#61AFFE'},
+  {label: '中', value: '中', color: '#FFA500'},
+  {label: '高', value: '高', color: '#F4511E'},
+  {label: '危', value: '危', color: '#800000'}
 ]
 const renderPriorityLabel = (option) => {
   return h(
       'span',
-      { style: { color: option.color, fontWeight: '600' } },
+      {style: {color: option.color, fontWeight: '600'}},
       option.label
   )
 }
@@ -300,8 +342,20 @@ const responseStatusType = computed(() => {
   return response.value.status >= 400 ? 'error' : 'success'
 })
 
-const addVariable = () => state.form.variables.push({ key: '', value: '' })
-const removeVariable = (index) => state.form.variables.splice(index, 1)
+// 添加计算属性
+const getBodyCount = computed(() => {
+  switch (state.form.bodyType) {
+    case 'form-data':
+      return state.form.bodyParams.length
+    case 'x-www-form-urlencoded':
+      return state.form.bodyForm.length
+    case 'json':
+      return state.form.jsonBody ? 1 : 0 // JSON内容存在则计1
+    default:
+      return 0
+  }
+})
+
 
 const handleDebug = async () => {
   try {
@@ -309,13 +363,13 @@ const handleDebug = async () => {
 
     // 构造请求参数
     const config = {
-      method: state.form.method,
       url: state.form.url,
-      params: state.form.params.reduce((acc, { key, value }) => {
+      method: state.form.method,
+      params: state.form.params.reduce((acc, {key, value}) => {
         if (key) acc[key] = value
         return acc
       }, {}),
-      headers: state.form.headers.reduce((acc, { key, value }) => {
+      headers: state.form.headers.reduce((acc, {key, value}) => {
         if (key) acc[key] = value
         return acc
       }, {})
@@ -324,7 +378,7 @@ const handleDebug = async () => {
     // 处理请求体
     if (state.form.bodyType === 'form-data') {
       const formData = new FormData()
-      state.form.bodyParams.forEach(({ key, value }) => {
+      state.form.bodyParams.forEach(({key, value}) => {
         if (key) formData.append(key, value)
       })
       config.data = formData
@@ -399,5 +453,17 @@ const handleSave = () => {
 
 .mt-4 {
   margin-top: 16px;
+}
+.json-editor {
+  border: 1px solid #eee;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+
+/* 确保编辑器容器可以自适应内容高度 */
+.json-editor :deep(.monaco-editor) {
+  min-height: 90px;
+  height: auto !important;
 }
 </style>
