@@ -32,7 +32,7 @@
             </n-gi>
           </n-grid>
 
-          <n-grid :cols="24" :x-gap="24" class="mt-4">
+          <n-grid :cols="24" :x-gap="24">
             <n-gi :span="5">
               <n-form-item label="优先级" path="priority">
                 <n-select
@@ -63,7 +63,7 @@
             </n-gi>
           </n-grid>
 
-          <n-grid :cols="24" :x-gap="24" class="mt-4">
+          <n-grid :cols="24" :x-gap="24">
             <n-gi :span="24">
               <n-form-item label="接口描述" path="description">
                 <n-input
@@ -92,6 +92,8 @@
             </template>
             <KeyValueEditor
                 v-model:items="state.form.headers"
+                :body-type="'none'"
+                :is-for-body="false"
             />
           </n-tab-pane>
           <n-tab-pane name="params" tab="请求体">
@@ -108,32 +110,31 @@
                 <n-radio value="json">json</n-radio>
               </n-space>
             </n-radio-group>
-            <div v-if="state.form.bodyType === 'form-data'" class="mt-4">
+            <n-button v-if="state.form.bodyType === 'json'" @click="formatJson" class="ml-10" size="tiny" round text type="primary">美化</n-button>
+            <div v-if="state.form.bodyType === 'form-data'">
               <KeyValueEditor
                   v-model:items="state.form.bodyParams"
+                  :body-type="state.form.bodyType"
+                  :enableFile="true"
+                  :is-for-body="true"
               />
             </div>
-            <div v-if="state.form.bodyType === 'x-www-form-urlencoded'" class="mt-4">
+            <div v-if="state.form.bodyType === 'x-www-form-urlencoded'">
               <KeyValueEditor
                   v-model:items="state.form.bodyForm"
+                  :body-type="state.form.bodyType"
+                  :is-for-body="true"
               />
             </div>
-            <div v-if="state.form.bodyType === 'json'" class="mt-4">
-<!--              <n-input-->
-<!--                  v-model:value="state.form.jsonBody"-->
-<!--                  type="textarea"-->
-<!--                  placeholder="输入JSON内容"-->
-<!--                  :rows="10"-->
-<!--                  class="json-editor"-->
-<!--              />-->
-
+            <div v-if="state.form.bodyType === 'json'">
               <monaco-editor
-                  v-model="state.form.jsonBody"
+                  v-model:value="state.form.jsonBody"
                   :options="editorOptions"
                   class="json-editor"
                   style="min-height: 300px; height: auto;"
               />
             </div>
+
           </n-tab-pane>
           <n-tab-pane name="variables" tab="变量">
             <template #tab>
@@ -143,6 +144,8 @@
             </template>
             <KeyValueEditor
                 v-model:items="state.form.variables"
+                :body-type="'none'"
+                :is-for-body="false"
             />
           </n-tab-pane>
         </n-tabs>
@@ -193,12 +196,15 @@ import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
 import { NCode, NTag } from 'naive-ui'
 import axios from 'axios'
+import {useMessage} from "naive-ui";
+
 import AppPage from "@/components/page/AppPage.vue";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
 
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
+const message = useMessage();
 
 
 const editorOptions = {
@@ -296,7 +302,7 @@ const state = reactive({
     bodyType: 'none',
     bodyForm: [],
     bodyParams: [],
-    jsonBody: '{\n \n}',
+    jsonBody: '',
     priority: '中'
   }
 })
@@ -342,7 +348,7 @@ const responseStatusType = computed(() => {
   return response.value.status >= 400 ? 'error' : 'success'
 })
 
-// 添加计算属性
+// 请求体属性数量计算
 const getBodyCount = computed(() => {
   switch (state.form.bodyType) {
     case 'form-data':
@@ -393,7 +399,7 @@ const handleDebug = async () => {
       status: res.status,
       statusText: res.statusText,
       headers: res.headers,
-      data: JSON.stringify(res.data, null, 2),
+      data: JSON.stringify(res.data, null, 4),
       duration: Date.now() - startTime,
       size: `${(JSON.stringify(res.data).length / 1024).toFixed(2)} KB`
     }
@@ -412,6 +418,29 @@ const handleDebug = async () => {
 const handleSave = () => {
   // 保存逻辑
   console.log('保存接口配置', state.form)
+}
+
+const formatJson = () => {
+  const inputJson = state.form.jsonBody.trim();
+  if (inputJson === '') {
+    message.warning('输入的 JSON 为空，请输入有效的 JSON 内容。');
+    return;
+  }
+
+  try {
+    const jsonData = JSON.parse(inputJson);
+    state.form.jsonBody = JSON.stringify(jsonData, null, 2);
+  } catch (parseError) {
+    try {
+      // 尝试使用 eval 处理可能不规范的 JSON
+      const jsonData = eval('(' + inputJson + ')');
+      state.form.jsonBody = JSON.stringify(jsonData, null, 2);
+    } catch (evalError) {
+      message.error(`JSON 格式化失败，请检查输入的 JSON 格式是否正确。详细错误信息：${parseError.message}`);
+      console.error('JSON 格式化失败，解析错误:', parseError);
+      console.error('JSON 格式化失败，eval 处理也失败:', evalError);
+    }
+  }
 }
 
 </script>
@@ -451,9 +480,6 @@ const handleSave = () => {
   text-align: center;
 }
 
-.mt-4 {
-  margin-top: 16px;
-}
 .json-editor {
   border: 1px solid #eee;
   border-radius: 15px;
