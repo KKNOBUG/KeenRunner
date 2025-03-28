@@ -1,4 +1,6 @@
 <script setup>
+import TheIcon from "@/components/icon/TheIcon.vue";
+
 /** 自定义图标 */
 const props = defineProps({
   /** 图标名称(assets/svg下的文件名) */
