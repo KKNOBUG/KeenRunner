@@ -33,16 +33,12 @@ self.MonacoEnvironment = {
   }
 }
 
-
-// export { monaco };
-
-
 const props = defineProps({
   // 展示的字符串
-  // modelValue: {
-  //   type: String,
-  //   default: '',
-  // },
+  modelValue: {
+    type: String,
+    default: '',
+  },
   value: {
     type: String,
     default: '',
@@ -61,11 +57,11 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  // // 比对需要的新数据
-  // newString: {
-  //   type: String,
-  //   default: '',
-  // },
+  // 比对需要的新数据
+  newString: {
+    type: String,
+    default: '',
+  },
   // 语言
   lang: {
     type: String,
@@ -74,7 +70,7 @@ const props = defineProps({
   // 主题
   theme: {
     type: String,
-    default: 'vs',   // vs ||  hc-black || vs-dark
+    default: 'vs-dark',   // vs ||  hc-black || vs-dark
   },
   //lineNumbers
   options: {
@@ -83,11 +79,9 @@ const props = defineProps({
       return {}
     }
   },
-
   executeHandle: {
     type: Function,
   },
-
   dbList: {
     type: Array,
     default: () => []
@@ -205,7 +199,6 @@ const initEditor = () => {
       const content = getValue();
       state.contentBackup = content;
       emit("update:value", content)
-
     })
   }
 }
@@ -258,7 +251,6 @@ const registerCustomEvent = (editor) => {
       // keybindings: [
       //   monaco.KeyMod.chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyJ)
       // ],
-
       run: copyToClipboard
     })
   }
@@ -291,7 +283,6 @@ const registerCustomEvent = (editor) => {
         // emit('on-jsonpath-change', {jsonPath: state.jsonPath})
       }
     }
-
   })
 
   editor.onMouseWheel((e) => {
