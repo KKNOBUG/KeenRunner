@@ -12,7 +12,11 @@
     "prettier": "npx prettier --write ."
   },
   "dependencies": {
+    "@codemirror/lang-json": "^6.0.1",
     "@codemirror/lang-python": "^6.1.7",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/lint": "^6.8.5",
+    "@codemirror/state": "^6.5.2",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@guolao/vue-monaco-editor": "^1.5.5",
     "@iconify/json": "^2.2.228",
