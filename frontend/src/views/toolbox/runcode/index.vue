@@ -100,16 +100,12 @@ const runCode = async () => {
   编辑器容器样式设置
   - 高度设置为视口高度的 50%，以适应两个编辑器的布局
   - 为容器添加 1px 宽的 #F4511E 颜色边框
-  - 设置容器的圆角为 10px，使外观更圆润
   - 隐藏溢出容器的内容
-  - 为容器底部添加 20px 的外边距，用于分隔不同的编辑器容器
 */
 :deep(.editor-container) {
   height: 50vh;
   border: 1px solid #F4511E;
-  border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 20px;
 }
 
 /*
@@ -138,14 +134,14 @@ const runCode = async () => {
 
 /*
   编辑器行号区域样式设置
-  - 设置行号区域的背景颜色为 #282c34
-  - 为行号区域右侧添加 1px 宽的 #3e4451 颜色分隔线
-  - 设置行号文本的颜色为 #5c6370
+  - 设置行号区域的背景颜色
+  - 为行号区域右侧添加分隔线
+  - 设置行号文本的颜色
 */
 :deep(.cm-editor .cm-gutters) {
   background: #282c34;
-  border-right: 1px solid #3e4451;
-  color: #5c6370;
+  border-right: 1px solid #5c6370;
+  color: #88929f;
 }
 
 /*
@@ -153,7 +149,7 @@ const runCode = async () => {
   - 当某一行被聚焦时，设置该行号区域的背景颜色为 #2c313a
 */
 :deep(.cm-editor .cm-activeLineGutter) {
-  background-color: #2c313a;
+  background-color: #424242;
 }
 
 /*
@@ -161,7 +157,7 @@ const runCode = async () => {
   - 当某一行被聚焦时，设置该行的背景颜色为 #2c313a
 */
 :deep(.cm-editor .cm-activeLine) {
-  background-color: #2c313a;
+  background-color: #424242;
 }
 
 /*
@@ -219,6 +215,6 @@ const runCode = async () => {
 */
 :deep(.cm-editor .cm-content ::selection) {
   background-color: #3e4451;
-  color: #fff;
+  color: #999;
 }
 </style>
