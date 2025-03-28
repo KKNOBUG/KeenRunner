@@ -221,7 +221,8 @@ const openBatchAddModal = () => {
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
   // 将当前的键值对信息格式化为 key:value:description 格式，填充到批量输入框中
-  batchInput.value = props.items.map(item => {
+  const nonEmptyItems = props.items.filter(item => item.key || item.value);
+  batchInput.value = nonEmptyItems.map(item => {
     if (item.description) {
       return `${item.key}:${item.value}:${item.description}`;
     }
