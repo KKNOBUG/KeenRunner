@@ -8,7 +8,7 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin
 from backend.enums.http_enum import HTTPMethod
 
 
@@ -26,7 +26,7 @@ class Audit(ScaffoldModel, TimestampMixin):
     response_time = fields.DatetimeField(index=True, description="响应时间")
     response_header = fields.JSONField(default=None, null=True, description="响应头部")
     response_code = fields.CharField(max_length=16, default="", null=True, index=True, description="响应代码")
-    response_message = fields.CharField(max_length=255, default="", null=True, description="响应消息")
+    response_message = fields.CharField(max_length=512, default="", null=True, description="响应消息")
     response_params = fields.TextField(default="", null=True, description="响应参数")
     response_elapsed = fields.CharField(max_length=16, description="响应耗时")
 

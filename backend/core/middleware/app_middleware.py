@@ -139,7 +139,7 @@ async def logging_middleware(request: Request, call_next):
         if isinstance(response_params, str):
             _response = json.loads(response_params)
             audit_log["response_code"] = _response.get("code", "")
-            audit_log["response_message"] = _response.get("message", "")
+            audit_log["response_message"] = _response.get("message", "")[:512]
             audit_log["response_params"] = response_params
             del _response
 
