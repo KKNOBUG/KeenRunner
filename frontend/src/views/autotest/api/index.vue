@@ -155,50 +155,120 @@
       </n-card>
 
       <!-- 响应结果卡片 -->
-      <n-card title="Response" size="small" hoverable>
-        <div v-if="response">
-          <n-space vertical :size="12">
-            <div>
-              <n-tag :type="responseStatusType" round>
-                状态: {{ response.status }} {{ response.statusText }}
-              </n-tag>
-              <n-tag :type="sizeTagType" round>
-                大小: {{ response.size }}
-              </n-tag>
-              <n-tag :type="durationTagType" round>
-                耗时: {{ response.duration }}ms
-              </n-tag>
-            </div>
-            <n-tabs type="line">
-              <n-tab-pane name="body" tab="Body">
-                <div v-if="isJsonResponse">
-                  <monaco-editor
-                      v-model:value="response.data"
-                      :options="responseEditorOptions"
-                      class="json-editor"
-                      readonly
-                      style="height: 400px"
-                  />
-                </div>
-              </n-tab-pane>
-              <n-tab-pane name="headers" tab="Headers">
-                <KeyValueView :items="response.headers"/>
-              </n-tab-pane>
-              <n-tab-pane v-if="response.cookies" name="cookies" tab="Cookies">
-                <n-data-table
-                    :columns="cookieColumns"
-                    :data="cookieData"
-                    :bordered="false"
-                />
-              </n-tab-pane>
-            </n-tabs>
-          </n-space>
-        </div>
-        <div v-else class="empty-response">
-          <n-empty description="点击调试按钮发送请求查看响应结果"/>
-        </div>
-      </n-card>
+      <n-card title="调试结果" size="small" hoverable>
+        <n-tabs type="line" animated>
+          <!-- 响应信息 -->
+          <n-tab-pane name="responseInfo" tab="响应信息">
+            <n-space vertical :size="16" v-if="response">
+              <n-collapse>
+                <n-collapse-item title="响应状态" name="responseStatus">
+                  <n-space vertical :size="12">
+                    <n-descriptions bordered :column="4" size="small">
+                      <n-descriptions-item label="状态码">
+                        <n-tag :type="responseStatusType">{{ response.status }}</n-tag>
+                      </n-descriptions-item>
+                      <n-descriptions-item label="耗时">
+                        <n-tag :type="durationTagType">{{ response.duration }}ms</n-tag>
+                      </n-descriptions-item>
+                      <n-descriptions-item label="大小">
+                        <n-tag :type="sizeTagType">{{ response.size }}</n-tag>
+                      </n-descriptions-item>
+                      <n-descriptions-item label="类型">
+                        <n-tag>{{ contentType }}</n-tag>
+                      </n-descriptions-item>
+                    </n-descriptions>
+                  </n-space>
+                </n-collapse-item>
+                <n-collapse-item title="响应头部" name="responseHeaders">
+                  <n-space vertical :size="12">
+                    <n-data-table
+                        :columns="[{title:'Header',key:'name'}, {title:'Value',key:'value'}]"
+                        :data="headerData"
+                        size="small"
+                    />
 
+
+                    <n-collapse v-if="hasCookies">
+                      <n-collapse-item title="Cookies">
+                        <n-data-table
+                            :columns="[{title:'Cookie',key:'name'}, {title:'Value',key:'value'}]"
+                            :data="cookieData"
+                            size="small"
+                        />
+                      </n-collapse-item>
+                    </n-collapse>
+                  </n-space>
+                </n-collapse-item>
+                <n-collapse-item title="响应内容" name="responseBody">
+                  <n-space vertical :size="12">
+                    <div v-if="isJsonResponse" style="height: 300px">
+                      <MonacoEditor
+                          :value="response.data"
+                          :options="editorOptions"
+                          readonly
+                      />
+                    </div>
+                    <n-code
+                        v-else
+                        :code="typeof response.data === 'object'? JSON.stringify(response.data) : response.data || ''"
+                        :language="responseLanguage"
+                        show-line-numbers
+                        class="response-code"
+                    />
+                  </n-space>
+                </n-collapse-item>
+              </n-collapse>
+            </n-space>
+          </n-tab-pane>
+
+          <!-- 请求信息 -->
+          <n-tab-pane name="requestInfo" tab="请求信息">
+            <n-space vertical :size="16" v-if="response">
+              <n-collapse>
+                <n-collapse-item title="请求地址" name="requestAddress">
+                  <n-space vertical :size="12">
+                    <n-descriptions bordered :column="2" size="small">
+                      <n-descriptions-item label="方法">
+                        <n-tag :type="methodTagType">{{ requestInfo.method }}</n-tag>
+                      </n-descriptions-item>
+                      <n-descriptions-item label="URL">
+                        <n-text copyable>{{ requestInfo.url }}</n-text>
+                      </n-descriptions-item>
+                    </n-descriptions>
+                  </n-space>
+                </n-collapse-item>
+                <n-collapse-item title="请求头部" name="requestHeaders">
+                  <n-data-table
+                      :columns="[{title:'Header',key:'name'}, {title:'Value',key:'value'}]"
+                      :data="requestHeaderData"
+                      size="small"
+                  />
+                </n-collapse-item>
+                <n-collapse-item :title="`请求内容 (${requestBodyType})`" name="requestBody">
+                  <div v-if="isJsonRequest" style="height: 250px">
+                    <MonacoEditor
+                        :value="formattedRequestJson"
+                        :options="editorOptions"
+                        readonly
+                    />
+                  </div>
+                  <n-data-table
+                      v-else
+                      :columns="[{title:'Key',key:'key'}, {title:'Value',key:'value'}]"
+                      :data="requestBodyData"
+                      size="small"
+                  />
+                </n-collapse-item>
+              </n-collapse>
+
+            </n-space>
+
+          </n-tab-pane>
+          <n-tab-pane name="extract" tab="数据提取">数据提取</n-tab-pane>
+          <n-tab-pane name="assert" tab="断言结果">断言结果</n-tab-pane>
+          <n-tab-pane name="logs" tab="执行日志">执行日志</n-tab-pane>
+        </n-tabs>
+      </n-card>
     </n-space>
   </AppPage>
 </template>
@@ -207,18 +277,17 @@
 import {computed, h, reactive, ref} from 'vue'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
-import {NCode, NTag} from 'naive-ui'
+import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText} from 'naive-ui'
 import api from "@/api";
 import AppPage from "@/components/page/AppPage.vue";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
-import { useUserStore } from '@/store';
+import {useUserStore} from '@/store';
 
 
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
 const formRef = ref(null);
-
 
 const editorOptions = {
   theme: 'vs-dark',
@@ -324,9 +393,6 @@ const state = reactive({
   }
 })
 
-// 响应结果
-const response = ref(null)
-
 // 请求方式下拉框
 const methodOptions = [
   {label: 'GET', value: 'GET', color: '#49CC90'},
@@ -342,7 +408,6 @@ const renderMethodLabel = (option) => {
   )
 }
 
-
 // 优先级下拉框
 const priorityOptions = [
   {label: '低', value: '低', color: '#49CC90'},
@@ -350,6 +415,7 @@ const priorityOptions = [
   {label: '高', value: '高', color: '#FFA500'},
   {label: '危', value: '危', color: '#F4511E'}
 ]
+
 const renderPriorityLabel = (option) => {
   return h(
       'span',
@@ -357,6 +423,7 @@ const renderPriorityLabel = (option) => {
       option.label
   )
 }
+
 // 请求体属性数量计算
 const getBodyCount = computed(() => {
   switch (state.form.bodyType) {
@@ -372,8 +439,32 @@ const getBodyCount = computed(() => {
 })
 
 
+// 响应结果
+const response = ref(null);
+const requestInfo = ref({
+  method: '',
+  url: '',
+  headers: {},
+  bodyType: 'none',
+  jsonBody: ''
+})
+
+
+// 计算属性
 const isJsonResponse = computed(() => {
-  return response.value?.headers?.['Content-Type']?.includes('json')
+  return contentType.value.includes('json')
+})
+
+const contentType = computed(() => {
+  return response.value?.headers?.['Content-Type']?.split(';')[0] || 'text/plain'
+})
+
+const responseLanguage = computed(() => {
+  const ct = contentType.value.toLowerCase()
+  if (ct.includes('json')) return 'json'
+  if (ct.includes('xml')) return 'xml'
+  if (ct.includes('html')) return 'html'
+  return 'text'
 })
 
 const formattedResponse = computed(() => {
@@ -384,11 +475,6 @@ const formattedResponse = computed(() => {
   }
 })
 
-const headerColumns = [
-  { title: 'Header Name', key: 'name' },
-  { title: 'Value', key: 'value' }
-]
-
 const headerData = computed(() => {
   return Object.entries(response.value?.headers || {}).map(([name, value]) => ({
     name,
@@ -396,17 +482,14 @@ const headerData = computed(() => {
   }))
 })
 
-const cookieColumns = [
-  { title: 'Cookie Name', key: 'name' },
-  { title: 'Value', key: 'value' }
-]
-
 const cookieData = computed(() => {
   return Object.entries(response.value?.cookies || {}).map(([name, value]) => ({
     name,
     value
   }))
 })
+
+const hasCookies = computed(() => cookieData.value.length > 0)
 
 const responseStatusType = computed(() => {
   if (!response.value) return 'default'
@@ -423,14 +506,59 @@ const sizeTagType = computed(() => {
   return parseFloat(response.value.size) > 100 ? 'warning' : 'success'
 })
 
-// 更新响应编辑器配置
-const responseEditorOptions = reactive({
-  ...editorOptions,
-  readOnly: true,
-  minimap: {
-    enabled: true
+// 请求信息相关
+const methodTagType = computed(() => {
+  const method = requestInfo.value.method?.toUpperCase()
+  return {
+    GET: 'success',
+    POST: 'info',
+    PUT: 'warning',
+    DELETE: 'error'
+  }[method] || 'default'
+})
+
+const requestHeaderData = computed(() => {
+  return Object.entries(requestInfo.value.headers || {}).map(([name, value]) => ({
+    name,
+    value
+  }))
+})
+
+const hasRequestBody = computed(() =>
+    ['POST', 'PUT', 'PATCH'].includes(requestInfo.value.method?.toUpperCase())
+)
+
+const requestBodyType = computed(() => {
+  const typeMap = {
+    'form-data': 'Form Data',
+    'x-www-form-urlencoded': 'Form URL Encoded',
+    'json': 'JSON'
+  }
+  return typeMap[requestInfo.value.bodyType] || 'Params'
+})
+
+const isJsonRequest = computed(() => requestInfo.value.bodyType === 'json')
+
+const formattedRequestJson = computed(() => {
+  try {
+    return JSON.stringify(JSON.parse(requestInfo.value.jsonBody), null, 2)
+  } catch {
+    return requestInfo.value.jsonBody
   }
 })
+
+const requestBodyData = computed(() => {
+  switch (requestInfo.value.bodyType) {
+    case 'form-data':
+      return state.form.bodyParams.filter(item => item.key)
+    case 'x-www-form-urlencoded':
+      return state.form.bodyForm.filter(item => item.key)
+    default:
+      return []
+  }
+})
+
+
 const debugging = async () => {
   const valid = await formRef.value.validate();
   if (!valid) {
@@ -442,10 +570,21 @@ const debugging = async () => {
     // 构造请求参数
     const params = state.form.params
         .filter(item => item.key)
-        .reduce((acc, { key, value }) => {
+        .reduce((acc, {key, value}) => {
           acc[key] = value;
           return acc;
         }, {});
+
+    requestInfo.value = {
+      method: state.form.method,
+      url: state.form.url,
+      headers: state.form.headers.reduce((acc, {key, value}) => {
+        if (key) acc[key] = value
+        return acc
+      }, {}),
+      bodyType: state.form.bodyType,
+      jsonBody: state.form.jsonBody
+    }
 
     // 处理不同请求体类型
     let formData = null;
@@ -453,7 +592,7 @@ const debugging = async () => {
 
     switch (state.form.bodyType) {
       case 'form-data':
-        formData = state.form.bodyParams.reduce((acc, { key, value, type }) => {
+        formData = state.form.bodyParams.reduce((acc, {key, value, type}) => {
           if (key) {
             // 处理文件类型
             if (type === 'file' && value instanceof File) {
@@ -469,7 +608,7 @@ const debugging = async () => {
         }, {});
         break;
       case 'x-www-form-urlencoded':
-        formData = state.form.bodyForm.reduce((acc, { key, value }) => {
+        formData = state.form.bodyForm.reduce((acc, {key, value}) => {
           if (key) acc[key] = value;
           return acc;
         }, {});
@@ -487,7 +626,7 @@ const debugging = async () => {
     const data = {
       url: state.form.url,
       method: state.form.method,
-      headers: state.form.headers.reduce((acc, { key, value }) => {
+      headers: state.form.headers.reduce((acc, {key, value}) => {
         if (key) acc[key] = value;
         return acc;
       }, {}),
@@ -499,7 +638,7 @@ const debugging = async () => {
       module: state.form.project,
       testcase_name: state.form.testcase_name,
       description: state.form.description,
-      variables: state.form.variables.reduce((acc, { key, value }) => {
+      variables: state.form.variables.reduce((acc, {key, value}) => {
         if (key) acc[key] = value;
         return acc;
       }, {}),
@@ -507,6 +646,7 @@ const debugging = async () => {
     };
 
     const responseData = await api.debugging(data);
+    console.log('responseData.data:', responseData.data);
 
     if (responseData.code === '000000') {
       response.value = responseData.data;
@@ -527,7 +667,7 @@ const updateOrCreate = async () => {
   const userStore = useUserStore(); // 获取用户状态管理 store
   const currentUser = userStore.username; // 获取当前登录用户信息
   const valid = await formRef.value.validate();
-  if (!valid){
+  if (!valid) {
     $message.warning("请填写必填字段")
     return;
   }
@@ -644,4 +784,11 @@ const formatJson = () => {
   min-height: 90px;
   height: auto !important;
 }
+
+/* 添加必要的布局样式 */
+.response-code {
+  max-height: 400px; /* 限制代码块高度 */
+  overflow: auto;    /* 添加滚动条 */
+}
+
 </style>
