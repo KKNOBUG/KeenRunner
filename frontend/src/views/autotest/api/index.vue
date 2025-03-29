@@ -3,7 +3,8 @@
     <n-space vertical :size="24">
       <!-- 接口信息卡片 -->
       <n-card title="Basic" size="small" hoverable>
-        <n-form :model="state.form" label-placement="left" label-width="auto" :rules="rules" label-align="right">
+        <n-form :model="state.form" label-placement="left" label-width="auto" :rules="rules" label-align="right"
+                ref="formRef">
           <n-grid :cols="24" :x-gap="24">
             <n-gi :span="5">
               <n-form-item label="请求方式" path="method">
@@ -26,8 +27,8 @@
             </n-gi>
             <n-gi :span="4">
               <n-space>
-                <n-button type="primary" @click="handleDebug">调试</n-button>
-                <n-button type="info" @click="handleSave">保存</n-button>
+                <n-button type="primary" @click="debugging">调试</n-button>
+                <n-button type="info" @click="updateOrCreate">保存</n-button>
               </n-space>
             </n-gi>
           </n-grid>
@@ -53,9 +54,9 @@
               </n-form-item>
             </n-gi>
             <n-gi :span="10">
-              <n-form-item label="接口名称" path="casename">
+              <n-form-item label="接口名称" path="testcase_name">
                 <n-input
-                    v-model:value="state.form.casename"
+                    v-model:value="state.form.testcase_name"
                     placeholder="请输入接口名称"
                     clearable
                 />
@@ -110,7 +111,9 @@
                 <n-radio value="json">json</n-radio>
               </n-space>
             </n-radio-group>
-            <n-button v-if="state.form.bodyType === 'json'" @click="formatJson" class="ml-10" size="tiny" round text type="primary">美化</n-button>
+            <n-button v-if="state.form.bodyType === 'json'" @click="formatJson" class="ml-10" size="tiny" round text
+                      type="primary">美化
+            </n-button>
             <div v-if="state.form.bodyType === 'form-data'">
               <KeyValueEditor
                   v-model:items="state.form.bodyParams"
@@ -159,24 +162,34 @@
               <n-tag :type="responseStatusType" round>
                 状态: {{ response.status }} {{ response.statusText }}
               </n-tag>
-              <n-tag :type="info" round>
+              <n-tag :type="sizeTagType" round>
                 大小: {{ response.size }}
               </n-tag>
-              <n-tag :type="info" round>
+              <n-tag :type="durationTagType" round>
                 耗时: {{ response.duration }}ms
               </n-tag>
             </div>
             <n-tabs type="line">
               <n-tab-pane name="body" tab="Body">
-                <n-code
-                    :code="response.data"
-                    language="json"
-                    show-line-numbers
-                    :hljs="hljs"
-                />
+                <div v-if="isJsonResponse">
+                  <monaco-editor
+                      v-model:value="response.data"
+                      :options="responseEditorOptions"
+                      class="json-editor"
+                      readonly
+                      style="height: 400px"
+                  />
+                </div>
               </n-tab-pane>
               <n-tab-pane name="headers" tab="Headers">
                 <KeyValueView :items="response.headers"/>
+              </n-tab-pane>
+              <n-tab-pane v-if="response.cookies" name="cookies" tab="Cookies">
+                <n-data-table
+                    :columns="cookieColumns"
+                    :data="cookieData"
+                    :bordered="false"
+                />
               </n-tab-pane>
             </n-tabs>
           </n-space>
@@ -191,20 +204,20 @@
 </template>
 
 <script setup>
-import { computed, h, reactive, ref } from 'vue'
+import {computed, h, reactive, ref} from 'vue'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
-import { NCode, NTag } from 'naive-ui'
-import axios from 'axios'
-import {useMessage} from "naive-ui";
-
+import {NCode, NTag} from 'naive-ui'
+import api from "@/api";
 import AppPage from "@/components/page/AppPage.vue";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
+import { useUserStore } from '@/store';
+
 
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
-const message = useMessage();
+const formRef = ref(null);
 
 
 const editorOptions = {
@@ -263,7 +276,7 @@ const rules = {
       trigger: 'blur'
     }
   ],
-  casename: [
+  testcase_name: [
     {
       required: true,
       message: '请输入测试案例名称',
@@ -289,8 +302,8 @@ const rules = {
 // 状态管理
 const state = reactive({
   form: {
-    url: 'https://api.example.com',
-    method: 'GET',
+    url: 'http://192.168.94.231:8518/base/auth/access_token',
+    method: 'POST',
     headers: [
       {key: 'Accept', value: '*/*'},
       {key: 'Accept-Encoding', value: 'gzip, deflate, br'},
@@ -302,8 +315,12 @@ const state = reactive({
     bodyType: 'none',
     bodyForm: [],
     bodyParams: [],
-    jsonBody: '',
-    priority: '中'
+    jsonBody: '{"password": "123456", "username": "admin"}',
+    priority: '中',
+    project: 'cs',
+    testcase_name: 'cs',
+    description: '',
+    module: 'cs'
   }
 })
 
@@ -328,10 +345,10 @@ const renderMethodLabel = (option) => {
 
 // 优先级下拉框
 const priorityOptions = [
-  {label: '低', value: '低', color: '#61AFFE'},
-  {label: '中', value: '中', color: '#FFA500'},
-  {label: '高', value: '高', color: '#F4511E'},
-  {label: '危', value: '危', color: '#800000'}
+  {label: '低', value: '低', color: '#49CC90'},
+  {label: '中', value: '中', color: '#61AFFE'},
+  {label: '高', value: '高', color: '#FFA500'},
+  {label: '危', value: '危', color: '#F4511E'}
 ]
 const renderPriorityLabel = (option) => {
   return h(
@@ -340,14 +357,6 @@ const renderPriorityLabel = (option) => {
       option.label
   )
 }
-
-
-// 计算属性
-const responseStatusType = computed(() => {
-  if (!response.value) return 'default'
-  return response.value.status >= 400 ? 'error' : 'success'
-})
-
 // 请求体属性数量计算
 const getBodyCount = computed(() => {
   switch (state.form.bodyType) {
@@ -363,67 +372,210 @@ const getBodyCount = computed(() => {
 })
 
 
-const handleDebug = async () => {
-  try {
-    const startTime = Date.now()
+const isJsonResponse = computed(() => {
+  return response.value?.headers?.['Content-Type']?.includes('json')
+})
 
+const formattedResponse = computed(() => {
+  try {
+    return JSON.stringify(response.value.data, null, 2)
+  } catch {
+    return response.value.data
+  }
+})
+
+const headerColumns = [
+  { title: 'Header Name', key: 'name' },
+  { title: 'Value', key: 'value' }
+]
+
+const headerData = computed(() => {
+  return Object.entries(response.value?.headers || {}).map(([name, value]) => ({
+    name,
+    value
+  }))
+})
+
+const cookieColumns = [
+  { title: 'Cookie Name', key: 'name' },
+  { title: 'Value', key: 'value' }
+]
+
+const cookieData = computed(() => {
+  return Object.entries(response.value?.cookies || {}).map(([name, value]) => ({
+    name,
+    value
+  }))
+})
+
+const responseStatusType = computed(() => {
+  if (!response.value) return 'default'
+  return response.value.status >= 400 ? 'error' : 'success'
+})
+
+const durationTagType = computed(() => {
+  if (!response.value) return 'default'
+  return response.value.duration > 1000 ? 'warning' : 'success'
+})
+
+const sizeTagType = computed(() => {
+  if (!response.value) return 'default'
+  return parseFloat(response.value.size) > 100 ? 'warning' : 'success'
+})
+
+// 更新响应编辑器配置
+const responseEditorOptions = reactive({
+  ...editorOptions,
+  readOnly: true,
+  minimap: {
+    enabled: true
+  }
+})
+const debugging = async () => {
+  const valid = await formRef.value.validate();
+  if (!valid) {
+    $message.warning("请填写必填字段");
+    return;
+  }
+
+  try {
     // 构造请求参数
-    const config = {
+    const params = state.form.params
+        .filter(item => item.key)
+        .reduce((acc, { key, value }) => {
+          acc[key] = value;
+          return acc;
+        }, {});
+
+    // 处理不同请求体类型
+    let formData = null;
+    let jsonBody = null;
+
+    switch (state.form.bodyType) {
+      case 'form-data':
+        formData = state.form.bodyParams.reduce((acc, { key, value, type }) => {
+          if (key) {
+            // 处理文件类型
+            if (type === 'file' && value instanceof File) {
+              acc[key] = {
+                file: value,
+                filename: value.name
+              };
+            } else {
+              acc[key] = value;
+            }
+          }
+          return acc;
+        }, {});
+        break;
+      case 'x-www-form-urlencoded':
+        formData = state.form.bodyForm.reduce((acc, { key, value }) => {
+          if (key) acc[key] = value;
+          return acc;
+        }, {});
+        break;
+      case 'json':
+        try {
+          jsonBody = JSON.parse(state.form.jsonBody || '{}');
+        } catch (e) {
+          $message.error('JSON格式错误，请检查输入');
+          return;
+        }
+        break;
+    }
+
+    const data = {
       url: state.form.url,
       method: state.form.method,
-      params: state.form.params.reduce((acc, {key, value}) => {
+      headers: state.form.headers.reduce((acc, { key, value }) => {
+        if (key) acc[key] = value;
+        return acc;
+      }, {}),
+      params: Object.keys(params).map(k => `${k}=${params[k]}`).join('&'),
+      json_body: jsonBody,
+      form_data: formData,
+      priority: state.form.priority,
+      project: state.form.project,
+      module: state.form.project,
+      testcase_name: state.form.testcase_name,
+      description: state.form.description,
+      variables: state.form.variables.reduce((acc, { key, value }) => {
+        if (key) acc[key] = value;
+        return acc;
+      }, {}),
+      created_user: useUserStore().username,
+    };
+
+    const responseData = await api.debugging(data);
+
+    if (responseData.code === '000000') {
+      response.value = responseData.data;
+      // 自动格式化JSON
+      if (isJsonResponse.value) {
+        response.value.data = formattedResponse.value;
+      }
+      $message.success('调试成功');
+    } else {
+      $message.error(`请求失败：${responseData.message}`);
+    }
+  } catch (error) {
+    $message.error(`调试失败：${error.message}`);
+  }
+};
+
+const updateOrCreate = async () => {
+  const userStore = useUserStore(); // 获取用户状态管理 store
+  const currentUser = userStore.username; // 获取当前登录用户信息
+  const valid = await formRef.value.validate();
+  if (!valid){
+    $message.warning("请填写必填字段")
+    return;
+  }
+  try {
+    // 构造请求数据
+    const data = {
+      url: state.form.url,
+      method: state.form.method,
+      headers: state.form.headers.reduce((acc, {key, value}) => {
         if (key) acc[key] = value
         return acc
       }, {}),
-      headers: state.form.headers.reduce((acc, {key, value}) => {
+      params: JSON.stringify(state.form.params.reduce((acc, {key, value}) => {
+        if (key) acc[key] = value
+        return acc
+      }, {})),
+      json_body: state.form.bodyType === 'json' ? JSON.parse(state.form.jsonBody || '{}') : null,
+      form_data: state.form.bodyType === 'form-data' ? state.form.bodyParams.reduce((acc, {key, value}) => {
+        if (key) acc[key] = value
+        return acc
+      }, {}) : null,
+      priority: state.form.priority,
+      project: state.form.project,
+      module: state.form.project,
+      testcase_name: state.form.testcase_name,
+      description: state.form.description,
+      created_user: currentUser,
+      updated_user: currentUser,
+      variables: state.form.variables.reduce((acc, {key, value}) => {
         if (key) acc[key] = value
         return acc
       }, {})
     }
 
-    // 处理请求体
-    if (state.form.bodyType === 'form-data') {
-      const formData = new FormData()
-      state.form.bodyParams.forEach(({key, value}) => {
-        if (key) formData.append(key, value)
-      })
-      config.data = formData
-    } else if (state.form.bodyType === 'json') {
-      config.data = JSON.parse(state.form.jsonBody || '{}')
-    }
-
-    // 发送请求（示例使用axios）
-    const res = await axios(config)
-
-    response.value = {
-      status: res.status,
-      statusText: res.statusText,
-      headers: res.headers,
-      data: JSON.stringify(res.data, null, 4),
-      duration: Date.now() - startTime,
-      size: `${(JSON.stringify(res.data).length / 1024).toFixed(2)} KB`
-    }
+    // 调用 api 中的保存接口
+    console.log("请求数据:", data);
+    const backend_response = await api.updateOrCreate(data);
+    $message.success('保存成功');
   } catch (error) {
-    response.value = {
-      status: error.response?.status || 500,
-      statusText: error.response?.statusText || 'Error',
-      headers: error.response?.headers || {},
-      data: error.message,
-      duration: 0,
-      size: '0 KB'
-    }
+    console.error('请求失败：', error);
+    $message.error(error.message);
   }
-}
-
-const handleSave = () => {
-  // 保存逻辑
-  console.log('保存接口配置', state.form)
 }
 
 const formatJson = () => {
   const inputJson = state.form.jsonBody.trim();
   if (inputJson === '') {
-    message.warning('输入的 JSON 为空，请输入有效的 JSON 内容。');
+    $message.warning('输入的 JSON 为空，请输入有效的 JSON 内容。');
     return;
   }
 
@@ -436,7 +588,7 @@ const formatJson = () => {
       const jsonData = eval('(' + inputJson + ')');
       state.form.jsonBody = JSON.stringify(jsonData, null, 2);
     } catch (evalError) {
-      message.error(`JSON 格式化失败，请检查输入的 JSON 格式是否正确。详细错误信息：${parseError.message}`);
+      $message.error(`JSON 格式化失败，请检查输入的 JSON 格式是否正确。详细错误信息：${parseError.message}`);
       console.error('JSON 格式化失败，解析错误:', parseError);
       console.error('JSON 格式化失败，eval 处理也失败:', evalError);
     }
