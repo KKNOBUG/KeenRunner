@@ -53,4 +53,8 @@ export default {
   // 工具箱相关
   runcodePython: (data = {}) => request.post('/toolbox/runcode/python', data),
   generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
+
+  // 测试用例相关
+  updateOrCreate: (data = {}) => request.post('/testcase/api/updateOrCreate', data),
+  debugging: (data = {}) => request.post('/testcase/api/debugging', data),
 }
