@@ -132,9 +132,9 @@
             <div v-if="state.form.bodyType === 'json'">
               <monaco-editor
                   v-model:value="state.form.jsonBody"
-                  :options="editorOptions"
+                  :options="monacoEditorOptions(false)"
                   class="json-editor"
-                  style="min-height: 300px; height: auto;"
+                  style="min-height: 400px; height: auto;"
               />
             </div>
 
@@ -155,57 +155,42 @@
       </n-card>
 
       <!-- 响应结果卡片 -->
-      <n-card title="调试结果" size="small" hoverable>
+      <n-card ref="debugResultRef" title="调试结果" size="small" hoverable>
+        <!-- 在卡片标题右侧添加响应状态信息 -->
+        <template #header-extra>
+          <n-space v-if="response" align="center">
+            <n-tag :type="responseStatusType" round size="small">Status: {{ response.status }}</n-tag>
+            <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
+            <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
+            <n-tag round>Type: {{ contentType }}</n-tag>
+          </n-space>
+        </template>
         <n-tabs type="line" animated>
           <!-- 响应信息 -->
           <n-tab-pane name="responseInfo" tab="响应信息">
             <n-space vertical :size="16" v-if="response">
-              <n-collapse>
-                <n-collapse-item title="响应状态" name="responseStatus">
+              <n-collapse :default-expanded-names="['responseHeaders', 'responseCookies', 'responseBody']"
+                          arrow-placement="right">
+                <n-collapse-item title="Headers" name="responseHeaders">
                   <n-space vertical :size="12">
-                    <n-descriptions bordered :column="4" size="small">
-                      <n-descriptions-item label="状态码">
-                        <n-tag :type="responseStatusType">{{ response.status }}</n-tag>
-                      </n-descriptions-item>
-                      <n-descriptions-item label="耗时">
-                        <n-tag :type="durationTagType">{{ response.duration }}ms</n-tag>
-                      </n-descriptions-item>
-                      <n-descriptions-item label="大小">
-                        <n-tag :type="sizeTagType">{{ response.size }}</n-tag>
-                      </n-descriptions-item>
-                      <n-descriptions-item label="类型">
-                        <n-tag>{{ contentType }}</n-tag>
-                      </n-descriptions-item>
-                    </n-descriptions>
+                    <pre v-if="responseHeadersText"
+                         @click="copyTextContent(responseHeadersText)">{{ responseHeadersText }}</pre>
                   </n-space>
                 </n-collapse-item>
-                <n-collapse-item title="响应头部" name="responseHeaders">
+                <n-collapse-item title="Cookies" name="responseCookies">
                   <n-space vertical :size="12">
-                    <n-data-table
-                        :columns="[{title:'Header',key:'name'}, {title:'Value',key:'value'}]"
-                        :data="headerData"
-                        size="small"
-                    />
-
-
-                    <n-collapse v-if="hasCookies">
-                      <n-collapse-item title="Cookies">
-                        <n-data-table
-                            :columns="[{title:'Cookie',key:'name'}, {title:'Value',key:'value'}]"
-                            :data="cookieData"
-                            size="small"
-                        />
-                      </n-collapse-item>
-                    </n-collapse>
+                    <pre v-if="responseCookiesText"
+                         @click="copyTextContent(responseCookiesText)">{{ responseCookiesText }}</pre>
                   </n-space>
                 </n-collapse-item>
-                <n-collapse-item title="响应内容" name="responseBody">
+                <n-collapse-item title="Body" name="responseBody">
                   <n-space vertical :size="12">
-                    <div v-if="isJsonResponse" style="height: 300px">
-                      <MonacoEditor
-                          :value="response.data"
-                          :options="editorOptions"
-                          readonly
+                    <div v-if="isJsonResponse">
+                      <monaco-editor
+                          v-model:value="response.data"
+                          :options="monacoEditorOptions(true)"
+                          class="json-editor"
+                          style="min-height: 400px; height: auto;"
                       />
                     </div>
                     <n-code
@@ -224,8 +209,8 @@
           <!-- 请求信息 -->
           <n-tab-pane name="requestInfo" tab="请求信息">
             <n-space vertical :size="16" v-if="response">
-              <n-collapse>
-                <n-collapse-item title="请求地址" name="requestAddress">
+              <n-collapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']">
+                <n-collapse-item title="Basic" name="requestBasic">
                   <n-space vertical :size="12">
                     <n-descriptions bordered :column="2" size="small">
                       <n-descriptions-item label="方法">
@@ -237,19 +222,25 @@
                     </n-descriptions>
                   </n-space>
                 </n-collapse-item>
-                <n-collapse-item title="请求头部" name="requestHeaders">
-                  <n-data-table
-                      :columns="[{title:'Header',key:'name'}, {title:'Value',key:'value'}]"
-                      :data="requestHeaderData"
-                      size="small"
-                  />
+                <n-collapse-item title="Headers" name="requestHeaders">
+                  <n-space vertical :size="12">
+                    <pre v-if="requestHeadersText"
+                         @click="copyTextContent(requestHeadersText)">{{ requestHeadersText }}</pre>
+                  </n-space>
                 </n-collapse-item>
-                <n-collapse-item :title="`请求内容 (${requestBodyType})`" name="requestBody">
-                  <div v-if="isJsonRequest" style="height: 250px">
-                    <MonacoEditor
-                        :value="formattedRequestJson"
-                        :options="editorOptions"
-                        readonly
+                <n-collapse-item title="Cookies" name="requestCookies">
+                  <n-space vertical :size="12">
+                    <pre v-if="requestCookiesText"
+                         @click="copyTextContent(requestCookiesText)">{{ requestCookiesText }}</pre>
+                  </n-space>
+                </n-collapse-item>
+                <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
+                  <div v-if="isJsonRequest">
+                    <monaco-editor
+                        v-model:value="formattedRequestJson"
+                        :options="monacoEditorOptions(true)"
+                        class="json-editor"
+                        style="min-height: 400px; height: auto;"
                     />
                   </div>
                   <n-data-table
@@ -289,36 +280,33 @@ import {useUserStore} from '@/store';
 hljs.registerLanguage('json', json)
 const formRef = ref(null);
 
-const editorOptions = {
-  theme: 'vs-dark',
-  language: 'json',
-  automaticLayout: true,
-  minimap: {
-    enabled: true
-  },
-  folding: true,
-  foldingStrategy: 'auto',
-  scrollBeyondLastLine: false,
-  fontSize: 14,
-  lineNumbers: 'on',
-  roundedSelection: false,
-  readOnly: false,
-  cursorStyle: 'line',
-  tabSize: 4,
-  wordWrap: 'on'
-}
+const monacoEditorOptions = (readOnly) => {
+  const options = {
+    // 基础配置
+    theme: 'vs-dark',
+    language: 'json',
+    fontSize: 14,
+    tabSize: 4,
+    // 布局与外观
+    automaticLayout: true,
+    minimap: {
+      enabled: true
+    },
+    lineNumbers: 'on',
+    renderLineHighlight: 'line',
+    wordWrap: 'off',
+    scrollBeyondLastLine: false,
+    // 其他
+    folding: true,
+    foldingStrategy: 'auto',
+    roundedSelection: false,
+    cursorStyle: 'line',
+  }
+  if (readOnly) {
+    options.readOnly = true
+  }
 
-// 键值对查看组件
-const KeyValueView = {
-  props: ['items'],
-  template: `
-    <div class="key-value-view">
-    <div v-for="(item, index) in items" :key="index" class="view-row">
-      <n-text strong class="key">{{ item.key }}:</n-text>
-      <n-text class="value">{{ item.value }}</n-text>
-    </div>
-    </div>
-  `
+  return options
 }
 
 
@@ -371,7 +359,7 @@ const rules = {
 // 状态管理
 const state = reactive({
   form: {
-    url: 'http://192.168.94.231:8518/base/auth/access_token',
+    url: 'http://192.168.94.229:8518/base/auth/access_token',
     method: 'POST',
     headers: [
       {key: 'Accept', value: '*/*'},
@@ -407,7 +395,6 @@ const renderMethodLabel = (option) => {
       option.label
   )
 }
-
 // 优先级下拉框
 const priorityOptions = [
   {label: '低', value: '低', color: '#49CC90'},
@@ -415,7 +402,6 @@ const priorityOptions = [
   {label: '高', value: '高', color: '#FFA500'},
   {label: '危', value: '危', color: '#F4511E'}
 ]
-
 const renderPriorityLabel = (option) => {
   return h(
       'span',
@@ -450,13 +436,14 @@ const requestInfo = ref({
 })
 
 
-// 计算属性
-const isJsonResponse = computed(() => {
-  return contentType.value.includes('json')
-})
-
+// 请求类型
 const contentType = computed(() => {
   return response.value?.headers?.['Content-Type']?.split(';')[0] || 'text/plain'
+})
+
+// 响应类型
+const isJsonResponse = computed(() => {
+  return contentType.value.includes('json')
 })
 
 const responseLanguage = computed(() => {
@@ -466,33 +453,40 @@ const responseLanguage = computed(() => {
   if (ct.includes('html')) return 'html'
   return 'text'
 })
-
+// 响应格式化
 const formattedResponse = computed(() => {
   try {
-    return JSON.stringify(response.value.data, null, 2)
+    return JSON.stringify(response.value.data, null, 4)
   } catch {
     return response.value.data
   }
 })
 
-const headerData = computed(() => {
-  return Object.entries(response.value?.headers || {}).map(([name, value]) => ({
-    name,
-    value
-  }))
+const responseHeadersText = computed(() => {
+  return Object.entries(response.value?.headers || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
 })
-
-const cookieData = computed(() => {
-  return Object.entries(response.value?.cookies || {}).map(([name, value]) => ({
-    name,
-    value
-  }))
+const responseCookiesText = computed(() => {
+  return Object.entries(response.value?.cookies || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
 })
-
-const hasCookies = computed(() => cookieData.value.length > 0)
+const requestHeadersText = computed(() => {
+  return Object.entries(requestInfo.value.headers || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
+})
+const requestCookiesText = computed(() => {
+  return Object.entries(requestInfo.value.cookies || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
+})
+const copyTextContent = (text) => {
+  navigator.clipboard.writeText(text).then(() => {
+    $message.success('复制成功');
+  }).catch((err) => {
+    $message.error(`复制失败: ${err.message}`);
+  });
+}
 
 const responseStatusType = computed(() => {
   if (!response.value) return 'default'
+  if (response.value.status === 200) {
+    return formattedResponse.value?.status === '000000' ? 'success' : 'error';
+  }
   return response.value.status >= 400 ? 'error' : 'success'
 })
 
@@ -506,7 +500,7 @@ const sizeTagType = computed(() => {
   return parseFloat(response.value.size) > 100 ? 'warning' : 'success'
 })
 
-// 请求信息相关
+// 响应-请求信息相关
 const methodTagType = computed(() => {
   const method = requestInfo.value.method?.toUpperCase()
   return {
@@ -517,16 +511,6 @@ const methodTagType = computed(() => {
   }[method] || 'default'
 })
 
-const requestHeaderData = computed(() => {
-  return Object.entries(requestInfo.value.headers || {}).map(([name, value]) => ({
-    name,
-    value
-  }))
-})
-
-const hasRequestBody = computed(() =>
-    ['POST', 'PUT', 'PATCH'].includes(requestInfo.value.method?.toUpperCase())
-)
 
 const requestBodyType = computed(() => {
   const typeMap = {
@@ -541,7 +525,7 @@ const isJsonRequest = computed(() => requestInfo.value.bodyType === 'json')
 
 const formattedRequestJson = computed(() => {
   try {
-    return JSON.stringify(JSON.parse(requestInfo.value.jsonBody), null, 2)
+    return JSON.stringify(JSON.parse(requestInfo.value.jsonBody), null, 4)
   } catch {
     return requestInfo.value.jsonBody
   }
@@ -558,6 +542,8 @@ const requestBodyData = computed(() => {
   }
 })
 
+
+const debugResultRef = ref(null)
 
 const debugging = async () => {
   const valid = await formRef.value.validate();
@@ -646,7 +632,6 @@ const debugging = async () => {
     };
 
     const responseData = await api.debugging(data);
-    console.log('responseData.data:', responseData.data);
 
     if (responseData.code === '000000') {
       response.value = responseData.data;
@@ -655,6 +640,13 @@ const debugging = async () => {
         response.value.data = formattedResponse.value;
       }
       $message.success('调试成功');
+      // 滚动到调试结果区域
+      nextTick(() => {
+        debugResultRef.value?.$el?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        })
+      })
     } else {
       $message.error(`请求失败：${responseData.message}`);
     }
@@ -745,11 +737,6 @@ const formatJson = () => {
   margin-bottom: 12px;
 }
 
-.json-editor {
-  font-family: 'Fira Code', monospace;
-  font-size: 14px;
-}
-
 .key-value-view .view-row {
   display: flex;
   gap: 16px;
@@ -767,13 +754,9 @@ const formatJson = () => {
   word-break: break-all;
 }
 
-.empty-response {
-  padding: 40px 0;
-  text-align: center;
-}
-
 .json-editor {
-  border: 1px solid #eee;
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
   border-radius: 15px;
   overflow: hidden;
   transition: height 0.3s ease;
@@ -788,7 +771,27 @@ const formatJson = () => {
 /* 添加必要的布局样式 */
 .response-code {
   max-height: 400px; /* 限制代码块高度 */
-  overflow: auto;    /* 添加滚动条 */
+  overflow: auto; /* 添加滚动条 */
 }
 
+:root {
+  --pre-bg-color: #f4f4f4;
+  --pre-text-color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pre-bg-color: #222;
+    --pre-text-color: #eee;
+  }
+}
+
+pre {
+  background-color: var(--pre-bg-color);
+  color: var(--pre-text-color);
+  padding: 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 </style>
