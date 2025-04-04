@@ -96,14 +96,26 @@ async def list_project(
         q &= Q(state=state)
 
     total, instances = await PROJECT_CRUD.list(
-        page=page, page_size=page_size, search=q, order=order, related=["dev_owner", "test_owner"]
+        page=page, page_size=page_size, search=q, order=order, related=["dev_owner", "test_owner", "env_projects"]
     )
-    data = [
-        await obj.to_dict(
+    data = []
+    for obj in instances:
+        project_dict = await obj.to_dict(
             fk=True,
             fk_include_fields=["id", "username", "alias", "phone", "email"]
-        ) for obj in instances
-    ]
+        )
+        # 处理关联的 Environment 数据
+        project_dict["environments"] = [
+            {
+                "id": env.id,
+                "name": env.name,
+                "host": env.host,
+                "port": env.port,
+                "description": env.description
+            }
+            for env in await obj.env_projects.all()
+        ]
+        data.append(project_dict)
     return SuccessResponse(data=data)
 
 
