@@ -6,9 +6,11 @@
 @Module  : project_schema.py
 @DateTime: 2025/3/15 15:08
 """
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
+
+from backend.applications.program.schemas.env_schema import EnvCreate, EnvUpdate
 
 
 class ProjectCreate(BaseModel):
@@ -18,6 +20,7 @@ class ProjectCreate(BaseModel):
     dev_owner: int = Field(example=1, description="开发负责人ID")
     test_owner: int = Field(example=1, description="测试负责人ID")
     state: int = Field(example=1, default=1, description="项目状态")
+    environments: Optional[List[EnvCreate]] = Field(example=None, default=None, description="关联环境")
 
     def create_dict(self):
         return self.model_dump(exclude_unset=True)
@@ -31,6 +34,7 @@ class ProjectUpdate(BaseModel):
     dev_owner: Optional[int] = None
     test_owner: Optional[int] = None
     state: Optional[int] = None
+    environments: Optional[List[EnvUpdate]] = None
 
     def update_dict(self):
         return self.model_dump(exclude_unset=True, exclude={"id"})
