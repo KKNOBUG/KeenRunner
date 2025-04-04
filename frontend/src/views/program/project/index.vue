@@ -31,7 +31,10 @@ const {
   modalFormRef,
 } = useCRUD({
   name: '项目',
-  initForm: {},
+  initForm: {
+    // 初始化环境信息数组
+    environments: []
+  },
   doCreate: api.createProject,
   doDelete: api.deleteProject,
   doUpdate: api.updateProject,
@@ -47,6 +50,44 @@ onMounted(() => {
   api.getUserList().then((res) => (ownerOption.value = res.data))
 
 })
+
+// 添加环境
+const addEnv = () => {
+  modalForm.value.environments.push({
+    name: '',
+    host: '',
+    port: '',
+    description: ''
+  })
+}
+// 重置逻辑（在handleAdd中处理）
+const customHandleAdd = () => {
+  handleAdd() // 调用原始的handleAdd
+  modalForm.value.environments = [] // 清空环境配置
+}
+
+// 删除环境
+const removeEnv = (index) => {
+  modalForm.value.environments.splice(index, 1)
+}
+
+
+// 编辑
+const customHandleEdit = (row) => {
+  console.log('原始数据:', row)
+  handleEdit(row)
+  modalForm.value = {
+    ...row,
+    test_owner: row.test_owner?.id,
+    dev_owner: row.dev_owner?.id,
+    state: row.state,
+    environments: row.env_projects?.map(env => ({ // ✨ 关键修改：映射字段
+      ...env,
+      port: env.port.toString() // 确保端口号是字符串类型（如果后端返回数字）
+    })) || []
+  }
+  console.log('处理后的表单数据:', modalForm.value)
+}
 
 const columns = [
   {
@@ -169,10 +210,14 @@ const columns = [
                   type: 'primary',
                   style: 'margin-right: 8px;',
                   onClick: () => {
-                    handleEdit(row)
+                    console.log('Edit button clicked'); // 添加日志
+                    console.log(row)
+                    // handleEdit(row)
+                    customHandleEdit(row)
                     modalForm.value.test_owner = row.test_owner?.id
                     modalForm.value.dev_owner = row.dev_owner?.id
                     modalForm.value.state = row.state
+                    modalForm.value.environments = row.environments || [];
                   },
                 },
                 {
@@ -231,7 +276,7 @@ const renderOptionLabel = (option) => {
 <template>
   <CommonPage show-footer title="项目列表">
     <template #action>
-      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">
+      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="customHandleAdd">
         <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
         新建项目
       </NButton>
@@ -264,7 +309,7 @@ const renderOptionLabel = (option) => {
               :options="stateOptions"
               clearable
               placeholder="请选择项目状态"
-              style="width: 160px"
+              style="width: 200px"
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -336,6 +381,79 @@ const renderOptionLabel = (option) => {
           <NInput v-model:value="modalForm.description" type="textarea" placeholder="请输入项目描述"/>
         </NFormItem>
 
+        <NFormItem label="环境配置" path="environments">
+          <div class="env-collapse" style="width: 100%">
+            <NCollapse v-if="modalForm.environments.length > 0" arrow-placement="right">
+              <NCollapseItem
+                  v-for="(env, index) in modalForm.environments"
+                  :key="index"
+                  :title="env.name || '待完善'"
+                  :name="index"
+              >
+                <template #header-extra>
+                  <NButton
+                      text
+                      type="error"
+                      size="small"
+                      @click.stop="removeEnv(index)"
+                  >
+                    <TheIcon icon="material-symbols:delete-outline" />
+                  </NButton>
+                </template>
+
+                <div class="env-fields">
+                  <NInput
+                      v-model:value="env.name"
+                      placeholder="请输入环境名称"
+                      class="field"
+                      :rule="{
+                        required: true,
+                        message: '请输入环境名称',
+                        trigger: ['input', 'blur'],
+                      }"
+                  />
+                  <NInput
+                      v-model:value="env.description"
+                      placeholder="请输入环境描述"
+                      class="field"
+                  />
+                  <NInput
+                      v-model:value="env.host"
+                      placeholder="请输入环境地址"
+                      class="field"
+                      :rule="{
+                        required: true,
+                        message: '请输入环境地址',
+                        trigger: ['input', 'blur'],
+                      }"
+                  />
+                  <NInput
+                      v-model:value="env.port"
+                      placeholder="请输入环境端口"
+                      class="field"
+                      :rule="{
+                        required: true,
+                        message: '请输入环境端口',
+                        trigger: ['input', 'blur'],
+                      }"
+                  />
+
+                </div>
+              </NCollapseItem>
+            </NCollapse>
+
+            <NButton
+                block
+                dashed
+                type="primary"
+                @click="addEnv"
+            >
+              <TheIcon icon="material-symbols:add" class="mr-8"/>
+              添加环境
+            </NButton>
+          </div>
+        </NFormItem>
+
         <NFormItem
             label="开发负责人"
             path="dev_owner"
@@ -356,7 +474,6 @@ const renderOptionLabel = (option) => {
               placeholder="请选择开发负责人"
               clearable
               filterable
-              style="width: 100%"
           />
         </NFormItem>
         <NFormItem
@@ -380,7 +497,6 @@ const renderOptionLabel = (option) => {
               placeholder="请选择测试负责人"
               clearable
               filterable
-              style="width: 100%"
           />
         </NFormItem>
       </NForm>
@@ -389,3 +505,20 @@ const renderOptionLabel = (option) => {
   </CommonPage>
 </template>
 
+
+<style scoped>
+.env-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.field {
+  width: 100%;
+}
+
+:deep(.n-collapse-item__header) {
+  padding: 12px;
+}
+
+</style>
