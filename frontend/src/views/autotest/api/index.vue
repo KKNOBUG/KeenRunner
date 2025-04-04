@@ -54,10 +54,10 @@
               </n-form-item>
             </n-gi>
             <n-gi :span="10">
-              <n-form-item label="接口名称" path="testcase_name">
+              <n-form-item label="测试用例名称" path="testcase_name">
                 <n-input
                     v-model:value="state.form.testcase_name"
-                    placeholder="请输入接口名称"
+                    placeholder="请输入测试用例名称"
                     clearable
                 />
               </n-form-item>
@@ -336,7 +336,7 @@ const rules = {
   testcase_name: [
     {
       required: true,
-      message: '请输入测试案例名称',
+      message: '请输入测试用例名称',
       trigger: 'blur'
     }
   ],
