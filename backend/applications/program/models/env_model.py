@@ -11,15 +11,15 @@ from tortoise import fields
 from backend.applications.base.services.scaffold import (
     ScaffoldModel,
     MaintainMixin,
-    TimestampMixin
+    TimestampMixin,
 )
 
 
 class Environment(ScaffoldModel, MaintainMixin, TimestampMixin):
     name = fields.CharField(max_length=64, unique=True, description="环境名称")
     host = fields.CharField(max_length=16, description="环境地址")
-    port = fields.SmallIntField(max_length=16, description="环境端口")
-    description = fields.TextField(null=True, description="环境描述")
+    port = fields.IntField(description="环境端口")
+    description = fields.TextField(null=True, description="描述")
     project = fields.ForeignKeyField(
         model_name="models.Project",
         related_name="env_projects",
