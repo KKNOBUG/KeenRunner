@@ -237,7 +237,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return await query.count(), await query.offset((page - 1) * page_size).limit(page_size).order_by(
             *order).prefetch_related(*related)
 
-    async def create(self, obj_in: CreateSchemaType) -> ModelType:
+    async def create(self, obj_in: Union[CreateSchemaType, Dict]) -> ModelType:
         """
         :param obj_in: 用于创建新对象的数据，可以是 CreateSchemaType 实例或字典。
         :return: 创建成功的数据库对象。
@@ -245,7 +245,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if isinstance(obj_in, Dict):
             obj_dict = obj_in
         else:
-            obj_dict = obj_in.model_dump()
+            obj_dict = obj_in.model_dump(warnings=False)
         obj = self.model(**obj_dict)
         await obj.save()
         return obj
