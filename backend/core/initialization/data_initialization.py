@@ -150,10 +150,85 @@ async def init_database_user():
         )
         await USER_CRUD.create_user(
             UserCreate(
-                username="tester",
+                username="CS1001",
                 password="123456",
-                alias="测试用户",
-                email="tester@test.com",
+                alias="段誉",
+                email="duanyu@test.com",
+                phone="18888888888",
+                avatar="/static/avatar/default/20250101010101.png",
+                dept_id="1",
+                state=2,
+                is_active=True,
+                is_superuser=False,
+                role_ids=["2", ]
+            )
+        )
+        await USER_CRUD.create_user(
+            UserCreate(
+                username="CS1002",
+                password="123456",
+                alias="虚竹",
+                email="xuzhu@test.com",
+                phone="18888888888",
+                avatar="/static/avatar/default/20250101010101.png",
+                dept_id="1",
+                state=2,
+                is_active=True,
+                is_superuser=False,
+                role_ids=["2", ]
+            )
+        )
+        await USER_CRUD.create_user(
+            UserCreate(
+                username="CS1003",
+                password="123456",
+                alias="郭靖",
+                email="guojing@test.com",
+                phone="18888888888",
+                avatar="/static/avatar/default/20250101010101.png",
+                dept_id="1",
+                state=2,
+                is_active=True,
+                is_superuser=False,
+                role_ids=["2", ]
+            )
+        )
+        await USER_CRUD.create_user(
+            UserCreate(
+                username="KF1001",
+                password="123456",
+                alias="小龙女",
+                email="xiaolongnv@dev.com",
+                phone="18888888888",
+                avatar="/static/avatar/default/20250101010101.png",
+                dept_id="1",
+                state=2,
+                is_active=True,
+                is_superuser=False,
+                role_ids=["2", ]
+            )
+        )
+        await USER_CRUD.create_user(
+            UserCreate(
+                username="KF1002",
+                password="123456",
+                alias="杨过",
+                email="yangguo@dev.com",
+                phone="18888888888",
+                avatar="/static/avatar/default/20250101010101.png",
+                dept_id="1",
+                state=2,
+                is_active=True,
+                is_superuser=False,
+                role_ids=["2", ]
+            )
+        )
+        await USER_CRUD.create_user(
+            UserCreate(
+                username="KF1003",
+                password="123456",
+                alias="黄蓉",
+                email="huangrong@dev.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
                 dept_id="1",
@@ -334,7 +409,7 @@ async def init_database_menu():
         autotest_children_menu = [
             Menu(
                 menu_type=MenuType.MENU,
-                name="接口测试",
+                name="Api 测试",
                 path="api",
                 order=1,
                 parent_id=autotest_parent_menu.id,
@@ -345,7 +420,7 @@ async def init_database_menu():
             ),
             Menu(
                 menu_type=MenuType.MENU,
-                name="WebUI测试",
+                name="Web 测试",
                 path="ui",
                 order=2,
                 parent_id=autotest_parent_menu.id,
@@ -356,9 +431,20 @@ async def init_database_menu():
             ),
             Menu(
                 menu_type=MenuType.MENU,
-                name="测试步骤",
+                name="App 测试",
+                path="ui",
+                order=3,
+                parent_id=autotest_parent_menu.id,
+                icon="garden:mobile-phone-fill-12",
+                is_hidden=False,
+                component="/autotest/ui",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="测试场景",
                 path="step",
-                order=1,
+                order=4,
                 parent_id=autotest_parent_menu.id,
                 icon="garden:arrow-retweet-stroke-12",
                 is_hidden=False,
@@ -369,7 +455,7 @@ async def init_database_menu():
                 menu_type=MenuType.MENU,
                 name="测试用例",
                 path="testcase",
-                order=2,
+                order=5,
                 parent_id=autotest_parent_menu.id,
                 icon="garden:file-document-stroke-12",
                 is_hidden=False,
@@ -380,7 +466,7 @@ async def init_database_menu():
                 menu_type=MenuType.MENU,
                 name="测试报告",
                 path="report",
-                order=1,
+                order=6,
                 parent_id=autotest_parent_menu.id,
                 icon="garden:document-search-stroke-12",
                 is_hidden=False,
