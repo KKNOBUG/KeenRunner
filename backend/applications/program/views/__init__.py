@@ -10,8 +10,10 @@ from fastapi import APIRouter
 
 from .project_view import project
 from .env_view import env
+from .module_view import module
 
 program = APIRouter()
 
 program.include_router(project, prefix="/project")
 program.include_router(env, prefix="/env")
+program.include_router(module, prefix="/module")
