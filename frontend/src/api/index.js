@@ -42,12 +42,20 @@ export default {
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
 
-  // 应用管理修改
+  // 应用管理相关
   getProject: (params = {}) => request.get('/program/project/get', { params }),
   createProject: (data = {}) => request.post('/program/project/create', data),
   deleteProject: (params = {}) => request.delete('/program/project/delete', { params }),
   updateProject: (data = {}) => request.post('/program/project/update', data),
   getProjectList: (params = {}) => request.get('/program/project/list', { params }),
+
+  getModule: (params = {}) => request.get('/program/module/get', { params }),
+  createModule: (data = {}) => request.post('/program/module/create', data),
+  deleteModule: (params = {}) => request.delete('/program/module/delete', { params }),
+  updateModule: (data = {}) => request.post('/program/module/update', data),
+  getModuleList: (params = {}) => request.get('/program/module/list', { params }),
+
+
 
 
   // 工具箱相关
