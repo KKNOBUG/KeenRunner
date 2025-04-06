@@ -15,7 +15,7 @@
       <slot />
       <div>
         <n-button secondary type="primary" @click="emit('reset')">重置</n-button>
-        <n-button ml-20 type="primary" @click="emit('search')">搜索</n-button>
+        <n-button secondary type="primary" @click="emit('search')" ml-20>搜索</n-button>
       </div>
     </n-space>
   </div>
