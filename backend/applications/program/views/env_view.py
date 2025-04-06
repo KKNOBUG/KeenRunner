@@ -87,14 +87,20 @@ async def list_env(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
+        project_id: int = Query(default=None, description="应用ID"),
         name: str = Query(default=None, description="环境名称"),
-        state: int = Query(default=None, description="环境状态"),
+        host: str = Query(default=None, description="环境地址"),
+        port: int = Query(default=None, description="环境端口"),
 ):
     q = Q()
+    if project_id:
+        q &= Q(project_id=project_id)
     if name:
         q &= Q(name__contains=name)
-    if state:
-        q &= Q(state=state)
+    if host:
+        q &= Q(host__contain=host)
+    if port:
+        q &= Q(port__contain=port)
 
     total, instances = await ENV_CRUD.list(
         page=page, page_size=page_size, search=q, order=order, related=["project"]
