@@ -41,11 +41,24 @@ const {
 const pattern = ref('')
 const active = ref(false)
 const ownerOption = ref([])
+const projectNameOptions = ref([])
 
-onMounted(() => {
+const projectStateOptions = [
+  {label: '开发', value: 1},
+  {label: '延期', value: 2},
+  {label: '交付', value: 3},
+  {label: '完成', value: 4},
+]
+
+onMounted(async () => {
   $table.value?.handleSearch()
   api.getUserList().then((res) => (ownerOption.value = res.data))
-
+  try {
+    const response = await api.getProjectList()
+    projectNameOptions.value = response.data.map(item => ({label: item.name, value: item.id}))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
+  }
 })
 
 const columns = [
@@ -222,12 +235,8 @@ const columns = [
   },
 ]
 
-const stateOptions = [
-  {label: '开发', value: 1},
-  {label: '延期', value: 2},
-  {label: '交付', value: 3},
-  {label: '完成', value: 4},
-]
+
+
 
 const renderOptionLabel = (option) => {
   const innerOption = option.option
@@ -258,21 +267,22 @@ const renderOptionLabel = (option) => {
       <!--  搜索  -->
       <template #queryBar>
         <QueryBarItem label="项目名称：" :label-width="100">
-          <NInput
-              v-model:value="queryItems.project_name"
+          <NSelect
+              v-model:value="queryItems.project_id"
+              :options="projectNameOptions"
               clearable
-              type="text"
-              placeholder="请输入项目名称"
-              @keypress.enter="$table?.handleSearch()"
+              placeholder="请选择项目名称"
+              style="width: 220px"
+              @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="项目状态：" :label-width="100">
           <NSelect
               v-model:value="queryItems.project_state"
-              :options="stateOptions"
+              :options="projectStateOptions"
               clearable
               placeholder="请选择项目状态"
-              style="width: 200px"
+              style="width: 220px"
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
