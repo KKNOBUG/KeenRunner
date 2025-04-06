@@ -19,7 +19,7 @@ class Environment(ScaffoldModel, MaintainMixin, TimestampMixin):
     project = fields.ForeignKeyField(
         model_name="models.Project",
         related_name="env_projects",
-        description="所属项目"
+        description="所属应用"
     )
 
     class Meta:
