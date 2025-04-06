@@ -22,9 +22,11 @@ class ApiTestCaseCreate(BaseModel):
     json_body: Optional[Dict] = None
     form_data: Optional[Dict] = None
     priority: TestCasePriorityEnum
-    project: str
-    module: str
+    project_id: int
+    module_id: Optional[int] = None
+    env_id: int
     testcase_name: str
+    testcase_tags: Optional[str] = None
     description: Optional[str] = None
     variables: Optional[Dict] = None
     created_user: str
@@ -63,9 +65,11 @@ class ApiTestCaseUpdate(BaseModel):
     json_body: Optional[Dict] = None
     form_data: Optional[Dict] = None
     priority: Optional[TestCasePriorityEnum] = None
-    project: Optional[str] = None
-    module: Optional[str] = None
+    project_id: Optional[int] = None
+    module_id: Optional[int] = None
+    env_id: Optional[int] = None
     testcase_name: Optional[str] = None
+    testcase_tags: Optional[str] = None
     description: Optional[str] = None
     variables: Optional[Dict] = None
     updated_user: Optional[str] = None
