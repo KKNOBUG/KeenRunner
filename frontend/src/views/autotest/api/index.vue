@@ -306,165 +306,33 @@
 
 <script setup>
 import {computed, h, onMounted, reactive, ref} from 'vue'
+import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText} from 'naive-ui'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
-import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText} from 'naive-ui'
 import api from "@/api";
 import AppPage from "@/components/page/AppPage.vue";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
 import {useUserStore} from '@/store';
 
-const projectOptions = ref([])
-const moduleOptions = ref([])
-const envOptions = ref([])
-
-onMounted(async () => {
-  try {
-    const projectResponse = await api.getProjectList({page: 1, page_size: 1000})
-    projectOptions.value = projectResponse.data.map(item => ({
-      label: item.name, value: Number(item.id)
-    }))
-  } catch (error) {
-    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
-  }
-})
-
-const filterModulesAndEnvs = async (projectId) => {
-  try {
-    const moduleResponse = await api.getModuleList({page: 1, page_size: 999, project_id: projectId})
-    moduleOptions.value = moduleResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
-    const envResponse = await api.getEnvList({page: 1, page_size: 999, project_id: projectId})
-    envOptions.value = envResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
-  } catch (error) {
-    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
-  }
-}
-
+/* ===================================== */
+/* =============== Basic =============== */
+/*  ==================================== */
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
 const formRef = ref(null);
+const projectOptions = ref([])  // 应用系统下拉选项
+const moduleOptions = ref([])   // 应用模块下拉选项
+const envOptions = ref([])     // 应用环境下拉选项
 
-const monacoEditorOptions = (readOnly) => {
-  const options = {
-    // 基础配置
-    theme: 'vs-dark',
-    language: 'json',
-    fontSize: 14,
-    tabSize: 4,
-    // 布局与外观
-    automaticLayout: true,
-    minimap: {
-      enabled: true
-    },
-    lineNumbers: 'on',
-    renderLineHighlight: 'line',
-    wordWrap: 'off',
-    scrollBeyondLastLine: false,
-    // 其他
-    folding: true,
-    foldingStrategy: 'auto',
-    roundedSelection: false,
-    cursorStyle: 'line',
-  }
-  if (readOnly) {
-    options.readOnly = true
-  }
-
-  return options
-}
-
-
-// 表单验证规则
-const rules = {
-  method: [
-    {
-      required: true,
-      message: '请选择请求方式',
-      trigger: 'change'
-    }
-  ],
-  url: [
-    {
-      required: true,
-      message: '请输入请求地址',
-      trigger: 'blur'
-    }
-  ],
-  // project_id: [
-  //   {
-  //     required: true,
-  //     message: '请选择应用系统',
-  //     trigger: ['blur', 'change']
-  //   }
-  // ],
-  // module_id: [
-  //   {
-  //     required: false,
-  //     message: '请选择应用模块',
-  //     trigger: ['blur', 'change']
-  //   }
-  // ],
-  // env_id: [
-  //   {
-  //     required: true,
-  //     message: '请选择应用环境',
-  //     trigger: ['blur', 'change']
-  //   }
-  // ],
-  testcase_name: [
-    {
-      required: true,
-      message: '请输入测试用例名称',
-      trigger: 'blur'
-    }
-  ],
-  priority: [
-    {
-      required: true,
-      message: '请选择测试案例优先级',
-      trigger: 'blur'
-    }
-  ],
-  testcase_tags: [
-    {
-      required: false,
-      message: '请输入测试用例标签',
-      trigger: 'blur'
-    }
-  ],
-  description: [
-    {
-      required: false,
-      message: '请输入测试案例描述',
-      trigger: 'blur'
-    }
-  ]
-}
-
-// 状态管理
-const state = reactive({
-  form: {
-    url: 'http://192.168.94.229:8518/base/auth/access_token',
-    method: 'POST',
-    headers: [
-      {key: 'Accept', value: '*/*'},
-      {key: 'Accept-Encoding', value: 'gzip, deflate, br'},
-      {key: 'Connection', value: 'keep-alive'},
-      {key: 'Content-Type', value: 'application/json'},
-    ],
-    params: [],
-    bodyType: 'none',
-    bodyForm: [],
-    bodyParams: [],
-    jsonBody: '{"password": "123456", "username": "admin"}',
-    variables: [],
-    priority: '',
-    testcase_name: '',
-    description: '',
-    project_id: '',
-    module_id: '',
-    env_id: '',
+/* 生命周期钩子 */
+onMounted(async () => {
+  try {
+    // 初始化加载项目列表
+    const response = await api.getProjectList({page: 1, page_size: 1000})
+    projectOptions.value = response.data.map(item => ({label: item.name, value: Number(item.id)}))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
   }
 })
 
@@ -497,7 +365,131 @@ const renderPriorityLabel = (option) => {
   )
 }
 
-// 请求体属性数量计算
+/* 根据项目ID过滤模块和环境 */
+const filterModulesAndEnvs = async (projectId) => {
+  try {
+    // 获取模块列表
+    const moduleResponse = await api.getModuleList({page: 1, page_size: 999, project_id: projectId})
+    moduleOptions.value = moduleResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
+    // 获取环境列表
+    const envResponse = await api.getEnvList({page: 1, page_size: 999, project_id: projectId})
+    envOptions.value = envResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
+  }
+}
+
+
+// 表单验证规则
+const rules = {
+  method: [
+    {
+      required: true,
+      message: '请选择请求方式',
+      trigger: 'change'
+    }
+  ],
+  url: [
+    {
+      required: true,
+      message: '请输入请求地址',
+      trigger: 'blur'
+    }
+  ],
+  project_id: [
+    {
+      required: true,
+      type: 'number',
+      message: '请选择应用系统',
+      trigger: ['blur', 'change']
+    }
+  ],
+  module_id: [
+    {
+      required: false,
+      type: 'number',
+      message: '请选择应用模块',
+      trigger: 'blur'
+    }
+  ],
+  env_id: [
+    {
+      required: true,
+      type: 'number',
+      message: '请选择应用环境',
+      trigger: ['blur', 'change']
+    }
+  ],
+  testcase_name: [
+    {
+      required: true,
+      message: '请输入测试用例名称',
+      trigger: 'blur'
+    }
+  ],
+  priority: [
+    {
+      required: true,
+      message: '请选择测试案例优先级',
+      trigger: 'blur'
+    }
+  ],
+  testcase_tags: [
+    {
+      required: false,
+      message: '请输入测试用例标签',
+      trigger: 'blur'
+    }
+  ],
+  description: [
+    {
+      required: false,
+      message: '请输入测试案例描述',
+      trigger: 'blur'
+    }
+  ]
+}
+
+/* 表单状态管理 */
+const state = reactive({
+  form: {
+    // 基础请求信息
+    url: 'http://192.168.94.229:8518/base/auth/access_token',
+    method: 'POST',
+
+    // 请求头
+    headers: [
+      {key: 'Accept', value: '*/*'},
+      {key: 'Accept-Encoding', value: 'gzip, deflate, br'},
+      {key: 'Connection', value: 'keep-alive'},
+      {key: 'Content-Type', value: 'application/json'},
+    ],
+    // 请求参数，简化为三种请求体类型：bodyType=none/form/json
+    bodyType: 'json', // 初始类型设置为json以匹配默认数据
+    params: [], // 用于URL查询参数(即?key=value形式)
+    // queryParams: [], // 用于URL查询参数(即?key=value形式)
+    bodyParams: [], // form-data格式数据
+    bodyForm: [], // x-www-form-urlencoded格式数据
+    jsonBody: '{"password": "123456", "username": "admin"}',
+
+    // 测试用例信息
+    priority: '',
+    testcase_name: '',
+    description: '',
+    project_id: null,
+    module_id: null,
+    env_id: null,
+
+    // 临时变量配置
+    variables: [],
+  }
+})
+
+
+/* ======================================= */
+/* =============== Request =============== */
+/*  ====================================== */
+/* 请求体数量计算 */
 const getBodyCount = computed(() => {
   switch (state.form.bodyType) {
     case 'form-data':
@@ -505,23 +497,62 @@ const getBodyCount = computed(() => {
     case 'x-www-form-urlencoded':
       return state.form.bodyForm.length
     case 'json':
-      return state.form.jsonBody ? 1 : 0 // JSON内容存在则计1
+      return state.form.jsonBody.trim() ? 1 : 0 // JSON内容存在则计1
     default:
       return 0
   }
 })
 
+watch(
+    () => state.form.jsonBody,
+    (newVal) => {
+      if (newVal?.trim() && !['json'].includes(state.form.bodyType)) {
+        state.form.bodyType = 'json'
+      }
+    },
+    {deep: true}
+)
 
-// 响应结果
-const response = ref(null);
-const requestInfo = ref({
-  method: '',
+const monacoEditorOptions = (readOnly) => {
+  const options = {
+    // 基础配置
+    theme: 'vs-dark',
+    language: 'json',
+    fontSize: 14,
+    tabSize: 4,
+    // 布局与外观
+    automaticLayout: true,
+    minimap: {
+      enabled: true
+    },
+    lineNumbers: 'on',
+    renderLineHighlight: 'line',
+    wordWrap: 'off',
+    scrollBeyondLastLine: false,
+    // 其他
+    folding: true,
+    foldingStrategy: 'auto',
+    roundedSelection: false,
+    cursorStyle: 'line',
+  }
+  if (readOnly) {
+    options.readOnly = true
+  }
+
+  return options
+}
+
+/* ======================================== */
+/* =============== Response =============== */
+/*  ======================================= */
+const response = ref(null) // 存储调试响应结果
+const requestInfo = ref({  // 存储请求的详细信息
   url: '',
+  method: '',
   headers: {},
   bodyType: 'none',
   jsonBody: ''
 })
-
 
 // 请求类型
 const contentType = computed(() => {
@@ -632,6 +663,7 @@ const requestBodyData = computed(() => {
 
 const debugResultRef = ref(null)
 
+/* 调试方法 */
 const debugging = async () => {
   const userStore = useUserStore(); // 获取用户状态管理 store
   const currentUser = userStore.username; // 获取当前登录用户信息
@@ -667,6 +699,7 @@ const debugging = async () => {
 
     switch (state.form.bodyType) {
       case 'form-data':
+        // 处理文件上传和普通字段
         formData = state.form.bodyParams.reduce((acc, {key, value, type}) => {
           if (key) {
             // 处理文件类型
@@ -683,12 +716,14 @@ const debugging = async () => {
         }, {});
         break;
       case 'x-www-form-urlencoded':
+        // URL编码格式处理
         formData = state.form.bodyForm.reduce((acc, {key, value}) => {
           if (key) acc[key] = value;
           return acc;
         }, {});
         break;
       case 'json':
+        // JSON格式验证
         try {
           jsonBody = JSON.parse(state.form.jsonBody || '{}');
         } catch (e) {
@@ -750,13 +785,13 @@ const debugging = async () => {
 };
 
 const updateOrCreate = async () => {
-  const userStore = useUserStore(); // 获取用户状态管理 store
-  const currentUser = userStore.username; // 获取当前登录用户信息
-  const valid = await formRef.value.validate();
-  if (!valid) {
-    $message.warning("请填写必填字段")
-    return;
-  }
+  // 获取当前登录用户信息
+  const userStore = useUserStore();
+  const currentUser = userStore.username;
+
+  // 表单验证
+  await formRef.value?.validate();
+
   try {
     // 构造请求数据
     const data = {
