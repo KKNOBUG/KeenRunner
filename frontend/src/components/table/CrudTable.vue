@@ -19,6 +19,8 @@
 </template>
 
 <script setup>
+import QueryBar from "@/components/query-bar/QueryBar.vue";
+
 const props = defineProps({
   /**
    * @remote true: 后端分页  false： 前端分页
