@@ -55,7 +55,11 @@ export default {
   updateModule: (data = {}) => request.post('/program/module/update', data),
   getModuleList: (params = {}) => request.get('/program/module/list', { params }),
 
-
+  getEnv: (params = {}) => request.get('/program/env/get', { params }),
+  createEnv: (data = {}) => request.post('/program/env/create', data),
+  deleteEnv: (params = {}) => request.delete('/program/env/delete', { params }),
+  updateEnv: (data = {}) => request.post('/program/env/update', data),
+  getEnvList: (params = {}) => request.get('/program/env/list', { params }),
 
 
   // 工具箱相关
