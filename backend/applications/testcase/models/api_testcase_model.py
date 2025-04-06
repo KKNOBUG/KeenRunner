@@ -20,10 +20,26 @@ class ApiTestCase(ScaffoldModel, MaintainMixin, TimestampMixin):
     params = fields.CharField(max_length=512, default="", null=True, description="请求参数（键值对）")
     json_body = fields.JSONField(default=None, null=True, description="请求参数（JSON）")
     form_data = fields.JSONField(default=None, null=True, description="请求参数（表单）")
-    priority = fields.CharEnumField(TestCasePriorityEnum, index=True, description="风险等级")
-    project = fields.CharField(max_length=64, index=True, description="应用项目")
-    module = fields.CharField(max_length=64, index=True, description="应用模块")
+    priority = fields.CharEnumField(TestCasePriorityEnum, index=True, description="优先等级")
+
+    project = fields.ForeignKeyField(
+        model_name="models.Project",
+        related_name="api_testcase_projects",
+        description="所属应用"
+    )
+    module = fields.ForeignKeyField(
+        model_name="models.Module",
+        related_name="api_testcase_modules",
+        description="所属模块",
+        null=True
+    )
+    env = fields.ForeignKeyField(
+        model_name="models.Environment",
+        related_name="api_testcase_envs",
+        description="所属环境"
+    )
     testcase_name = fields.CharField(max_length=255, index=True, description="测试用例名称")
+    testcase_tags = fields.CharField(max_length=255, null=True, description="测试用例标签")
     description = fields.TextField(null=True, description="描述")
     variables = fields.JSONField(default=None, null=True, description="关联变量")
 
