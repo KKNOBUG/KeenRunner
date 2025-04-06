@@ -8,8 +8,10 @@
 """
 import json
 import time
+import traceback
 
 import aiohttp
+import tortoise
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
@@ -27,6 +29,7 @@ from backend.core.response.http_response import (
 )
 from backend.enums.http_enum import HTTPMethod
 from backend.enums.testcase_priority_enum import TestCasePriorityEnum
+from backend import LOGGER
 
 api_testcase = APIRouter()
 
@@ -152,9 +155,15 @@ async def debug_api_testcase(
                     "size": f"{len(response_body) / 1024:.2f} KB",
                     "duration": duration
                 }
-                return SuccessResponse(data=response_data)
 
+                await API_TESTCASE_CRUD.create_or_update_api_testcase(api_testcase_in)
+                return SuccessResponse(data=response_data)
         except aiohttp.ClientError as e:
+            LOGGER.error(traceback.format_exc())
             return FailureResponse(message=f"请求失败: {str(e)}")
+        except tortoise.exceptions.BaseORMException as e:
+            LOGGER.error(traceback.format_exc())
+            return FailureResponse(message=f"数据库交互异常: {str(e)}")
         except Exception as e:
+            LOGGER.error(traceback.format_exc())
             return FailureResponse(message=f"调试接口时发生错误: {str(e)}")
