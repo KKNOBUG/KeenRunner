@@ -3,8 +3,15 @@
     <n-space vertical :size="24">
       <!-- 接口信息卡片 -->
       <n-card title="Basic" size="small" hoverable>
-        <n-form :model="state.form" label-placement="left" label-width="auto" :rules="rules" label-align="right"
-                ref="formRef">
+        <n-form
+            :rules="rules"
+            :model="state.form"
+            label-width="auto"
+            label-align="right"
+            label-placement="left"
+            ref="formRef"
+        >
+          <!-- 测试用例调试信息 -->
           <n-grid :cols="24" :x-gap="24">
             <n-gi :span="5">
               <n-form-item label="请求方式" path="method">
@@ -33,28 +40,43 @@
             </n-gi>
           </n-grid>
 
+          <!-- 测试用例应用信息 -->
           <n-grid :cols="24" :x-gap="24">
-            <n-gi :span="5">
-              <n-form-item label="优先级" path="priority">
+            <n-gi :span="8">
+              <n-form-item label="应用系统" path="project_id">
                 <n-select
-                    v-model:value="state.form.priority"
-                    placeholder="请选择优先级"
-                    :options="priorityOptions"
-                    :render-label="renderPriorityLabel"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="9">
-              <n-form-item label="应用系统" path="project">
-                <n-input
-                    v-model:value="state.form.project"
+                    v-model:value="state.form.project_id"
                     placeholder="请输入应用系统"
-                    clearable
+                    :options="projectOptions"
+                    @update:value="filterModulesAndEnvs"
                 />
               </n-form-item>
             </n-gi>
-            <n-gi :span="10">
-              <n-form-item label="测试用例名称" path="testcase_name">
+            <n-gi :span="8">
+              <n-form-item label="应用模块" path="module_id">
+                <n-select
+                    v-model:value="state.form.module_id"
+                    placeholder="请选择应用模块"
+                    :options="moduleOptions"
+                />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="8">
+              <n-form-item label="应用环境" path="env_id">
+                <n-select
+                    v-model:value="state.form.env_id"
+                    placeholder="请选择应用环境"
+                    :options="envOptions"
+                />
+              </n-form-item>
+            </n-gi>
+
+          </n-grid>
+
+          <!-- 测试用例基础信息 -->
+          <n-grid :cols="24" :x-gap="24">
+            <n-gi :span="8">
+              <n-form-item label="用例名称" path="testcase_name">
                 <n-input
                     v-model:value="state.form.testcase_name"
                     placeholder="请输入测试用例名称"
@@ -62,8 +84,26 @@
                 />
               </n-form-item>
             </n-gi>
+            <n-gi :span="8">
+              <n-form-item label="优先等级" path="priority">
+                <n-select
+                    v-model:value="state.form.priority"
+                    placeholder="请选择优等级"
+                    :options="priorityOptions"
+                    :render-label="renderPriorityLabel"
+                />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="8">
+              <n-form-item label="用例标签" path="testcase_tags">
+                <n-input
+                    v-model:value="state.form.testcase_tags"
+                    placeholder="请输入测试用例标签"
+                    clearable
+                />
+              </n-form-item>
+            </n-gi>
           </n-grid>
-
           <n-grid :cols="24" :x-gap="24">
             <n-gi :span="24">
               <n-form-item label="接口描述" path="description">
@@ -72,7 +112,7 @@
                     v-model:value="state.form.description"
                     placeholder="请输入接口描述"
                     clearable
-                    :rows="3"
+                    :rows="5"
                     style="min-height: 6rem;"
                 />
               </n-form-item>
@@ -265,7 +305,7 @@
 </template>
 
 <script setup>
-import {computed, h, reactive, ref} from 'vue'
+import {computed, h, onMounted, reactive, ref} from 'vue'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
 import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText} from 'naive-ui'
@@ -275,6 +315,31 @@ import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
 import {useUserStore} from '@/store';
 
+const projectOptions = ref([])
+const moduleOptions = ref([])
+const envOptions = ref([])
+
+onMounted(async () => {
+  try {
+    const projectResponse = await api.getProjectList({page: 1, page_size: 1000})
+    projectOptions.value = projectResponse.data.map(item => ({
+      label: item.name, value: Number(item.id)
+    }))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
+  }
+})
+
+const filterModulesAndEnvs = async (projectId) => {
+  try {
+    const moduleResponse = await api.getModuleList({page: 1, page_size: 999, project_id: projectId})
+    moduleOptions.value = moduleResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
+    const envResponse = await api.getEnvList({page: 1, page_size: 999, project_id: projectId})
+    envOptions.value = envResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
+  }
+}
 
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
@@ -326,13 +391,27 @@ const rules = {
       trigger: 'blur'
     }
   ],
-  project: [
-    {
-      required: true,
-      message: '请选择应用系统',
-      trigger: 'blur'
-    }
-  ],
+  // project_id: [
+  //   {
+  //     required: true,
+  //     message: '请选择应用系统',
+  //     trigger: ['blur', 'change']
+  //   }
+  // ],
+  // module_id: [
+  //   {
+  //     required: false,
+  //     message: '请选择应用模块',
+  //     trigger: ['blur', 'change']
+  //   }
+  // ],
+  // env_id: [
+  //   {
+  //     required: true,
+  //     message: '请选择应用环境',
+  //     trigger: ['blur', 'change']
+  //   }
+  // ],
   testcase_name: [
     {
       required: true,
@@ -344,6 +423,13 @@ const rules = {
     {
       required: true,
       message: '请选择测试案例优先级',
+      trigger: 'blur'
+    }
+  ],
+  testcase_tags: [
+    {
+      required: false,
+      message: '请输入测试用例标签',
       trigger: 'blur'
     }
   ],
@@ -368,16 +454,17 @@ const state = reactive({
       {key: 'Content-Type', value: 'application/json'},
     ],
     params: [],
-    variables: [],
     bodyType: 'none',
     bodyForm: [],
     bodyParams: [],
     jsonBody: '{"password": "123456", "username": "admin"}',
-    priority: '中',
-    project: 'cs',
-    testcase_name: 'cs',
+    variables: [],
+    priority: '',
+    testcase_name: '',
     description: '',
-    module: 'cs'
+    project_id: '',
+    module_id: '',
+    env_id: '',
   }
 })
 
@@ -546,6 +633,8 @@ const requestBodyData = computed(() => {
 const debugResultRef = ref(null)
 
 const debugging = async () => {
+  const userStore = useUserStore(); // 获取用户状态管理 store
+  const currentUser = userStore.username; // 获取当前登录用户信息
   const valid = await formRef.value.validate();
   if (!valid) {
     $message.warning("请填写必填字段");
@@ -623,12 +712,17 @@ const debugging = async () => {
       project: state.form.project,
       module: state.form.project,
       testcase_name: state.form.testcase_name,
+      testcase_tags: state.form.testcase_tags,
       description: state.form.description,
       variables: state.form.variables.reduce((acc, {key, value}) => {
         if (key) acc[key] = value;
         return acc;
       }, {}),
-      created_user: useUserStore().username,
+      project_id: state.form.project_id,
+      module_id: state.form.module_id,
+      env_id: state.form.env_id,
+      created_user: currentUser,
+      updated_user: currentUser,
     };
 
     const responseData = await api.debugging(data);
@@ -685,15 +779,18 @@ const updateOrCreate = async () => {
       project: state.form.project,
       module: state.form.project,
       testcase_name: state.form.testcase_name,
+      testcase_tags: state.form.testcase_tags,
       description: state.form.description,
       created_user: currentUser,
       updated_user: currentUser,
       variables: state.form.variables.reduce((acc, {key, value}) => {
         if (key) acc[key] = value
         return acc
-      }, {})
+      }, {}),
+      project_id: state.form.project_id,
+      module_id: state.form.module_id,
+      env_id: state.form.env_id
     }
-
     // 调用 api 中的保存接口
     console.log("请求数据:", data);
     const backend_response = await api.updateOrCreate(data);
