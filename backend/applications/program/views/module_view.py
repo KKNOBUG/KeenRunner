@@ -91,7 +91,7 @@ async def list_module(
         name: str = Query(default=None, description="模块名称"),
         dev_owner_name: str = Query(default=None, description="模块开发负责人"),
         test_owner_name: str = Query(default=None, description="模块测试负责人"),
-        project_name: str = Query(default=None, description="项目名称"),
+        project_id: str = Query(default=None, description="项目名称"),
         project_state: int = Query(default=None, description="项目状态"),
 ):
     q = Q()
@@ -103,8 +103,8 @@ async def list_module(
     if test_owner_name:
         test_owner_ids = await USER_CRUD.model.filter(alias__contains=test_owner_name).values_list("id", flat=True)
         q &= Q(test_owner_id__in=test_owner_ids)
-    if project_name:
-        q &= Q(project__name__in=project_name)
+    if project_id:
+        q &= Q(project_id=project_id)
     if project_state:
         q &= Q(project__state=project_state)
 
