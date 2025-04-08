@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Union, Optional
 
 from backend.core.exceptions.base_exceptions import (
-    TypeRejectException, NotFoundException, NotImplementedException
+    TypeRejectException, NotFoundException, NotImplementedException, ParameterException
 )
 
 
@@ -225,7 +225,8 @@ class FileUtils:
         if exclude_startswith:
             files = [file for file in files if not os.path.basename(file).startswith(exclude_startswith)]
         if exclude_endswith:
-            files = [file for file in files if not os.path.splitext(os.path.basename(file))[0].endswith(exclude_endswith)]
+            files = [file for file in files if
+                     not os.path.splitext(os.path.basename(file))[0].endswith(exclude_endswith)]
         if exclude_extension:
             files = [file for file in files if not file.endswith(exclude_extension)]
 
@@ -376,6 +377,31 @@ class FileUtils:
             return False
         except Exception as e:
             return False
+
+    @staticmethod
+    def move_directory(src_abspath: Union[str, Path], dst_abspath: Union[str, Path]) -> bool:
+        """
+        移动目录或文件到指定目标路径。
+
+        :param src_abspath: 源文件或目录的绝对路径，可以是字符串或 Path 对象
+        :param dst_abspath: 目标文件或目录的绝对路径，可以是字符串或 Path 对象
+        :return: 如果复制成功返回 True，否则返回 False
+        """
+        # 检查原始文件或目录是否存在
+        if not os.path.exists(src_abspath):
+            raise NotFoundException(message=f"目录中不存在文件: {src_abspath}")
+
+        # 检查目标目录是否存在
+        dst_dir = os.path.dirname(dst_abspath)
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir, exist_ok=True)
+
+        # 检查目标文件是否存在
+        if os.path.exists(dst_abspath):
+            raise ParameterException(message=f"目标目录下存在同名文件: {dst_abspath}")
+
+        shutil.move(src=src_abspath, dst=dst_abspath)
+        return True
 
     @staticmethod
     def zip_files(zip_file_name: str, zip_dir_path: str) -> str:
