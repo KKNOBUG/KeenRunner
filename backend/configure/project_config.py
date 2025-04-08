@@ -109,19 +109,27 @@ class ProjectConfig(BaseSettings):
     CORS_MAX_AGE: int = 600
 
     # 文件上传设置
-    UPLOAD_FILE_MAX_SIZE: int = 1024 * 1024 * 30  # 30MB
+    UPLOAD_FILE_BASE_SIZE: int = 1024 * 1024  # 1MB
+    UPLOAD_FILE_PEAK_SIZE: Dict[str, int] = {
+        "tiny": UPLOAD_FILE_BASE_SIZE * 32,
+        "micro": UPLOAD_FILE_BASE_SIZE * 64,
+        "small": UPLOAD_FILE_BASE_SIZE * 128,
+        "medium": UPLOAD_FILE_BASE_SIZE * 256,
+        "large": UPLOAD_FILE_BASE_SIZE * 512,
+        "huge": UPLOAD_FILE_BASE_SIZE * 1024,
+    }
     UPLOAD_FILE_SUFFIX: List[str] = [
         'image/jepg',
         'image/png',
         'text/csv',
         'text/plain',
         'text/markdown',
-        'applicaton/pdf',
-        'applicaton/zip',
-        'applicaton/octet-stream',  # dat
+        'application/pdf',
+        'application/zip',
+        'application/msword',  # doc
+        'application/octet-stream',  # dat
         'application/vnd.ms-excel',  # xls
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # xlsx
-        'application/msword',  # doc
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'  # docx
     ]
 
