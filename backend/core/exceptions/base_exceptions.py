@@ -66,24 +66,66 @@ class MaxTimeoutException(BaseExceptions):
         super().__init__(**kwargs)
 
 
-class ReadFileException(BaseExceptions):
+class UploadFileException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE104)
         kwargs.setdefault("code", BaseErrorEnum.BASE104.code)
         super().__init__(**kwargs)
 
 
-class TypeRejectException(BaseExceptions):
+class DownloadFileException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE105)
         kwargs.setdefault("code", BaseErrorEnum.BASE105.code)
         super().__init__(**kwargs)
 
 
-class DataAlreadyExistsException(BaseExceptions):
+class TypeRejectException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE106)
+        kwargs.setdefault("code", BaseErrorEnum.BASE106.code)
+        super().__init__(**kwargs)
+
+
+class FileExtensionException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE107)
+        kwargs.setdefault("code", BaseErrorEnum.BASE107.code)
+        super().__init__(**kwargs)
+
+
+class FileTooManyException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE108)
+        kwargs.setdefault("code", BaseErrorEnum.BASE108.code)
+        super().__init__(**kwargs)
+
+
+class FileInvalidException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE109)
+        kwargs.setdefault("code", BaseErrorEnum.BASE109.code)
+        super().__init__(**kwargs)
+
+
+class DataNotStandardizedException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE110)
+        kwargs.setdefault("code", BaseErrorEnum.BASE110.code)
+        super().__init__(**kwargs)
+
+
+class DataBaseStorageException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE300)
         kwargs.setdefault("code", BaseErrorEnum.BASE300.code)
+        super().__init__(**kwargs)
+
+
+class DataAlreadyExistsException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE301)
+        kwargs.setdefault("code", BaseErrorEnum.BASE301.code)
         super().__init__(**kwargs)
 
 
