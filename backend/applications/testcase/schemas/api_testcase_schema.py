@@ -6,7 +6,7 @@
 @Module  : api_testcase_schema.py
 @DateTime: 2025/3/28 15:42
 """
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict, Set, Any
 
 from pydantic import BaseModel, Field
 
@@ -17,18 +17,22 @@ from backend.enums.testcase_priority_enum import TestCasePriorityEnum
 class ApiTestCaseCreate(BaseModel):
     url: str
     method: HTTPMethod
-    headers: Optional[Dict[str, str]] = None
-    params: Optional[str] = None
-    json_body: Optional[Dict] = None
-    form_data: Optional[Dict] = None
-    priority: TestCasePriorityEnum
+    headers: Optional[Dict[str, Any]] = None
+
+    params: Optional[Dict[str, Any]] = None
+    json_body: Optional[Dict[str, Any]] = None
+    form_data: Optional[Dict[str, Any]] = None
+    x_www_form_urlencoded: Optional[Dict[str, Any]] = None
+
     project_id: int
     module_id: Optional[int] = None
     env_id: int
+    priority: TestCasePriorityEnum
     testcase_name: str
     testcase_tags: Optional[str] = None
     description: Optional[str] = None
-    variables: Optional[Dict] = None
+
+    variables: Optional[Dict[str, Any]] = None
     created_user: str
     updated_user: Optional[str] = None
 
@@ -60,16 +64,20 @@ class ApiTestCaseCreate(BaseModel):
 class ApiTestCaseUpdate(BaseModel):
     url: Optional[str] = None
     method: Optional[HTTPMethod] = None
-    headers: Optional[Dict[str, str]] = None
-    params: Optional[str] = None
-    json_body: Optional[Dict] = None
-    form_data: Optional[Dict] = None
-    priority: Optional[TestCasePriorityEnum] = None
+    headers: Optional[Dict[str, Any]] = None
+
+    params: Optional[Dict[str, Any]] = None
+    json_body: Optional[Dict[str, Any]] = None
+    form_data: Optional[Dict[str, Any]] = None
+    x_www_form_urlencoded: Optional[Dict[str, Any]] = None
+
     project_id: Optional[int] = None
     module_id: Optional[int] = None
     env_id: Optional[int] = None
+    priority: Optional[TestCasePriorityEnum] = None
     testcase_name: Optional[str] = None
     testcase_tags: Optional[str] = None
     description: Optional[str] = None
+
     variables: Optional[Dict] = None
     updated_user: Optional[str] = None
