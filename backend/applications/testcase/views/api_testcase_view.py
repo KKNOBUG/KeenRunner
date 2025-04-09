@@ -6,14 +6,20 @@
 @Module  : api_testcase_view.py
 @DateTime: 2025/3/28 15:57
 """
+import base64
 import json
+import os
+import tempfile
 import time
 import traceback
+from typing import Dict, Any, Tuple, List
 
 import aiohttp
 import tortoise
+from aiohttp import FormData
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
+from tortoise import exceptions as tortoise_exceptions
 
 from backend.applications.testcase.schemas.api_testcase_schema import ApiTestCaseCreate, ApiTestCaseUpdate
 from backend.applications.testcase.services.api_testcase_crud import API_TESTCASE_CRUD
@@ -98,55 +104,98 @@ async def get_api_testcase(
     return SuccessResponse(data=data)
 
 
-# 后端代码 api_testcase_view.py 文件修改
+async def process_form_data(form_data_dict: Dict[str, Any]) -> Tuple[FormData, List[str]]:
+    """处理form-data格式的数据，支持文件上传"""
+    form_data = aiohttp.FormData()
+    temp_files = []  # 用于跟踪临时文件
+
+    for key, value in form_data_dict.items():
+        if isinstance(value, dict) and 'file' in value:
+            # 处理文件上传
+            file_data = value['file']
+            filename = value.get('filename', 'file')
+
+            if isinstance(file_data, str) and file_data.startswith('data:'):
+                # 处理Base64编码的文件
+                try:
+                    # 解析content type和base64数据
+                    content_type = file_data.split(';')[0].split(':')[1]
+                    base64_data = file_data.split(',')[1]
+                    file_content = base64.b64decode(base64_data)
+
+                    # 创建临时文件
+                    temp_file = tempfile.NamedTemporaryFile(delete=False)
+                    temp_file.write(file_content)
+                    temp_file.close()
+                    temp_files.append(temp_file.name)
+
+                    # 添加到FormData
+                    form_data.add_field(
+                        key,
+                        open(temp_file.name, 'rb'),
+                        filename=filename,
+                        content_type=content_type
+                    )
+                except Exception as e:
+                    # 确保清理任何已创建的临时文件
+                    for temp_file in temp_files:
+                        try:
+                            os.unlink(temp_file)
+                        except:
+                            pass
+                    raise ValueError(f"处理文件 {filename} 失败: {str(e)}")
+        else:
+            # 处理普通字段
+            form_data.add_field(key, str(value))
+
+    return form_data, temp_files
+
 
 @api_testcase.post("/debugging", summary="调试API测试用例信息")
 async def debug_api_testcase(
         api_testcase_in: ApiTestCaseCreate = Body(..., description="API测试用例信息")
 ):
+    """
+    调试API测试用例，支持多种请求参数类型：
+    - URL查询参数 (params)
+    - JSON请求体 (json_body)
+    - 表单数据 (form_data)
+    - URL编码数据 (x_www_form_urlencoded)
+    """
     start_time = time.time()
+    temp_files = []  # 跟踪需要清理的临时文件
 
-    # 参数处理
-    params = {}
-    if api_testcase_in.params:
-        try:
-            params = dict(item.split("=") for item in api_testcase_in.params.split("&"))
-        except Exception as e:
-            return FailureResponse(message=f"参数解析失败: {str(e)}")
+    try:
+        # 1. 处理请求参数
+        request_kwargs = {
+            'method': api_testcase_in.method.value,
+            'url': api_testcase_in.url,
+            # 'headers': api_testcase_in.headers,
+            'timeout': aiohttp.ClientTimeout(total=30),
+            'params': api_testcase_in.params
+        }
 
-    # 请求体处理
-    data = None
-    json_data = api_testcase_in.json_body
-    if api_testcase_in.form_data:
-        data = aiohttp.FormData()
-        for key, value in api_testcase_in.form_data.items():
-            if isinstance(value, dict) and 'file' in value:  # 处理文件上传
-                data.add_field(key, value['file'], filename=value['filename'])
-            else:
-                data.add_field(key, str(value))
+        # 2. 根据不同的请求体类型设置相应的参数
+        if api_testcase_in.json_body is not None:
+            request_kwargs['json'] = api_testcase_in.json_body
+        elif api_testcase_in.form_data is not None:
+            form_data, temp_files = await process_form_data(api_testcase_in.form_data)
+            request_kwargs['data'] = form_data
+        elif api_testcase_in.x_www_form_urlencoded is not None:
+            request_kwargs['data'] = api_testcase_in.x_www_form_urlencoded
 
-    # 发送请求
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.request(
-                    method=api_testcase_in.method.value,
-                    url=api_testcase_in.url,
-                    params=params,
-                    headers=api_testcase_in.headers,
-                    json=json_data,
-                    data=data,
-                    timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
+        # 3. 发送请求
+        async with aiohttp.ClientSession() as session:
+            async with session.request(**request_kwargs) as response:
                 duration = round((time.time() - start_time) * 1000, 2)
                 response_body = await response.text()
 
-                # 尝试解析JSON
+                # 4. 处理响应数据
                 try:
                     formatted_data = json.loads(response_body)
                 except json.JSONDecodeError:
                     formatted_data = response_body
 
-                # 构造返回数据
                 response_data = {
                     "status": response.status,
                     "statusText": response.reason,
@@ -156,14 +205,23 @@ async def debug_api_testcase(
                     "duration": duration
                 }
 
+                # 5. 保存测试用例
                 await API_TESTCASE_CRUD.create_or_update_api_testcase(api_testcase_in)
                 return SuccessResponse(data=response_data)
-        except aiohttp.ClientError as e:
-            LOGGER.error(traceback.format_exc())
-            return FailureResponse(message=f"请求失败: {str(e)}")
-        except tortoise.exceptions.BaseORMException as e:
-            LOGGER.error(traceback.format_exc())
-            return FailureResponse(message=f"数据库交互异常: {str(e)}")
-        except Exception as e:
-            LOGGER.error(traceback.format_exc())
-            return FailureResponse(message=f"调试接口时发生错误: {str(e)}")
+
+    except aiohttp.ClientError as e:
+        LOGGER.error(traceback.format_exc())
+        return FailureResponse(message=f"请求失败: {str(e)}")
+    except tortoise_exceptions.BaseORMException as e:
+        LOGGER.error(traceback.format_exc())
+        return FailureResponse(message=f"数据库交互异常: {str(e)}")
+    except Exception as e:
+        LOGGER.error(traceback.format_exc())
+        return FailureResponse(message=f"调试接口时发生错误: {str(e)}")
+    finally:
+        # 6. 清理临时文件
+        for temp_file in temp_files:
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
