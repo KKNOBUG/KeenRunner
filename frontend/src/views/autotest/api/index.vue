@@ -29,6 +29,7 @@
                     v-model:value="state.form.url"
                     placeholder="请输入请求地址"
                     clearable
+                    @blur="handleUrlBlur"
                 />
               </n-form-item>
             </n-gi>
@@ -331,60 +332,14 @@ const formRef = ref(null);
 const projectOptions = ref([])  // 应用系统下拉选项
 const moduleOptions = ref([])   // 应用模块下拉选项
 const envOptions = ref([])     // 应用环境下拉选项
-
-/* 生命周期钩子 */
-onMounted(async () => {
-  try {
-    // 初始化加载项目列表
-    const response = await api.getProjectList({page: 1, page_size: 1000})
-    projectOptions.value = response.data.map(item => ({label: item.name, value: Number(item.id)}))
-  } catch (error) {
-    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
-  }
+const response = ref(null) // 存储调试响应结果
+const requestInfo = ref({  // 存储请求的详细信息
+  url: '',
+  method: '',
+  headers: {},
+  request_body_type: 'none',
+  json_body: ''
 })
-
-// 请求方式下拉框
-const methodOptions = [
-  {label: 'GET', value: 'GET', color: '#49CC90'},
-  {label: 'POST', value: 'POST', color: '#61AFFE'},
-  {label: 'PUT', value: 'PUT', color: '#FFA500'},
-  {label: 'DELETE', value: 'DELETE', color: '#F4511E'}
-]
-const renderMethodLabel = (option) => {
-  return h(
-      'span',
-      {style: {color: option.color, fontWeight: '600'}},
-      option.label
-  )
-}
-// 优先级下拉框
-const priorityOptions = [
-  {label: '低', value: '低', color: '#49CC90'},
-  {label: '中', value: '中', color: '#61AFFE'},
-  {label: '高', value: '高', color: '#FFA500'},
-  {label: '危', value: '危', color: '#F4511E'}
-]
-const renderPriorityLabel = (option) => {
-  return h(
-      'span',
-      {style: {color: option.color, fontWeight: '600'}},
-      option.label
-  )
-}
-
-/* 根据项目ID过滤模块和环境 */
-const filterModulesAndEnvs = async (projectId) => {
-  try {
-    // 获取模块列表
-    const moduleResponse = await api.getModuleList({page: 1, page_size: 999, project_id: projectId})
-    moduleOptions.value = moduleResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
-    // 获取环境列表
-    const envResponse = await api.getEnvList({page: 1, page_size: 999, project_id: projectId})
-    envOptions.value = envResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
-  } catch (error) {
-    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
-  }
-}
 
 
 // 表单验证规则
@@ -460,7 +415,7 @@ const rules = {
 /* 表单状态管理 */
 const state = reactive({
   form: {
-    url: 'http://172.20.10.2:8518/base/auth/access_token',
+    url: 'http://192.168.94.229:8518/base/auth/access_token',
     method: 'POST',
     headers: [
       {key: 'Accept', value: '*/*'},
@@ -483,6 +438,61 @@ const state = reactive({
     variables: [],
   }
 })
+
+
+/* 生命周期钩子 */
+onMounted(async () => {
+  try {
+    // 初始化加载项目列表
+    const response = await api.getProjectList({page: 1, page_size: 1000})
+    projectOptions.value = response.data.map(item => ({label: item.name, value: Number(item.id)}))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
+  }
+})
+
+// 请求方式下拉框
+const methodOptions = [
+  {label: 'GET', value: 'GET', color: '#49CC90'},
+  {label: 'POST', value: 'POST', color: '#61AFFE'},
+  {label: 'PUT', value: 'PUT', color: '#FFA500'},
+  {label: 'DELETE', value: 'DELETE', color: '#F4511E'}
+]
+const renderMethodLabel = (option) => {
+  return h(
+      'span',
+      {style: {color: option.color, fontWeight: '600'}},
+      option.label
+  )
+}
+// 优先级下拉框
+const priorityOptions = [
+  {label: '低', value: '低', color: '#49CC90'},
+  {label: '中', value: '中', color: '#61AFFE'},
+  {label: '高', value: '高', color: '#FFA500'},
+  {label: '危', value: '危', color: '#F4511E'}
+]
+const renderPriorityLabel = (option) => {
+  return h(
+      'span',
+      {style: {color: option.color, fontWeight: '600'}},
+      option.label
+  )
+}
+
+/* 根据项目ID过滤模块和环境 */
+const filterModulesAndEnvs = async (projectId) => {
+  try {
+    // 获取模块列表
+    const moduleResponse = await api.getModuleList({page: 1, page_size: 999, project_id: projectId})
+    moduleOptions.value = moduleResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
+    // 获取环境列表
+    const envResponse = await api.getEnvList({page: 1, page_size: 999, project_id: projectId})
+    envOptions.value = envResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
+  } catch (error) {
+    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
+  }
+}
 
 /* 请求体数量计算 */
 const getBodyCount = computed(() => {
@@ -539,15 +549,6 @@ const monacoEditorOptions = (readOnly) => {
   return options
 }
 
-
-const response = ref(null) // 存储调试响应结果
-const requestInfo = ref({  // 存储请求的详细信息
-  url: '',
-  method: '',
-  headers: {},
-  request_body_type: 'none',
-  json_body: ''
-})
 
 // 请求类型
 const contentType = computed(() => {
@@ -725,10 +726,86 @@ const processVariables = (variables) => {
   }, {});
 }
 
-// 20250409-204600
+// ----------------------
+
+// Function to parse query parameters from a URL
+const parseQueryParams = (url) => {
+  const params = new URLSearchParams(url.split('?')[1] || '');
+  return Array.from(params.entries()).map(([key, value]) => ({
+    key: decodeURIComponent(key),
+    value: decodeURIComponent(value)
+  }));
+};
+
+// Function to update the URL based on params
+const updateUrlFromParams = () => {
+  const url = new URL(state.form.url.split('?')[0], window.location.origin);
+  state.form.params.forEach(({key, value}) => {
+    if (key) {
+      url.searchParams.set(encodeURIComponent(key), encodeURIComponent(value));
+    }
+  });
+  state.form.url = url.toString(); // 移除 decodeURIComponent
+};
+
+// Watcher to handle changes in the method
+watch(
+    () => state.form.method,
+    (newMethod) => {
+      if (newMethod === 'GET') {
+        state.form.params = parseQueryParams(state.form.url);
+      }
+    },
+    {immediate: true}
+);
+
+// Watcher to handle changes in params
+watch(
+    () => state.form.params,
+    (newParams) => {
+      if (state.form.method === 'GET') {
+        updateUrlFromParams();
+      }
+    },
+    {deep: true}
+);
+
+// Function to handle URL input blur event
+const handleUrlBlur = () => {
+  if (state.form.method === 'GET') {
+    state.form.params = parseQueryParams(state.form.url);
+  }
+};
 
 
-// 20250409-204600
+// -----
+const downloadFile = (blob, filename) => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+};
+
+const extractFilename = (contentDisposition) => {
+  const match = contentDisposition.match(/filename\*=(?:UTF-8'')?(.+)/i);
+  if (match) {
+    return decodeURIComponent(match[1]);
+  }
+  // 获取当前日期和时间
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0'); // 月份从0开始
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${year}${month}${day}${hours}${minutes}${seconds}_DOWNLOAD`;
+};
+// ----------------------
 
 
 /* 调试方法 */
@@ -789,11 +866,22 @@ const debugging = async () => {
 
     if (responseData.code === '000000') {
       response.value = responseData.data;
-      // 自动格式化JSON
-      if (isJsonResponse.value) {
-        response.value.data = formattedResponse.value;
+
+      // 检查响应是否为文件类型
+      const contentType = response.value.headers['Content-Type'];
+      if (contentType && contentType.includes('application/octet-stream')) {
+        const blob = new Blob([response.value.data], { type: contentType });
+        const contentDisposition = response.value.headers['Content-Disposition'];
+        const filename = extractFilename(contentDisposition);
+        downloadFile(blob, filename);
+      } else {
+        // 自动格式化JSON
+        if (isJsonResponse.value) {
+          response.value.data = formattedResponse.value;
+        }
+        $message.success('调试成功');
       }
-      $message.success('调试成功');
+
       // 滚动到调试结果区域
       nextTick(() => {
         debugResultRef.value?.$el?.scrollIntoView({
