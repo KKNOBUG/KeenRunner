@@ -125,7 +125,7 @@
       <!-- 请求配置卡片 -->
       <n-card title="Request" size="small" hoverable>
         <n-tabs type="line" animated>
-          <n-tab-pane name="headers" tab="请求头">
+          <n-tab-pane name="request_headers" tab="请求头">
             <template #tab>
               <n-badge :value="state.form.headers.length" :max="99" show-zero>
                 <span>请求头</span>
@@ -137,46 +137,55 @@
                 :is-for-body="false"
             />
           </n-tab-pane>
-          <n-tab-pane name="params" tab="请求体">
+          <n-tab-pane name="request_body" tab="请求体">
             <template #tab>
               <n-badge :value="getBodyCount" :max="99" show-zero>
                 <span>请求体</span>
               </n-badge>
             </template>
-            <n-radio-group v-model:value="state.form.bodyType" name="bodyType">
+            <n-radio-group v-model:value="state.form.request_body_type" name="request_body_type">
               <n-space>
                 <n-radio value="none">none</n-radio>
+                <n-radio value="params">params</n-radio>
                 <n-radio value="form-data">form-data</n-radio>
                 <n-radio value="x-www-form-urlencoded">x-www-form-urlencoded</n-radio>
                 <n-radio value="json">json</n-radio>
               </n-space>
             </n-radio-group>
-            <n-button v-if="state.form.bodyType === 'json'" @click="formatJson" class="ml-10" size="tiny" round text
+            <n-button v-if="state.form.request_body_type === 'json'" @click="formatJson" class="ml-10" size="tiny" round
+                      text
                       type="primary">美化
             </n-button>
-            <div v-if="state.form.bodyType === 'form-data'">
+            <template v-if="state.form.request_body_type === 'params'">
               <KeyValueEditor
-                  v-model:items="state.form.bodyParams"
-                  :body-type="state.form.bodyType"
+                  v-model:items="state.form.params"
+                  :body-type="state.form.request_body_type"
+                  :is-for-body="true"
+              />
+            </template>
+            <template v-if="state.form.request_body_type === 'form-data'">
+              <KeyValueEditor
+                  v-model:items="state.form.form_data"
+                  :body-type="state.form.request_body_type"
                   :enableFile="true"
                   :is-for-body="true"
               />
-            </div>
-            <div v-if="state.form.bodyType === 'x-www-form-urlencoded'">
+            </template>
+            <template v-if="state.form.request_body_type === 'x-www-form-urlencoded'">
               <KeyValueEditor
-                  v-model:items="state.form.bodyForm"
-                  :body-type="state.form.bodyType"
+                  v-model:items="state.form.x_www_form_urlencoded"
+                  :body-type="state.form.request_body_type"
                   :is-for-body="true"
               />
-            </div>
-            <div v-if="state.form.bodyType === 'json'">
+            </template>
+            <template v-if="state.form.request_body_type === 'json'">
               <monaco-editor
-                  v-model:value="state.form.jsonBody"
+                  v-model:value="state.form.json_body"
                   :options="monacoEditorOptions(false)"
                   class="json-editor"
                   style="min-height: 400px; height: auto;"
               />
-            </div>
+            </template>
 
           </n-tab-pane>
           <n-tab-pane name="variables" tab="变量">
@@ -315,9 +324,7 @@ import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
 import {useUserStore} from '@/store';
 
-/* ===================================== */
-/* =============== Basic =============== */
-/*  ==================================== */
+
 // 注册JSON高亮
 hljs.registerLanguage('json', json)
 const formRef = ref(null);
@@ -453,61 +460,51 @@ const rules = {
 /* 表单状态管理 */
 const state = reactive({
   form: {
-    // 基础请求信息
-    url: 'http://192.168.94.229:8518/base/auth/access_token',
+    url: 'http://172.20.10.2:8518/base/auth/access_token',
     method: 'POST',
-
-    // 请求头
     headers: [
       {key: 'Accept', value: '*/*'},
       {key: 'Accept-Encoding', value: 'gzip, deflate, br'},
       {key: 'Connection', value: 'keep-alive'},
-      {key: 'Content-Type', value: 'application/json'},
+      {key: 'Content-Type', value: '*/*'},
     ],
-    // 请求参数，简化为三种请求体类型：bodyType=none/form/json
-    bodyType: 'json', // 初始类型设置为json以匹配默认数据
-    params: [], // 用于URL查询参数(即?key=value形式)
-    // queryParams: [], // 用于URL查询参数(即?key=value形式)
-    bodyParams: [], // form-data格式数据
-    bodyForm: [], // x-www-form-urlencoded格式数据
-    jsonBody: '{"password": "123456", "username": "admin"}',
-
-    // 测试用例信息
-    priority: '',
-    testcase_name: '',
-    description: '',
-    project_id: null,
-    module_id: null,
-    env_id: null,
-
-    // 临时变量配置
+    request_body_type: 'json',
+    params: [],
+    form_data: [],
+    x_www_form_urlencoded: [],
+    json_body: '{"password": "123456", "username": "admin"}',
+    priority: '低',
+    testcase_name: '测试',
+    testcase_tags: '',
+    description: '测试',
+    project_id: 1,
+    module_id: 1,
+    env_id: 1,
     variables: [],
   }
 })
 
-
-/* ======================================= */
-/* =============== Request =============== */
-/*  ====================================== */
 /* 请求体数量计算 */
 const getBodyCount = computed(() => {
-  switch (state.form.bodyType) {
+  switch (state.form.request_body_type) {
+    case 'params':
+      return state.form.params.length
     case 'form-data':
-      return state.form.bodyParams.length
+      return state.form.form_data.length
     case 'x-www-form-urlencoded':
-      return state.form.bodyForm.length
+      return state.form.x_www_form_urlencoded.length
     case 'json':
-      return state.form.jsonBody.trim() ? 1 : 0 // JSON内容存在则计1
+      return state.form.json_body.trim() ? 1 : 0 // JSON内容存在则计1
     default:
       return 0
   }
 })
 
 watch(
-    () => state.form.jsonBody,
+    () => state.form.json_body,
     (newVal) => {
-      if (newVal?.trim() && !['json'].includes(state.form.bodyType)) {
-        state.form.bodyType = 'json'
+      if (newVal?.trim() && !['json'].includes(state.form.request_body_type)) {
+        state.form.request_body_type = 'json'
       }
     },
     {deep: true}
@@ -542,16 +539,14 @@ const monacoEditorOptions = (readOnly) => {
   return options
 }
 
-/* ======================================== */
-/* =============== Response =============== */
-/*  ======================================= */
+
 const response = ref(null) // 存储调试响应结果
 const requestInfo = ref({  // 存储请求的详细信息
   url: '',
   method: '',
   headers: {},
-  bodyType: 'none',
-  jsonBody: ''
+  request_body_type: 'none',
+  json_body: ''
 })
 
 // 请求类型
@@ -636,25 +631,27 @@ const requestBodyType = computed(() => {
     'x-www-form-urlencoded': 'Form URL Encoded',
     'json': 'JSON'
   }
-  return typeMap[requestInfo.value.bodyType] || 'Params'
+  return typeMap[requestInfo.value.request_body_type] || 'Params'
 })
 
-const isJsonRequest = computed(() => requestInfo.value.bodyType === 'json')
+const isJsonRequest = computed(() => requestInfo.value.request_body_type === 'json')
 
 const formattedRequestJson = computed(() => {
   try {
-    return JSON.stringify(JSON.parse(requestInfo.value.jsonBody), null, 4)
+    return JSON.stringify(JSON.parse(requestInfo.value.json_body), null, 4)
   } catch {
-    return requestInfo.value.jsonBody
+    return requestInfo.value.json_body
   }
 })
 
 const requestBodyData = computed(() => {
-  switch (requestInfo.value.bodyType) {
+  switch (requestInfo.value.request_body_type) {
+    case 'params':
+      return state.form.form_data.filter(item => item.key)
     case 'form-data':
-      return state.form.bodyParams.filter(item => item.key)
+      return state.form.form_data.filter(item => item.key)
     case 'x-www-form-urlencoded':
-      return state.form.bodyForm.filter(item => item.key)
+      return state.form.x_www_form_urlencoded.filter(item => item.key)
     default:
       return []
   }
@@ -663,10 +660,81 @@ const requestBodyData = computed(() => {
 
 const debugResultRef = ref(null)
 
+const handleParamsRequest = (params) => {
+  return params
+      .filter(item => item.key)
+      .reduce((acc, {key, value}) => {
+        acc[key] = value;
+        return acc;
+      }, {});
+}
+
+const handleFormDataRequest = async (formData) => {
+  const processedData = {};
+  for (const item of formData) {
+    if (item.key) {
+      if (item.type === 'file' && item.value instanceof File) {
+        // 处理文件上传
+        const reader = new FileReader();
+        const fileContent = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(item.value);
+        });
+
+        processedData[item.key] = {
+          file: fileContent,
+          filename: item.value.name,
+          type: item.value.type,
+          size: item.value.size
+        };
+      } else {
+        // 处理普通字段
+        processedData[item.key] = item.value;
+      }
+    }
+  }
+  return processedData;
+}
+
+const handleUrlEncodedRequest = (data) => {
+  return data.reduce((acc, {key, value}) => {
+    if (key) acc[key] = value;
+    return acc;
+  }, {});
+}
+
+const handleJsonRequest = (jsonString) => {
+  try {
+    return JSON.parse(jsonString || '{}');
+  } catch (e) {
+    throw new Error('JSON格式错误，请检查输入');
+  }
+}
+
+const processHeaders = (headers) => {
+  return headers.reduce((acc, {key, value}) => {
+    if (key) acc[key] = value;
+    return acc;
+  }, {});
+}
+
+const processVariables = (variables) => {
+  return variables.reduce((acc, {key, value}) => {
+    if (key) acc[key] = value;
+    return acc;
+  }, {});
+}
+
+// 20250409-204600
+
+
+// 20250409-204600
+
+
 /* 调试方法 */
 const debugging = async () => {
-  const userStore = useUserStore(); // 获取用户状态管理 store
-  const currentUser = userStore.username; // 获取当前登录用户信息
+  const userStore = useUserStore();
+  const currentUser = userStore.username;
   const valid = await formRef.value.validate();
   if (!valid) {
     $message.warning("请填写必填字段");
@@ -674,88 +742,45 @@ const debugging = async () => {
   }
 
   try {
-    // 构造请求参数
-    const params = state.form.params
-        .filter(item => item.key)
-        .reduce((acc, {key, value}) => {
-          acc[key] = value;
-          return acc;
-        }, {});
-
+    // 保存请求信息用于显示
     requestInfo.value = {
       method: state.form.method,
       url: state.form.url,
-      headers: state.form.headers.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value
-        return acc
-      }, {}),
-      bodyType: state.form.bodyType,
-      jsonBody: state.form.jsonBody
-    }
+      headers: processHeaders(state.form.headers),
+      request_body_type: state.form.request_body_type,
+      json_body: state.form.json_body
+    };
 
-    // 处理不同请求体类型
-    let formData = null;
-    let jsonBody = null;
-
-    switch (state.form.bodyType) {
-      case 'form-data':
-        // 处理文件上传和普通字段
-        formData = state.form.bodyParams.reduce((acc, {key, value, type}) => {
-          if (key) {
-            // 处理文件类型
-            if (type === 'file' && value instanceof File) {
-              acc[key] = {
-                file: value,
-                filename: value.name
-              };
-            } else {
-              acc[key] = value;
-            }
-          }
-          return acc;
-        }, {});
-        break;
-      case 'x-www-form-urlencoded':
-        // URL编码格式处理
-        formData = state.form.bodyForm.reduce((acc, {key, value}) => {
-          if (key) acc[key] = value;
-          return acc;
-        }, {});
-        break;
-      case 'json':
-        // JSON格式验证
-        try {
-          jsonBody = JSON.parse(state.form.jsonBody || '{}');
-        } catch (e) {
-          $message.error('JSON格式错误，请检查输入');
-          return;
-        }
-        break;
-    }
-
+    // 构造请求数据，匹配后端 ApiTestCaseCreate 模型
     const data = {
       url: state.form.url,
       method: state.form.method,
-      headers: state.form.headers.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value;
-        return acc;
-      }, {}),
-      params: Object.keys(params).map(k => `${k}=${params[k]}`).join('&'),
-      json_body: jsonBody,
-      form_data: formData,
-      priority: state.form.priority,
-      project: state.form.project,
-      module: state.form.project,
-      testcase_name: state.form.testcase_name,
-      testcase_tags: state.form.testcase_tags,
-      description: state.form.description,
-      variables: state.form.variables.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value;
-        return acc;
-      }, {}),
+      headers: processHeaders(state.form.headers),
+
+      // 根据请求体类型设置对应的字段
+      params: state.form.request_body_type === 'params' ?
+          handleParamsRequest(state.form.params) : {},
+
+      json_body: state.form.request_body_type === 'json' ?
+          handleJsonRequest(state.form.json_body) : {},
+
+      form_data: state.form.request_body_type === 'form-data' ?
+          await handleFormDataRequest(state.form.form_data) : {},
+
+      x_www_form_urlencoded: state.form.request_body_type === 'x-www-form-urlencoded' ?
+          handleUrlEncodedRequest(state.form.x_www_form_urlencoded) : {},
+
+      // 测试用例基本信息
       project_id: state.form.project_id,
       module_id: state.form.module_id,
       env_id: state.form.env_id,
+      priority: state.form.priority,
+      testcase_name: state.form.testcase_name,
+      testcase_tags: state.form.testcase_tags,
+      description: state.form.description,
+
+      // 变量和用户信息
+      variables: processVariables(state.form.variables),
       created_user: currentUser,
       updated_user: currentUser,
     };
@@ -774,8 +799,8 @@ const debugging = async () => {
         debugResultRef.value?.$el?.scrollIntoView({
           behavior: 'smooth',
           block: 'start'
-        })
-      })
+        });
+      });
     } else {
       $message.error(`请求失败：${responseData.message}`);
     }
@@ -797,35 +822,49 @@ const updateOrCreate = async () => {
     const data = {
       url: state.form.url,
       method: state.form.method,
+      // 处理 headers，转换为对象格式
       headers: state.form.headers.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value
-        return acc
+        if (key) acc[key] = value;
+        return acc;
       }, {}),
-      params: JSON.stringify(state.form.params.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value
-        return acc
-      }, {})),
-      json_body: state.form.bodyType === 'json' ? JSON.parse(state.form.jsonBody || '{}') : null,
-      form_data: state.form.bodyType === 'form-data' ? state.form.bodyParams.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value
-        return acc
-      }, {}) : null,
+
+      // 根据请求体类型设置对应的参数
+      params: state.form.request_body_type === 'params' ?
+          handleParamsRequest(state.form.params) : {},
+
+      json_body: state.form.request_body_type === 'json' ?
+          handleJsonRequest(state.form.json_body) : {},
+
+      form_data: state.form.request_body_type === 'form-data' ?
+          state.form.form_data.reduce((acc, {key, value}) => {
+            if (key) acc[key] = value;
+            return acc;
+          }, {}) : {},
+
+      x_www_form_urlencoded: state.form.request_body_type === 'x-www-form-urlencoded' ?
+          state.form.x_www_form_urlencoded.reduce((acc, {key, value}) => {
+            if (key) acc[key] = value;
+            return acc;
+          }, {}) : {},
+
+      // 基本信息
       priority: state.form.priority,
-      project: state.form.project,
-      module: state.form.project,
+      project_id: state.form.project_id,
+      module_id: state.form.module_id,
+      env_id: state.form.env_id,
       testcase_name: state.form.testcase_name,
       testcase_tags: state.form.testcase_tags,
       description: state.form.description,
+
+      // 变量和用户信息
+      variables: state.form.variables.reduce((acc, {key, value}) => {
+        if (key) acc[key] = value;
+        return acc;
+      }, {}),
       created_user: currentUser,
       updated_user: currentUser,
-      variables: state.form.variables.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value
-        return acc
-      }, {}),
-      project_id: state.form.project_id,
-      module_id: state.form.module_id,
-      env_id: state.form.env_id
-    }
+    };
+
     // 调用 api 中的保存接口
     console.log("请求数据:", data);
     const backend_response = await api.updateOrCreate(data);
@@ -834,10 +873,11 @@ const updateOrCreate = async () => {
     console.error('请求失败：', error);
     $message.error(error.message);
   }
-}
+};
+
 
 const formatJson = () => {
-  const inputJson = state.form.jsonBody.trim();
+  const inputJson = state.form.json_body.trim();
   if (inputJson === '') {
     $message.warning('输入的 JSON 为空，请输入有效的 JSON 内容。');
     return;
@@ -845,12 +885,12 @@ const formatJson = () => {
 
   try {
     const jsonData = JSON.parse(inputJson);
-    state.form.jsonBody = JSON.stringify(jsonData, null, 2);
+    state.form.json_body = JSON.stringify(jsonData, null, 2);
   } catch (parseError) {
     try {
       // 尝试使用 eval 处理可能不规范的 JSON
       const jsonData = eval('(' + inputJson + ')');
-      state.form.jsonBody = JSON.stringify(jsonData, null, 2);
+      state.form.json_body = JSON.stringify(jsonData, null, 2);
     } catch (evalError) {
       $message.error(`JSON 格式化失败，请检查输入的 JSON 格式是否正确。详细错误信息：${parseError.message}`);
       console.error('JSON 格式化失败，解析错误:', parseError);
