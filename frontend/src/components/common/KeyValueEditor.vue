@@ -240,12 +240,12 @@ const handleBatchAdd = () => {
     if (parts.length === 2) {
       const key = parts[0].trim();
       const value = parts[1].trim();
-      newItems.push({key, value, description: ''});
+      newItems.push({key, value, type: "text", description: ''});
     } else if (parts.length === 3) {
       const key = parts[0].trim();
       const value = parts[1].trim();
       const desc = parts[2].trim();
-      newItems.push({key, value, description: desc});
+      newItems.push({key, value, type: "text", description: desc});
     }
   });
   emit('update:items', newItems);
