@@ -31,6 +31,11 @@ class ApiTestCaseCrud(ScaffoldCrud[ApiTestCase, ApiTestCaseCreate, ApiTestCaseUp
         return instance
 
     async def create_or_update_api_testcase(self, api_testcase_in: ApiTestCaseCreate) -> ApiTestCase:
+        """
+        创建或更新API测试用例
+        :param api_testcase_in: API测试用例创建模型
+        :return: API测试用例实例
+        """
         url: str = api_testcase_in.url
         method: str = api_testcase_in.method
         testcase_name: str = api_testcase_in.testcase_name
