@@ -176,12 +176,12 @@ async def debug_api_testcase(
         }
 
         # 2. 根据不同的请求体类型设置相应的参数
-        if api_testcase_in.json_body is not None:
+        if api_testcase_in.json_body:
             request_kwargs['json'] = api_testcase_in.json_body
-        elif api_testcase_in.form_data is not None:
+        elif api_testcase_in.form_data:
             form_data, temp_files = await process_form_data(api_testcase_in.form_data)
             request_kwargs['data'] = form_data
-        elif api_testcase_in.x_www_form_urlencoded is not None:
+        elif api_testcase_in.x_www_form_urlencoded:
             request_kwargs['data'] = api_testcase_in.x_www_form_urlencoded
 
         # 3. 发送请求
