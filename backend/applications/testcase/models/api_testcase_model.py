@@ -14,14 +14,19 @@ from backend.enums.testcase_priority_enum import TestCasePriorityEnum
 
 
 class ApiTestCase(ScaffoldModel, MaintainMixin, TimestampMixin):
+    # 基本请求信息
     url = fields.CharField(max_length=255, description="请求地址")
     method = fields.CharEnumField(HTTPMethod, description="请求方式")
     headers = fields.JSONField(default=None, null=True, description="请求头部")
-    params = fields.CharField(max_length=512, default="", null=True, description="请求参数（键值对）")
-    json_body = fields.JSONField(default=None, null=True, description="请求参数（JSON）")
-    form_data = fields.JSONField(default=None, null=True, description="请求参数（表单）")
-    priority = fields.CharEnumField(TestCasePriorityEnum, index=True, description="优先等级")
 
+    # 请求参数
+    params = fields.JSONField(default=dict, null=True, description="URL查询参数")
+    json_body = fields.JSONField(default=dict, null=True, description="JSON格式请求体")
+    form_data = fields.JSONField(default=dict, null=True, description="multipart/form-data格式请求体")
+    x_www_form_urlencoded = fields.JSONField(default=dict, null=True, description="x-www-form-urlencoded格式请求体")
+
+    # 测试用例基本信息
+    priority = fields.CharEnumField(TestCasePriorityEnum, index=True, description="优先等级")
     project = fields.ForeignKeyField(
         model_name="models.Project",
         related_name="api_testcase_projects",
@@ -40,7 +45,7 @@ class ApiTestCase(ScaffoldModel, MaintainMixin, TimestampMixin):
     )
     testcase_name = fields.CharField(max_length=255, index=True, description="测试用例名称")
     testcase_tags = fields.CharField(max_length=255, null=True, description="测试用例标签")
-    description = fields.TextField(null=True, description="描述")
+    description = fields.TextField(null=True, description="测试用例描述")
     variables = fields.JSONField(default=None, null=True, description="关联变量")
 
     class Meta:
