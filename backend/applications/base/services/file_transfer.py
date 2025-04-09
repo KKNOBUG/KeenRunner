@@ -6,6 +6,8 @@
 @Module  : file_transfer.py
 @DateTime: 2025/4/7 09:13
 """
+import base64
+import mimetypes
 import os
 import re
 import traceback
@@ -21,6 +23,35 @@ from backend.core.exceptions.base_exceptions import UploadFileException, FileExt
 
 
 class FileTransfer:
+
+    @staticmethod
+    async def process_base64_file(
+            base64_data: str,
+            original_filename: str,
+    ) -> Tuple[bytes, str, str]:
+        """
+        处理base64编码的文件数据
+        :param base64_data: base64编码的文件数据
+        :param original_filename: 原始文件名
+        :return: (文件内容, 文件名, content_type)
+        """
+        try:
+            # 解析 data URI
+            if ',' in base64_data:
+                # 处理 data URI 格式 (e.g., "data:image/png;base64,...")
+                content_type = base64_data.split(';')[0].split(':')[1]
+                base64_content = base64_data.split(',')[1]
+            else:
+                # 处理纯 base64 内容
+                content_type = mimetypes.guess_type(original_filename)[0] or 'application/octet-stream'
+                base64_content = base64_data
+
+            # 解码 base64 数据
+            file_content = base64.b64decode(base64_content)
+
+            return file_content, original_filename, content_type
+        except Exception as e:
+            raise ValueError(f"处理base64文件数据失败: {str(e)}")
 
     @staticmethod
     async def save_upload_file_chunks(
@@ -46,10 +77,31 @@ class FileTransfer:
         :param upload_file_size: 文件的体积限制
         :return:
         """
-        # 检查文件名称
-        filename: str = upload_file.filename
-        if check_filename and (not filename or re.search(r'[\\/*?:\'"<>|!@#$%^&]', filename)):
-            raise UploadFileException(message="文件名称不被允许")
+        # 处理不同类型的文件上传
+        if isinstance(upload_file, dict):
+            # 处理base64编码的文件数据
+            if 'file' not in upload_file or 'filename' not in upload_file:
+                raise ValueError("缺少必要的文件信息")
+
+            file_content, filename, content_type = await FileTransfer.process_base64_file(
+                upload_file['file'],
+                upload_file['filename']
+            )
+            file_size = len(file_content)
+        else:
+            # 处理常规文件上传
+            filename = upload_file.filename
+            content_type = upload_file.content_type
+            file_size = upload_file.size
+
+        # 检查文件名称（移除特殊字符但保留扩展名）
+        if check_filename:
+            name, ext = os.path.splitext(filename)
+            # 只对文件名部分进行清理，保留扩展名
+            cleaned_name = re.sub(r'[\\/*?:\'"<>|!@#$%^&]', '', name)
+            if not cleaned_name:
+                raise UploadFileException(message="文件名称不被允许")
+            filename = cleaned_name + ext
 
         # 检查文件类型
         if check_filetype and (upload_file.content_type not in PROJECT_CONFIG.UPLOAD_FILE_SUFFIX):
