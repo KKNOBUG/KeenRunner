@@ -77,8 +77,9 @@ async def logging_middleware(request: Request, call_next):
                 }
             else:
                 form_data[field_name] = field_value
-        request_body = json.dumps(form_data).encode("utf-8")
+
         # 重置流的位置到开头，确保后续处理能正确读取
+        request_body = json.dumps(form_data, ensure_ascii=False).encode("utf-8")
         request._stream.seek(0)
 
     # 记录请求信息
