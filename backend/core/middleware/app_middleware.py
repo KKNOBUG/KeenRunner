@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional
 from urllib.parse import unquote
 
 from fastapi import Request, Response, UploadFile
+from starlette.datastructures import FormData
 from starlette.types import ASGIApp, Scope, Receive, Send
 
 from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
@@ -65,7 +66,7 @@ async def logging_middleware(request: Request, call_next):
     is_upload: bool = is_upload_request(request)
     if is_upload:
         form_data: Dict[str, Any] = {}
-        original_form_data = await request.form()
+        original_form_data: FormData = await request.form()
         # 提取字段和文件信息
         for field_name, field_value in original_form_data.items():
             if hasattr(field_value, 'file'):
