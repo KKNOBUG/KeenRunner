@@ -13,7 +13,7 @@ from io import BytesIO
 from typing import Dict, Any, Optional
 from urllib.parse import unquote
 
-from fastapi import Request, Response
+from fastapi import Request, Response, UploadFile
 from starlette.types import ASGIApp, Scope, Receive, Send
 
 from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
@@ -43,7 +43,7 @@ def is_download_response(response: Response) -> bool:
     return "attachment" in content_disposition.lower()
 
 
-def is_supertext_response(response: Response) -> bool:
+def is_longtext_response(response: Response) -> bool:
     content_length: int = response.headers.get("content-length", 0)
     return int(content_length) > 5000
 
@@ -54,18 +54,31 @@ async def logging_middleware(request: Request, call_next):
     request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(start_time))
 
     # 变量初始化
-    request_body, response_params = b'', b''
-    is_html, is_upload, is_download = False, False, False
+    request_body, response_body = b'', b''
 
-    # 判断是否为文件上传清洁
+    # 读取并保存原始请求体，重置请求流以便后续处理
+    original_request_body: bytes = await request.body()
+    request._body = original_request_body
+    request._stream = BytesIO(original_request_body)
+
+    # 判断是否为文件上传请求
     is_upload: bool = is_upload_request(request)
     if is_upload:
-        request_body: bytes = b"<FILE UPLOAD>"
-    else:
-        # 消费请求体并重置请求流
-        request_body: bytes = await request.body()
-        request._body = request_body
-        request._stream = BytesIO(request_body)
+        form_data: Dict[str, Any] = {}
+        original_form_data = await request.form()
+        # 提取字段和文件信息
+        for field_name, field_value in original_form_data.items():
+            if hasattr(field_value, 'file'):
+                form_data[field_name] = {
+                    "filename": field_value.filename,
+                    "content_type": field_value.content_type,
+                    "size": field_value.size
+                }
+            else:
+                form_data[field_name] = field_value
+        request_body = json.dumps(form_data).encode("utf-8")
+        # 重置流的位置到开头，确保后续处理能正确读取
+        request._stream.seek(0)
 
     # 记录请求信息
     request_method: str = request.method
@@ -84,6 +97,7 @@ async def logging_middleware(request: Request, call_next):
     is_download: bool = is_download_response(response)
     is_html: bool = is_html_response(response)
     is_image: bool = is_image_response(response)
+    is_longtext: bool = is_longtext_response(response)
 
     response_header: dict = dict(response.headers)
 
@@ -97,21 +111,23 @@ async def logging_middleware(request: Request, call_next):
     ):
         # 消费响应体
         if is_download:
-            response_params = b"<FILE DOWNLOAD>"
+            response_body = b"<FILE DOWNLOAD>"
         elif is_html:
-            response_params = b"<HTML CONTENT>"
+            response_body = b"<HTML CONTENT>"
         elif is_image:
-            response_params = b"IMAGE CONTENT"
+            response_body = b"IMAGE CONTENT"
+        elif is_longtext:
+            response_body = b"LONGTEXT CONTENT"
         else:
             body_chunks = []
             async for chunk in response.body_iterator:
                 body_chunks.append(chunk)
 
-            response_params = b"".join(body_chunks).decode("utf-8", errors="ignore")
+            response_body = b"".join(body_chunks).decode("utf-8", errors="ignore")
 
             # 重置响应体
             response = Response(
-                content=response_params,
+                content=response_body,
                 status_code=response.status_code,
                 headers=response_header,
                 media_type=response.media_type
@@ -136,11 +152,11 @@ async def logging_middleware(request: Request, call_next):
             "response_header": response_header,
             "response_elapsed": response_elapsed
         }
-        if isinstance(response_params, str):
-            _response = json.loads(response_params)
+        if isinstance(response_body, str):
+            _response = json.loads(response_body)
             audit_log["response_code"] = _response.get("code", "")
             audit_log["response_message"] = _response.get("message", "")[:512]
-            audit_log["response_params"] = response_params
+            audit_log["response_body"] = response_body
             del _response
 
         request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
@@ -155,7 +171,7 @@ async def logging_middleware(request: Request, call_next):
                                f"响应头部：{audit_log.get('response_header')}\n" \
                                f"响应代码：{audit_log.get('response_code')}\n" \
                                f"响应消息：{audit_log.get('response_message')}\n" \
-                               f"响应参数：{audit_log.get('response_params')}\n" \
+                               f"响应参数：{audit_log.get('response_body')}\n" \
                                f"响应时间：{audit_log.get('response_time')}\n" \
                                f"响应耗时：{audit_log.get('response_elapsed')}\n" \
                                f"< < < < < < < < < < < < < < < < < < < < "
