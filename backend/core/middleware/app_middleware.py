@@ -87,7 +87,7 @@ async def logging_middleware(request: Request, call_next):
     request_client: str = request.client.host if request.client else "127.0.0.1"
     request_tags: str = GLOBAL_CONFIG.ROUTER_TAGS.get(request_router or "未定义", "未定义")
     request_summary: str = GLOBAL_CONFIG.ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
-    request_body: bytes = request_body if is_upload else request_body.decode("utf-8", errors="ignore")
+    request_body: bytes = request_body if is_upload else original_request_body.decode("utf-8", errors="ignore")
     request_params: str = unquote(request.query_params.__str__())
 
     # 请求流传递并获取响应
