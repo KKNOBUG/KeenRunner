@@ -32,7 +32,7 @@ from backend.core.exceptions.http_exceptions import (
     app_exception_handler
 )
 # from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
-from backend.core.middleware.app_middleware import logging_middleware
+from backend.core.middlewares.app_middleware import logging_middleware
 
 
 def register_logging() -> logger:

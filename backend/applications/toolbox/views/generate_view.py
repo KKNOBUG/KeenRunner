@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Body
 
 from backend.applications.toolbox.schemas.generate_schema import GenerateVirtualInfo
-from backend.core.response.http_response import SuccessResponse
+from backend.core.responses.http_response import SuccessResponse
 from backend import GENERATE
 
 generate = APIRouter()

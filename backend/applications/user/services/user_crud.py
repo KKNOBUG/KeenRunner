@@ -16,7 +16,7 @@ from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate
 from backend.core.exceptions.base_exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException
-from backend.core.response.http_response import ForbiddenResponse
+from backend.core.responses.http_response import ForbiddenResponse
 from backend.services.password import verify_password, get_password_hash
 from backend.applications.base.services.scaffold import ScaffoldCrud
 

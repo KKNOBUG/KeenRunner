@@ -17,7 +17,7 @@ from starlette.responses import StreamingResponse
 from backend import PROJECT_CONFIG
 from backend.applications.base.services.file_transfer import FileTransfer
 from backend.common.file_utils import FileUtils
-from backend.core.response.http_response import (
+from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
     NotFoundResponse

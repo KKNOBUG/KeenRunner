@@ -12,7 +12,7 @@ from tortoise.expressions import Q
 
 from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate, RoleUpdateMenusRouters
 from backend.applications.base.services.role_crud import ROLE_CRUD
-from backend.core.response.http_response import SuccessResponse, DataAlreadyExistsResponse
+from backend.core.responses.http_response import SuccessResponse, DataAlreadyExistsResponse
 
 role = APIRouter()
 

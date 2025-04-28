@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 from tortoise.expressions import Q
 
 from backend.applications.base.models.audit_model import Audit
-from backend.core.response.http_response import SuccessResponse
+from backend.core.responses.http_response import SuccessResponse
 
 audit = APIRouter()
 

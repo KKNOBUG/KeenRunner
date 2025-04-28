@@ -12,15 +12,15 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from tortoise import Tortoise
 
-from backend.core.initialization.app_initialization import (
+from backend.core.initializations.app_initialization import (
     register_database,
     register_logging,
     register_exceptions,
     register_middlewares,
     register_routers,
 )
-from backend.core.initialization.data_initialization import init_database_table
-from backend.core.response.http_response import SuccessResponse
+from backend.core.initializations.data_initialization import init_database_table
+from backend.core.responses.http_response import SuccessResponse
 
 try:
     from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER

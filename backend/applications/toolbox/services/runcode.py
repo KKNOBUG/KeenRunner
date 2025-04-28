@@ -14,7 +14,7 @@ from fastapi import HTTPException
 
 from backend.core.exceptions.base_exceptions import ImportedException, SyntaxException, MaxTimeoutException, \
     ReqInvalidException
-from backend.core.response.http_response import BadReqResponse, RequestTimeoutResponse
+from backend.core.responses.http_response import BadReqResponse, RequestTimeoutResponse
 
 
 def validate_python_code(code: str):

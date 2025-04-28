@@ -17,7 +17,7 @@ from backend.core.exceptions.base_exceptions import (
     DataAlreadyExistsException,
     NotFoundException
 )
-from backend.core.response.http_response import (
+from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,

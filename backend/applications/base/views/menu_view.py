@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
 from backend.applications.base.services.menu_crud import MENU_CRUD
-from backend.core.response.http_response import NotFoundResponse, SuccessResponse, FailureResponse
+from backend.core.responses.http_response import NotFoundResponse, SuccessResponse, FailureResponse
 
 menu = APIRouter()
 
