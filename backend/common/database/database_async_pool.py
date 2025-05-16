@@ -196,24 +196,21 @@ class DatabaseAsyncPool:
         """
         try:
             async with pooled.acquire() as conn:
-                await conn.ping()
-                if dict_cursor:
-                    async with conn.cursor(aiomysql.cursors.DictCursor) as cursor:
-                        rowcount = await cursor.execute(sql)
+                # await conn.ping() # 连接池在获取连接时已确保连接有效，因此无需显式调用 ping()，减少额外延迟。
+                cursor_class = aiomysql.cursors.DictCursor if dict_cursor else aiomysql.cursors.Cursor
+                async with conn.cursor(cursor_class) as cursor:
+                    rowcount = await cursor.execute(sql)
+                    # 使用 cursor.description 判断是否有结果集，避免对非查询语句（如INSERT/UPDATE）调用 fetchall()，防止错误
+                    if cursor.description:
                         result = await cursor.fetchall()
-                else:
-                    async with conn.cursor() as cursor:
-                        rowcount = await cursor.execute(sql)
-                        result = await cursor.fetchall()
+                        data = json.loads(json.dumps([dict(row) for row in result], default=self.serializer))
 
-                if sql.strip().lower().startswith("select"):
-                    data = json.loads(json.dumps([dict(row) for row in result], default=self.serializer))
-                else:
-                    await conn.commit()
-                    data = json.loads(json.dumps({"count": rowcount}, default=self.serializer))
+                    else:
+                        await conn.commit()
+                        data = json.loads(json.dumps({"count": rowcount}, default=self.serializer))
                 return {"env": env, "tos": tos, "zone": zone, "name": name, "data": data}
         except Exception as e:
-            raise ValueError(e.__str__())
+            raise RuntimeError(f"执行SQL时发生错误: {e}") from e
 
 
 DATABASE_ASYNC_POOL = DatabaseAsyncPool(DATABASES)
