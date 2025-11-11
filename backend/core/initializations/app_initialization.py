@@ -88,7 +88,7 @@ async def register_database(app: FastAPI) -> None:
 
     # 生成迁移文件
     try:
-        await command.migrate(name=f"auto_{datetime.now().strftime('%Y%m%d%H%M%S')}")
+        await command.migrate(name="auto_migrate")
     except AttributeError as e:
         print("无法从数据库中检索模型历史记录，模型历史记录将从头创建")
         shutil.rmtree(PROJECT_CONFIG.MIGRATION_DIR)
@@ -159,6 +159,7 @@ def register_routers(app: FastAPI) -> None:
     from backend.applications.toolbox.views import toolbox
     from backend.applications.program.views import program
     from backend.applications.testcase.views import testcase
+    from backend.applications.aotutest.views import autotest
 
     # 挂在路由蓝图
     app.include_router(router=base, prefix="/base", tags=["基础服务"])
@@ -167,3 +168,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=toolbox, prefix="/toolbox", tags=["工具箱服务"])
     app.include_router(router=program, prefix="/program", tags=["应用管理服务"])
     app.include_router(router=testcase, prefix="/testcase", tags=["测试用例服务"])
+    app.include_router(router=autotest, prefix="/autotest", tags=["自动化测试"])

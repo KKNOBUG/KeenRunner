@@ -11,24 +11,24 @@ from typing import Optional
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestCaseCreate, AutoTestCaseUpdate
-from backend.applications.aotutest.models.autotest_model import AutoTestStepMapping, AutoTestStepInfo, AutoTestCaseInfo
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
+from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
 
 
-class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseInfo, AutoTestCaseCreate, AutoTestCaseUpdate]):
+class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
     def __init__(self):
-        super().__init__(model=AutoTestCaseInfo)
+        super().__init__(model=AutoTestApiCaseInfo)
 
-    async def get_by_id(self, case_id: int) -> Optional[AutoTestCaseInfo]:
+    async def get_by_id(self, case_id: int) -> Optional[AutoTestApiCaseInfo]:
         """根据ID查询用例信息"""
         return await self.model.filter(id=case_id, state=-1).first()
 
-    async def create_case(self, case_in: AutoTestCaseCreate) -> AutoTestCaseInfo:
+    async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
         """创建用例信息"""
         # 检查用例名称和项目ID的唯一性
-        existing_case = await self.model.filter(case_name=case_in.case_name, project_id=case_in.project_id).first()
+        existing_case = await self.model.filter(case_name=case_in.case_name, case_project=case_in.case_project).first()
         if existing_case:
             raise DataAlreadyExistsException(
                 message=f"项目(id={case_in.project_id})下用例名称(case_name={case_in.case_name})已存在"
@@ -42,9 +42,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseInfo, AutoTestCaseCreate, AutoTe
         except IntegrityError as e:
             raise DataAlreadyExistsException(message=f"创建用例失败: {str(e)}")
 
-    async def update_case(self, case_in: AutoTestCaseUpdate) -> AutoTestCaseInfo:
+    async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
         """更新用例信息"""
-        case_id = case_in.id
+        case_id = case_in.case_id
         instance = await self.query(case_id)
         if not instance:
             raise NotFoundException(message=f"用例(id={case_id})信息不存在")
@@ -56,14 +56,16 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseInfo, AutoTestCaseCreate, AutoTe
         }
 
         # 如果更新了用例名称或项目ID，检查唯一性
-        if "case_name" in update_dict or "project_id" in update_dict:
+        if "case_name" in update_dict or "case_project" in update_dict:
             case_name = update_dict.get("case_name", instance.case_name)
-            project_id = update_dict.get("project_id", instance.project_id)
-            existing_case = await self.model.filter(case_name=case_name, project_id=project_id).exclude(
-                id=case_id).first()
+            case_project = update_dict.get("case_project", instance.case_project)
+            existing_case = await self.model.filter(
+                case_name=case_name,
+                case_project=case_project
+            ).exclude(id=case_id).first()
             if existing_case:
                 raise DataAlreadyExistsException(
-                    message=f"项目(id={project_id})下用例名称(case_name={case_name})已存在"
+                    message=f"项目(id={case_project})下用例名称(case_name={case_name})已存在"
                 )
         try:
             update_dict["case_version"] = instance.case_version + 1
@@ -74,21 +76,21 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseInfo, AutoTestCaseCreate, AutoTe
         except IntegrityError as e:
             raise DataAlreadyExistsException(message=f"更新用例失败: {str(e)}")
 
-    async def delete_case(self, case_id: int) -> AutoTestCaseInfo:
+    async def delete_case(self, case_id: int) -> AutoTestApiCaseInfo:
         """删除用例信息"""
         instance = await self.query(case_id)
         if not instance:
             raise NotFoundException(message=f"用例(id={case_id})信息不存在")
 
-        # 检查是否有步骤映射关联
-        mappings_count = await AutoTestStepMapping.filter(case__id=case_id).count()
-        if mappings_count > 0:
+        # 检查是否有步骤明细关联（使用普通字段查询）
+        steps_count = await AutoTestApiStepInfo.filter(case_id=case_id, state=-1).count()
+        if steps_count > 0:
             raise DataAlreadyExistsException(
-                message=f"用例(id={case_id})存在步骤映射，无法删除"
+                message=f"用例(id={case_id})存在步骤明细，无法删除"
             )
 
-        # 检查是否被其他用例引用
-        quote_steps_count = await AutoTestStepInfo.filter(quote_case__id=case_id).count()
+        # 检查是否被其他用例引用（使用普通字段查询）
+        quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state=-1).count()
         if quote_steps_count > 0:
             raise DataAlreadyExistsException(
                 message=f"用例(id={case_id})被其他用例引用，无法删除"
@@ -108,4 +110,4 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseInfo, AutoTestCaseCreate, AutoTe
         )
 
 
-AUTO_TEST_CASE_CRUD = AutoTestCaseCrud()
+AUTOTEST_API_CASE_CRUD = AutoTestApiCaseCrud()

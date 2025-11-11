@@ -46,27 +46,22 @@ class BaseResponse(JSONResponse):
         elif message and isinstance(message, Message):
             self.message = message.value
 
-        if data and isinstance(data, (int, str, list, dict)):
+        if data or isinstance(data, (int, str, list, dict)):
             self.data = data
 
-        if total and isinstance(total, int):
+        if total or isinstance(total, (int, float)):
             self.total = total
 
         resp = dict(
             code=self.code,
             status=self.status,
             message=self.message,
+            data=data,
+            total=total
         )
-        if self.data not in ("", [], {}):
-            resp["data"] = self.data
-        if self.total is None and isinstance(self.data, (dict, list)):
-            resp["total"] = len(self.data)
-        elif self.total:
-            resp["total"] = self.total
 
         super(BaseResponse, self).__init__(
             status_code=self.http_status_code,
             content=jsonable_encoder(resp),
             **kwargs
         )
-
