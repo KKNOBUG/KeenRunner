@@ -16,8 +16,12 @@ class StepType(str, Enum):
     HTTP = "HTTP/HTTPS协议网络请求"
     TCP = "TCP协议网络请求"
     SQL = "SQL语句执行"
-    PYTHON = "Python代码执行"
-    JAVA = "Java代码执行"
+    PYTHON = "执行代码(Python)"
+    JAVA = "执行代码(Java)"
+    PRE_PYTHON = "执行前置代码(Python)"
+    POST_PYTHON = "执行后置代码(Python)"
+    PRE_JAVA = "执行前置代码(Java)"
+    POST_JAVA = "执行后置代码(Java)"
     CONDITION = "条件分支"
     WAIT = "等待控制"
     LOOP = "循环结构"
@@ -92,6 +96,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_form_data = fields.JSONField(null=True, description="请求表单，JSON格式")
     request_form_file = fields.JSONField(null=True, description="请求文件路径")
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对，JSON格式")
+    # 逻辑相关
+    wait = fields.IntField(ge=0, null=True, description="等待时间，正整数（毫秒），非必输")
+    code = fields.TextField(null=True, description="后置操作代码，Text类型")
 
     # 前后置相关
     pre_wait = fields.IntField(ge=0, null=True, description="前置等待时间，正整数（毫秒），非必输")
@@ -100,11 +107,15 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     post_code = fields.TextField(null=True, description="后置操作代码，Text类型")
 
     # 变量、断言和逻辑处理
+    # 自定义的变量和调用函数的变量
     use_variables = fields.JSONField(null=True, description="变量使用，JSON格式")
+    # 提取和前后置操作产出的变量
+    # 参数提取表达式模板：变量名称、提取来源、表达式、提取值、提取结果、错误信息
     ext_variables = fields.JSONField(null=True, description="变量提取，JSON格式")
+    # 断言表达式模板：断言名称，断言对象、断言路径、结果值、断言方式、期望值、断言结果、错误信息
     validators = fields.JSONField(null=True, description="断言规则，JSON格式")
-    loop = fields.BooleanField(default=False, description="是否循环子步骤执行逻辑")
-    condition = fields.BooleanField(default=False, description="是否进入子步骤执行逻辑")
+    max_cycles = fields.IntField(ge=1, null=True, description="循环次数")
+    conditions = fields.TextField(null=True, description="判断条件")
 
     class Meta:
         table = "krun_autotest_api_step"
@@ -127,3 +138,87 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         return self.step_name
 
 
+class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
+    """
+    测试报告信息表
+    """
+    case_id = fields.BigIntField(index=True, description="用例ID")
+    case_name = fields.CharField(max_length=255, index=True, description="用例名称")
+    case_st_time = fields.CharField(max_length=32, null=True, description="用例执行开始时间")
+    case_ed_time = fields.CharField(max_length=32, null=True, description="用例执行结束时间")
+    case_elapsed = fields.CharField(max_length=16, null=True, description="用例执行消耗时间")
+    case_state = fields.BooleanField(description="用例执行状态")
+    case_step_count = fields.IntField(ge=1, description="用例步骤数量(含子级步骤)")
+    case_step_fill_count = fields.IntField(ge=0, description="用例步骤失败数量")
+    case_step_pass_count = fields.IntField(ge=0, description="用例步骤成功数量")
+    case_step_pass_ratio = fields.FloatField(ge=0, description="用例步骤成功率")
+    case_report_code = fields.CharField(max_length=64, default=generate_timestamp, unique=True, description="报告标识")
+
+    class Meta:
+        table = "krun_autotest_api_report"
+        table_description = "自动化测试-测试报告表"
+        indexes = (
+            ("case_name", "created_user"),
+            ("case_name", "case_state"),
+            ("case_name", "state"),
+        )
+        ordering = ["-updated_time"]
+
+    def __str__(self):
+        return self.case_name
+
+
+class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
+    """
+    测试步骤结果表
+    """
+    # 报告批次号
+    case_report_code = fields.CharField(max_length=64, index=True, description="报告标识")
+    # 用例信息相关
+    case_id = fields.BigIntField(description="用例ID")
+    case_code = fields.CharField(max_length=64, description="用例标识")
+
+    # 步骤明细相关(指向步骤明细树结构中的具体步骤)
+    step_id = fields.BigIntField(description="步骤ID")
+    step_no = fields.BigIntField(description="步骤序号")
+    step_code = fields.CharField(max_length=64, description="步骤标识")
+    step_name = fields.CharField(max_length=255, description="步骤明细名称")
+    step_type = fields.CharEnumField(StepType, description="步骤明细类型")
+
+    # 步骤执行相关
+    step_state = fields.BooleanField(description="测试执行状态")
+    step_st_time = fields.CharField(max_length=255, null=True, description="步骤执行开始时间")
+    step_ed_time = fields.CharField(max_length=255, null=True, description="步骤执行结束时间")
+    step_elapsed = fields.CharField(max_length=255, null=True, description="步骤执行消耗时间")
+    step_logger = fields.TextField(null=True, description="步骤执行日志")
+    step_error = fields.TextField(null=True, description="步骤错误描述")
+
+    # 请求相关
+    response_cookie = fields.TextField(null=True, description="响应cookies")
+    response_header = fields.JSONField(null=True, description="响应头，JSON格式")
+    response_body = fields.JSONField(null=True, description="响应体，JSON格式")
+    response_text = fields.TextField(null=True, description="响应文本，Text格式")
+    response_elapsed = fields.CharField(max_length=16, null=True, description="响应时间")
+
+    # 变量相关
+    # 包含提取变量，以及前后code设置的变量
+    session_variables = fields.JSONField(null=True, description="请求头，JSON格式")
+    # 自定义变量，如编写指定值或引用随机函数
+    defined_variables = fields.JSONField(null=True, description="请求头，JSON格式")
+
+    # 参数提取相关
+    ext_variables = fields.JSONField(null=True, description="变量提取，JSON格式")
+    validators = fields.JSONField(null=True, description="断言规则，JSON格式")
+
+    class Meta:
+        table = "krun_autotest_api_details"
+        table_description = "自动化测试-步骤结果表"
+        indexes = (
+            ("case_id", "step_id", "step_no"),
+            ("case_id", "step_name", "step_type"),
+            ("case_id", "step_state"),
+        )
+        ordering = ["-updated_time"]
+
+    def __str__(self):
+        return self.step_code
