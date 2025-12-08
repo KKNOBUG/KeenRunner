@@ -67,8 +67,6 @@ async def search_steps(
         q = Q()
         if step_in.id:
             q &= Q(id=step_in.id)
-        if step_in.step_name:
-            q &= Q(step_name__contains=step_in.step_name)
         if step_in.case_id:
             q &= Q(case_id=step_in.case_id)
         if step_in.step_type:

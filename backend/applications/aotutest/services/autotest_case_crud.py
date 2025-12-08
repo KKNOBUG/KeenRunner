@@ -6,10 +6,11 @@
 @Module  : autotest_case_crud.py
 @DateTime: 2025/4/28
 """
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
+from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
 from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
@@ -24,6 +25,19 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
     async def get_by_id(self, case_id: int) -> Optional[AutoTestApiCaseInfo]:
         """根据ID查询用例信息"""
         return await self.model.filter(id=case_id, state=-1).first()
+
+    async def get_by_code(self, case_code: str) -> Optional[AutoTestApiCaseInfo]:
+        """根据code查询用例信息"""
+        return await self.model.filter(case_code=case_code, state=-1).first()
+
+    async def get_by_conditions(
+            self,
+            conditions: Dict[str, Any],
+            only_one: bool = True,
+    ) -> Optional[AutoTestApiCaseInfo]:
+        """根据条件查询用例信息"""
+        stmt: QuerySet = self.model.filter(**conditions, state=-1)
+        return await (stmt.first() if only_one else stmt.all())
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
         """创建用例信息"""

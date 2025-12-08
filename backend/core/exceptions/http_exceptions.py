@@ -6,6 +6,8 @@
 @Module  : http_exceptions.py
 @DateTime: 2025/1/17 22:30
 """
+import traceback
+
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.exceptions import HTTPException
@@ -82,5 +84,6 @@ async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> B
 
 # 当发生未被其他特定异常处理器处理的异常时，会触发此函数
 async def app_exception_handler(request: Request, exc: Exception) -> BaseResponse:
-    error_message = f"服务器发生未知错误，请稍后重试，或点击右上角二维码加入答疑群。具体错误信息: {str(exc)}"
-    return FailureResponse(message=error_message)
+    error_traceback = traceback.format_exc()
+    error_message = f"服务器发生未知错误，请稍后重试，或点击右上角二维码加入答疑群"
+    return FailureResponse(message=error_message, data=f"{error_traceback}")

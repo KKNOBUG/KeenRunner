@@ -12,6 +12,7 @@ import shutil
 from datetime import datetime
 from typing import Dict, Any
 
+import tortoise.exceptions
 from loguru import logger
 from aerich import Command
 from fastapi import FastAPI
@@ -121,6 +122,21 @@ def register_exceptions(app: FastAPI) -> None:
         handler=null_point_exception_handler
     )
     # 当发生未被其他特定异常处理器处理的异常时，会触发此函数
+    app.add_exception_handler(IOError, app_exception_handler)
+    app.add_exception_handler(OSError, app_exception_handler)
+    app.add_exception_handler(KeyError, app_exception_handler)
+    app.add_exception_handler(ValueError, app_exception_handler)
+    app.add_exception_handler(IndexError, app_exception_handler)
+    app.add_exception_handler(TypeError, app_exception_handler)
+    app.add_exception_handler(MemoryError, app_exception_handler)
+    app.add_exception_handler(ImportError, app_exception_handler)
+    app.add_exception_handler(TimeoutError, app_exception_handler)
+    app.add_exception_handler(RuntimeError, app_exception_handler)
+    app.add_exception_handler(AttributeError, app_exception_handler)
+    app.add_exception_handler(FileExistsError, app_exception_handler)
+    app.add_exception_handler(FileNotFoundError, app_exception_handler)
+    app.add_exception_handler(NotADirectoryError, app_exception_handler)
+    app.add_exception_handler(tortoise.exceptions.BaseORMException, app_exception_handler)
     app.add_exception_handler(
         exc_class_or_status_code=Exception,
         handler=app_exception_handler
