@@ -503,6 +503,12 @@ async def test_execution():
 
     # 提取用例信息（从第一个步骤中获取）
     case_info = TEST_DATA["data"][0].get("case", {})
+    case_info.pop("state")
+    case_info.pop("case_desc")
+    case_info.pop("created_time")
+    case_info.pop("updated_time")
+    case_info.pop("case_version")
+    print(f"\n用例信息:", json.dumps(case_info, ensure_ascii=False, indent=2))
     case = {
         "id": case_info.get("id"),
         "case_code": case_info.get("case_code"),
@@ -512,7 +518,7 @@ async def test_execution():
     # 提取根步骤（parent_step_id为None的步骤）
     root_steps = [step for step in TEST_DATA["data"] if step.get("parent_step_id") is None]
 
-    print(f"\n用例信息:")
+    print(f"\n用例信息:", case_info)
     print(f"  用例ID: {case['id']}")
     print(f"  用例代码: {case['case_code']}")
     print(f"  用例名称: {case['case_name']}")

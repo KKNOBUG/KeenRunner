@@ -70,7 +70,8 @@ class StepExecutionContext:
         self.variables: Dict[str, Any] = dict(initial_variables or {})
         self.session_variables: Dict[str, Any] = {}
         self.ext_variables: Dict[str, Any] = {}
-        self.logs: List[str] = []
+        self.logs: Dict[int, List[str]] = {}
+        self._current_step_no: Optional[int] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
 
@@ -100,9 +101,14 @@ class StepExecutionContext:
             raise RuntimeError("HTTP client 未初始化，请在异步上下文中使用")
         return self._http_client
 
-    def log(self, message: str) -> None:
+    def log(self, message: str, step_no: Optional[int] = None) -> None:
+        step_no = self._current_step_no or 1
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        self.logs.append(f"[{timestamp}] {message}")
+        self.logs.setdefault(step_no, []).append(f"[{timestamp}] {message}")
+
+    def set_current_step_no(self, step_no: Optional[int] = None) -> None:
+        self._current_step_no = step_no
 
     def clone_state(self) -> Dict[str, Any]:
         return {
@@ -248,8 +254,8 @@ class StepExecutionContext:
         if result is None:
             return {}
         if not isinstance(result, dict):
-            raise StepExecutionError("执行代码返回值必须是 dict")
-        self.log(f"执行代码返回: {result}")
+            raise StepExecutionError("执行代码返回值必须是 dict 类型")
+        self.log(f"[执行代码(Python)] 返回结果: {result}")
         return result
 
     @staticmethod
@@ -331,6 +337,10 @@ class StepExecutionContext:
 
         return code
 
+    @property
+    def current_step_no(self):
+        return self._current_step_no
+
 
 class BaseStepExecutor:
     """步骤执行器基类。"""
@@ -371,6 +381,9 @@ class BaseStepExecutor:
             step_type=self.step_type,
             success=True,
         )
+        # 设置当前步骤编号
+        previous_step_no: int = self.context.current_step_no
+        self.context.set_current_step_no(self.step_no)
         try:
             await self._before_execute()
             await self._execute(result)
@@ -378,8 +391,9 @@ class BaseStepExecutor:
         except Exception as exc:
             result.success = False
             result.error = str(exc)
-            self.context.log(f"步骤执行失败: {exc}")
+            self.context.log(f"步骤执行失败: {exc}", step_no=previous_step_no)
         finally:
+            self.context.set_current_step_no(step_no=previous_step_no)
             end = time.perf_counter()
             result.elapsed = round(end - start, 6)
         return result
@@ -448,12 +462,15 @@ class LoopStepExecutor(BaseStepExecutor):
                     result.success = False
             return child_results
 
+        self.context.log(f"[循环控制器] ---> 开始", step_no=self.step_no)
         while should_continue:
             iteration += 1
-            self.context.log(f"循环结构第 {iteration} 次执行")
+
+            self.context.log(f"[循环控制器] [次数循环] 第 {iteration} 次执行", step_no=self.step_no)
             await run_children_once()
 
             if max_cycles and iteration >= max_cycles:
+                self.context.log(f"[循环控制器] ---> 结束", step_no=self.step_no)
                 break
 
             if condition:
@@ -461,10 +478,11 @@ class LoopStepExecutor(BaseStepExecutor):
                     should_continue = False
 
             if iteration >= guard_limit:
-                raise StepExecutionError("循环次数超过安全阈值，疑似无限循环")
+                raise StepExecutionError("循环次数超过安全阈值, 疑似无限循环, 循环终止...")
 
             if not max_cycles and not condition:
                 should_continue = False
+                self.context.log(f"[循环控制器] ---> 结束", step_no=self.step_no)
 
     def _evaluate_condition(self, condition: str) -> bool:
         try:
@@ -528,11 +546,11 @@ class ConditionStepExecutor(BaseStepExecutor):
         if not self.compare(value, operation, except_value):
             result.success = True
             result.message = f"条件未满足: {desc}"
-            self.context.log(result.message)
+            self.context.log(result.message, step_no=self.step_no)
             return
 
         result.message = f"条件满足: {desc}"
-        self.context.log(result.message)
+        self.context.log(result.message, step_no=self.step_no)
         child_results = await self._execute_children()
         for child in child_results:
             result.append_child(child)
@@ -676,7 +694,7 @@ class HttpStepExecutor(BaseStepExecutor):
         actual = self._resolve_json_path(response_json, expr)
         success = ConditionStepExecutor.compare(actual, operation, expected)
         message = f"断言[{name}] {expr} {operation} {expected}, 实际值={actual}"
-        self.context.log(message)
+        self.context.log(message, step_no=self.step_no)
 
         return [{
             "name": name,
@@ -753,7 +771,7 @@ class AutoTestStepExecutionEngine:
             steps: Iterable[Dict[str, Any]],
             *,
             initial_variables: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[List[StepExecutionResult], List[str]]:
+    ) -> Tuple[List[StepExecutionResult], Dict[int, List[str]]]:
         async with StepExecutionContext(
                 case_id=case.get("id"),
                 case_code=case.get("case_code"),
@@ -764,11 +782,62 @@ class AutoTestStepExecutionEngine:
             results: List[StepExecutionResult] = []
 
             for step in ordered_root_steps:
+                context.step_code = step.get("step_code")
                 executor = StepExecutorFactory.create_executor(step, context)
                 result = await executor.execute()
                 results.append(result)
 
+                # 对于根步骤（parent_step_id 为 None），汇总所有子步骤的日志
+                if step.get("parent_step_id") is None:
+                    root_step_no = step.get("step_no")
+                    if root_step_no is not None:
+                        self._aggregate_root_step_logs(context, result, root_step_no)
+
             return results, context.logs
+
+    @staticmethod
+    def _aggregate_root_step_logs(
+            context: StepExecutionContext,
+            root_result: StepExecutionResult,
+            root_step_no: int
+    ) -> None:
+        """
+        汇总根步骤的所有子步骤日志
+
+        Args:
+            context: 执行上下文
+            root_result: 根步骤的执行结果
+            root_step_no: 根步骤编号
+        """
+
+        def collect_child_step_nos(result: StepExecutionResult) -> List[int]:
+            """递归收集所有子步骤的编号"""
+            step_nos = []
+            if result.step_no is not None:
+                step_nos.append(result.step_no)
+            for child in result.children:
+                step_nos.extend(collect_child_step_nos(child))
+            return step_nos
+
+        # 收集所有子步骤的编号（递归收集，包括子步骤的子步骤）
+        child_step_nos = []
+        for child in root_result.children:
+            child_step_nos.extend(collect_child_step_nos(child))
+
+        # 汇总所有子步骤的日志（按步骤编号排序）
+        aggregated_logs = []
+        for step_no in sorted(child_step_nos):
+            if step_no in context.logs:
+                aggregated_logs.extend(context.logs[step_no])
+
+        # 将根步骤的日志替换为：根步骤自己的日志 + 所有子步骤的汇总日志
+        if root_step_no in context.logs:
+            root_logs = context.logs[root_step_no]
+            # 根步骤日志 + 子步骤汇总日志
+            context.logs[root_step_no] = root_logs + aggregated_logs
+        else:
+            # 如果根步骤没有自己的日志，直接使用子步骤的汇总日志
+            context.logs[root_step_no] = aggregated_logs
 
 
 class AutoTestStepExecution:
@@ -784,47 +853,37 @@ class AutoTestStepExecution:
 
     async def get_case_info(self) -> Dict[str, Any]:
         # 提取用例信息（从第一个步骤中获取）
-        case_info = self.test_steps[0].get("case", {})
-        case = {
-            "id": case_info.get("id"),
-            "case_code": case_info.get("case_code"),
-            "case_name": case_info.get("case_name"),
-        }
-        print(f"\n用例信息:")
-        print(f"  用例ID: {case['id']}")
-        print(f"  用例代码: {case['case_code']}")
-        print(f"  用例名称: {case['case_name']}")
-        return case
+        case_info: dict = self.test_steps[0].get("case", {})
+        if not case_info:
+            raise ValueError("从第一个步骤中获取用例信息失败")
+        return case_info
 
     async def get_parent_step(self) -> List[Dict[str, Any]]:
         # 提取根步骤（parent_step_id为None的步骤）
         root_steps = [step for step in self.test_steps if step.get("parent_step_id") is None]
-        print(f"\n根步骤数量: {len(root_steps)}")
         return root_steps
 
     async def execute(self):
-
         # 创建执行引擎
         engine = AutoTestStepExecutionEngine()
-
         # 执行测试
         try:
-            case = await self.get_case_info()
+            case_info = await self.get_case_info()
+            print(f"\n用例信息:\n", json.dumps(case_info, ensure_ascii=False, indent=2))
+
             root_steps = await self.get_parent_step()
+            print(f"\n根步骤数量: {len(root_steps)}")
+
             results, logs = await engine.execute_case(
-                case=case,
+                case=case_info,
                 steps=root_steps,
                 initial_variables=self.initial_variables  # 可以在这里设置初始变量
             )
 
-            print("\n" + "=" * 80)
-            print("执行结果")
-            print("=" * 80)
-
             # 打印执行日志
             print("\n执行日志:")
-            for log in logs:
-                print(f"  {log}")
+            for log_code, log_message in logs.items():
+                print(f"{log_code}: \n" + '\n'.join(log_message))
 
             # 打印执行结果
             print("\n步骤执行结果:")
@@ -836,16 +895,17 @@ class AutoTestStepExecution:
             success_steps = sum(1 for r in self._count_all_results(results) if r.success)
             failed_steps = total_steps - success_steps
 
-            print("\n" + "=" * 80)
-            print("执行统计")
-            print("=" * 80)
-            print(f"总步骤数: {total_steps}")
-            print(f"成功步骤: {success_steps}")
-            print(f"失败步骤: {failed_steps}")
-            print(f"成功率: {success_steps / total_steps * 100:.2f}%" if total_steps > 0 else "N/A")
+            execute_detail: Dict[str, int] = {
+                "total_steps": total_steps,
+                "success_steps": success_steps,
+                "failed_steps": failed_steps,
+                "rate": f"{success_steps / total_steps * 100:.2f}%" if total_steps > 0 else "N/A"
+
+            }
+            print(f"\n执行统计:\n", json.dumps(execute_detail, ensure_ascii=False))
 
         except Exception as e:
-            print(f"\n执行异常: {type(e).__name__}: {e}")
+            print(f"\n执行异常: \n{type(e).__name__}: {e}")
             import traceback
             traceback.print_exc()
 
@@ -862,14 +922,14 @@ class AutoTestStepExecution:
         if result.elapsed:
             print(f"{prefix}   耗时: {result.elapsed:.3f}秒")
         if result.variables:
-            print(f"{prefix}   变量: {json.dumps(result.variables, ensure_ascii=False, indent=2)}")
+            print(f"{prefix}   变量: {json.dumps(result.variables, ensure_ascii=False)}")
         if result.validators:
-            print(f"{prefix}   断言: {json.dumps(result.validators, ensure_ascii=False, indent=2)}")
+            print(f"{prefix}   断言: {json.dumps(result.validators, ensure_ascii=False)}")
         if result.response:
-            print(f"{prefix}   响应: {json.dumps(result.response, ensure_ascii=False, indent=2)[:200]}...")
+            print(f"{prefix}   响应: {json.dumps(result.response, ensure_ascii=False)[:200]}...")
 
         for child in result.children:
-            cls._print_result(child, indent + 1)
+            cls._print_result(child, indent + 2)
 
     @classmethod
     def _count_all_results(cls, results: List[StepExecutionResult]) -> List[StepExecutionResult]:
