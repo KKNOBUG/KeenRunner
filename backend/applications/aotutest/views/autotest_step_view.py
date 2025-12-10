@@ -137,7 +137,8 @@ async def get_step_tree(
     """
     try:
         tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
-        return SuccessResponse(data=tree_data, message="获取步骤树成功")
+        step_counter = tree_data.pop(-1)
+        return SuccessResponse(data=tree_data, message="获取步骤树成功", total=step_counter["total_steps"])
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:

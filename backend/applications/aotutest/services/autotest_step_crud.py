@@ -16,7 +16,7 @@ from backend.applications.aotutest.models.autotest_model import (
 )
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate, AutoTestApiStepUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
+from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
 
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
@@ -30,7 +30,43 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
     async def get_by_case_id(self, case_id: int) -> List[Dict[str, Any]]:
         """
         根据用例ID获取所有步骤（包含所有子步骤、引用测试用例中的步骤）
-        核心功能：通过测试用例信息id查询所拥有的所有子级步骤
+
+        该方法通过递归方式构建完整的步骤树结构，包括：
+        1. 根步骤（parent_step_id 为 None 的步骤）
+        2. 所有子步骤（递归包含子步骤的子步骤）
+        3. 引用用例的步骤（如果步骤中配置了 quote_case_id）
+
+        同时会统计并记录该用例所拥有的步骤总数，包括：
+        - 直接步骤：属于该用例的所有步骤
+        - 子步骤：所有步骤的子级步骤（递归统计）
+        - 引用步骤：通过 quote_case_id 引用的其他用例的步骤
+
+        Args:
+            case_id (int): 测试用例ID
+
+        Returns:
+            List[Dict[str, Any]]: 步骤树列表，每个元素是一个根步骤及其完整的子树结构。
+                                 每个步骤字典包含以下字段：
+                                 - 步骤基本信息（id, step_no, step_name, step_type等）
+                                 - case: 所属用例信息
+                                 - children: 子步骤列表（递归结构）
+                                 - quote_steps: 引用用例的步骤列表（如果存在）
+                                 - quote_case: 引用用例的基本信息（如果存在）
+
+        Raises:
+            NotFoundException: 当指定的用例ID不存在时抛出异常
+
+        Note:
+            - 只返回状态为正常（state=-1）的步骤
+            - 步骤按照 step_no 排序
+            - 引用用例的步骤也会递归构建完整的树结构
+            - 步骤数量统计包括所有层级的子步骤和引用步骤
+
+        Example:
+            >>> crud = AutoTestApiStepCrud()
+            >>> steps = await crud.get_by_case_id(case_id=1)
+            >>> # steps 是一个列表，包含所有根步骤的完整树结构
+            >>> # 可以通过递归遍历 children 和 quote_steps 访问所有步骤
         """
         # 业务层验证：检查用例是否存在
         case = await AutoTestApiCaseInfo.filter(id=case_id, state=-1).first()
@@ -44,8 +80,41 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             state=-1
         ).order_by("step_no").all()
 
+        # 步骤计数器：用于统计该用例拥有的步骤总数
+        # 使用列表存储以便在嵌套函数中修改
+        step_counter = {
+            "direct_steps": 0,  # 直接属于该用例的步骤数（根步骤）
+            "child_steps": 0,  # 所有子步骤数（递归统计，不包括根步骤）
+            "quote_steps": 0,  # 引用用例的步骤数
+            "total_steps": 0  # 总步骤数（direct_steps + child_steps + quote_steps）
+        }
+
         # 递归构建步骤树
-        async def build_step_tree(step: AutoTestApiStepInfo) -> Dict[str, Any]:
+        async def build_step_tree(step: AutoTestApiStepInfo, is_quote: bool = False) -> Dict[str, Any]:
+            """
+            递归构建步骤树
+
+            Args:
+                step: 当前步骤对象
+                is_quote: 是否为引用步骤（用于统计区分）
+
+            Returns:
+                包含步骤信息和子树的字典
+            """
+            # 统计步骤数量
+            step_counter["total_steps"] += 1
+            if is_quote:
+                # 引用步骤及其所有子步骤都计入 quote_steps
+                step_counter["quote_steps"] += 1
+            else:
+                # 非引用步骤：根据是否有父步骤判断是根步骤还是子步骤
+                if step.parent_step_id is None:
+                    # 根步骤（parent_step_id 为 None）
+                    step_counter["direct_steps"] += 1
+                else:
+                    # 子步骤（parent_step_id 不为 None）
+                    step_counter["child_steps"] += 1
+
             # 获取步骤基本信息
             step_dict = await step.to_dict(fk=False)
 
@@ -55,14 +124,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 if case:
                     step_dict["case"] = await case.to_dict()
 
-            # 获取子步骤
+            # 获取子步骤（递归构建）
             children = await self.model.filter(
                 parent_step_id=step.id,
                 state=-1
             ).order_by("step_no").all()
 
             if children:
-                step_dict["children"] = [await build_step_tree(child) for child in children]
+                step_dict["children"] = [await build_step_tree(child, is_quote=is_quote) for child in children]
             else:
                 step_dict["children"] = []
 
@@ -80,7 +149,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                     quote_steps = []
                     for quote_step in quote_case_root_steps:
-                        quote_steps.append(await build_step_tree(quote_step))
+                        # 标记为引用步骤进行统计
+                        quote_steps.append(await build_step_tree(quote_step, is_quote=True))
 
                     step_dict["quote_steps"] = quote_steps
                     # 添加引用用例的基本信息
@@ -99,6 +169,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         for root_step in root_steps:
             result.append(await build_step_tree(root_step))
 
+        result.append(step_counter)
         return result
 
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestApiStepInfo:
@@ -250,4 +321,3 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
 
 AUTOTEST_API_STEP_CRUD = AutoTestApiStepCrud()
-
