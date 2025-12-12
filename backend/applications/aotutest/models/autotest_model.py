@@ -43,6 +43,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_desc = fields.CharField(max_length=2048, null=True, description="用例描述")
     case_tags = fields.CharField(max_length=255, null=True, description="用例标签")
     case_code = fields.CharField(max_length=64, default=generate_timestamp, unique=True, description="用例标识")
+    # case_steps = fields.IntField(default=0, ge=0, description="用例步骤数")
     case_version = fields.IntField(default=1, ge=1, description="用例版本")
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属项目")
 

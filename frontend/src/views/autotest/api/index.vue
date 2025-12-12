@@ -1,1057 +1,756 @@
 <template>
   <AppPage>
-    <n-space vertical :size="24">
-      <!-- 接口信息卡片 -->
-      <n-card title="Basic" size="small" hoverable>
-        <n-form
-            :rules="rules"
-            :model="state.form"
-            label-width="auto"
-            label-align="right"
-            label-placement="left"
-            ref="formRef"
-        >
-          <!-- 测试用例调试信息 -->
-          <n-grid :cols="24" :x-gap="24">
-            <n-gi :span="5">
-              <n-form-item label="请求方式" path="method">
-                <n-select
-                    v-model:value="state.form.method"
-                    placeholder="请选择请求方式"
-                    :options="methodOptions"
-                    :render-label="renderMethodLabel"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="15">
-              <n-form-item label="请求地址" path="url">
-                <n-input
-                    v-model:value="state.form.url"
-                    placeholder="请输入请求地址"
-                    clearable
-                    @blur="handleUrlBlur"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="4">
-              <n-space>
-                <n-button type="primary" @click="debugging">调试</n-button>
-                <n-button type="info" @click="updateOrCreate">保存</n-button>
-              </n-space>
-            </n-gi>
-          </n-grid>
-
-          <!-- 测试用例应用信息 -->
-          <n-grid :cols="24" :x-gap="24">
-            <n-gi :span="8">
-              <n-form-item label="应用系统" path="project_id">
-                <n-select
-                    v-model:value="state.form.project_id"
-                    placeholder="请输入应用系统"
-                    :options="projectOptions"
-                    @update:value="filterModulesAndEnvs"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="8">
-              <n-form-item label="应用模块" path="module_id">
-                <n-select
-                    v-model:value="state.form.module_id"
-                    placeholder="请选择应用模块"
-                    :options="moduleOptions"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="8">
-              <n-form-item label="应用环境" path="env_id">
-                <n-select
-                    v-model:value="state.form.env_id"
-                    placeholder="请选择应用环境"
-                    :options="envOptions"
-                />
-              </n-form-item>
-            </n-gi>
-
-          </n-grid>
-
-          <!-- 测试用例基础信息 -->
-          <n-grid :cols="24" :x-gap="24">
-            <n-gi :span="8">
-              <n-form-item label="用例名称" path="testcase_name">
-                <n-input
-                    v-model:value="state.form.testcase_name"
-                    placeholder="请输入测试用例名称"
-                    clearable
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="8">
-              <n-form-item label="优先等级" path="priority">
-                <n-select
-                    v-model:value="state.form.priority"
-                    placeholder="请选择优等级"
-                    :options="priorityOptions"
-                    :render-label="renderPriorityLabel"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="8">
-              <n-form-item label="用例标签" path="testcase_tags">
-                <n-input
-                    v-model:value="state.form.testcase_tags"
-                    placeholder="请输入测试用例标签"
-                    clearable
-                />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-          <n-grid :cols="24" :x-gap="24">
-            <n-gi :span="24">
-              <n-form-item label="接口描述" path="description">
-                <n-input
-                    type="textarea"
-                    v-model:value="state.form.description"
-                    placeholder="请输入接口描述"
-                    clearable
-                    :rows="5"
-                    style="min-height: 6rem;"
-                />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-
-        </n-form>
-      </n-card>
-
-      <!-- 请求配置卡片 -->
-      <n-card title="Request" size="small" hoverable>
-        <n-tabs type="line" animated>
-          <n-tab-pane name="request_headers" tab="请求头">
-            <template #tab>
-              <n-badge :value="state.form.headers.length" :max="99" show-zero>
-                <span>请求头</span>
-              </n-badge>
-            </template>
-            <KeyValueEditor
-                v-model:items="state.form.headers"
-                :body-type="'none'"
-                :is-for-body="false"
-            />
-          </n-tab-pane>
-          <n-tab-pane name="request_body" tab="请求体">
-            <template #tab>
-              <n-badge :value="getBodyCount" :max="99" show-zero>
-                <span>请求体</span>
-              </n-badge>
-            </template>
-            <n-radio-group v-model:value="state.form.request_body_type" name="request_body_type">
-              <n-space>
-                <n-radio value="none">none</n-radio>
-                <n-radio value="params">params</n-radio>
-                <n-radio value="form-data">form-data</n-radio>
-                <n-radio value="x-www-form-urlencoded">x-www-form-urlencoded</n-radio>
-                <n-radio value="json">json</n-radio>
-              </n-space>
-            </n-radio-group>
-            <n-button v-if="state.form.request_body_type === 'json'" @click="formatJson" class="ml-10" size="tiny" round
-                      text
-                      type="primary">美化
-            </n-button>
-            <template v-if="state.form.request_body_type === 'params'">
-              <KeyValueEditor
-                  v-model:items="state.form.params"
-                  :body-type="state.form.request_body_type"
-                  :is-for-body="true"
-              />
-            </template>
-            <template v-if="state.form.request_body_type === 'form-data'">
-              <KeyValueEditor
-                  v-model:items="state.form.form_data"
-                  :body-type="state.form.request_body_type"
-                  :enableFile="true"
-                  :is-for-body="true"
-              />
-            </template>
-            <template v-if="state.form.request_body_type === 'x-www-form-urlencoded'">
-              <KeyValueEditor
-                  v-model:items="state.form.x_www_form_urlencoded"
-                  :body-type="state.form.request_body_type"
-                  :is-for-body="true"
-              />
-            </template>
-            <template v-if="state.form.request_body_type === 'json'">
-              <monaco-editor
-                  v-model:value="state.form.json_body"
-                  :options="monacoEditorOptions(false)"
-                  class="json-editor"
-                  style="min-height: 400px; height: auto;"
-              />
-            </template>
-
-          </n-tab-pane>
-          <n-tab-pane name="variables" tab="变量">
-            <template #tab>
-              <n-badge :value="state.form.variables.length" :max="99" show-zero>
-                <span>变量</span>
-              </n-badge>
-            </template>
-            <KeyValueEditor
-                v-model:items="state.form.variables"
-                :body-type="'none'"
-                :is-for-body="false"
-            />
-          </n-tab-pane>
-        </n-tabs>
-      </n-card>
-
-      <!-- 响应结果卡片 -->
-      <n-card ref="debugResultRef" title="调试结果" size="small" hoverable>
-        <!-- 在卡片标题右侧添加响应状态信息 -->
-        <template #header-extra>
-          <n-space v-if="response" align="center">
-            <n-tag :type="responseStatusType" round size="small">Status: {{ response.status }}</n-tag>
-            <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
-            <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
-            <n-tag round>Type: {{ contentType }}</n-tag>
-          </n-space>
-        </template>
-        <n-tabs type="line" animated>
-          <!-- 响应信息 -->
-          <n-tab-pane name="responseInfo" tab="响应信息">
-            <n-space vertical :size="16" v-if="response">
-              <n-collapse :default-expanded-names="['responseHeaders', 'responseCookies', 'responseBody']"
-                          arrow-placement="right">
-                <n-collapse-item title="Headers" name="responseHeaders">
-                  <n-space vertical :size="12">
-                    <pre v-if="responseHeadersText"
-                         @click="copyTextContent(responseHeadersText)">{{ responseHeadersText }}</pre>
-                  </n-space>
-                </n-collapse-item>
-                <n-collapse-item title="Cookies" name="responseCookies">
-                  <n-space vertical :size="12">
-                    <pre v-if="responseCookiesText"
-                         @click="copyTextContent(responseCookiesText)">{{ responseCookiesText }}</pre>
-                  </n-space>
-                </n-collapse-item>
-                <n-collapse-item title="Body" name="responseBody">
-                  <n-space vertical :size="12">
-                    <div v-if="isJsonResponse">
-                      <monaco-editor
-                          v-model:value="response.data"
-                          :options="monacoEditorOptions(true)"
-                          class="json-editor"
-                          style="min-height: 400px; height: auto;"
-                      />
+    <n-grid :cols="24" :x-gap="16">
+      <n-gi :span="7">
+        <n-card size="small" hoverable>
+          <template #header>
+            <div class="step-header">
+              <span class="step-count">{{ totalStepsCount }}个步骤</span>
+              <n-button
+                  text
+                  size="small"
+                  @click="toggleAllExpand"
+                  class="collapse-btn"
+              >
+                <template #icon>
+                  <TheIcon
+                      :icon="isAllExpanded ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down'"/>
+                </template>
+              </n-button>
+            </div>
+          </template>
+          <div class="step-tree-container">
+            <div
+                v-for="(step, index) in steps"
+                :key="step.id"
+                class="step-item"
+                :class="{ 'is-selected': selectedKeys.includes(step.id) }"
+                :draggable="true"
+                @dragstart="handleDragStart($event, step.id, null, index)"
+                @dragover.prevent="handleDragOver($event)"
+                @drop="handleDrop($event, step.id, null, index)"
+                @click="handleSelect([step.id])"
+            >
+              <div class="step-item-distance">
+                  <span class="step-name" :title="step.name">
+                    <TheIcon
+                        :icon="getStepIcon(step.type)"
+                        :size="18"
+                        class="step-icon"
+                        :class="getStepIconClass(step.type)"
+                    />
+                    <span class="step-name-text">{{ getStepDisplayName(step.name, step.id) }}</span>
+                    <span class="step-actions">
+                      <span class="step-number">#{{ getStepNumber(step.id) }}</span>
+                      <n-button
+                          text
+                          size="tiny"
+                          @click.stop="handleCopyStep(step.id)"
+                          class="action-btn"
+                      >
+                        <template #icon>
+                          <TheIcon icon="material-symbols:content-copy" :size="16"/>
+                        </template>
+                      </n-button>
+                      <n-popconfirm @positive-click="handleDeleteStep(step.id)" @click.stop>
+                        <template #trigger>
+                          <n-button text size="tiny" type="error" class="action-btn">
+                            <template #icon>
+                              <TheIcon icon="material-symbols:delete" :size="16"/>
+                            </template>
+                          </n-button>
+                        </template>
+                        确认删除该步骤?
+                      </n-popconfirm>
+                    </span>
+                    </span>
+                <div v-if="stepDefinitions[step.type]?.allowChildren">
+                  <div
+                      v-for="(child, childIndex) in step.children"
+                      :key="child.id"
+                      class="step-item"
+                      :class="{ 'is-selected': selectedKeys.includes(child.id) }"
+                      :draggable="true"
+                      @dragstart.stop="handleDragStart($event, child.id, step.id, childIndex)"
+                      @dragover.prevent.stop="handleDragOver($event)"
+                      @drop.stop="handleDrop($event, child.id, step.id, childIndex)"
+                      @click.stop="handleSelect([child.id])"
+                  >
+                    <div class="step-item-child">
+                        <span class="step-name" :title="child.name">
+                          <TheIcon
+                              :icon="getStepIcon(child.type)"
+                              :size="18"
+                              class="step-icon"
+                              :class="getStepIconClass(child.type)"
+                          />
+                          <span class="step-name-text">{{ getStepDisplayName(child.name, child.id) }}</span>
+                          <span class="step-actions">
+                            <span class="step-number">#{{ getStepNumber(child.id) }}</span>
+                            <n-button text size="tiny" @click.stop="handleCopyStep(child.id)" class="action-btn">
+                              <template #icon>
+                                <TheIcon icon="material-symbols:content-copy" :size="16"/>
+                              </template>
+                            </n-button>
+                            <n-popconfirm @positive-click="handleDeleteStep(child.id)" @click.stop>
+                              <template #trigger>
+                                <n-button text size="tiny" type="error" class="action-btn">
+                                  <template #icon>
+                                    <TheIcon icon="material-symbols:delete" :size="14"/>
+                                  </template>
+                                </n-button>
+                              </template>
+                              确认删除该步骤?
+                            </n-popconfirm>
+                          </span>
+                      </span>
                     </div>
-                    <n-code
-                        v-else
-                        :code="typeof response.data === 'object'? JSON.stringify(response.data) : response.data || ''"
-                        :language="responseLanguage"
-                        show-line-numbers
-                        class="response-code"
-                    />
-                  </n-space>
-                </n-collapse-item>
-              </n-collapse>
-            </n-space>
-          </n-tab-pane>
-
-          <!-- 请求信息 -->
-          <n-tab-pane name="requestInfo" tab="请求信息">
-            <n-space vertical :size="16" v-if="response">
-              <n-collapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']">
-                <n-collapse-item title="Basic" name="requestBasic">
-                  <n-space vertical :size="12">
-                    <n-descriptions bordered :column="2" size="small">
-                      <n-descriptions-item label="方法">
-                        <n-tag :type="methodTagType">{{ requestInfo.method }}</n-tag>
-                      </n-descriptions-item>
-                      <n-descriptions-item label="URL">
-                        <n-text copyable>{{ requestInfo.url }}</n-text>
-                      </n-descriptions-item>
-                    </n-descriptions>
-                  </n-space>
-                </n-collapse-item>
-                <n-collapse-item title="Headers" name="requestHeaders">
-                  <n-space vertical :size="12">
-                    <pre v-if="requestHeadersText"
-                         @click="copyTextContent(requestHeadersText)">{{ requestHeadersText }}</pre>
-                  </n-space>
-                </n-collapse-item>
-                <n-collapse-item title="Cookies" name="requestCookies">
-                  <n-space vertical :size="12">
-                    <pre v-if="requestCookiesText"
-                         @click="copyTextContent(requestCookiesText)">{{ requestCookiesText }}</pre>
-                  </n-space>
-                </n-collapse-item>
-                <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
-                  <div v-if="isJsonRequest">
-                    <monaco-editor
-                        v-model:value="formattedRequestJson"
-                        :options="monacoEditorOptions(true)"
-                        class="json-editor"
-                        style="min-height: 400px; height: auto;"
-                    />
                   </div>
-                  <n-data-table
-                      v-else
-                      :columns="[{title:'Key',key:'key'}, {title:'Value',key:'value'}]"
-                      :data="requestBodyData"
-                      size="small"
-                  />
-                </n-collapse-item>
-              </n-collapse>
-
-            </n-space>
-
-          </n-tab-pane>
-          <n-tab-pane name="extract" tab="数据提取">数据提取</n-tab-pane>
-          <n-tab-pane name="assert" tab="断言结果">断言结果</n-tab-pane>
-          <n-tab-pane name="logs" tab="执行日志">执行日志</n-tab-pane>
-        </n-tabs>
-      </n-card>
-    </n-space>
+                  <div class="step-add-btn">
+                    <n-dropdown
+                        trigger="click"
+                        :options="addOptions"
+                        :render-label="renderDropdownLabel"
+                        @select="(key) => handleAddStep(key, step.id)"
+                    >
+                      <n-button dashed size="small" class="add-step-btn" @click.stop>添加步骤</n-button>
+                    </n-dropdown>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <n-dropdown
+                trigger="click"
+                :options="addOptions"
+                :render-label="renderDropdownLabel"
+                @select="(key) => handleAddStep(key, null)"
+            >
+              <n-button dashed size="small" class="add-step-btn">添加步骤</n-button>
+            </n-dropdown>
+          </div>
+        </n-card>
+      </n-gi>
+      <n-gi :span="17">
+        <n-card :title="currentStepTitle" size="small" hoverable>
+          <component
+              v-if="currentStep"
+              :is="editorComponent"
+              :config="currentStep.config"
+              @update:config="(val) => updateStepConfig(currentStep.id, val)"
+          />
+          <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
+        </n-card>
+      </n-gi>
+    </n-grid>
   </AppPage>
 </template>
 
 <script setup>
-import {computed, h, onMounted, reactive, ref} from 'vue'
-import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText} from 'naive-ui'
-import hljs from 'highlight.js/lib/core'
-import json from 'highlight.js/lib/languages/json'
-import api from "@/api";
+import {computed, h, ref, onMounted, nextTick, watch, onUpdated} from 'vue'
+import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm} from 'naive-ui'
+import TheIcon from '@/components/icon/TheIcon.vue'
 import AppPage from "@/components/page/AppPage.vue";
-import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
-import MonacoEditor from "@/components/monaco/index.vue";
-import {useUserStore} from '@/store';
+import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
+import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
+import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
+import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
+import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 
-
-// 注册JSON高亮
-hljs.registerLanguage('json', json)
-const formRef = ref(null);
-const projectOptions = ref([])  // 应用系统下拉选项
-const moduleOptions = ref([])   // 应用模块下拉选项
-const envOptions = ref([])     // 应用环境下拉选项
-const response = ref(null) // 存储调试响应结果
-const requestInfo = ref({  // 存储请求的详细信息
-  url: '',
-  method: '',
-  headers: {},
-  request_body_type: 'none',
-  json_body: ''
-})
-
-
-// 表单验证规则
-const rules = {
-  method: [
-    {
-      required: true,
-      message: '请选择请求方式',
-      trigger: 'change'
-    }
-  ],
-  url: [
-    {
-      required: true,
-      message: '请输入请求地址',
-      trigger: 'blur'
-    }
-  ],
-  project_id: [
-    {
-      required: true,
-      type: 'number',
-      message: '请选择应用系统',
-      trigger: ['blur', 'change']
-    }
-  ],
-  module_id: [
-    {
-      required: false,
-      type: 'number',
-      message: '请选择应用模块',
-      trigger: 'blur'
-    }
-  ],
-  env_id: [
-    {
-      required: true,
-      type: 'number',
-      message: '请选择应用环境',
-      trigger: ['blur', 'change']
-    }
-  ],
-  testcase_name: [
-    {
-      required: true,
-      message: '请输入测试用例名称',
-      trigger: 'blur'
-    }
-  ],
-  priority: [
-    {
-      required: true,
-      message: '请选择测试案例优先级',
-      trigger: 'blur'
-    }
-  ],
-  testcase_tags: [
-    {
-      required: false,
-      message: '请输入测试用例标签',
-      trigger: 'blur'
-    }
-  ],
-  description: [
-    {
-      required: false,
-      message: '请输入测试案例描述',
-      trigger: 'blur'
-    }
-  ]
+const stepDefinitions = {
+  loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
+  code: {label: '执行代码', allowChildren: false, icon: 'teenyicons:python-outline'},
+  http: {label: 'HTTP 请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
+  if: {label: '分支条件', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
+  wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
+  database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'}
 }
 
-/* 表单状态管理 */
-const state = reactive({
-  form: {
-    url: 'http://192.168.94.229:8518/base/auth/access_token',
-    method: 'POST',
-    headers: [
-      {key: 'Accept', value: '*/*'},
-      {key: 'Accept-Encoding', value: 'gzip, deflate, br'},
-      {key: 'Connection', value: 'keep-alive'},
-      {key: 'Content-Type', value: '*/*'},
-    ],
-    request_body_type: 'json',
-    params: [],
-    form_data: [],
-    x_www_form_urlencoded: [],
-    json_body: '{"password": "123456", "username": "admin"}',
-    priority: '低',
-    testcase_name: '测试',
-    testcase_tags: '',
-    description: '测试',
-    project_id: 1,
-    module_id: 1,
-    env_id: 1,
-    variables: [],
-  }
-})
-
-
-/* 生命周期钩子 */
-onMounted(async () => {
-  try {
-    // 初始化加载项目列表
-    const response = await api.getProjectList({page: 1, page_size: 1000})
-    projectOptions.value = response.data.map(item => ({label: item.name, value: Number(item.id)}))
-  } catch (error) {
-    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
-  }
-})
-
-// 请求方式下拉框
-const methodOptions = [
-  {label: 'GET', value: 'GET', color: '#49CC90'},
-  {label: 'POST', value: 'POST', color: '#61AFFE'},
-  {label: 'PUT', value: 'PUT', color: '#FFA500'},
-  {label: 'DELETE', value: 'DELETE', color: '#F4511E'}
-]
-const renderMethodLabel = (option) => {
-  return h(
-      'span',
-      {style: {color: option.color, fontWeight: '600'}},
-      option.label
-  )
-}
-// 优先级下拉框
-const priorityOptions = [
-  {label: '低', value: '低', color: '#49CC90'},
-  {label: '中', value: '中', color: '#61AFFE'},
-  {label: '高', value: '高', color: '#FFA500'},
-  {label: '危', value: '危', color: '#F4511E'}
-]
-const renderPriorityLabel = (option) => {
-  return h(
-      'span',
-      {style: {color: option.color, fontWeight: '600'}},
-      option.label
-  )
+const editorMap = {
+  loop: ApiLoopEditor,
+  code: ApiCodeEditor,
+  http: ApiHttpEditor,
+  if: ApiIfEditor,
+  wait: ApiWaitEditor
 }
 
-/* 根据项目ID过滤模块和环境 */
-const filterModulesAndEnvs = async (projectId) => {
-  try {
-    // 获取模块列表
-    const moduleResponse = await api.getModuleList({page: 1, page_size: 999, project_id: projectId})
-    moduleOptions.value = moduleResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
-    // 获取环境列表
-    const envResponse = await api.getEnvList({page: 1, page_size: 999, project_id: projectId})
-    envOptions.value = envResponse.data.map(item => ({label: item.name, value: Number(item.id)}))
-  } catch (error) {
-    $message.error(`错误：\n${error.response?.data?.message || error.message}`)
-  }
-}
+let seed = 1000
+const genId = () => `step-${seed++}`
 
-/* 请求体数量计算 */
-const getBodyCount = computed(() => {
-  switch (state.form.request_body_type) {
-    case 'params':
-      return state.form.params.length
-    case 'form-data':
-      return state.form.form_data.length
-    case 'x-www-form-urlencoded':
-      return state.form.x_www_form_urlencoded.length
-    case 'json':
-      return state.form.json_body.trim() ? 1 : 0 // JSON内容存在则计1
-    default:
-      return 0
-  }
-})
-
-watch(
-    () => state.form.json_body,
-    (newVal) => {
-      if (newVal?.trim() && !['json'].includes(state.form.request_body_type)) {
-        state.form.request_body_type = 'json'
+const buildDefaultSteps = () => ([
+  {
+    id: genId(),
+    type: 'loop',
+    name: '循环 3 次',
+    config: {mode: 'times', times: 3, interval: 0},
+    children: [
+      {
+        id: genId(),
+        type: 'code',
+        name: '执行代码 - 创建随机变量1',
+        config: {}
       }
-    },
-    {deep: true}
-)
-
-const monacoEditorOptions = (readOnly) => {
-  const options = {
-    // 基础配置
-    theme: 'vs-dark',
-    language: 'json',
-    fontSize: 14,
-    tabSize: 4,
-    // 布局与外观
-    automaticLayout: true,
-    minimap: {
-      enabled: true
-    },
-    lineNumbers: 'on',
-    renderLineHighlight: 'line',
-    wordWrap: 'off',
-    scrollBeyondLastLine: false,
-    // 其他
-    folding: true,
-    foldingStrategy: 'auto',
-    roundedSelection: false,
-    cursorStyle: 'line',
+    ]
+  },
+  {
+    id: genId(),
+    type: 'http',
+    name: '登录ZERORUNNER系统',
+    config: {}
+  },
+  {
+    id: genId(),
+    type: 'if',
+    name: 'If ${token} not_none',
+    config: {left: '${token}', operator: 'not_empty', remark: '判断token是否获取成功'},
+    children: [
+      {id: genId(), type: 'code', name: '执行代码—创建随机变量2', config: {}},
+      {id: genId(), type: 'wait', name: 'Wait 等待 2 秒', config: {seconds: 2}},
+      {id: genId(), type: 'http', name: 'AP POST 查询测试用例信息列表', config: {}}
+    ]
   }
-  if (readOnly) {
-    options.readOnly = true
-  }
+])
 
-  return options
-}
+const steps = ref(buildDefaultSteps())
+const selectedKeys = ref([steps.value[0]?.id].filter(Boolean))
+const dragState = ref({draggingId: null, dragOverId: null, dragOverParent: null, dragOverIndex: null})
 
+const addOptions = Object.entries(stepDefinitions).map(([value, item]) => ({
+  label: item.label,
+  key: value,
+  icon: item.icon
+}))
 
-// 请求类型
-const contentType = computed(() => {
-  return response.value?.headers?.['Content-Type']?.split(';')[0] || 'text/plain'
-})
-
-// 响应类型
-const isJsonResponse = computed(() => {
-  return contentType.value.includes('json')
-})
-
-const responseLanguage = computed(() => {
-  const ct = contentType.value.toLowerCase()
-  if (ct.includes('json')) return 'json'
-  if (ct.includes('xml')) return 'xml'
-  if (ct.includes('html')) return 'html'
-  return 'text'
-})
-// 响应格式化
-const formattedResponse = computed(() => {
-  try {
-    return JSON.stringify(response.value.data, null, 4)
-  } catch {
-    return response.value.data
-  }
-})
-
-const responseHeadersText = computed(() => {
-  return Object.entries(response.value?.headers || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
-})
-const responseCookiesText = computed(() => {
-  return Object.entries(response.value?.cookies || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
-})
-const requestHeadersText = computed(() => {
-  return Object.entries(requestInfo.value.headers || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
-})
-const requestCookiesText = computed(() => {
-  return Object.entries(requestInfo.value.cookies || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
-})
-const copyTextContent = (text) => {
-  navigator.clipboard.writeText(text).then(() => {
-    $message.success('复制成功');
-  }).catch((err) => {
-    $message.error(`复制失败: ${err.message}`);
-  });
-}
-
-const responseStatusType = computed(() => {
-  if (!response.value) return 'default'
-  if (response.value.status === 200) {
-    return formattedResponse.value?.status === '000000' ? 'success' : 'error';
-  }
-  return response.value.status >= 400 ? 'error' : 'success'
-})
-
-const durationTagType = computed(() => {
-  if (!response.value) return 'default'
-  return response.value.duration > 1000 ? 'warning' : 'success'
-})
-
-const sizeTagType = computed(() => {
-  if (!response.value) return 'default'
-  return parseFloat(response.value.size) > 100 ? 'warning' : 'success'
-})
-
-// 响应-请求信息相关
-const methodTagType = computed(() => {
-  const method = requestInfo.value.method?.toUpperCase()
-  return {
-    GET: 'success',
-    POST: 'info',
-    PUT: 'warning',
-    DELETE: 'error'
-  }[method] || 'default'
-})
-
-
-const requestBodyType = computed(() => {
-  const typeMap = {
-    'form-data': 'Form Data',
-    'x-www-form-urlencoded': 'Form URL Encoded',
-    'json': 'JSON'
-  }
-  return typeMap[requestInfo.value.request_body_type] || 'Params'
-})
-
-const isJsonRequest = computed(() => requestInfo.value.request_body_type === 'json')
-
-const formattedRequestJson = computed(() => {
-  try {
-    return JSON.stringify(JSON.parse(requestInfo.value.json_body), null, 4)
-  } catch {
-    return requestInfo.value.json_body
-  }
-})
-
-const requestBodyData = computed(() => {
-  switch (requestInfo.value.request_body_type) {
-    case 'params':
-      return state.form.form_data.filter(item => item.key)
-    case 'form-data':
-      return state.form.form_data.filter(item => item.key)
-    case 'x-www-form-urlencoded':
-      return state.form.x_www_form_urlencoded.filter(item => item.key)
-    default:
-      return []
-  }
-})
-
-
-const debugResultRef = ref(null)
-
-const handleParamsRequest = (params) => {
-  return params
-      .filter(item => item.key)
-      .reduce((acc, {key, value}) => {
-        acc[key] = value;
-        return acc;
-      }, {});
-}
-
-const handleFormDataRequest = async (formData) => {
-  const processedData = {};
-  for (const item of formData) {
-    if (item.key) {
-      if (item.type === 'file' && item.value instanceof File) {
-        // 处理文件上传
-        const reader = new FileReader();
-        const fileContent = await new Promise((resolve) => {
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(item.value);
-        });
-
-        processedData[item.key] = {
-          file: fileContent,
-          filename: item.value.name,
-          type: item.value.type,
-          size: item.value.size
-        };
-      } else {
-        // 处理普通字段
-        processedData[item.key] = item.value;
+// 计算总步骤数（包括子步骤）
+const totalStepsCount = computed(() => {
+  const countSteps = (list) => {
+    let count = 0
+    for (const step of list) {
+      count++
+      if (step.children && step.children.length) {
+        count += countSteps(step.children)
       }
     }
+    return count
   }
-  return processedData;
+  return countSteps(steps.value)
+})
+
+// 判断是否全部展开（简化处理，这里假设总是展开的）
+const isAllExpanded = ref(true)
+
+const toggleAllExpand = () => {
+  // 这里可以实现折叠/展开逻辑，暂时简化处理
+  isAllExpanded.value = !isAllExpanded.value
 }
 
-const handleUrlEncodedRequest = (data) => {
-  return data.reduce((acc, {key, value}) => {
-    if (key) acc[key] = value;
-    return acc;
-  }, {});
-}
-
-const handleJsonRequest = (jsonString) => {
-  try {
-    return JSON.parse(jsonString || '{}');
-  } catch (e) {
-    throw new Error('JSON格式错误，请检查输入');
-  }
-}
-
-const processHeaders = (headers) => {
-  return headers.reduce((acc, {key, value}) => {
-    if (key) acc[key] = value;
-    return acc;
-  }, {});
-}
-
-const processVariables = (variables) => {
-  return variables.reduce((acc, {key, value}) => {
-    if (key) acc[key] = value;
-    return acc;
-  }, {});
-}
-
-// ----------------------
-
-// Function to parse query parameters from a URL
-const parseQueryParams = (url) => {
-  const params = new URLSearchParams(url.split('?')[1] || '');
-  return Array.from(params.entries()).map(([key, value]) => ({
-    key: decodeURIComponent(key),
-    value: decodeURIComponent(value)
-  }));
-};
-
-// Function to update the URL based on params
-const updateUrlFromParams = () => {
-  const url = new URL(state.form.url.split('?')[0], window.location.origin);
-  state.form.params.forEach(({key, value}) => {
-    if (key) {
-      url.searchParams.set(encodeURIComponent(key), encodeURIComponent(value));
+const findStep = (id, list = steps.value) => {
+  for (const step of list) {
+    if (step.id === id) return step
+    if (step.children && step.children.length) {
+      const found = findStep(id, step.children)
+      if (found) return found
     }
-  });
-  state.form.url = url.toString(); // 移除 decodeURIComponent
-};
-
-// Watcher to handle changes in the method
-watch(
-    () => state.form.method,
-    (newMethod) => {
-      if (newMethod === 'GET') {
-        state.form.params = parseQueryParams(state.form.url);
-      }
-    },
-    {immediate: true}
-);
-
-// Watcher to handle changes in params
-watch(
-    () => state.form.params,
-    (newParams) => {
-      if (state.form.method === 'GET') {
-        updateUrlFromParams();
-      }
-    },
-    {deep: true}
-);
-
-// Function to handle URL input blur event
-const handleUrlBlur = () => {
-  if (state.form.method === 'GET') {
-    state.form.params = parseQueryParams(state.form.url);
   }
-};
+  return null
+}
 
-
-// -----
-const downloadFile = (blob, filename) => {
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
-};
-
-const extractFilename = (contentDisposition) => {
-  const match = contentDisposition.match(/filename\*=(?:UTF-8'')?(.+)/i);
-  if (match) {
-    return decodeURIComponent(match[1]);
+const findStepParent = (id, list = steps.value, parent = null) => {
+  for (const step of list) {
+    if (step.id === id) return parent
+    if (step.children && step.children.length) {
+      const found = findStepParent(id, step.children, step)
+      if (found !== null) return found
+    }
   }
-  // 获取当前日期和时间
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0'); // 月份从0开始
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  return `${year}${month}${day}${hours}${minutes}${seconds}_DOWNLOAD`;
-};
-// ----------------------
+  return null
+}
 
+const handleSelect = (keys) => {
+  selectedKeys.value = keys
+}
 
-/* 调试方法 */
-const debugging = async () => {
-  const userStore = useUserStore();
-  const currentUser = userStore.username;
-  const valid = await formRef.value.validate();
-  if (!valid) {
-    $message.warning("请填写必填字段");
-    return;
+const currentStep = computed(() => {
+  const key = selectedKeys.value?.[0]
+  if (!key) return null
+  return findStep(key)
+})
+
+const editorComponent = computed(() => {
+  const step = currentStep.value
+  if (!step) return null
+  return editorMap[step.type] || null
+})
+
+const currentStepTitle = computed(() => {
+  if (!currentStep.value) return '步骤配置'
+  return stepDefinitions[currentStep.value.type]?.label || '步骤配置'
+})
+
+const insertStep = (parentId, type, index = null) => {
+  const def = stepDefinitions[type]
+  if (!def) return null
+  const newStep = {
+    id: genId(),
+    type,
+    name: `${def.label}-${new Date().getTime()}`,
+    config: {},
+    children: def.allowChildren ? [] : undefined
   }
-
-  try {
-    // 保存请求信息用于显示
-    requestInfo.value = {
-      method: state.form.method,
-      url: state.form.url,
-      headers: processHeaders(state.form.headers),
-      request_body_type: state.form.request_body_type,
-      json_body: state.form.json_body
-    };
-
-    // 构造请求数据，匹配后端 ApiTestCaseCreate 模型
-    const data = {
-      url: state.form.url,
-      method: state.form.method,
-      headers: processHeaders(state.form.headers),
-
-      // 根据请求体类型设置对应的字段
-      params: state.form.request_body_type === 'params' ?
-          handleParamsRequest(state.form.params) : {},
-
-      json_body: state.form.request_body_type === 'json' ?
-          handleJsonRequest(state.form.json_body) : {},
-
-      form_data: state.form.request_body_type === 'form-data' ?
-          await handleFormDataRequest(state.form.form_data) : {},
-
-      x_www_form_urlencoded: state.form.request_body_type === 'x-www-form-urlencoded' ?
-          handleUrlEncodedRequest(state.form.x_www_form_urlencoded) : {},
-
-      // 测试用例基本信息
-      project_id: state.form.project_id,
-      module_id: state.form.module_id,
-      env_id: state.form.env_id,
-      priority: state.form.priority,
-      testcase_name: state.form.testcase_name,
-      testcase_tags: state.form.testcase_tags,
-      description: state.form.description,
-
-      // 变量和用户信息
-      variables: processVariables(state.form.variables),
-      created_user: currentUser,
-      updated_user: currentUser,
-    };
-
-    const responseData = await api.debugging(data);
-
-    if (responseData.code === '000000') {
-      response.value = responseData.data;
-
-      // 检查响应是否为文件类型
-      const contentType = response.value.headers['Content-Type'];
-      if (contentType && contentType.includes('application/octet-stream')) {
-        const blob = new Blob([response.value.data], { type: contentType });
-        const contentDisposition = response.value.headers['Content-Disposition'];
-        const filename = extractFilename(contentDisposition);
-        downloadFile(blob, filename);
-      } else {
-        // 自动格式化JSON
-        if (isJsonResponse.value) {
-          response.value.data = formattedResponse.value;
-        }
-        $message.success('调试成功');
-      }
-
-      // 滚动到调试结果区域
-      nextTick(() => {
-        debugResultRef.value?.$el?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
-      });
+  if (!parentId) {
+    // 添加到根级别
+    if (index !== null) {
+      steps.value.splice(index, 0, newStep)
     } else {
-      $message.error(`请求失败：${responseData.message}`);
+      steps.value.push(newStep)
     }
-  } catch (error) {
-    $message.error(`调试失败：${error.message}`);
+    return newStep
   }
-};
-
-const updateOrCreate = async () => {
-  // 获取当前登录用户信息
-  const userStore = useUserStore();
-  const currentUser = userStore.username;
-
-  // 表单验证
-  await formRef.value?.validate();
-
-  try {
-    // 构造请求数据
-    const data = {
-      url: state.form.url,
-      method: state.form.method,
-      // 处理 headers，转换为对象格式
-      headers: state.form.headers.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value;
-        return acc;
-      }, {}),
-
-      // 根据请求体类型设置对应的参数
-      params: state.form.request_body_type === 'params' ?
-          handleParamsRequest(state.form.params) : {},
-
-      json_body: state.form.request_body_type === 'json' ?
-          handleJsonRequest(state.form.json_body) : {},
-
-      form_data: state.form.request_body_type === 'form-data' ?
-          state.form.form_data.reduce((acc, {key, value}) => {
-            if (key) acc[key] = value;
-            return acc;
-          }, {}) : {},
-
-      x_www_form_urlencoded: state.form.request_body_type === 'x-www-form-urlencoded' ?
-          state.form.x_www_form_urlencoded.reduce((acc, {key, value}) => {
-            if (key) acc[key] = value;
-            return acc;
-          }, {}) : {},
-
-      // 基本信息
-      priority: state.form.priority,
-      project_id: state.form.project_id,
-      module_id: state.form.module_id,
-      env_id: state.form.env_id,
-      testcase_name: state.form.testcase_name,
-      testcase_tags: state.form.testcase_tags,
-      description: state.form.description,
-
-      // 变量和用户信息
-      variables: state.form.variables.reduce((acc, {key, value}) => {
-        if (key) acc[key] = value;
-        return acc;
-      }, {}),
-      created_user: currentUser,
-      updated_user: currentUser,
-    };
-
-    // 调用 api 中的保存接口
-    console.log("请求数据:", data);
-    const backend_response = await api.updateOrCreate(data);
-    $message.success('保存成功');
-  } catch (error) {
-    console.error('请求失败：', error);
-    $message.error(error.message);
-  }
-};
-
-
-const formatJson = () => {
-  const inputJson = state.form.json_body.trim();
-  if (inputJson === '') {
-    $message.warning('输入的 JSON 为空，请输入有效的 JSON 内容。');
-    return;
-  }
-
-  try {
-    const jsonData = JSON.parse(inputJson);
-    state.form.json_body = JSON.stringify(jsonData, null, 2);
-  } catch (parseError) {
-    try {
-      // 尝试使用 eval 处理可能不规范的 JSON
-      const jsonData = eval('(' + inputJson + ')');
-      state.form.json_body = JSON.stringify(jsonData, null, 2);
-    } catch (evalError) {
-      $message.error(`JSON 格式化失败，请检查输入的 JSON 格式是否正确。详细错误信息：${parseError.message}`);
-      console.error('JSON 格式化失败，解析错误:', parseError);
-      console.error('JSON 格式化失败，eval 处理也失败:', evalError);
+  // 添加到父步骤的子级
+  const parent = findStep(parentId)
+  if (parent && stepDefinitions[parent.type]?.allowChildren) {
+    // 父步骤允许有子步骤，添加到其children中
+    parent.children = parent.children || []
+    if (index !== null) {
+      parent.children.splice(index, 0, newStep)
+    } else {
+      parent.children.push(newStep)
     }
+    return newStep
+  }
+  return null
+}
+
+const handleAddStep = (type, parentId) => {
+  // 如果parentId存在，说明是要添加到某个父步骤的子级
+  // 如果parentId为null，说明是要添加到根级别
+  const created = insertStep(parentId, type)
+  if (created) {
+    selectedKeys.value = [created.id]
+    // 更新显示名称
+    updateStepDisplayNames()
   }
 }
 
+const removeStep = (id, list = steps.value) => {
+  const idx = list.findIndex(item => item.id === id)
+  if (idx !== -1) {
+    list.splice(idx, 1)
+    return true
+  }
+  for (const item of list) {
+    if (item.children && item.children.length) {
+      const removed = removeStep(id, item.children)
+      if (removed) return true
+    }
+  }
+  return false
+}
+
+const handleDeleteStep = (id) => {
+  removeStep(id)
+  if (selectedKeys.value[0] === id) {
+    selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+  }
+}
+
+const handleCopyStep = (id) => {
+  const step = findStep(id)
+  if (!step) return
+  const copiedStep = JSON.parse(JSON.stringify(step))
+  copiedStep.id = genId()
+  copiedStep.name = `${copiedStep.name} (副本)`
+  // 递归更新子步骤ID
+  const updateIds = (node) => {
+    node.id = genId()
+    if (node.children && node.children.length) {
+      node.children.forEach(updateIds)
+    }
+  }
+  updateIds(copiedStep)
+
+  const parent = findStepParent(id)
+  if (parent) {
+    const parentStep = findStep(parent.id)
+    if (parentStep && parentStep.children) {
+      const index = parentStep.children.findIndex(s => s.id === id)
+      parentStep.children.splice(index + 1, 0, copiedStep)
+    }
+  } else {
+    const index = steps.value.findIndex(s => s.id === id)
+    steps.value.splice(index + 1, 0, copiedStep)
+  }
+  selectedKeys.value = [copiedStep.id]
+}
+
+const updateStepConfig = (id, config) => {
+  const step = findStep(id)
+  if (step) {
+    step.config = {...step.config, ...config}
+    // 根据配置更新步骤名称
+    if (step.type === 'loop') {
+      if (config.mode === 'times') {
+        step.name = `Loop 循环 ${config.times || 3} 次`
+      } else if (config.mode === 'for') {
+        step.name = `Loop For ${config.forVar || 'i'}`
+      } else {
+        step.name = `Loop 条件循环`
+      }
+    } else if (step.type === 'http') {
+      const method = config.method || 'POST'
+      const name = config.name || 'HTTP请求'
+      step.name = `API ${method} ${name}`
+    } else if (step.type === 'if') {
+      const left = config.left || ''
+      const operator = config.operator || 'not_empty'
+      const operatorMap = {
+        'not_empty': 'not_none',
+        'empty': 'is_none',
+        'eq': '==',
+        'ne': '!='
+      }
+      step.name = `If ${left} ${operatorMap[operator] || operator}`
+    } else if (step.type === 'wait') {
+      step.name = `Wait 等待 ${config.seconds || 2} 秒`
+    } else if (step.type === 'code') {
+      step.name = config.name || '执行代码'
+    }
+    // 更新显示名称
+    updateStepDisplayNames()
+  }
+}
+
+const getStepIcon = (type) => {
+  return stepDefinitions[type]?.icon || 'material-symbols:code'
+}
+
+const getStepIconClass = (type) => {
+  const classMap = {
+    loop: 'icon-loop',
+    code: 'icon-code',
+    http: 'icon-http',
+    if: 'icon-if',
+    wait: 'icon-wait'
+  }
+  return classMap[type] || ''
+}
+
+// 拖拽相关
+const handleDragStart = (event, stepId, parentId, index) => {
+  dragState.value.draggingId = stepId
+  dragState.value.dragOverParent = parentId
+  dragState.value.dragOverIndex = index
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', stepId)
+}
+
+const handleDragOver = (event) => {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+}
+
+const handleDrop = (event, targetId, targetParentId, targetIndex) => {
+  event.preventDefault()
+  const draggingId = dragState.value.draggingId
+  if (!draggingId || draggingId === targetId) return
+
+  const draggingStep = findStep(draggingId)
+  if (!draggingStep) return
+
+  // 移除原位置的步骤
+  const removeFromList = (list, id) => {
+    const idx = list.findIndex(item => item.id === id)
+    if (idx !== -1) {
+      list.splice(idx, 1)
+      return true
+    }
+    for (const item of list) {
+      if (item.children && item.children.length) {
+        if (removeFromList(item.children, id)) return true
+      }
+    }
+    return false
+  }
+
+  // 移除原位置
+  removeFromList(steps.value, draggingId)
+
+  // 插入到新位置
+  if (targetParentId) {
+    const parent = findStep(targetParentId)
+    if (parent && parent.children) {
+      const insertIndex = targetIndex !== null ? targetIndex : parent.children.length
+      parent.children.splice(insertIndex, 0, draggingStep)
+    }
+  } else {
+    const insertIndex = targetIndex !== null ? targetIndex : steps.value.length
+    steps.value.splice(insertIndex, 0, draggingStep)
+  }
+
+  dragState.value = {draggingId: null, dragOverId: null, dragOverParent: null, dragOverIndex: null}
+}
+
+// 计算步骤编号（按深度优先遍历）
+const stepNumberMap = computed(() => {
+  const map = new Map()
+  let counter = 0
+
+  const traverse = (list) => {
+    for (const step of list) {
+      counter++
+      map.set(step.id, counter)
+      if (step.children && step.children.length) {
+        traverse(step.children)
+      }
+    }
+  }
+
+  traverse(steps.value)
+  return map
+})
+
+const getStepNumber = (stepId) => {
+  return stepNumberMap.value.get(stepId) || 0
+}
+
+// 存储每个步骤的显示名称（用于中间省略）
+const stepDisplayNames = ref(new Map())
+
+// 计算文本中间省略（保留开头和结尾）
+const truncateTextMiddle = (text, maxChars = 20) => {
+  if (!text || text.length <= maxChars) return text
+  // 计算开头和结尾的长度（为省略号留出空间）
+  const halfLen = Math.floor((maxChars - 3) / 2)
+  const start = text.substring(0, halfLen)
+  const end = text.substring(text.length - halfLen)
+  return `${start}...${end}`
+}
+
+// 获取步骤显示名称（中间省略）
+const getStepDisplayName = (name, stepId) => {
+  if (!name) return ''
+  // 如果已经计算过，返回计算后的名称
+  if (stepDisplayNames.value.has(stepId)) {
+    return stepDisplayNames.value.get(stepId)
+  }
+  // 如果还没有计算过，先进行简单处理
+  const maxDisplayLength = 22
+  if (name.length > maxDisplayLength) {
+    return truncateTextMiddle(name, maxDisplayLength)
+  }
+  return name
+}
+
+// 更新步骤显示名称（根据容器宽度动态计算）
+const updateStepDisplayNames = () => {
+  nextTick(() => {
+    const nameMap = new Map()
+    // 考虑到操作按钮的宽度（步骤编号 + 复制 + 删除按钮），设置合理的文本长度限制
+    // 操作按钮大约需要 80-100px，文本区域大约可以显示 20-25 个字符
+    const maxDisplayLength = 22
+
+    const updateNames = (list) => {
+      for (const step of list) {
+        const stepName = step.name || ''
+        // 根据步骤名称长度决定是否需要中间省略
+        if (stepName.length > maxDisplayLength) {
+          nameMap.set(step.id, truncateTextMiddle(stepName, maxDisplayLength))
+        } else {
+          nameMap.set(step.id, stepName)
+        }
+        if (step.children && step.children.length) {
+          updateNames(step.children)
+        }
+      }
+    }
+    updateNames(steps.value)
+    stepDisplayNames.value = nameMap
+  })
+}
+
+// 监听steps变化，更新显示名称
+watch(() => steps.value, () => {
+  updateStepDisplayNames()
+}, { deep: true })
+
+onMounted(() => {
+  updateStepDisplayNames()
+})
+
+onUpdated(() => {
+  // 组件更新后重新计算显示名称
+  updateStepDisplayNames()
+})
+
+const renderDropdownLabel = (option) => {
+  const iconClass = getStepIconClass(option.key)
+  return h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}}, [
+    h(TheIcon, {
+      icon: option.icon,
+      size: 16,
+      class: ['step-icon', iconClass]
+    }),
+    h('span', option.label)
+  ])
+}
 </script>
 
 <style scoped>
-.key-value-editor .key-value-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 100px;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.key-value-view .view-row {
+.step-header {
   display: flex;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
 }
 
-.key-value-view .key {
-  min-width: 200px;
-  color: #1f2937;
-}
-
-.key-value-view .value {
-  color: #4b5563;
-  word-break: break-all;
-}
-
-.json-editor {
-  font-family: 'Fira Code', monospace;
+.step-count {
+  font-weight: 600;
   font-size: 14px;
-  border-radius: 15px;
+}
+
+.collapse-btn {
+  padding: 4px;
+}
+
+.step-tree-container {
+  padding: 8px 0;
+}
+
+.step-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 300;
+  background-color: #f5f5f5;
+  padding: 8px 8px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  position: relative;
+  min-width: 0; /* 允许flex子元素收缩 */
+}
+
+.step-name:hover {
+  color: #F4511E; /* 字体变为红色 */
+}
+
+.step-name-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  transition: height 0.3s ease;
+  white-space: nowrap;
+  /* 确保文本不会挤压操作按钮 */
+  margin-right: auto;
+  /* 为操作按钮预留空间 */
+  padding-right: 8px;
+  /* 文本显示：由于已经在JavaScript中处理了中间省略，这里不需要text-overflow */
+  display: inline-block;
 }
 
-/* 确保编辑器容器可以自适应内容高度 */
-.json-editor :deep(.monaco-editor) {
-  min-height: 90px;
-  height: auto !important;
+.step-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
 }
 
-/* 添加必要的布局样式 */
-.response-code {
-  max-height: 400px; /* 限制代码块高度 */
-  overflow: auto; /* 添加滚动条 */
+.step-name:hover .step-actions {
+  display: flex;
 }
 
-:root {
-  --pre-bg-color: #f4f4f4;
-  --pre-text-color: #333;
+.step-number {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  margin-right: 4px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --pre-bg-color: #222;
-    --pre-text-color: #eee;
-  }
+.step-item {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: all .2s;
+  cursor: pointer;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
-pre {
-  background-color: var(--pre-bg-color);
-  color: var(--pre-text-color);
-  padding: 10px;
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-break: break-word;
+.step-item.is-selected {
+  /* 红色虚线外轮廓：宽度 + 样式 + 颜色 */
+  border: 1px dashed #F4511E; /* 匹配背景色的红色虚线 */
 }
+
+.step-item[draggable="true"] {
+  cursor: move;
+}
+
+
+.step-item-child {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.step-item-distance {
+  padding-bottom: 5px;
+}
+
+
+.step-add-btn {
+  padding-top: 5px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.step-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.step-icon.icon-loop {
+  color: #F4511E;
+}
+
+.step-icon.icon-code {
+  color: #3363e0;
+}
+
+.step-icon.icon-http {
+  color: #3363e0;
+}
+
+.step-icon.icon-if {
+  color: #F4511E;
+  /*
+  transform: rotate(90deg);
+  关键：确保旋转生效（行内元素默认不支持transform）
+  display: inline-block; 或 block/flex，根据布局调整
+   */
+}
+
+.step-icon.icon-wait {
+  color: #48d024;
+}
+
+.action-btn {
+  padding: 2px 1px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.action-btn:hover {
+  opacity: 1;
+}
+
+/* 下拉菜单中的图标样式 */
+:deep(.n-dropdown-menu .step-icon) {
+  flex-shrink: 0;
+}
+
+.add-step-btn {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
 </style>

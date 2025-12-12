@@ -75,6 +75,8 @@ async def search_cases(
             q &= Q(case_project=case_in.case_project)
         if case_in.case_version:
             q &= Q(case_version=case_in.case_version)
+        if case_in.created_user:
+            q &= Q(created_user__iexact=case_in.created_user)
         q &= Q(state=case_in.state)
         total, instances = await AUTOTEST_API_CASE_CRUD.select_cases(
             search=q,

@@ -48,4 +48,5 @@ class AutoTestApiCaseSelect(BaseModel):
     case_tags: Optional[str] = Field(None, description="用例标签")
     case_project: Optional[int] = Field(None, ge=1, description="用例所属项目")
     case_version: Optional[int] = Field(None, ge=1, description="用例版本，正整数，最小值1")
+    created_user: Optional[str] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(-1, description="用例状态，正常：-1，删除：1")

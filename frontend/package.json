@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
+    "views": "link:@/views",
     "vite": "^4.0.4"
   },
   "lint-staged": {

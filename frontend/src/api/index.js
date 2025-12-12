@@ -69,4 +69,9 @@ export default {
   // 测试用例相关
   updateOrCreate: (data = {}) => request.post('/testcase/api/updateOrCreate', data),
   debugging: (data = {}) => request.post('/testcase/api/debugging', data),
+
+  getApiTestcaseList: (data = {}) => request.post('/autotest/case/search', data),
+  createApiTestcaseList: (data = {}) => request.post('/autotest/case/create', data),
+  updateApiTestcaseList: (data = {}) => request.post('/autotest/case/update', data),
+  deleteApiTestcaseList: (data = {}) => request.delete(`/autotest/case/delete?case_id=${data.case_id}`, data),
 }
