@@ -70,8 +70,10 @@ export default {
   updateOrCreate: (data = {}) => request.post('/testcase/api/updateOrCreate', data),
   debugging: (data = {}) => request.post('/testcase/api/debugging', data),
 
+  // 自动化测试相关
   getApiTestcaseList: (data = {}) => request.post('/autotest/case/search', data),
   createApiTestcaseList: (data = {}) => request.post('/autotest/case/create', data),
   updateApiTestcaseList: (data = {}) => request.post('/autotest/case/update', data),
   deleteApiTestcaseList: (data = {}) => request.delete(`/autotest/case/delete?case_id=${data.case_id}`, data),
+  getStepTree: (data = {}) => request.delete(`/autotest/step/tree?case_id=${data.case_id}`, data),
 }

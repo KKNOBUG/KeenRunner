@@ -52,8 +52,6 @@ const customHandleAdd = () => {
 }
 
 
-
-
 const columns = [
   {
     title: '所属项目',
@@ -71,7 +69,7 @@ const columns = [
   },
   {
     title: '用例步骤',
-    key: 'case_step_count',
+    key: 'case_steps',
     width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
