@@ -1,5 +1,6 @@
 <script setup>
 import {h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
+import {useRouter} from 'vue-router'
 import {NButton, NInput, NPopconfirm} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -39,6 +40,7 @@ const {
 const pattern = ref('')
 const active = ref(false)
 const ownerOption = ref([])
+const router = useRouter()
 
 onMounted(() => {
   $table.value?.handleSearch()
@@ -48,7 +50,7 @@ onMounted(() => {
 
 // 重置逻辑（在handleAdd中处理）
 const customHandleAdd = () => {
-  handleAdd() // 调用原始的handleAdd
+  router.push({path: '/autotest/api'})
 }
 
 
@@ -149,14 +151,7 @@ const columns = [
                   size: 'small',
                   type: 'primary',
                   style: 'margin-right: 8px;',
-                  onClick: () => {
-                    console.log('点击编辑按钮'); // 添加日志
-                    console.log(row)
-                    // handleEdit(row)
-                    modalForm.value.created_user = row.created_user
-                    modalForm.value.updated_user = row.updated_user
-                    modalForm.value.state = row.state
-                  },
+                  onClick: () => router.push({path: '/autotest/api', query: {case_id: row.id}}),
                 },
                 {
                   default: () => '编辑',

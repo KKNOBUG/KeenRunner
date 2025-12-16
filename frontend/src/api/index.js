@@ -75,5 +75,8 @@ export default {
   createApiTestcaseList: (data = {}) => request.post('/autotest/case/create', data),
   updateApiTestcaseList: (data = {}) => request.post('/autotest/case/update', data),
   deleteApiTestcaseList: (data = {}) => request.delete(`/autotest/case/delete?case_id=${data.case_id}`, data),
-  getStepTree: (data = {}) => request.delete(`/autotest/step/tree?case_id=${data.case_id}`, data),
+  getStepTree: (data = {}) => request.get(`/autotest/step/tree?case_id=${data.case_id}`, data),
+  updateStepTree: (data = {}) => request.post('/autotest/step/update', data),
+
+
 }

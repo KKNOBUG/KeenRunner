@@ -1,5 +1,56 @@
 <template>
   <AppPage>
+      <n-card size="small" class="case-info-card" title="用例信息">
+        <div class="case-info-fields">
+          <div class="case-field">
+            <span class="case-field-label">所属项目</span>
+            <n-input
+                v-model:value="caseForm.case_project"
+                size="small"
+                placeholder="请输入所属项目"
+                class="case-field-input"
+            />
+          </div>
+
+          <div class="case-field">
+            <span class="case-field-label">用例名称</span>
+            <n-input
+                v-model:value="caseForm.case_name"
+                size="small"
+                placeholder="请输入用例名称"
+                class="case-field-input"
+            />
+          </div>
+
+          <div class="case-field">
+            <span class="case-field-label">用例标签</span>
+            <n-input
+                v-model:value="caseForm.case_tags"
+                size="small"
+                placeholder="请输入用例标签"
+                class="case-field-input"
+            />
+          </div>
+
+          <div class="case-field case-field-full">
+            <span class="case-field-label">用例描述</span>
+            <n-input
+                v-model:value="caseForm.case_desc"
+                size="small"
+                type="textarea"
+                placeholder="请输入用例描述"
+            />
+          </div>
+
+          <!-- 按钮放在表单内部 -->
+          <div class="case-field case-field-full">
+            <n-space justify="end">
+              <n-button size="small" type="warning" >调试</n-button>
+              <n-button size="small" type="primary" @click="handleSaveAll">保存</n-button>
+            </n-space>
+          </div>
+        </div>
+      </n-card>
     <div class="page-container">
       <n-grid :cols="24" :x-gap="16" class="grid-container">
         <n-gi :span="7" class="left-column">
@@ -224,8 +275,9 @@
 </template>
 
 <script setup>
-import {computed, defineComponent, h, nextTick, onMounted, onUpdated, ref, watch} from 'vue'
-import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm} from 'naive-ui'
+import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
+import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import AppPage from "@/components/page/AppPage.vue";
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
@@ -233,6 +285,7 @@ import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
+import api from "@/api";
 
 const stepDefinitions = {
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
@@ -254,151 +307,16 @@ const editorMap = {
 let seed = 1000
 const genId = () => `step-${seed++}`
 
-const buildDefaultSteps = () => ([
-  {
-    id: genId(),
-    type: 'loop',
-    name: '循环 3 次',
-    config: {
-      mode: 'times', // 循环模式：times（次数）/condition（条件）
-      times: 3,      // 循环次数（mode=times 时必填）
-      interval: 0    // 循环间隔（秒）
-    },
-    // loop的子步骤（支持嵌套loop/if）
-    children: [
-      {
-        id: genId(),
-        type: 'code',
-        name: '执行代码 - 创建随机变量1',
-        config: {
-          code: 'const random1 = Math.random();' // 补充代码配置
-        }
-        // 非loop/if，无children字段
-      },
-      // 嵌套示例：loop的子步骤包含if，if又有自己的子步骤
-      {
-        id: genId(),
-        type: 'if',
-        name: 'If ${random1} > 0.5',
-        config: {
-          left: '${random1}',
-          operator: 'gt', // 大于
-          remark: '判断随机数是否大于0.5'
-        },
-        children: [
-          {
-            id: genId(),
-            type: 'code',
-            name: '执行代码 - 随机数大于0.5的逻辑',
-            config: {
-              code: 'console.log("random1 > 0.5");'
-            }
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: genId(),
-    type: 'http',
-    name: '登录ZERORUNNER系统',
-    config: {
-      method: 'POST', // 补充HTTP配置
-      url: '/api/login',
-      params: {},
-      data: {
-        username: 'admin',
-        password: '123456'
-      },
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }
-    // 非loop/if，无children字段
-  },
-  {
-    id: genId(),
-    type: 'if',
-    name: 'If ${token} not_none',
-    config: {
-      left: '${token}',
-      operator: 'not_empty', // 非空
-      remark: '判断token是否获取成功'
-    },
-    children: [
-      {
-        id: genId(),
-        type: 'code',
-        name: '执行代码—创建随机变量2',
-        config: {
-          code: 'const random2 = Math.random();'
-        }
-      },
-      {
-        id: genId(),
-        type: 'wait',
-        name: 'Wait 等待 2 秒',
-        config: {
-          seconds: 2 // 等待秒数（wait类型专属配置）
-        }
-      },
-      {
-        id: genId(),
-        type: 'http',
-        name: 'AP POST 查询测试用例信息列表',
-        config: {
-          method: 'POST',
-          url: '/api/testcase/list',
-          params: {},
-          data: {},
-          headers: {
-            'Authorization': 'Bearer ${token}'
-          }
-        }
-      },
-      // 嵌套示例：if的子步骤包含loop
-      {
-        id: genId(),
-        type: 'loop',
-        name: '循环2次执行查询',
-        config: {
-          mode: 'times',
-          times: 2,
-          interval: 1 // 间隔1秒
-        },
-        children: [
-          {
-            id: genId(),
-            type: 'http',
-            name: '嵌套循环-查询测试用例',
-            config: {
-              method: 'POST',
-              url: '/api/testcase/list',
-              headers: {
-                'Authorization': 'Bearer ${token}'
-              }
-            }
-          }
-        ]
-      }
-    ]
-  },
-  // 补充：无子女的loop/if示例（显式空数组）
-  {
-    id: genId(),
-    type: 'if',
-    name: 'If ${random2} < 0.3',
-    config: {
-      left: '${random2}',
-      operator: 'lt',
-      remark: '判断随机数是否小于0.3'
-    },
-    children: [] // 无子女时显式为空数组
-  }
-])
-
-const steps = ref(buildDefaultSteps())
-const selectedKeys = ref([steps.value[0]?.id].filter(Boolean))
+const steps = ref([])
+const selectedKeys = ref([])
+const route = useRoute()
+const caseId = computed(() => route.query.case_id || null)
+const caseForm = reactive({
+  case_project: '',
+  case_name: '',
+  case_tags: '',
+  case_desc: ''
+})
 const dragState = ref({
   draggingId: null,
   dragOverId: null, // 当前拖拽进入的 loop/if 步骤 ID（焦点高亮）
@@ -509,6 +427,142 @@ const findStepParent = (id, list = steps.value, parent = null) => {
     }
   }
   return null
+}
+
+const backendTypeToLocal = (step_type) => {
+  switch (step_type) {
+    case '循环结构':
+      return 'loop'
+    case '执行代码(Python)':
+      return 'code'
+    case 'HTTP/HTTPS协议网络请求':
+      return 'http'
+    case '条件分支':
+      return 'if'
+    case '等待控制':
+      return 'wait'
+    default:
+      return 'code'
+  }
+}
+
+const parseJsonSafely = (val) => {
+  if (!val) return null
+  if (typeof val === 'object') return val
+  try {
+    return JSON.parse(val)
+  } catch (e) {
+    return null
+  }
+}
+
+const mapBackendStep = (step) => {
+  if (!step || !step.step_type) return null
+  const localType = backendTypeToLocal(step.step_type)
+  const base = {
+    id: step.step_code || `step-${step.id || genId()}`,
+    type: localType,
+    name: step.step_name || step.step_type || '步骤',
+    config: {}
+  }
+
+  if (localType === 'loop') {
+    base.config = {
+      mode: 'times',
+      times: step.max_cycles || 1,
+      interval: step.wait || 0
+    }
+    base.children = []
+  } else if (localType === 'code') {
+    base.config = {
+      code: step.code || ''
+    }
+  } else if (localType === 'http') {
+    base.config = {
+      method: step.request_method || 'POST',
+      url: step.request_url || '',
+      params: step.request_params || {},
+      data: step.request_body || {},
+      headers: step.request_header || {},
+      extract: step.extract_variables || {},
+      validators: step.validators || {}
+    }
+  } else if (localType === 'if') {
+    const parsed = parseJsonSafely(step.conditions) || {}
+    base.config = {
+      left: parsed.value || '',
+      operator: parsed.operation || parsed.op || 'not_empty',
+      remark: parsed.desc || ''
+    }
+    base.children = []
+  } else if (localType === 'wait') {
+    base.config = {
+      seconds: step.wait || 0
+    }
+  }
+
+  if (step.children && step.children.length && stepDefinitions[localType]?.allowChildren) {
+    base.children = step.children.map(mapBackendStep).filter(Boolean)
+  }
+
+  if (!stepDefinitions[localType]?.allowChildren) {
+    delete base.children
+  } else if (!base.children) {
+    base.children = []
+  }
+
+  return base
+}
+
+const hydrateCaseInfo = (data) => {
+  const firstStepCase = data?.[0]?.case
+  if (firstStepCase) {
+    caseForm.case_project = firstStepCase.case_project || ''
+    caseForm.case_name = firstStepCase.case_name || ''
+    caseForm.case_tags = firstStepCase.case_tags || ''
+    caseForm.case_desc = firstStepCase.case_desc || ''
+  } else {
+    caseForm.case_project = ''
+    caseForm.case_name = ''
+    caseForm.case_tags = ''
+    caseForm.case_desc = ''
+  }
+}
+
+const handleSaveAll = async () => {
+  try {
+    await api.updateStepTree({
+      case_id: caseId.value,
+      case_info: {...caseForm},
+      steps: steps.value
+    })
+    window.$message?.success?.('保存成功')
+  } catch (error) {
+    console.error('Failed to save step tree', error)
+    window.$message?.error?.('保存失败')
+  }
+}
+
+const loadSteps = async () => {
+  stepExpandStates.value = new Map()
+  if (!caseId.value) {
+    steps.value = []
+    selectedKeys.value = []
+    hydrateCaseInfo([])
+    return
+  }
+  try {
+    const res = await api.getStepTree({case_id: caseId.value})
+    const data = Array.isArray(res?.data) ? res.data : []
+    hydrateCaseInfo(data)
+    steps.value = data.map(mapBackendStep).filter(Boolean)
+    selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+  } catch (error) {
+    console.error('Failed to load step tree', error)
+    steps.value = []
+    selectedKeys.value = []
+    hydrateCaseInfo([])
+  }
 }
 
 const handleSelect = (keys) => {
@@ -1015,6 +1069,11 @@ const truncateTextMiddle = (text, maxChars = 20) => {
 
 // 获取步骤显示名称（中间省略）
 const getStepDisplayName = (name, stepId) => {
+  console.log("==========");
+  console.log(name);
+  console.log("-----");
+  console.log(stepId);
+  console.log("==========");
   if (!name) return ''
   // 如果已经计算过，返回计算后的名称
   if (stepDisplayNames.value.has(stepId)) {
@@ -1061,9 +1120,12 @@ watch(() => steps.value, () => {
   initializeStepExpandStates()
 }, {deep: true})
 
+watch(() => caseId.value, () => {
+  loadSteps()
+})
+
 onMounted(() => {
-  updateStepDisplayNames()
-  initializeStepExpandStates()
+  loadSteps()
 })
 
 onUpdated(() => {
@@ -1325,7 +1387,64 @@ const RecursiveStepChildren = defineComponent({
   overflow: hidden;
   min-height: 0; /* 允许容器缩小 */
 }
+.case-info-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
 
+.case-info-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.case-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.case-field-full {
+  grid-column: 1 / -1;
+}
+
+.case-field-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.case-field-input {
+  width: 100%;
+  transition: border-color 0.3s ease;
+}
+
+.case-field-input:hover {
+  border-color: #409eff;
+}
+
+
+
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .case-info-fields {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .case-field-label {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .case-info-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 /* Grid 容器：使用 flex 布局，占满可用高度 */
 .grid-container {
   height: 100%;

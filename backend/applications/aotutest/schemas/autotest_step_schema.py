@@ -112,5 +112,49 @@ class AutoTestStepSelect(BaseModel):
     state: Optional[int] = Field(-1, description="步骤状态，正常：-1，删除：1")
 
 
+class AutoTestStepTreeUpdateItem(BaseModel):
+    """步骤树更新项（用于批量更新）"""
+    id: int = Field(..., description="步骤ID")
+    step_no: Optional[int] = Field(None, ge=1, description="步骤明细序号")
+    step_name: Optional[str] = Field(None, max_length=255, description="步骤明细名称")
+    step_desc: Optional[str] = Field(None, max_length=2048, description="步骤明细描述")
+    step_type: Optional[StepType] = Field(None, description="步骤明细类型")
+    case_id: Optional[int] = Field(None, description="步骤所属用例")
+    parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
+    quote_case_id: Optional[int] = Field(None, description="引用用例信息ID")
+    request_url: Optional[str] = Field(None, max_length=2048, description="请求地址")
+    request_port: Optional[str] = Field(None, max_length=16, description="请求端口")
+    request_method: Optional[str] = Field(None, max_length=16, description="请求方法")
+    request_header: Optional[Dict[str, Any]] = Field(None, description="请求头，JSON格式")
+    request_text: Optional[str] = Field(None, description="请求体，Text格式")
+    request_body: Optional[Dict[str, Any]] = Field(None, description="请求体，JSON格式")
+    request_params: Optional[str] = Field(None, description="请求参数，Text格式")
+    request_form_data: Optional[Dict[str, Any]] = Field(None, description="请求表单，JSON格式")
+    request_form_file: Optional[Dict[str, Any]] = Field(None, description="请求文件，JSON格式")
+    request_form_urlencoded: Optional[Dict[str, Any]] = Field(None, description="请求键值对，JSON格式")
+    pre_wait: Optional[int] = Field(None, ge=0, description="前置等待时间（毫秒）")
+    post_wait: Optional[int] = Field(None, ge=0, description="后置等待时间（毫秒）")
+    pre_code: Optional[str] = Field(None, description="前置操作代码")
+    post_code: Optional[str] = Field(None, description="后置操作代码")
+    code: Optional[str] = Field(None, description="后置操作代码（兼容字段）")
+    wait: Optional[int] = Field(None, ge=0, description="等待时间（毫秒）")
+    max_cycles: Optional[int] = Field(None, ge=1, description="循环次数")
+    conditions: Optional[str] = Field(None, description="判断条件")
+    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(包含提取变量，以及前后code设置的变量)")
+    defined_variables: Optional[Dict[str, Any]] = Field(None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
+    extract_variables: Optional[Dict[str, Any]] = Field(None, description="提取变量(从上下午中提取参数)")
+    validators: Optional[Dict[str, Any]] = Field(None, description="断言规则，JSON格式")
+    case: Optional[Dict[str, Any]] = Field(None, description="测试用例信息")
+    children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
+    quote_steps: Optional[List[Any]] = Field(None, description="引用步骤列表（更新时忽略）")
+    quote_case: Optional[Any] = Field(None, description="引用用例信息（更新时忽略）")
+
+
+class AutoTestStepTreeUpdateList(BaseModel):
+    """批量更新步骤树"""
+    steps: List[AutoTestStepTreeUpdateItem] = Field(..., description="步骤树数据")
+
+
 # 允许递归引用
 BaseAutoTestApiStep.model_rebuild()
+AutoTestStepTreeUpdateItem.model_rebuild()
