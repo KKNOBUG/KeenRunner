@@ -114,7 +114,8 @@ class AutoTestStepSelect(BaseModel):
 
 class AutoTestStepTreeUpdateItem(BaseModel):
     """步骤树更新项（用于批量更新）"""
-    id: int = Field(..., description="步骤ID")
+    id: Optional[int] = Field(None, description="步骤ID（更新必填，新增可不填）")
+    step_code: Optional[str] = Field(None, max_length=64, description="步骤明细代码")
     step_no: Optional[int] = Field(None, ge=1, description="步骤明细序号")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤明细名称")
     step_desc: Optional[str] = Field(None, max_length=2048, description="步骤明细描述")

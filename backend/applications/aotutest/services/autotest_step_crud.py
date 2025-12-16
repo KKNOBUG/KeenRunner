@@ -6,7 +6,7 @@
 @Module  : autotest_step_crud.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Set
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
@@ -14,10 +14,11 @@ from tortoise.expressions import Q
 from backend.applications.aotutest.models.autotest_model import (
     AutoTestApiStepInfo, AutoTestApiCaseInfo
 )
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate, AutoTestApiStepUpdate, \
-    AutoTestStepTreeUpdateItem
+from backend.applications.aotutest.schemas.autotest_step_schema import (
+    AutoTestApiStepCreate, AutoTestApiStepUpdate, AutoTestStepTreeUpdateItem
+)
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
 
 
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
@@ -357,7 +358,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 # 构建更新数据，排除 case、children、quote_steps、quote_case 等字段
                 update_dict = step_data.dict(
-                    exclude={"case", "children", "quote_steps", "quote_case", "id"},
+                    exclude={"case", "children", "quote_steps", "quote_case", "id", "step_code"},
                     exclude_none=True
                 )
 
@@ -463,6 +464,322 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         return {
             "updated_count": updated_count,
             "failed_steps": failed_steps
+        }
+
+    async def batch_update_or_create_steps(
+            self,
+            steps_data: List[AutoTestStepTreeUpdateItem],
+            parent_step_id: Optional[int] = None,
+            processed_step_ids: Optional[set] = None
+    ) -> Dict[str, Any]:
+        """
+        批量更新或新增步骤信息（递归处理嵌套层级，去重处理，验证关联正确性）
+
+        Args:
+            steps_data: 步骤数据列表，每个元素是包含步骤信息的字典
+            parent_step_id: 父步骤ID（用于递归处理子步骤时传递）
+            processed_step_ids: 已处理的步骤ID集合（用于去重，避免重复处理）
+
+        Returns:
+            Dict[str, Any]: 包含处理统计信息的字典
+                - created_count: 成功新增的步骤数量
+                - updated_count: 成功更新的步骤数量
+                - failed_steps: 处理失败的步骤ID列表及原因
+                - steps: 处理成功的步骤详细信息列表
+        """
+        if processed_step_ids is None:
+            processed_step_ids: Set = set()
+
+        created_count: int = 0
+        updated_count: int = 0
+        failed_steps: List[Dict[str, Any]] = []
+        steps_list: List[Dict[str, Any]] = []  # 存储处理成功的步骤信息
+        # step_data: AutoTestStepTreeUpdateItem
+        for step_data in steps_data:
+            step_id: Optional[int] = step_data.id
+
+            # 去重：如果已经处理过该步骤，跳过
+            if step_id and step_id in processed_step_ids:
+                continue
+
+            try:
+                # 验证步骤的case_id是否与用例的id匹配
+                case: Dict[str, Any] = step_data.case
+                if case and isinstance(case, dict):
+                    case_id_from_case: int = case.get("id")
+                    case_id_from_step: int = step_data.case_id
+
+                    # 如果步骤数据中有case_id，验证是否与case字段中的id匹配
+                    if case_id_from_step and case_id_from_case and case_id_from_step != case_id_from_case:
+                        failed_steps.append({
+                            "step_id": step_id,
+                            "reason": f"步骤的case_id({case_id_from_step})与用例信息中的id({case_id_from_case})不匹配"
+                        })
+                        # 即使关联不匹配，也要递归处理子步骤
+                        children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                        if children:
+                            child_result = await self.batch_update_or_create_steps(
+                                steps_data=children,
+                                parent_step_id=parent_step_id,
+                                processed_step_ids=processed_step_ids
+                            )
+                            created_count += child_result["created_count"]
+                            updated_count += child_result["updated_count"]
+                            failed_steps.extend(child_result["failed_steps"])
+                            steps_list.extend(child_result.get("steps", []))
+                        continue
+
+                    # 如果步骤数据中没有case_id，使用case字段中的id
+                    if not case_id_from_step and case_id_from_case:
+                        step_data.case_id = case_id_from_case
+
+                # 检查步骤是否存在（只有在提供了 step_id 时才查询）
+                instance: Optional[AutoTestApiStepInfo] = await self.get_by_id(step_id=step_id) if step_id else None
+
+                if not instance:
+                    # 步骤不存在，执行新增，及验证必填字段
+                    if not step_data.case_id:
+                        failed_steps.append({
+                            "step_id": step_id,
+                            "reason": "新增步骤时，步骤所属用例(case_id)不能为空"
+                        })
+                        # 即使缺少必填字段，也要递归处理子步骤
+                        children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                        if children:
+                            child_result = await self.batch_update_or_create_steps(
+                                steps_data=children,
+                                parent_step_id=parent_step_id,
+                                processed_step_ids=processed_step_ids
+                            )
+                            created_count += child_result["created_count"]
+                            updated_count += child_result["updated_count"]
+                            failed_steps.extend(child_result["failed_steps"])
+                            steps_list.extend(child_result.get("steps", []))
+                        continue
+                    if not step_data.step_no:
+                        failed_steps.append({
+                            "step_id": step_id,
+                            "reason": "新增步骤时，步骤序号(step_no)不能为空"
+                        })
+                        continue
+                    if not step_data.step_type:
+                        failed_steps.append({
+                            "step_id": step_id,
+                            "reason": "新增步骤时，步骤类型(step_type)不能为空"
+                        })
+                        continue
+
+                    # 检查用例是否存在
+                    case: Optional[AutoTestApiCaseInfo] = await AutoTestApiCaseInfo.filter(
+                        id=step_data.case_id, state=-1
+                    ).first()
+                    if not case:
+                        failed_steps.append({
+                            "step_id": step_id,
+                            "reason": f"用例(id={step_data.case_id})信息不存在，无法新增步骤"
+                        })
+                        continue
+
+                    # 检查同一用例下步骤序号是否已存在
+                    existing_step: Optional[AutoTestApiCaseInfo] = await self.model.filter(
+                        case_id=step_data.case_id,
+                        step_no=step_data.step_no,
+                        state=-1
+                    ).first()
+                    if existing_step:
+                        failed_steps.append({
+                            "step_id": step_id,
+                            "reason": f"用例(id={step_data.case_id})下步骤序号(step_no={step_data.step_no})已存在"
+                        })
+                        continue
+
+                    # 验证父步骤
+                    final_parent_step_id = parent_step_id if parent_step_id is not None else step_data.parent_step_id
+                    if final_parent_step_id:
+                        parent_step = await self.model.filter(id=final_parent_step_id, state=-1).first()
+                        if not parent_step:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"父级步骤(id={final_parent_step_id})信息不存在"
+                            })
+                            continue
+                        # 确保父步骤属于同一个用例
+                        if parent_step.case_id != step_data.case_id:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"父级步骤(id={final_parent_step_id})与当前用例(id={step_data.case_id})不匹配"
+                            })
+                            continue
+
+                    # 构建新增数据
+                    create_dict = step_data.model_dump(
+                        exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code"},
+                        exclude_none=True
+                    )
+                    if final_parent_step_id is not None:
+                        create_dict["parent_step_id"] = final_parent_step_id
+
+                    # 如果提供了id，尝试使用提供的id
+                    if step_id:
+                        existing_by_id = await self.model.filter(id=step_id).first()
+                        if existing_by_id:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"步骤ID({step_id})已被使用，无法新增"
+                            })
+                            continue
+                        create_dict["id"] = step_id
+
+                    # 执行新增（直接使用字典，因为create方法接受字典）
+                    new_instance: AutoTestApiStepInfo = await self.create(create_dict)
+                    created_count += 1
+                    processed_step_ids.add(new_instance.id)
+                    steps_list.append(await new_instance.to_dict())
+
+                    # 递归处理子步骤
+                    children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                    if children:
+                        child_result = await self.batch_update_or_create_steps(
+                            steps_data=children,
+                            parent_step_id=new_instance.id,
+                            processed_step_ids=processed_step_ids
+                        )
+                        created_count += child_result["created_count"]
+                        updated_count += child_result["updated_count"]
+                        failed_steps.extend(child_result["failed_steps"])
+                        steps_list.extend(child_result.get("steps", []))
+
+                else:
+                    # 步骤存在，执行更新
+                    # 构建更新数据，排除 case、children、quote_steps、quote_case 等字段
+                    update_dict = step_data.model_dump(
+                        exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code"},
+                        exclude_none=True
+                    )
+                    # 处理 parent_step_id
+                    if "parent_step_id" not in step_data.model_dump(exclude_unset=True) and parent_step_id is not None:
+                        update_dict["parent_step_id"] = parent_step_id
+                    elif step_data.parent_step_id is not None:
+                        update_dict["parent_step_id"] = step_data.parent_step_id
+                    elif step_data.parent_step_id is None and parent_step_id is None:
+                        # 明确设置为None（根步骤）
+                        update_dict["parent_step_id"] = None
+
+                    # 如果更新了步骤序号，检查是否冲突
+                    if "step_no" in update_dict:
+                        case_id = update_dict.get("case_id", instance.case_id)
+                        existing_step = await self.model.filter(
+                            case_id=case_id,
+                            step_no=update_dict["step_no"],
+                            state=-1
+                        ).exclude(id=step_id).first()
+                        if existing_step:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"用例(id={case_id})下步骤序号(step_no={update_dict['step_no']})已存在"
+                            })
+                            # 即使序号冲突，也要递归处理子步骤
+                            children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                            if children:
+                                child_result = await self.batch_update_or_create_steps(
+                                    steps_data=children,
+                                    parent_step_id=step_id,
+                                    processed_step_ids=processed_step_ids
+                                )
+                                created_count += child_result["created_count"]
+                                updated_count += child_result["updated_count"]
+                                failed_steps.extend(child_result["failed_steps"])
+                                steps_list.extend(child_result.get("steps", []))
+                            continue
+
+                    # 业务层验证：如果更新了用例ID，检查用例是否存在
+                    if "case_id" in update_dict:
+                        case: Optional[AutoTestApiCaseInfo] = await AutoTestApiCaseInfo.filter(
+                            id=update_dict["case_id"], state=-1).first()
+                        if not case:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"用例(id={update_dict['case_id']})信息不存在"
+                            })
+                            continue
+
+                    # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
+                    if "parent_step_id" in update_dict and update_dict["parent_step_id"]:
+                        parent_step = await self.model.filter(id=update_dict["parent_step_id"], state=-1).first()
+                        if not parent_step:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"父级步骤(id={update_dict['parent_step_id']})信息不存在"
+                            })
+                            continue
+                        # 确保父步骤属于同一个用例
+                        case_id = update_dict.get("case_id", instance.case_id)
+                        if parent_step.case_id != case_id:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"父级步骤(id={update_dict['parent_step_id']})与当前用例(id={case_id})不匹配"
+                            })
+                            continue
+                        # 检查是否形成循环引用
+                        if parent_step.id == step_id:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": "不能将自身设置为父步骤"
+                            })
+                            continue
+
+                    # 业务层验证：如果更新了引用用例ID，检查引用用例是否存在
+                    if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
+                        quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state=-1).first()
+                        if not quote_case:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"引用用例(id={update_dict['quote_case_id']})信息不存在"
+                            })
+                            continue
+
+                    # 执行更新
+                    updated_instance = await self.update(id=step_id, obj_in=update_dict)
+                    updated_count += 1
+                    processed_step_ids.add(step_id)
+                    steps_list.append(await updated_instance.to_dict())
+
+                    # 递归处理子步骤
+                    children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                    if children:
+                        child_result = await self.batch_update_or_create_steps(
+                            steps_data=children,
+                            parent_step_id=step_id,
+                            processed_step_ids=processed_step_ids
+                        )
+                        created_count += child_result["created_count"]
+                        updated_count += child_result["updated_count"]
+                        failed_steps.extend(child_result["failed_steps"])
+                        steps_list.extend(child_result.get("steps", []))
+
+            except Exception as e:
+                failed_steps.append({"step_id": step_id, "reason": str(e)})
+                # 即使当前步骤处理失败，也尝试递归处理子步骤
+                children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                if children:
+                    try:
+                        child_result = await self.batch_update_or_create_steps(
+                            steps_data=children,
+                            parent_step_id=parent_step_id,
+                            processed_step_ids=processed_step_ids
+                        )
+                        created_count += child_result["created_count"]
+                        updated_count += child_result["updated_count"]
+                        failed_steps.extend(child_result["failed_steps"])
+                        steps_list.extend(child_result.get("steps", []))
+                    except Exception as child_e:
+                        pass
+
+        return {
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "failed_steps": failed_steps,
+            "steps": steps_list
         }
 
 

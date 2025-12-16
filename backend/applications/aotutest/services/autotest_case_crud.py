@@ -6,7 +6,7 @@
 @Module  : autotest_case_crud.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Set
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
@@ -199,6 +199,120 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         return {
             "updated_count": updated_count,
             "failed_cases": failed_cases
+        }
+
+    async def batch_update_or_create_cases(self, cases_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        批量更新或新增测试用例信息（去重处理，避免重复更新同一个用例）
+
+        Args:
+            cases_data: 用例数据列表，每个元素是包含用例信息的字典
+
+        Returns:
+            Dict[str, Any]: 包含处理统计信息的字典
+                - created_count: 成功新增的用例数量
+                - updated_count: 成功更新的用例数量
+                - failed_cases: 处理失败的用例ID列表及原因
+                - cases: 处理成功的用例详细信息列表
+        """
+        created_count: int = 0
+        updated_count: int = 0
+        failed_cases: List[Dict[str, Any]] = []
+        processed_case_ids: Set = set()  # 用于去重（仅针对已有id的用例）
+        cases_list: List[Dict[str, Any]] = []  # 存储处理成功的用例信息（附带输入映射）
+
+        for case_data in cases_data:
+            if not isinstance(case_data, dict):
+                continue
+            # 去重：对于已有id的用例，避免重复处理
+            case_id: Optional[int] = case_data.get("id")
+            if case_id and case_id in processed_case_ids:
+                continue
+            try:
+                # 检查用例是否存在
+                instance: Optional[AutoTestApiCaseInfo] = await self.query(case_id)
+                if not instance:
+                    # 用例不存在，执行新增，及验证必填字段
+                    if not case_data.get("case_name"):
+                        failed_cases.append({"case_id": case_id, "reason": "新增用例时，用例名称不能为空"})
+                        continue
+                    if not case_data.get("case_project"):
+                        failed_cases.append({"case_id": case_id, "reason": "新增用例时，用例所属项目不能为空"})
+                        continue
+                    # 检查用例名称和项目ID的唯一性
+                    case_name: str = case_data["case_name"]
+                    case_project: str = case_data["case_project"]
+                    existing_case: Optional[AutoTestApiCaseInfo] = await self.model.filter(
+                        case_name=case_name,
+                        case_project=case_project,
+                        state=-1
+                    ).first()
+                    if existing_case:
+                        failed_cases.append({
+                            "case_id": case_id,
+                            "reason": f"项目(id={case_project})下用例名称(case_name={case_name})已存在，无法新增"
+                        })
+                        continue
+
+                    # 构建新增数据（id、case_code 由数据库自动生成）
+                    create_dict: Dict[str, Any] = {
+                        "case_name": case_name,
+                        "case_project": case_project,
+                        "case_desc": case_data.get("case_desc"),
+                        "case_tags": case_data.get("case_tags"),
+                    }
+
+                    # 执行新增
+                    new_instance: AutoTestApiCaseInfo = await self.create(create_dict)
+                    created_count += 1
+                    processed_case_ids.add(new_instance.id)
+                    case_dict: Dict[str, Any] = await new_instance.to_dict()
+                    cases_list.append(case_dict)
+                else:
+                    # 用例存在，执行更新
+                    # 如果没有任何可更新的字段，跳过
+                    if not case_data:
+                        processed_case_ids.add(case_id)
+                        case_dict = await instance.to_dict()
+                        cases_list.append(case_dict)
+                        continue
+
+                    # 如果更新了用例名称或项目ID，检查唯一性
+                    if "case_name" in case_data or "case_project" in case_data:
+                        case_name: str = case_data.get("case_name", instance.case_name)
+                        case_project: int = case_data.get("case_project", instance.case_project)
+                        existing_case: Optional[AutoTestApiCaseInfo] = await self.model.filter(
+                            case_name=case_name,
+                            case_project=case_project,
+                            state=-1
+                        ).exclude(id=case_id).first()
+                        if existing_case:
+                            failed_cases.append({
+                                "case_id": case_id,
+                                "reason": f"项目(id={case_project})下用例名称(case_name={case_name})已存在"
+                            })
+                            continue
+
+                    # 执行更新
+                    case_data.pop("id")
+                    case_data.pop("state")
+                    case_data.pop("case_code")
+                    case_data.pop("created_user")
+                    case_data.pop("created_time")
+                    case_data["case_version"] = instance.case_version + 1
+                    updated_instance: AutoTestApiCaseInfo = await self.update(id=case_id, obj_in=case_data)
+                    updated_count += 1
+                    processed_case_ids.add(case_id)
+                    case_dict: Dict[str, Any] = await updated_instance.to_dict()
+                    cases_list.append(case_dict)
+            except Exception as e:
+                failed_cases.append({"case_id": case_id, "reason": str(e)})
+
+        return {
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "failed_cases": failed_cases,
+            "cases": cases_list
         }
 
 
