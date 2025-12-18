@@ -1,7 +1,7 @@
 <template>
   <n-tabs type="line" animated>
     <n-tab-pane name="script_info" tab="脚本信息">
-      <div class="hint-box">
+      <div className="hint-box">
         如果想获取返回值请在脚本中将结果赋值给result变量 如 result = 1
       </div>
       <monaco-editor
@@ -36,6 +36,10 @@ import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 
 const props = defineProps({
   config: {
+    type: Object,
+    default: () => ({})
+  },
+  step: {
     type: Object,
     default: () => ({})
   }

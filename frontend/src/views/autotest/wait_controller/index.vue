@@ -18,6 +18,10 @@ const props = defineProps({
   config: {
     type: Object,
     default: () => ({})
+  },
+  step: {
+    type: Object,
+    default: () => ({})
   }
 })
 

@@ -1,56 +1,56 @@
 <template>
   <AppPage>
-      <n-card size="small" class="case-info-card" title="用例信息">
-        <div class="case-info-fields">
-          <div class="case-field">
-            <span class="case-field-label">所属项目</span>
-            <n-input
-                v-model:value="caseForm.case_project"
-                size="small"
-                placeholder="请输入所属项目"
-                class="case-field-input"
-            />
-          </div>
-
-          <div class="case-field">
-            <span class="case-field-label">用例名称</span>
-            <n-input
-                v-model:value="caseForm.case_name"
-                size="small"
-                placeholder="请输入用例名称"
-                class="case-field-input"
-            />
-          </div>
-
-          <div class="case-field">
-            <span class="case-field-label">用例标签</span>
-            <n-input
-                v-model:value="caseForm.case_tags"
-                size="small"
-                placeholder="请输入用例标签"
-                class="case-field-input"
-            />
-          </div>
-
-          <div class="case-field case-field-full">
-            <span class="case-field-label">用例描述</span>
-            <n-input
-                v-model:value="caseForm.case_desc"
-                size="small"
-                type="textarea"
-                placeholder="请输入用例描述"
-            />
-          </div>
-
-          <!-- 按钮放在表单内部 -->
-          <div class="case-field case-field-full">
-            <n-space justify="end">
-              <n-button size="small" type="warning" >调试</n-button>
-              <n-button size="small" type="primary" @click="handleSaveAll">保存</n-button>
-            </n-space>
-          </div>
+    <n-card size="small" class="case-info-card" title="用例信息">
+      <div class="case-info-fields">
+        <div class="case-field">
+          <span class="case-field-label">所属项目</span>
+          <n-input
+              v-model:value="caseForm.case_project"
+              size="small"
+              placeholder="请输入所属项目"
+              class="case-field-input"
+          />
         </div>
-      </n-card>
+
+        <div class="case-field">
+          <span class="case-field-label">用例名称</span>
+          <n-input
+              v-model:value="caseForm.case_name"
+              size="small"
+              placeholder="请输入用例名称"
+              class="case-field-input"
+          />
+        </div>
+
+        <div class="case-field">
+          <span class="case-field-label">用例标签</span>
+          <n-input
+              v-model:value="caseForm.case_tags"
+              size="small"
+              placeholder="请输入用例标签"
+              class="case-field-input"
+          />
+        </div>
+
+        <div class="case-field case-field-full">
+          <span class="case-field-label">用例描述</span>
+          <n-input
+              v-model:value="caseForm.case_desc"
+              size="small"
+              type="textarea"
+              placeholder="请输入用例描述"
+          />
+        </div>
+
+        <!-- 按钮放在表单内部 -->
+        <div class="case-field case-field-full">
+          <n-space justify="end">
+            <n-button type="primary" >调试</n-button>
+            <n-button type="info" @click="handleSaveAll">保存</n-button>
+          </n-space>
+        </div>
+      </div>
+    </n-card>
     <div class="page-container">
       <n-grid :cols="24" :x-gap="16" class="grid-container">
         <n-gi :span="7" class="left-column">
@@ -260,10 +260,26 @@
         </n-gi>
         <n-gi :span="17" class="right-column">
           <n-card :title="currentStepTitle" size="small" hoverable class="config-card">
+            <!--
+              数据传递说明：
+              1. :config="currentStep.config" - 传递步骤的配置数据（从 mapBackendStep 中提取的配置对象）
+              2. :step="currentStep" - 传递完整的步骤对象，包含：
+                 - id: 步骤ID（step_code）
+                 - type: 步骤类型（http/loop/code/if/wait）
+                 - name: 步骤名称（step_name）
+                 - config: 配置数据对象
+                 - original: 完整的原始后端步骤数据，包含所有字段：
+                   * step_code, step_name, step_desc, step_type
+                   * request_method, request_url, request_header, request_body
+                   * extract_variables, validators, defined_variables
+                   * id, case_id, parent_step_id 等所有后端返回的字段
+              3. 所有编辑器组件（HTTP控制器、循环控制器、条件控制器等）都可以通过 props.step.original 访问完整的原始数据
+            -->
             <component
                 v-if="currentStep"
                 :is="editorComponent"
                 :config="currentStep.config"
+                :step="currentStep"
                 @update:config="(val) => updateStepConfig(currentStep.id, val)"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
@@ -456,6 +472,34 @@ const parseJsonSafely = (val) => {
   }
 }
 
+/**
+ * 将后端返回的步骤数据转换为前端使用的格式
+ *
+ * 数据传递流程：
+ * 1. 后端 API (getStepTree) 返回完整的步骤数据，包含所有字段：
+ *    - step_code, step_name, step_desc, step_type
+ *    - request_method, request_url, request_header, request_body, request_params
+ *    - extract_variables, validators, defined_variables
+ *    - id, case_id, parent_step_id, children 等
+ *
+ * 2. mapBackendStep 函数将后端数据转换为前端格式：
+ *    - base.id: 使用 step_code 作为唯一标识
+ *    - base.type: 转换为前端类型（http/loop/code/if/wait）
+ *    - base.name: 使用 step_name
+ *    - base.config: 提取配置数据（根据类型不同提取不同字段）
+ *    - base.original: 保留完整的原始后端数据（所有字段）
+ *
+ * 3. 传递给编辑器组件时：
+ *    - :config="currentStep.config" - 传递配置数据
+ *    - :step="currentStep" - 传递完整步骤对象（包含 original）
+ *
+ * 4. 编辑器组件中可以通过 props.step.original 访问所有原始数据：
+ *    - props.step.original.step_name - 步骤名称
+ *    - props.step.original.step_desc - 步骤描述
+ *    - props.step.original.step_code - 步骤代码
+ *    - props.step.original.request_method - 请求方法
+ *    - 等等所有后端返回的字段
+ */
 const mapBackendStep = (step) => {
   if (!step || !step.step_type) return null
   const localType = backendTypeToLocal(step.step_type)
@@ -463,7 +507,15 @@ const mapBackendStep = (step) => {
     id: step.step_code || `step-${step.id || genId()}`,
     type: localType,
     name: step.step_name || step.step_type || '步骤',
-    config: {}
+    config: {},
+    // 保留完整的原始后端步骤数据，供编辑器组件使用
+    // 这样编辑器组件可以通过 props.step.original 访问所有原始字段
+    original: {
+      ...step,
+      // 确保 children 和 quote_steps 也被保留（但需要递归处理）
+      children: undefined, // 先设为 undefined，后面单独处理
+      quote_steps: step.quote_steps || []
+    }
   }
 
   if (localType === 'loop') {
@@ -503,12 +555,16 @@ const mapBackendStep = (step) => {
 
   if (step.children && step.children.length && stepDefinitions[localType]?.allowChildren) {
     base.children = step.children.map(mapBackendStep).filter(Boolean)
+    // 保留原始 children 数据到 original 中
+    base.original.children = step.children
   }
 
   if (!stepDefinitions[localType]?.allowChildren) {
     delete base.children
+    base.original.children = step.children || []
   } else if (!base.children) {
     base.children = []
+    base.original.children = []
   }
 
   return base
@@ -574,6 +630,28 @@ const currentStep = computed(() => {
   if (!key) return null
   return findStep(key)
 })
+
+watch(
+    () => currentStep.value,
+    (step) => {
+      if (step) {
+        console.log('========== 步骤编辑页面 - 传递给控制器组件 ==========')
+        console.log('完整的 Step 对象:', step)
+        console.log('Step 对象的所有 key:', Object.keys(step))
+        console.log('Step.config (配置数据):', step.config)
+        console.log('Step.original (原始后端数据):', step.original)
+        if (step.original) {
+          console.log('Step.original 的所有 key:', Object.keys(step.original))
+          console.log('Step.original.step_code:', step.original.step_code)
+          console.log('Step.original.step_name:', step.original.step_name)
+          console.log('Step.original.step_desc:', step.original.step_desc)
+          console.log('Step.original.step_type:', step.original.step_type)
+        }
+        console.log('==================================================')
+      }
+    },
+    {immediate: true}
+)
 
 const editorComponent = computed(() => {
   const step = currentStep.value
@@ -1069,11 +1147,6 @@ const truncateTextMiddle = (text, maxChars = 20) => {
 
 // 获取步骤显示名称（中间省略）
 const getStepDisplayName = (name, stepId) => {
-  console.log("==========");
-  console.log(name);
-  console.log("-----");
-  console.log(stepId);
-  console.log("==========");
   if (!name) return ''
   // 如果已经计算过，返回计算后的名称
   if (stepDisplayNames.value.has(stepId)) {
