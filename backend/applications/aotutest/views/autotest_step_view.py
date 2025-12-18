@@ -502,7 +502,8 @@ async def debug_http_request(
         # 执行日志
         logs = [
             format_log(f"请求开始"),
-            format_log(f"开始调试HTTP请求: {request_method} {request_url}")
+            format_log(f"开始调试HTTP请求: {request_method} {request_url}"),
+            format_log(f"参数替换开始"),
         ]
 
         # 处理变量替换（简单实现，支持 ${variable} 格式）
@@ -510,7 +511,9 @@ async def debug_http_request(
             """解析占位符变量"""
             if isinstance(value, str):
                 for var_name, var_value in defined_variables.items():
-                    value = value.replace(f"${{{var_name}}}", str(var_value))
+                    if value.startswith("$"):
+                        value = value.replace(f"${{{var_name}}}", str(var_value))
+                        logs.append("${" + var_name + "} => " + f"{var_value}")
                 return value
             elif isinstance(value, dict):
                 return {k: resolve_placeholders(v) for k, v in value.items()}
@@ -541,6 +544,7 @@ async def debug_http_request(
             json_data = resolve_placeholders(request_body)
 
         # 构建请求参数
+        logs.append(format_log("参数替换结束"))
         request_kwargs = {
             "headers": headers if headers else None,
             "params": params if params else None,
