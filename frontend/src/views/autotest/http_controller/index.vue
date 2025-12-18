@@ -34,7 +34,7 @@
             </n-gi>
             <n-gi :span="2">
               <n-space>
-                <n-button type="primary" @click="debugging">调试</n-button>
+                <n-button type="primary" @click="debugging" :loading="debugLoading">调试</n-button>
               </n-space>
             </n-gi>
           </n-grid>
@@ -318,9 +318,9 @@
         </n-tabs>
       </n-card>
 
-      <!-- 响应结果卡片：仅在有响应数据时展示 -->
+      <!-- 响应结果卡片：在加载中或有响应数据时展示 -->
       <n-card
-          v-if="response"
+          v-if="response || debugLoading"
           title="调试信息"
           size="small"
           hoverable
@@ -328,14 +328,25 @@
       >
         <!-- 在卡片标题右侧添加响应状态信息 -->
         <template #header-extra>
-          <n-space v-if="response" align="center">
+          <n-space v-if="response && !debugLoading" align="center">
             <n-tag :type="responseStatusType" round size="small">Status: {{ response.status }}</n-tag>
             <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
             <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
             <n-tag round>Type: {{ contentType }}</n-tag>
           </n-space>
+          <n-tag v-if="debugLoading" type="info" round size="small">
+            <template #icon>
+              <n-spin size="small" />
+            </template>
+            请求中...
+          </n-tag>
         </template>
-        <n-tabs type="line" animated>
+        <!-- 加载状态 -->
+        <div v-if="debugLoading" class="debug-loading">
+          <n-spin size="large" description="正在发送请求，请稍候..." />
+        </div>
+        <!-- 响应内容 -->
+        <n-tabs v-else type="line" animated>
           <!-- 请求信息 -->
           <n-tab-pane name="requestInfo" tab="请求信息">
             <n-space vertical :size="16" v-if="response">
@@ -463,7 +474,7 @@
 
 <script setup>
 import {computed, h, reactive, ref, watch, nextTick} from 'vue'
-import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText, NSwitch, NInputNumber, NTooltip, NRadioGroup, NRadio, NEmpty} from 'naive-ui'
+import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText, NSwitch, NInputNumber, NTooltip, NRadioGroup, NRadio, NEmpty, NSpin} from 'naive-ui'
 import api from "@/api";
 import AppPage from "@/components/page/AppPage.vue";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
@@ -818,6 +829,7 @@ const monacoEditorOptions = (readOnly) => {
 /* =============== Response =============== */
 /*  ======================================= */
 const response = ref(null) // 存储调试响应结果
+const debugLoading = ref(false) // 调试加载状态
 const requestInfo = ref({  // 存储请求的详细信息
   url: '',
   method: '',
@@ -959,6 +971,10 @@ const debugging = async () => {
     return;
   }
 
+  // 设置加载状态
+  debugLoading.value = true
+  response.value = null // 清空之前的响应数据
+
   try {
     const cfg = buildConfigFromState()
 
@@ -1037,6 +1053,9 @@ const debugging = async () => {
     }
   } catch (error) {
     $message.error(`调试失败：${error.message}`);
+  } finally {
+    // 关闭加载状态
+    debugLoading.value = false
   }
 };
 
@@ -1486,5 +1505,13 @@ pre {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.debug-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px 0;
 }
 </style>

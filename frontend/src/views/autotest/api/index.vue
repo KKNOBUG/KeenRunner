@@ -3,7 +3,7 @@
     <n-card size="small" class="case-info-card" title="用例信息">
       <div class="case-info-fields">
         <div class="case-field">
-          <span class="case-field-label">所属项目</span>
+          <span class="case-field-label case-field-required">所属项目</span>
           <n-input
               v-model:value="caseForm.case_project"
               size="small"
@@ -13,7 +13,7 @@
         </div>
 
         <div class="case-field">
-          <span class="case-field-label">用例名称</span>
+          <span class="case-field-label case-field-required">用例名称</span>
           <n-input
               v-model:value="caseForm.case_name"
               size="small"
@@ -43,9 +43,9 @@
         </div>
 
         <!-- 按钮放在表单内部 -->
-        <div class="case-field case-field-full">
+        <div class="case-field case-field-full case-field-buttons">
           <n-space justify="end">
-            <n-button type="primary" >调试</n-button>
+            <n-button type="primary">调试</n-button>
             <n-button type="info" @click="handleSaveAll">保存</n-button>
           </n-space>
         </div>
@@ -1468,29 +1468,42 @@ const RecursiveStepChildren = defineComponent({
 
 .case-info-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px 24px;
 }
 
 .case-field {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
 }
 
 .case-field-full {
   grid-column: 1 / -1;
 }
 
+.case-field-full.case-field-buttons {
+  justify-content: flex-end;
+}
+
 .case-field-label {
   font-size: 14px;
   font-weight: 500;
   color: #333;
-  margin-bottom: 2px;
+  white-space: nowrap;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.case-field-required::before {
+  content: '*';
+  color: #d03050;
+  margin-right: 4px;
 }
 
 .case-field-input {
-  width: 100%;
+  flex: 1;
   transition: border-color 0.3s ease;
 }
 
@@ -1505,11 +1518,22 @@ const RecursiveStepChildren = defineComponent({
 @media (max-width: 768px) {
   .case-info-fields {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .case-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   .case-field-label {
     font-size: 13px;
+    min-width: auto;
+  }
+
+  .case-field-input {
+    width: 100%;
   }
 }
 
