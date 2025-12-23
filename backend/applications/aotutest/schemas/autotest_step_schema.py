@@ -6,9 +6,9 @@
 @Module  : autotest_step_schema.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.applications.aotutest.models.autotest_model import StepType
 
@@ -154,6 +154,45 @@ class AutoTestStepTreeUpdateItem(BaseModel):
 class AutoTestStepTreeUpdateList(BaseModel):
     """批量更新步骤树"""
     steps: List[AutoTestStepTreeUpdateItem] = Field(..., description="步骤树数据")
+
+class AutoTestHttpDebugRequest(BaseModel):
+    """HTTP请求调试模型（不保存到数据库）"""
+    request_url: str = Field(..., max_length=2048, description="请求地址")
+    request_method: Optional[str] = Field("GET", max_length=16, description="请求方法")
+    request_header: Optional[Dict[str, Any]] = Field(None, description="请求头，JSON格式")
+    request_params: Optional[Union[Dict[str, Any], str]] = Field(None, description="请求参数，字典或字符串格式")
+    request_body: Optional[Dict[str, Any]] = Field(None, description="请求体，JSON格式")
+    request_form_data: Optional[Dict[str, Any]] = Field(None, description="请求表单，form-data格式")
+    request_form_urlencoded: Optional[Dict[str, Any]] = Field(None, description="请求键值对，x-www-form-urlencoded格式")
+    request_text: Optional[str] = Field(None, description="请求体，Text格式")
+    defined_variables: Optional[Dict[str, Any]] = Field(None, description="定义变量(自定义变量，用于变量替换)")
+    extract_variables: Optional[List[Dict[str, Any]]] = Field(None, description="提取变量配置(数组或对象)")
+    validators: Optional[List[Dict[str, Any]]] = Field(None, description="断言配置(数组或对象)")
+    step_name: Optional[str] = Field("HTTP调试", max_length=255, description="步骤名称")
+
+    @field_validator('extract_variables', mode='before')
+    @classmethod
+    def normalize_extract_variables(cls, v):
+        """将单个字典转换为列表格式，兼容前端可能发送的单个对象"""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+    @field_validator('validators', mode='before')
+    @classmethod
+    def normalize_validators(cls, v):
+        """将单个字典转换为列表格式，兼容前端可能发送的单个对象"""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
 
 
 # 允许递归引用

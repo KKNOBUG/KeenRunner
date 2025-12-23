@@ -19,7 +19,8 @@ from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate, AutoTestApiStepUpdate,
-    AutoTestStepSelect, AutoTestStepTreeUpdateList, AutoTestStepTreeUpdateItem
+    AutoTestStepSelect, AutoTestStepTreeUpdateList, AutoTestStepTreeUpdateItem,
+    AutoTestHttpDebugRequest
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
@@ -438,7 +439,7 @@ async def batch_update_steps_tree(
 
 @autotest_step.post("/http/debugging", summary="调试HTTP请求", description="实时调试HTTP请求，不保存到数据库")
 async def debug_http_request(
-        step_data: Dict[str, Any] = Body(..., description="HTTP步骤调试数据")
+        step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP步骤调试数据")
 ):
     """
     调试HTTP请求接口
@@ -475,22 +476,35 @@ async def debug_http_request(
     """
     try:
         # 提取请求参数
-        request_url = step_data.get("request_url")
-        request_method = (step_data.get("request_method") or "GET").upper()
-        request_header = step_data.get("request_header") or {}
-        request_params = step_data.get("request_params")
-        request_body = step_data.get("request_body")
-        request_form_data = step_data.get("request_form_data")
-        request_form_urlencoded = step_data.get("request_form_urlencoded")
-        request_text = step_data.get("request_text")
-        defined_variables = step_data.get("defined_variables") or {}
-        extract_variables = step_data.get("extract_variables") or []
-        validators = step_data.get("validators") or []
-        step_name = step_data.get("step_name") or "HTTP调试"
-
-        # 验证必填参数
-        if not request_url:
-            return BadReqResponse(message="请求URL不能为空")
+        # request_url = step_data.get("request_url")
+        # request_method = (step_data.get("request_method") or "GET").upper()
+        # request_header = step_data.get("request_header") or {}
+        # request_params = step_data.get("request_params")
+        # request_body = step_data.get("request_body")
+        # request_form_data = step_data.get("request_form_data")
+        # request_form_urlencoded = step_data.get("request_form_urlencoded")
+        # request_text = step_data.get("request_text")
+        # defined_variables = step_data.get("defined_variables") or {}
+        # extract_variables = step_data.get("extract_variables") or []
+        # validators = step_data.get("validators") or []
+        # step_name = step_data.get("step_name") or "HTTP调试"
+        #
+        # # 验证必填参数
+        # if not request_url:
+        #     return BadReqResponse(message="请求URL不能为空")
+        # 提取请求参数（使用 Pydantic 模型，自动验证）
+        request_url = step_data.request_url
+        request_method = (step_data.request_method or "GET").upper()
+        request_header = step_data.request_header or {}
+        request_params = step_data.request_params
+        request_body = step_data.request_body
+        request_form_data = step_data.request_form_data
+        request_form_urlencoded = step_data.request_form_urlencoded
+        request_text = step_data.request_text
+        defined_variables = step_data.defined_variables or {}
+        extract_variables = step_data.extract_variables or []
+        validators = step_data.validators or []
+        step_name = step_data.step_name or "HTTP调试"
 
         # 日志辅助函数：添加时间戳和步骤名称
         from datetime import datetime
