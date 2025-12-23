@@ -96,6 +96,7 @@ async function handleLogin() {
     $message.success(t('views.login.message_login_success'))
 
     // 登录成功后设置 token
+    // debugger
     setToken(res.data.access_token)
     const userStore = useUserStore()
     userStore.setUserInfo(res.data)

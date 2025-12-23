@@ -37,8 +37,8 @@ async def create_case(
         return SuccessResponse(data=data, message="创建测试用例成功")
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
+    # except NotFoundException as e:
+    #     return NotFoundResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"创建失败，异常描述: {str(e)}")
 
@@ -124,7 +124,7 @@ async def delete_case(
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_case.delete("/delete", summary="按id查询一个测试用例信息的步骤数量")
+@autotest_case.delete("/steps", summary="按id查询一个测试用例信息的步骤数量")
 async def get_case_step_total(
         case_id: int = Query(..., description="测试用例ID")
 ):

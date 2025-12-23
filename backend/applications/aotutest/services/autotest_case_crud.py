@@ -45,7 +45,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         existing_case = await self.model.filter(case_name=case_in.case_name, case_project=case_in.case_project).first()
         if existing_case:
             raise DataAlreadyExistsException(
-                message=f"项目(id={case_in.project_id})下用例名称(case_name={case_in.case_name})已存在"
+                message=f"项目(id={case_in.case_project})下用例名称(case_name={case_in.case_name})已存在"
             )
 
         try:

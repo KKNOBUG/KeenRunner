@@ -118,7 +118,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     step_counter["child_steps"] += 1
 
             # 获取步骤基本信息
-            step_dict = await step.to_dict(fk=False)
+            # step_dict = await step.to_dict(fk=False)
+            step_dict = await step.to_dict()
 
             # 获取用例信息（业务层手动查询）
             if step.case_id:
@@ -581,7 +582,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         continue
 
                     # 检查同一用例下步骤序号是否已存在
-                    existing_step: Optional[AutoTestApiCaseInfo] = await self.model.filter(
+                    existing_step: Optional[AutoTestApiStepInfo] = await self.model.filter(
                         case_id=step_data.case_id,
                         step_no=step_data.step_no,
                         state=-1
