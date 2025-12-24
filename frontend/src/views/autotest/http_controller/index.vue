@@ -127,14 +127,14 @@
             </div>
 
           </n-tab-pane>
-          <n-tab-pane name="variables" tab="变量">
+          <n-tab-pane name="defined_variables" tab="变量">
             <template #tab>
-              <n-badge :value="state.form.variables.length" :max="99" show-zero>
+              <n-badge :value="state.form.defined_variables.length" :max="99" show-zero>
                 <span>变量</span>
               </n-badge>
             </template>
             <KeyValueEditor
-                v-model:items="state.form.variables"
+                v-model:items="state.form.defined_variables"
                 :body-type="'none'"
                 :is-for-body="false"
             />
@@ -490,7 +490,7 @@ import {useRoute} from 'vue-router'
  * 1. config: 从步骤树传递的配置数据（step.config），包含：
  *    - method, url, headers, params
  *    - data (JSON body), form_data, form_urlencoded
- *    - extract_variables, assert_validators, variables
+ *    - extract_variables, assert_validators, defined_variables
  *
  * 2. step: 完整的步骤对象，包含：
  *    - step.id: 步骤ID（step_code）
@@ -569,7 +569,7 @@ const state = reactive({
     jsonBody: '',
     testcase_name: '',
     description: '',
-    variables: [],
+    defined_variables: [],
     extract_variables: {},
     assert_validators: {},
   }
@@ -652,7 +652,7 @@ const initFromConfig = () => {
   }
 
   // 变量（优先使用原始数据）
-  state.form.variables = kvObjectToList(cfg.defined_variables || original.defined_variables || cfg.variables || {})
+  state.form.defined_variables = kvObjectToList(cfg.defined_variables || original.defined_variables || cfg.defined_variables || {})
 
   // 提取（优先使用原始数据）
   state.form.extract_variables = {}
@@ -718,7 +718,7 @@ const buildValidatorsForBackend = () => {
 const buildConfigFromState = () => {
   const headersObj = kvListToObject(state.form.headers)
   const paramsObj = kvListToObject(state.form.params)
-  const variablesObj = kvListToObject(state.form.variables)
+  const variablesObj = kvListToObject(state.form.defined_variables)
 
   let data = null
   let form_data = null
