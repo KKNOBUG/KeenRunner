@@ -30,31 +30,30 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     async def get_by_id(self, report_id: int) -> Optional[AutoTestApiReportInfo]:
         """根据ID查询报告信息"""
-        return await self.model.filter(id=report_id, state=-1).first()
+        return await self.model.filter(id=report_id, state__not=1).first()
 
     async def get_by_code(self, report_code: str) -> Optional[AutoTestApiReportInfo]:
         """根据ID查询报告信息"""
-        return await self.model.filter(report_code=report_code, state=-1).first()
+        return await self.model.filter(report_code=report_code, state__not=1).first()
 
     async def get_by_conditions(
             self,
             conditions: Dict[str, Any],
             only_one: bool = True
     ) -> Optional[AutoTestApiReportInfo]:
-        stmt: QuerySet = self.model.filter(**conditions, state=-1)
+        stmt: QuerySet = self.model.filter(**conditions, state__not=1)
         return await (stmt.first() if only_one else stmt.all())
 
     async def create_report(self, report_in: AutoTestApiReportCreate) -> AutoTestApiReportInfo:
         """创建报告信息"""
         case_id: int = report_in.case_id
-        case_name: str = report_in.case_name
         case_code: str = report_in.case_code
         case_instance = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
             only_one=True,
-            conditions={"id": case_id, "case_name": case_name, "case_code": case_code}
+            conditions={"id": case_id, "case_code": case_code}
         )
         if not case_instance:
-            raise NotFoundException(message=f"用例(id={case_id}, case_name={case_name})信息不存在")
+            raise NotFoundException(message=f"用例(id={case_id}, case_code={case_code})信息不存在")
         try:
             report_dict = report_in.dict(exclude_unset=True)
             instance = await self.create(report_dict)
@@ -64,7 +63,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     async def update_report(self, report_in: AutoTestApiReportUpdate) -> AutoTestApiReportInfo:
         """更新报告信息"""
-        report_id = report_in.id
+        report_id = report_in.report_id
         report_code = report_in.report_code
         if not report_id and not report_code:
             raise ParameterException(message=f"参数缺失, 更新报告信息必须传递id或code")

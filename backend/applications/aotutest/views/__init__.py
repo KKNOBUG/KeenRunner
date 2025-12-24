@@ -15,7 +15,7 @@ from .autotest_detail_view import autotest_detail
 
 autotest = APIRouter()
 
-autotest.include_router(autotest_case, prefix="/case")
-autotest.include_router(autotest_step, prefix="/step")
-autotest.include_router(autotest_report, prefix="/report")
-autotest.include_router(autotest_detail, prefix="/detail")
+autotest.include_router(autotest_case, prefix="/case", tags=["用例相关"])
+autotest.include_router(autotest_step, prefix="/step", tags=["步骤相关"])
+autotest.include_router(autotest_report, prefix="/report", tags=["报告相关"])
+autotest.include_router(autotest_detail, prefix="/detail", tags=["明细相关"])

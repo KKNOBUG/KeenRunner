@@ -30,10 +30,10 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
         super().__init__(model=AutoTestApiDetailsInfo)
 
     async def get_by_id(self, report_id: int) -> Optional[AutoTestApiDetailsInfo]:
-        return await self.model.filter(id=report_id, state=-1).first()
+        return await self.model.filter(id=report_id, state__not=1).first()
 
     async def get_by_code(self, report_code: int) -> Optional[List[AutoTestApiDetailsInfo]]:
-        return await self.model.filter(report_code=report_code, state=-1).all()
+        return await self.model.filter(report_code=report_code, state__not=1).all()
 
     async def get_by_conditions(
             self,
@@ -41,7 +41,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             only_one: bool = True,
     ) -> Optional[AutoTestApiDetailsInfo]:
         """根据条件查询用例信息"""
-        stmt: QuerySet = self.model.filter(**conditions, state=-1)
+        stmt: QuerySet = self.model.filter(**conditions, state__not=1)
         return await (stmt.first() if only_one else stmt.all())
 
     async def create_step_detail(self, detail_in: AutoTestApiDetailCreate) -> AutoTestApiDetailsInfo:
@@ -72,6 +72,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
 
     async def update_step_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailsInfo:
         """更新步骤明细信息"""
+        # 检查用例是否存在
         case_id = detail_in.case_id
         case_code = detail_in.case_code
         case_instance = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
@@ -81,6 +82,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
         if not case_instance:
             raise NotFoundException(message=f"用例(id={case_id}, case_code={case_code})信息不存在")
 
+        # 检查报告清单是否存在
         report_code = detail_in.report_code
         report_instance = await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
             only_one=True,
@@ -90,7 +92,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             raise NotFoundException(
                 message=f"测试报告(case_id={case_id}, case_code={case_code}, report_code={report_code})信息不存在"
             )
-        detail_id = detail_in.id
+        # 更新报告明细
+        detail_id = detail_in.detail_id
         step_code = detail_in.step_code
         if not detail_id and (not report_code and not step_code):
             raise ParameterException(message=f"参数缺失, 更新步骤明细信息必须传递id或步骤代码和报告代码")

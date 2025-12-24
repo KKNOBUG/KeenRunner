@@ -27,7 +27,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def get_by_id(self, step_id: int) -> Optional[AutoTestApiStepInfo]:
         """根据ID查询步骤明细"""
-        return await self.model.filter(id=step_id, state=-1).first()
+        return await self.model.filter(id=step_id, state__not=1).first()
 
     async def get_by_case_id(self, case_id: int) -> List[Dict[str, Any]]:
         """
@@ -59,7 +59,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             NotFoundException: 当指定的用例ID不存在时抛出异常
 
         Note:
-            - 只返回状态为正常（state=-1）的步骤
+            - 只返回状态为正常（state__not=1）的步骤
             - 步骤按照 step_no 排序
             - 引用用例的步骤也会递归构建完整的树结构
             - 步骤数量统计包括所有层级的子步骤和引用步骤
@@ -71,7 +71,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             >>> # 可以通过递归遍历 children 和 quote_steps 访问所有步骤
         """
         # 业务层验证：检查用例是否存在
-        case = await AutoTestApiCaseInfo.filter(id=case_id, state=-1).first()
+        case = await AutoTestApiCaseInfo.filter(id=case_id, state__not=1).first()
         if not case:
             raise NotFoundException(message=f"用例(id={case_id})信息不存在")
 
@@ -79,7 +79,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         root_steps = await self.model.filter(
             case_id=case_id,
             parent_step_id__isnull=True,
-            state=-1
+            state__not=1
         ).order_by("step_no").all()
 
         # 步骤计数器：用于统计该用例拥有的步骤总数
@@ -123,14 +123,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
             # 获取用例信息（业务层手动查询）
             if step.case_id:
-                case = await AutoTestApiCaseInfo.filter(id=step.case_id, state=-1).first()
+                case = await AutoTestApiCaseInfo.filter(id=step.case_id, state__not=1).first()
                 if case:
                     step_dict["case"] = await case.to_dict()
 
             # 获取子步骤（递归构建）
             children = await self.model.filter(
                 parent_step_id=step.id,
-                state=-1
+                state__not=1
             ).order_by("step_no").all()
 
             if children:
@@ -141,13 +141,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             # 如果引用了其他用例，获取引用用例的所有步骤（包含子步骤）
             if step.quote_case_id:
                 # 业务层验证：检查引用用例是否存在
-                quote_case = await AutoTestApiCaseInfo.filter(id=step.quote_case_id, state=-1).first()
+                quote_case = await AutoTestApiCaseInfo.filter(id=step.quote_case_id, state__not=1).first()
                 if quote_case:
                     # 递归获取引用用例的所有根步骤
                     quote_case_root_steps = await self.model.filter(
                         case_id=step.quote_case_id,
                         parent_step_id__isnull=True,
-                        state=-1
+                        state__not=1
                     ).order_by("step_no").all()
 
                     quote_steps = []
@@ -181,13 +181,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestApiStepInfo:
         """创建步骤明细"""
         # 业务层验证：检查用例是否存在
-        case = await AutoTestApiCaseInfo.filter(id=step_in.case_id, state=-1).first()
+        case = await AutoTestApiCaseInfo.filter(id=step_in.case_id, state__not=1).first()
         if not case:
             raise NotFoundException(message=f"用例(id={step_in.case_id})信息不存在")
 
         # 业务层验证：如果指定了父步骤，检查父步骤是否存在
         if step_in.parent_step_id:
-            parent_step = await self.model.filter(id=step_in.parent_step_id, state=-1).first()
+            parent_step = await self.model.filter(id=step_in.parent_step_id, state__not=1).first()
             if not parent_step:
                 raise NotFoundException(message=f"父级步骤(id={step_in.parent_step_id})信息不存在")
             # 确保父步骤属于同一个用例
@@ -198,7 +198,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 业务层验证：如果指定了引用用例，检查引用用例是否存在
         if step_in.quote_case_id:
-            quote_case = await AutoTestApiCaseInfo.filter(id=step_in.quote_case_id, state=-1).first()
+            quote_case = await AutoTestApiCaseInfo.filter(id=step_in.quote_case_id, state__not=1).first()
             if not quote_case:
                 raise NotFoundException(message=f"引用用例(id={step_in.quote_case_id})信息不存在")
 
@@ -206,7 +206,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         existing_step = await self.model.filter(
             case_id=step_in.case_id,
             step_no=step_in.step_no,
-            state=-1
+            state__not=1
         ).first()
         if existing_step:
             raise DataAlreadyExistsException(
@@ -222,7 +222,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def update_step(self, step_in: AutoTestApiStepUpdate) -> AutoTestApiStepInfo:
         """更新步骤明细"""
-        step_id = step_in.id
+        step_id = step_in.step_id
         instance = await self.query(step_id)
         if not instance or instance.state != -1:
             raise NotFoundException(message=f"步骤明细(id={step_id})信息不存在")
@@ -239,7 +239,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             existing_step = await self.model.filter(
                 case_id=case_id,
                 step_no=update_dict["step_no"],
-                state=-1
+                state__not=1
             ).exclude(id=step_id).first()
             if existing_step:
                 raise DataAlreadyExistsException(
@@ -248,14 +248,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 业务层验证：如果更新了用例ID，检查用例是否存在
         if "case_id" in update_dict:
-            case = await AutoTestApiCaseInfo.filter(id=update_dict["case_id"], state=-1).first()
+            case = await AutoTestApiCaseInfo.filter(id=update_dict["case_id"], state__not=1).first()
             if not case:
                 raise NotFoundException(message=f"用例(id={update_dict['case_id']})信息不存在")
 
         # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
         if "parent_step_id" in update_dict:
             if update_dict["parent_step_id"]:
-                parent_step = await self.model.filter(id=update_dict["parent_step_id"], state=-1).first()
+                parent_step = await self.model.filter(id=update_dict["parent_step_id"], state__not=1).first()
                 if not parent_step:
                     raise NotFoundException(message=f"父级步骤(id={update_dict['parent_step_id']})信息不存在")
                 # 确保父步骤属于同一个用例
@@ -276,14 +276,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     if current_parent_id in visited:
                         break
                     visited.add(current_parent_id)
-                    parent = await self.model.filter(id=current_parent_id, state=-1).first()
+                    parent = await self.model.filter(id=current_parent_id, state__not=1).first()
                     if not parent:
                         break
                     current_parent_id = parent.parent_step_id
 
         # 业务层验证：如果更新了引用用例ID，检查引用用例是否存在
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
-            quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state=-1).first()
+            quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state__not=1).first()
             if not quote_case:
                 raise NotFoundException(message=f"引用用例(id={update_dict['quote_case_id']})信息不存在")
 
@@ -303,7 +303,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise NotFoundException(message=f"步骤明细(id={step_id})信息不存在")
 
         # 检查是否有子步骤
-        children_count = await self.model.filter(parent_step_id=step_id, state=-1).count()
+        children_count = await self.model.filter(parent_step_id=step_id, state__not=1).count()
         if children_count > 0:
             raise DataAlreadyExistsException(
                 message=f"步骤明细(id={step_id})存在子步骤，无法删除"
@@ -317,7 +317,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
     async def select_steps(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """按条件查询步骤明细"""
         # 默认只查询未删除的记录
-        search &= Q(state=-1)
+        search &= Q(state__not=1)
         return await self.list(
             page=page,
             page_size=page_size,
@@ -379,7 +379,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     existing_step = await self.model.filter(
                         case_id=case_id,
                         step_no=update_dict["step_no"],
-                        state=-1
+                        state__not=1
                     ).exclude(id=step_id).first()
                     if existing_step:
                         failed_steps.append({
@@ -396,7 +396,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 # 业务层验证：如果更新了用例ID，检查用例是否存在
                 if "case_id" in update_dict:
-                    case = await AutoTestApiCaseInfo.filter(id=update_dict["case_id"], state=-1).first()
+                    case = await AutoTestApiCaseInfo.filter(id=update_dict["case_id"], state__not=1).first()
                     if not case:
                         failed_steps.append({
                             "step_id": step_id,
@@ -406,7 +406,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
                 if "parent_step_id" in update_dict and update_dict["parent_step_id"]:
-                    parent_step = await self.model.filter(id=update_dict["parent_step_id"], state=-1).first()
+                    parent_step = await self.model.filter(id=update_dict["parent_step_id"], state__not=1).first()
                     if not parent_step:
                         failed_steps.append({
                             "step_id": step_id,
@@ -431,7 +431,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 # 业务层验证：如果更新了引用用例ID，检查引用用例是否存在
                 if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
-                    quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state=-1).first()
+                    quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state__not=1).first()
                     if not quote_case:
                         failed_steps.append({
                             "step_id": step_id,
@@ -572,7 +572,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                     # 检查用例是否存在
                     case: Optional[AutoTestApiCaseInfo] = await AutoTestApiCaseInfo.filter(
-                        id=step_data.case_id, state=-1
+                        id=step_data.case_id, state__not=1
                     ).first()
                     if not case:
                         failed_steps.append({
@@ -585,7 +585,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     existing_step: Optional[AutoTestApiStepInfo] = await self.model.filter(
                         case_id=step_data.case_id,
                         step_no=step_data.step_no,
-                        state=-1
+                        state__not=1
                     ).first()
                     if existing_step:
                         failed_steps.append({
@@ -597,7 +597,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     # 验证父步骤
                     final_parent_step_id = parent_step_id if parent_step_id is not None else step_data.parent_step_id
                     if final_parent_step_id:
-                        parent_step = await self.model.filter(id=final_parent_step_id, state=-1).first()
+                        parent_step = await self.model.filter(id=final_parent_step_id, state__not=1).first()
                         if not parent_step:
                             failed_steps.append({
                                 "step_id": step_id,
@@ -672,7 +672,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         existing_step = await self.model.filter(
                             case_id=case_id,
                             step_no=update_dict["step_no"],
-                            state=-1
+                            state__not=1
                         ).exclude(id=step_id).first()
                         if existing_step:
                             failed_steps.append({
@@ -696,7 +696,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     # 业务层验证：如果更新了用例ID，检查用例是否存在
                     if "case_id" in update_dict:
                         case: Optional[AutoTestApiCaseInfo] = await AutoTestApiCaseInfo.filter(
-                            id=update_dict["case_id"], state=-1).first()
+                            id=update_dict["case_id"], state__not=1).first()
                         if not case:
                             failed_steps.append({
                                 "step_id": step_id,
@@ -706,7 +706,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                     # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
                     if "parent_step_id" in update_dict and update_dict["parent_step_id"]:
-                        parent_step = await self.model.filter(id=update_dict["parent_step_id"], state=-1).first()
+                        parent_step = await self.model.filter(id=update_dict["parent_step_id"], state__not=1).first()
                         if not parent_step:
                             failed_steps.append({
                                 "step_id": step_id,
@@ -731,7 +731,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                     # 业务层验证：如果更新了引用用例ID，检查引用用例是否存在
                     if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
-                        quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state=-1).first()
+                        quote_case = await AutoTestApiCaseInfo.filter(id=update_dict["quote_case_id"], state__not=1).first()
                         if not quote_case:
                             failed_steps.append({
                                 "step_id": step_id,

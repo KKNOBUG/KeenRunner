@@ -24,11 +24,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def get_by_id(self, case_id: int) -> Optional[AutoTestApiCaseInfo]:
         """根据ID查询用例信息"""
-        return await self.model.filter(id=case_id, state=-1).first()
+        return await self.model.filter(id=case_id, state__not=1).first()
 
     async def get_by_code(self, case_code: str) -> Optional[AutoTestApiCaseInfo]:
         """根据code查询用例信息"""
-        return await self.model.filter(case_code=case_code, state=-1).first()
+        return await self.model.filter(case_code=case_code, state__not=1).first()
 
     async def get_by_conditions(
             self,
@@ -36,7 +36,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             only_one: bool = True,
     ) -> Optional[AutoTestApiCaseInfo]:
         """根据条件查询用例信息"""
-        stmt: QuerySet = self.model.filter(**conditions, state=-1)
+        stmt: QuerySet = self.model.filter(**conditions, state__not=1)
         return await (stmt.first() if only_one else stmt.all())
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
@@ -47,7 +47,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise DataAlreadyExistsException(
                 message=f"项目(id={case_in.case_project})下用例名称(case_name={case_in.case_name})已存在"
             )
-
         try:
             case_dict = case_in.dict()
             case_dict["case_version"] = 1
@@ -97,14 +96,14 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise NotFoundException(message=f"用例(id={case_id})信息不存在")
 
         # 检查是否有步骤明细关联（使用普通字段查询）
-        steps_count = await AutoTestApiStepInfo.filter(case_id=case_id, state=-1).count()
+        steps_count = await AutoTestApiStepInfo.filter(case_id=case_id, state__not=1).count()
         if steps_count > 0:
             raise DataAlreadyExistsException(
                 message=f"用例(id={case_id})存在步骤明细，无法删除"
             )
 
         # 检查是否被其他用例引用（使用普通字段查询）
-        quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state=-1).count()
+        quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
         if quote_steps_count > 0:
             raise DataAlreadyExistsException(
                 message=f"用例(id={case_id})被其他用例引用，无法删除"
@@ -245,7 +244,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     existing_case: Optional[AutoTestApiCaseInfo] = await self.model.filter(
                         case_name=case_name,
                         case_project=case_project,
-                        state=-1
+                        state__not=1
                     ).first()
                     if existing_case:
                         failed_cases.append({
@@ -284,7 +283,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                         existing_case: Optional[AutoTestApiCaseInfo] = await self.model.filter(
                             case_name=case_name,
                             case_project=case_project,
-                            state=-1
+                            state__not=1
                         ).exclude(id=case_id).first()
                         if existing_case:
                             failed_cases.append({

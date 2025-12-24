@@ -45,7 +45,8 @@
         <!-- 按钮放在表单内部 -->
         <div class="case-field case-field-full case-field-buttons">
           <n-space justify="end">
-            <n-button type="primary">调试</n-button>
+            <n-button type="success" :loading="runLoading" @click="handleRun">运行</n-button>
+            <n-button type="primary" :loading="debugLoading" @click="handleDebug">调试</n-button>
             <n-button type="info" @click="handleSaveAll">保存</n-button>
           </n-space>
         </div>
@@ -333,6 +334,8 @@ const caseForm = reactive({
   case_tags: '',
   case_desc: ''
 })
+const runLoading = ref(false)
+const debugLoading = ref(false)
 const dragState = ref({
   draggingId: null,
   dragOverId: null, // 当前拖拽进入的 loop/if 步骤 ID（焦点高亮）
@@ -447,16 +450,16 @@ const findStepParent = (id, list = steps.value, parent = null) => {
 
 const backendTypeToLocal = (step_type) => {
   switch (step_type) {
-    case '循环结构':
-      return 'loop'
-    case '执行代码(Python)':
-      return 'code'
-    case 'HTTP/HTTPS协议网络请求':
+    case 'HTTP请求':
       return 'http'
+    case '执行代码请求(Python)':
+      return 'code'
     case '条件分支':
       return 'if'
     case '等待控制':
       return 'wait'
+    case '循环结构':
+      return 'loop'
     default:
       return 'code'
   }
@@ -596,6 +599,60 @@ const handleSaveAll = async () => {
   } catch (error) {
     console.error('Failed to save step tree', error)
     window.$message?.error?.('保存失败')
+  }
+}
+
+const handleRun = async () => {
+  if (!caseId.value) {
+    window.$message?.warning?.('请先选择或创建测试用例')
+    return
+  }
+  runLoading.value = true
+  try {
+    const res = await api.executeStepTree({
+      case_id: caseId.value,
+      initial_variables: {}
+    })
+    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
+      const stats = res.data?.statistics || {}
+      const msg = `执行完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
+      window.$message?.success?.(msg)
+    } else {
+      window.$message?.error?.(res?.message || '执行失败')
+    }
+  } catch (error) {
+    console.error('Failed to run step tree', error)
+    window.$message?.error?.(error?.message || '执行失败')
+  } finally {
+    runLoading.value = false
+  }
+}
+
+const handleDebug = async () => {
+  if (!steps.value || steps.value.length === 0) {
+    window.$message?.warning?.('请先添加测试步骤')
+    return
+  }
+  debugLoading.value = true
+  try {
+    const res = await api.executeStepTree({
+      case_id: caseId.value || 0,
+      case_info: {...caseForm},
+      steps: steps.value,
+      initial_variables: {}
+    })
+    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
+      const stats = res.data?.statistics || {}
+      const msg = `调试完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
+      window.$message?.success?.(msg)
+    } else {
+      window.$message?.error?.(res?.message || '调试失败')
+    }
+  } catch (error) {
+    console.error('Failed to debug step tree', error)
+    window.$message?.error?.(error?.message || '调试失败')
+  } finally {
+    debugLoading.value = false
   }
 }
 

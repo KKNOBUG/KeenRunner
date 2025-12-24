@@ -65,8 +65,8 @@ async def search_step_details(
     """按条件查询多个测试用例信息"""
     try:
         q = Q()
-        if detail_in.id:
-            q &= Q(id=detail_in.id)
+        if detail_in.detail_id:
+            q &= Q(id=detail_in.detail_id)
         if detail_in.case_id:
             q &= Q(case_id=detail_in.case_id)
         if detail_in.step_state is not None:

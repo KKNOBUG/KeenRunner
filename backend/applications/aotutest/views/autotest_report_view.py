@@ -66,18 +66,20 @@ async def search_reports(
     """按条件查询多个测试用例信息"""
     try:
         q = Q()
-        if report_in.id:
-            q &= Q(id=report_in.id)
+        if report_in.report_id:
+            q &= Q(id=report_in.report_id)
         if report_in.case_id:
             q &= Q(case_id=report_in.case_id)
-        if report_in.case_name:
-            q &= Q(case_name__contains=report_in.case_name)
+        if report_in.report_type:
+            q &= Q(report_type=report_in.report_type.value)
         if report_in.case_state is not None:
             q &= Q(case_state=report_in.case_state)
         if report_in.created_user:
             q &= Q(created_user=report_in.created_user)
         if report_in.updated_user:
             q &= Q(updated_user=report_in.updated_user)
+        if report_in.step_pass_ratio:
+            q &= Q(step_pass_ratio__gte=report_in.step_pass_ratio)
         q &= Q(state=report_in.state)
         total, instances = await AUTOTEST_API_REPORT_CRUD.select_reports(
             search=q,

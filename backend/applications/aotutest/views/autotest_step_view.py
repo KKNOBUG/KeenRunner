@@ -24,6 +24,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
+from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
 from backend.core.responses.http_response import (
     SuccessResponse,
@@ -181,12 +182,14 @@ async def search_steps(
     """按条件查询多个测试步骤明细"""
     try:
         q = Q()
-        if step_in.id:
-            q &= Q(id=step_in.id)
+        if step_in.step_id:
+            q &= Q(id=step_in.step_id)
         if step_in.case_id:
             q &= Q(case_id=step_in.case_id)
         if step_in.step_type:
-            q &= Q(step_type=step_in.step_type)
+            q &= Q(step_type=step_in.step_type.value)
+        if step_in.case_type:
+            q &= Q(step_type=step_in.step_type.value)
         if step_in.parent_step_id is not None:
             if step_in.parent_step_id == 0:
                 q &= Q(parent_step_id__isnull=True)
@@ -461,7 +464,7 @@ async def debug_http_request(
     - request_text: 文本格式请求体（字符串）
     - defined_variables: 定义的变量（字典，用于变量替换）
     - extract_variables: 提取变量配置（数组或对象）
-    - validators: 断言配置（数组或对象）
+    - assert_validators: 断言配置（数组或对象）
 
     返回数据格式：
     - status: HTTP状态码
@@ -475,23 +478,6 @@ async def debug_http_request(
     - logs: 执行日志（数组）
     """
     try:
-        # 提取请求参数
-        # request_url = step_data.get("request_url")
-        # request_method = (step_data.get("request_method") or "GET").upper()
-        # request_header = step_data.get("request_header") or {}
-        # request_params = step_data.get("request_params")
-        # request_body = step_data.get("request_body")
-        # request_form_data = step_data.get("request_form_data")
-        # request_form_urlencoded = step_data.get("request_form_urlencoded")
-        # request_text = step_data.get("request_text")
-        # defined_variables = step_data.get("defined_variables") or {}
-        # extract_variables = step_data.get("extract_variables") or []
-        # validators = step_data.get("validators") or []
-        # step_name = step_data.get("step_name") or "HTTP调试"
-        #
-        # # 验证必填参数
-        # if not request_url:
-        #     return BadReqResponse(message="请求URL不能为空")
         # 提取请求参数（使用 Pydantic 模型，自动验证）
         request_url = step_data.request_url
         request_method = (step_data.request_method or "GET").upper()
@@ -503,7 +489,7 @@ async def debug_http_request(
         request_text = step_data.request_text
         defined_variables = step_data.defined_variables or {}
         extract_variables = step_data.extract_variables or []
-        validators = step_data.validators or []
+        assert_validators = step_data.assert_validators or []
         step_name = step_data.step_name or "HTTP调试"
 
         # 日志辅助函数：添加时间戳和步骤名称
@@ -627,7 +613,7 @@ async def debug_http_request(
         if extract_variables:
             # 支持数组格式的提取变量
             logs.append(format_log(f"提取开始"))
-            extract_list = extract_variables if isinstance(extract_variables, list) else [extract_variables]
+            extract_list: List[dict] = extract_variables if isinstance(extract_variables, list) else [extract_variables]
             for extract_item in extract_list:
                 try:
                     name = extract_item.get("name", "")
@@ -714,10 +700,11 @@ async def debug_http_request(
 
         # 处理断言验证
         validator_results = []
-        if validators:
+        if assert_validators:
             # 支持数组格式的断言
             logs.append(format_log(f"断言开始"))
-            validators_list = validators if isinstance(validators, list) else [validators]
+            validators_list: List[Dict] = assert_validators if isinstance(assert_validators,
+                                                                          list) else [assert_validators]
             for validator_item in validators_list:
                 try:
                     name = validator_item.get("name", "")
@@ -844,3 +831,185 @@ async def debug_http_request(
     except Exception as e:
         logger.error(f"调试HTTP请求失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"调试失败，异常描述: {str(e)}")
+
+
+@autotest_step.post("/execute", summary="执行测试步骤树", description="运行/调试用例步骤树，生成报告与明细")
+async def execute_step_tree(
+        case_id: Optional[int] = Body(None, description="测试用例ID"),
+        steps: Optional[List[Dict[str, Any]]] = Body(None, description="前端传递的步骤树数据（调试模式）"),
+        case_info: Optional[Dict[str, Any]] = Body(None, description="前端传递的用例信息"),
+        initial_variables: Optional[Dict[str, Any]] = Body(None, description="初始变量")
+):
+    """
+    执行步骤树（运行/调试）：
+    - 运行模式：仅传 case_id，后端从数据库读取并执行。
+    - 调试模式：传 steps（和可选 case_info），直接执行页面中的步骤树，不依赖数据库。
+    - 始终生成报告（AutoTestApiReportInfo）和步骤明细（AutoTestApiDetailsInfo），所有步骤（含条件/循环等无响应步骤）均落库，循环同一步骤多次执行会合并。
+    返回：report_code、results、logs、statistics（两种模式结构一致）。
+    """
+    try:
+        # 用例信息处理
+        if steps:
+            # 调试模式：允许未保存，使用传入 case_info 或占位
+            if not case_info:
+                if not case_id:
+                    return BadReqResponse(message="调试模式需提供case_info或case_id")
+                db_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id)
+                if not db_case:
+                    return NotFoundResponse(message=f"用例(id={case_id})不存在")
+                db_case_dict = await db_case.to_dict()
+                case_info = {
+                    "id": db_case_dict.get("id"),
+                    "case_code": db_case_dict.get("case_code") or f"tmp-{int(time.time())}",
+                    "case_name": db_case_dict.get("case_name") or "未命名用例",
+                }
+            else:
+                case_info = {
+                    "id": case_info.get("id") or case_id,
+                    "case_code": case_info.get("case_code") or f"tmp-{int(time.time())}",
+                    "case_name": case_info.get("case_name") or "未命名用例",
+                }
+        else:
+            # 运行模式：必须有 case_id，从库读取
+            if not case_id:
+                return BadReqResponse(message="运行模式必须提供case_id")
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id)
+            if not case_instance:
+                return NotFoundResponse(message=f"用例(id={case_id})信息不存在")
+            case_dict = await case_instance.to_dict()
+            case_info = {
+                "id": case_dict.get("id"),
+                "case_code": case_dict.get("case_code"),
+                "case_name": case_dict.get("case_name"),
+            }
+
+        # 构造步骤树
+        if steps:
+            # 前端格式 -> 后端格式
+            step_type_map = {
+                "http": "HTTP/HTTPS协议网络请求",
+                "loop": "循环结构",
+                "if": "条件分支",
+                "wait": "等待控制",
+                "code": "执行代码(Python)",
+            }
+
+            counter = {"n": 0}
+
+            def transform(step_list: List[Dict[str, Any]], parent_id=None) -> List[Dict[str, Any]]:
+                converted = []
+                for item in step_list:
+                    counter["n"] += 1
+                    cfg = item.get("config") or {}
+                    original = item.get("original") or {}
+                    step_code = original.get("step_code") or item.get("id") or f"step-{counter['n']}"
+                    step_type = step_type_map.get(item.get("type"), "执行代码(Python)")
+                    base = {
+                        "id": original.get("id"),
+                        "step_no": counter["n"],
+                        "step_code": step_code,
+                        "step_name": item.get("name") or original.get("step_name") or step_type,
+                        "step_type": step_type,
+                        "case_id": case_info.get("id") or 0,
+                        "parent_step_id": parent_id,
+                        "quote_case_id": original.get("quote_case_id"),
+                        "request_url": original.get("request_url"),
+                        "request_method": original.get("request_method"),
+                        "request_header": original.get("request_header"),
+                        "request_body": original.get("request_body"),
+                        "request_params": original.get("request_params"),
+                        "request_form_data": original.get("request_form_data"),
+                        "request_form_urlencoded": original.get("request_form_urlencoded"),
+                        "request_text": original.get("request_text"),
+                        "extract_variables": original.get("extract_variables"),
+                        "assert_validators": original.get("assert_validators"),
+                        "defined_variables": original.get("defined_variables"),
+                        "session_variables": original.get("session_variables"),
+                        "max_cycles": original.get("max_cycles"),
+                        "conditions": original.get("conditions"),
+                        "wait": original.get("wait"),
+                        "code": original.get("code"),
+                    }
+
+                    if item.get("type") == "http":
+                        base.update({
+                            "request_method": cfg.get("method") or original.get("request_method"),
+                            "request_url": cfg.get("url") or original.get("request_url"),
+                            "request_params": cfg.get("params") or original.get("request_params"),
+                            "request_body": cfg.get("data") or original.get("request_body"),
+                            "request_header": cfg.get("headers") or original.get("request_header"),
+                            "extract_variables": cfg.get("extract") or original.get("extract_variables"),
+                            "assert_validators": cfg.get("assert_validators") or original.get("assert_validators"),
+                        })
+                    elif item.get("type") == "code":
+                        base.update({"code": cfg.get("code") or original.get("code")})
+                    elif item.get("type") == "wait":
+                        base.update({"wait": cfg.get("seconds") or original.get("wait")})
+                    elif item.get("type") == "if":
+                        base.update({
+                            "conditions": json.dumps({
+                                "value": cfg.get("left"),
+                                "operation": cfg.get("operator"),
+                                "desc": cfg.get("remark", "")
+                            }, ensure_ascii=False)
+                        })
+                    elif item.get("type") == "loop":
+                        base.update({
+                            "max_cycles": cfg.get("times") or original.get("max_cycles"),
+                            "wait": cfg.get("interval") or original.get("wait"),
+                        })
+
+                    children = item.get("children") or []
+                    base["children"] = transform(children, parent_id=base.get("id") or base["step_code"])
+                    converted.append(base)
+                return converted
+
+            tree_data = transform(steps, parent_id=None)
+        else:
+            tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
+            if not tree_data:
+                return BadReqResponse(message="用例没有步骤数据")
+            if isinstance(tree_data, list) and tree_data and isinstance(tree_data[-1], dict) and "total_steps" in tree_data[-1]:
+                tree_data.pop(-1)
+
+        root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
+        if not root_steps:
+            return BadReqResponse(message="没有可执行的根步骤")
+
+        engine = AutoTestStepExecutionEngine(save_report=True)
+        results, logs, report_code, statistics = await engine.execute_case(
+            case=case_info,
+            steps=root_steps,
+            initial_variables=initial_variables or {}
+        )
+
+        def serialize_result(r: Any) -> Dict[str, Any]:
+            return {
+                "step_id": r.step_id,
+                "step_no": r.step_no,
+                "step_code": r.step_code,
+                "step_name": r.step_name,
+                "step_type": r.step_type.value if r.step_type else None,
+                "success": r.success,
+                "message": r.message,
+                "error": r.error,
+                "elapsed": r.elapsed,
+                "variables": r.variables,
+                "assert_validators": r.assert_validators,
+                "children": [serialize_result(c) for c in r.children],
+            }
+
+        result_data = {
+            "report_code": report_code,
+            "results": [serialize_result(r) for r in results],
+            "logs": {str(k): v for k, v in logs.items()},
+            "statistics": statistics
+        }
+
+        return SuccessResponse(data=result_data, message="执行步骤成功")
+
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e))
+    except Exception as e:
+        logger.error(f"执行步骤失败，异常描述: {str(e)}", exc_info=True)
+        return FailureResponse(message=f"执行失败，异常描述: {str(e)}")

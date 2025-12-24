@@ -37,10 +37,42 @@ async def create_case(
         return SuccessResponse(data=data, message="创建测试用例成功")
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
-    # except NotFoundException as e:
-    #     return NotFoundResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"创建失败，异常描述: {str(e)}")
+
+
+@autotest_case.delete("/delete", summary="按id删除一个测试用例信息", description="根据id删除测试用例信息")
+async def delete_case(
+        case_id: int = Query(..., description="测试用例ID")
+):
+    """按id删除一个测试用例信息"""
+    try:
+        instance = await AUTOTEST_API_CASE_CRUD.delete_case(case_id)
+        data = await instance.to_dict()
+        return SuccessResponse(data=data, message="删除测试用例成功")
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
+
+
+@autotest_case.post("/update", summary="按id修改一个测试用例信息", description="根据id修改测试用例信息")
+async def update_case(
+        case_in: AutoTestApiCaseUpdate = Body(..., description="测试用例信息")
+):
+    """按id修改一个测试用例信息"""
+    try:
+        instance = await AUTOTEST_API_CASE_CRUD.update_case(case_in)
+        data = await instance.to_dict()
+        return SuccessResponse(data=data, message="更新测试用例成功")
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        return FailureResponse(message=f"修改失败，异常描述: {str(e)}")
 
 
 @autotest_case.get("/get", summary="按id查询一个测试用例信息", description="根据id查询测试用例信息")
@@ -71,6 +103,10 @@ async def search_cases(
             q &= Q(case_name__contains=case_in.case_name)
         if case_in.case_tags:
             q &= Q(case_tags__contains=case_in.case_tags)
+        if case_in.case_steps != 0:
+            q &= Q(case_steps=case_in.case_steps)
+        else:
+            q &= Q(case_steps=case_in.case_steps)
         if case_in.case_project:
             q &= Q(case_project=case_in.case_project)
         if case_in.case_version:
@@ -88,54 +124,3 @@ async def search_cases(
         return SuccessResponse(data=data, total=total)
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
-
-
-@autotest_case.post("/update", summary="按id修改一个测试用例信息", description="根据id修改测试用例信息")
-async def update_case(
-        case_in: AutoTestApiCaseUpdate = Body(..., description="测试用例信息")
-):
-    """按id修改一个测试用例信息"""
-    try:
-        instance = await AUTOTEST_API_CASE_CRUD.update_case(case_in)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="更新测试用例成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except Exception as e:
-        return FailureResponse(message=f"修改失败，异常描述: {str(e)}")
-
-
-@autotest_case.delete("/delete", summary="按id删除一个测试用例信息", description="根据id删除测试用例信息")
-async def delete_case(
-        case_id: int = Query(..., description="测试用例ID")
-):
-    """按id删除一个测试用例信息"""
-    try:
-        instance = await AUTOTEST_API_CASE_CRUD.delete_case(case_id)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="删除测试用例成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except Exception as e:
-        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
-
-
-@autotest_case.delete("/steps", summary="按id查询一个测试用例信息的步骤数量")
-async def get_case_step_total(
-        case_id: int = Query(..., description="测试用例ID")
-):
-    """按id查询一个测试用例信息的步骤数量"""
-    try:
-        instance = await AUTOTEST_API_CASE_CRUD.delete_case(case_id)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="删除测试用例成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except Exception as e:
-        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")

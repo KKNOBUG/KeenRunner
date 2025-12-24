@@ -139,7 +139,7 @@
                 :is-for-body="false"
             />
           </n-tab-pane>
-          <n-tab-pane name="extract" tab="提取">
+          <n-tab-pane name="extract_variables" tab="提取">
             <template #tab>
               <n-badge :value="extractCount" :max="99" show-zero>
                 <span>提取</span>
@@ -147,7 +147,7 @@
             </template>
             <!-- 提取配置 -->
             <n-space vertical :size="16">
-              <div v-for="(item, key) in state.form.extract" :key="key" class="extract-item">
+              <div v-for="(item, key) in state.form.extract_variables" :key="key" class="extract_variables-item">
                 <n-card size="small" hoverable>
                   <template #header>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -230,7 +230,7 @@
               <n-button type="primary" @click="addExtract" block dashed>添加提取</n-button>
             </n-space>
           </n-tab-pane>
-          <n-tab-pane name="validators" tab="断言">
+          <n-tab-pane name="assert_validators" tab="断言">
             <template #tab>
               <n-badge :value="validatorsCount" :max="99" show-zero>
                 <span>断言</span>
@@ -238,7 +238,7 @@
             </template>
             <!-- 断言配置 -->
             <n-space vertical :size="16">
-              <div v-for="(item, key) in state.form.validators" :key="key" class="validator-item">
+              <div v-for="(item, key) in state.form.assert_validators" :key="key" class="validator-item">
                 <n-card size="small" hoverable>
                   <template #header>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -434,7 +434,7 @@
             </n-space>
           </n-tab-pane>
           <!-- 数据提取 -->
-          <n-tab-pane name="extract" tab="数据提取">
+          <n-tab-pane name="extract_variables" tab="数据提取">
             <n-data-table
                 v-if="response && response.extract_results && response.extract_results.length > 0"
                 :columns="extractColumns"
@@ -490,7 +490,7 @@ import {useRoute} from 'vue-router'
  * 1. config: 从步骤树传递的配置数据（step.config），包含：
  *    - method, url, headers, params
  *    - data (JSON body), form_data, form_urlencoded
- *    - extract, validators, variables
+ *    - extract_variables, assert_validators, variables
  *
  * 2. step: 完整的步骤对象，包含：
  *    - step.id: 步骤ID（step_code）
@@ -500,7 +500,7 @@ import {useRoute} from 'vue-router'
  *    - step.original: 完整的原始后端步骤数据，包含所有字段：
  *      * step_code, step_name, step_desc, step_type
  *      * request_method, request_url, request_header, request_body, request_params
- *      * extract_variables, validators, defined_variables
+ *      * extract_variables, assert_validators, defined_variables
  *      * id, case_id, parent_step_id, children 等所有后端返回的字段
  *
  * 使用方式：
@@ -570,8 +570,8 @@ const state = reactive({
     testcase_name: '',
     description: '',
     variables: [],
-    extract: {},
-    validators: {},
+    extract_variables: {},
+    assert_validators: {},
   }
 })
 
@@ -614,7 +614,7 @@ const initFromConfig = () => {
     console.log('   - request_method:', original.request_method)
     console.log('   - request_url:', original.request_url)
     console.log('   - extract_variables:', original.extract_variables)
-    console.log('   - validators:', original.validators)
+    console.log('   - assert_validators:', original.assert_validators)
     console.log('   - defined_variables:', original.defined_variables)
   }
   console.log('==================================================')
@@ -655,13 +655,13 @@ const initFromConfig = () => {
   state.form.variables = kvObjectToList(cfg.defined_variables || original.defined_variables || cfg.variables || {})
 
   // 提取（优先使用原始数据）
-  state.form.extract = {}
+  state.form.extract_variables = {}
   extractCollapseState.value = {}
-  const extractSource = cfg.extract || original.extract_variables || {}
+  const extractSource = cfg.extract_variables || original.extract_variables || {}
   const extractList = Array.isArray(extractSource) ? extractSource : (extractSource && typeof extractSource === 'object' && !Array.isArray(extractSource) ? [extractSource] : [])
   extractList.forEach((item, index) => {
     const key = String(index + 1)
-    state.form.extract[key] = {
+    state.form.extract_variables[key] = {
       name: item.name || '',
       object: item.source || 'Response Json',
       extractScope: item.range === 'ALL' ? '全部提取' : '部分提取',
@@ -673,13 +673,13 @@ const initFromConfig = () => {
   })
 
   // 断言（优先使用原始数据）
-  state.form.validators = {}
+  state.form.assert_validators = {}
   validatorCollapseState.value = {}
-  const validatorsSource = cfg.validators || original.validators || {}
+  const validatorsSource = cfg.assert_validators || original.assert_validators || {}
   const validatorsList = Array.isArray(validatorsSource) ? validatorsSource : (validatorsSource && typeof validatorsSource === 'object' && !Array.isArray(validatorsSource) ? [validatorsSource] : [])
   validatorsList.forEach((item, index) => {
     const key = String(index + 1)
-    state.form.validators[key] = {
+    state.form.assert_validators[key] = {
       name: item.name || '',
       object: item.source || 'Response Json',
       jsonpath: item.expr || '',
@@ -695,7 +695,7 @@ const initFromConfig = () => {
 initFromConfig()
 
 const buildExtractForBackend = () => {
-  return Object.values(state.form.extract || {}).map(item => ({
+  return Object.values(state.form.extract_variables || {}).map(item => ({
     expr: item.jsonpath || '',
     name: item.name || '',
     range: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
@@ -706,7 +706,7 @@ const buildExtractForBackend = () => {
 }
 
 const buildValidatorsForBackend = () => {
-  return Object.values(state.form.validators || {}).map(item => ({
+  return Object.values(state.form.assert_validators || {}).map(item => ({
     expr: item.jsonpath || '',
     name: item.name || '',
     source: item.object || 'Response Json',
@@ -754,8 +754,8 @@ const buildConfigFromState = () => {
     form_data,
     form_urlencoded,
     request_text,
-    extract: buildExtractForBackend(),
-    validators: buildValidatorsForBackend(),
+    extract_variables: buildExtractForBackend(),
+    assert_validators: buildValidatorsForBackend(),
     defined_variables: variablesObj
   }
 }
@@ -1007,7 +1007,7 @@ const debugging = async () => {
       request_header: cfg.headers,
       defined_variables: cfg.defined_variables,
       extract_variables: buildExtractForBackend(),
-      validators: buildValidatorsForBackend(),
+      assert_validators: buildValidatorsForBackend(),
       created_user: currentUser,
       updated_user: currentUser
     }
@@ -1121,12 +1121,12 @@ const assertionOptions = [
 
 // 提取数量计算
 const extractCount = computed(() => {
-  return Object.keys(state.form.extract).length
+  return Object.keys(state.form.extract_variables).length
 })
 
 // 断言数量计算
 const validatorsCount = computed(() => {
-  return Object.keys(state.form.validators).length
+  return Object.keys(state.form.assert_validators).length
 })
 
 // 获取提取对象标签
@@ -1162,14 +1162,14 @@ const getValidatorPlaceholder = (object) => {
 
 // 生成下一个提取序号
 const getNextExtractKey = () => {
-  const keys = Object.keys(state.form.extract).map(k => parseInt(k)).filter(k => !isNaN(k))
+  const keys = Object.keys(state.form.extract_variables).map(k => parseInt(k)).filter(k => !isNaN(k))
   if (keys.length === 0) return '1'
   return String(Math.max(...keys) + 1)
 }
 
 // 生成下一个断言序号
 const getNextValidatorKey = () => {
-  const keys = Object.keys(state.form.validators).map(k => parseInt(k)).filter(k => !isNaN(k))
+  const keys = Object.keys(state.form.assert_validators).map(k => parseInt(k)).filter(k => !isNaN(k))
   if (keys.length === 0) return '1'
   return String(Math.max(...keys) + 1)
 }
@@ -1177,7 +1177,7 @@ const getNextValidatorKey = () => {
 // 添加提取
 const addExtract = () => {
   const key = getNextExtractKey()
-  state.form.extract[key] = {
+  state.form.extract_variables[key] = {
     name: '',
     object: 'Response Json',
     extractScope: '部分提取', // 默认选择部分提取
@@ -1190,16 +1190,16 @@ const addExtract = () => {
 
 // 删除提取
 const removeExtract = (key) => {
-  delete state.form.extract[key]
+  delete state.form.extract_variables[key]
   delete extractCollapseState.value[key]
 }
 
 // 复制提取
 const duplicateExtract = (key) => {
-  const item = state.form.extract[key]
+  const item = state.form.extract_variables[key]
   if (item) {
     const newKey = getNextExtractKey()
-    state.form.extract[newKey] = {
+    state.form.extract_variables[newKey] = {
       ...JSON.parse(JSON.stringify(item)),
       name: item.name ? `${item.name}_副本` : ''
     }
@@ -1220,7 +1220,7 @@ const continueExtract = (key) => {
 // 添加断言
 const addValidator = () => {
   const key = getNextValidatorKey()
-  state.form.validators[key] = {
+  state.form.assert_validators[key] = {
     name: '',
     object: 'Response Json',
     jsonpath: '',
@@ -1234,16 +1234,16 @@ const addValidator = () => {
 
 // 删除断言
 const removeValidator = (key) => {
-  delete state.form.validators[key]
+  delete state.form.assert_validators[key]
   delete validatorCollapseState.value[key]
 }
 
 // 复制断言
 const duplicateValidator = (key) => {
-  const item = state.form.validators[key]
+  const item = state.form.assert_validators[key]
   if (item) {
     const newKey = getNextValidatorKey()
-    state.form.validators[newKey] = {
+    state.form.assert_validators[newKey] = {
       ...JSON.parse(JSON.stringify(item)),
       name: item.name ? `${item.name}_副本` : ''
     }
@@ -1478,17 +1478,17 @@ pre {
   word-break: break-word;
 }
 
-.extract-item,
+.extract_variables-item,
 .validator-item {
   margin-bottom: 1px;
 }
 
-.extract-item :deep(.n-card),
+.extract_variables-item :deep(.n-card),
 .validator-item :deep(.n-card) {
   border: 1px solid #e0e0e0;
 }
 
-.extract-item :deep(.n-card-header),
+.extract_variables-item :deep(.n-card-header),
 .validator-item :deep(.n-card-header) {
   padding: 12px 16px;
   background-color: #fafafa;

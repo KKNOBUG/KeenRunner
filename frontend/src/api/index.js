@@ -78,5 +78,5 @@ export default {
   getStepTree: (data = {}) => request.get(`/autotest/step/tree?case_id=${data.case_id}`, data),
   updateStepTree: (data = {}) => request.post('/autotest/step/update/tree', data),
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http/debugging', data),
-
+  executeStepTree: (data = {}) => request.post('/autotest/step/execute', data),
 }
