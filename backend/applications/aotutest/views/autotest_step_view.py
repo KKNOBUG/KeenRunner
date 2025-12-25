@@ -17,10 +17,11 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from backend.applications.aotutest.models.autotest_model import ReportType
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate, AutoTestApiStepUpdate,
     AutoTestStepSelect, AutoTestStepTreeUpdateList, AutoTestStepTreeUpdateItem,
-    AutoTestHttpDebugRequest
+    AutoTestHttpDebugRequest, AutoTestStepTreeExecute
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
@@ -835,154 +836,77 @@ async def debug_http_request(
 
 @autotest_step.post("/execute", summary="执行测试步骤树", description="运行/调试用例步骤树，生成报告与明细")
 async def execute_step_tree(
-        case_id: Optional[int] = Body(None, description="测试用例ID"),
-        steps: Optional[List[Dict[str, Any]]] = Body(None, description="前端传递的步骤树数据（调试模式）"),
-        case_info: Optional[Dict[str, Any]] = Body(None, description="前端传递的用例信息"),
-        initial_variables: Optional[Dict[str, Any]] = Body(None, description="初始变量")
+        request: AutoTestStepTreeExecute = Body(..., description="执行请求参数")
 ):
     """
     执行步骤树（运行/调试）：
-    - 运行模式：仅传 case_id，后端从数据库读取并执行。
-    - 调试模式：传 steps（和可选 case_info），直接执行页面中的步骤树，不依赖数据库。
-    - 始终生成报告（AutoTestApiReportInfo）和步骤明细（AutoTestApiDetailsInfo），所有步骤（含条件/循环等无响应步骤）均落库，循环同一步骤多次执行会合并。
-    返回：report_code、results、logs、statistics（两种模式结构一致）。
+    - 运行模式：只接收case_id参数，后端基于传入的case_id，查询数据库中该用例关联的完整测试步骤树数据；
+      按步骤树层级依次执行所有测试步骤，将每一步骤的执行结果（含成功/失败状态、执行日志、变量提取结果等）
+      写入指定数据库表（如 AutoTestApiDetailsInfo）；注意开启数据库事务要么全部成功，要么全部失败。
+      返回：执行结果汇总（如整体成功/失败、步骤执行数量）+ 数据库落库成功标识。
+
+    - 调试模式：只接收steps参数，不接收case_id参数，无需查询数据库用例信息，直接基于传入的steps参数
+      解析测试步骤树，按步骤树层级依次执行所有测试步骤；执行过程中记录每一步骤的执行结果（格式与运行模式一致），
+      但不写入数据库。
+      返回：完整的步骤级执行结果（含每一步的状态、日志、变量提取结果、会话变量的累积）+ 整体执行汇总。
     """
     try:
-        # 用例信息处理
-        if steps:
-            # 调试模式：允许未保存，使用传入 case_info 或占位
-            if not case_info:
-                if not case_id:
-                    return BadReqResponse(message="调试模式需提供case_info或case_id")
-                db_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id)
-                if not db_case:
-                    return NotFoundResponse(message=f"用例(id={case_id})不存在")
-                db_case_dict = await db_case.to_dict()
-                case_info = {
-                    "id": db_case_dict.get("id"),
-                    "case_code": db_case_dict.get("case_code") or f"tmp-{int(time.time())}",
-                    "case_name": db_case_dict.get("case_name") or "未命名用例",
-                }
-            else:
-                case_info = {
-                    "id": case_info.get("id") or case_id,
-                    "case_code": case_info.get("case_code") or f"tmp-{int(time.time())}",
-                    "case_name": case_info.get("case_name") or "未命名用例",
-                }
-        else:
-            # 运行模式：必须有 case_id，从库读取
-            if not case_id:
-                return BadReqResponse(message="运行模式必须提供case_id")
-            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id)
-            if not case_instance:
-                return NotFoundResponse(message=f"用例(id={case_id})信息不存在")
-            case_dict = await case_instance.to_dict()
-            case_info = {
-                "id": case_dict.get("id"),
-                "case_code": case_dict.get("case_code"),
-                "case_name": case_dict.get("case_name"),
-            }
+        case_id = request.case_id
+        steps = request.steps
+        initial_variables = request.initial_variables or {}
 
-        # 构造步骤树
-        if steps:
-            # 前端格式 -> 后端格式
-            step_type_map = {
-                "http": "HTTP/HTTPS协议网络请求",
-                "loop": "循环结构",
-                "if": "条件分支",
-                "wait": "等待控制",
-                "code": "执行代码(Python)",
-            }
+        # 判断运行模式还是调试模式
+        is_run_mode = case_id is not None
+        is_debug_mode = steps is not None and len(steps) > 0
 
-            counter = {"n": 0}
+        if not is_run_mode and not is_debug_mode:
+            return BadReqResponse(message="必须提供case_id（运行模式）或steps（调试模式）之一")
 
-            def transform(step_list: List[Dict[str, Any]], parent_id=None) -> List[Dict[str, Any]]:
-                converted = []
-                for item in step_list:
-                    counter["n"] += 1
-                    cfg = item.get("config") or {}
-                    original = item.get("original") or {}
-                    step_code = original.get("step_code") or item.get("id") or f"step-{counter['n']}"
-                    step_type = step_type_map.get(item.get("type"), "执行代码(Python)")
-                    base = {
-                        "id": original.get("id"),
-                        "step_no": counter["n"],
-                        "step_code": step_code,
-                        "step_name": item.get("name") or original.get("step_name") or step_type,
-                        "step_type": step_type,
-                        "case_id": case_info.get("id") or 0,
-                        "parent_step_id": parent_id,
-                        "quote_case_id": original.get("quote_case_id"),
-                        "request_url": original.get("request_url"),
-                        "request_method": original.get("request_method"),
-                        "request_header": original.get("request_header"),
-                        "request_body": original.get("request_body"),
-                        "request_params": original.get("request_params"),
-                        "request_form_data": original.get("request_form_data"),
-                        "request_form_urlencoded": original.get("request_form_urlencoded"),
-                        "request_text": original.get("request_text"),
-                        "extract_variables": original.get("extract_variables"),
-                        "assert_validators": original.get("assert_validators"),
-                        "defined_variables": original.get("defined_variables"),
-                        "session_variables": original.get("session_variables"),
-                        "max_cycles": original.get("max_cycles"),
-                        "conditions": original.get("conditions"),
-                        "wait": original.get("wait"),
-                        "code": original.get("code"),
-                    }
+        if is_run_mode and is_debug_mode:
+            return BadReqResponse(message="运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
 
-                    if item.get("type") == "http":
-                        base.update({
-                            "request_method": cfg.get("method") or original.get("request_method"),
-                            "request_url": cfg.get("url") or original.get("request_url"),
-                            "request_params": cfg.get("params") or original.get("request_params"),
-                            "request_body": cfg.get("data") or original.get("request_body"),
-                            "request_header": cfg.get("headers") or original.get("request_header"),
-                            "extract_variables": cfg.get("extract") or original.get("extract_variables"),
-                            "assert_validators": cfg.get("assert_validators") or original.get("assert_validators"),
-                        })
-                    elif item.get("type") == "code":
-                        base.update({"code": cfg.get("code") or original.get("code")})
-                    elif item.get("type") == "wait":
-                        base.update({"wait": cfg.get("seconds") or original.get("wait")})
-                    elif item.get("type") == "if":
-                        base.update({
-                            "conditions": json.dumps({
-                                "value": cfg.get("left"),
-                                "operation": cfg.get("operator"),
-                                "desc": cfg.get("remark", "")
-                            }, ensure_ascii=False)
-                        })
-                    elif item.get("type") == "loop":
-                        base.update({
-                            "max_cycles": cfg.get("times") or original.get("max_cycles"),
-                            "wait": cfg.get("interval") or original.get("wait"),
-                        })
+        # 转换数据库格式的数据：处理conditions从数组转为JSON字符串
+        def normalize_step(step: Dict[str, Any]) -> Dict[str, Any]:
+            """规范化步骤数据格式"""
+            step = step.copy()
 
-                    children = item.get("children") or []
-                    base["children"] = transform(children, parent_id=base.get("id") or base["step_code"])
-                    converted.append(base)
-                return converted
+            # 处理conditions：如果是数组，取第一个并转为JSON字符串
+            conditions = step.get("conditions")
+            if isinstance(conditions, list) and len(conditions) > 0:
+                condition_obj = conditions[0]
+                step["conditions"] = json.dumps(condition_obj, ensure_ascii=False)
+            elif conditions is None:
+                step["conditions"] = None
 
-            tree_data = transform(steps, parent_id=None)
-        else:
-            tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
-            if not tree_data:
-                return BadReqResponse(message="用例没有步骤数据")
-            if isinstance(tree_data, list) and tree_data and isinstance(tree_data[-1], dict) and "total_steps" in tree_data[-1]:
-                tree_data.pop(-1)
+            # extract_variables和assert_validators保持数组格式（执行引擎已支持）
+            # 移除不需要的字段
+            step.pop("case", None)
+            step.pop("quote_case", None)
 
-        root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
-        if not root_steps:
-            return BadReqResponse(message="没有可执行的根步骤")
+            # 递归处理children和quote_steps
+            if "children" in step and isinstance(step["children"], list):
+                step["children"] = [normalize_step(child) for child in step["children"]]
+            if "quote_steps" in step and isinstance(step["quote_steps"], list):
+                step["quote_steps"] = [normalize_step(quote_step) for quote_step in step["quote_steps"]]
 
-        engine = AutoTestStepExecutionEngine(save_report=True)
-        results, logs, report_code, statistics = await engine.execute_case(
-            case=case_info,
-            steps=root_steps,
-            initial_variables=initial_variables or {}
-        )
+            return step
 
+        # 收集所有步骤的defined_variables作为初始变量
+        def collect_defined_variables(steps_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+            """递归收集所有步骤的defined_variables"""
+            variables = {}
+            for step in steps_list:
+                defined_vars = step.get("defined_variables")
+                if isinstance(defined_vars, dict):
+                    variables.update(defined_vars)
+                # 递归处理children和quote_steps
+                children = step.get("children", [])
+                quote_steps = step.get("quote_steps", [])
+                variables.update(collect_defined_variables(children))
+                variables.update(collect_defined_variables(quote_steps))
+            return variables
+
+        # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
             return {
                 "step_id": r.step_id,
@@ -994,19 +918,145 @@ async def execute_step_tree(
                 "message": r.message,
                 "error": r.error,
                 "elapsed": r.elapsed,
-                "variables": r.variables,
+                "extract_variables": r.extract_variables,
                 "assert_validators": r.assert_validators,
+                "response": r.response,
                 "children": [serialize_result(c) for c in r.children],
             }
 
-        result_data = {
-            "report_code": report_code,
-            "results": [serialize_result(r) for r in results],
-            "logs": {str(k): v for k, v in logs.items()},
-            "statistics": statistics
-        }
+        # ========== 运行模式 ==========
+        if is_run_mode:
+            # 1. 查询用例信息
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id)
+            if not case_instance:
+                return NotFoundResponse(message=f"用例(id={case_id})信息不存在")
+            case_dict = await case_instance.to_dict()
+            case_info = {
+                "id": case_dict.get("id"),
+                "case_code": case_dict.get("case_code"),
+                "case_name": case_dict.get("case_name"),
+            }
 
-        return SuccessResponse(data=result_data, message="执行步骤成功")
+            # 2. 查询步骤树数据
+            tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
+            if not tree_data:
+                return BadReqResponse(message="用例没有步骤数据")
+            if isinstance(tree_data, list) and tree_data and isinstance(tree_data[-1], dict) and "total_steps" in \
+                    tree_data[-1]:
+                tree_data.pop(-1)
+
+            # 3. 规范化步骤数据
+            tree_data = [normalize_step(step) for step in tree_data]
+
+            # 4. 收集defined_variables
+            all_defined_variables = collect_defined_variables(tree_data)
+            merged_initial_variables = dict(initial_variables)
+            merged_initial_variables.update(all_defined_variables)
+
+            # 5. 获取根步骤
+            root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
+            if not root_steps:
+                return BadReqResponse(message="没有可执行的根步骤")
+
+            # 6. 使用事务执行并保存到数据库
+            try:
+                async with in_transaction():
+                    engine = AutoTestStepExecutionEngine(save_report=True)
+                    results, logs, report_code, statistics, _ = await engine.execute_case(
+                        case=case_info,
+                        steps=root_steps,
+                        initial_variables=merged_initial_variables
+                    )
+
+                    # 返回运行模式的简化结果
+                    result_data = {
+                        "success": statistics.get("failed_steps", 0) == 0,
+                        "total_steps": statistics.get("total_steps", 0),
+                        "success_steps": statistics.get("success_steps", 0),
+                        "failed_steps": statistics.get("failed_steps", 0),
+                        "pass_ratio": statistics.get("pass_ratio", 0.0),
+                        "report_code": report_code,
+                        "saved_to_database": True
+                    }
+
+                    return SuccessResponse(data=result_data, message="执行步骤成功并已保存到数据库")
+            except Exception as transaction_error:
+                logger.error(f"执行步骤过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
+                return FailureResponse(message=f"执行失败，事务已回滚: {str(transaction_error)}")
+
+        # ========== 调试模式 ==========
+        else:  # is_debug_mode
+            # 1. 将Pydantic模型转换为字典（如果步骤是Pydantic模型）
+            steps_dict = []
+            for step in steps:
+                if hasattr(step, 'model_dump'):
+                    steps_dict.append(step.model_dump())
+                elif isinstance(step, dict):
+                    steps_dict.append(step)
+                else:
+                    steps_dict.append(dict(step))
+
+            tree_data = steps_dict
+
+            # 2. 从步骤中提取case_info（如果存在）
+            case_info = None
+            if tree_data and isinstance(tree_data[0], dict):
+                case_obj = tree_data[0].get("case")
+                if case_obj:
+                    case_info = {
+                        "id": case_obj.get("id"),
+                        "case_code": case_obj.get("case_code") or f"tmp-{int(time.time())}",
+                        "case_name": case_obj.get("case_name") or "未命名用例",
+                    }
+            if not case_info:
+                case_info = {
+                    "id": None,
+                    "case_code": f"tmp-{int(time.time())}",
+                    "case_name": "调试用例",
+                }
+
+            # 3. 规范化步骤数据
+            tree_data = [normalize_step(step) for step in tree_data]
+
+            # 4. 收集defined_variables
+            all_defined_variables = collect_defined_variables(tree_data)
+            merged_initial_variables = dict(initial_variables)
+            merged_initial_variables.update(all_defined_variables)
+
+            # 5. 获取根步骤
+            root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
+            if not root_steps:
+                return BadReqResponse(message="没有可执行的根步骤")
+
+            # 6. 执行但不保存到数据库
+            engine = AutoTestStepExecutionEngine(save_report=False)
+            results, logs, report_code, statistics, session_variables = await engine.execute_case(
+                case=case_info,
+                steps=root_steps,
+                initial_variables=merged_initial_variables,
+                report_type=ReportType.EXEC1
+            )
+
+            # 7. 获取最终会话变量（从执行引擎返回）
+            # 会话变量已经包含了所有步骤产生的extract_variables
+            # 合并初始变量（defined_variables）
+            final_session_variables = dict(session_variables)
+            final_session_variables.update(merged_initial_variables)
+
+            # 8. 返回调试模式的详细结果
+            result_data = {
+                "success": statistics.get("failed_steps", 0) == 0,
+                "total_steps": statistics.get("total_steps", 0),
+                "success_steps": statistics.get("success_steps", 0),
+                "failed_steps": statistics.get("failed_steps", 0),
+                "pass_ratio": statistics.get("pass_ratio", 0.0),
+                "results": [serialize_result(r) for r in results],
+                "logs": {str(k): v for k, v in logs.items()},
+                "session_variables": final_session_variables,
+                "saved_to_database": False
+            }
+
+            return SuccessResponse(data=result_data, message="调试执行完成")
 
     except NotFoundException as e:
         return NotFoundResponse(message=str(e))

@@ -8,7 +8,7 @@
 """
 from typing import Optional, List, Dict, Any, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.models.autotest_model import StepType, CaseType
 from backend.enums.http_enum import HTTPMethod
@@ -114,10 +114,14 @@ class AutoTestStepTreeUpdateItem(BaseModel):
     max_interval: Optional[float] = Field(None, description="每次循环间隔时间(正浮点数)")
     conditions: Optional[List[Dict[str, Any]]] = Field(None, description="判断条件")
 
-    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(包含提取变量，以及前后code设置的变量)")
-    defined_variables: Optional[Dict[str, Any]] = Field(None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
-    extract_variables: Optional[List[Dict[str, Any]]] = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
-    assert_validators: Optional[List[Dict[str, Any]]] = Field(None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
+    session_variables: Optional[Dict[str, Any]] = Field(None,
+                                                        description="会话变量(包含提取变量，以及前后code设置的变量)")
+    defined_variables: Optional[Dict[str, Any]] = Field(None,
+                                                        description="定义变量(自定义变量，如编写指定值或引用随机函数)")
+    extract_variables: Optional[List[Dict[str, Any]]] = Field(None,
+                                                              description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    assert_validators: Optional[List[Dict[str, Any]]] = Field(None,
+                                                              description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
 
     case: Optional[Dict[str, Any]] = Field(None, description="测试用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
@@ -144,10 +148,14 @@ class AutoTestHttpDebugRequest(BaseModel):
     request_form_file: Optional[Dict[str, Any]] = Field(None, description="请求文件路径(Json格式)")
     request_form_urlencoded: Optional[Dict[str, Any]] = Field(None, description="请求键值对数据(Json格式)")
 
-    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(包含提取变量，以及前后code设置的变量)")
-    defined_variables: Optional[Dict[str, Any]] = Field(None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
-    extract_variables: Optional[List[Dict[str, Any]]] = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
-    assert_validators: Optional[List[Dict[str, Any]]] = Field(None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
+    session_variables: Optional[Dict[str, Any]] = Field(None,
+                                                        description="会话变量(包含提取变量，以及前后code设置的变量)")
+    defined_variables: Optional[Dict[str, Any]] = Field(None,
+                                                        description="定义变量(自定义变量，如编写指定值或引用随机函数)")
+    extract_variables: Optional[List[Dict[str, Any]]] = Field(None,
+                                                              description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    assert_validators: Optional[List[Dict[str, Any]]] = Field(None,
+                                                              description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
 
     @field_validator('extract_variables', mode='before')
     @classmethod
@@ -172,6 +180,27 @@ class AutoTestHttpDebugRequest(BaseModel):
         if isinstance(v, list):
             return v
         return v
+
+
+class AutoTestStepTreeExecute(BaseModel):
+    """执行测试步骤树请求模型"""
+    case_id: Optional[int] = Field(None, description="用例ID（运行模式必填）")
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据（调试模式必填）")
+    initial_variables: Optional[Dict[str, Any]] = Field(None, description="初始变量")
+
+    @model_validator(mode='after')
+    def validate_mode(self):
+        """验证运行模式或调试模式参数"""
+        case_id = self.case_id
+        steps = self.steps
+
+        # 必须提供case_id或steps之一，但不能同时提供
+        if case_id is None and (steps is None or len(steps) == 0):
+            raise ValueError("运行模式必须提供case_id，调试模式必须提供steps")
+        if case_id is not None and steps is not None and len(steps) > 0:
+            raise ValueError("运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
+
+        return self
 
 
 # 允许递归引用

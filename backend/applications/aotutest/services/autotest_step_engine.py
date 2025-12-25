@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 
 import httpx
 
-from backend.applications.aotutest.models.autotest_model import StepType
+from backend.applications.aotutest.models.autotest_model import StepType, ReportType
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate, AutoTestApiReportUpdate
@@ -433,9 +433,7 @@ class BaseStepExecutor:
         previous_step_no: int = self.context.current_step_no
         self.context.set_current_step_no(self.step_no)
         try:
-            await self._before_execute()
             await self._execute(result)
-            await self._after_execute(result)
         except Exception as exc:
             result.success = False
             result.error = str(exc)
@@ -499,17 +497,17 @@ class BaseStepExecutor:
             # 2. extract_variables: 从响应中提取的变量
             # 只包含通过 extract_variables 配置从响应中提取的变量
             extract_variables = {}
-            extract_variables_config = self.step.get("extract_variables")
-            if extract_variables_config and isinstance(extract_variables_config, dict) and result.extract_variables:
-                ext_var_name = extract_variables_config.get("name")
-                if ext_var_name and ext_var_name in result.extract_variables:
-                    extract_variables[ext_var_name] = result.extract_variables[ext_var_name]
+            extract_variables_config: List[Dict[str, Any]] = self.step.get("extract_variables")
+            if extract_variables_config and isinstance(extract_variables_config, list) and result.extract_variables:
+                for extract in extract_variables_config:
+                    ext_name = extract.get("name")
+                    if ext_name and ext_name in result.extract_variables:
+                        extract_variables[ext_name] = result.extract_variables[ext_name]
 
             # 3. session_variables: 累积的会话变量（包含所有步骤产生的变量）
             # 使用深拷贝确保保存的是当前时刻的快照，不会被后续步骤影响
             # session_variables 包含：
             # - 从响应中提取的变量（extract_variables）
-            # - 前后置代码产生的变量
             # - 其他步骤产生的变量
             session_variables = dict(self.context.session_variables) if self.context.session_variables else {}
 
@@ -542,61 +540,6 @@ class BaseStepExecutor:
             await AUTOTEST_API_DETAIL_CRUD.create_step_detail(detail_create)
         except Exception as e:
             print(f"保存步骤明细失败: {e}")
-
-    async def _before_execute(self) -> None:
-        try:
-            defined_variables = self.step.get("defined_variables") or {}
-            if defined_variables:
-                try:
-                    prepared = self.context.resolve_placeholders(defined_variables)
-                    self.context.update_variables(prepared, scope="defined_variables")
-                except Exception as exc:
-                    self.context.log(f"前置变量处理失败: {exc}，继续执行", step_no=self.step_no)
-
-            pre_code = self.step.get("pre_code")
-            if pre_code:
-                try:
-                    new_vars = self.context.run_python_code(
-                        pre_code,
-                        namespace=self.context.clone_state(),
-                    )
-                    if new_vars:
-                        self.context.update_variables(new_vars, scope="extract_variables")
-                except Exception as exc:
-                    self.context.log(f"前置代码执行失败: {exc}，继续执行", step_no=self.step_no)
-
-            pre_wait = self.step.get("pre_wait")
-            if pre_wait is not None:
-                try:
-                    await self.context.sleep(float(pre_wait))
-                except Exception as exc:
-                    self.context.log(f"前置等待失败: {exc}，继续执行", step_no=self.step_no)
-        except Exception as exc:
-            self.context.log(f"前置处理异常: {exc}，继续执行", step_no=self.step_no)
-
-    async def _after_execute(self, result: StepExecutionResult) -> None:
-        try:
-            post_code = self.step.get("post_code")
-            if post_code:
-                try:
-                    new_vars = self.context.run_python_code(
-                        post_code,
-                        namespace=self.context.clone_state(),
-                    )
-                    if new_vars:
-                        self.context.update_variables(new_vars, scope="extract_variables")
-                        result.extract_variables.update(new_vars)
-                except Exception as exc:
-                    self.context.log(f"后置代码执行失败: {exc}，继续执行", step_no=self.step_no)
-
-            post_wait = self.step.get("post_wait")
-            if post_wait is not None:
-                try:
-                    await self.context.sleep(float(post_wait))
-                except Exception as exc:
-                    self.context.log(f"后置等待失败: {exc}，继续执行", step_no=self.step_no)
-        except Exception as exc:
-            self.context.log(f"后置处理异常: {exc}，继续执行", step_no=self.step_no)
 
     async def _execute(self, result: StepExecutionResult) -> None:
         raise NotImplementedError
@@ -1019,20 +962,43 @@ class HttpStepExecutor(BaseStepExecutor):
             if not extract_variables or response_json is None:
                 return {}
 
-            name = extract_variables.get("name")
-            expr = extract_variables.get("expr")
+            result = {}
 
-            if not name or not expr:
-                raise StepExecutionError("变量提取配置不完整")
+            # 支持数组格式和单个对象格式
+            if isinstance(extract_variables, list):
+                # 数组格式：处理多个提取配置
+                for ext_config in extract_variables:
+                    if not isinstance(ext_config, dict):
+                        continue
+                    name = ext_config.get("name")
+                    expr = ext_config.get("expr")
+                    if not name or not expr:
+                        continue
+                    try:
+                        extracted = self._resolve_json_path(response_json, expr)
+                        result[name] = extracted
+                    except StepExecutionError:
+                        raise
+                    except Exception as exc:
+                        self.context.log(f"变量提取失败 [{name}]: {exc}", step_no=self.step_no)
+                        # 继续处理其他变量，不中断
+            elif isinstance(extract_variables, dict):
+                # 单个对象格式：兼容旧格式
+                name = extract_variables.get("name")
+                expr = extract_variables.get("expr")
+                if not name or not expr:
+                    raise StepExecutionError("变量提取配置不完整")
+                try:
+                    extracted = self._resolve_json_path(response_json, expr)
+                    result[name] = extracted
+                except StepExecutionError:
+                    raise
+                except Exception as exc:
+                    raise StepExecutionError(f"JSONPath解析失败: {exc}") from exc
+            else:
+                raise StepExecutionError(f"不支持的extract_variables格式: {type(extract_variables)}")
 
-            try:
-                extracted = self._resolve_json_path(response_json, expr)
-            except StepExecutionError:
-                raise
-            except Exception as exc:
-                raise StepExecutionError(f"JSONPath解析失败: {exc}") from exc
-
-            return {name: extracted}
+            return result
         except StepExecutionError:
             raise
         except Exception as exc:
@@ -1045,40 +1011,89 @@ class HttpStepExecutor(BaseStepExecutor):
             if not assert_validators or response_json is None:
                 return []
 
-            expr = assert_validators.get("expr")
-            operation = assert_validators.get("operation")
-            expected = assert_validators.get("except_value")
-            name = assert_validators.get("name")
+            results = []
 
-            if not expr or not operation:
-                raise StepExecutionError("断言配置不完整")
+            # 支持数组格式和单个对象格式
+            if isinstance(assert_validators, list):
+                # 数组格式：处理多个断言配置
+                for validator_config in assert_validators:
+                    if not isinstance(validator_config, dict):
+                        continue
+                    expr = validator_config.get("expr")
+                    operation = validator_config.get("operation")
+                    expected = validator_config.get("except_value")
+                    name = validator_config.get("name", "")
 
-            try:
-                actual = self._resolve_json_path(response_json, expr)
-            except StepExecutionError:
-                raise
-            except Exception as exc:
-                raise StepExecutionError(f"断言JSONPath解析失败: {exc}") from exc
+                    if not expr or not operation:
+                        self.context.log(f"断言配置不完整，跳过: {validator_config}", step_no=self.step_no)
+                        continue
 
-            try:
-                success = ConditionStepExecutor.compare(actual, operation, expected)
-            except StepExecutionError:
-                raise
-            except Exception as exc:
-                raise StepExecutionError(f"断言比较失败: {exc}") from exc
+                    try:
+                        actual = self._resolve_json_path(response_json, expr)
+                    except StepExecutionError:
+                        raise
+                    except Exception as exc:
+                        raise StepExecutionError(f"断言JSONPath解析失败: {exc}") from exc
 
-            message = f"断言[{name}] {expr} {operation} {expected}, 实际值={actual}"
-            self.context.log(message, step_no=self.step_no)
+                    try:
+                        success = ConditionStepExecutor.compare(actual, operation, expected)
+                    except StepExecutionError:
+                        raise
+                    except Exception as exc:
+                        raise StepExecutionError(f"断言比较失败: {exc}") from exc
 
-            return [{
-                "name": name,
-                "expr": expr,
-                "operation": operation,
-                "expected": expected,
-                "actual": actual,
-                "success": success,
-                "message": message,
-            }]
+                    message = f"断言[{name}] {expr} {operation} {expected}, 实际值={actual}"
+                    self.context.log(message, step_no=self.step_no)
+
+                    results.append({
+                        "name": name,
+                        "expr": expr,
+                        "operation": operation,
+                        "expected": expected,
+                        "actual": actual,
+                        "success": success,
+                        "message": message,
+                    })
+            elif isinstance(assert_validators, dict):
+                # 单个对象格式：兼容旧格式
+                expr = assert_validators.get("expr")
+                operation = assert_validators.get("operation")
+                expected = assert_validators.get("except_value")
+                name = assert_validators.get("name", "")
+
+                if not expr or not operation:
+                    raise StepExecutionError("断言配置不完整")
+
+                try:
+                    actual = self._resolve_json_path(response_json, expr)
+                except StepExecutionError:
+                    raise
+                except Exception as exc:
+                    raise StepExecutionError(f"断言JSONPath解析失败: {exc}") from exc
+
+                try:
+                    success = ConditionStepExecutor.compare(actual, operation, expected)
+                except StepExecutionError:
+                    raise
+                except Exception as exc:
+                    raise StepExecutionError(f"断言比较失败: {exc}") from exc
+
+                message = f"断言[{name}] {expr} {operation} {expected}, 实际值={actual}"
+                self.context.log(message, step_no=self.step_no)
+
+                results.append({
+                    "name": name,
+                    "expr": expr,
+                    "operation": operation,
+                    "expected": expected,
+                    "actual": actual,
+                    "success": success,
+                    "message": message,
+                })
+            else:
+                raise StepExecutionError(f"不支持的assert_validators格式: {type(assert_validators)}")
+
+            return results
         except StepExecutionError:
             raise
         except Exception as exc:
@@ -1194,9 +1209,16 @@ class AutoTestStepExecutionEngine:
             steps: Iterable[Dict[str, Any]],
             *,
             initial_variables: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[List[StepExecutionResult], Dict[int, List[str]], Optional[str], Dict[str, Any]]:
+            report_type: Optional[ReportType] = None,
+    ) -> Tuple[List[StepExecutionResult], Dict[int, List[str]], Optional[str], Dict[str, Any], Dict[str, Any]]:
         """
-        执行测试用例并返回：(结果列表, 日志, 报告码, 统计信息)
+        执行测试用例并返回：(结果列表, 日志, 报告码, 统计信息, 会话变量)
+
+        Args:
+            case: 用例信息字典
+            steps: 步骤列表
+            initial_variables: 初始变量
+            report_type: 报告类型，默认为 EXEC1（执行方式1）
         """
         case_id = case.get("id")
         case_code = case.get("case_code")
@@ -1210,6 +1232,8 @@ class AutoTestStepExecutionEngine:
             try:
                 user_id = CTX_USER_ID.get(0)
                 user_name = str(user_id) if user_id else None
+                # 如果没有指定report_type，默认使用EXEC1（执行方式1）
+                final_report_type = report_type if report_type is not None else ReportType.EXEC1
                 report_create = AutoTestApiReportCreate(
                     case_id=case_id,
                     case_code=case_code,
@@ -1220,6 +1244,7 @@ class AutoTestStepExecutionEngine:
                     step_fill_count=0,
                     step_pass_count=0,
                     step_pass_ratio=0.0,
+                    report_type=final_report_type,
                     created_user=user_name
                 )
                 report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_create)
@@ -1296,7 +1321,10 @@ class AutoTestStepExecutionEngine:
                 "pass_ratio": round(pass_ratio, 2)
             }
 
-            return results, context.logs, report_code, statistics
+            # 返回会话变量（用于调试模式）
+            session_variables = dict(context.session_variables) if context.session_variables else {}
+
+            return results, context.logs, report_code, statistics, session_variables
 
     @staticmethod
     def _collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:
@@ -1385,7 +1413,7 @@ class AutoTestStepExecution:
             root_steps = await self.get_parent_step()
             print(f"\n根步骤数量: {len(root_steps)}")
 
-            results, logs, _, _ = await engine.execute_case(
+            results, logs, _, _, _ = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
                 initial_variables=self.initial_variables  # 可以在这里设置初始变量

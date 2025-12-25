@@ -40,7 +40,7 @@ class AutoTestApiDetailCreate(BaseModel):
 
     session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(包含提取变量，以及前后code设置的变量)")
     defined_variables: Optional[Dict[str, Any]] = Field(None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
-    extract_variables: Optional[List[Dict[str, Any]]] = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    extract_variables: Optional[Dict[str, Any]] = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     assert_validators: Optional[List[Dict[str, Any]]] = Field(None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
 
 
@@ -69,7 +69,7 @@ class AutoTestApiDetailUpdate(BaseModel):
 
     session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(包含提取变量，以及前后code设置的变量)")
     defined_variables: Optional[Dict[str, Any]] = Field(None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
-    extract_variables: Optional[List[Dict[str, Any]]] = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    extract_variables: Optional[Dict[str, Any]] = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     assert_validators: Optional[List[Dict[str, Any]]] = Field(None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
 
 

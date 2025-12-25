@@ -18,9 +18,8 @@ class CaseType(str, Enum):
 
 
 class ReportType(str, Enum):
-    EXEC1 = "执行方式1"
-    EXEC2 = "执行方式2"
-    EXEC3 = "执行方式3"
+    EXEC1 = "单笔执行"
+    EXEC2 = "批量执行"
 
 
 class StepType(str, Enum):
