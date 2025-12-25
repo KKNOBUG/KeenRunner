@@ -93,6 +93,7 @@ class AutoTestStepTreeUpdateItem(BaseModel):
     step_name: Optional[str] = Field(None, description="步骤明细名称")
     step_desc: Optional[str] = Field(None, description="步骤明细描述")
     step_type: Optional[StepType] = Field(None, description="步骤明细类型")
+    case_type: Optional[CaseType] = Field(None, description="用例所属类型")
 
     case_id: Optional[int] = Field(None, description="步骤明细所属用例")
     quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")

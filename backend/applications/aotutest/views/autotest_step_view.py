@@ -455,13 +455,7 @@ async def batch_update_steps_tree(
                 # 6. 构建返回结果
                 result_data: Dict[str, Any] = {
                     "case_update": case_result,
-                    "step_update": {
-                        "created_count": step_result["created_count"],
-                        "updated_count": step_result["updated_count"],
-                        "failed_count": len(step_result["failed_steps"]),
-                        "failed_steps": step_result["failed_steps"],
-                        "steps": step_result.get("steps", [])
-                    }
+                    "step_update": step_result
                 }
 
                 # 7. 判断是否有失败项

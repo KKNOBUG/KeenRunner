@@ -18,6 +18,7 @@ from backend.applications.aotutest.models.autotest_model import (
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate, AutoTestApiStepUpdate, AutoTestStepTreeUpdateItem
 )
+from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
 
@@ -558,40 +559,34 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 if not instance:
                     # 步骤不存在，执行新增，及验证必填字段
                     if not step_data.case_id:
-                        failed_steps.append({
-                            "step_id": step_id,
-                            "reason": "新增步骤时，步骤所属用例(case_id)不能为空"
-                        })
-                        # 即使缺少必填字段，也要递归处理子步骤
-                        children: List[AutoTestStepTreeUpdateItem] = step_data.children
-                        if children:
-                            child_result = await self.batch_update_or_create_steps(
-                                steps_data=children,
-                                parent_step_id=parent_step_id,
-                                processed_step_ids=processed_step_ids
-                            )
-                            created_count += child_result["created_count"]
-                            updated_count += child_result["updated_count"]
-                            failed_steps.extend(child_result["failed_steps"])
-                            passed_steps.extend(child_result.get("steps", []))
+                        failed_steps.append({"step_id": step_id, "reason": "新增步骤时，步骤所属用例(case_id)不能为空"})
+                        # # 即使缺少必填字段，也要递归处理子步骤
+                        # children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                        # if children:
+                        #     child_result = await self.batch_update_or_create_steps(
+                        #         steps_data=children,
+                        #         parent_step_id=parent_step_id,
+                        #         processed_step_ids=processed_step_ids
+                        #     )
+                        #     created_count += child_result["created_count"]
+                        #     updated_count += child_result["updated_count"]
+                        #     failed_steps.extend(child_result["failed_steps"])
+                        #     passed_steps.extend(child_result.get("steps", []))
                         continue
                     if not step_data.step_no:
-                        failed_steps.append({
-                            "step_id": step_id,
-                            "reason": "新增步骤时，步骤序号(step_no)不能为空"
-                        })
+                        failed_steps.append({"step_id": step_id, "reason": "新增步骤时，步骤序号(step_no)不能为空"})
                         continue
                     if not step_data.step_type:
-                        failed_steps.append({
-                            "step_id": step_id,
-                            "reason": "新增步骤时，步骤类型(step_type)不能为空"
-                        })
+                        failed_steps.append({"step_id": step_id, "reason": "新增步骤时，步骤类型(step_type)不能为空"})
+                        continue
+                    if not step_data.case_type:
+                        failed_steps.append({"step_id": step_id, "reason": "新增步骤时，用例所属类型(case_type)不能为空"})
                         continue
 
                     # 检查用例是否存在
-                    case: Optional[AutoTestApiCaseInfo] = await AutoTestApiCaseInfo.filter(
-                        id=step_data.case_id, state__not=1
-                    ).first()
+                    case: Optional[AutoTestApiCaseInfo] = await AUTOTEST_API_CASE_CRUD.get_by_id(
+                        case_id=step_data.case_id
+                    )
                     if not case:
                         failed_steps.append({
                             "step_id": step_id,
