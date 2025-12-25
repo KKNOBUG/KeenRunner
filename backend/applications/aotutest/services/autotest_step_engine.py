@@ -22,8 +22,10 @@ import httpx
 from backend.applications.aotutest.models.autotest_model import StepType, ReportType
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate, AutoTestApiReportUpdate
-from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate, AutoTestApiDetailUpdate
+from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate, \
+    AutoTestApiReportUpdate
+from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate, \
+    AutoTestApiDetailUpdate
 from backend.services.ctx import CTX_USER_ID
 
 
@@ -463,7 +465,6 @@ class BaseStepExecutor:
         """保存步骤明细到数据库（含无响应步骤占位；循环多次执行合并）"""
         try:
             step_end_time = datetime.now()
-            step_start_dt = datetime.strptime(step_st_time_str, "%Y-%m-%d %H:%M:%S")
             step_ed_time_str = step_end_time.strftime("%Y-%m-%d %H:%M:%S")
             step_elapsed = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
 
@@ -488,7 +489,7 @@ class BaseStepExecutor:
                 if cookies:
                     response_cookie = json.dumps(cookies, ensure_ascii=False)
 
-            step_code = self.step_code or f"step-{self.step_id or self.step_no or 'tmp'}"
+            step_code = self.step_code
 
             # 1. defined_variables: 从步骤配置中获取用户定义的变量
             # 这是用户在步骤配置中预先定义的变量（如固定值、随机函数等）
@@ -838,8 +839,10 @@ class WaitStepExecutor(BaseStepExecutor):
 class TcpStepExecutor(BaseStepExecutor):
     pass
 
+
 class DataBaseStepExecutor(BaseStepExecutor):
     pass
+
 
 class HttpStepExecutor(BaseStepExecutor):
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -1119,7 +1122,7 @@ class HttpStepExecutor(BaseStepExecutor):
             for i, part in enumerate(parts):
                 if isinstance(current, dict):
                     if part not in current:
-                        raise StepExecutionError(f"JSONPath路径不存在: {'$.'.join(parts[:i+1])}")
+                        raise StepExecutionError(f"JSONPath路径不存在: {'$.'.join(parts[:i + 1])}")
                     current = current.get(part)
                 elif isinstance(current, list):
                     try:
@@ -1131,7 +1134,8 @@ class HttpStepExecutor(BaseStepExecutor):
                     except IndexError as exc:
                         raise StepExecutionError(f"列表索引越界: {part}，列表长度: {len(current)}") from exc
                 else:
-                    raise StepExecutionError(f"无法在 {type(current).__name__} 类型上应用 JSONPath: {part}，路径: {'$.'.join(parts[:i+1])}")
+                    raise StepExecutionError(
+                        f"无法在 {type(current).__name__} 类型上应用 JSONPath: {part}，路径: {'$.'.join(parts[:i + 1])}")
 
             return current
         except StepExecutionError:
