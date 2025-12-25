@@ -23,6 +23,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepSelect, AutoTestStepTreeUpdateList, AutoTestStepTreeUpdateItem,
     AutoTestHttpDebugRequest, AutoTestStepTreeExecute
 )
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -33,6 +34,7 @@ from backend.core.responses.http_response import (
     DataAlreadyExistsResponse,
     NotFoundResponse,
     BadReqResponse,
+    ParameterResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -265,71 +267,156 @@ async def get_step_tree(
         return FailureResponse(message=f"获取步骤树失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/update/tree", summary="批量更新测试用例和步骤信息")
+def validate_step_tree_structure(steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
+    """
+    校验步骤树结构合法性
+
+    Args:
+        steps_data: 步骤树数据
+
+    Returns:
+        tuple[bool, Optional[str]]: (是否合法, 错误信息)
+    """
+    from backend.applications.aotutest.models.autotest_model import StepType
+
+    # 允许有子步骤的步骤类型
+    ALLOWED_CHILDREN_TYPES = {StepType.LOOP, StepType.IF}
+
+    def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: set, path: list) -> tuple:
+        """递归检查步骤"""
+        step_id = step.step_id
+        step_code = step.step_code
+
+        # 检查自循环引用
+        if step_id and step_id in visited_ids:
+            return False, f"步骤(step_id={step_id}, step_code={step_code or 'N/A'})存在自循环引用"
+        if step_code and step_code in path:
+            return False, f"步骤(step_code={step_code})存在自循环引用"
+
+        # 添加到已访问集合
+        if step_id:
+            visited_ids.add(step_id)
+        if step_code:
+            path.append(step_code)
+
+        # 检查步骤类型是否允许有子步骤
+        if step.children and len(step.children) > 0:
+            if step.step_type not in ALLOWED_CHILDREN_TYPES:
+                return False, f"步骤(step_id={step_id}, step_code={step_code or 'N/A'}, step_type={step.step_type})不允许包含子步骤，仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
+
+            # 递归检查子步骤
+            for child in step.children:
+                is_valid, error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())
+                if not is_valid:
+                    return False, error_msg
+
+        return True, None
+
+    # 检查所有根步骤
+    for step in steps_data:
+        is_valid, error_msg = check_step_recursive(step, set(), [])
+        if not is_valid:
+            return False, error_msg
+
+    return True, None
+
+
+@autotest_step.post("/update_or_create/tree", summary="批量更新测试用例和步骤信息")
 async def batch_update_steps_tree(
-        steps: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据（数组嵌套字典）")
+        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据（包含case和steps）")
 ):
     """
     批量更新测试用例和步骤信息
 
     核心功能：
-    1. 验证数据是否符合模型要求（如果数组中只有一个字典对象且该字典对象只有一个"case"键，则仅更新/新增测试用例）
-    2. 接收嵌套结构的步骤树数据
-    3. 提取并去重测试用例信息，批量更新或新增
-    4. 递归处理所有层级的步骤，批量更新或新增
-    5. 验证用例信息和步骤信息的关联正确性
-    6. 使用事务保证原子性（要么全部成功，要么全部回滚）
+    1. 根据case_id和case_code判断是新增还是更新
+    2. 校验步骤树结构合法性（自循环引用、结构合法性）
+    3. 接收嵌套结构的步骤树数据
+    4. 提取并去重测试用例信息，批量更新或新增
+    5. 递归处理所有层级的步骤，批量更新或新增
+    6. 验证用例信息和步骤信息的关联正确性
+    7. 使用事务保证原子性（要么全部成功，要么全部回滚）
 
     入参格式：
-    - 外层是步骤数组
-    - 每个步骤包含：步骤信息、case字段（测试用例信息）、children字段（子步骤数组）
+    - case: 用例信息（AutoTestApiCaseUpdate格式）
+    - steps: 步骤树数据（数组格式）
 
     返回格式：
     - 成功：返回更新成功的提示 + 影响的用例数 / 步骤数 + 详细的用例和步骤信息
     - 失败：返回失败原因
     """
     try:
-        steps_data: List[AutoTestStepTreeUpdateItem] = steps.steps
+        # 获取用例信息和步骤数据
+        case_data: AutoTestApiCaseUpdate = data.case
+        steps_data: List[AutoTestStepTreeUpdateItem] = data.steps
+
         logger.info(f"开始批量更新步骤树，共 {len(steps_data)} 个根步骤")
 
-        # 1. 验证数据是否符合模型要求
-        # 如果数组中只有一个字典对象且该字典对象只有一个"case"键，说明该测试用例不存在步骤信息
-        if len(steps_data) == 1:
-            first_step: AutoTestStepTreeUpdateItem = steps_data[0]
-            # 检查是否只有case字段，没有其他步骤相关字段
-            # 排除children、quote_steps、quote_case这些不影响判断的字段
-            step_dict: Dict[str, Any] = first_step.model_dump(exclude={"children", "quote_steps", "quote_case"},
-                                                              exclude_none=True)
-            # 如果除了case字段和id字段外，没有其他有效字段，则认为只有case信息
-            has_step_info = False if list(step_dict.keys()) == ["case"] else True
+        # 1. 校验步骤树结构合法性
+        is_valid, error_msg = validate_step_tree_structure(steps_data)
+        if not is_valid:
+            logger.error(f"步骤树结构校验失败: {error_msg}")
+            return BadReqResponse(message=f"步骤树结构校验失败: {error_msg}")
 
-            if not has_step_info and first_step.case:
-                # 只有case信息，没有步骤信息，仅处理用例
-                logger.info("检测到只有用例信息，没有步骤信息，仅处理用例")
-                case: Dict[str, Any] = first_step.case
-                if isinstance(case, dict):
-                    # 为后续映射增加输入key，便于新增后回传id
-                    # case["_input_key"] = "only_case_0"
-                    cases_data = [case]
-                else:
-                    return BadReqResponse(message="用例信息格式不正确")
+        # 2. 判断是新增还是更新
+        case_dict = case_data.model_dump(exclude_unset=True)
+        case_id = case_dict.get("case_id")
+        case_code = case_dict.get("case_code")
 
-                # 使用事务执行批量更新/新增用例
-                try:
-                    async with in_transaction():
-                        case_result = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(cases_data)
-                        logger.info(
-                            f"用例处理完成：新增 {case_result['created_count']} 个，更新 {case_result['updated_count']} 个，失败 {len(case_result['failed_cases'])} 个")
+        # 如果同时存在case_id和case_code，判定为更新
+        if case_id and case_code:
+            is_update = True
+            logger.info(f"检测到更新操作，case_id={case_id}, case_code={case_code}")
+        elif not case_id and not case_code:
+            is_update = False
+            logger.info(f"检测到新增操作，case_id={case_id}, case_code={case_code}")
+        else:
+            return ParameterResponse(message="用例参数校验失败")
 
+        # 3. 准备用例数据
+        cases_data: List[Dict[str, Any]] = [case_dict]
+
+        # 4. 如果是更新操作，验证用例是否存在
+        if is_update:
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+                only_one=True,
+                conditions={"id": case_id, "case_code": case_code}
+            )
+            if not case_instance:
+                return NotFoundResponse(message=f"用例(id={case_id}, code={case_code})不存在")
+
+        # 5. 使用事务执行批量更新/新增
+        try:
+            async with in_transaction():
+                # 5.1 处理用例信息
+                case_result: Dict[str, Any] = {
+                    "created_count": 0,
+                    "updated_count": 0,
+                    "failed_cases": [],
+                    "passed_cases": []
+                }
+
+                if cases_data:
+                    case_result: Dict[str, Any] = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(
+                        cases_data=cases_data
+                    )
+                    created_count: int = case_result['created_count']
+                    updated_count: int = case_result['updated_count']
+                    passed_cases: List[Dict[str, Any]] = case_result['passed_cases']
+                    failed_cases: List[Dict[str, Any]] = case_result['failed_cases']
+                    logger.info(
+                        f"用例处理完成："
+                        f"新增: {created_count}个, "
+                        f"更新: {updated_count}个, "
+                        f"成功明细: {passed_cases}, "
+                        f"失败明细: {failed_cases}"
+                    )
+
+                    # 如果用例处理失败，直接返回
+                    if len(failed_cases) > 0:
                         result_data = {
-                            "case_update": {
-                                "created_count": case_result["created_count"],
-                                "updated_count": case_result["updated_count"],
-                                "failed_count": len(case_result["failed_cases"]),
-                                "failed_cases": case_result["failed_cases"],
-                                "cases": case_result.get("cases", [])
-                            },
-                            "step_update": {
+                            "cases": case_result,
+                            "steps": {
                                 "created_count": 0,
                                 "updated_count": 0,
                                 "failed_count": 0,
@@ -337,57 +424,26 @@ async def batch_update_steps_tree(
                                 "steps": []
                             }
                         }
+                        message = f"用例处理失败: {failed_cases}"
+                        logger.error(message)
+                        return BadReqResponse(message=message, data=result_data)
 
-                        total_failed = len(case_result["failed_cases"])
-                        if total_failed > 0:
-                            message = f"用例处理完成，但存在部分失败：失败 {total_failed} 个"
-                            logger.warning(message)
-                            return SuccessResponse(data=result_data, message=message)
-                        else:
-                            message = f"用例处理成功：新增 {case_result['created_count']} 个，更新 {case_result['updated_count']} 个"
-                            logger.info(message)
-                            return SuccessResponse(data=result_data, message=message)
-                except Exception as transaction_error:
-                    logger.error(f"用例处理过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
-                    raise
+                    # 获取处理后的用例ID，用于关联步骤
+                    if passed_cases and len(passed_cases) > 0:
+                        processed_case = passed_cases[0]
+                        final_case_id: int = processed_case.get("case_id")
+                        if final_case_id:
+                            # 更新步骤数据中的case_id
+                            def update_case_id_recursive(step_list: List[AutoTestStepTreeUpdateItem], case_id: int):
+                                """递归更新步骤的case_id"""
+                                for step in step_list:
+                                    step.case_id = case_id
+                                    if step.children:
+                                        update_case_id_recursive(step.children, case_id)
 
-        # 2. 提取所有 case 数据并去重（支持没有id的新增场景）
-        cases_data: List[Dict[str, Any]] = []
-        case_ids_seen = set()
+                            update_case_id_recursive(steps_data, final_case_id)
 
-        def extract_cases_recursive(step_list: List[AutoTestStepTreeUpdateItem]):
-            """递归提取所有 case 数据"""
-            for step in step_list:
-                # 提取 case 字段
-                case: Dict[str, Any] = step.case
-                if isinstance(case, dict) and case.get("id"):
-                    case_id: int = case["id"]
-                    if case_id not in case_ids_seen:
-                        cases_data.append(case)
-                        case_ids_seen.add(case_id)
-
-                # 递归处理子步骤
-                children = step.children
-                if children:
-                    extract_cases_recursive(children)
-
-        extract_cases_recursive(steps_data)
-        logger.info(f"提取到 {len(cases_data)} 个唯一用例，准备处理")
-
-        # 3. 使用事务执行批量更新/新增
-        try:
-            # Tortoise ORM 的事务处理：使用 in_transaction 上下文管理器
-            async with in_transaction():
-                # 3.1 批量更新/新增测试用例信息
-                case_result: Dict[str, Any] = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(cases_data)
-                logger.info(
-                    f"用例处理完成："
-                    f"新增 {case_result['created_count']} 个，"
-                    f"更新 {case_result['updated_count']} 个，"
-                    f"失败 {len(case_result['failed_cases'])} 个"
-                )
-
-                # 3.2 批量更新/新增步骤信息（递归处理）
+                # 5.2 批量更新/新增步骤信息（递归处理）
                 step_result: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.batch_update_or_create_steps(steps_data)
                 logger.info(
                     f"步骤处理完成："
@@ -396,15 +452,9 @@ async def batch_update_steps_tree(
                     f"失败 {len(step_result['failed_steps'])} 个"
                 )
 
-                # 4. 构建返回结果
+                # 6. 构建返回结果
                 result_data: Dict[str, Any] = {
-                    "case_update": {
-                        "created_count": case_result["created_count"],
-                        "updated_count": case_result["updated_count"],
-                        "failed_count": len(case_result["failed_cases"]),
-                        "failed_cases": case_result["failed_cases"],
-                        "cases": case_result.get("cases", [])
-                    },
+                    "case_update": case_result,
                     "step_update": {
                         "created_count": step_result["created_count"],
                         "updated_count": step_result["updated_count"],
@@ -414,14 +464,15 @@ async def batch_update_steps_tree(
                     }
                 }
 
-                # 5. 判断是否有失败项
-                total_failed: int = len(case_result["failed_cases"]) + len(step_result["failed_steps"])
+                # 7. 判断是否有失败项
+                total_failed: int = len(failed_cases) + len(step_result["failed_steps"])
                 if total_failed > 0:
-                    message = f"批量处理完成，但存在部分失败：用例失败 {len(case_result['failed_cases'])} 个，步骤失败 {len(step_result['failed_steps'])} 个"
+                    message = f"批量处理完成，但存在部分失败：用例失败 {len(failed_cases)} 个，步骤失败 {len(step_result['failed_steps'])} 个"
                     logger.warning(message)
                     return SuccessResponse(data=result_data, message=message)
                 else:
-                    message = f"批量处理成功：用例新增 {case_result['created_count']} 个/更新 {case_result['updated_count']} 个，步骤新增 {step_result['created_count']} 个/更新 {step_result['updated_count']} 个"
+                    action_type = "更新" if is_update else "新增"
+                    message = f"{action_type}成功：用例{'更新' if is_update else '新增'} {created_count + updated_count} 个，步骤新增 {step_result['created_count']} 个/更新 {step_result['updated_count']} 个"
                     logger.info(message)
                     return SuccessResponse(
                         data=result_data,

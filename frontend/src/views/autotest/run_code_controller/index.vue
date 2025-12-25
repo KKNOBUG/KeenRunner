@@ -69,8 +69,11 @@ const monacoEditorOptions = {
 }
 
 watch(
-    () => props.config,
-    (val) => Object.assign(form, defaults, val || {}),
+    () => [props.step?.id, props.config],
+    ([stepId, val]) => {
+      // 当步骤变化时，重新初始化表单
+      Object.assign(form, defaults, val || {})
+    },
     {deep: true, immediate: true}
 )
 

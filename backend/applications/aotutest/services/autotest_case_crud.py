@@ -216,31 +216,38 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         created_count: int = 0
         updated_count: int = 0
-        failed_cases: List[Dict[str, Any]] = []
         processed_case_ids: Set = set()  # 用于去重（仅针对已有id的用例）
-        cases_list: List[Dict[str, Any]] = []  # 存储处理成功的用例信息（附带输入映射）
+        passed_cases: List[Dict[str, Any]] = []  # 存储处理成功的用例信息（附带输入映射）
+        failed_cases: List[Dict[str, Any]] = []
 
         for case_data in cases_data:
             if not isinstance(case_data, dict):
                 continue
             # 去重：对于已有id的用例，避免重复处理
-            case_id: Optional[int] = case_data.get("id")
-            if case_id and case_id in processed_case_ids:
+            case_id: Optional[int] = case_data.get("case_id")
+            case_code: Optional[str] = case_data.get("case_code")
+            if case_id and case_code and (case_id, case_code) in processed_case_ids:
                 continue
             try:
                 # 检查用例是否存在
-                instance: Optional[AutoTestApiCaseInfo] = await self.query(case_id)
+                if not case_id and not case_code:
+                    instance = None
+                else:
+                    instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
+                        only_one=True,
+                        conditions={"id": case_id, "case_code": case_code}
+                    )
                 if not instance:
                     # 用例不存在，执行新增，及验证必填字段
-                    if not case_data.get("case_name"):
-                        failed_cases.append({"case_id": case_id, "reason": "新增用例时，用例名称不能为空"})
+                    case_name: Optional[str] = case_data.get("case_name")
+                    case_project: Optional[str] = case_data.get("case_project")
+                    if not case_name:
+                        failed_cases.append({"case_id": case_id, "reason": "新增用例时，用例名称字段不能为空"})
                         continue
-                    if not case_data.get("case_project"):
-                        failed_cases.append({"case_id": case_id, "reason": "新增用例时，用例所属项目不能为空"})
+                    if not case_project:
+                        failed_cases.append({"case_id": case_id, "reason": "新增用例时，用例所属项目字段不能为空"})
                         continue
                     # 检查用例名称和项目ID的唯一性
-                    case_name: str = case_data["case_name"]
-                    case_project: str = case_data["case_project"]
                     existing_case: Optional[AutoTestApiCaseInfo] = await self.model.filter(
                         case_name=case_name,
                         case_project=case_project,
@@ -249,7 +256,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     if existing_case:
                         failed_cases.append({
                             "case_id": case_id,
-                            "reason": f"项目(id={case_project})下用例名称(case_name={case_name})已存在，无法新增"
+                            "reason": f"项目(id={case_project})下用例名称(name={case_name})已存在，无法新增"
                         })
                         continue
 
@@ -264,16 +271,24 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     # 执行新增
                     new_instance: AutoTestApiCaseInfo = await self.create(create_dict)
                     created_count += 1
-                    processed_case_ids.add(new_instance.id)
-                    case_dict: Dict[str, Any] = await new_instance.to_dict()
-                    cases_list.append(case_dict)
+                    processed_case_ids.add((new_instance.id, new_instance.case_code))
+                    case_dict: Dict[str, Any] = await new_instance.to_dict(
+                        include_fields=["case_code", "case_name"]
+                    )
+                    case_dict["created"] = True
+                    case_dict["case_id"] = new_instance.id
+                    passed_cases.append(case_dict)
                 else:
                     # 用例存在，执行更新
                     # 如果没有任何可更新的字段，跳过
                     if not case_data:
-                        processed_case_ids.add(case_id)
-                        case_dict = await instance.to_dict()
-                        cases_list.append(case_dict)
+                        processed_case_ids.add((case_id, case_code))
+                        case_dict: Dict[str, Any] = await instance.to_dict(
+                            include_fields=["case_code", "case_name"]
+                        )
+                        case_dict["created"] = False
+                        case_dict["case_id"] = case_id
+                        passed_cases.append(case_dict)
                         continue
 
                     # 如果更新了用例名称或项目ID，检查唯一性
@@ -288,22 +303,30 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                         if existing_case:
                             failed_cases.append({
                                 "case_id": case_id,
-                                "reason": f"项目(id={case_project})下用例名称(case_name={case_name})已存在"
+                                "reason": f"项目(id={case_project})下用例名称(name={case_name})已存在"
                             })
                             continue
 
                     # 执行更新
-                    case_data.pop("id")
-                    case_data.pop("state")
-                    case_data.pop("case_code")
-                    case_data.pop("created_user")
-                    case_data.pop("created_time")
+                    try:
+                        case_data.pop("id")
+                        case_data.pop("state")
+                        case_data.pop("case_id")
+                        case_data.pop("case_code")
+                        case_data.pop("created_user")
+                        case_data.pop("created_time")
+                    except KeyError:
+                        pass
                     case_data["case_version"] = instance.case_version + 1
                     updated_instance: AutoTestApiCaseInfo = await self.update(id=case_id, obj_in=case_data)
                     updated_count += 1
-                    processed_case_ids.add(case_id)
-                    case_dict: Dict[str, Any] = await updated_instance.to_dict()
-                    cases_list.append(case_dict)
+                    processed_case_ids.add((case_id, case_code))
+                    case_dict: Dict[str, Any] = await updated_instance.to_dict(
+                        include_fields=["case_code", "case_name"]
+                    )
+                    case_dict["created"] = True
+                    case_dict["case_id"] = case_id
+                    passed_cases.append(case_dict)
             except Exception as e:
                 failed_cases.append({"case_id": case_id, "reason": str(e)})
 
@@ -311,7 +334,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             "created_count": created_count,
             "updated_count": updated_count,
             "failed_cases": failed_cases,
-            "cases": cases_list
+            "passed_cases": passed_cases
         }
 
 

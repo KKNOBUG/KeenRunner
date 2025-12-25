@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.models.autotest_model import StepType, CaseType
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.enums.http_enum import HTTPMethod
 
 
@@ -87,8 +88,8 @@ class AutoTestStepSelect(BaseModel):
 class AutoTestStepTreeUpdateItem(BaseModel):
     """步骤树更新项（用于批量更新）"""
     step_id: Optional[int] = Field(None, description="步骤ID(更新必填，新增不填)")
-    step_no: Optional[int] = Field(None, description="步骤明细序号")
-    step_code: Optional[str] = Field(None, description="步骤明细标识代码")
+    step_no: Optional[int] = Field(None, description="步骤明细序号(更新必填，新增不填)")
+    step_code: Optional[str] = Field(None, description="步骤明细标识代码(更新必填，新增不填)")
     step_name: Optional[str] = Field(None, description="步骤明细名称")
     step_desc: Optional[str] = Field(None, description="步骤明细描述")
     step_type: Optional[StepType] = Field(None, description="步骤明细类型")
@@ -131,6 +132,7 @@ class AutoTestStepTreeUpdateItem(BaseModel):
 
 class AutoTestStepTreeUpdateList(BaseModel):
     """批量更新步骤树"""
+    case: AutoTestApiCaseUpdate = Field(..., description="用例信息")
     steps: List[AutoTestStepTreeUpdateItem] = Field(..., description="步骤树数据")
 
 

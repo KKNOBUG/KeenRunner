@@ -129,8 +129,8 @@ const form = reactive({
 })
 
 watch(
-    () => props.config,
-    (val) => {
+    () => [props.step?.id, props.config],
+    ([stepId, val]) => {
       // 监听props变化时，强制转换为数字类型
       const newVal = { ...defaults, ...val || {} }
       newVal.times = Number(newVal.times)

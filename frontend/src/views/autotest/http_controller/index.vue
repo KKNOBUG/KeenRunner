@@ -694,6 +694,15 @@ const initFromConfig = () => {
 
 initFromConfig()
 
+// 监听 props.step 和 props.config 的变化，重新初始化
+watch(
+    () => [props.step?.id, props.config],
+    () => {
+      initFromConfig()
+    },
+    { deep: true, immediate: false }
+)
+
 const buildExtractForBackend = () => {
   return Object.values(state.form.extract_variables || {}).map(item => ({
     expr: item.jsonpath || '',

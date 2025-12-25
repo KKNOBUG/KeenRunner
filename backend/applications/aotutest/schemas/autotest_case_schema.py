@@ -21,7 +21,8 @@ class AutoTestApiCaseCreate(BaseModel):
 
 class AutoTestApiCaseUpdate(BaseModel):
     """更新用例信息"""
-    case_id: int = Field(..., description="用例ID")
+    case_id: Optional[int] = Field(None, description="用例ID")
+    case_code: Optional[str] = Field(None, description="用例标识代码")
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     case_tags: Optional[str] = Field(None, max_length=255, description="用例标签")

@@ -278,6 +278,7 @@
             -->
             <component
                 v-if="currentStep"
+                :key="currentStep.id"
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
@@ -306,8 +307,8 @@ import api from "@/api";
 
 const stepDefinitions = {
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  code: {label: '执行代码', allowChildren: false, icon: 'teenyicons:python-outline'},
-  http: {label: 'HTTP 请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
+  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
+  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   if: {label: '分支条件', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'}
@@ -530,7 +531,9 @@ const mapBackendStep = (step) => {
     base.children = []
   } else if (localType === 'code') {
     base.config = {
-      code: step.code || ''
+      script: step.code || '',
+      variables: step.defined_variables ? (Array.isArray(step.defined_variables) ? step.defined_variables : Object.entries(step.defined_variables).map(([key, value]) => ({key, value}))) : [],
+      extracts: step.extract_variables ? (Array.isArray(step.extract_variables) ? step.extract_variables : Object.entries(step.extract_variables).map(([key, value]) => ({key, value}))) : []
     }
   } else if (localType === 'http') {
     base.config = {
@@ -588,17 +591,130 @@ const hydrateCaseInfo = (data) => {
   }
 }
 
+// 将前端类型转换为后端类型
+const localTypeToBackend = (localType) => {
+  const typeMap = {
+    'http': 'HTTP请求',
+    'code': '执行代码请求(Python)',
+    'if': '条件分支',
+    'wait': '等待控制',
+    'loop': '循环结构'
+  }
+  return typeMap[localType] || '执行代码请求(Python)'
+}
+
+// 将前端步骤格式转换为后端格式
+const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
+  const original = step.original || {}
+  const config = step.config || {}
+
+  // 基础字段
+  const backendStep = {
+    step_id: original.id || null,
+    step_code: original.step_code || step.id || null,
+    step_name: step.name || original.step_name || '',
+    step_desc: original.step_desc || '',
+    step_type: localTypeToBackend(step.type),
+    step_no: stepNo,
+    case_id: original.case_id || caseId.value || null,
+    parent_step_id: parentStepId,
+    quote_case_id: original.quote_case_id || null
+  }
+
+  // 根据类型设置特定字段
+  if (step.type === 'http') {
+    backendStep.request_method = config.method || original.request_method || 'POST'
+    backendStep.request_url = config.url || original.request_url || ''
+    backendStep.request_header = config.headers || original.request_header || {}
+    backendStep.request_body = config.data || original.request_body || {}
+    backendStep.request_params = config.params ? (typeof config.params === 'string' ? config.params : JSON.stringify(config.params)) : original.request_params || null
+    backendStep.request_form_data = config.form_data || original.request_form_data || null
+    backendStep.request_form_urlencoded = config.form_urlencoded || original.request_form_urlencoded || null
+    backendStep.extract_variables = config.extract_variables || original.extract_variables || null
+    backendStep.assert_validators = config.assert_validators || original.assert_validators || null
+    backendStep.defined_variables = config.defined_variables || original.defined_variables || null
+  } else if (step.type === 'code') {
+    backendStep.code = config.script || original.code || ''
+    backendStep.defined_variables = config.variables ? (Array.isArray(config.variables) ? config.variables.reduce((acc, item) => {
+      if (item.key) acc[item.key] = item.value
+      return acc
+    }, {}) : config.variables) : original.defined_variables || null
+    backendStep.extract_variables = config.extracts ? (Array.isArray(config.extracts) ? config.extracts.map(item => ({
+      name: item.key || '',
+      expr: item.value || '',
+      range: 'SOME',
+      source: 'Response Json'
+    })) : config.extracts) : original.extract_variables || null
+  } else if (step.type === 'loop') {
+    backendStep.max_cycles = config.times || original.max_cycles || 1
+    backendStep.max_interval = config.interval || original.max_interval || 0
+    backendStep.wait = config.interval || original.wait || 0
+  } else if (step.type === 'if') {
+    const conditions = [{
+      value: config.left || '',
+      operation: config.operator || 'not_empty',
+      desc: config.remark || ''
+    }]
+    backendStep.conditions = conditions
+  } else if (step.type === 'wait') {
+    backendStep.wait = config.seconds || original.wait || 0
+  }
+
+  // 处理子步骤
+  if (step.children && step.children.length > 0) {
+    backendStep.children = step.children.map((child, index) => {
+      const childStepId = child.original?.id || null
+      return convertStepToBackend(child, childStepId, index + 1)
+    })
+  }
+
+  return backendStep
+}
+
 const handleSaveAll = async () => {
   try {
-    await api.updateStepTree({
-      case_id: caseId.value,
-      case_info: {...caseForm},
-      steps: steps.value
+    // 构建用例信息
+    const caseInfo = {
+      ...caseForm
+    }
+
+    // 根据是否有caseId判断是新增还是更新
+    if (caseId.value) {
+      // 更新操作：添加case_id和case_code
+      // 从第一个步骤的original中获取case_code
+      const firstStep = steps.value[0]
+      if (firstStep?.original?.case?.case_code) {
+        caseInfo.case_code = firstStep.original.case.case_code
+      }
+      caseInfo.case_id = caseId.value
+    } else {
+      // 新增操作：case_id和case_code必须为null（schema要求必填但可以为null）
+      caseInfo.case_id = null
+      caseInfo.case_code = null
+    }
+
+    // 转换步骤数据
+    const backendSteps = steps.value.map((step, index) => {
+      const stepId = step.original?.id || null
+      return convertStepToBackend(step, null, index + 1)
     })
-    window.$message?.success?.('保存成功')
+
+    const payload = {
+      case: caseInfo,
+      steps: backendSteps
+    }
+
+    const res = await api.updateStepTree(payload)
+    if (res?.code === '000000' || res?.code === 200 || res?.code === 0) {
+      window.$message?.success?.(res?.message || '保存成功')
+      // 重新加载数据
+      await loadSteps()
+    } else {
+      window.$message?.error?.(res?.message || '保存失败')
+    }
   } catch (error) {
     console.error('Failed to save step tree', error)
-    window.$message?.error?.('保存失败')
+    window.$message?.error?.(error?.response?.data?.message || error?.message || '保存失败')
   }
 }
 
@@ -893,7 +1009,7 @@ const updateStepConfig = (id, config) => {
     } else if (step.type === 'wait') {
       step.name = `Wait 等待 ${config.seconds || 2} 秒`
     } else if (step.type === 'code') {
-      step.name = config.name || '执行代码'
+      step.name = config.name || '执行代码请求(Python)'
     }
     // 更新显示名称
     updateStepDisplayNames()
