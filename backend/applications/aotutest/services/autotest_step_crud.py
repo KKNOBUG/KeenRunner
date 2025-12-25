@@ -648,7 +648,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     new_instance: AutoTestApiStepInfo = await self.create(create_dict)
                     created_count += 1
                     processed_step_ids.add((new_instance.id, new_instance.step_code))
-                    passed_steps.append(await new_instance.to_dict())
+                    step_dict: Dict[str, Any] = await new_instance.to_dict(
+                        include_fields=["step_code", "step_name"]
+                    )
+                    step_dict["created"] = True
+                    step_dict["step_id"] = new_instance.id
+                    passed_steps.append(step_dict)
 
                     # 递归处理子步骤
                     children: List[AutoTestStepTreeUpdateItem] = step_data.children
@@ -661,7 +666,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
                         failed_steps.extend(child_result["failed_steps"])
-                        passed_steps.extend(child_result.get("steps", []))
+                        passed_steps.extend(child_result.get("passed_steps", []))
 
                 else:
                     # 步骤存在，执行更新
@@ -703,7 +708,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                                 created_count += child_result["created_count"]
                                 updated_count += child_result["updated_count"]
                                 failed_steps.extend(child_result["failed_steps"])
-                                passed_steps.extend(child_result.get("steps", []))
+                                passed_steps.extend(child_result.get("passed_steps", []))
                             continue
 
                     # 业务层验证：如果更新了用例ID，检查用例是否存在
@@ -762,7 +767,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     updated_instance = await self.update(id=step_id, obj_in=update_dict)
                     updated_count += 1
                     processed_step_ids.add((step_id, updated_instance.step_code))
-                    passed_steps.append(await updated_instance.to_dict())
+                    step_dict: Dict[str, Any] = await updated_instance.to_dict(
+                        include_fields=["step_code", "step_name"]
+                    )
+                    step_dict["created"] = False
+                    step_dict["step_id"] = step_id
+                    passed_steps.append(step_dict)
 
                     # 递归处理子步骤
                     children: List[AutoTestStepTreeUpdateItem] = step_data.children
@@ -775,7 +785,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
                         failed_steps.extend(child_result["failed_steps"])
-                        passed_steps.extend(child_result.get("steps", []))
+                        passed_steps.extend(child_result.get("passed_steps", []))
 
             except Exception as e:
                 failed_steps.append({"step_id": step_id, "reason": str(e)})
@@ -791,7 +801,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
                         failed_steps.extend(child_result["failed_steps"])
-                        passed_steps.extend(child_result.get("steps", []))
+                        passed_steps.extend(child_result.get("passed_steps", []))
                     except Exception as child_e:
                         pass
 
