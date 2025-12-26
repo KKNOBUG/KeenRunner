@@ -28,6 +28,7 @@ class AutoTestApiCaseUpdate(BaseModel):
     case_tags: Optional[str] = Field(None, max_length=255, description="用例标签")
     case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
     case_project: Optional[int] = Field(None, ge=1, description="用例所属应用项目")
+    case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
 
 
 class AutoTestApiCaseSelect(BaseModel):

@@ -329,7 +329,7 @@ async def batch_update_steps_tree(
     批量更新测试用例和步骤信息
 
     核心功能：
-    1. 根据case_id和case_code判断是新增还是更新
+    1. 根据case_id和case_code判断是新增还是更新(如果有case_id和case_code说明存在用例，是更新动作，但是步骤中可能会存在新增)
     2. 校验步骤树结构合法性（自循环引用、结构合法性）
     3. 接收嵌套结构的步骤树数据
     4. 提取并去重测试用例信息，批量更新或新增
@@ -349,7 +349,6 @@ async def batch_update_steps_tree(
         # 获取用例信息和步骤数据
         case_data: AutoTestApiCaseUpdate = data.case
         steps_data: List[AutoTestStepTreeUpdateItem] = data.steps
-
         logger.info(f"开始批量更新步骤树，共 {len(steps_data)} 个根步骤")
 
         # 1. 校验步骤树结构合法性
@@ -359,11 +358,9 @@ async def batch_update_steps_tree(
             return BadReqResponse(message=f"步骤树结构校验失败: {error_msg}")
 
         # 2. 判断是新增还是更新
-        case_dict = case_data.model_dump(exclude_unset=True)
-        case_id = case_dict.get("case_id")
-        case_code = case_dict.get("case_code")
-
-        # 如果同时存在case_id和case_code，判定为更新
+        case_id = case_data.case_id
+        case_code = case_data.case_code
+        # 如果同时存在case_id和case_code字段，说明用例信息存在，判定为更新
         if case_id and case_code:
             is_update = True
             logger.info(f"检测到更新操作，case_id={case_id}, case_code={case_code}")
@@ -374,16 +371,7 @@ async def batch_update_steps_tree(
             return ParameterResponse(message="用例参数校验失败")
 
         # 3. 准备用例数据
-        cases_data: List[Dict[str, Any]] = [case_dict]
-
-        # 4. 如果是更新操作，验证用例是否存在
-        if is_update:
-            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
-                only_one=True,
-                conditions={"id": case_id, "case_code": case_code}
-            )
-            if not case_instance:
-                return NotFoundResponse(message=f"用例(id={case_id}, code={case_code})不存在")
+        cases_data: List[AutoTestApiCaseUpdate] = [case_data]
 
         # 5. 使用事务执行批量更新/新增
         try:
@@ -395,11 +383,8 @@ async def batch_update_steps_tree(
                     "failed_cases": [],
                     "passed_cases": []
                 }
-
                 if cases_data:
-                    case_result: Dict[str, Any] = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(
-                        cases_data=cases_data
-                    )
+                    case_result: Dict[str, Any] = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(cases_data)
                     created_count: int = case_result['created_count']
                     updated_count: int = case_result['updated_count']
                     passed_cases: List[Dict[str, Any]] = case_result['passed_cases']

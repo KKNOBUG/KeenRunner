@@ -9,7 +9,7 @@
 import asyncio
 from decimal import Decimal
 from datetime import datetime, date, time
-from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional
+from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, Set
 
 from pydantic import BaseModel
 from tortoise.models import Model
@@ -23,14 +23,14 @@ class ScaffoldModel(models.Model):
     id = fields.BigIntField(pk=True, description="主键")
 
     async def to_dict(self,
-                      include_fields: Optional[List[str]] = None,
-                      exclude_fields: Optional[List[str]] = None,
+                      include_fields: Optional[Union[List[str], Set[str]]] = None,
+                      exclude_fields: Optional[Union[List[str], Set[str]]] = None,
                       m2m: bool = False,
-                      m2m_include_fields: Optional[List[str]] = None,
-                      m2m_exclude_fields: Optional[List[str]] = None,
+                      m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
+                      m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
                       fk: bool = False,
-                      fk_include_fields: Optional[List[str]] = None,
-                      fk_exclude_fields: Optional[List[str]] = None,
+                      fk_include_fields: Optional[Union[List[str], Set[str]]] = None,
+                      fk_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
                       ):
         """
         将模型实例转换为字典形式，支持灵活配置要包含或排除的字段，以及是否处理多对多关系和外键关系。
