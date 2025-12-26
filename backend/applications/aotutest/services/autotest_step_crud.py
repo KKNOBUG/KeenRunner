@@ -13,7 +13,7 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import (
-    AutoTestApiStepInfo, AutoTestApiCaseInfo
+    AutoTestApiStepInfo, AutoTestApiCaseInfo, StepType
 )
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate, AutoTestApiStepUpdate, AutoTestStepTreeUpdateItem
@@ -330,6 +330,85 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         await instance.save()
         return instance
 
+    async def delete_steps_recursive(
+            self,
+            step_id: Optional[int] = None,
+            step_code: Optional[str] = None,
+            parent_step_id: Optional[int] = None,
+            case_id: Optional[int] = None,
+            exclude_step_ids: Optional[Set[tuple]] = None
+    ) -> int:
+        """
+        递归删除步骤及其所有子步骤（软删除）
+
+        Args:
+            step_id: 要删除的步骤ID（与step_code二选一）
+            step_code: 要删除的步骤代码（与step_id二选一）
+            parent_step_id: 要删除的父步骤ID下的所有子步骤
+            case_id: 要删除的用例ID下的所有根步骤（parent_step_id为None的步骤）
+            exclude_step_ids: 排除的步骤集合，格式为 {(step_id, step_code), ...}，这些步骤不会被删除
+
+        Returns:
+            int: 删除的步骤数量（包括子步骤）
+
+        Note:
+            - step_id/step_code 和 parent_step_id 和 case_id 只能指定一个
+            - 如果指定了 exclude_step_ids，则这些步骤及其子步骤不会被删除
+            - 删除是递归的，会删除所有子步骤
+        """
+        if exclude_step_ids is None:
+            exclude_step_ids = set()
+
+        deleted_count = 0
+
+        async def delete_step_and_children(step: AutoTestApiStepInfo) -> int:
+            """递归删除步骤及其所有子步骤"""
+            deleted = 0
+            # 先删除所有子步骤
+            children = await self.model.filter(parent_step_id=step.id, state__not=1).all()
+            for child in children:
+                deleted += await delete_step_and_children(child)
+            # 然后删除当前步骤（软删除）
+            if (step.id, step.step_code) not in exclude_step_ids:
+                step.state = 1
+                await step.save()
+                deleted += 1
+            return deleted
+
+        # 根据参数类型执行不同的删除逻辑
+        if step_id is not None or step_code is not None:
+            # 单步骤删除
+            conditions = {"state__not": 1}
+            if step_id is not None:
+                conditions["id"] = step_id
+            if step_code is not None:
+                conditions["step_code"] = step_code
+
+            step = await self.model.filter(**conditions).first()
+            if step:
+                deleted_count = await delete_step_and_children(step)
+        elif parent_step_id is not None:
+            # 删除指定父步骤下的所有子步骤
+            existing_steps = await self.model.filter(
+                parent_step_id=parent_step_id,
+                state__not=1
+            ).all()
+            for step in existing_steps:
+                if (step.id, step.step_code) not in exclude_step_ids:
+                    deleted_count += await delete_step_and_children(step)
+        elif case_id is not None:
+            # 删除指定用例下的所有根步骤（parent_step_id为None的步骤）
+            existing_steps = await self.model.filter(
+                case_id=case_id,
+                parent_step_id__isnull=True,
+                state__not=1
+            ).all()
+            for step in existing_steps:
+                if (step.id, step.step_code) not in exclude_step_ids:
+                    deleted_count += await delete_step_and_children(step)
+
+        return deleted_count
+
     async def select_steps(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """按条件查询步骤明细"""
         # 默认只查询未删除的记录
@@ -352,8 +431,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         created_count: int = 0
         updated_count: int = 0
+        deleted_count: int = 0  # 删除的步骤数量
         failed_steps: List[Dict[str, Any]] = []
         passed_steps: List[Dict[str, Any]] = []  # 存储处理成功的步骤信息
+
+        # 收集所有传入步骤的case_id，用于后续删除多余步骤
+        case_ids: Set[int] = set()
+        for step_data in steps_data:
+            if step_data.case_id:
+                case_ids.add(step_data.case_id)
 
         for step_data in steps_data:
             # 去重：如果已经处理过该步骤，跳过
@@ -421,6 +507,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                                 "reason": f"父级步骤(id={final_parent_step_id})与当前用例(id={step_data.case_id})不匹配"
                             })
                             continue
+                        # 验证父步骤类型：只有循环结构和条件分支允许拥有子级步骤
+                        ALLOWED_CHILDREN_TYPES = {StepType.LOOP, StepType.IF}
+                        if parent_step.step_type not in ALLOWED_CHILDREN_TYPES:
+                            failed_steps.append({
+                                "step_no": step_no,
+                                "reason": f"父级步骤(id={final_parent_step_id}, step_type={parent_step.step_type})不允许包含子步骤，仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
+                            })
+                            continue
 
                     # 构建新增数据
                     create_dict = step_data.model_dump(
@@ -451,6 +545,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
+                        deleted_count += child_result.get("deleted_count", 0)
                         failed_steps.extend(child_result["failed_steps"])
                         passed_steps.extend(child_result.get("passed_steps", []))
 
@@ -528,12 +623,40 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                                 "reason": f"父级步骤(id={update_dict['parent_step_id']})与当前用例(id={case_id})不匹配"
                             })
                             continue
-                        # 检查是否形成循环引用
+                        # 验证父步骤类型：只有循环结构和条件分支允许拥有子级步骤
+                        ALLOWED_CHILDREN_TYPES = {StepType.LOOP, StepType.IF}
+                        if parent_step.step_type not in ALLOWED_CHILDREN_TYPES:
+                            failed_steps.append({
+                                "step_id": step_id,
+                                "reason": f"父级步骤(id={update_dict['parent_step_id']}, step_type={parent_step.step_type})不允许包含子步骤，仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
+                            })
+                            continue
+                        # 检查是否形成循环引用（包括深层循环引用）
                         if parent_step.id == step_id:
                             failed_steps.append({
                                 "step_id": step_id,
                                 "reason": "不能将自身设置为父步骤"
                             })
+                            continue
+                        # 检查深层循环引用（防止父步骤的父步骤链中包含当前步骤）
+                        visited = set()
+                        current_parent_id = parent_step.parent_step_id
+                        while current_parent_id:
+                            if current_parent_id == step_id:
+                                failed_steps.append({
+                                    "step_id": step_id,
+                                    "reason": "检测到循环引用，无法更新步骤"
+                                })
+                                break
+                            if current_parent_id in visited:
+                                break
+                            visited.add(current_parent_id)
+                            parent = await self.model.filter(id=current_parent_id, state__not=1).first()
+                            if not parent:
+                                break
+                            current_parent_id = parent.parent_step_id
+                        # 如果检测到循环引用，跳过当前步骤的更新
+                        if current_parent_id == step_id:
                             continue
 
                     # 业务层验证：如果更新了引用用例ID，检查引用用例是否存在
@@ -570,6 +693,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
+                        deleted_count += child_result.get("deleted_count", 0)
                         failed_steps.extend(child_result["failed_steps"])
                         passed_steps.extend(child_result.get("passed_steps", []))
 
@@ -586,14 +710,33 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
+                        deleted_count += child_result.get("deleted_count", 0)
                         failed_steps.extend(child_result["failed_steps"])
                         passed_steps.extend(child_result.get("passed_steps", []))
                     except Exception as child_e:
                         pass
 
+        # 删除多余的步骤：处理完所有传入的步骤后，删除那些不在processed_step_ids中的步骤
+        # 只处理根步骤（parent_step_id为None）或指定父步骤的子步骤
+        if case_ids or parent_step_id is not None:
+            if parent_step_id is not None:
+                # 删除指定父步骤下的所有子步骤（排除已处理的步骤）
+                deleted_count = await self.delete_steps_recursive(
+                    parent_step_id=parent_step_id,
+                    exclude_step_ids=processed_step_ids
+                )
+            elif case_ids:
+                # 删除所有case_ids下的根步骤（排除已处理的步骤）
+                for case_id in case_ids:
+                    deleted_count += await self.delete_steps_recursive(
+                        case_id=case_id,
+                        exclude_step_ids=processed_step_ids
+                    )
+
         return {
             "created_count": created_count,
             "updated_count": updated_count,
+            "deleted_count": deleted_count,
             "failed_steps": failed_steps,
             "passed_steps": passed_steps
         }

@@ -434,6 +434,7 @@ async def batch_update_steps_tree(
                     f"步骤处理完成："
                     f"新增 {step_result['created_count']} 个，"
                     f"更新 {step_result['updated_count']} 个，"
+                    f"删除 {step_result.get('deleted_count', 0)} 个，"
                     f"失败 {len(step_result['failed_steps'])} 个"
                 )
 
@@ -446,12 +447,14 @@ async def batch_update_steps_tree(
                 # 7. 判断是否有失败项
                 total_failed: int = len(failed_cases) + len(step_result["failed_steps"])
                 if total_failed > 0:
-                    message = f"批量处理完成，但存在部分失败：用例失败 {len(failed_cases)} 个，步骤失败 {len(step_result['failed_steps'])} 个"
+                    message = f"批量处理完成, 但存在部分失败(用例失败数: {len(failed_cases)}, 步骤失败数: {len(step_result['failed_steps'])})"
                     logger.warning(message)
                     return SuccessResponse(data=result_data, message=message)
                 else:
                     action_type = "更新" if is_update else "新增"
-                    message = f"{action_type}成功：用例{'更新' if is_update else '新增'} {created_count + updated_count} 个，步骤新增 {step_result['created_count']} 个/更新 {step_result['updated_count']} 个"
+                    deleted_info = f"/删除 {step_result.get('deleted_count', 0)} 个" if step_result.get('deleted_count',
+                                                                                                        0) > 0 else ""
+                    message = f"{action_type}成功：用例{'更新' if is_update else '新增'} {created_count + updated_count} 个，步骤新增 {step_result['created_count']} 个/更新 {step_result['updated_count']} 个{deleted_info}"
                     logger.info(message)
                     return SuccessResponse(
                         data=result_data,
