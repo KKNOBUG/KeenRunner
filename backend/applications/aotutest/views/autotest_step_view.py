@@ -978,7 +978,8 @@ async def execute_step_tree(
                     results, logs, report_code, statistics, _ = await engine.execute_case(
                         case=case_info,
                         steps=root_steps,
-                        initial_variables=merged_initial_variables
+                        initial_variables=merged_initial_variables,
+                        report_type=ReportType.EXEC1
                     )
 
                     # 返回运行模式的简化结果
