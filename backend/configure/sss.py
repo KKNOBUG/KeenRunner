@@ -21,17 +21,11 @@ from backend.applications.aotutest.models.autotest_model import ReportType
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate, AutoTestApiStepUpdate,
     AutoTestStepSelect, AutoTestStepTreeUpdateList, AutoTestStepTreeUpdateItem,
-    AutoTestHttpDebugRequest, AutoTestStepTreeExecute, AutoTestBatchExecuteCases
+    AutoTestHttpDebugRequest, AutoTestStepTreeExecute
 )
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_step_crud import (
-    AUTOTEST_API_STEP_CRUD,
-    normalize_step,
-    collect_defined_variables,
-    execute_single_case,
-    batch_execute_cases
-)
+from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException, \
     DataBaseStorageException, ParameterException, TypeRejectException
@@ -432,8 +426,8 @@ async def batch_update_steps_tree(
 
                 # 6. 构建返回结果
                 result_data: Dict[str, Any] = {
-                    "cases": case_result,
-                    "steps": step_result
+                    "case_update": case_result,
+                    "step_update": step_result
                 }
 
                 # 7. 返回
@@ -444,8 +438,7 @@ async def batch_update_steps_tree(
                 )
                 logger.warning(message)
                 return SuccessResponse(data=result_data, message=message)
-        except (TypeRejectException, ParameterException, DataBaseStorageException, DataAlreadyExistsException,
-                NotFoundException) as e:
+        except (TypeRejectException, ParameterException, DataBaseStorageException, DataAlreadyExistsException, NotFoundException) as e:
             return FailureResponse(message=e.message)
         except Exception as transaction_error:
             # 事务会自动回滚
@@ -885,6 +878,47 @@ async def execute_step_tree(
         if is_run_mode and is_debug_mode:
             return BadReqResponse(message="运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
 
+        # 转换数据库格式的数据：处理conditions从数组转为JSON字符串
+        def normalize_step(step: Dict[str, Any]) -> Dict[str, Any]:
+            """规范化步骤数据格式"""
+            step = step.copy()
+
+            # 处理conditions：如果是数组，取第一个并转为JSON字符串
+            conditions = step.get("conditions")
+            if isinstance(conditions, list) and len(conditions) > 0:
+                condition_obj = conditions[0]
+                step["conditions"] = json.dumps(condition_obj, ensure_ascii=False)
+            elif conditions is None:
+                step["conditions"] = None
+
+            # extract_variables和assert_validators保持数组格式（执行引擎已支持）
+            # 移除不需要的字段
+            step.pop("case", None)
+            step.pop("quote_case", None)
+
+            # 递归处理children和quote_steps
+            if "children" in step and isinstance(step["children"], list):
+                step["children"] = [normalize_step(child) for child in step["children"]]
+            if "quote_steps" in step and isinstance(step["quote_steps"], list):
+                step["quote_steps"] = [normalize_step(quote_step) for quote_step in step["quote_steps"]]
+
+            return step
+
+        # 收集所有步骤的defined_variables作为初始变量
+        def collect_defined_variables(steps_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+            """递归收集所有步骤的defined_variables"""
+            variables = {}
+            for step in steps_list:
+                defined_vars = step.get("defined_variables")
+                if isinstance(defined_vars, dict):
+                    variables.update(defined_vars)
+                # 递归处理children和quote_steps
+                children = step.get("children", [])
+                quote_steps = step.get("quote_steps", [])
+                variables.update(collect_defined_variables(children))
+                variables.update(collect_defined_variables(quote_steps))
+            return variables
+
         # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
             return {
@@ -905,14 +939,60 @@ async def execute_step_tree(
 
         # ========== 运行模式 ==========
         if is_run_mode:
+            # 1. 查询用例信息
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id)
+            if not case_instance:
+                return NotFoundResponse(message=f"用例(id={case_id})信息不存在")
+            case_dict = await case_instance.to_dict()
+            case_info = {
+                "id": case_dict.get("id"),
+                "case_code": case_dict.get("case_code"),
+                "case_name": case_dict.get("case_name"),
+            }
+
+            # 2. 查询步骤树数据
+            tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
+            if not tree_data:
+                return BadReqResponse(message="用例没有步骤数据")
+            if isinstance(tree_data, list) and tree_data and isinstance(tree_data[-1], dict) and "total_steps" in \
+                    tree_data[-1]:
+                tree_data.pop(-1)
+
+            # 3. 规范化步骤数据
+            tree_data = [normalize_step(step) for step in tree_data]
+
+            # 4. 收集defined_variables
+            all_defined_variables = collect_defined_variables(tree_data)
+            merged_initial_variables = dict(initial_variables)
+            merged_initial_variables.update(all_defined_variables)
+
+            # 5. 获取根步骤
+            root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
+            if not root_steps:
+                return BadReqResponse(message="没有可执行的根步骤")
+
+            # 6. 使用事务执行并保存到数据库
             try:
-                # 使用公共函数执行单个用例
-                result_data = await execute_single_case(case_id, initial_variables)
-                return SuccessResponse(data=result_data, message="执行步骤成功并已保存到数据库")
-            except NotFoundException as e:
-                return NotFoundResponse(message=str(e))
-            except ParameterException as e:
-                return BadReqResponse(message=str(e))
+                async with in_transaction():
+                    engine = AutoTestStepExecutionEngine(save_report=True)
+                    results, logs, report_code, statistics, _ = await engine.execute_case(
+                        case=case_info,
+                        steps=root_steps,
+                        initial_variables=merged_initial_variables
+                    )
+
+                    # 返回运行模式的简化结果
+                    result_data = {
+                        "success": statistics.get("failed_steps", 0) == 0,
+                        "total_steps": statistics.get("total_steps", 0),
+                        "success_steps": statistics.get("success_steps", 0),
+                        "failed_steps": statistics.get("failed_steps", 0),
+                        "pass_ratio": statistics.get("pass_ratio", 0.0),
+                        "report_code": report_code,
+                        "saved_to_database": True
+                    }
+
+                    return SuccessResponse(data=result_data, message="执行步骤成功并已保存到数据库")
             except Exception as transaction_error:
                 logger.error(f"执行步骤过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
                 return FailureResponse(message=f"执行失败，事务已回滚: {str(transaction_error)}")
@@ -996,45 +1076,3 @@ async def execute_step_tree(
     except Exception as e:
         logger.error(f"执行步骤失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"执行失败，异常描述: {str(e)}")
-
-
-@autotest_step.post("/batch_execute", summary="批量执行测试用例", description="根据用例ID列表批量执行多个测试用例")
-async def batch_execute_cases_endpoint(
-        request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数")
-):
-    """
-    批量执行测试用例：
-    - 根据cases_ids列表(多个case_id)执行，逐一执行列表内的所有case_id
-    - 针对每一个case_id开启独立的事务，确保每个用例的执行结果独立保存
-    - 如果某个用例执行失败，不会影响其他用例的执行
-    - 返回每个用例的执行结果汇总
-
-    返回数据格式：
-    - total_cases: 总用例数
-    - success_cases: 成功用例数
-    - failed_cases: 失败用例数
-    - results: 每个用例的执行结果列表
-    - summary: 汇总信息（包含成功率、是否全部成功等）
-    """
-    try:
-        case_ids = request.case_ids
-        initial_variables = request.initial_variables or {}
-
-        if not case_ids or len(case_ids) == 0:
-            return BadReqResponse(message="case_ids列表不能为空")
-
-        # 调用批量执行函数
-        result_data = await batch_execute_cases(case_ids, initial_variables)
-
-        message = (
-            f"批量执行完成: "
-            f"总用例数: {result_data['total_cases']}, "
-            f"成功: {result_data['success_cases']}, "
-            f"失败: {result_data['failed_cases']}"
-        )
-
-        return SuccessResponse(data=result_data, message=message)
-
-    except Exception as e:
-        logger.error(f"批量执行用例失败，异常描述: {str(e)}", exc_info=True)
-        return FailureResponse(message=f"批量执行失败，异常描述: {str(e)}")

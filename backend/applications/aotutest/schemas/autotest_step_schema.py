@@ -206,6 +206,12 @@ class AutoTestStepTreeExecute(BaseModel):
         return self
 
 
+class AutoTestBatchExecuteCases(BaseModel):
+    """批量执行测试用例请求模型"""
+    case_ids: List[int] = Field(..., description="用例ID列表", min_length=1)
+    initial_variables: Optional[Dict[str, Any]] = Field(None, description="初始变量（会应用到所有用例）")
+
+
 # 允许递归引用
 AutoTestApiStepBase.model_rebuild()
 AutoTestStepTreeUpdateItem.model_rebuild()
