@@ -33,34 +33,58 @@ class StepType(str, Enum):
     LOOP = "循环结构"
 
 
-def generate_global_code() -> str:
+def unique_identify() -> str:
     timestamp = int(datetime.datetime.now().timestamp())
     uuid4_str = uuid.uuid4().hex.upper()
     return f"{timestamp}-{uuid4_str}"
 
 
 class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
-    project_env = fields.CharField(max_length=255, index=True, description="应用环境")
-    project_name = fields.CharField(max_length=255, index=True, description="应用名称")
-    project_host = fields.CharField(max_length=255, index=True, description="应用主机")
-    project_port = fields.CharField(max_length=255, index=True, description="应用端口")
-    project_code = fields.CharField(max_length=64, default=generate_global_code, unique=True, description="应用标识代码")
-    state = fields.SmallIntField(default=-1, index=True, description="应用状态(-1:启用, 1:禁用)")
+    project_name = fields.CharField(max_length=255, unique=True, description="应用名称")
+    project_desc = fields.CharField(max_length=2048, null=True, description="应用描述")
+    project_state = fields.CharField(max_length=64, null=True, description="应用状态")
+    project_phase = fields.CharField(max_length=64, null=True, description="应用阶段")
+    project_dev_owners = fields.JSONField(default=list, null=True, description="应用开发负责人")
+    project_developers = fields.JSONField(default=list, null=True, description="应用开发人员列表")
+    project_test_owners = fields.JSONField(default=list, null=True, description="应用测试负责人")
+    project_testers = fields.JSONField(default=list, null=True, description="应用测试人员列表")
+    project_current_month_env = fields.CharField(max_length=64, null=True, description="应用当前月版环境")
+    project_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="应用标识代码")
+    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:删除, 1:未删除)")
 
     class Meta:
         table = "krun_autotest_api_project"
-        table_description = "自动化测试-用例信息表"
-        # 同一项目下，用例名称唯一，避免重复
-        unique_together = (
-            ("project_env", "project_name"),
-        )
+        table_description = "自动化测试-应用信息表"
         indexes = (
-            ("project_env", "project_name"),
+            ("project_name", "project_state"),
         )
         ordering = ["-updated_time"]
 
     def __str__(self):
         return self.project_name
+
+
+class AutoTestApiEnvironmentInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
+    project_id = fields.BigIntField(index=True, description="环境所属项目")
+    env_name = fields.CharField(max_length=64, index=True, description="环境名称")
+    env_host = fields.CharField(max_length=64, description="环境主机(http://127.0.0.1:8000 | https://127.0.0.1:8000)")
+    env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
+    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+
+    class Meta:
+        table = "krun_autotest_api_env"
+        table_description = "自动化测试-环境信息表"
+        # 同一项目下，用例名称唯一，避免重复
+        unique_together = (
+            ("project_id", "env_name"),
+        )
+        indexes = (
+            ("project_id", "env_name"),
+        )
+        ordering = ["-updated_time"]
+
+    def __str__(self):
+        return self.env_name
 
 
 class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
@@ -70,11 +94,11 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_name = fields.CharField(max_length=255, index=True, description="用例名称")
     case_desc = fields.CharField(max_length=2048, null=True, description="用例描述")
     case_tags = fields.CharField(max_length=255, null=True, description="用例标签")
-    case_code = fields.CharField(max_length=64, default=generate_global_code, unique=True, description="用例标识代码")
+    case_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="用例标识代码")
     case_steps = fields.IntField(default=0, ge=0, description="用例步骤数量(含所有子级步骤)")
     case_version = fields.IntField(default=1, ge=1, description="用例更新版本(修改次数)")
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用项目")
-    state = fields.SmallIntField(default=-1, index=True, description="用例状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
     class Meta:
         table = "krun_autotest_api_case"
@@ -103,7 +127,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     step_no = fields.IntField(default=1, ge=1, description="步骤明细序号")
     step_name = fields.CharField(max_length=255, description="步骤明细名称")
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤明细描述")
-    step_code = fields.CharField(max_length=64, default=generate_global_code, unique=True, description="步骤明细标识代码")
+    step_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="步骤明细标识代码")
     step_type = fields.CharEnumField(StepType, description="步骤明细类型")
     case_type = fields.CharEnumField(CaseType, description="用例所属类型")
 
@@ -125,6 +149,8 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_form_data = fields.JSONField(null=True, description="请求表单数据(Json格式)")
     request_form_file = fields.JSONField(null=True, description="请求文件路径(Json格式)")
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据(Json格式)")
+    request_project = fields.BigIntField(max_length=255, null=True, description="请求应用名称")
+    request_environment = fields.CharField(max_length=64, null=True, description="请求环境名称")
 
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")
@@ -142,7 +168,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # 断言表达式模板：断言名称，断言对象、断言路径、结果值、断言方式、期望值、断言结果、错误信息
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
-    state = fields.SmallIntField(default=-1, index=True, description="步骤状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
     class Meta:
         table = "krun_autotest_api_step"
@@ -181,10 +207,10 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     step_pass_count = fields.IntField(default=0, ge=0, description="用例步骤成功数量(含所有子级步骤)")
     step_pass_ratio = fields.FloatField(default=0.0, ge=0.0, description="用例步骤成功率(含所有子级步骤)")
 
-    report_code = fields.CharField(max_length=64, default=generate_global_code, unique=True, description="报告标识代码")
+    report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     report_type = fields.CharEnumField(ReportType, description="报告标识类型")
     task_code = fields.CharField(max_length=64, null=True, description="报告标识类型")
-    state = fields.SmallIntField(default=-1, index=True, description="报告状态(-1:未删除, 1:删除)")
+    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:未删除, 1:删除)")
 
     class Meta:
         table = "krun_autotest_api_report"
@@ -237,7 +263,7 @@ class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
 
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
-    state = fields.SmallIntField(default=-1, index=True, description="报告明细状态(-1:未删除, 1:删除)")
+    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:未删除, 1:删除)")
 
     class Meta:
         table = "krun_autotest_api_details"

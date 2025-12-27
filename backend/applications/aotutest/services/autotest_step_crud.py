@@ -16,7 +16,7 @@ from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.models.autotest_model import (
-    AutoTestApiStepInfo, AutoTestApiCaseInfo, StepType, ReportType
+    AutoTestApiStepInfo, AutoTestApiCaseInfo, StepType, ReportType, AutoTestApiEnvironmentInfo
 )
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate, AutoTestApiStepUpdate, AutoTestStepTreeUpdateItem
@@ -439,7 +439,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         created_count: int = 0
         updated_count: int = 0
         deleted_count: int = 0  # 删除的步骤数量
-        passed_steps: List[Dict[str, Any]] = []  # 存储处理成功的步骤信息
+        success_detail: List[Dict[str, Any]] = []  # 存储处理成功的步骤信息
 
         # 收集所有传入步骤的case_id，用于后续删除多余步骤
         case_ids: Set[int] = set()
@@ -536,7 +536,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 created_count += 1
                 step_dict["created"] = True
                 step_dict["step_id"] = new_step_instance.id
-                passed_steps.append(step_dict)
+                success_detail.append(step_dict)
 
                 # 递归处理子步骤
                 children: List[AutoTestStepTreeUpdateItem] = step_data.children
@@ -549,7 +549,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     created_count += child_result["created_count"]
                     updated_count += child_result["updated_count"]
                     deleted_count += child_result.get("deleted_count", 0)
-                    passed_steps.extend(child_result.get("passed_steps", []))
+                    success_detail.extend(child_result.get("success_detail", []))
 
             else:
                 # 步骤存在，执行更新
@@ -656,7 +656,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 updated_count += 1
                 step_dict["created"] = False
                 step_dict["step_id"] = step_id
-                passed_steps.append(step_dict)
+                success_detail.append(step_dict)
 
                 # 递归处理子步骤
                 children: List[AutoTestStepTreeUpdateItem] = step_data.children
@@ -669,7 +669,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     created_count += child_result["created_count"]
                     updated_count += child_result["updated_count"]
                     deleted_count += child_result.get("deleted_count", 0)
-                    passed_steps.extend(child_result.get("passed_steps", []))
+                    success_detail.extend(child_result.get("success_detail", []))
 
         # 删除多余的步骤：处理完所有传入的步骤后，删除那些不在processed_step中的步骤
         # 只处理根步骤（parent_step_id为None）或指定父步骤的子步骤
@@ -692,7 +692,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             "created_count": created_count,
             "updated_count": updated_count,
             "deleted_count": deleted_count,
-            "passed_steps": passed_steps
+            "success_detail": success_detail
         }
 
 
@@ -755,7 +755,8 @@ def collect_defined_variables(steps_list: List[Dict[str, Any]]) -> Dict[str, Any
 
 async def execute_single_case(
         case_id: int,
-        initial_variables: Optional[Dict[str, Any]] = None
+        initial_variables: Optional[Dict[str, Any]] = None,
+        execute_environment: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     执行单个用例（运行模式）
@@ -771,6 +772,7 @@ async def execute_single_case(
     Args:
         case_id: 用例ID
         initial_variables: 初始变量（可选）
+        execute_environment: 批量执行用例时可指定统一环境
 
     Returns:
         执行结果字典，包含：
@@ -828,7 +830,8 @@ async def execute_single_case(
             case=case_info,
             steps=root_steps,
             initial_variables=merged_initial_variables,
-            report_type=ReportType.EXEC1
+            execute_environment=execute_environment,
+            report_type=ReportType.EXEC2    # 批量执行
         )
 
         # 返回运行模式的简化结果
@@ -850,7 +853,8 @@ async def execute_single_case(
 
 async def batch_execute_cases(
         case_ids: List[int],
-        initial_variables: Optional[Dict[str, Any]] = None
+        initial_variables: Optional[Dict[str, Any]] = None,
+        execute_environment: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     批量执行多个用例
@@ -861,6 +865,7 @@ async def batch_execute_cases(
     Args:
         case_ids: 用例ID列表
         initial_variables: 初始变量（可选，会应用到所有用例）
+        execute_environment: 批量执行用例时可指定统一环境
 
     Returns:
         批量执行结果字典，包含：
@@ -881,7 +886,11 @@ async def batch_execute_cases(
     for case_id in case_ids:
         try:
             # 每个用例独立开启事务执行
-            result = await execute_single_case(case_id, initial_variables)
+            result = await execute_single_case(
+                case_id=case_id,
+                initial_variables=initial_variables,
+                execute_environment=execute_environment
+            )
             result["error"] = None
             results.append(result)
             if result.get("success", False):

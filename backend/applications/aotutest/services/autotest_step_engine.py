@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 
 import httpx
 
-from backend.applications.aotutest.models.autotest_model import StepType, ReportType
+from backend.applications.aotutest.models.autotest_model import StepType, ReportType, AutoTestApiEnvironmentInfo
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate, \
@@ -70,10 +70,12 @@ class StepExecutionContext:
             case_id: int,
             case_code: str,
             *,
+            env: Optional[str] = None,
             initial_variables: Optional[Dict[str, Any]] = None,
             http_client: Optional[HttpClientProtocol] = None,
             report_code: Optional[str] = None,
     ) -> None:
+        self.env = env
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
@@ -389,7 +391,7 @@ class BaseStepExecutor:
 
     @property
     def step_id(self) -> Optional[int]:
-        return self.step.get("id")
+        return self.step.get("step_id")
 
     @property
     def step_no(self) -> Optional[int]:
@@ -516,8 +518,8 @@ class BaseStepExecutor:
                 case_id=self.context.case_id,
                 case_code=self.context.case_code,
                 report_code=self.context.report_code,
-                step_id=self.step_id or 0,
-                step_no=self.step_no or 0,
+                step_id=self.step_id,
+                step_no=self.step_no,
                 step_name=self.step_name,
                 step_code=step_code,
                 step_type=self.step_type,
@@ -847,16 +849,27 @@ class DataBaseStepExecutor(BaseStepExecutor):
 class HttpStepExecutor(BaseStepExecutor):
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
+            env = self.context.env
+            step_type = self.step.get("step_type")
             request_url = self.step.get("request_url")
+            request_project: str = self.step.get("request_project")
+            if env and step_type == StepType.HTTP and not request_url.lower().startswith("http"):
+                env_instance = await AutoTestApiEnvironmentInfo.filter(
+                    project_id=request_project, env_name=env
+                ).first()
+                if not env_instance:
+                    raise
+                execute_environment_host: str = env_instance.env_host.rstrip("/")
+                request_url = f"{execute_environment_host}/{request_url.lstrip('/')}"
+
             request_method = (self.step.get("request_method") or "GET").upper()
             request_port = self.step.get("request_port")
-
+            if request_url and not request_url.startswith("http") and not self.step["request_port"]:
+                raise
             if not request_url:
                 raise StepExecutionError("网络请求步骤缺少 request_url")
-
             if request_port:
                 raise StepExecutionError("暂未实现 TCP 请求执行逻辑")
-
             try:
                 headers = self.context.resolve_placeholders(self.step.get("request_header") or {})
                 params = self.context.resolve_placeholders(self.step.get("request_params") or {})
@@ -1214,6 +1227,7 @@ class AutoTestStepExecutionEngine:
             *,
             initial_variables: Optional[Dict[str, Any]] = None,
             report_type: Optional[ReportType] = None,
+            execute_environment: Optional[str] = None
     ) -> Tuple[List[StepExecutionResult], Dict[int, List[str]], Optional[str], Dict[str, Any], Dict[str, Any]]:
         """
         执行测试用例并返回：(结果列表, 日志, 报告码, 统计信息, 会话变量)
@@ -1223,6 +1237,7 @@ class AutoTestStepExecutionEngine:
             steps: 步骤列表
             initial_variables: 初始变量
             report_type: 报告类型，默认为 EXEC1（执行方式1）
+            execute_environment: 批量执行用例时可指定统一环境
         """
         case_id = case.get("id")
         case_code = case.get("case_code")
@@ -1260,6 +1275,7 @@ class AutoTestStepExecutionEngine:
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,
+                env=execute_environment,
                 initial_variables=initial_variables,
                 http_client=self._http_client,
                 report_code=report_code,
@@ -1381,104 +1397,3 @@ class AutoTestStepExecutionEngine:
         else:
             # 如果根步骤没有自己的日志，直接使用子步骤的汇总日志
             context.logs[root_step_no] = aggregated_logs
-
-
-class AutoTestStepExecution:
-    def __init__(
-            self, *,
-            test_steps: Union[Dict[str, Any], List[Dict[str, Any]]],
-            initial_variables: Dict[str, Any] = None,
-    ) -> None:
-        if not isinstance(test_steps, (dict, list)):
-            raise TypeError("测试步骤类型错误")
-        self.initial_variables = initial_variables if initial_variables else {}
-        self.test_steps = test_steps if isinstance(test_steps, list) else test_steps["data"]
-
-    async def get_case_info(self) -> Dict[str, Any]:
-        # 提取用例信息（从第一个步骤中获取）
-        case_info: dict = self.test_steps[0].get("case", {})
-        if not case_info:
-            raise ValueError("从第一个步骤中获取用例信息失败")
-        return case_info
-
-    async def get_parent_step(self) -> List[Dict[str, Any]]:
-        # 提取根步骤（parent_step_id为None的步骤）
-        root_steps = [step for step in self.test_steps if step.get("parent_step_id") is None]
-        return root_steps
-
-    async def execute(self):
-        # 创建执行引擎
-        engine = AutoTestStepExecutionEngine()
-        # 执行测试
-        try:
-            case_info = await self.get_case_info()
-            print(f"\n用例信息:\n", json.dumps(case_info, ensure_ascii=False, indent=2))
-
-            root_steps = await self.get_parent_step()
-            print(f"\n根步骤数量: {len(root_steps)}")
-
-            results, logs, _, _, _ = await engine.execute_case(
-                case=case_info,
-                steps=root_steps,
-                initial_variables=self.initial_variables  # 可以在这里设置初始变量
-            )
-
-            # 打印执行日志
-            print("\n执行日志:")
-            for log_code, log_message in logs.items():
-                print(f"{log_code}: \n" + '\n'.join(log_message))
-
-            # 打印执行结果
-            print("\n步骤执行结果:")
-            for result in results:
-                self._print_result(result)
-
-            # 统计信息
-            total_steps = sum(1 for _ in self._count_all_results(results))
-            success_steps = sum(1 for r in self._count_all_results(results) if r.success)
-            failed_steps = total_steps - success_steps
-
-            execute_detail: Dict[str, int] = {
-                "total_steps": total_steps,
-                "success_steps": success_steps,
-                "failed_steps": failed_steps,
-                "rate": f"{success_steps / total_steps * 100:.2f}%" if total_steps > 0 else "N/A"
-
-            }
-            print(f"\n执行统计:\n", json.dumps(execute_detail, ensure_ascii=False))
-
-        except Exception as e:
-            print(f"\n执行异常: \n{type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-
-    @classmethod
-    def _print_result(cls, result: StepExecutionResult, indent: int = 0) -> None:
-        """递归打印执行结果"""
-        prefix = "  " * indent
-        status = "✓" if result.success else "✗"
-        print(f"{prefix}{status} [{result.step_no}] {result.step_name} ({result.step_type.value})")
-        if result.message:
-            print(f"{prefix}   消息: {result.message}")
-        if result.error:
-            print(f"{prefix}   错误: {result.error}")
-        if result.elapsed:
-            print(f"{prefix}   耗时: {result.elapsed:.3f}秒")
-        if result.extract_variables:
-            print(f"{prefix}   变量: {json.dumps(result.extract_variables, ensure_ascii=False)}")
-        if result.assert_validators:
-            print(f"{prefix}   断言: {json.dumps(result.assert_validators, ensure_ascii=False)}")
-        if result.response:
-            print(f"{prefix}   响应: {json.dumps(result.response, ensure_ascii=False)[:200]}...")
-
-        for child in result.children:
-            cls._print_result(child, indent + 2)
-
-    @classmethod
-    def _count_all_results(cls, results: List[StepExecutionResult]) -> List[StepExecutionResult]:
-        """递归收集所有结果"""
-        all_results = []
-        for result in results:
-            all_results.append(result)
-            all_results.extend(cls._count_all_results(result.children))
-        return all_results

@@ -420,9 +420,10 @@ async def batch_update_steps_tree(
 
                 # 5.2 批量更新/新增步骤信息（递归处理）
                 step_result: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.batch_update_or_create_steps(steps_data)
-                created_step_count: int = case_result['created_count']
-                updated_step_count: int = case_result['updated_count']
-                success_step_detail: List[Dict[str, Any]] = case_result['success_detail']
+                created_step_count: int = step_result['created_count']
+                updated_step_count: int = step_result['updated_count']
+                deleted_step_count: int = step_result['deleted_count']
+                success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
                 logger.info(
                     f"步骤处理完成："
                     f"新增: {created_step_count}个, "
@@ -439,8 +440,11 @@ async def batch_update_steps_tree(
                 # 7. 返回
                 message = (
                     f"批量处理完成: "
-                    f"用例新增/更新数: {created_case_count + updated_case_count}, "
-                    f"步骤新增/更新数: {created_step_count + updated_step_count}"
+                    f"用例新增数: {created_case_count}, "
+                    f"用例更新数: {updated_case_count}, "
+                    f"步骤新增数: {created_step_count}, "
+                    f"步骤更新数: {updated_step_count}, "
+                    f"步骤删除数: {deleted_step_count}"
                 )
                 logger.warning(message)
                 return SuccessResponse(data=result_data, message=message)
@@ -1018,21 +1022,23 @@ async def batch_execute_cases_endpoint(
     """
     try:
         case_ids = request.case_ids
+        execute_environment = request.env
         initial_variables = request.initial_variables or {}
-
         if not case_ids or len(case_ids) == 0:
             return BadReqResponse(message="case_ids列表不能为空")
 
         # 调用批量执行函数
-        result_data = await batch_execute_cases(case_ids, initial_variables)
-
+        result_data = await batch_execute_cases(
+            case_ids=case_ids,
+            initial_variables=initial_variables,
+            execute_environment=execute_environment
+        )
         message = (
             f"批量执行完成: "
             f"总用例数: {result_data['total_cases']}, "
             f"成功: {result_data['success_cases']}, "
             f"失败: {result_data['failed_cases']}"
         )
-
         return SuccessResponse(data=result_data, message=message)
 
     except Exception as e:

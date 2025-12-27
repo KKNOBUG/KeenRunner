@@ -208,7 +208,8 @@ class AutoTestStepTreeExecute(BaseModel):
 
 class AutoTestBatchExecuteCases(BaseModel):
     """批量执行测试用例请求模型"""
-    case_ids: List[int] = Field(..., description="用例ID列表", min_length=1)
+    env: Optional[str] = Field(None, description="执行环境名称")
+    case_ids: List[int] = Field(..., min_length=1, description="用例ID列表")
     initial_variables: Optional[Dict[str, Any]] = Field(None, description="初始变量（会应用到所有用例）")
 
 
