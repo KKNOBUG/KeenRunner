@@ -911,7 +911,11 @@ async def execute_step_tree(
         if is_run_mode:
             try:
                 # 使用公共函数执行单个用例
-                result_data = await execute_single_case(case_id, initial_variables)
+                result_data = await execute_single_case(
+                    case_id=case_id,
+                    initial_variables=initial_variables,
+                    report_type=ReportType.EXEC1
+                )
                 return SuccessResponse(data=result_data, message="执行步骤成功并已保存到数据库")
             except NotFoundException as e:
                 return NotFoundResponse(message=str(e))
@@ -1031,7 +1035,8 @@ async def batch_execute_cases_endpoint(
         result_data = await batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables,
-            execute_environment=execute_environment
+            execute_environment=execute_environment,
+            report_type=ReportType.EXEC2
         )
         message = (
             f"批量执行完成: "

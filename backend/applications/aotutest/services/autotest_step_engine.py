@@ -1271,6 +1271,7 @@ class AutoTestStepExecutionEngine:
                 self._report_code = report_code
             except Exception as e:
                 print(f"创建报告失败: {e}")
+                raise
 
         async with StepExecutionContext(
                 case_id=case_id,
@@ -1333,6 +1334,7 @@ class AutoTestStepExecutionEngine:
                     await AUTOTEST_API_REPORT_CRUD.update_report(report_update)
                 except Exception as e:
                     print(f"更新报告失败: {e}")
+                    raise
 
             statistics = {
                 "total_steps": total_steps,

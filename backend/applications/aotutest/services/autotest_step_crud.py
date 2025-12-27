@@ -755,6 +755,7 @@ def collect_defined_variables(steps_list: List[Dict[str, Any]]) -> Dict[str, Any
 
 async def execute_single_case(
         case_id: int,
+        report_type: ReportType,
         initial_variables: Optional[Dict[str, Any]] = None,
         execute_environment: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -771,6 +772,7 @@ async def execute_single_case(
 
     Args:
         case_id: 用例ID
+        report_type: 执行模式
         initial_variables: 初始变量（可选）
         execute_environment: 批量执行用例时可指定统一环境
 
@@ -831,7 +833,7 @@ async def execute_single_case(
             steps=root_steps,
             initial_variables=merged_initial_variables,
             execute_environment=execute_environment,
-            report_type=ReportType.EXEC2    # 批量执行
+            report_type=report_type
         )
 
         # 返回运行模式的简化结果
@@ -853,6 +855,7 @@ async def execute_single_case(
 
 async def batch_execute_cases(
         case_ids: List[int],
+        report_type: ReportType,
         initial_variables: Optional[Dict[str, Any]] = None,
         execute_environment: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -864,6 +867,7 @@ async def batch_execute_cases(
 
     Args:
         case_ids: 用例ID列表
+        report_type: 执行模式
         initial_variables: 初始变量（可选，会应用到所有用例）
         execute_environment: 批量执行用例时可指定统一环境
 
@@ -889,7 +893,8 @@ async def batch_execute_cases(
             result = await execute_single_case(
                 case_id=case_id,
                 initial_variables=initial_variables,
-                execute_environment=execute_environment
+                execute_environment=execute_environment,
+                report_type=report_type
             )
             result["error"] = None
             results.append(result)
