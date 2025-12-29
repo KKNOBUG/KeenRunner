@@ -808,8 +808,8 @@ async def execute_single_case(
     tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
     if not tree_data:
         raise ParameterException(message="用例没有步骤数据")
-    if isinstance(tree_data, list) and tree_data and isinstance(tree_data[-1], dict) and "total_steps" in \
-            tree_data[-1]:
+    if isinstance(tree_data, list) and tree_data and isinstance(
+            tree_data[-1], dict) and "total_steps" in tree_data[-1]:
         tree_data.pop(-1)
 
     # 3. 规范化步骤数据
@@ -882,9 +882,9 @@ async def batch_execute_cases(
     if initial_variables is None:
         initial_variables = {}
 
-    total_cases = len(case_ids)
-    success_cases = 0
-    failed_cases = 0
+    total_cases: int = len(case_ids)
+    success_cases: int = 0
+    failed_cases: int = 0
     results = []
 
     for case_id in case_ids:

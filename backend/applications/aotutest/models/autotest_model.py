@@ -20,6 +20,7 @@ class CaseType(str, Enum):
 class ReportType(str, Enum):
     EXEC1 = "单笔执行"
     EXEC2 = "批量执行"
+    EXEC3 = "定时执行"
 
 
 class StepType(str, Enum):
@@ -67,7 +68,7 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 class AutoTestApiEnvironmentInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
     project_id = fields.BigIntField(index=True, description="环境所属项目")
     env_name = fields.CharField(max_length=64, index=True, description="环境名称")
-    env_host = fields.CharField(max_length=64, description="环境主机(http://127.0.0.1:8000 | https://127.0.0.1:8000)")
+    env_host = fields.CharField(max_length=255, description="环境主机(http://127.0.0.1:8000 | https://127.0.0.1:8000)")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
 
