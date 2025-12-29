@@ -34,6 +34,23 @@ class StepType(str, Enum):
     LOOP = "循环结构"
 
 
+class LoopMode(str, Enum):
+    # 循环模式：次数循环(loop_mode + loop_maximums + loop_interval)
+    COUNT = "次数循环"
+    # 循环模式：对象循环(loop_mode + loop_iterable + loop_iter_idx + loop_iter_val + loop_interval)
+    ITERABLE = "对象循环"
+    # 循环模式：字典循环(loop_mode + loop_iterable + loop_iter_idx + loop_iter_key + loop_iter_val + loop_interval)
+    DICT = "字典循环"
+    # 循环模式：条件循环(loop_mode + conditions + loop_interval + loop_timeout)
+    CONDITION = "条件循环"
+
+
+class LoopErrorStrategy(str, Enum):
+    CONTINUE = "继续下一次循环"
+    BREAK = "中断循环"
+    STOP = "停止整个用例执行"
+
+
 def unique_identify() -> str:
     timestamp = int(datetime.datetime.now().timestamp())
     uuid4_str = uuid.uuid4().hex.upper()
@@ -130,7 +147,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤明细描述")
     step_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="步骤明细标识代码")
     step_type = fields.CharEnumField(StepType, description="步骤明细类型")
-    case_type = fields.CharEnumField(CaseType, description="用例所属类型")
+    case_type = fields.CharEnumField(CaseType, default=CaseType.PRIVATE_SCRIPT, description="用例所属类型")
 
     # 用例信息ID（普通字段，不设外键，业务层验证）
     case_id = fields.BigIntField(null=True, index=True, description="步骤明细所属用例")
@@ -156,9 +173,16 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")
     wait = fields.FloatField(ge=0, null=True, description="等待控制(正浮点数, 单位:秒)")
-    max_cycles = fields.IntField(ge=1, null=True, description="最大循环次数(正整数)")
-    max_interval = fields.FloatField(ge=0, null=True, description="每次循环间隔时间(正浮点数)")
-    conditions = fields.JSONField(null=True, description="判断条件")
+    loop_mode = fields.CharEnumField(LoopMode, null=True, description="循环模式类型")
+    loop_maximums = fields.IntField(ge=1, null=True, description="最大循环次数(正整数)")
+    loop_interval = fields.FloatField(ge=0, null=True, description="每次循环间隔时间(正浮点数)")
+    loop_iterable = fields.CharField(max_length=512, null=True, description="循环对象来源(变量名或可迭代对象)")
+    loop_iter_idx = fields.CharField(max_length=64, null=True, description="用于存储enumerate得到的索引值")
+    loop_iter_key = fields.CharField(max_length=64, null=True, description="用于存储字典的键")
+    loop_iter_val = fields.CharField(max_length=64, null=True, description="用于存储字典的值或列表的项")
+    loop_on_error = fields.CharEnumField(LoopErrorStrategy, null=True, description="循环执行失败时的处理策略")
+    loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
+    conditions = fields.JSONField(null=True, description="判断条件(循环结构或条件分支)")
 
     # 变量、断言和逻辑处理
     # 自定义的变量和调用函数的变量

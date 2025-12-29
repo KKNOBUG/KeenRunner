@@ -18,7 +18,13 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 import httpx
 import requests
 
-from backend.applications.aotutest.models.autotest_model import StepType, ReportType, AutoTestApiEnvironmentInfo
+from backend.applications.aotutest.models.autotest_model import (
+    StepType,
+    ReportType,
+    AutoTestApiEnvironmentInfo,
+    LoopMode,
+    LoopErrorStrategy,
+)
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
@@ -679,81 +685,439 @@ class BaseStepExecutor:
 class LoopStepExecutor(BaseStepExecutor):
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
-            iteration = 0
-            max_cycles = self.step.get("max_cycles")
-            condition = self.step.get("conditions")
-            should_continue = True
-            guard_limit = 100
+            # 获取循环模式，必须明确指定
+            loop_mode_str = self.step.get("loop_mode")
+            if not loop_mode_str:
+                raise StepExecutionError("【循环结构】循环模式未指定, 请明确指定循环模式类型")
 
-            async def run_children_once() -> List[StepExecutionResult]:
-                try:
-                    child_results = await self._execute_children()
-                    for child in child_results:
-                        result.append_child(child)
-                        if not child.success:
-                            result.success = False
-                    return child_results
-                except Exception as e:
-                    result.success = False
-                    error_message: str = f"【循环结构】循环执行子步骤失败: {e}"
-                    result.error = error_message
-                    self.context.log(error_message, step_no=self.step_no)
-                    return []
+            try:
+                loop_mode = LoopMode(loop_mode_str)
+            except (ValueError, TypeError) as e:
+                raise StepExecutionError(
+                    f"【循环结构】循环模式{loop_mode_str}无效(仅允许选择: 次数循环、对象循环、字典循环、条件循环)"
+                ) from e
 
-            self.context.log(f"【循环结构】 ---> 循环开始", step_no=self.step_no)
-            while should_continue:
-                iteration += 1
-                # 记录循环次数（作用于当前循环和子步骤）
-                if self.step_code:
-                    self.context.step_cycle_index[self.step_code] = iteration
+            # 获取错误处理策略，必须明确指定
+            on_error_str = self.step.get("loop_on_error")
+            if not on_error_str:
+                raise StepExecutionError("【循环结构】错误处理策略未指定, 请明确指定错误处理策略")
 
-                self.context.log(f"【循环结构】次数循环: 第{iteration}次执行", step_no=self.step_no)
-                # 为子步骤记录当前循环次数（每次循环前重置子树的计数起点）
-                for child in self.children:
-                    child_code = child.get("step_code") or child.get("id") or ""
-                    if child_code:
-                        self.context.step_cycle_index[child_code] = iteration
+            try:
+                on_error = LoopErrorStrategy(on_error_str)
+            except (ValueError, TypeError) as e:
+                raise StepExecutionError(
+                    f"【循环结构】错误处理策略{on_error_str}无效(仅允许选择: 继续下一次循环、中断循环、停止整个用例执行)"
+                ) from e
 
-                try:
-                    await run_children_once()
-                except Exception as e:
-                    result.success = False
-                    error_message: str = f"【循环结构】次数循环: 第{iteration}次执行失败, 错误描述: {e}"
-                    result.error = error_message
-                    self.context.log(error_message, step_no=self.step_no)
-                    # 可以选择继续或中断循环
-                    break
+            # 根据循环模式执行不同的逻辑
+            if loop_mode == LoopMode.COUNT:
+                await self._execute_count_loop(result, on_error)
+            elif loop_mode == LoopMode.ITERABLE:
+                await self._execute_iterable_loop(result, on_error)
+            elif loop_mode == LoopMode.DICT:
+                await self._execute_dict_loop(result, on_error)
+            elif loop_mode == LoopMode.CONDITION:
+                await self._execute_condition_loop(result, on_error)
+            else:
+                raise StepExecutionError(f"【循环结构】不支持的循环模式: {loop_mode}")
 
-                if max_cycles and iteration >= max_cycles:
-                    self.context.log(f"【循环结构】 ---> 循环结束", step_no=self.step_no)
-                    break
-
-                if condition:
-                    try:
-                        if not self._evaluate_condition(condition):
-                            should_continue = False
-                    except Exception as e:
-                        result.success = False
-                        error_message: str = f"【循环结构】条件评估失败: {e}"
-                        result.error = error_message
-                        self.context.log(error_message, step_no=self.step_no)
-                        break
-
-                if iteration >= guard_limit:
-                    raise StepExecutionError(
-                        f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 次, "
-                        f"疑似无限循环, 为保护系统安全已自动终止循环"
-                    )
-
-                if not max_cycles and not condition:
-                    should_continue = False
-                    self.context.log(f"【循环结构】 ---> 结束", step_no=self.step_no)
         except StepExecutionError:
             raise
         except Exception as e:
             result.success = False
             result.error = f"【循环结构】执行异常: {e}"
             self.context.log(result.error, step_no=self.step_no)
+            raise StepExecutionError(result.error) from e
+
+    async def _execute_count_loop(self, result: StepExecutionResult, on_error: LoopErrorStrategy) -> None:
+        """次数循环模式"""
+        loop_maximums = self.step.get("loop_maximums")
+        if not loop_maximums:
+            raise StepExecutionError("【循环结构】次数循环模式缺少必要字段: loop_maximums")
+
+        loop_interval = self.step.get("loop_interval")
+        guard_limit = 1000  # 安全限制
+
+        self.context.log(f"【循环结构】次数循环开始: 最大循环次数={loop_maximums}", step_no=self.step_no)
+
+        for iteration in range(1, loop_maximums + 1):
+            # 记录循环次数
+            if self.step_code:
+                self.context.step_cycle_index[self.step_code] = iteration
+
+            self.context.log(f"【循环结构】次数循环: 第{iteration}/{loop_maximums}次执行", step_no=self.step_no)
+
+            # 为子步骤记录当前循环次数
+            for child in self.children:
+                child_code = child.get("step_code") or child.get("id") or ""
+                if child_code:
+                    self.context.step_cycle_index[child_code] = iteration
+
+            # 执行子步骤
+            try:
+                child_results = await self._execute_children()
+                for child in child_results:
+                    result.append_child(child)
+                    if not child.success:
+                        result.success = False
+                        if on_error == LoopErrorStrategy.STOP:
+                            raise StepExecutionError(f"【循环结构】子步骤执行失败, 停止整个用例执行")
+                        elif on_error == LoopErrorStrategy.BREAK:
+                            self.context.log(f"【循环结构】子步骤执行失败, 中断循环", step_no=self.step_no)
+                            return
+                        # CONTINUE 模式继续下一次循环
+            except StepExecutionError:
+                if on_error == LoopErrorStrategy.STOP:
+                    raise
+                elif on_error == LoopErrorStrategy.BREAK:
+                    self.context.log(f"【循环结构】子步骤执行异常, 中断循环", step_no=self.step_no)
+                    return
+                # CONTINUE 模式继续下一次循环
+            except Exception as e:
+                error_message = f"【循环结构】次数循环: 第{iteration}次执行失败, 错误描述: {e}"
+                self.context.log(error_message, step_no=self.step_no)
+                result.success = False
+                if on_error == LoopErrorStrategy.STOP:
+                    raise StepExecutionError(error_message) from e
+                elif on_error == LoopErrorStrategy.BREAK:
+                    return
+                # CONTINUE 模式继续下一次循环
+
+            # 循环间隔（最后一次不需要等待）
+            if iteration < loop_maximums and loop_interval and loop_interval > 0:
+                await self.context.sleep(loop_interval)
+
+            # 安全检查
+            if iteration >= guard_limit:
+                raise StepExecutionError(
+                    f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 次, "
+                    f"疑似无限循环, 为保护系统安全已自动终止循环"
+                )
+
+        self.context.log(f"【循环结构】次数循环结束: 共执行{loop_maximums}次", step_no=self.step_no)
+
+    async def _execute_iterable_loop(self, result: StepExecutionResult, on_error: LoopErrorStrategy) -> None:
+        """对象循环模式"""
+        loop_iterable = self.step.get("loop_iterable")
+        if not loop_iterable:
+            raise StepExecutionError("【循环结构】对象循环模式缺少必要字段: loop_iterable")
+
+        # 获取变量名（loop_iter_idx 是变量名，用于存储 enumerate 得到的索引值）
+        loop_iter_idx = self.step.get("loop_iter_idx")
+        # 处理可能是 IntField 的情况（模型定义问题，实际应该是变量名字符串）
+        if isinstance(loop_iter_idx, int):
+            # 如果是整数，可能是模型默认值1，使用默认变量名
+            index_var_name = "loop_index"
+        else:
+            # 如果是字符串，直接使用；如果为空，使用默认值
+            index_var_name = loop_iter_idx if loop_iter_idx else "loop_index"
+
+        # 循环索引从1开始（enumerate的start参数固定为1）
+        start_index = 1
+
+        value_var_name = self.step.get("loop_iter_val") or "loop_value"
+        loop_interval = self.step.get("loop_interval")
+
+        # 解析可迭代对象来源
+        try:
+            iterable_obj = self._parse_iterable_source(loop_iterable)
+
+            # 验证是否为可迭代对象（排除字符串和字节）
+            if isinstance(iterable_obj, (str, bytes)):
+                raise StepExecutionError(
+                    f"【循环结构】对象循环模式: loop_iterable 不能是字符串或字节类型, "
+                    f"请使用列表、元组等可迭代对象"
+                )
+
+            if not hasattr(iterable_obj, "__iter__"):
+                raise StepExecutionError(
+                    f"【循环结构】对象循环模式: loop_iterable 必须是可迭代对象(列表、元组等), "
+                    f"当前类型: {type(iterable_obj).__name__}"
+                )
+
+            # 转换为列表以便索引
+            iterable_list = list(iterable_obj)
+            total_items = len(iterable_list)
+
+            if total_items == 0:
+                self.context.log("【循环结构】对象循环: 可迭代对象为空, 跳过循环", step_no=self.step_no)
+                return
+
+            self.context.log(
+                f"【循环结构】对象循环开始: 可迭代对象长度={total_items}, "
+                f"索引变量={index_var_name}, 值变量={value_var_name}",
+                step_no=self.step_no
+            )
+
+            for idx, item in enumerate(iterable_list, start=start_index):
+                # 记录循环次数
+                if self.step_code:
+                    self.context.step_cycle_index[self.step_code] = idx
+
+                self.context.log(
+                    f"【循环结构】对象循环: 第{idx}/{total_items}次执行, 值={item}",
+                    step_no=self.step_no
+                )
+
+                # 将循环变量注入到上下文
+                self.context.update_variables(
+                    {f"{index_var_name}_{idx}": idx, f"{value_var_name}_{idx}": item},
+                    scope="session_variables"
+                )
+
+                # 为子步骤记录当前循环次数
+                for child in self.children:
+                    child_code = child.get("step_code") or child.get("id") or ""
+                    if child_code:
+                        self.context.step_cycle_index[child_code] = idx
+
+                # 执行子步骤
+                try:
+                    child_results = await self._execute_children()
+                    for child in child_results:
+                        result.append_child(child)
+                        if not child.success:
+                            result.success = False
+                            if on_error == LoopErrorStrategy.STOP:
+                                raise StepExecutionError(f"【循环结构】子步骤执行失败, 停止整个用例执行")
+                            elif on_error == LoopErrorStrategy.BREAK:
+                                self.context.log(f"【循环结构】子步骤执行失败, 中断循环", step_no=self.step_no)
+                                return
+                except StepExecutionError:
+                    if on_error == LoopErrorStrategy.STOP:
+                        raise
+                    elif on_error == LoopErrorStrategy.BREAK:
+                        self.context.log(f"【循环结构】子步骤执行异常, 中断循环", step_no=self.step_no)
+                        return
+                except Exception as e:
+                    error_message = f"【循环结构】对象循环: 第{idx}次执行失败, 错误描述: {e}"
+                    self.context.log(error_message, step_no=self.step_no)
+                    result.success = False
+                    if on_error == LoopErrorStrategy.STOP:
+                        raise StepExecutionError(error_message) from e
+                    elif on_error == LoopErrorStrategy.BREAK:
+                        return
+
+                # 循环间隔（最后一次不需要等待）
+                if idx < total_items and loop_interval and loop_interval > 0:
+                    await self.context.sleep(loop_interval)
+
+            self.context.log(f"【循环结构】对象循环结束: 共执行{total_items}次", step_no=self.step_no)
+
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            raise StepExecutionError(f"【循环结构】对象循环执行异常: {e}") from e
+
+    async def _execute_dict_loop(self, result: StepExecutionResult, on_error: LoopErrorStrategy) -> None:
+        """字典循环模式"""
+        loop_iterable = self.step.get("loop_iterable")
+        if not loop_iterable:
+            raise StepExecutionError("【循环结构】字典循环模式缺少必要字段: loop_iterable")
+
+        # 获取变量名（loop_iter_idx 是索引变量名，loop_iter_key 是键变量名，loop_iter_val 是值变量名）
+        loop_iter_idx = self.step.get("loop_iter_idx")
+        # 处理可能是 IntField 的情况（模型定义问题，实际应该是变量名字符串）
+        if isinstance(loop_iter_idx, int):
+            # 如果是整数，可能是模型默认值1，使用默认变量名
+            index_var_name = "loop_index"
+        else:
+            # 如果是字符串，直接使用；如果为空，使用默认值
+            index_var_name = loop_iter_idx if loop_iter_idx else "loop_index"
+
+        # 循环索引从1开始（enumerate的start参数固定为1）
+        start_index = 1
+
+        key_var_name = self.step.get("loop_iter_key") or "loop_key"
+        value_var_name = self.step.get("loop_iter_val") or "loop_value"
+        loop_interval = self.step.get("loop_interval")
+
+        # 解析字典对象来源
+        try:
+            dict_obj = self._parse_iterable_source(loop_iterable)
+
+            # 验证是否为字典
+            if not isinstance(dict_obj, dict):
+                raise StepExecutionError(
+                    f"【循环结构】字典循环模式: loop_iterable 必须是字典类型, "
+                    f"当前类型: {type(dict_obj).__name__}"
+                )
+
+            total_items = len(dict_obj)
+            if total_items == 0:
+                self.context.log("【循环结构】字典循环: 字典对象为空, 跳过循环", step_no=self.step_no)
+                return
+
+            self.context.log(
+                f"【循环结构】字典循环开始: 字典键数量={total_items}, "
+                f"索引变量={index_var_name}, 键变量={key_var_name}, 值变量={value_var_name}",
+                step_no=self.step_no
+            )
+
+            for idx, (key, value) in enumerate(dict_obj.items(), start=start_index):
+                # 记录循环次数
+                if self.step_code:
+                    self.context.step_cycle_index[self.step_code] = idx
+
+                self.context.log(
+                    f"【循环结构】字典循环: 第{idx}/{total_items}次执行, 键={key}, 值={value}",
+                    step_no=self.step_no
+                )
+
+                # 将循环变量注入到上下文
+                self.context.update_variables(
+                    {f"{index_var_name}_{idx}": idx, f"{value_var_name}_{idx}": value},
+                    scope="session_variables"
+                )
+
+                # 为子步骤记录当前循环次数
+                for child in self.children:
+                    child_code = child.get("step_code") or child.get("id") or ""
+                    if child_code:
+                        self.context.step_cycle_index[child_code] = idx
+
+                # 执行子步骤
+                try:
+                    child_results = await self._execute_children()
+                    for child in child_results:
+                        result.append_child(child)
+                        if not child.success:
+                            result.success = False
+                            if on_error == LoopErrorStrategy.STOP:
+                                raise StepExecutionError(f"【循环结构】子步骤执行失败, 停止整个用例执行")
+                            elif on_error == LoopErrorStrategy.BREAK:
+                                self.context.log(f"【循环结构】子步骤执行失败, 中断循环", step_no=self.step_no)
+                                return
+                except StepExecutionError:
+                    if on_error == LoopErrorStrategy.STOP:
+                        raise
+                    elif on_error == LoopErrorStrategy.BREAK:
+                        self.context.log(f"【循环结构】子步骤执行异常, 中断循环", step_no=self.step_no)
+                        return
+                except Exception as e:
+                    error_message = f"【循环结构】字典循环: 第{idx}次执行失败, 错误描述: {e}"
+                    self.context.log(error_message, step_no=self.step_no)
+                    result.success = False
+                    if on_error == LoopErrorStrategy.STOP:
+                        raise StepExecutionError(error_message) from e
+                    elif on_error == LoopErrorStrategy.BREAK:
+                        return
+
+                # 循环间隔（最后一次不需要等待）
+                if idx < total_items and loop_interval and loop_interval > 0:
+                    await self.context.sleep(loop_interval)
+
+            self.context.log(f"【循环结构】字典循环结束: 共执行{total_items}次", step_no=self.step_no)
+
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            raise StepExecutionError(f"【循环结构】字典循环执行异常: {e}") from e
+
+    async def _execute_condition_loop(self, result: StepExecutionResult, on_error: LoopErrorStrategy) -> None:
+        """条件循环模式"""
+        condition = self.step.get("conditions")
+        if not condition:
+            raise StepExecutionError("【循环结构】条件循环模式缺少必要字段: conditions")
+
+        loop_timeout = self.step.get("loop_timeout")
+        loop_interval = self.step.get("loop_interval")
+        guard_limit = 1000  # 安全限制
+
+        # 记录开始时间（用于超时控制）
+        start_time = time.time()
+        iteration = 0
+        should_continue = True
+
+        self.context.log(
+            f"【循环结构】条件循环开始: 超时时间={loop_timeout if loop_timeout else '无限制'}秒",
+            step_no=self.step_no
+        )
+
+        while should_continue:
+            iteration += 1
+
+            # 检查超时
+            if loop_timeout and loop_timeout > 0:
+                elapsed = time.time() - start_time
+                if elapsed >= loop_timeout:
+                    self.context.log(
+                        f"【循环结构】条件循环超时: 已执行 {iteration} 次, 耗时 {elapsed:.2f} 秒, 超过限制 {loop_timeout} 秒",
+                        step_no=self.step_no
+                    )
+                    break
+
+            # 记录循环次数
+            if self.step_code:
+                self.context.step_cycle_index[self.step_code] = iteration
+
+            self.context.log(f"【循环结构】条件循环: 第{iteration}次执行", step_no=self.step_no)
+
+            # 为子步骤记录当前循环次数
+            for child in self.children:
+                child_code = child.get("step_code") or child.get("id") or ""
+                if child_code:
+                    self.context.step_cycle_index[child_code] = iteration
+
+            # 执行子步骤
+            try:
+                child_results = await self._execute_children()
+                for child in child_results:
+                    result.append_child(child)
+                    if not child.success:
+                        result.success = False
+                        if on_error == LoopErrorStrategy.STOP:
+                            raise StepExecutionError(f"【循环结构】子步骤执行失败, 停止整个用例执行")
+                        elif on_error == LoopErrorStrategy.BREAK:
+                            self.context.log(f"【循环结构】子步骤执行失败, 中断循环", step_no=self.step_no)
+                            should_continue = False
+                            break
+            except StepExecutionError:
+                if on_error == LoopErrorStrategy.STOP:
+                    raise
+                elif on_error == LoopErrorStrategy.BREAK:
+                    self.context.log(f"【循环结构】子步骤执行异常, 中断循环", step_no=self.step_no)
+                    should_continue = False
+                    break
+            except Exception as e:
+                error_message = f"【循环结构】条件循环: 第{iteration}次执行失败, 错误描述: {e}"
+                self.context.log(error_message, step_no=self.step_no)
+                result.success = False
+                if on_error == LoopErrorStrategy.STOP:
+                    raise StepExecutionError(error_message) from e
+                elif on_error == LoopErrorStrategy.BREAK:
+                    should_continue = False
+                    break
+
+            if not should_continue:
+                break
+
+            # 评估循环条件
+            try:
+                if not self._evaluate_condition(condition):
+                    self.context.log(f"【循环结构】条件循环: 条件不满足, 结束循环", step_no=self.step_no)
+                    should_continue = False
+                    break
+            except Exception as e:
+                result.success = False
+                error_message = f"【循环结构】条件评估失败: {e}"
+                result.error = error_message
+                self.context.log(error_message, step_no=self.step_no)
+                should_continue = False
+                break
+
+            # 安全检查
+            if iteration >= guard_limit:
+                raise StepExecutionError(
+                    f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 次, "
+                    f"疑似无限循环, 为保护系统安全已自动终止循环"
+                )
+
+            # 循环间隔
+            if loop_interval and loop_interval > 0:
+                await self.context.sleep(loop_interval)
+
+        self.context.log(f"【循环结构】条件循环结束: 共执行{iteration}次", step_no=self.step_no)
 
     def _evaluate_condition(self, condition: str) -> bool:
         try:
@@ -801,6 +1165,32 @@ class LoopStepExecutor(BaseStepExecutor):
             return ConditionStepExecutor.compare(value, operation, except_value)
         except Exception as e:
             raise StepExecutionError(f"【循环结构】循环条件比较失败: {e}") from e
+
+    def _parse_iterable_source(self, source: Any) -> Any:
+        """解析可迭代对象来源，支持变量引用、JSON字符串和直接对象"""
+        try:
+            # 先解析占位符
+            resolved_source = self.context.resolve_placeholders(source)
+
+            # 如果是字符串且以 ${ 开头，尝试获取变量
+            if isinstance(resolved_source, str) and resolved_source.startswith("${") and resolved_source.endswith("}"):
+                variable_name = resolved_source[2:-1]
+                obj = self.context.get_variable(variable_name)
+            elif isinstance(resolved_source, str):
+                # 尝试解析 JSON 字符串
+                try:
+                    obj = json.loads(resolved_source)
+                except (json.JSONDecodeError, ValueError):
+                    # 如果不是 JSON，作为普通字符串处理
+                    obj = resolved_source
+            else:
+                obj = resolved_source
+
+            return obj
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            raise StepExecutionError(f"【循环结构】解析可迭代对象来源失败: {e}") from e
 
 
 class ConditionStepExecutor(BaseStepExecutor):

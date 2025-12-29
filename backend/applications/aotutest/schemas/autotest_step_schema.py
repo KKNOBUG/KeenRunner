@@ -40,8 +40,8 @@ class AutoTestApiStepBase(BaseModel):
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
     wait: Optional[float] = Field(None, description="等待控制(正浮点数, 单位:秒)")
-    max_cycles: Optional[int] = Field(None, description="最大循环次数(正整数)")
-    max_interval: Optional[float] = Field(None, description="每次循环间隔时间(正浮点数)")
+    loop_maximums: Optional[int] = Field(None, description="最大循环次数(正整数)")
+    loop_interval: Optional[float] = Field(None, description="每次循环间隔时间(正浮点数)")
     conditions: Optional[List[Dict[str, Any]]] = Field(None, description="判断条件")
 
     session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(所有步骤的执行结果持续累积)")
@@ -112,8 +112,8 @@ class AutoTestStepTreeUpdateItem(BaseModel):
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
     wait: Optional[float] = Field(None, description="等待控制(正浮点数, 单位:秒)")
-    max_cycles: Optional[int] = Field(None, description="最大循环次数(正整数)")
-    max_interval: Optional[float] = Field(None, description="每次循环间隔时间(正浮点数)")
+    loop_maximums: Optional[int] = Field(None, description="最大循环次数(正整数)")
+    loop_interval: Optional[float] = Field(None, description="每次循环间隔时间(正浮点数)")
     conditions: Optional[List[Dict[str, Any]]] = Field(None, description="判断条件")
 
     session_variables: Optional[Dict[str, Any]] = Field(None,
