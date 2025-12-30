@@ -32,7 +32,6 @@ from backend.applications.aotutest.schemas.autotest_report_schema import (
 )
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
-
 from backend.services.ctx import CTX_USER_ID
 
 
@@ -642,11 +641,7 @@ class BaseStepExecutor:
             await AUTOTEST_API_DETAIL_CRUD.create_step_detail(detail_create)
         except Exception as e:
             error_message: str = f"保存步骤明细到数据库失败: 步骤ID={self.step_id}, 步骤编号={self.step_no}, 错误详情: {e}"
-            if self.step_no:
-                self.context.log(error_message, step_no=self.step_no)
-            else:
-                print(error_message)
-            # 不抛出异常, 避免影响执行流程
+            raise StepExecutionError(error_message)
 
     async def _execute(self, result: StepExecutionResult) -> None:
         raise NotImplementedError
@@ -1318,7 +1313,7 @@ class PythonStepExecutor(BaseStepExecutor):
                     self.context.update_variables(new_vars, scope="extract_variables")
                     result.extract_variables.update(new_vars)
                 except Exception as e:
-                    raise StepExecutionError(f"【更新变量】(extract_variables)失败: {e}") from e
+                    raise StepExecutionError(f"【更新变量】-【extract_variables】失败: {e}") from e
         except StepExecutionError:
             raise
         except Exception as e:
@@ -1593,7 +1588,7 @@ class HttpStepExecutor(BaseStepExecutor):
             if not assert_validators or response_json is None:
                 return []
 
-            results = []
+            results: List[Dict[str, Any]] = []
 
             # 支持数组格式和单个对象格式
             if isinstance(assert_validators, list):
@@ -1603,7 +1598,7 @@ class HttpStepExecutor(BaseStepExecutor):
                         continue
                     expr = validator_config.get("expr")
                     operation = validator_config.get("operation")
-                    expected = validator_config.get("except_value")
+                    except_value = validator_config.get("except_value")
                     name = validator_config.get("name", "")
 
                     if not expr or not operation:
@@ -1611,71 +1606,58 @@ class HttpStepExecutor(BaseStepExecutor):
                         continue
 
                     try:
-                        actual = self._resolve_json_path(response_json, expr)
+                        actual_value = self._resolve_json_path(response_json, expr)
                     except StepExecutionError:
                         raise
                     except Exception as exc:
                         raise StepExecutionError(f"【断言验证】JSONPath解析失败: {exc}") from exc
 
                     try:
-                        success = ConditionStepExecutor.compare(actual, operation, expected)
+                        success = ConditionStepExecutor.compare(actual_value, operation, except_value)
                     except StepExecutionError:
                         raise
                     except Exception as exc:
                         raise StepExecutionError(f"【断言验证】比较失败: {exc}") from exc
-                    assert_expr = {"名称": name, "表达式": expr, "操作": operation, "预期值": expected,
-                                   "实际值": actual}
-                    message = f"【断言验证】-【{assert_expr}】"
-                    self.context.log(message, step_no=self.step_no)
-
                     results.append({
                         "name": name,
                         "expr": expr,
                         "operation": operation,
-                        "expected": expected,
-                        "actual": actual,
+                        "except_value": except_value,
+                        "actual_value": actual_value,
                         "success": success,
-                        "message": message,
                     })
             elif isinstance(assert_validators, dict):
                 # 单个对象格式：兼容旧格式
                 expr = assert_validators.get("expr")
                 operation = assert_validators.get("operation")
-                expected = assert_validators.get("except_value")
+                except_value = assert_validators.get("except_value")
                 name = assert_validators.get("name", "")
-
                 if not expr or not operation:
                     raise StepExecutionError(
                         f"【断言验证】配置不完整: "
                         f"缺少JSONPath表达式(expr)或比较操作符(operation), "
                         f"当前配置: expr={expr}, operation={operation}"
                     )
-
                 try:
-                    actual = self._resolve_json_path(response_json, expr)
+                    actual_value = self._resolve_json_path(response_json, expr)
                 except StepExecutionError:
                     raise
                 except Exception as e:
                     raise StepExecutionError(f"【断言验证】JSONPath解析失败: {e}") from e
 
                 try:
-                    success = ConditionStepExecutor.compare(actual, operation, expected)
+                    success = ConditionStepExecutor.compare(actual_value, operation, except_value)
                 except StepExecutionError:
                     raise
                 except Exception as exc:
                     raise StepExecutionError(f"【断言验证】比较失败: {exc}") from exc
-                assert_expr = {"名称": name, "表达式": expr, "操作": operation, "预期值": expected, "实际值": actual}
-                message = f"【断言验证】-【{assert_expr}】"
-                self.context.log(message, step_no=self.step_no)
-
                 results.append({
                     "name": name,
                     "expr": expr,
                     "operation": operation,
-                    "expected": expected,
-                    "actual": actual,
+                    "except_value": except_value,
+                    "actual_value": actual_value,
                     "success": success,
-                    "message": message,
                 })
             else:
                 raise StepExecutionError(f"【断言验证】不支持的assert_validators格式: {type(assert_validators)}")
