@@ -308,8 +308,9 @@ class StepExecutionContext:
         """执行 Python 代码块, 返回新增变量。"""
         if not code:
             return {}
+        resolved_code = self._resolve_code_placeholders(code)
 
-        prepared = self._normalize_python_code(code)
+        prepared = self._normalize_python_code(resolved_code)
         # 提供安全的全局环境, 包含必要的内置函数和导入功能
         safe_globals = {
             "__builtins__": {
@@ -471,6 +472,117 @@ class StepExecutionContext:
             return "\n".join(normalized_parts)
 
         return code
+
+    def _resolve_code_placeholders(self, code: str) -> str:
+        """
+        解析Python代码中的占位符，将 ${var_name} 替换为实际变量值。
+
+        处理规则：
+        1. 字符串字面量中的占位符（如 '${var}'）替换为实际值，去掉占位符周围的引号
+           例如：'${idx_1}' == 1 会变成 1 == 1（假设 idx_1 = 1）
+        2. 字符串拼接中的占位符（如 '${item}_1001'）替换为实际值，保持字符串格式
+           例如：'${item_1}_1001' 会变成 'test_1001'（假设 item_1 = "test"）
+        3. 代码逻辑中的占位符（如 if ${var} == 1:）直接替换为实际值
+        """
+        if not code or not isinstance(code, str):
+            return code
+
+        pattern = re.compile(r"(['\"])\$\{([^}]+)}\1")
+
+        def replace_string_placeholder(match: re.Match[str]) -> str:
+            """处理字符串字面量中的占位符，如 '${var}' 或 "${var}" """
+            quote_char = match.group(1)
+            var_name = match.group(2)
+            if not var_name:
+                self.log("【执行代码请求(Python)】占位符格式错误: ${} 中变量名为空, 保留原值")
+                return match.group(0)
+
+            try:
+                var_value = self.get_variable(var_name)
+            except KeyError:
+                self.log(f"【执行代码请求(Python)】占位符变量({var_name})未定义, 将保留原占位符")
+                return match.group(0)
+            except Exception as e:
+                self.log(f"【执行代码请求(Python)】获取占位符变量({var_name})失败: {e}, 将保留原占位符")
+                return match.group(0)
+
+            # 在字符串字面量中，替换为实际值（去掉引号）
+            # 例如：'${idx_1}' == 1 变成 1 == 1
+            if isinstance(var_value, str):
+                return var_value
+            elif isinstance(var_value, (int, float, bool)):
+                return str(var_value)
+            elif var_value is None:
+                return "None"
+            else:
+                return str(var_value)
+
+        # 先处理字符串字面量中的占位符（如 '${var}' 或 "${var}"）
+        code = pattern.sub(replace_string_placeholder, code)
+
+        # 再处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
+        # 使用更通用的正则：匹配引号内的内容，包含占位符
+        pattern2 = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
+
+        def replace_string_concat_placeholder(match: re.Match[str]) -> str:
+            """处理字符串拼接中的占位符，如 'prefix_${var}_suffix' """
+            quote_char = match.group(1)
+            prefix = match.group(2)
+            var_name = match.group(3)
+            suffix = match.group(4)
+
+            if not var_name:
+                return match.group(0)
+
+            try:
+                var_value = self.get_variable(var_name)
+            except KeyError:
+                self.log(f"【执行代码请求(Python)】占位符变量({var_name})未定义, 将保留原占位符")
+                return match.group(0)
+            except Exception as e:
+                self.log(f"【执行代码请求(Python)】获取占位符变量({var_name})失败: {e}, 将保留原占位符")
+                return match.group(0)
+
+            # 字符串拼接，保持字符串格式
+            result = prefix + str(var_value) + suffix
+            return quote_char + result + quote_char
+
+        code = pattern2.sub(replace_string_concat_placeholder, code)
+
+        # 最后处理代码逻辑中的占位符（不在字符串中的）
+        pattern3 = re.compile(r"\$\{([^}]+)}")
+
+        def replace_code_placeholder(match: re.Match[str]) -> str:
+            """处理代码逻辑中的占位符，如 if ${var} == 1: """
+            var_name = match.group(1)
+            if not var_name:
+                return match.group(0)
+
+            try:
+                var_value = self.get_variable(var_name)
+            except KeyError:
+                self.log(f"【执行代码请求(Python)】占位符变量({var_name})未定义, 将保留原占位符")
+                return match.group(0)
+            except Exception as e:
+                self.log(f"【执行代码请求(Python)】获取占位符变量({var_name})失败: {e}, 将保留原占位符")
+                return match.group(0)
+
+            # 在代码逻辑中，返回值的Python表示
+            if isinstance(var_value, str):
+                return repr(var_value)
+            elif isinstance(var_value, (int, float, bool)):
+                return str(var_value)
+            elif var_value is None:
+                return "None"
+            else:
+                return repr(var_value)
+
+        try:
+            resolved_code = pattern3.sub(replace_code_placeholder, code)
+            return resolved_code
+        except Exception as e:
+            self.log(f"【执行代码请求(Python)】解析代码占位符时发生错误: {e}, 将使用原代码")
+            return code
 
     @property
     def current_step_no(self):
