@@ -17,114 +17,158 @@ from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailSelect
 )
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+from backend.core.exceptions.base_exceptions import (
+    NotFoundException,
+    ParameterException,
+    DataAlreadyExistsException, DataBaseStorageException,
+)
 from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
-    NotFoundResponse, ParameterResponse,
+    NotFoundResponse,
+    ParameterResponse, DataBaseStorageResponse,
 )
 
 autotest_detail = APIRouter()
 
 
-@autotest_detail.post("/create", summary="新增一个测试步骤明细信息")
+@autotest_detail.post("/create", summary="API自动化测试-新增明细")
 async def create_step_detail(
-        detail_in: AutoTestApiDetailCreate = Body(..., description="测试用例信息")
+        detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息")
 ):
     try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.create_step_detail(detail_in)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="创建测试步骤明细成功")
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
+        instance = await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in)
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "detail_id"}
+        )
+        return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"创建测试步骤明细失败，异常描述: {str(e)}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_detail.get("/get", summary="按id查询一个测试步骤明细信息")
-async def get_step_detail(
-        detail_id: int = Query(..., description="测试用例ID")
+@autotest_detail.delete("/delete", summary="API自动化测试-按id或code删除明细")
+async def delete_report(
+        detail_id: Optional[int] = Query(None, description="明细ID"),
+        step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        report_code: Optional[str] = Query(None, description="报告标识代码")
 ):
     try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.get_by_id(detail_id)
-        if not instance:
-            return NotFoundResponse(message=f"测试步骤明细(id={detail_id})信息不存在")
-        data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        instance = await AUTOTEST_API_DETAIL_CRUD.delete_detail(
+            detail_id=detail_id,
+            step_code=step_code,
+            report_code=report_code
+        )
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "detail_id"}
+        )
+        return SuccessResponse(message="删除成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"查询步骤明细失败，异常描述: {str(e)}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_detail.post("/search", summary="按条件查询多个测试步骤明细信息")
+@autotest_detail.post("/update", summary="API自动化测试-按id或code更新明细")
+async def update_report(
+        detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息")
+):
+    try:
+        instance = await AUTOTEST_API_DETAIL_CRUD.update_detail(detail_in)
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "detail_id"}
+        )
+        return SuccessResponse(message="更新成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except Exception as e:
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
+
+
+@autotest_detail.get("/get", summary="API自动化测试-按id或code查询明细")
+async def get_step_detail(
+        detail_id: Optional[int] = Query(None, description="明细ID"),
+        step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        report_code: Optional[str] = Query(None, description="报告标识代码"),
+):
+    try:
+        if detail_id:
+            instance = await AUTOTEST_API_DETAIL_CRUD.get_by_id(detail_id=detail_id, on_error=True)
+        else:
+            instance = await AUTOTEST_API_DETAIL_CRUD.get_by_conditions(
+                only_one=True,
+                on_error=True,
+                conditions={"step_code": step_code, "report_code": report_code}
+            )
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "detail_id"}
+        )
+        return SuccessResponse(message="查询成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@autotest_detail.post("/search", summary="API自动化测试-按条件查询明细")
 async def search_step_details(
         detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件")
 ):
-    """按条件查询多个测试用例信息"""
     try:
         q = Q()
+        if detail_in.case_id:
+            q &= Q(case_id__contains=detail_in.case_id)
+        if detail_in.case_code:
+            q &= Q(case_code__contains=detail_in.case_code)
+        if detail_in.report_code:
+            q &= Q(report_code__contains=detail_in.report_code)
+        if detail_in.step_id:
+            q &= Q(step_id__contains=detail_in.step_id)
+        if detail_in.step_no:
+            q &= Q(step_no__contains=detail_in.step_no)
+        if detail_in.step_code:
+            q &= Q(step_code__contains=detail_in.step_code)
+        if detail_in.step_type:
+            q &= Q(step_type=detail_in.step_type.value)
         if detail_in.detail_id:
             q &= Q(id=detail_in.detail_id)
-        if detail_in.case_id:
-            q &= Q(case_id=detail_in.case_id)
-        if detail_in.step_state is not None:
-            q &= Q(step_state=detail_in.step_state)
         if detail_in.created_user:
-            q &= Q(created_user=detail_in.created_user)
+            q &= Q(created_user__iexact=detail_in.created_user)
         if detail_in.updated_user:
-            q &= Q(updated_user=detail_in.updated_user)
-        if detail_in.step_type:
-            q &= Q(step_type=detail_in.step_type)
-        q &= Q(state=detail_in.state)
-        total, instances = await AUTOTEST_API_DETAIL_CRUD.select_step_details(
+            q &= Q(updated_user__iexact=detail_in.updated_user)
+        q &= Q(step_state=detail_in.step_state, state=detail_in.state)
+        total, instances = await AUTOTEST_API_DETAIL_CRUD.select_details(
             search=q,
             page=detail_in.page,
             page_size=detail_in.page_size,
             order=detail_in.order
         )
-        data = [await obj.to_dict() for obj in instances]
-        return SuccessResponse(data=data, total=total)
-    except Exception as e:
-        return FailureResponse(message=f"查询步骤明细失败，异常描述: {str(e)}")
-
-
-@autotest_detail.post("/update", summary="按id或code修改一个测试步骤明细信息")
-async def update_report(
-        detail_in: AutoTestApiDetailUpdate = Body(..., description="测试步骤明细信息")
-):
-    try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.update_step_detail(detail_in)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="更新测试步骤明细成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except Exception as e:
-        return FailureResponse(message=f"更新测试步骤明细失败，异常描述: {str(e)}")
-
-
-@autotest_detail.delete("/delete", summary="按id或code删除一个测试步骤明细信息")
-async def delete_report(
-        detail_id: Optional[int] = Query(None, description="测试步骤明细ID"),
-        step_code: Optional[str] = Query(None, description="步骤标识"),
-        report_code: Optional[str] = Query(None, description="报告标识")
-):
-    try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.delete_step_detail(
-            detail_id=detail_id,
-            step_code=step_code,
-            report_code=report_code
-        )
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="删除测试步骤明细成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
+        data = [
+            await obj.to_dict(
+                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                replace_fields={"id": "detail_id"}
+            ) for obj in instances
+        ]
+        return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"删除测试步骤明细失败，异常描述: {str(e)}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

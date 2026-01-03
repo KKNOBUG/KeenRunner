@@ -17,189 +17,151 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import ReportType
-from backend.applications.aotutest.schemas.autotest_step_schema import (
-    AutoTestApiStepCreate, AutoTestApiStepUpdate,
-    AutoTestStepSelect, AutoTestStepTreeUpdateList, AutoTestStepTreeUpdateItem,
-    AutoTestHttpDebugRequest, AutoTestStepTreeExecute, AutoTestBatchExecuteCases
-)
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_step_crud import (
-    AUTOTEST_API_STEP_CRUD,
-    normalize_step,
-    collect_defined_variables,
-    execute_single_case,
-    batch_execute_cases
+from backend.applications.aotutest.schemas.autotest_step_schema import (
+    AutoTestApiStepCreate,
+    AutoTestApiStepUpdate,
+    AutoTestStepSelect,
+    AutoTestStepTreeUpdateList,
+    AutoTestStepTreeUpdateItem,
+    AutoTestHttpDebugRequest,
+    AutoTestStepTreeExecute,
+    AutoTestBatchExecuteCases
 )
-from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException, \
-    DataBaseStorageException, ParameterException, TypeRejectException
+from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
+from backend.applications.aotutest.services.autotest_step_engine import (
+    AutoTestStepExecutionEngine,
+    AutoTestToolService
+)
+from backend.core.exceptions.base_exceptions import (
+    NotFoundException,
+    ParameterException,
+    TypeRejectException,
+    DataBaseStorageException,
+    DataAlreadyExistsException,
+)
 from backend.core.responses.http_response import (
+    BadReqResponse,
     SuccessResponse,
     FailureResponse,
-    DataAlreadyExistsResponse,
     NotFoundResponse,
-    BadReqResponse,
     ParameterResponse,
+    DataBaseStorageResponse,
+    DataAlreadyExistsResponse,
 )
+from backend.enums.autotest_enum import ReportType
 
 logger = logging.getLogger(__name__)
 
 autotest_step = APIRouter()
 
 
-def resolve_json_path(data: Any, expr: str) -> Any:
-    """解析JSONPath表达式"""
-    if not expr or not expr.startswith("$."):
-        raise ValueError(f"仅支持 $. 开头的 JSONPath 表达式: {expr}")
-
-    parts = [part for part in expr[2:].split(".") if part]
-    current: Any = data
-    for part in parts:
-        if isinstance(current, dict):
-            current = current.get(part)
-        elif isinstance(current, list):
-            try:
-                index = int(part)
-            except ValueError:
-                raise ValueError(f"列表索引必须为整数: {part}")
-            try:
-                current = current[index]
-            except IndexError:
-                raise ValueError(f"列表索引越界: {part}")
-        else:
-            raise ValueError(f"无法在 {type(current)} 类型上应用 JSONPath: {part}")
-    return current
-
-
-def _normalize_value(value: Any) -> Any:
-    """
-    标准化值的类型，用于比较
-    - 如果值是可以转换为数字的字符串，则转换为数字
-    - 如果值是布尔型字符串，则转换为布尔值
-    """
-    if value is None:
-        return None
-    if isinstance(value, (int, float, bool)):
-        return value
-    if isinstance(value, str):
-        # 尝试转换为整数
-        if value.isdigit() or (value.startswith('-') and value[1:].isdigit()):
-            return int(value)
-        # 尝试转换为浮点数
-        try:
-            if '.' in value:
-                return float(value)
-        except ValueError:
-            pass
-        # 尝试转换为布尔值
-        if value.lower() == 'true':
-            return True
-        if value.lower() == 'false':
-            return False
-    return value
-
-
-def _type_aware_equals(actual: Any, expected: Any) -> bool:
-    """
-    类型感知的相等比较
-    - 先尝试直接比较
-    - 如果类型不同，尝试标准化后比较
-    """
-    # 直接比较
-    if actual == expected:
-        return True
-    # 标准化后比较
-    norm_actual = _normalize_value(actual)
-    norm_expected = _normalize_value(expected)
-    return norm_actual == norm_expected
-
-
-def _type_aware_compare(actual: Any, expected: Any, comparator) -> bool:
-    """
-    类型感知的数值比较（用于大于、小于等）
-    """
-    norm_actual = _normalize_value(actual)
-    norm_expected = _normalize_value(expected)
-    # 确保都是数值类型才能进行大小比较
-    if isinstance(norm_actual, (int, float)) and isinstance(norm_expected, (int, float)):
-        return comparator(norm_actual, norm_expected)
-    # 如果不是数值，尝试字符串比较
-    return comparator(str(actual), str(expected))
-
-
-def compare_assertion(actual: Any, operation: str, expected: Any) -> bool:
-    """比较断言结果，支持类型智能转换"""
-    op_map = {
-        "等于": lambda a, b: _type_aware_equals(a, b),
-        "不等于": lambda a, b: not _type_aware_equals(a, b),
-        "大于": lambda a, b: _type_aware_compare(a, b, lambda x, y: x > y),
-        "大于等于": lambda a, b: _type_aware_compare(a, b, lambda x, y: x >= y),
-        "小于": lambda a, b: _type_aware_compare(a, b, lambda x, y: x < y),
-        "小于等于": lambda a, b: _type_aware_compare(a, b, lambda x, y: x <= y),
-        "长度等于": lambda a, b: len(str(a)) == int(_normalize_value(b)) if _normalize_value(b) is not None else False,
-        "包含": lambda a, b: str(b) in str(a),
-        "不包含": lambda a, b: str(b) not in str(a),
-        "以...开始": lambda a, b: str(a).startswith(str(b)),
-        "以...结束": lambda a, b: str(a).endswith(str(b)),
-    }
-    comparator = op_map.get(operation)
-    if comparator is None:
-        raise ValueError(f"不支持的操作符: {operation}")
-    try:
-        return comparator(actual, expected)
-    except Exception as e:
-        raise ValueError(f"断言比较失败: {str(e)}")
-
-
-@autotest_step.post("/create", summary="新增一个测试步骤明细")
+@autotest_step.post("/create", summary="API自动化测试-新增步骤")
 async def create_step(
-        step_in: AutoTestApiStepCreate = Body(..., description="步骤明细信息")
+        step_in: AutoTestApiStepCreate = Body(..., description="步骤信息")
 ):
-    """新增一个测试步骤明细"""
     try:
         instance = await AUTOTEST_API_STEP_CRUD.create_step(step_in)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="创建步骤明细成功")
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "step_id"}
+        )
+        return SuccessResponse(message="新增成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e))
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        return FailureResponse(message=f"新增失败, 异常描述: {e}")
+
+
+@autotest_step.delete("/delete", summary="API自动化测试-按id或code删除步骤")
+async def delete_step(
+        step_id: Optional[int] = Query(..., description="步骤ID"),
+        step_code: Optional[str] = Query(..., description="步骤标识代码"),
+):
+    try:
+        instance = await AUTOTEST_API_STEP_CRUD.delete_step(step_id=step_id, step_code=step_code)
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "step_id"}
+        )
+        return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e))
     except Exception as e:
-        return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
+        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_step.get("/get", summary="按id查询一个测试步骤明细", description="根据id查询步骤明细信息")
+@autotest_step.post("/update", summary="API自动化测试-按id或code更新步骤")
+async def update_step(
+        step_in: AutoTestApiStepUpdate = Body(..., description="步骤信息")
+):
+    try:
+        instance = await AUTOTEST_API_STEP_CRUD.update_step(step_in)
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "step_id"}
+        )
+        return SuccessResponse(message="更新成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        return FailureResponse(message=f"修改失败，异常描述: {e}")
+
+
+@autotest_step.get("/get", summary="API自动化测试-按id或code查询步骤")
 async def get_step(
         step_id: int = Query(..., description="步骤明细ID")
 ):
-    """按id查询一个测试步骤明细"""
     try:
-        instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id)
-        if not instance:
-            return NotFoundResponse(message=f"步骤明细(id={step_id})信息不存在")
-        data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id=step_id, on_error=True)
+        data = await instance.to_dict(
+            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            replace_fields={"id": "step_id"}
+        )
+        return SuccessResponse(message="查询成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/search", summary="按条件查询多个测试步骤明细", description="支持分页按条件查询步骤明细信息")
+@autotest_step.post("/search", summary="API自动化测试-按条件查询步骤")
 async def search_steps(
         step_in: AutoTestStepSelect = Body(..., description="查询条件")
 ):
-    """按条件查询多个测试步骤明细"""
     try:
         q = Q()
         if step_in.step_id:
             q &= Q(id=step_in.step_id)
-        if step_in.case_id:
-            q &= Q(case_id=step_in.case_id)
+        if step_in.step_no:
+            q &= Q(step_no=step_in.step_no)
+        if step_in.step_name:
+            q &= Q(step_name=step_in.step_name)
         if step_in.step_type:
             q &= Q(step_type=step_in.step_type.value)
         if step_in.case_type:
             q &= Q(step_type=step_in.step_type.value)
+        if step_in.case_id:
+            q &= Q(case_id=step_in.case_id)
         if step_in.parent_step_id is not None:
             if step_in.parent_step_id == 0:
                 q &= Q(parent_step_id__isnull=True)
@@ -208,129 +170,45 @@ async def search_steps(
         if step_in.quote_case_id:
             q &= Q(quote_case_id=step_in.quote_case_id)
         q &= Q(state=step_in.state)
-
         total, instances = await AUTOTEST_API_STEP_CRUD.select_steps(
             search=q,
             page=step_in.page,
             page_size=step_in.page_size,
             order=step_in.order
         )
-        data = [await obj.to_dict() for obj in instances]
-        return SuccessResponse(data=data, total=total)
+        data = [
+            await obj.to_dict(
+                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                replace_fields={"id": "step_id"}
+            ) for obj in instances
+        ]
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/update", summary="按id修改一个测试步骤明细", description="根据id修改步骤明细信息")
-async def update_step(
-        step_in: AutoTestApiStepUpdate = Body(..., description="步骤明细信息")
-):
-    """按id修改一个测试步骤明细"""
-    try:
-        instance = await AUTOTEST_API_STEP_CRUD.update_step(step_in)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="更新步骤明细成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e))
-    except Exception as e:
-        return FailureResponse(message=f"修改失败，异常描述: {str(e)}")
-
-
-@autotest_step.delete("/delete", summary="按id删除一个测试步骤明细", description="根据id删除步骤明细信息")
-async def delete_step(
-        step_id: int = Query(..., description="步骤明细ID")
-):
-    """按id删除一个测试步骤明细"""
-    try:
-        instance = await AUTOTEST_API_STEP_CRUD.delete_step(step_id)
-        data = await instance.to_dict()
-        return SuccessResponse(data=data, message="删除步骤明细成功")
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e))
-    except Exception as e:
-        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
-
-
-@autotest_step.get("/tree", summary="按测试用例id查询所有对应步骤",
-                   description="包含所有子步骤、引用测试用例中的步骤")
+@autotest_step.get("/tree", summary="API自动化测试-按id或code查询步骤树")
 async def get_step_tree(
-        case_id: int = Query(..., description="测试用例ID")
+        case_id: Optional[int] = Query(..., description="用例ID"),
+        case_code: Optional[str] = Query(..., description="用例标识代码"),
 ):
-    """
-    核心功能：通过测试用例信息id查询所拥有的所有子级步骤
-    包含所有子步骤、引用测试用例中的步骤
-    """
     try:
-        tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id)
+        tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id, case_code=case_code)
         step_counter = tree_data.pop(-1)
-        return SuccessResponse(data=tree_data, message="获取步骤树成功", total=step_counter["total_steps"])
+        return SuccessResponse(message="查询成功", data=tree_data, total=step_counter["total_steps"])
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"获取步骤树失败，异常描述: {str(e)}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-def validate_step_tree_structure(steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
-    """
-    校验步骤树结构合法性
-
-    Args:
-        steps_data: 步骤树数据
-
-    Returns:
-        tuple[bool, Optional[str]]: (是否合法, 错误信息)
-    """
-    from backend.applications.aotutest.models.autotest_model import StepType
-
-    # 允许有子步骤的步骤类型
-    ALLOWED_CHILDREN_TYPES = {StepType.LOOP, StepType.IF}
-
-    def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: set, path: list) -> tuple:
-        """递归检查步骤"""
-        step_id = step.step_id
-        step_code = step.step_code
-
-        # 检查自循环引用
-        if step_id and step_id in visited_ids:
-            return False, f"步骤(step_id={step_id}, step_code={step_code or 'N/A'})存在自循环引用"
-        if step_code and step_code in path:
-            return False, f"步骤(step_code={step_code})存在自循环引用"
-
-        # 添加到已访问集合
-        if step_id:
-            visited_ids.add(step_id)
-        if step_code:
-            path.append(step_code)
-
-        # 检查步骤类型是否允许有子步骤
-        if step.children and len(step.children) > 0:
-            if step.step_type not in ALLOWED_CHILDREN_TYPES:
-                return False, f"步骤(step_id={step_id}, step_code={step_code or 'N/A'}, step_type={step.step_type})不允许包含子步骤，仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
-
-            # 递归检查子步骤
-            for child in step.children:
-                is_valid, error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())
-                if not is_valid:
-                    return False, error_msg
-
-        return True, None
-
-    # 检查所有根步骤
-    for step in steps_data:
-        is_valid, error_msg = check_step_recursive(step, set(), [])
-        if not is_valid:
-            return False, error_msg
-
-    return True, None
-
-
-@autotest_step.post("/update_or_create/tree", summary="批量更新测试用例和步骤信息")
+@autotest_step.post("/update_or_create_tree", summary="API自动化测试-更新用例级步骤树")
 async def batch_update_steps_tree(
-        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据（包含case和steps）")
+        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)")
 ):
     """
     批量更新测试用例和步骤信息
@@ -359,7 +237,7 @@ async def batch_update_steps_tree(
         logger.info(f"开始批量更新步骤树，共 {len(steps_data)} 个根步骤")
 
         # 1. 校验步骤树结构合法性
-        is_valid, error_msg = validate_step_tree_structure(steps_data)
+        is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(steps_data)
         if not is_valid:
             logger.error(f"步骤树结构校验失败: {error_msg}")
             return BadReqResponse(message=f"步骤树结构校验失败: {error_msg}")
@@ -447,27 +325,33 @@ async def batch_update_steps_tree(
                     f"步骤删除数: {deleted_step_count}"
                 )
                 logger.warning(message)
-                return SuccessResponse(data=result_data, message=message)
-        except (TypeRejectException, ParameterException, DataBaseStorageException, DataAlreadyExistsException,
+                return SuccessResponse(message=message, data=result_data)
+        except (TypeRejectException,
+                ParameterException,
+                DataBaseStorageException,
+                DataAlreadyExistsException,
                 NotFoundException) as e:
             return FailureResponse(message=e.message)
         except Exception as transaction_error:
             # 事务会自动回滚
             logger.error(f"批量处理过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
             raise
-
     except NotFoundException as e:
-        return NotFoundResponse(message=str(e))
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e))
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         logger.error(f"批量处理失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"批量处理失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/http/debugging", summary="调试HTTP请求", description="实时调试HTTP请求，不保存到数据库")
+@autotest_step.post("/http_debugging", summary="API自动化测试-HTTP请求调试")
 async def debug_http_request(
-        step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP步骤调试数据")
+        step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据")
 ):
     """
     调试HTTP请求接口
@@ -660,7 +544,7 @@ async def debug_http_request(
                         elif expr:
                             try:
                                 # 部分提取
-                                extracted_value = resolve_json_path(response_json, expr)
+                                extracted_value = AutoTestToolService.resolve_json_path(response_json, expr)
                                 logs.append(format_log(f"提取变量成功: {name} = {extracted_value}"))
                             except Exception as e:
                                 error_msg = str(e)
@@ -748,7 +632,7 @@ async def debug_http_request(
                             logs.append(format_log(f"断言失败: {name}, {error_msg}"))
                         else:
                             try:
-                                actual_value = resolve_json_path(response_json, expr)
+                                actual_value = AutoTestToolService.resolve_json_path(response_json, expr)
                             except Exception as e:
                                 error_msg = f"无法解析表达式 {expr}: {str(e)}"
                                 logs.append(format_log(f"断言失败: {name}, {error_msg}"))
@@ -773,7 +657,7 @@ async def debug_http_request(
 
                     if error_msg == "" and actual_value is not None:
                         try:
-                            success = compare_assertion(actual_value, operation, expected_value)
+                            success = AutoTestToolService.compare_assertion(actual_value, operation, expected_value)
                             if success:
                                 logs.append(format_log(
                                     f"断言通过: {name}, {expr} {operation} {expected_value}, 实际值={actual_value}"))
@@ -851,16 +735,15 @@ async def debug_http_request(
         logger.info(
             f"HTTP调试请求成功: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
 
-        return SuccessResponse(data=result_data, message="调试请求成功")
-
+        return SuccessResponse(message="调试请求成功", data=result_data)
     except Exception as e:
         logger.error(f"调试HTTP请求失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"调试失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/execute", summary="执行测试步骤树", description="运行/调试用例步骤树，生成报告与明细")
+@autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
 async def execute_step_tree(
-        request: AutoTestStepTreeExecute = Body(..., description="执行请求参数")
+        request: AutoTestStepTreeExecute = Body(..., description="步骤树数据")
 ):
     """
     执行步骤树（运行/调试）：
@@ -911,12 +794,12 @@ async def execute_step_tree(
         if is_run_mode:
             try:
                 # 使用公共函数执行单个用例
-                result_data = await execute_single_case(
+                result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                     case_id=case_id,
                     initial_variables=initial_variables,
                     report_type=ReportType.EXEC1
                 )
-                return SuccessResponse(data=result_data, message="执行步骤成功并已保存到数据库")
+                return SuccessResponse(message="执行步骤成功并已保存到数据库", data=result_data)
             except NotFoundException as e:
                 return NotFoundResponse(message=str(e))
             except ParameterException as e:
@@ -957,10 +840,10 @@ async def execute_step_tree(
                 }
 
             # 3. 规范化步骤数据
-            tree_data = [normalize_step(step) for step in tree_data]
+            tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
             # 4. 收集defined_variables
-            all_defined_variables = collect_defined_variables(tree_data)
+            all_defined_variables = AutoTestToolService.collect_defined_variables(tree_data)
             merged_initial_variables = dict(initial_variables)
             merged_initial_variables.update(all_defined_variables)
 
@@ -997,16 +880,13 @@ async def execute_step_tree(
                 "saved_to_database": False
             }
 
-            return SuccessResponse(data=result_data, message="调试执行完成")
-
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e))
+            return SuccessResponse(message="调试执行完成", data=result_data, )
     except Exception as e:
         logger.error(f"执行步骤失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"执行失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/batch_execute", summary="批量执行测试用例", description="根据用例ID列表批量执行多个测试用例")
+@autotest_step.post("/batch_execute", summary="API自动化测试-批量执行用例")
 async def batch_execute_cases_endpoint(
         request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数")
 ):
@@ -1032,7 +912,7 @@ async def batch_execute_cases_endpoint(
             return BadReqResponse(message="case_ids列表不能为空")
 
         # 调用批量执行函数
-        result_data = await batch_execute_cases(
+        result_data = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables,
             execute_environment=execute_environment,
@@ -1044,8 +924,7 @@ async def batch_execute_cases_endpoint(
             f"成功: {result_data['success_cases']}, "
             f"失败: {result_data['failed_cases']}"
         )
-        return SuccessResponse(data=result_data, message=message)
-
+        return SuccessResponse(message=message, data=result_data, )
     except Exception as e:
         logger.error(f"批量执行用例失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"批量执行失败，异常描述: {str(e)}")

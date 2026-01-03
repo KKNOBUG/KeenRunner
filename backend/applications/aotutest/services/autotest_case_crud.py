@@ -8,120 +8,136 @@
 """
 from typing import Optional, Dict, Any, List, Set
 
-from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
 from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException, TypeRejectException, \
-    ParameterException, DataBaseStorageException
+from backend.core.exceptions.base_exceptions import (
+    NotFoundException,
+    ParameterException,
+    TypeRejectException,
+    DataBaseStorageException,
+    DataAlreadyExistsException,
+)
 
 
 class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
     def __init__(self):
         super().__init__(model=AutoTestApiCaseInfo)
 
-    async def get_by_id(self, case_id: int) -> Optional[AutoTestApiCaseInfo]:
-        """根据ID查询用例信息"""
-        return await self.model.filter(id=case_id, state__not=1).first()
+    async def get_by_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
+        if not case_id:
+            raise ParameterException(message="参数(case_id)不允许为空")
+        instance = await self.model.filter(id=case_id, state__not=1).first()
+        if not instance and on_error:
+            raise NotFoundException(message=f"用例(id={case_id})不存在")
+        return instance
 
-    async def get_by_code(self, case_code: str) -> Optional[AutoTestApiCaseInfo]:
-        """根据code查询用例信息"""
-        return await self.model.filter(case_code=case_code, state__not=1).first()
+    async def get_by_code(self, case_code: str, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
+        if not case_code:
+            raise ParameterException(message="参数(case_code)不允许为空")
+        instance = await self.model.filter(case_code=case_code, state__not=1).first()
+        if not instance and on_error:
+            raise NotFoundException(message=f"用例(code={case_code})不存在")
+        return instance
 
     async def get_by_conditions(
             self,
             conditions: Dict[str, Any],
             only_one: bool = True,
+            on_error: bool = False
     ) -> Optional[AutoTestApiCaseInfo]:
-        """根据条件查询用例信息"""
-        stmt: QuerySet = self.model.filter(**conditions, state__not=1)
-        return await (stmt.first() if only_one else stmt.all())
+        try:
+            stmt: QuerySet = self.model.filter(**conditions, state__not=1)
+            instances = await (stmt.first() if only_one else stmt.all())
+        except FieldError as e:
+            raise ParameterException(message=f"查询'用例'异常, 错误描述: {e}")
+
+        if not instances and on_error:
+            raise NotFoundException(message=f"按条件{conditions}查询'用例'无记录")
+        return instances
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
-        """创建用例信息"""
-        # 检查用例名称和项目ID的唯一性
-        existing_case = await self.model.filter(case_name=case_in.case_name, case_project=case_in.case_project).first()
+        case_name: str = case_in.case_name
+        case_project: int = case_in.case_project
+        existing_case = await self.model.filter(
+            case_name=case_in.case_name,
+            case_project=case_in.case_project,
+            state__not=1
+        ).first()
         if existing_case:
-            raise DataAlreadyExistsException(
-                message=f"项目(id={case_in.case_project})下用例名称(case_name={case_in.case_name})已存在"
-            )
+            raise DataAlreadyExistsException(message=f"应用(id={case_project})下用例名称(case_name={case_name})已存在")
         try:
-            case_dict = case_in.dict()
+            case_dict = case_in.model_dump(exclude_none=True, exclude_unset=True)
             case_dict["case_version"] = 1
             instance = await self.create(case_dict)
             return instance
         except IntegrityError as e:
-            raise DataAlreadyExistsException(message=f"创建用例失败: {str(e)}")
+            raise DataBaseStorageException(message=f"创建用例失败, 违法约束规则: {str(e)}")
 
     async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
-        """更新用例信息"""
-        case_id = case_in.case_id
-        instance = await self.query(case_id)
-        if not instance:
-            raise NotFoundException(message=f"用例(id={case_id})信息不存在")
-
-        # 构建更新字典
-        update_dict = {
-            key: value for key, value in case_in.model_dump(exclude_unset=True, exclude={"id"}).items()
-            if value is not None
-        }
+        case_id: Optional[int] = case_in.case_id
+        case_code: Optional[str] = case_in.case_code
+        if case_id:
+            instance = await self.get_by_id(case_id=case_id, on_error=True)
+        else:
+            instance = await self.get_by_code(case_code=case_code, on_error=True)
+            case_id: int = instance.id
 
         # 如果更新了用例名称或项目ID，检查唯一性
+        update_dict = case_in.model_dump(
+            exclude_none=True,
+            exclude_unset=True,
+            exclude={"case_id", "case_code"}
+        )
         if "case_name" in update_dict or "case_project" in update_dict:
             case_name = update_dict.get("case_name", instance.case_name)
             case_project = update_dict.get("case_project", instance.case_project)
             existing_case = await self.model.filter(
                 case_name=case_name,
-                case_project=case_project
+                case_project=case_project,
+                state__not=1
             ).exclude(id=case_id).first()
             if existing_case:
-                raise DataAlreadyExistsException(
-                    message=f"项目(id={case_project})下用例名称(case_name={case_name})已存在"
-                )
+                raise DataAlreadyExistsException(message=f"项目(id={case_project})下用例名称(case_name={case_name})已存在")
         try:
             update_dict["case_version"] = instance.case_version + 1
             instance = await self.update(id=case_id, obj_in=update_dict)
             return instance
         except DoesNotExist:
-            raise NotFoundException(message=f"用例(id={case_id})信息不存在")
+            raise NotFoundException(message=f"用例(id={case_id})不存在")
         except IntegrityError as e:
-            raise DataAlreadyExistsException(message=f"更新用例失败: {str(e)}")
+            raise DataBaseStorageException(message=f"更新用例失败, 违法约束规则: {str(e)}")
 
-    async def delete_case(self, case_id: int) -> AutoTestApiCaseInfo:
-        """删除用例信息"""
-        instance = await self.query(case_id)
-        if not instance:
-            raise NotFoundException(message=f"用例(id={case_id})信息不存在")
+    async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestApiCaseInfo:
+        if case_id:
+            instance = await self.get_by_id(case_id=case_id, on_error=True)
+        else:
+            instance = await self.get_by_code(case_code=case_code, on_error=True)
+            case_id: int = instance.id
 
         # 检查是否有步骤明细关联（使用普通字段查询）
         steps_count = await AutoTestApiStepInfo.filter(case_id=case_id, state__not=1).count()
         if steps_count > 0:
-            raise DataAlreadyExistsException(
-                message=f"用例(id={case_id})存在步骤明细，无法删除"
-            )
+            raise DataAlreadyExistsException(message=f"用例(id={case_id})存在步骤，无法删除")
 
         # 检查是否被其他用例引用（使用普通字段查询）
         quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
         if quote_steps_count > 0:
-            raise DataAlreadyExistsException(
-                message=f"用例(id={case_id})被其他用例引用，无法删除"
-            )
+            raise DataAlreadyExistsException(message=f"用例(id={case_id})被其他用例引用，无法删除")
 
         instance.state = 1
         await instance.save()
         return instance
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: list) -> tuple:
-        """按条件查询用例信息"""
-        return await self.list(
-            page=page,
-            page_size=page_size,
-            search=search,
-            order=order
-        )
+        try:
+            return await self.list(page=page, page_size=page_size, search=search, order=order)
+        except FieldError as e:
+            raise ParameterException(message=f"查询'用例'异常, 错误描述: {e}")
 
     async def batch_update_or_create_cases(self, cases_data: List[AutoTestApiCaseUpdate]) -> Dict[str, Any]:
         created_count: int = 0
@@ -168,9 +184,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 # 构建新增数据（id、case_code 由数据库自动生成）
                 create_case_dict: Dict[str, Any] = case_data.model_dump(
                     exclude_none=True,
+                    exclude_unset=True,
                     exclude={"case_id", "case_code", "case_version"}
                 )
-                # 执行新增
                 try:
                     new_case_instance: AutoTestApiCaseInfo = await self.create(obj_in=create_case_dict)
                 except Exception as e:
@@ -211,9 +227,8 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                             message=f"第({cid})条用例新增失败, 项目(id={case_project})下用例名称(name={case_name})已存在"
                         )
 
-                # 执行更新
-                update_case_dict["case_version"] = case_instance.case_version + 1
                 try:
+                    update_case_dict["case_version"] = case_instance.case_version + 1
                     updated_instance: AutoTestApiCaseInfo = await self.update(id=case_id, obj_in=update_case_dict)
                 except Exception as e:
                     raise DataBaseStorageException(message=f"第({cid})条用例更新失败, 错误描述: {e}")

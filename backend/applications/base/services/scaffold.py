@@ -25,6 +25,7 @@ class ScaffoldModel(models.Model):
     async def to_dict(self,
                       include_fields: Optional[Union[List[str], Set[str]]] = None,
                       exclude_fields: Optional[Union[List[str], Set[str]]] = None,
+                      replace_fields: Optional[Dict[str, str]] = None,
                       m2m: bool = False,
                       m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
                       m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
@@ -36,6 +37,7 @@ class ScaffoldModel(models.Model):
         将模型实例转换为字典形式，支持灵活配置要包含或排除的字段，以及是否处理多对多关系和外键关系。
         :param include_fields: 需要引入的本表字段列表，默认为 None
         :param exclude_fields: 需要排除的本表字段列表，默认为 None
+        :param replace_fields: 需要别名的本表字段列表，默认为 None
         :param m2m: 是否获取多对多关系字段的数据，默认为 False
         :param m2m_include_fields: 需要引入的多对多表字段列表，默认为 None
         :param m2m_exclude_fields: 需要排除的多对多表字段列表，默认为 None
@@ -60,6 +62,8 @@ class ScaffoldModel(models.Model):
             if field in exclude_fields:
                 continue
             value = getattr(self, field)
+            if replace_fields:
+                field = replace_fields.get(field, field)
             d[field] = await self.__format_value(value)
 
         # 如果 fk 为 True，异步获取外键字段关联的数据

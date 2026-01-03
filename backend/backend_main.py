@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from tortoise import Tortoise
+from tortoise.exceptions import DBConnectionError
 
 from backend.core.initializations.app_initialization import (
     register_database,
@@ -32,7 +33,10 @@ except ImportError as e:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await register_database(app)
+    try:
+        await register_database(app)
+    except DBConnectionError as e:
+        raise RuntimeError("数据库连接失败, 请检查主机地址是否可达")
     await init_database_table(app)
 
     for route in app.routes:

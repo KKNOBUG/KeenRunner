@@ -91,6 +91,17 @@ class FileTooManyResponse(BaseResponse):
         super(FileTooManyResponse, self).__init__(message=message, data=data, total=total)
 
 
+class DataBaseStorageResponse(BaseResponse):
+    code = Code.CODE400
+    status = Status.FAILURE
+    message = "数据库存储异常"
+    data = {}
+    total = None
+
+    def __init__(self, message: Optional[str] = None, data: DataType = None, total: Optional[int] = None):
+        super(DataBaseStorageResponse, self).__init__(message=message, data=data, total=total)
+
+
 class DataAlreadyExistsResponse(BaseResponse):
     code = Code.CODE400
     status = Status.FAILURE
