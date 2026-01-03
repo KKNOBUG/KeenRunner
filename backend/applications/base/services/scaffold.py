@@ -285,3 +285,31 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if obj:
             await obj.delete()
         return obj
+
+
+class UpperStr(str):
+    @classmethod
+    def __get__validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v, *args):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
+
+class LowerStr(str):
+    @classmethod
+    def __get__validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v, *args):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return v.lower()
+        return v

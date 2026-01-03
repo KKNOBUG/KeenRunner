@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any, Union, Type
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.applications.base.services.scaffold import UpperStr
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.enums.autotest_enum import CaseType, StepType, LoopMode, LoopErrorStrategy
 from backend.enums.http_enum import HTTPMethod
@@ -74,13 +75,13 @@ class AutoTestApiStepChildren(BaseModel):
 class AutoTestApiStepCreate(AutoTestApiStepBase):
     step_no: int = Field(..., description="步骤序号")
     step_type: StepType = Field(..., description="步骤类型")
-    created_user: Optional[str] = Field(None, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, description="创建人员")
 
 
 class AutoTestApiStepUpdate(AutoTestApiStepBase):
     step_id: Optional[int] = Field(None, description="步骤ID")
     step_code: Optional[str] = Field(None, description="步骤标识代码")
-    updated_user: Optional[str] = Field(None, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, description="更新人员")
 
 
 class AutoTestStepSelect(BaseModel):
@@ -97,6 +98,8 @@ class AutoTestStepSelect(BaseModel):
     case_type: Optional[CaseType] = Field(None, description="用例所属类型")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
     quote_case_id: Optional[int] = Field(None, description="引用用例信息ID")
+    created_user: Optional[UpperStr] = Field(None, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, description="更新人员")
     state: Optional[int] = Field(-1, description="状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
 

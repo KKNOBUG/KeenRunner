@@ -125,11 +125,11 @@ async def search_reports(
     try:
         q = Q()
         if report_in.case_id:
-            q &= Q(case_id__contains=report_in.case_id)
+            q &= Q(case_id=report_in.case_id)
         if report_in.case_code:
             q &= Q(case_code__contains=report_in.case_code)
         if report_in.report_id:
-            q &= Q(report_id__contains=report_in.report_id)
+            q &= Q(id=report_in.report_id)
         if report_in.report_code:
             q &= Q(report_code__contains=report_in.report_code)
         if report_in.report_type:

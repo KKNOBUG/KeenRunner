@@ -10,6 +10,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
 from backend.enums.autotest_enum import CaseType
 
 
@@ -19,6 +20,7 @@ class AutoTestApiCaseCreate(BaseModel):
     case_tags: Optional[str] = Field(None, max_length=255, description="用例标签")
     case_type: Optional[CaseType] = Field(default=CaseType.PRIVATE_SCRIPT, max_length=255, description="用例所属类型")
     case_project: int = Field(default=1, ge=1, description="用例所属应用项目")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiCaseBase(BaseModel):
@@ -34,6 +36,7 @@ class AutoTestApiCaseBase(BaseModel):
 
 class AutoTestApiCaseUpdate(AutoTestApiCaseBase):
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiCaseSelect(AutoTestApiCaseBase):
@@ -41,6 +44,6 @@ class AutoTestApiCaseSelect(AutoTestApiCaseBase):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-updated_time"], description="排序字段")
 
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(-1, description="状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")

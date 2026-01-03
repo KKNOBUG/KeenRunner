@@ -184,4 +184,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=toolbox, prefix="/toolbox", tags=["工具箱服务"])
     app.include_router(router=program, prefix="/program", tags=["应用管理服务"])
     app.include_router(router=testcase, prefix="/testcase", tags=["测试用例服务"])
-    app.include_router(router=autotest, prefix="/autotest", tags=["自动化测试"])
+    app.include_router(router=autotest, prefix="/autotest")

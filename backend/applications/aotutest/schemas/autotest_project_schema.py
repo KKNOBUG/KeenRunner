@@ -10,6 +10,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.applications.base.services.scaffold import UpperStr
+
 
 class AutoTestApiProjectBase(BaseModel):
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
@@ -20,12 +22,12 @@ class AutoTestApiProjectBase(BaseModel):
     project_developers: Optional[List[str]] = Field(None, description="应用开发人员列表")
     project_test_owners: Optional[List[str]] = Field(None, description="应用测试负责人")
     project_testers: Optional[List[str]] = Field(None, description="应用测试人员列表")
-    project_current_month_env: Optional[str] = Field(None, max_length=64, description="应用当前月版环境")
+    project_current_month_env: Optional[UpperStr] = Field(None, max_length=64, description="应用当前月版环境")
 
 
 class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     project_name: str = Field(..., max_length=255, description="应用名称")
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
     @field_validator('project_dev_owners', mode='before')
     @classmethod
@@ -75,7 +77,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
 class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
     project_id: Optional[int] = Field(None, description="应用ID")
     project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiProjectSelect(BaseModel):
@@ -90,6 +92,6 @@ class AutoTestApiProjectSelect(BaseModel):
     project_dev_owners: Optional[List[str]] = Field(None, description="应用开发负责人")
     project_test_owners: Optional[List[str]] = Field(None, description="应用测试负责人")
 
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人员")
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(None, description="状态(-1:删除, 1:未删除)")

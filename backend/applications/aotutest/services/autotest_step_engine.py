@@ -2139,9 +2139,9 @@ class AutoTestStepExecutionEngine:
             report_type: 报告类型, 默认为 EXEC1（执行方式1）
             execute_environment: 批量执行用例时可指定统一环境
         """
-        case_id = case.get("id")
-        case_code = case.get("case_code")
-        case_name = case.get("case_name", "")
+        case_id: int = case.get("case_id")
+        case_code: str = case.get("case_code")
+        case_name: str = case.get("case_name")
 
         case_start_time = datetime.now()
         case_st_time_str = case_start_time.strftime("%Y-%m-%d %H:%M:%S")

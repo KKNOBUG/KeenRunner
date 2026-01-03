@@ -82,8 +82,8 @@ async def create_step(
 
 @autotest_step.delete("/delete", summary="API自动化测试-按id或code删除步骤")
 async def delete_step(
-        step_id: Optional[int] = Query(..., description="步骤ID"),
-        step_code: Optional[str] = Query(..., description="步骤标识代码"),
+        step_id: Optional[int] = Query(None, description="步骤ID"),
+        step_code: Optional[str] = Query(None, description="步骤标识代码"),
 ):
     try:
         instance = await AUTOTEST_API_STEP_CRUD.delete_step(step_id=step_id, step_code=step_code)
@@ -93,11 +93,11 @@ async def delete_step(
         )
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
-        return NotFoundResponse(message=str(e))
+        return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
-        return ParameterResponse(message=str(e))
+        return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e))
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
@@ -127,10 +127,14 @@ async def update_step(
 
 @autotest_step.get("/get", summary="API自动化测试-按id或code查询步骤")
 async def get_step(
-        step_id: int = Query(..., description="步骤明细ID")
+        step_id: Optional[int] = Query(None, description="步骤ID"),
+        step_code: Optional[str] = Query(None, description="步骤标识代码"),
 ):
     try:
-        instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id=step_id, on_error=True)
+        if step_id:
+            instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id=step_id, on_error=True)
+        else:
+            instance = await AUTOTEST_API_STEP_CRUD.get_by_code(step_code=step_code, on_error=True)
         data = await instance.to_dict(
             exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
             replace_fields={"id": "step_id"}
@@ -191,8 +195,8 @@ async def search_steps(
 
 @autotest_step.get("/tree", summary="API自动化测试-按id或code查询步骤树")
 async def get_step_tree(
-        case_id: Optional[int] = Query(..., description="用例ID"),
-        case_code: Optional[str] = Query(..., description="用例标识代码"),
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
 ):
     try:
         tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id, case_code=case_code)
@@ -801,9 +805,9 @@ async def execute_step_tree(
                 )
                 return SuccessResponse(message="执行步骤成功并已保存到数据库", data=result_data)
             except NotFoundException as e:
-                return NotFoundResponse(message=str(e))
+                return NotFoundResponse(message=str(e.message))
             except ParameterException as e:
-                return BadReqResponse(message=str(e))
+                return BadReqResponse(message=str(e.message))
             except Exception as transaction_error:
                 logger.error(f"执行步骤过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
                 return FailureResponse(message=f"执行失败，事务已回滚: {str(transaction_error)}")

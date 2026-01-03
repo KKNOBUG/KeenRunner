@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any, Type
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
 from backend.enums.autotest_enum import StepType
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
@@ -46,18 +47,18 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
     step_type: StepType = Field(..., description="步骤类型")
     step_state: bool = Field(..., description="步骤执行状态")
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
+    case_id: int = Field(..., description="用例ID")
+    case_code: str = Field(..., max_length=64, description="用例标识代码")
     report_code: str = Field(..., max_length=64, description="报告标识代码")
     detail_id: Optional[int] = Field(None, description="明细ID")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
-    case_id: int = Field(..., description="用例ID")
-    case_code: str = Field(..., max_length=64, description="用例标识代码")
     step_type: Optional[StepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态")
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiDetailSelect(BaseModel):
@@ -73,9 +74,9 @@ class AutoTestApiDetailSelect(BaseModel):
     step_no: Optional[int] = Field(None, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_type: Optional[StepType] = Field(None, description="步骤类型")
-    step_state: Optional[bool] = Field(default=True, description="步骤执行状态(True:成功, False:失败)")
+    step_state: Optional[bool] = Field(None, description="步骤执行状态(True:成功, False:失败)")
 
     detail_id: Optional[int] = Field(None, description="明细ID")
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人")
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人")
-    state: Optional[int] = Field(-1, description="状态(-1:未删除, 1:删除)")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人")
+    state: Optional[int] = Field(default=-1, description="状态(-1:未删除, 1:删除)")

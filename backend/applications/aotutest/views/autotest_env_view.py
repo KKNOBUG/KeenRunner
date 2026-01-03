@@ -119,17 +119,19 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
     try:
         q = Q()
         if env_in.env_id:
-            q &= Q(id__contains=env_in.env_id)
+            q &= Q(id=env_in.env_id)
         if env_in.env_code:
             q &= Q(env_code__contains=env_in.env_code)
         if env_in.project_id:
-            q &= Q(project_id__contains=env_in.project_id)
+            q &= Q(project_id=env_in.project_id)
         if env_in.env_name:
             q &= Q(env_name__contains=env_in.env_name)
         if env_in.env_host:
             q &= Q(env_host__contains=env_in.env_host)
         if env_in.created_user:
             q &= Q(created_user__iexact=env_in.created_user)
+        if env_in.updated_user:
+            q &= Q(updated_user__iexact=env_in.updated_user)
         q &= Q(state=env_in.state)
         total, instances = await AUTOTEST_API_ENV_CRUD.select_envs(
             search=q,

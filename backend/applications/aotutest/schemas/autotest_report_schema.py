@@ -10,6 +10,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
 from backend.enums.autotest_enum import ReportType
 
 
@@ -38,13 +39,13 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
     step_pass_ratio: float = Field(default=0.0, ge=0, description="用例步骤成功率(含所有子级步骤)")
 
     report_type: ReportType = Field(..., description="报告标识类型")
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人")
 
 
 class AutoTestApiReportUpdate(AutoTestApiReportBase):
     report_id: int = Field(None, description="报告ID")
     report_code: str = Field(None, max_length=64, description="报告标识代码")
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人")
 
 
 class AutoTestApiReportSelect(BaseModel):
@@ -60,7 +61,7 @@ class AutoTestApiReportSelect(BaseModel):
     task_code: Optional[str] = Field(None, description="任务标识代码")
 
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
-    created_user: Optional[str] = Field(None, max_length=16, description="创建人")
-    updated_user: Optional[str] = Field(None, max_length=16, description="更新人")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人")
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
-    state: Optional[int] = Field(-1, description="状态(-1:未删除, 1:删除)")
+    state: Optional[int] = Field(default=-1, description="状态(-1:未删除, 1:删除)")

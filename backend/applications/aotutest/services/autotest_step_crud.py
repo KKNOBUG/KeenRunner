@@ -178,7 +178,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step.case_id, on_error=True)
                 step_dict["case"] = await case.to_dict(
                     exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
-                    replace_fields={"id": "step_id"}
+                    replace_fields={"id": "case_id"}
                 )
 
             # 获取子步骤（递归构建）
@@ -238,32 +238,33 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestApiStepInfo:
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step_in.case_id, on_error=True)
+        case_id: int = step_in.case_id
+        step_no: int = step_in.step_no
+        await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
 
         # 业务层验证：如果指定了父步骤，检查父步骤是否存在
         if step_in.parent_step_id:
-            parent_step = await self.get_by_id(step_id=step_in.parent_step_id, on_error=True)
+            parent_step_id: int = step_in.parent_step_id
+            parent_step = await self.get_by_id(step_id=parent_step_id, on_error=True)
             # 业务层验证：确保父步骤属于同一个用例
             if parent_step.case_id != step_in.case_id:
-                raise NotFoundException(
-                    message=f"父级步骤(id={step_in.parent_step_id})与当前用例(id={step_in.case_id})不匹配"
-                )
+                raise NotFoundException(message=f"父级步骤(id={parent_step_id})与当前用例(id={case_id})不匹配")
 
         # 业务层验证：如果指定了引用用例，检查引用用例是否存在
         if step_in.quote_case_id:
-            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step_in.quote_case_id, on_error=False)
+            quote_case_id: int = step_in.quote_case_id
+            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=False)
             if not quote_case:
-                raise NotFoundException(message=f"引用用例(id={step_in.quote_case_id})信息不存在")
+                raise NotFoundException(message=f"引用用例(id={quote_case_id})信息不存在")
 
         # 业务层验证：检查同一用例下步骤序号是否已存在
-        existing_step = await self.model.filter(case_id=step_in.case_id, step_no=step_in.step_no, state__not=1).first()
+        existing_step = await self.model.filter(case_id=case_id, step_no=step_no, state__not=1).first()
         if existing_step:
-            raise DataAlreadyExistsException(
-                message=f"用例(id={step_in.case_id})下步骤序号(step_no={step_in.step_no})已存在"
-            )
+            raise DataAlreadyExistsException(message=f"用例(id={case_id})下步骤序号(step_no={step_no})已存在")
 
         try:
-            instance = await self.create(step_in)
+            step_dict = step_in.model_dump(exclude_none=True, exclude_unset=True)
+            instance = await self.create(step_dict)
             return instance
         except IntegrityError as e:
             raise DataBaseStorageException(message=f"创建步骤明细失败: {str(e)}")
@@ -275,6 +276,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             instance = await self.get_by_id(step_id=step_id, on_error=True)
         else:
             instance = await self.get_by_code(step_code=step_code, on_error=True)
+            step_id: int = instance.id
 
         # 构建更新字典
         update_dict: Dict[str, Any] = step_in.model_dump(
@@ -282,6 +284,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             exclude_unset=True,
             exclude={"step_id", "step_code"}
         )
+        if not update_dict:
+            return instance
         # 业务层验证：如果更新了步骤序号，检查是否冲突
         if "step_no" in update_dict:
             case_id = update_dict.get("case_id", instance.case_id)
@@ -765,7 +769,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 1. 查询用例信息
         case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
         case_dict = await case_instance.to_dict(
-            include_fields={"case_code", "case_name"},
+            include_fields={"id", "case_code", "case_name"},
             replace_fields={"id": "case_id"}
         )
 

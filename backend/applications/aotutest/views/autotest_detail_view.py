@@ -135,26 +135,28 @@ async def search_step_details(
     try:
         q = Q()
         if detail_in.case_id:
-            q &= Q(case_id__contains=detail_in.case_id)
+            q &= Q(case_id=detail_in.case_id)
         if detail_in.case_code:
             q &= Q(case_code__contains=detail_in.case_code)
         if detail_in.report_code:
             q &= Q(report_code__contains=detail_in.report_code)
         if detail_in.step_id:
-            q &= Q(step_id__contains=detail_in.step_id)
+            q &= Q(step_id=detail_in.step_id)
         if detail_in.step_no:
-            q &= Q(step_no__contains=detail_in.step_no)
+            q &= Q(step_no=detail_in.step_no)
         if detail_in.step_code:
             q &= Q(step_code__contains=detail_in.step_code)
         if detail_in.step_type:
             q &= Q(step_type=detail_in.step_type.value)
+        if detail_in.step_state is not None:
+            q &= Q(step_state=detail_in.step_state)
         if detail_in.detail_id:
             q &= Q(id=detail_in.detail_id)
         if detail_in.created_user:
             q &= Q(created_user__iexact=detail_in.created_user)
         if detail_in.updated_user:
             q &= Q(updated_user__iexact=detail_in.updated_user)
-        q &= Q(step_state=detail_in.step_state, state=detail_in.state)
+        q &= Q(state=detail_in.state)
         total, instances = await AUTOTEST_API_DETAIL_CRUD.select_details(
             search=q,
             page=detail_in.page,

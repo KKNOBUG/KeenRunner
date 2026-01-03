@@ -54,8 +54,8 @@ async def create_case(
 
 @autotest_case.delete("/delete", summary="API自动化测试-按id或code删除用例")
 async def delete_case(
-        case_id: Optional[int] = Query(..., description="用例ID"),
-        case_code: Optional[str] = Query(..., description="用例标识代码"),
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
 ):
     try:
         instance = await AUTOTEST_API_CASE_CRUD.delete_case(case_id=case_id, case_code=case_code)
@@ -99,8 +99,8 @@ async def update_case(
 
 @autotest_case.get("/get", summary="API自动化测试-按id或code查询用例")
 async def get_case(
-        case_id: Optional[int] = Query(..., description="用例ID"),
-        case_code: Optional[str] = Query(..., description="用例标识代码"),
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
 ):
     try:
         if case_id:
@@ -127,7 +127,7 @@ async def search_cases(
     try:
         q = Q()
         if case_in.case_id:
-            q &= Q(id__contains=case_in.case_id)
+            q &= Q(id=case_in.case_id)
         if case_in.case_code:
             q &= Q(case_code__contains=case_in.case_code)
         if case_in.case_name:
@@ -137,13 +137,15 @@ async def search_cases(
         if case_in.case_type:
             q &= Q(case_type=case_in.case_type.value)
         if case_in.case_steps:
-            q &= Q(case_steps=case_in.case_steps)
+            q &= Q(case_steps__gte=case_in.case_steps)
         if case_in.case_project:
             q &= Q(case_project=case_in.case_project)
         if case_in.case_version:
-            q &= Q(case_version=case_in.case_version)
+            q &= Q(case_version__gte=case_in.case_version)
         if case_in.created_user:
             q &= Q(created_user__iexact=case_in.created_user)
+        if case_in.updated_user:
+            q &= Q(updated_user__iexact=case_in.updated_user)
         q &= Q(state=case_in.state)
         total, instances = await AUTOTEST_API_CASE_CRUD.select_cases(
             search=q,
