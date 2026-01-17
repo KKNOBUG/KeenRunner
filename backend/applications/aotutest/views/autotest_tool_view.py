@@ -11,6 +11,7 @@ from typing import List
 
 from fastapi import APIRouter
 
+from backend import LOGGER
 from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
@@ -46,6 +47,7 @@ async def get_func_info():
             'generate_information(min_age=18, max_age=60)',
             'generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, is_microsecond=False)',
         ]
+        LOGGER.info(f"辅助函数查询成功")
         return SuccessResponse(message="查询成功", data=func, total=len(func))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
