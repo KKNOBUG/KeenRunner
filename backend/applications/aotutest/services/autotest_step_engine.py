@@ -242,23 +242,26 @@ class StepExecutionContext:
         except (ValueError, TypeError) as e:
             raise StepExecutionError(
                 f"【等待控制】等待时间解析失败: "
-                f"参数[seconds]必须是[float]类型, 但得到[{type(seconds)}类型: [{seconds}], 错误描述: {e}"
+                f"参数[seconds]必须是[float]类型, 且不允许小于0, "
+                f"但得到[{type(seconds)}类型: [{seconds}], 错误描述: {e}"
             ) from e
         if wait_time < 0:
             raise StepExecutionError(
                 f"【等待控制】等待时间解析失败: "
-                f"参数[seconds]必须是[float]类型, 且不允许小于0, 但得到[{seconds}]"
+                f"参数[seconds]必须是[float]类型, 且不允许小于0, "
+                f"但得到[{type(seconds)}类型: [{seconds}]"
             )
         if wait_time > 300:
             raise StepExecutionError(
                 f"【等待控制】等待时间解析失败: "
-                f"参数[seconds]必须是[float]类型, 且不允许大于300, 但得到[{seconds}]"
+                f"参数[seconds]必须是[float]类型, 且不允许大于300, "
+                f"但得到[{type(seconds)}类型: [{seconds}]"
             )
         try:
             await asyncio.sleep(wait_time)
             self.log(f"【等待控制】等待 {wait_time} 秒成功")
         except Exception as e:
-            raise StepExecutionError(f"【等待控制】执行等待操作时发生错误: {e}") from e
+            raise StepExecutionError(f"【等待控制】执行等待操作时发生异常: {e}") from e
 
     async def send_http_request(
             self,
@@ -1336,22 +1339,19 @@ class LoopStepExecutor(BaseStepExecutor):
             condition_obj = json.loads(normalized_condition)
         except json.JSONDecodeError as e:
             raise StepExecutionError(
-                f"【循环结构】循环条件JSON格式错误: 条件配置不是有效的JSON格式, "
+                f"【循环结构】条件表达式不是有效的JSON格式, "
                 f"错误位置: 第{e.lineno}行, 第{e.colno}列, "
-                f"错误信息: {e.msg}, 请检查条件配置格式"
+                f"错误信息: {e.msg}"
             ) from e
 
         except Exception as e:
-            raise StepExecutionError(
-                f"【循环结构】处理循环条件时发生错误: 在解析或处理条件配置时失败, 错误详情: {e}") from e
+            raise StepExecutionError(f"【循环结构】条件表达式解析异常, 错误详情: {e}") from e
 
         value_expr = condition_obj.get("value")
         operation = condition_obj.get("operation")
         except_value = condition_obj.get("except_value")
-
         if value_expr is None or operation is None:
-            raise StepExecutionError(
-                f"【循环结构】循环条件配置不完整: 缺少必要字段, value={value_expr}, operation={operation}, 请检查条件配置")
+            raise StepExecutionError(f"【循环结构】条件表达式缺少必要字段: [value={value_expr}, operation={operation}]")
 
         try:
             resolved = self.context.resolve_placeholders(value_expr)
@@ -1360,18 +1360,17 @@ class LoopStepExecutor(BaseStepExecutor):
                 try:
                     value = self.context.get_variable(variable_name)
                 except KeyError as e:
-                    raise StepExecutionError(f"【循环结构】循环条件中变量未定义: {variable_name}") from e
+                    raise StepExecutionError(f"【循环结构】条件表达式中变量未定义: {variable_name}") from e
             else:
                 value = resolved
         except Exception as e:
             if isinstance(e, StepExecutionError):
                 raise
-            raise StepExecutionError(f"【循环结构】循环条件变量解析失败: {e}") from e
-
+            raise StepExecutionError(f"【循环结构】条件表达式中变量解析失败: {e}") from e
         try:
             return ConditionStepExecutor.compare(value, operation, except_value)
         except Exception as e:
-            raise StepExecutionError(f"【循环结构】循环条件比较失败: {e}") from e
+            raise StepExecutionError(f"【循环结构】条件表达式执行异常, 错误描述: {e}") from e
 
     def _parse_iterable_source(self, source: Any) -> Any:
         """解析可迭代对象来源，支持变量引用、JSON字符串和直接对象"""
@@ -1527,11 +1526,17 @@ class PythonStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(
-                    f"【执行代码请求(Python)】代码执行异常: "
-                    f"错误类型: {type(e).__name__}"
-                    f"错误信息: {e}"
-                ) from e
+                error_message: str = (
+                    f"【执行代码请求(Python)】步骤执行失败: "
+                    f"用例ID: {self.case_id}, "
+                    f"步骤序号: {self.step_no}, "
+                    f"步骤标识: {self.step_code}, "
+                    f"步骤名称: {self.step_name}, "
+                    f"步骤类型: {self.step_type}, "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误详情: {e}"
+                )
+                raise StepExecutionError(error_message) from e
 
             if new_vars:
                 try:
@@ -1554,8 +1559,8 @@ class PythonStepExecutor(BaseStepExecutor):
             )
             result.success = False
             result.error = error_message
-            self.context.log(result.error, step_code=self.step_code)
-            raise StepExecutionError(result.error) from e
+            self.context.log(error_message, step_code=self.step_code)
+            raise StepExecutionError(error_message) from e
 
 
 class WaitStepExecutor(BaseStepExecutor):
@@ -1569,7 +1574,8 @@ class WaitStepExecutor(BaseStepExecutor):
                 wait_float = float(wait_seconds)
             except (ValueError, TypeError) as e:
                 raise StepExecutionError(
-                    f"【等待控制】等待时间格式错误: 期望数字类型, 实际值: {wait_seconds}, 错误: {e}"
+                    f"【等待控制】参数[wait]必须是[float]类型, 且不允许小于0, "
+                    f"但得到[{type(wait_seconds)}]类型: {wait_seconds}, 错误: {e}"
                 ) from e
 
             try:
@@ -1577,12 +1583,12 @@ class WaitStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(f"【等待控制】等待步骤执行失败: {e}") from e
+                raise StepExecutionError(f"【等待控制】步骤执行失败: {e}") from e
         except StepExecutionError:
             raise
         except Exception as e:
             error_message: str = (
-                f"【等待控制】步骤执行失败: "
+                f"【等待控制】步骤执行异常: "
                 f"用例ID: {self.case_id}, "
                 f"步骤序号: {self.step_no}, "
                 f"步骤标识: {self.step_code}, "
@@ -2341,9 +2347,15 @@ class StepExecutorFactory:
 class AutoTestStepExecutionEngine:
     """测试步骤执行引擎入口。"""
 
-    def __init__(self, *, http_client: Optional[HttpClientProtocol] = None, save_report: bool = True) -> None:
+    def __init__(
+            self, *,
+            http_client: Optional[HttpClientProtocol] = None,
+            save_report: bool = True,
+            task_code: Optional[str] = None,
+    ) -> None:
         self._http_client = http_client
         self._save_report = save_report
+        self._task_code = task_code
         self._report_code: Optional[str] = None
 
     async def execute_case(
