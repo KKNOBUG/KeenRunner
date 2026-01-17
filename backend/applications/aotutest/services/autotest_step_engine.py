@@ -733,7 +733,11 @@ class BaseStepExecutor:
                     await self._save_step_detail(result, step_st_time_str, num_cycles)
                 except Exception as e:
                     # 保存步骤明细失败不应该影响执行流程
-                    self.context.log(f"保存步骤明细失败: {e}", step_code=self.step_code)
+                    self.context.log(
+                        f"保存步骤明细(case_id={self.case_id}, step_id={self.step_id}, "
+                        f"step_no={self.step_no}, step_code={self.step_code})失败, 错误描述: {e}",
+                        step_code=self.step_code
+                    )
         return result
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
@@ -811,7 +815,10 @@ class BaseStepExecutor:
             from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
             await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_create)
         except Exception as e:
-            error_message: str = f"保存步骤明细到数据库失败: 步骤ID={self.step_id}, 步骤编号={self.step_no}, 错误详情: {e}"
+            error_message: str = (
+                f"保存步骤明细(case_id={self.case_id}, step_id={self.step_id}, "
+                f"step_no={self.step_no}, step_code={self.step_code})失败, 错误描述: {e}"
+            )
             raise StepExecutionError(error_message)
 
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -1366,7 +1373,7 @@ class LoopStepExecutor(BaseStepExecutor):
         except Exception as e:
             if isinstance(e, StepExecutionError):
                 raise
-            raise StepExecutionError(f"【循环结构】条件表达式中变量解析失败: {e}") from e
+            raise StepExecutionError(f"【循环结构】条件表达式中占位符解析异常, 错误描述: {e}") from e
         try:
             return ConditionStepExecutor.compare(value, operation, except_value)
         except Exception as e:
@@ -1416,15 +1423,13 @@ class ConditionStepExecutor(BaseStepExecutor):
                 condition_obj = json.loads(normalized_condition)
             except json.JSONDecodeError as e:
                 raise StepExecutionError(
-                    f"【条件分支】解析失败: "
-                    f"条件配置不是有效的JSON格式, "
+                    f"【条件分支】条件表达式不是有效的JSON格式: "
                     f"错误位置: 第{e.lineno}行, 第{e.colno}列, "
                     f"错误类型: {type(e).__name__}"
                     f"错误信息: {e}"
                 ) from e
             except Exception as e:
-                raise StepExecutionError(
-                    f"【条件分支】解析条件配置时发生错误: 在处理条件JSON字符串时失败, 错误详情: {e}") from e
+                raise StepExecutionError(f"【条件分支】条件表达式解析异常, 错误详情: {e}") from e
 
             value_expr = condition_obj.get("value")
             operation = condition_obj.get("operation")
@@ -1432,16 +1437,13 @@ class ConditionStepExecutor(BaseStepExecutor):
             desc = condition_obj.get("desc", "")
             if value_expr is None or operation is None:
                 raise StepExecutionError(
-                    f"【条件分支】条件配置不完整: 缺少必要字段, value={value_expr}, operation={operation}, 请检查条件配置是否完整"
-                )
+                    f"【条件分支】条件表达式缺少必要字段: [value={value_expr}, operation={operation}]")
             try:
                 resolved_value_expr = self.context.resolve_placeholders(value_expr)
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(
-                    f"【条件分支】解析条件变量占位符时发生错误: 在处理条件值'{value_expr}'中的变量占位符时失败, 错误详情: {e}"
-                ) from e
+                raise StepExecutionError(f"【条件分支】条件表达式占位符解析异常, 错误详情: {e}") from e
 
             try:
                 if isinstance(resolved_value_expr, str) and resolved_value_expr.startswith(
@@ -1450,13 +1452,13 @@ class ConditionStepExecutor(BaseStepExecutor):
                     try:
                         value = self.context.get_variable(variable_name)
                     except KeyError as e:
-                        raise StepExecutionError(f"【条件分支】条件中变量未定义: {variable_name}") from e
+                        raise StepExecutionError(f"【条件分支】条件表达式中变量未定义: {variable_name}") from e
                 else:
                     value = resolved_value_expr
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(f"【条件分支】条件值获取失败: {e}") from e
+                raise StepExecutionError(f"【条件分支】条件表达式中变量解析异常, 错误描述: {e}") from e
 
             try:
                 if not self.compare(value, operation, except_value):
@@ -1465,7 +1467,7 @@ class ConditionStepExecutor(BaseStepExecutor):
                     self.context.log(result.message, step_code=self.step_code)
                     return
             except Exception as e:
-                raise StepExecutionError(f"【条件分支】条件比较失败: {e}") from e
+                raise StepExecutionError(f"【条件分支】条件表达式执行异常, 错误描述: {e}") from e
 
             result.message = f"【条件分支】条件满足: {desc}"
             self.context.log(result.message, step_code=self.step_code)
@@ -1621,13 +1623,10 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     }
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(
-                    f"【引用公共用例】用例(id={quote_case_id})不存在, 错误描述: {e.message}"
-                ) from e
+                raise StepExecutionError(f"【引用公共用例】用例(id={quote_case_id})不存在, 错误描述: {e.message}") from e
             except Exception as e:
-                raise StepExecutionError(
-                    f"【引用公共用例】用例(id={quote_case_id})不存在, 错误描述: {e}"
-                ) from e
+                raise StepExecutionError(f"【引用公共用例】用例(id={quote_case_id})查询异常, 错误描述: {e}") from e
+
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
                 replace_fields={"id", "case_id"}
@@ -1635,7 +1634,6 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             quote_case_name: str = quote_case_dict["case_name"]
             try:
                 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-                quote_steps_count: Dict[str, Any] = {}
                 quote_steps = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=quote_case_id)
                 if not quote_steps:
                     self.context.log(
@@ -1643,12 +1641,10 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                         step_code=self.step_code
                     )
                     return
-                else:
-                    quote_steps_count = quote_steps.pop(-1)
+                quote_steps.pop(-1)
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共用例】获取用例(id={quote_case_id})步骤树数据失败, 错误描述: {e}"
-                ) from e
+                    f"【引用公共用例】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}") from e
 
             self.context.log(
                 f"【引用公共用例】执行用例(id={quote_case_id}, name={quote_case_name})开始",
