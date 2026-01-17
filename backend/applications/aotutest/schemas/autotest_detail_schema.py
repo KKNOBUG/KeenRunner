@@ -11,13 +11,15 @@ from typing import Optional, List, Dict, Any, Type
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import StepType
+from backend.enums.autotest_enum import AutoTestStepType
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
 class AutoTestApiDetailBase(BaseModel):
+    quote_case_id: Optional[int] = Field(None, ge=1, description="引用公共用例ID")
+
     step_st_time: Optional[str] = Field(None, max_length=255, description="步骤执行开始时间")
     step_ed_time: Optional[str] = Field(None, max_length=255, description="步骤执行结束时间")
     step_elapsed: Optional[str] = Field(None, max_length=16, description="步骤执行消耗时间")
@@ -45,7 +47,7 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
     step_no: int = Field(..., description="步骤序号")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
-    step_type: StepType = Field(..., description="步骤类型")
+    step_type: AutoTestStepType = Field(..., description="步骤类型")
     step_state: bool = Field(..., description="步骤执行状态")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
@@ -56,7 +58,7 @@ class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
     report_code: str = Field(..., max_length=64, description="报告标识代码")
     detail_id: Optional[int] = Field(None, description="明细ID")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
-    step_type: Optional[StepType] = Field(None, description="步骤类型")
+    step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
@@ -68,15 +70,16 @@ class AutoTestApiDetailSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, description="用例标识代码")
+    quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
 
     step_id: Optional[int] = Field(None, description="步骤ID")
     step_no: Optional[int] = Field(None, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
-    step_type: Optional[StepType] = Field(None, description="步骤类型")
+    step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态(True:成功, False:失败)")
 
     detail_id: Optional[int] = Field(None, description="明细ID")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人")
-    state: Optional[int] = Field(default=-1, description="状态(-1:未删除, 1:删除)")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    state: Optional[int] = Field(default=-1, description="状态(-1:启用, 1:禁用)")

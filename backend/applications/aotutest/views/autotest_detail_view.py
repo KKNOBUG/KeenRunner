@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
+from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
     AutoTestApiDetailUpdate,
@@ -40,9 +41,15 @@ async def create_step_detail(
     try:
         instance = await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "detail_id"}
         )
+        LOGGER.info(f"新增明细成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -67,9 +74,15 @@ async def delete_report(
             report_code=report_code
         )
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "detail_id"}
         )
+        LOGGER.info(f"按id或code删除明细成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -86,9 +99,15 @@ async def update_report(
     try:
         instance = await AUTOTEST_API_DETAIL_CRUD.update_detail(detail_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "detail_id"}
         )
+        LOGGER.info(f"按id或code更新明细成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -116,9 +135,15 @@ async def get_step_detail(
                 conditions={"step_code": step_code, "report_code": report_code}
             )
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "detail_id"}
         )
+        LOGGER.info(f"按id或code查询明细成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -165,10 +190,16 @@ async def search_step_details(
         )
         data = [
             await obj.to_dict(
-                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
                 replace_fields={"id": "detail_id"}
             ) for obj in instances
         ]
+        LOGGER.info(f"按条件查询明细成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

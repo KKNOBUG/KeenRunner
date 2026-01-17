@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
+from backend import LOGGER
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
@@ -38,9 +39,15 @@ async def create_env_info(env_in: AutoTestApiEnvCreate = Body(..., description="
     try:
         instance = await AUTOTEST_API_ENV_CRUD.create_env(env_in=env_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "env_id"}
         )
+        LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
@@ -58,9 +65,15 @@ async def delete_env_info(
     try:
         instance = await AUTOTEST_API_ENV_CRUD.delete_env(env_id=env_id, env_code=env_code)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "env_id"}
         )
+        LOGGER.info(f"按id或code删除环境成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -75,9 +88,15 @@ async def update_env_info(env_in: AutoTestApiEnvUpdate = Body(..., description="
     try:
         instance = await AUTOTEST_API_ENV_CRUD.update_env(env_in=env_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "env_id"}
         )
+        LOGGER.info(f"按id或code更新环境成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -102,9 +121,15 @@ async def get_env_info(
         else:
             instance = await AUTOTEST_API_ENV_CRUD.get_by_code(env_code=env_code, on_error=True)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "env_id"}
         )
+        LOGGER.info(f"按id或code查询环境成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -141,11 +166,17 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
         )
         data = [
             await obj.to_dict(
-                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
                 replace_fields={"id": "env_id"}
             )
             for obj in instances
         ]
+        LOGGER.info(f"按条件查询环境成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

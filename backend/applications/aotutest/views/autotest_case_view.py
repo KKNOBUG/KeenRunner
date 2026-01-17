@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
+from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_case_schema import (
     AutoTestApiCaseCreate,
     AutoTestApiCaseSelect,
@@ -42,9 +43,15 @@ async def create_case(
     try:
         instance = await AUTOTEST_API_CASE_CRUD.create_case(case_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "case_id"}
         )
+        LOGGER.info(f"新增用例成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
@@ -60,9 +67,15 @@ async def delete_case(
     try:
         instance = await AUTOTEST_API_CASE_CRUD.delete_case(case_id=case_id, case_code=case_code)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "case_id"}
         )
+        LOGGER.info(f"按id或code删除用例成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -81,9 +94,15 @@ async def update_case(
     try:
         instance = await AUTOTEST_API_CASE_CRUD.update_case(case_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "case_id"}
         )
+        LOGGER.info(f"按id或code更新除用例成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -108,9 +127,15 @@ async def get_case(
         else:
             instance = await AUTOTEST_API_CASE_CRUD.get_by_code(case_code=case_code, on_error=True)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "case_id"}
         )
+        LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -155,10 +180,16 @@ async def search_cases(
         )
         data = [
             await obj.to_dict(
-                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
                 replace_fields={"id": "case_id"}
             ) for obj in instances
         ]
+        LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

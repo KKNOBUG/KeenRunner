@@ -25,7 +25,7 @@ class ScaffoldModel(models.Model):
     async def to_dict(self,
                       include_fields: Optional[Union[List[str], Set[str]]] = None,
                       exclude_fields: Optional[Union[List[str], Set[str]]] = None,
-                      replace_fields: Optional[Dict[str, str]] = None,
+                      replace_fields: Optional[Union[List[str], Set[str]]] = None,
                       m2m: bool = False,
                       m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
                       m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
@@ -149,7 +149,7 @@ class ScaffoldModel(models.Model):
 
 
 class UUIDModel:
-    uuid = fields.UUIDField(unique=True, description="唯一标识符")
+    uid = fields.UUIDField(unique=True, description="唯一标识符")
 
 
 class PacketModel:
@@ -172,8 +172,14 @@ class TimestampMixin:
 
 
 class MaintainMixin:
-    created_user = fields.CharField(max_length=16, default=None, null=True, description="创建人")
-    updated_user = fields.CharField(max_length=16, default=None, null=True, description="更新人")
+    created_user = fields.CharField(max_length=16, default=None, null=True, description="创建人员")
+    updated_user = fields.CharField(max_length=16, default=None, null=True, description="更新人员")
+
+
+class ReserveFields:
+    reserve_1 = fields.CharField(max_length=64, default=None, null=True, description="备用字段1")
+    reserve_2 = fields.CharField(max_length=128, default=None, null=True, description="备用字段2")
+    reserve_3 = fields.CharField(max_length=255, default=None, null=True, description="备用字段3")
 
 
 # 类型变量 ModelType，限定为继承自 Model 的类型
@@ -286,19 +292,20 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             await obj.delete()
         return obj
 
+UpperStr = str
 
-class UpperStr(str):
-    @classmethod
-    def __get__validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v, *args):
-        if v is None:
-            return v
-        if isinstance(v, str):
-            return v.upper()
-        return v
+# class UpperStr(str):
+#     @classmethod
+#     def __get__validators__(cls):
+#         yield cls.validate
+#
+#     @classmethod
+#     def validate(cls, v, *args):
+#         if v is None:
+#             return v
+#         if isinstance(v, str):
+#             return v.upper()
+#         return v
 
 
 class LowerStr(str):

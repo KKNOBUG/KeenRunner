@@ -10,9 +10,9 @@ from typing import Optional, List, Dict, Any, Union, Type
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from backend.applications.base.services.scaffold import UpperStr
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
-from backend.enums.autotest_enum import CaseType, StepType, LoopMode, LoopErrorStrategy
+from backend.applications.base.services.scaffold import UpperStr
+from backend.enums.autotest_enum import AutoTestCaseType, AutoTestStepType, AutoTestLoopMode, AutoTestLoopErrorStrategy
 from backend.enums.http_enum import HTTPMethod
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
@@ -45,8 +45,8 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码(更新必填, 新增不填)")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
     step_desc: Optional[str] = Field(None, description="步骤描述")
-    step_type: Optional[StepType] = Field(None, description="步骤类型")
-    case_type: Optional[CaseType] = Field(None, description="用例所属类型")
+    step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
+    case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
 
     case_id: Optional[int] = Field(None, description="步骤所属用例")
     quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
@@ -54,14 +54,14 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
     wait: Optional[float] = Field(None, ge=0, le=300, description="等待控制(正浮点数, 单位:秒)")
-    loop_mode: Optional[LoopMode] = Field(None, description="循环模式类型")
+    loop_mode: Optional[AutoTestLoopMode] = Field(None, description="循环模式类型")
     loop_maximums: Optional[int] = Field(None, ge=0, le=100, description="最大循环次数(正整数)")
     loop_interval: Optional[float] = Field(None, ge=0, le=60, description="每次循环间隔时间(正浮点数)")
     loop_iterable: Optional[str] = Field(None, max_length=512, description="循环对象来源(变量名或可迭代对象)")
     loop_iter_idx: Optional[str] = Field(None, max_length=64, description="用于存储enumerate得到的索引值")
     loop_iter_key: Optional[str] = Field(None, max_length=64, description="用于存储字典的键")
     loop_iter_val: Optional[str] = Field(None, max_length=64, description="用于存储字典的值或列表的项")
-    loop_on_error: Optional[LoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
+    loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
     loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
     conditions: NON_LIST_DICT_TYPE = Field(None, description="判断条件(循环结构或条件分支)")
     state: Optional[int] = Field(default=-1, description="状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
@@ -73,14 +73,14 @@ class AutoTestApiStepChildren(BaseModel):
 
 
 class AutoTestApiStepCreate(AutoTestApiStepBase):
-    step_no: int = Field(..., description="步骤序号")
-    step_type: StepType = Field(..., description="步骤类型")
+    step_no: int = Field(..., ge=1, description="步骤序号")
+    step_name: str = Field(..., max_length=64, description="步骤名称")
+    case_type: AutoTestCaseType = Field(..., description="用例所属类型")
+    step_type: AutoTestStepType = Field(..., description="步骤类型")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")
 
 
 class AutoTestApiStepUpdate(AutoTestApiStepBase):
-    step_id: Optional[int] = Field(None, description="步骤ID")
-    step_code: Optional[str] = Field(None, description="步骤标识代码")
     updated_user: Optional[UpperStr] = Field(None, description="更新人员")
 
 
@@ -92,12 +92,12 @@ class AutoTestStepSelect(BaseModel):
     step_id: Optional[int] = Field(None, description="步骤ID")
     step_no: Optional[int] = Field(None, description="步骤序号")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
-    step_type: Optional[StepType] = Field(None, description="步骤类型")
+    step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
 
     case_id: Optional[int] = Field(None, description="用例ID")
-    case_type: Optional[CaseType] = Field(None, description="用例所属类型")
+    case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
-    quote_case_id: Optional[int] = Field(None, description="引用用例信息ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, description="更新人员")
     state: Optional[int] = Field(-1, description="状态(-1:未删除, 1:删除, 2:执行成功, 3:执行失败)")
@@ -107,7 +107,7 @@ class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
     quote_steps: Optional[List[Any]] = Field(None, description="引用步骤列表(更新时忽略)")
-    quote_case: Optional[Any] = Field(None, description="引用用例信息(更新时忽略)")
+    quote_case: Optional[Any] = Field(None, description="引用公共用例信息(更新时忽略)")
 
 
 class AutoTestStepTreeUpdateList(BaseModel):
@@ -146,15 +146,14 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 class AutoTestStepTreeExecute(BaseModel):
     case_id: Optional[int] = Field(None, description="用例ID(运行模式必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填)")
-    initial_variables: NON_DICT_TYPE = Field(None, description="初始变量")
+    initial_variables: NON_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
 
     @model_validator(mode='after')
     def validate_mode(self):
         case_id = self.case_id
         steps = self.steps
-        # 必须提供case_id或steps之一，但不能同时提供
         if case_id is None and (steps is None or len(steps) == 0):
-            raise ValueError("运行模式必须提供case_id，调试模式必须提供steps")
+            raise ValueError("运行模式必须提供[case_id]参数，调试模式必须提供[steps]参数")
         if case_id is not None and steps is not None and len(steps) > 0:
             raise ValueError("运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
         return self

@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
+from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate, AutoTestApiReportSelect, AutoTestApiReportUpdate
 )
@@ -38,9 +39,15 @@ async def create_report(
     try:
         instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "report_id"}
         )
+        LOGGER.info(f"新增报告成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -62,9 +69,15 @@ async def delete_report(
     try:
         instance = await AUTOTEST_API_REPORT_CRUD.delete_report(report_id=report_id, report_code=report_code)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "report_id"}
         )
+        LOGGER.info(f"按id或code删除报告成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -81,9 +94,15 @@ async def update_report(
     try:
         instance = await AUTOTEST_API_REPORT_CRUD.update_report(report_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "report_id"}
         )
+        LOGGER.info(f"按id或code更新报告成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -106,9 +125,15 @@ async def get_report(
         else:
             instance = await AUTOTEST_API_REPORT_CRUD.get_by_code(report_code=report_code, on_error=True)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "report_id"}
         )
+        LOGGER.info(f"按id或code查询报告成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -153,10 +178,16 @@ async def search_reports(
         )
         data = [
             await obj.to_dict(
-                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
                 replace_fields={"id": "report_id"}
             ) for obj in instances
         ]
+        LOGGER.info(f"按条件查询报告成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")

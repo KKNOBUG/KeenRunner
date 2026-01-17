@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
+from backend import LOGGER
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
@@ -40,9 +41,15 @@ async def create_project_info(project_in: AutoTestApiProjectCreate = Body(..., d
     try:
         instance = await AUTOTEST_API_PROJECT_CRUD.create_project(project_in=project_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "project_id"}
         )
+        LOGGER.info(f"新增应用成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -64,9 +71,15 @@ async def delete_project_info(
     try:
         instance = await AUTOTEST_API_PROJECT_CRUD.delete_project(project_id=project_id, project_code=project_code)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "project_id"}
         )
+        LOGGER.info(f"按id或code删除应用成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -81,9 +94,15 @@ async def update_project_info(project_in: AutoTestApiProjectUpdate = Body(..., d
     try:
         instance = await AUTOTEST_API_PROJECT_CRUD.update_project(project_in=project_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "project_id"}
         )
+        LOGGER.info(f"按id或code更新应用成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -108,9 +127,15 @@ async def get_project_info(
         else:
             instance = await AUTOTEST_API_PROJECT_CRUD.get_by_code(project_code=project_code, on_error=True)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "project_id"}
         )
+        LOGGER.info(f"按id或code查询应用成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -149,12 +174,18 @@ async def search_project_info(project_in: AutoTestApiProjectSelect = Body(..., d
         )
         data = [
             await obj.to_dict(
-                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
                 replace_fields={"id": "project_id"}
             )
             for obj in instances
         ]
-        return SuccessResponse(message="查询成功", data=data, total=1)
+        LOGGER.info(f"按条件查询应用成功, 结果明细: {total}")
+        return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

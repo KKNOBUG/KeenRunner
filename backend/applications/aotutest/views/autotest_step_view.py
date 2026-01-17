@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+import traceback
 from typing import List, Dict, Any, Optional
 
 import httpx
@@ -17,6 +18,7 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -30,10 +32,8 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-from backend.applications.aotutest.services.autotest_step_engine import (
-    AutoTestStepExecutionEngine,
-    AutoTestToolService
-)
+from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
+from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     ParameterException,
@@ -50,9 +50,7 @@ from backend.core.responses.http_response import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
-from backend.enums.autotest_enum import ReportType
-
-logger = logging.getLogger(__name__)
+from backend.enums.autotest_enum import AutoTestReportType
 
 autotest_step = APIRouter()
 
@@ -64,9 +62,15 @@ async def create_step(
     try:
         instance = await AUTOTEST_API_STEP_CRUD.create_step(step_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "step_id"}
         )
+        LOGGER.info(f"新增步骤成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -88,9 +92,15 @@ async def delete_step(
     try:
         instance = await AUTOTEST_API_STEP_CRUD.delete_step(step_id=step_id, step_code=step_code)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "step_id"}
         )
+        LOGGER.info(f"按id或code删除步骤成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -109,9 +119,15 @@ async def update_step(
     try:
         instance = await AUTOTEST_API_STEP_CRUD.update_step(step_in)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "step_id"}
         )
+        LOGGER.info(f"按id或code更新步骤成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -136,9 +152,15 @@ async def get_step(
         else:
             instance = await AUTOTEST_API_STEP_CRUD.get_by_code(step_code=step_code, on_error=True)
         data = await instance.to_dict(
-            exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
             replace_fields={"id": "step_id"}
         )
+        LOGGER.info(f"按id或code查询步骤成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -182,10 +204,16 @@ async def search_steps(
         )
         data = [
             await obj.to_dict(
-                exclude_fields={"state", "created_user", "updated_user", "created_time", "updated_time"},
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
                 replace_fields={"id": "step_id"}
             ) for obj in instances
         ]
+        LOGGER.info(f"按条件查询步骤成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -200,7 +228,8 @@ async def get_step_tree(
 ):
     try:
         tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id, case_code=case_code)
-        step_counter = tree_data.pop(-1)
+        step_counter: Dict[str, Any] = tree_data.pop(-1)
+        LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {step_counter}")
         return SuccessResponse(message="查询成功", data=tree_data, total=step_counter["total_steps"])
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -238,34 +267,21 @@ async def batch_update_steps_tree(
         # 获取用例信息和步骤数据
         case_data: AutoTestApiCaseUpdate = data.case
         steps_data: List[AutoTestStepTreeUpdateItem] = data.steps
-        logger.info(f"开始批量更新步骤树，共 {len(steps_data)} 个根步骤")
 
         # 1. 校验步骤树结构合法性
         is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(steps_data)
         if not is_valid:
-            logger.error(f"步骤树结构校验失败: {error_msg}")
-            return BadReqResponse(message=f"步骤树结构校验失败: {error_msg}")
+            error_message: str = f"步骤树结构校验失败: {error_msg}"
+            LOGGER.error(error_message)
+            return BadReqResponse(message=f"步骤树结构校验失败", data=error_msg)
 
-        # 2. 判断是新增还是更新
-        case_id = case_data.case_id
-        case_code = case_data.case_code
-        # 如果同时存在case_id和case_code字段，说明用例信息存在，判定为更新
-        if case_id and case_code:
-            is_update = True
-            logger.info(f"检测到更新操作，case_id={case_id}, case_code={case_code}")
-        elif not case_id and not case_code:
-            is_update = False
-            logger.info(f"检测到新增操作，case_id={case_id}, case_code={case_code}")
-        else:
-            return ParameterResponse(message="用例参数校验失败")
-
-        # 3. 准备用例数据
+        # 2. 准备用例数据
         cases_data: List[AutoTestApiCaseUpdate] = [case_data]
 
-        # 5. 使用事务执行批量更新/新增
+        # 3. 使用事务执行批量更新/新增
         try:
             async with in_transaction():
-                # 5.1 处理用例信息
+                # 3.1 处理用例信息
                 case_result: Dict[str, Any] = {
                     "created_count": 0,
                     "updated_count": 0,
@@ -277,10 +293,10 @@ async def batch_update_steps_tree(
                     created_case_count: int = case_result['created_count']
                     updated_case_count: int = case_result['updated_count']
                     success_case_detail: List[Dict[str, Any]] = case_result['success_detail']
-                    logger.info(
+                    LOGGER.info(
                         f"用例处理完成："
-                        f"新增: {created_case_count}个, "
-                        f"更新: {updated_case_count}个, "
+                        f"新增用例: {created_case_count}个, "
+                        f"更新用例: {updated_case_count}个, "
                         f"成功明细: {success_case_detail}"
                     )
 
@@ -296,20 +312,20 @@ async def batch_update_steps_tree(
                                 for step in steps:
                                     step.case_id = relevant_case_id
                                     if step.children:
-                                        recursive_update_case_id(step.children, case_id)
+                                        recursive_update_case_id(step.children, relevant_case_id)
 
                             recursive_update_case_id(steps_data, successful_case_id)
 
-                # 5.2 批量更新/新增步骤信息（递归处理）
+                # 3.2 批量更新/新增步骤信息（递归处理）
                 step_result: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.batch_update_or_create_steps(steps_data)
                 created_step_count: int = step_result['created_count']
                 updated_step_count: int = step_result['updated_count']
                 deleted_step_count: int = step_result['deleted_count']
                 success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
-                logger.info(
+                LOGGER.info(
                     f"步骤处理完成："
-                    f"新增: {created_step_count}个, "
-                    f"更新: {updated_step_count}个, "
+                    f"新增步骤: {created_step_count}个, "
+                    f"更新步骤: {updated_step_count}个, "
                     f"成功明细: {success_step_detail}"
                 )
 
@@ -328,7 +344,7 @@ async def batch_update_steps_tree(
                     f"步骤更新数: {updated_step_count}, "
                     f"步骤删除数: {deleted_step_count}"
                 )
-                logger.warning(message)
+                LOGGER.info(f"更新用例及步骤树成功, 结果数量: {message}")
                 return SuccessResponse(message=message, data=result_data)
         except (TypeRejectException,
                 ParameterException,
@@ -336,9 +352,14 @@ async def batch_update_steps_tree(
                 DataAlreadyExistsException,
                 NotFoundException) as e:
             return FailureResponse(message=e.message)
-        except Exception as transaction_error:
+        except Exception as e:
             # 事务会自动回滚
-            logger.error(f"批量处理过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
+            LOGGER.error(
+                f"发生未知错误，事务已回滚, "
+                f"错误类型: {type(e).__name__}, "
+                f"错误描述: {e}, "
+                f"错误回溯: {traceback.format_exc()}"
+            )
             raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -349,8 +370,8 @@ async def batch_update_steps_tree(
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        logger.error(f"批量处理失败，异常描述: {str(e)}", exc_info=True)
-        return FailureResponse(message=f"批量处理失败，异常描述: {str(e)}")
+        LOGGER.error(str(e))
+        return FailureResponse(message=f"更新用例及步骤树异常", data=str(e))
 
 
 @autotest_step.post("/http_debugging", summary="API自动化测试-HTTP请求调试")
@@ -408,7 +429,6 @@ async def debug_http_request(
         # 日志辅助函数：添加时间戳和步骤名称
         from datetime import datetime
         def format_log(message: str) -> str:
-            """格式化日志：[时间戳] [步骤名称] 消息内容"""
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
 
@@ -419,20 +439,57 @@ async def debug_http_request(
             format_log(f"参数替换开始"),
         ]
 
-        # 处理变量替换（简单实现，支持 ${variable} 格式）
         def resolve_placeholders(value: Any) -> Any:
-            """解析占位符变量"""
-            if isinstance(value, str):
-                for var_name, var_value in defined_variables.items():
-                    if value.startswith("$"):
-                        value = value.replace(f"${{{var_name}}}", str(var_value))
-                        logs.append("${" + var_name + "} => " + f"{var_value}")
+            """支持嵌套结构中的 ${var} 占位符替换。"""
+            try:
+                if isinstance(value, str):
+                    pattern = re.compile(r"\$\{([^}]+)}")
+
+                    def replace(match: re.Match[str]) -> str:
+                        var_name = match.group(1)
+                        if not var_name:
+                            logs.append("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
+                            return match.group(0)
+                        try:
+                            resolved = defined_variables[var_name]
+                        except KeyError:
+                            logs.append(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                            return match.group(0)
+                        except Exception as e:
+                            logs.append(
+                                f"【获取变量】占位符解析失败, 引用变量({var_name})引发未知异常, 保留原值, 错误描述: {e}")
+                            return match.group(0)
+                        try:
+                            logs.append("【获取变量】占位符解析成功, ${" + var_name + "} <=> " + f"{resolved}")
+                            return str(resolved)
+                        except Exception as e:
+                            logs.append(
+                                f"【获取变量】将变量[{var_name}]的值[{resolved}]转换为字符串时失败, 保留原值, 错误描述: {e}")
+                            return match.group(0)
+
+                    return pattern.sub(replace, value)
+
+                if isinstance(value, dict):
+                    try:
+                        return {k: resolve_placeholders(v) for k, v in value.items()}
+                    except Exception as e:
+                        logs.append(f"【获取变量】解析字典中的占位符时发生错误, 键: {list(value.keys())}, 错误: {e}")
+                        return value
+
+                if isinstance(value, list):
+                    try:
+                        return [resolve_placeholders(item) for item in value]
+                    except Exception as e:
+                        logs.append(f"【获取变量】解析列表中的占位符时发生错误, 列表长度: {len(value)}, 错误: {e}")
+                        return value
                 return value
-            elif isinstance(value, dict):
-                return {k: resolve_placeholders(v) for k, v in value.items()}
-            elif isinstance(value, list):
-                return [resolve_placeholders(item) for item in value]
-            return value
+            except Exception as e:
+                logs.append(
+                    f"【获取变量】占位符解析过程中发生未知异常, 保留原值, "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误描述: {e}"
+                )
+                return value
 
         # 解析请求参数
         headers = resolve_placeholders(request_header)
@@ -491,8 +548,13 @@ async def debug_http_request(
             except httpx.RequestError as e:
                 return FailureResponse(message=f"请求失败: {str(e)}")
             except Exception as e:
-                logger.error(f"HTTP请求异常: {str(e)}", exc_info=True)
-                return FailureResponse(message=f"请求异常: {str(e)}")
+                error_message: str = (
+                    f"【HTTP请求调试】请求服务器发生未知错误, "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误描述: {e}"
+                )
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                return FailureResponse(message=f"HTTP请求调试异常", data=error_message)
 
         # 计算耗时
         duration = int((time.time() - start_time) * 1000)  # 转换为毫秒
@@ -736,13 +798,18 @@ async def debug_http_request(
             }
         }
 
-        logger.info(
+        LOGGER.info(
             f"HTTP调试请求成功: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
 
-        return SuccessResponse(message="调试请求成功", data=result_data)
+        return SuccessResponse(message="HTTP调试请求成功", data=result_data)
     except Exception as e:
-        logger.error(f"调试HTTP请求失败，异常描述: {str(e)}", exc_info=True)
-        return FailureResponse(message=f"调试失败，异常描述: {str(e)}")
+        error_message: str = (
+            f"【HTTP请求调试】请求服务器发生未知错误，"
+            f"错误类型: {type(e).__name__}, "
+            f"错误详情: {e}"
+        )
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"HTTP调试请求异常", data=error_message)
 
 
 @autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
@@ -769,16 +836,15 @@ async def execute_step_tree(
         # 判断运行模式还是调试模式
         is_run_mode = case_id is not None
         is_debug_mode = steps is not None and len(steps) > 0
-
         if not is_run_mode and not is_debug_mode:
             return BadReqResponse(message="必须提供case_id（运行模式）或steps（调试模式）之一")
-
         if is_run_mode and is_debug_mode:
             return BadReqResponse(message="运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
 
         # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
             return {
+                "case_id": r.case_id,
                 "step_id": r.step_id,
                 "step_no": r.step_no,
                 "step_code": r.step_code,
@@ -801,20 +867,26 @@ async def execute_step_tree(
                 result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                     case_id=case_id,
                     initial_variables=initial_variables,
-                    report_type=ReportType.EXEC1
+                    report_type=AutoTestReportType.EXEC1
                 )
                 return SuccessResponse(message="执行步骤成功并已保存到数据库", data=result_data)
             except NotFoundException as e:
                 return NotFoundResponse(message=str(e.message))
             except ParameterException as e:
                 return BadReqResponse(message=str(e.message))
-            except Exception as transaction_error:
-                logger.error(f"执行步骤过程中发生异常，事务已回滚: {str(transaction_error)}", exc_info=True)
-                return FailureResponse(message=f"执行失败，事务已回滚: {str(transaction_error)}")
+            except Exception as e:
+                error_message: str = (
+                    f"执行步骤过程中发生异常，事务已回滚: "
+                    f"用例ID: {case_id}, "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误详情: {e}"
+                )
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                return FailureResponse(message=f"执行步骤过程中发生异常，事务已回滚: {str(e)}")
 
         # ========== 调试模式 ==========
-        else:  # is_debug_mode
-            # 1. 将Pydantic模型转换为字典（如果步骤是Pydantic模型）
+        else:
+            # 1. 将Pydantic模型转换为字典
             steps_dict = []
             for step in steps:
                 if hasattr(step, 'model_dump'):
@@ -847,9 +919,12 @@ async def execute_step_tree(
             tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
             # 4. 收集defined_variables
-            all_defined_variables = AutoTestToolService.collect_defined_variables(tree_data)
-            merged_initial_variables = dict(initial_variables)
-            merged_initial_variables.update(all_defined_variables)
+            all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
+            initial_variables.update(all_session_variables)
+            try:
+                merged_initial_variables = AutoTestToolService.execute_func_string(initial_variables)
+            except Exception as e:
+                return ParameterResponse(message=str(e))
 
             # 5. 获取根步骤
             root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
@@ -862,12 +937,10 @@ async def execute_step_tree(
                 case=case_info,
                 steps=root_steps,
                 initial_variables=merged_initial_variables,
-                report_type=ReportType.EXEC1
+                report_type=AutoTestReportType.EXEC1
             )
 
             # 7. 获取最终会话变量（从执行引擎返回）
-            # 会话变量已经包含了所有步骤产生的extract_variables
-            # 合并初始变量（defined_variables）
             final_session_variables = dict(session_variables)
             final_session_variables.update(merged_initial_variables)
 
@@ -886,7 +959,6 @@ async def execute_step_tree(
 
             return SuccessResponse(message="调试执行完成", data=result_data, )
     except Exception as e:
-        logger.error(f"执行步骤失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"执行失败，异常描述: {str(e)}")
 
 
@@ -894,20 +966,6 @@ async def execute_step_tree(
 async def batch_execute_cases_endpoint(
         request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数")
 ):
-    """
-    批量执行测试用例：
-    - 根据cases_ids列表(多个case_id)执行，逐一执行列表内的所有case_id
-    - 针对每一个case_id开启独立的事务，确保每个用例的执行结果独立保存
-    - 如果某个用例执行失败，不会影响其他用例的执行
-    - 返回每个用例的执行结果汇总
-
-    返回数据格式：
-    - total_cases: 总用例数
-    - success_cases: 成功用例数
-    - failed_cases: 失败用例数
-    - results: 每个用例的执行结果列表
-    - summary: 汇总信息（包含成功率、是否全部成功等）
-    """
     try:
         case_ids = request.case_ids
         execute_environment = request.env
@@ -915,20 +973,30 @@ async def batch_execute_cases_endpoint(
         if not case_ids or len(case_ids) == 0:
             return BadReqResponse(message="case_ids列表不能为空")
 
-        # 调用批量执行函数
-        result_data = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
+        # 后台执行
+        # from celery_scheduler.tasks.task_exec_case import task_batch_execute_cases
+        # apply_async_resound: AsyncResult = task_batch_execute_cases.apply_async(
+        #     kwargs={
+        #         "case_ids": case_ids,
+        #         "initial_variables": initial_variables,
+        #         "execute_environment": execute_environment,
+        #         "report_type": AutoTestApiReportType.EXEC2
+        #     },
+        #     expires=3600,
+        # )
+        # exec_result = {
+        #     "task_id": apply_async_resound.task_id,
+        #     "task_state": apply_async_resound.state
+        # }
+
+        # 即时执行
+        exec_result = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
             case_ids=case_ids,
-            initial_variables=initial_variables,
+            initial_variables=initial_variables or {},
             execute_environment=execute_environment,
-            report_type=ReportType.EXEC2
+            report_type=AutoTestReportType.EXEC2,
         )
-        message = (
-            f"批量执行完成: "
-            f"总用例数: {result_data['total_cases']}, "
-            f"成功: {result_data['success_cases']}, "
-            f"失败: {result_data['failed_cases']}"
-        )
-        return SuccessResponse(message=message, data=result_data, )
+        return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)
+
     except Exception as e:
-        logger.error(f"批量执行用例失败，异常描述: {str(e)}", exc_info=True)
         return FailureResponse(message=f"批量执行失败，异常描述: {str(e)}")
