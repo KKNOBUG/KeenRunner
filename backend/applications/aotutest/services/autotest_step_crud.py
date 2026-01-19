@@ -140,7 +140,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             # 获取步骤基本信息
             step_dict = await step.to_dict(
                 exclude_fields={
-                    "state", "created_user", "updated_user",
+                    "state",
+                    "created_user", "updated_user",
                     "created_time", "updated_time",
                     "reserve_1", "reserve_2", "reserve_3"
                 },
@@ -189,8 +190,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 parent_step_id__isnull=True,
                 state__not=1
             ).order_by("step_no").all()
-            LOGGER.info(
-                f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用用例的所有步骤(包含子步骤, 递归构建)开始 =")
+            LOGGER.info(f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用用例的所有步骤(包含子步骤, 递归构建)开始 =")
             step_dict["quote_steps"] = [await build_step_tree(quote, is_quote=True) for quote in quote_case_root_steps]
             step_dict["quote_case"] = await quote_case.to_dict(
                 exclude_fields={
@@ -201,8 +201,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 },
                 replace_fields={"id": "case_id"}
             )
-            LOGGER.info(
-                f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用用例的所有步骤(包含子步骤, 递归构建)完成 =")
+            LOGGER.info("= 获取步骤(step_id={step.id}, step_no={step.step_no})引用用例的所有步骤(包含子步骤, 递归构建)完成 =")
             return step_dict
 
         # 构建所有根步骤的树

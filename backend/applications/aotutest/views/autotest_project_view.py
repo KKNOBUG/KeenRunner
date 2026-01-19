@@ -12,12 +12,12 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from backend import LOGGER
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
     AutoTestApiProjectSelect
 )
+from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
@@ -27,9 +27,7 @@ from backend.core.exceptions.base_exceptions import (
 from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
-    DataAlreadyExistsResponse,
     ParameterResponse,
-    NotFoundResponse,
     DataBaseStorageResponse,
 )
 
@@ -51,14 +49,10 @@ async def create_project_info(project_in: AutoTestApiProjectCreate = Body(..., d
         )
         LOGGER.info(f"新增应用成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
@@ -81,10 +75,10 @@ async def delete_project_info(
         )
         LOGGER.info(f"按id或code删除应用成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
@@ -104,14 +98,10 @@ async def update_project_info(project_in: AutoTestApiProjectUpdate = Body(..., d
         )
         LOGGER.info(f"按id或code更新应用成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
@@ -137,9 +127,7 @@ async def get_project_info(
         )
         LOGGER.info(f"按id或code查询应用成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败, 异常描述: {e}")

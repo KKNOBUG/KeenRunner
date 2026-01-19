@@ -25,7 +25,7 @@ class ScaffoldModel(models.Model):
     async def to_dict(self,
                       include_fields: Optional[Union[List[str], Set[str]]] = None,
                       exclude_fields: Optional[Union[List[str], Set[str]]] = None,
-                      replace_fields: Optional[Union[List[str], Set[str]]] = None,
+                      replace_fields: Optional[Dict[str, str]] = None,
                       m2m: bool = False,
                       m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
                       m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,

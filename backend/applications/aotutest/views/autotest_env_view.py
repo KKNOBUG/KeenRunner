@@ -12,12 +12,12 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from backend import LOGGER
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvSelect
 )
+from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
@@ -26,9 +26,8 @@ from backend.core.exceptions.base_exceptions import (
 from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
-    DataAlreadyExistsResponse,
     ParameterResponse,
-    NotFoundResponse, DataBaseStorageResponse
+    DataBaseStorageResponse
 )
 
 autotest_env = APIRouter()
@@ -49,10 +48,10 @@ async def create_env_info(env_in: AutoTestApiEnvCreate = Body(..., description="
         )
         LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except DataBaseStorageException as e:
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
@@ -75,9 +74,7 @@ async def delete_env_info(
         )
         LOGGER.info(f"按id或code删除环境成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
@@ -98,14 +95,10 @@ async def update_env_info(env_in: AutoTestApiEnvUpdate = Body(..., description="
         )
         LOGGER.info(f"按id或code更新环境成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
@@ -131,9 +124,7 @@ async def get_env_info(
         )
         LOGGER.info(f"按id或code查询环境成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败, 异常描述: {e}")

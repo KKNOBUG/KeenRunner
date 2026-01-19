@@ -27,7 +27,6 @@ from backend.core.exceptions.base_exceptions import (
 from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
-    NotFoundResponse,
     ParameterResponse,
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
@@ -53,6 +52,8 @@ async def create_case(
         )
         LOGGER.info(f"新增用例成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
@@ -77,9 +78,7 @@ async def delete_case(
         )
         LOGGER.info(f"按id或code删除用例成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -104,14 +103,10 @@ async def update_case(
         )
         LOGGER.info(f"按id或code更新除用例成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
@@ -137,9 +132,7 @@ async def get_case(
         )
         LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {e}")

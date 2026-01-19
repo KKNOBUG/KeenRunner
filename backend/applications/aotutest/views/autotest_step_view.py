@@ -7,7 +7,6 @@
 @DateTime: 2025/4/28
 """
 import json
-import logging
 import re
 import time
 import traceback
@@ -72,14 +71,10 @@ async def create_step(
         )
         LOGGER.info(f"新增步骤成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
@@ -102,12 +97,10 @@ async def delete_step(
         )
         LOGGER.info(f"按id或code删除步骤成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
@@ -129,14 +122,10 @@ async def update_step(
         )
         LOGGER.info(f"按id或code更新步骤成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"修改失败，异常描述: {e}")
 
@@ -162,9 +151,7 @@ async def get_step(
         )
         LOGGER.info(f"按id或code查询步骤成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
@@ -231,9 +218,7 @@ async def get_step_tree(
         step_counter: Dict[str, Any] = tree_data.pop(-1)
         LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {step_counter}")
         return SuccessResponse(message="查询成功", data=tree_data, total=step_counter["total_steps"])
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

@@ -1728,6 +1728,7 @@ class HttpStepExecutor(BaseStepExecutor):
             step_type = self.step.get("step_type")
             request_url = self.step.get("request_url")
             request_project: str = self.step.get("request_project")
+            request_method = self.step.get("request_method", "").upper()
             if env and step_type == AutoTestStepType.HTTP and not request_url.lower().startswith("http"):
                 try:
                     env_instance = await AutoTestApiEnvInfo.filter(
@@ -1735,72 +1736,47 @@ class HttpStepExecutor(BaseStepExecutor):
                         env_name=env,
                     ).first()
                     if not env_instance:
-                        raise StepExecutionError(
-                            f"【HTTP请求】环境配置不存在: "
-                            f"项目({request_project})下未找到环境(name={env})的配置"
-                        )
+                        raise StepExecutionError(f"【HTTP请求】环境(project_id={request_project}, name={env})配置不存在")
                     execute_environment_host: str = env_instance.env_host.rstrip("/")
                     if not execute_environment_host:
                         raise StepExecutionError(
-                            f"【HTTP请求】环境主机地址为空: "
-                            f"环境(name={env})的主机(host={execute_environment_host})配置异常"
+                            f"【HTTP请求】环境(project_id={request_project}, "
+                            f"name={env}, host={execute_environment_host})配置异常"
                         )
                     request_url = f"{execute_environment_host}/{request_url.lstrip('/')}"
                 except StepExecutionError:
                     raise
                 except Exception as e:
-                    raise StepExecutionError(
-                        f"【HTTP请求】环境配置查询失败: "
-                        f"项目(id={request_project})环境(name={env})查询异常, 错误描述: {e}"
-                    ) from e
+                    raise StepExecutionError(f"【HTTP请求】环境配置查询异常, 错误描述: {e}") from e
 
-            request_method = (self.step.get("request_method") or "GET").upper()
-            request_port = self.step.get("request_port")
-            if request_url and not request_url.startswith("http") and not request_port:
+            if request_url and not request_url.startswith("http"):
                 raise StepExecutionError(
-                    f"【HTTP请求】请求URL格式错误: "
-                    f"URL({request_url})不是有效的HTTP/HTTPS地址, 请检查URL配置或添加端口号"
+                    f"【HTTP请求】请求URL({request_url})不是有效的HTTP/HTTPS地址"
                 )
             if not request_url:
                 raise StepExecutionError("【HTTP请求】HTTP请求配置错误: 请求URL(request_url)未配置")
-            if request_port:
-                raise StepExecutionError(
-                    f"【HTTP请求】TCP请求暂不支持: "
-                    f"检测到请求端口配置(request_port={request_port}), "
-                    f"当前版本仅支持HTTP/HTTPS请求, TCP请求功能尚未实现"
-                )
-            try:
-                headers = self.context.resolve_placeholders(self.step.get("request_header") or {})
-                params = self.context.resolve_placeholders(self.step.get("request_params") or {})
-                form_data = self.context.resolve_placeholders(self.step.get("request_form_data") or {})
-                urlencoded = self.context.resolve_placeholders(self.step.get("request_form_urlencoded") or {})
-                request_body = self.context.resolve_placeholders(self.step.get("request_body"))
-                request_text = self.step.get("request_text")
-            except Exception as e:
-                raise StepExecutionError(
-                    f"【HTTP请求】解析请求参数时发生错误: 在处理请求头、参数或请求体中的变量占位符时失败, 错误详情: {e}"
-                ) from e
 
+            headers = self.context.resolve_placeholders(self.step.get("request_header") or {})
+            params = self.context.resolve_placeholders(self.step.get("request_params") or {})
+            form_data = self.context.resolve_placeholders(self.step.get("request_form_data") or {})
+            urlencoded = self.context.resolve_placeholders(self.step.get("request_form_urlencoded") or {})
+            request_body = self.context.resolve_placeholders(self.step.get("request_body"))
+            request_text = self.context.resolve_placeholders(self.step.get("request_text"))
             form_files = self.step.get("request_form_file")
             data_payload: Optional[Any] = None
             json_payload: Optional[Any] = None
 
-            try:
-                if request_text:
-                    data_payload = self.context.resolve_placeholders(request_text)
-                elif form_data:
-                    data_payload = form_data
-                elif urlencoded:
-                    data_payload = urlencoded
+            if request_text:
+                data_payload = self.context.resolve_placeholders(request_text)
+            elif form_data:
+                data_payload = form_data
+            elif urlencoded:
+                data_payload = urlencoded
 
-                if request_body:
-                    json_payload = request_body
+            if request_body:
+                json_payload = request_body
 
-                params_payload = params if isinstance(params, dict) else None
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                raise StepExecutionError(f"【HTTP请求】处理请求体时发生错误: 在构建请求数据时失败, 错误详情: {e}") from e
+            params_payload = params if isinstance(params, dict) else None
 
             try:
                 response = await self.context.send_http_request(
@@ -1814,7 +1790,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 )
             except httpx.RequestError as e:
                 raise StepExecutionError(
-                    f"【HTTP请求】请求失败: 请求 {request_method} {request_url} 时发生网络错误, 错误详情: {e}"
+                    f"【HTTP请求】请求 {request_method} {request_url} 时发生网络错误, 错误详情: {e}"
                 ) from e
             except httpx.HTTPStatusError as e:
                 # HTTP状态错误不一定是失败, 记录响应继续处理
@@ -1825,7 +1801,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 )
             except Exception as e:
                 raise StepExecutionError(
-                    f"【HTTP请求】请求发生未预期的错误: 请求 {request_method} {request_url} 时发生异常, 错误详情: {e}"
+                    f"【HTTP请求】请求 {request_method} {request_url} 时发生未预期的异常, 错误详情: {e}"
                 ) from e
 
             try:
@@ -1842,10 +1818,10 @@ class HttpStepExecutor(BaseStepExecutor):
                     "elapsed": str(response.elapsed.total_seconds()),
                 }
             except AttributeError as e:
-                raise StepExecutionError(f"【HTTP请求】响应对象格式错误: 响应对象缺少必要属性, 错误详情: {e}") from e
+                raise StepExecutionError(f"【HTTP请求】响应对象缺少必要属性, 错误详情: {e}") from e
             except Exception as e:
                 raise StepExecutionError(
-                    f"【HTTP请求】处理响应时发生错误: 在提取响应状态码、头部、内容或Cookie时失败, 错误详情: {e}") from e
+                    f"【HTTP请求】在提取响应状态码、内容、headers、cookies时失败, 错误详情: {e}") from e
 
             try:
                 response_json = response.json()
@@ -1905,7 +1881,7 @@ class HttpStepExecutor(BaseStepExecutor):
             raise
         except Exception as e:
             error_message: str = (
-                f"【断言验证】步骤执行失败: "
+                f"【HTTP请求】步骤执行失败: "
                 f"用例ID: {self.case_id}, "
                 f"步骤序号: {self.step_no}, "
                 f"步骤标识: {self.step_code}, "

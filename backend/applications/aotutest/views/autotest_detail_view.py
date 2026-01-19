@@ -26,8 +26,6 @@ from backend.core.exceptions.base_exceptions import (
 from backend.core.responses.http_response import (
     SuccessResponse,
     FailureResponse,
-    DataAlreadyExistsResponse,
-    NotFoundResponse,
     ParameterResponse, DataBaseStorageResponse,
 )
 
@@ -51,12 +49,10 @@ async def create_step_detail(
         )
         LOGGER.info(f"新增明细成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
@@ -84,9 +80,7 @@ async def delete_report(
         )
         LOGGER.info(f"按id或code删除明细成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"删除失败，异常描述: {e}")
@@ -109,11 +103,9 @@ async def update_report(
         )
         LOGGER.info(f"按id或code更新明细成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"更新失败，异常描述: {e}")
@@ -145,9 +137,7 @@ async def get_step_detail(
         )
         LOGGER.info(f"按id或code查询明细成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {e}")
