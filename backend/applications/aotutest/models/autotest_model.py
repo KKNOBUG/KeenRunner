@@ -85,6 +85,7 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
 class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     tag_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="标签标识代码")
     tag_type = fields.CharEnumField(AutoTestTagType, description="标签所属类型")
+    tag_project = fields.IntField(default=1, ge=1, index=True, description="标签所属应用")
     tag_mode = fields.CharField(max_length=64, null=True, description="标签大类")
     tag_name = fields.CharField(max_length=64, null=True, description="标签名称")
     tag_desc = fields.CharField(max_length=2048, null=True, description="标签描述")
@@ -94,7 +95,7 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         table = "krun_autotest_api_tag"
         table_description = "自动化测试-标签信息表"
         unique_together = (
-            ("tag_type", "tag_mode", "tag_name"),
+            ("tag_project", "tag_type", "tag_mode", "tag_name"),
         )
         indexes = (
             ("tag_type", "tag_mode", "tag_name"),
@@ -114,7 +115,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="用例标识代码")
     case_steps = fields.IntField(default=0, ge=0, description="用例步骤数量(含所有子级步骤)")
     case_version = fields.IntField(default=1, ge=1, description="用例更新版本(修改次数)")
-    case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用项目")
+    case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用")
     session_variables = fields.JSONField(null=True, description="会话变量(初始变量池)")
     state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
 

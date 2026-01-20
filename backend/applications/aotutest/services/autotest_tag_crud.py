@@ -42,7 +42,9 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_ids(self, tag_ids: List[int], on_error: bool = False) -> Optional[bool]:
+    async def get_by_ids(
+            self, tag_ids: List[int], on_error: bool = False, return_obj: bool = False
+    ) -> Optional[Union[bool, List[AutoTestApiTagInfo]]]:
         if not tag_ids or not isinstance(tag_ids, list):
             error_message: str = "查询标签信息失败, 参数(tag_id)不允许为空且必须是List[int]类型"
             LOGGER.error(error_message)
@@ -50,10 +52,14 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
         existing_tags = await self.model.filter(id__in=tag_ids, state__not=1).values_list("id", flat=True)
         missing_tags: set = set(tag_ids) - set(existing_tags)
-        if missing_tags and on_error:
+        if missing_tags:
             error_message: str = f"查询标签信息失败, 标签({missing_tags})不存在"
             LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
+            if on_error:
+                raise NotFoundException(message=error_message)
+            return False
+        if return_obj:
+            return await self.model.filter(id__in=tag_ids, state__not=1).all()
         return True
 
     async def get_by_code(self, tag_code: str, on_error: bool = False) -> Optional[AutoTestApiTagInfo]:

@@ -156,6 +156,8 @@ async def search_tags_info(
             q &= Q(tag_type=tag_in.tag_type.value)
         if tag_in.tag_mode:
             q &= Q(tag_mode__contains=tag_in.tag_mode)
+        if tag_in.tag_project:
+            q &= Q(tag_project=tag_in.tag_project)
         if tag_in.tag_name:
             q &= Q(tag_name__contains=tag_in.tag_name)
         if tag_in.created_user:

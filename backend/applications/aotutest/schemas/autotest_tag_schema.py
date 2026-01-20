@@ -17,6 +17,7 @@ from backend.enums.autotest_enum import AutoTestTagType
 
 class AutoTestApiTagCreate(BaseModel):
     tag_type: AutoTestTagType = Field(default=AutoTestTagType.SCRIPT, description="标签所属类型")
+    tag_project: int = Field(..., ge=1, description="标签所属应用")
     tag_mode: str = Field(..., max_length=64, description="标签大类")
     tag_name: str = Field(..., max_length=64, description="标签名称")
     tag_desc: Optional[str] = Field(None, max_length=2048, description="标签描述")
@@ -26,6 +27,7 @@ class AutoTestApiTagUpdate(BaseModel):
     tag_id: Optional[int] = Field(None, description="标签ID")
     tag_code: Optional[str] = Field(None, max_length=64, description="标签标识代码")
     tag_type: Optional[AutoTestTagType] = Field(None, description="标签所属类型")
+    tag_project: Optional[int] = Field(None, ge=1, description="标签所属应用")
     tag_mode: Optional[str] = Field(None, max_length=64, description="标签大类")
     tag_name: Optional[str] = Field(None, max_length=64, description="标签名称")
     tag_desc: Optional[str] = Field(None, max_length=2048, description="标签描述")

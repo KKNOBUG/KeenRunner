@@ -6,7 +6,7 @@
 @Module  : autotest_case_view.py
 @DateTime: 2025/4/28
 """
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
@@ -18,6 +18,8 @@ from backend.applications.aotutest.schemas.autotest_case_schema import (
     AutoTestApiCaseUpdate
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
+from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     ParameterException,
@@ -171,8 +173,9 @@ async def search_cases(
             page_size=case_in.page_size,
             order=case_in.order
         )
-        data = [
-            await obj.to_dict(
+        case_serializes: List[Dict[str, Any]] = []
+        for instance in instances:
+            serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={
                     "state",
                     "created_user", "updated_user",
@@ -180,11 +183,43 @@ async def search_cases(
                     "reserve_1", "reserve_2", "reserve_3"
                 },
                 replace_fields={"id": "case_id"}
-            ) for obj in instances
-        ]
+            )
+            project_id: int = serialize.pop("case_project")
+            project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(
+                on_error=True,
+                project_id=project_id
+            )
+            serialize["case_project"] = await project_instance.to_dict(
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
+                replace_fields={"id": "project_id"}
+            )
+            tag_ids: List[int] = serialize.pop("case_tags")
+            serialize["case_tags"] = [
+                await obj.to_dict(
+                    exclude_fields={
+                        "state",
+                        "created_user", "updated_user",
+                        "created_time", "updated_time",
+                        "reserve_1", "reserve_2", "reserve_3"
+                    },
+                    replace_fields={"id": "tag_id"}
+                ) for obj in (
+                    await AUTOTEST_API_TAG_CRUD.get_by_ids(
+                        tag_ids=tag_ids,
+                        on_error=True,
+                        return_obj=True
+                    )
+                )
+            ]
+            case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
-        return SuccessResponse(message="查询成功", data=data, total=total)
-    except ParameterException as e:
+        return SuccessResponse(message="查询成功", data=case_serializes, total=total)
+    except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

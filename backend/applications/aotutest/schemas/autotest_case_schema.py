@@ -20,7 +20,7 @@ class AutoTestApiCaseCreate(BaseModel):
     case_tags: List[int] = Field(..., max_length=255, description="用例标签")
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
-    case_project: int = Field(default=1, ge=1, description="用例所属应用项目")
+    case_project: int = Field(default=1, ge=1, description="用例所属应用")
     session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始化变量池)")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
@@ -33,7 +33,7 @@ class AutoTestApiCaseBase(BaseModel):
     case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(None, description="用例所属属性")
     case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
-    case_project: Optional[int] = Field(None, ge=1, description="用例所属应用项目")
+    case_project: Optional[int] = Field(None, ge=1, description="用例所属应用")
     session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始化变量池)")
     case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
 
