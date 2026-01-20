@@ -608,7 +608,7 @@ async def debug_http_request(
                             if source.lower() == "response json":
                                 if not response_json:
                                     error_msg = "【变量提取】响应内容不是有效的JSON数据"
-                                elif range_type == "ALL":
+                                elif range_type.lower() == "all":
                                     extracted_value = response_json
                                 elif expr:
                                     try:
