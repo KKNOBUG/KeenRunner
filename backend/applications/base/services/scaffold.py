@@ -292,7 +292,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             await obj.delete()
         return obj
 
+
 UpperStr = str
+
 
 # class UpperStr(str):
 #     @classmethod
@@ -320,3 +322,7 @@ class LowerStr(str):
         if isinstance(v, str):
             return v.lower()
         return v
+
+    @classmethod
+    def __get__pydantic__json_schema__(cls, core_schema, hanlder):
+        return {"type": "string", "description": "字符串(自动转换小写)"}

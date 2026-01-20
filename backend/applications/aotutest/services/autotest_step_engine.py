@@ -1629,7 +1629,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
-                replace_fields={"id", "case_id"}
+                replace_fields={"id": "case_id"}
             )
             quote_case_name: str = quote_case_dict["case_name"]
             try:
@@ -1990,15 +1990,18 @@ class HttpStepExecutor(BaseStepExecutor):
     ):
 
         if source.lower() == "response json":
-            if response_json is None:
-                raise StepExecutionError(f"【{operation_type}】响应内容不是JSON格式")
+            if not response_json:
+                raise StepExecutionError(f"【{operation_type}】响应内容不是有效的JSON数据")
             if range_type.lower() == "all":
                 return response_json
             else:
                 if not expr:
                     raise StepExecutionError(
                         f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
-                extracted = self._resolve_json_path(response_json, expr)
+                try:
+                    extracted = AutoTestToolService.resolve_json_path(data=response_json, expr=expr)
+                except Exception as e:
+                    raise StepExecutionError(str(e)) from e
                 if isinstance(extracted, list) and index is not None:
                     try:
                         index_int: int = int(index)
@@ -2015,8 +2018,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 return extracted
 
         elif source.lower() == "response xml":
-            if response_text is None:
-                raise StepExecutionError(f"【{operation_type}】响应内容为空")
+            if not response_text:
+                raise StepExecutionError(f"【{operation_type}】响应内容不是有效的XML数据")
             if range_type.lower() == "all":
                 return response_text
             else:
@@ -2049,17 +2052,16 @@ class HttpStepExecutor(BaseStepExecutor):
                     except ET.ParseError as e:
                         raise StepExecutionError(f"【{operation_type}】响应内容不是XML格式, 错误描述: {e}") from e
                     except Exception as e:
-                        raise StepExecutionError(f"【{operation_type}】XPath表达式执行失败, 错误描述: {e}") from e
+                        raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误描述: {e}") from e
 
         elif source.lower() == "response text":
-            if response_text is None:
-                raise StepExecutionError(f"【{operation_type}】响应内容为空")
+            if not response_text:
+                raise StepExecutionError(f"【{operation_type}】响应内容不是有效的Text数据")
             if range_type.lower() == "all":
                 return response_text
             else:
                 if not expr:
-                    raise StepExecutionError(
-                        f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
+                    raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
                 else:
                     try:
                         match = re.search(expr, response_text)
@@ -2071,24 +2073,30 @@ class HttpStepExecutor(BaseStepExecutor):
                         raise StepExecutionError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
 
         elif source.lower() == "response header":
-            if response_headers is None or not response_headers:
+            if not response_headers:
                 raise StepExecutionError(f"【{operation_type}】响应header为空")
             if range_type.lower() == "all":
                 return response_headers
             else:
                 if not expr:
                     raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名")
-                return response_headers.get(expr, "")
+                var = response_headers.get(expr)
+                if not var:
+                    raise StepExecutionError(f"【{operation_type}】响应 Headers 中不存在: {expr}")
+                return var
 
         elif source.lower() == "response cookie":
-            if response_cookies is None or not response_cookies:
+            if not response_cookies:
                 raise StepExecutionError(f"【{operation_type}】响应Cookie为空")
             if range_type.lower() == "all":
                 return response_cookies
             else:
                 if not expr:
                     raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名")
-                return response_cookies.get(expr, "")
+                var = response_cookies.get(expr)
+                if not var:
+                    raise StepExecutionError(f"【{operation_type}】响应 Cookies 中不存在: {expr}")
+                return var
 
         elif source.lower() == "session_variables" or source == "变量池":
             if not expr:
@@ -2096,10 +2104,10 @@ class HttpStepExecutor(BaseStepExecutor):
             try:
                 return self.context.get_variable(expr)
             except KeyError:
-                raise StepExecutionError(f"【{operation_type}】在[Session Variables Pool]中未找到[{expr}]变量")
+                raise StepExecutionError(f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量")
 
         else:
-            raise StepExecutionError(f"【{operation_type}】源类型{source}不被支持")
+            raise StepExecutionError(f"【{operation_type}】源类型 {source} 不被支持")
 
     def _run_validators(
             self,
@@ -2135,7 +2143,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 source = validator_config.get("source")
                 if not expr or not operation or not except_value:
                     self.context.log(
-                        f"【断言验证】缺少必要配置: [expr={expr}, operation={operation}, except_value={except_value}]",
+                        f"【断言验证】表达式子项解析无效(跳过): "
+                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数",
                         step_code=self.step_code
                     )
                     continue
@@ -2189,65 +2198,6 @@ class HttpStepExecutor(BaseStepExecutor):
             )
             raise StepExecutionError(error_message) from e
 
-    @staticmethod
-    def _resolve_json_path(data: Any, expr: str) -> Any:
-        try:
-            if not expr or not isinstance(expr, str):
-                raise StepExecutionError(
-                    f"【JSONPath解析】格式错误: 表达式必须是非空字符串, 当前值: {expr} (类型: {type(expr).__name__})")
-
-            if not expr.startswith("$."):
-                raise StepExecutionError(
-                    f"【JSONPath解析】格式错误: 表达式必须以 '$.' 开头, 当前表达式: '{expr}', 示例: '$.data.user.name'")
-
-            if data is None:
-                raise StepExecutionError("【JSONPath解析】响应数据为空, 无法从空数据中提取值, 请检查响应是否正常返回")
-
-            parts = [part for part in expr[2:].split(".") if part]
-            if not parts:
-                raise StepExecutionError(
-                    f"【JSONPath解析】路径为空, 表达式 '{expr}' 在去除 '$.' 前缀后没有有效的路径部分")
-
-            current: Any = data
-            for i, part in enumerate(parts):
-                if isinstance(current, dict):
-                    if part not in current:
-                        current_path = '$.' + '.'.join(parts[:i + 1])
-                        available_keys = list(current.keys())[:10]  # 只显示前10个键
-                        keys_hint = ', '.join(available_keys) + ('...' if len(current) > 10 else '')
-                        raise StepExecutionError(
-                            f"【JSONPath解析】路径不存在: "
-                            f"路径 '{current_path}' 中的键 '{part}' 在数据中不存在, 可用键: [{keys_hint}]"
-                        )
-                    current = current.get(part)
-                elif isinstance(current, list):
-                    try:
-                        index = int(part)
-                    except ValueError as e:
-                        raise StepExecutionError(
-                            f"【JSONPath解析】列表索引错误: 路径中的索引 '{part}' 不是有效的整数, 列表索引必须是数字"
-                        ) from e
-                    try:
-                        current = current[index]
-                    except IndexError as e:
-                        current_path = '$.' + '.'.join(parts[:i + 1])
-                        raise StepExecutionError(
-                            f"【JSONPath解析】列表索引越界: 路径 '{current_path}' 中的索引 {part} 超出范围, "
-                            f"列表长度为 {len(current)}, 有效索引范围: 0-{len(current) - 1}"
-                        ) from e
-                else:
-                    current_path = '$.' + '.'.join(parts[:i + 1])
-                    raise StepExecutionError(
-                        f"【JSONPath解析】类型错误: "
-                        f"路径 '{current_path}' 中的 '{part}' 无法在 {type(current).__name__} 类型上应用, "
-                        f"期望字典(dict)或列表(list)类型"
-                    )
-
-            return current
-        except StepExecutionError:
-            raise
-        except Exception as e:
-            raise StepExecutionError(f"【JSONPath解析】异常: {e}") from e
 
 
 class DefaultStepExecutor(BaseStepExecutor):

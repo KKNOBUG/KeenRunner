@@ -23,26 +23,61 @@ class AutoTestToolService:
 
     @classmethod
     def resolve_json_path(cls, data: Any, expr: str) -> Any:
-        if not expr or not expr.startswith("$."):
-            raise ValueError(f"仅支持 $. 开头的 JSONPath 表达式: {expr}")
+        try:
+            if not expr or not isinstance(expr, str):
+                raise ValueError(
+                    f"【JSONPath解析】格式错误: 表达式必须是非空字符串, 当前值: {expr} (类型: {type(expr).__name__})")
 
-        parts = [part for part in expr[2:].split(".") if part]
-        current: Any = data
-        for part in parts:
-            if isinstance(current, dict):
-                current = current.get(part)
-            elif isinstance(current, list):
-                try:
-                    index = int(part)
-                except ValueError:
-                    raise ValueError(f"列表索引必须为整数: {part}")
-                try:
-                    current = current[index]
-                except IndexError:
-                    raise ValueError(f"列表索引越界: {part}")
-            else:
-                raise ValueError(f"无法在 {type(current)} 类型上应用 JSONPath: {part}")
-        return current
+            if not expr.startswith("$."):
+                raise ValueError(
+                    f"【JSONPath解析】格式错误: 表达式必须以 '$.' 开头, 当前表达式: '{expr}', 示例: '$.data.user.name'")
+
+            if data is None:
+                raise ValueError("【JSONPath解析】响应数据为空, 无法从空数据中提取值, 请检查响应是否正常返回")
+
+            parts = [part for part in expr[2:].split(".") if part]
+            if not parts:
+                raise ValueError(
+                    f"【JSONPath解析】路径为空, 表达式 '{expr}' 在去除 '$.' 前缀后没有有效的路径部分")
+
+            current: Any = data
+            for i, part in enumerate(parts):
+                if isinstance(current, dict):
+                    if part not in current:
+                        current_path = '$.' + '.'.join(parts[:i + 1])
+                        available_keys = list(current.keys())[:10]  # 只显示前10个键
+                        keys_hint = ', '.join(available_keys) + ('...' if len(current) > 10 else '')
+                        raise ValueError(
+                            f"【JSONPath解析】路径不存在: "
+                            f"路径 '{current_path}' 中的键 '{part}' 在数据中不存在, 可用键: [{keys_hint}]"
+                        )
+                    current = current.get(part)
+                elif isinstance(current, list):
+                    try:
+                        index = int(part)
+                    except ValueError as e:
+                        raise ValueError(
+                            f"【JSONPath解析】列表索引错误: 路径中的索引 '{part}' 不是有效的整数, 列表索引必须是数字"
+                        ) from e
+                    try:
+                        current = current[index]
+                    except IndexError as e:
+                        current_path = '$.' + '.'.join(parts[:i + 1])
+                        raise ValueError(
+                            f"【JSONPath解析】列表索引越界: 路径 '{current_path}' 中的索引 {part} 超出范围, "
+                            f"列表长度为 {len(current)}, 有效索引范围: 0-{len(current) - 1}"
+                        ) from e
+                else:
+                    current_path = '$.' + '.'.join(parts[:i + 1])
+                    raise ValueError(
+                        f"【JSONPath解析】类型错误: "
+                        f"路径 '{current_path}' 中的 '{part}' 无法在 {type(current).__name__} 类型上应用, "
+                        f"期望字典(dict)或列表(list)类型"
+                    )
+
+            return current
+        except Exception as e:
+            raise ValueError(f"【JSONPath解析】异常: {e}") from e
 
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:

@@ -11,6 +11,7 @@ import re
 import time
 import traceback
 from typing import List, Dict, Any, Optional
+from xml.etree import ElementTree as ET
 
 import httpx
 from fastapi import APIRouter, Body, Query
@@ -549,20 +550,20 @@ async def debug_http_request(
         # 解析响应数据
         response_json = None
         response_data = None
-        response_body_text = response.text
+        response_text = response.text
+        response_headers = dict(response.headers)
         try:
             # 尝试解析为JSON
             response_json = response.json()
             response_data = response_json
         except (ValueError, json.JSONDecodeError):
-            # 如果不是JSON，使用文本
-            response_data = response_body_text
+            response_data = response_text
 
         # 解析Cookies
-        cookies = {}
+        response_cookies = {}
         if response.cookies:
             for cookie in response.cookies.jar:
-                cookies[cookie.name] = cookie.value
+                response_cookies[cookie.name] = cookie.value
 
         # 计算响应大小
         response_size = len(response.content)
@@ -571,180 +572,368 @@ async def debug_http_request(
         # 处理数据提取
         extract_results = []
         if extract_variables:
-            # 支持数组格式的提取变量
-            logs.append(format_log(f"提取开始"))
-            extract_list: List[dict] = extract_variables if isinstance(extract_variables, list) else [extract_variables]
-            for extract_item in extract_list:
-                try:
-                    name = extract_item.get("name", "")
-                    source = extract_item.get("source", "Response Json")
-                    expr = extract_item.get("expr", "")
-                    range_type = extract_item.get("range", "SOME")
+            if not isinstance(extract_variables, list):
+                logs.append(format_log(
+                    f"【变量提取】表达式列表解析失败: "
+                    f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
+                    f"但得到[{type(extract_variables)}]类型"
+                ))
+            else:
+                logs.append(format_log(f"【变量提取】开始"))
+                for ext_config in extract_variables:
+                    try:
+                        if not isinstance(ext_config, dict):
+                            logs.append(format_log(
+                                f"【变量提取】表达式子项解析无效(跳过): "
+                                f"参数[extract_variables]的子项必须是[Dict[str, Any]]类型, "
+                                f"但得到[{type(ext_config)}]类型: {ext_config}"
+                            ))
+                            continue
 
-                    extracted_value = None
-                    error_msg = ""
+                        name = ext_config.get("name")
+                        expr = ext_config.get("expr")
+                        source = ext_config.get("source")
+                        range_type = ext_config.get("range")
+                        index = ext_config.get("index")
+                        if not name or not expr or not source:
+                            logs.append(format_log(
+                                f"【变量提取】表达式子项解析无效(跳过): "
+                                f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"
+                            ))
+                            continue
 
-                    if source == "Response Json":
-                        if not response_json:
-                            error_msg = "响应不是JSON格式，无法提取"
-                            logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
-                        elif range_type == "ALL":
-                            # 全部提取
-                            extracted_value = response_json
-                            logs.append(format_log(f"提取变量成功: {name} = {extracted_value}"))
-                        elif expr:
-                            try:
-                                # 部分提取
-                                extracted_value = AutoTestToolService.resolve_json_path(response_json, expr)
-                                logs.append(format_log(f"提取变量成功: {name} = {extracted_value}"))
-                            except Exception as e:
-                                error_msg = str(e)
-                                logs.append(format_log(f"提取变量失败: {name}, 错误: {error_msg}"))
-                        else:
-                            error_msg = "部分提取需要提供表达式"
-                            logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
-                    elif source == "Response Header" and expr:
-                        # 从响应头提取
-                        extracted_value = response.headers.get(expr, "")
-                        if extracted_value:
-                            logs.append(format_log(f"提取变量成功: {name} = {extracted_value}"))
-                        else:
-                            error_msg = f"响应头中未找到: {expr}"
-                            logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
-                    elif source == "Response Cookie" and expr:
-                        # 从Cookie提取
-                        extracted_value = cookies.get(expr, "")
-                        if extracted_value:
-                            logs.append(format_log(f"提取变量成功: {name} = {extracted_value}"))
-                        else:
-                            error_msg = f"Cookie中未找到: {expr}"
-                            logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
-                    elif source == "Response Text" and expr:
-                        # 从响应文本提取（正则表达式）
+                        error_msg = ""
+                        extracted_value = None
                         try:
-                            match = re.search(expr, response_body_text)
-                            extracted_value = match.group(0) if match else None
-                            if extracted_value:
-                                logs.append(format_log(f"提取变量成功: {name} = {extracted_value}"))
-                            else:
-                                error_msg = f"正则表达式未匹配到内容: {expr}"
-                                logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
-                        except Exception as e:
-                            error_msg = f"正则表达式错误: {str(e)}"
-                            logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
-                    else:
-                        error_msg = "提取配置不完整"
-                        logs.append(format_log(f"提取变量失败: {name}, {error_msg}"))
+                            if source.lower() == "response json":
+                                if not response_json:
+                                    error_msg = "【变量提取】响应内容不是有效的JSON数据"
+                                elif range_type == "ALL":
+                                    extracted_value = response_json
+                                elif expr:
+                                    try:
+                                        extracted_value = AutoTestToolService.resolve_json_path(
+                                            data=response_json,
+                                            expr=expr
+                                        )
+                                    except Exception as e:
+                                        error_msg = f"【变量提取】: {e}"
+                                    if isinstance(extracted_value, list) and index is not None:
+                                        try:
+                                            index_int = int(index)
+                                            if index_int < len(extracted_value):
+                                                extracted_value = extracted_value[index_int]
+                                            else:
+                                                error_msg = (
+                                                    f"【变量提取】数组越界, "
+                                                    f"给定索引[{index_int}]不可大于数组长度[{len(extracted_value)}]"
+                                                )
+                                        except (ValueError, TypeError) as e:
+                                            error_msg = f"【变量提取】参数[index]必须是数字类型, 错误描述: {e}"
+                                else:
+                                    error_msg = "【变量提取】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式"
 
-                    extract_results.append({
-                        "name": name,
-                        "source": source,
-                        "range": range_type,
-                        "expr": expr,
-                        "extracted_value": extracted_value,
-                        "error": error_msg,
-                        "success": error_msg == ""
-                    })
-                except Exception as e:
-                    logs.append(format_log(f"处理提取变量时出错: {str(e)}"))
-                    extract_results.append({
-                        "name": extract_item.get("name", ""),
-                        "source": extract_item.get("source", ""),
-                        "range": extract_item.get("range", ""),
-                        "expr": extract_item.get("expr", ""),
-                        "extracted_value": None,
-                        "error": str(e),
-                        "success": False
-                    })
-            logs.append(format_log(f"提取结束"))
+                            elif source.lower() == "response xml":
+                                if not response_text:
+                                    error_msg = "【变量提取】响应内容不是有效的XML数据"
+                                elif range_type.lower() == "all":
+                                    extracted_value = response_text
+                                elif expr:
+                                    try:
+                                        response_xml = ET.fromstring(response_text)
+                                        elements = response_xml.findall(expr)
+                                        if not elements:
+                                            error_msg = f"【变量提取】XPath表达式[{expr}]未匹配到元素"
+                                        elif index is not None:
+                                            try:
+                                                index_int = int(index)
+                                                if index_int < len(elements):
+                                                    element = elements[index_int]
+                                                    extracted_value = element.text if element.text else ET.tostring(
+                                                        element,
+                                                        encoding="unicode"
+                                                    )
+                                                else:
+                                                    error_msg = (
+                                                        f"【变量提取】数组越界, "
+                                                        f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
+                                                    )
+                                            except (ValueError, TypeError) as e:
+                                                error_msg = f"【变量提取】参数[index]必须是数字类型, 错误描述: {e}"
+                                        else:
+                                            element = elements[-1]
+                                            extracted_value = element.text if element.text else ET.tostring(
+                                                element,
+                                                encoding="unicode"
+                                            )
+                                    except ET.ParseError as e:
+                                        error_msg = f"【变量提取】响应内容不是有效的XML格式, 错误描述: {e}"
+                                    except Exception as e:
+                                        error_msg = f"【变量提取】XPath表达式[{expr}]执行失败, 错误: {e}"
+                                else:
+                                    error_msg = "【变量提取】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式"
+
+                            elif source.lower() == "response text":
+                                if not response_text:
+                                    error_msg = "【变量提取】响应内容不是有效的Text数据"
+                                if range_type.lower() == "all":
+                                    extracted_value = response_text
+                                elif expr:
+                                    try:
+                                        match = re.search(expr, response_text)
+                                        extracted_value = match.group(0) if match else None
+                                        if not extracted_value:
+                                            error_msg = f"【变量提取】正则表达式[{expr}]未匹配到内容"
+                                    except re.error as e:
+                                        error_msg = f"【变量提取】正则表达式[{expr}]执行失败, 错误描述: {e}"
+                                else:
+                                    error_msg = "【变量提取】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式"
+
+                            elif source.lower() == "response headers":
+                                if not response_headers:
+                                    error_msg = "【变量提取】响应 Headers 为空"
+                                if range_type.lower() == "all":
+                                    extracted_value = response_headers
+                                elif expr:
+                                    extracted_value = response_headers.get(expr)
+                                    if not extracted_value:
+                                        error_msg = f"【变量提取】响应 Headers 中不存在: {expr}"
+                                else:
+                                    error_msg = "【变量提取】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称"
+
+                            elif source.lower() == "response cookies":
+                                if not response_cookies:
+                                    error_msg = "【变量提取】响应 Cookies 为空"
+                                if range_type.lower() == "all":
+                                    extracted_value = response_cookies
+                                elif expr:
+                                    extracted_value = response_cookies.get(expr)
+                                    if not extracted_value:
+                                        error_msg = f"【变量提取】响应 Cookies 中不存在: {expr}"
+                                else:
+                                    error_msg = "【变量提取】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称"
+
+                            elif source.lower() == "session_variables" or source == "变量池":
+                                if expr:
+                                    extracted_value = defined_variables.get(expr)
+                                    if extracted_value is None:
+                                        error_msg = f"【变量提取】在变量池[Session Variables Pool]中未找到[{expr}]变量"
+                                else:
+                                    error_msg = "【变量提取】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称"
+                            else:
+                                error_msg = f"【变量提取】源类型 {source} 不被支持"
+
+                            if error_msg:
+                                logs.append(format_log(f"【变量提取】失败: {name}, {error_msg}"))
+                            else:
+                                logs.append(format_log(f"【变量提取】成功: {name}  <==>  {extracted_value}"))
+
+                        except Exception as e:
+                            error_msg = str(e)
+                            logs.append(format_log(f"【变量提取】异常: {name}, 错误: {error_msg}"))
+
+                        extract_results.append({
+                            "name": name,
+                            "source": source,
+                            "range": range_type,
+                            "expr": expr,
+                            "index": index,
+                            "extracted_value": extracted_value,
+                            "error": error_msg,
+                            "success": error_msg == ""
+                        })
+                    except Exception as e:
+                        logs.append(format_log(f"【变量提取】发生未知异常: {str(e)}"))
+                        extract_results.append({
+                            "name": ext_config.get("name"),
+                            "source": ext_config.get("source"),
+                            "range": ext_config.get("range"),
+                            "expr": ext_config.get("expr"),
+                            "index": ext_config.get("index"),
+                            "extracted_value": None,
+                            "error": str(e),
+                            "success": False
+                        })
+                logs.append(format_log(f"【变量提取】结束"))
 
         # 处理断言验证
         validator_results = []
         if assert_validators:
-            # 支持数组格式的断言
-            logs.append(format_log(f"断言开始"))
-            validators_list: List[Dict] = assert_validators if isinstance(assert_validators,
-                                                                          list) else [assert_validators]
-            for validator_item in validators_list:
-                try:
-                    name = validator_item.get("name", "")
-                    source = validator_item.get("source", "Response Json")
-                    expr = validator_item.get("expr", "")
-                    operation = validator_item.get("operation", "等于")
-                    expected_value = validator_item.get("except_value")
+            # 必须是数组格式
+            if not isinstance(assert_validators, list):
+                logs.append(format_log(
+                    f"【断言验证】表达式列表解析失败: "
+                    f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
+                    f"但得到[{type(extract_variables)}]类型"
+                ))
+            else:
+                logs.append(format_log(f"【断言验证】开始"))
+                for validator_config in assert_validators:
+                    try:
+                        if not isinstance(validator_config, dict):
+                            logs.append(format_log(
+                                f"【断言验证】表达式子项解析无效(跳过): "
+                                f"参数[extract_variables]的子项必须是[Dict[str, Any]]类型, "
+                                f"但得到[{type(validator_config)}]类型: {validator_config}"
+                            ))
+                            continue
+                        name = validator_config.get("name")
+                        expr = validator_config.get("expr")
+                        operation = validator_config.get("operation")
+                        except_value = validator_config.get("except_value")
+                        source = validator_config.get("source")
+                        if not operation or not operation or except_value:
+                            logs.append(format_log(
+                                f"【断言验证】表达式子项解析无效(跳过): "
+                                f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"
+                            ))
+                            continue
 
-                    actual_value = None
-                    error_msg = ""
-                    success = False
-
-                    if source == "Response Json" and expr:
-                        if not response_json:
-                            error_msg = "响应不是JSON格式，无法断言"
-                            logs.append(format_log(f"断言失败: {name}, {error_msg}"))
-                        else:
-                            try:
-                                actual_value = AutoTestToolService.resolve_json_path(response_json, expr)
-                            except Exception as e:
-                                error_msg = f"无法解析表达式 {expr}: {str(e)}"
-                                logs.append(format_log(f"断言失败: {name}, {error_msg}"))
-                    elif source == "Response Header" and expr:
-                        actual_value = response.headers.get(expr, "")
-                    elif source == "Response Cookie" and expr:
-                        actual_value = cookies.get(expr, "")
-                    elif source == "Response Text" and expr:
-                        # 从响应文本提取（正则表达式）
+                        error_msg = ""
+                        success = False
+                        actual_value = None
                         try:
-                            match = re.search(expr, response_body_text)
-                            actual_value = match.group(0) if match else None
-                        except Exception as e:
-                            error_msg = f"正则表达式错误: {str(e)}"
-                            logs.append(format_log(f"断言失败: {name}, {error_msg}"))
-                    elif source == "变量池" and expr:
-                        # 从变量池提取（这里简化处理，实际应该从定义的变量中获取）
-                        actual_value = defined_variables.get(expr, None)
-                        if actual_value is None:
-                            error_msg = f"变量池中未找到: {expr}"
-                            logs.append(format_log(f"断言失败: {name}, {error_msg}"))
+                            if source.lower() == "response json":
+                                if not response_json:
+                                    error_msg = "【断言验证】响应内容不是有效的JSON数据"
+                                elif expr:
+                                    try:
+                                        actual_value = AutoTestToolService.resolve_json_path(
+                                            data=response_json,
+                                            expr=expr
+                                        )
+                                    except Exception as e:
+                                        error_msg = f"【断言验证】: {e}"
+                                else:
+                                    error_msg = "【断言验证】参数[expr]是必须的, 并且需要是有效的JSONPath表达式"
 
-                    if error_msg == "" and actual_value is not None:
-                        try:
-                            success = AutoTestToolService.compare_assertion(actual_value, operation, expected_value)
-                            if success:
-                                logs.append(format_log(
-                                    f"断言通过: {name}, {expr} {operation} {expected_value}, 实际值={actual_value}"))
+                            elif source.lower() == "response xml":
+                                if not response_text:
+                                    error_msg = "【断言验证】响应内容不是有效的XML数据"
+                                elif expr:
+                                    try:
+                                        response_xml = ET.fromstring(response_text)
+                                        elements = response_xml.findall(expr)
+                                        if not elements:
+                                            error_msg = f"【断言验证】XPath表达式[{expr}]未匹配到元素"
+                                        else:
+                                            element = elements[-1]
+                                            actual_value = element.text if element.text else ET.tostring(
+                                                element,
+                                                encoding="unicode"
+                                            )
+                                    except ET.ParseError as e:
+                                        error_msg = f"【断言验证】响应内容不是有效的XML格式, 错误描述: {e}"
+                                    except Exception as e:
+                                        error_msg = f"【断言验证】XPath表达式[{expr}]执行失败, 错误: {e}"
+                                else:
+                                    error_msg = "【断言验证】参数[expr]是必须的, 并且需要是有效的XPath表达式"
+
+                            elif source.lower() == "response text":
+                                if not response_text:
+                                    error_msg = "【断言验证】响应内容不是有效的Text数据"
+                                elif expr:
+                                    try:
+                                        match = re.search(expr, response_text)
+                                        actual_value = match.group(0) if match else None
+                                        if not actual_value:
+                                            error_msg = f"【断言验证】正则表达式[{expr}]未匹配到内容"
+                                    except re.error as e:
+                                        error_msg = f"【断言验证】正则表达式[{expr}]执行失败, 错误描述: {e}"
+                                else:
+                                    error_msg = "【断言验证】参数[expr]是必须的, 并且需要是有效的正则表达式"
+
+                            elif source.lower() == "response headers":
+                                if not response_cookies:
+                                    error_msg = "【断言验证】响应 Headers 为空"
+                                elif expr:
+                                    actual_value = response_headers.get(expr)
+                                    if not actual_value:
+                                        error_msg = f"【断言验证】响应 Headers 中不存在: {expr}"
+                                else:
+                                    error_msg = "【断言验证】参数[expr]是必须的, 并且需要是存在的键名称"
+
+                            elif source.lower() == "response cookies":
+                                if not response_cookies:
+                                    error_msg = "【断言验证】响应 Cookies 为空"
+                                elif expr:
+                                    actual_value = response_cookies.get(expr)
+                                    if not actual_value:
+                                        error_msg = f"【断言验证】响应 Cookies 中不存在: {expr}"
+                                else:
+                                    error_msg = "【断言验证】参数[expr]是必须的, 并且需要是存在的键名称"
+
+                            elif source.lower() == "session_variables" or source == "变量池":
+                                if not defined_variables:
+                                    error_msg = "【断言验证】变量池 session_variables 为空"
+                                elif expr:
+                                    actual_value = defined_variables.get(expr)
+                                    if actual_value is None:
+                                        error_msg = f"变量池 session_variables 中不存在: {expr}"
+                                else:
+                                    error_msg = "【断言验证】参数[expr]是必须的, 并且需要是存在的键名称"
+
+                            else:
+                                error_msg = f"【断言验证】源类型 {source} 不被支持"
+
+                            if error_msg:
+                                logs.append(format_log(f"【断言验证】比较失败: {name}, {error_msg}"))
+                            elif actual_value is not None:
+                                try:
+                                    success = AutoTestToolService.compare_assertion(
+                                        actual=actual_value,
+                                        operation=operation,
+                                        expected=except_value
+                                    )
+                                    if success:
+                                        logs.append(format_log(
+                                            f"【断言验证】比较成功: "
+                                            f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
+                                        ))
+                                    else:
+                                        logs.append(format_log(
+                                            f"【断言验证】比较失败: "
+                                            f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
+                                        ))
+                                except Exception as e:
+                                    error_msg = str(e)
+                                    logs.append(format_log(
+                                        f"【断言验证】比较异常, 错误描述: {e}: {name}, {error_msg}"
+                                    ))
                             else:
                                 logs.append(format_log(
-                                    f"断言失败: {name}, {expr} {operation} {expected_value}, 实际值={actual_value}"))
-                        except Exception as e:
-                            error_msg = str(e)
-                            logs.append(format_log(f"断言比较失败: {name}, {error_msg}"))
-                    elif error_msg == "":
-                        error_msg = "无法获取实际值"
-                        logs.append(format_log(f"断言失败: {name}, {error_msg}"))
+                                    f"【断言验证】获取实际值失败: "
+                                    f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
+                                ))
 
-                    validator_results.append({
-                        "name": name,
-                        "source": source,
-                        "expr": expr,
-                        "operation": operation,
-                        "expected_value": expected_value,
-                        "actual_value": actual_value,
-                        "success": success,
-                        "error": error_msg
-                    })
-                except Exception as e:
-                    logs.append(format_log(f"处理断言时出错: {str(e)}"))
-                    validator_results.append({
-                        "name": validator_item.get("name", ""),
-                        "source": validator_item.get("source", ""),
-                        "expr": validator_item.get("expr", ""),
-                        "operation": validator_item.get("operation", ""),
-                        "expected_value": validator_item.get("except_value"),
-                        "actual_value": None,
-                        "success": False,
-                        "error": str(e)
-                    })
-            logs.append(format_log(f"断言结束"))
+                        except Exception as e:
+                            logs.append(format_log(
+                                f"【断言验证】获取实际值异常, 错误描述: {e}: "
+                                f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
+                            ))
+                        validator_results.append({
+                            "name": name,
+                            "source": source,
+                            "expr": expr,
+                            "operation": operation,
+                            "except_value": except_value,
+                            "actual_value": actual_value,
+                            "success": success,
+                            "error": error_msg
+                        })
+                    except Exception as e:
+                        logs.append(format_log(f"【断言验证】未知异常, 错误描述: {e}"))
+                        validator_results.append({
+                            "name": validator_config.get("name"),
+                            "source": validator_config.get("source"),
+                            "expr": validator_config.get("expr"),
+                            "operation": validator_config.get("operation"),
+                            "expected_value": validator_config.get("except_value"),
+                            "actual_value": None,
+                            "success": False,
+                            "error": str(e)
+                        })
+                logs.append(format_log(f"【断言验证】结束"))
 
         # 构建返回数据（包含处理后的请求信息，用于前端展示实际发送的报文）
         # 确定实际发送的请求体类型和内容
@@ -765,14 +954,13 @@ async def debug_http_request(
         result_data = {
             "status": response.status_code,
             "headers": dict(response.headers),
-            "cookies": cookies,
+            "cookies": response_cookies,
             "data": response_data,
             "duration": duration,
             "size": size_str,
             "extract_results": extract_results,
             "validator_results": validator_results,
             "logs": logs,
-            # 添加处理后的请求信息，供前端展示实际发送的报文
             "request_info": {
                 "url": request_url,
                 "method": request_method,
