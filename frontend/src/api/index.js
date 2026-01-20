@@ -75,7 +75,15 @@ export default {
   createApiTestcaseList: (data = {}) => request.post('/autotest/case/create', data),
   updateApiTestcaseList: (data = {}) => request.post('/autotest/case/update', data),
   deleteApiTestcaseList: (data = {}) => request.delete(`/autotest/case/delete?case_id=${data.case_id}`, data),
-  getStepTree: (data = {}) => request.get(`/autotest/step/tree?case_id=${data.case_id}`, data),
+  // getStepTree: (data = {}) => request.get(`/autotest/step/tree?case_id=${data.case_id}`, data),
+  getStepTree: (data = {}) => {
+    const params = []
+    if (data.case_id) params.push(`case_id=${data.case_id}`)
+    if (data.case_code) params.push(`case_code=${data.case_code}`)
+    console.log(data.case_id)
+    console.log(data.case_code)
+    return request.get(`/autotest/step/tree${params.length ? '?' + params.join('&') : ''}`, data)
+  },
   updateStepTree: (data = {}) => request.post('/autotest/step/update/tree', data),
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http/debugging', data),
   executeStepTree: (data = {}) => request.post('/autotest/step/execute', data),

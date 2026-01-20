@@ -165,7 +165,14 @@ const columns = [
                   size: 'small',
                   type: 'primary',
                   style: 'margin-right: 8px;',
-                  onClick: () => router.push({path: '/autotest/api', query: {case_id: row.id}}),
+                  // onClick: () => router.push({path: '/autotest/api', query: {case_id: row.id}}),
+                  onClick: () => {
+                    const query = {case_id: row.case_id}
+                    if (row.case_code) {
+                      query.case_code = row.case_code
+                    }
+                    router.push({path: '/autotest/api', query})
+                  },
                 },
                 {
                   default: () => '编辑',
@@ -177,7 +184,7 @@ const columns = [
         h(
             NPopconfirm,
             {
-              onPositiveClick: () => handleDelete({case_id: row.id}, false),
+              onPositiveClick: () => handleDelete({case_id: row.case_id}, false),
               onNegativeClick: () => {
               },
             },

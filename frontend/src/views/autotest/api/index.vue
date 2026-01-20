@@ -329,6 +329,7 @@ const steps = ref([])
 const selectedKeys = ref([])
 const route = useRoute()
 const caseId = computed(() => route.query.case_id || null)
+const caseCode = computed(() => route.query.case_code || null)
 const caseForm = reactive({
   case_project: '',
   case_name: '',
@@ -774,14 +775,17 @@ const handleDebug = async () => {
 
 const loadSteps = async () => {
   stepExpandStates.value = new Map()
-  if (!caseId.value) {
+  if (!caseId.value && !caseCode.value) {
     steps.value = []
     selectedKeys.value = []
     hydrateCaseInfo([])
     return
   }
   try {
-    const res = await api.getStepTree({case_id: caseId.value})
+    const params = {}
+    if (caseId.value) params.case_id = caseId.value
+    if (caseCode.value) params.case_code = caseCode.value
+    const res = await api.getStepTree(params)
     const data = Array.isArray(res?.data) ? res.data : []
     hydrateCaseInfo(data)
     steps.value = data.map(mapBackendStep).filter(Boolean)
@@ -1366,7 +1370,7 @@ watch(() => steps.value, () => {
   initializeStepExpandStates()
 }, {deep: true})
 
-watch(() => caseId.value, () => {
+watch([() => caseId.value, () => caseCode.value], () => {
   loadSteps()
 })
 
