@@ -56,7 +56,7 @@ const customHandleAdd = () => {
 
 const columns = [
   {
-    title: '所属项目',
+    title: '所属应用',
     key: 'case_project',
     width: 150,
     align: 'center',
@@ -86,6 +86,20 @@ const columns = [
   {
     title: '用例标签',
     key: 'case_tags',
+    width: 150,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例属性',
+    key: 'case_attr',
+    width: 150,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例类型',
+    key: 'case_type',
     width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
@@ -216,12 +230,12 @@ const columns = [
 
       <!--  搜索  -->
       <template #queryBar>
-        <QueryBarItem label="用例标签：">
+        <QueryBarItem label="所属应用：">
           <NInput
-              v-model:value="queryItems.case_tags"
+              v-model:value="queryItems.case_project"
               clearable
               type="text"
-              placeholder="请输入用例标签"
+              placeholder="请输入应用名称"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -231,6 +245,33 @@ const columns = [
               clearable
               type="text"
               placeholder="请输入用例名称"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="用例标签：">
+          <NInput
+              v-model:value="queryItems.case_tags"
+              clearable
+              type="text"
+              placeholder="请输入用例标签"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="用例属性：">
+          <NInput
+              v-model:value="queryItems.case_attr"
+              clearable
+              type="text"
+              placeholder="请输入用例属性"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="用例类型：">
+          <NInput
+              v-model:value="queryItems.case_type"
+              clearable
+              type="text"
+              placeholder="请输入用例类型"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>

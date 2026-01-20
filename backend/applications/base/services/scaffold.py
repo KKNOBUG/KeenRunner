@@ -157,7 +157,7 @@ class PacketModel:
 
 
 class StateModel:
-    state = fields.SmallIntField(default=-1, index=True, description="状态")
+    state = fields.SmallIntField(default=0, index=True, description="状态")
 
 
 class ClassModel:
