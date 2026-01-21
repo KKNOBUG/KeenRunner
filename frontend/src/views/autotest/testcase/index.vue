@@ -285,7 +285,11 @@ const columns = [
                   type: 'primary',
                   style: 'margin-right: 8px;',
                   onClick: () => {
-                    const query = {case_id: row.case_id}
+                    // 将完整的用例信息通过query传递（使用JSON字符串）
+                    const query = {
+                      case_id: row.case_id,
+                      case_info: JSON.stringify(row) // 将整条用例信息对象转换为JSON字符串
+                    }
                     if (row.case_code) {
                       query.case_code = row.case_code
                     }
@@ -567,3 +571,4 @@ const columns = [
 }
 
 </style>
+

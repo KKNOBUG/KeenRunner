@@ -4,10 +4,14 @@
       <div class="case-info-fields">
         <div class="case-field">
           <span class="case-field-label case-field-required">所属项目</span>
-          <n-input
+          <n-select
               v-model:value="caseForm.case_project"
+              :options="projectOptions"
+              :loading="projectLoading"
+              clearable
+              filterable
+              placeholder="请选择应用"
               size="small"
-              placeholder="请输入所属项目"
               class="case-field-input"
           />
         </div>
@@ -24,10 +28,83 @@
 
         <div class="case-field">
           <span class="case-field-label">用例标签</span>
-          <n-input
-              v-model:value="caseForm.case_tags"
+          <n-popover
+              v-model:show="tagPopoverShow"
+              trigger="click"
+              placement="bottom-start"
+              :style="{ width: '400px' }"
+          >
+            <template #trigger>
+              <n-input
+                  :value="getSelectedTagNames()"
+                  clearable
+                  readonly
+                  placeholder="请选择标签"
+                  size="small"
+                  class="case-field-input"
+                  @clear="caseForm.case_tags = []"
+                  @click="tagPopoverShow = !tagPopoverShow"
+              />
+            </template>
+            <template #default>
+              <div style="display: flex; height: 300px; width: 400px;">
+                <div style="width: 45%; overflow-y: auto;">
+                  <n-list v-if="Object.keys(tagModeGroups).length > 0">
+                    <n-list-item
+                        v-for="(tags, mode) in tagModeGroups"
+                        :key="mode"
+                        :class="{ 'tag-mode-selected': selectedTagMode === mode, 'tag-mode-item': true }"
+                        @click="selectedTagMode = mode"
+                    >
+                      <span class="tag-mode-text" :title="mode">{{ mode }}</span>
+                    </n-list-item>
+                  </n-list>
+                  <div v-else style="padding: 20px; text-align: center; color: #999;">
+                    {{ tagLoading ? '加载中...' : '暂无标签数据' }}
+                  </div>
+                </div>
+                <div style="width: 50%; overflow-y: auto;">
+                  <n-list v-if="selectedTagMode && currentTagNames.length > 0">
+                    <n-list-item
+                        v-for="tag in currentTagNames"
+                        :key="tag.tag_id"
+                        :class="{ 'tag-name-selected': isTagSelected(tag.tag_id) }"
+                        class="tag-list-item"
+                        @click="handleTagSelect(tag.tag_id)"
+                    >
+                      <span class="tag-checkbox">{{ isTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
+                      <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
+                    </n-list-item>
+                  </n-list>
+                  <div v-else style="padding: 20px; text-align: center; color: #999;">
+                    {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
+                  </div>
+                </div>
+              </div>
+            </template>
+          </n-popover>
+        </div>
+
+        <div class="case-field">
+          <span class="case-field-label">用例属性</span>
+          <n-select
+              v-model:value="caseForm.case_attr"
+              :options="caseAttrOptions"
+              clearable
+              placeholder="请选择用例属性"
               size="small"
-              placeholder="请输入用例标签"
+              class="case-field-input"
+          />
+        </div>
+
+        <div class="case-field">
+          <span class="case-field-label">用例类型</span>
+          <n-select
+              v-model:value="caseForm.case_type"
+              :options="caseTypeOptions"
+              clearable
+              placeholder="请选择用例类型"
+              size="small"
               class="case-field-input"
           />
         </div>
@@ -295,7 +372,7 @@
 <script setup>
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
-import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace} from 'naive-ui'
+import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace, NSelect, NPopover, NList, NListItem} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import AppPage from "@/components/page/AppPage.vue";
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
@@ -330,12 +407,179 @@ const selectedKeys = ref([])
 const route = useRoute()
 const caseId = computed(() => route.query.case_id || null)
 const caseCode = computed(() => route.query.case_code || null)
+
+// 从路由参数中解析用例信息并填充表单
+const initCaseInfoFromRoute = () => {
+  if (route.query.case_info) {
+    try {
+      const caseInfo = JSON.parse(route.query.case_info)
+      // 填充表单数据
+      // case_project 是对象，提取 project_id
+      if (caseInfo.case_project) {
+        caseForm.case_project = typeof caseInfo.case_project === 'object'
+            ? caseInfo.case_project.project_id
+            : caseInfo.case_project
+      }
+      caseForm.case_name = caseInfo.case_name || ''
+      // case_tags 是对象数组，提取 tag_id 数组
+      if (Array.isArray(caseInfo.case_tags) && caseInfo.case_tags.length > 0) {
+        caseForm.case_tags = caseInfo.case_tags.map(tag => {
+          return typeof tag === 'object' ? tag.tag_id : tag
+        }).filter(id => id !== undefined && id !== null)
+      } else {
+        caseForm.case_tags = []
+      }
+      caseForm.case_desc = caseInfo.case_desc || ''
+      caseForm.case_attr = caseInfo.case_attr || ''
+      caseForm.case_type = caseInfo.case_type || ''
+    } catch (error) {
+      console.error('解析用例信息失败:', error)
+    }
+  }
+}
+
 const caseForm = reactive({
   case_project: '',
   case_name: '',
-  case_tags: '',
-  case_desc: ''
+  case_tags: [],
+  case_desc: '',
+  case_attr: '',
+  case_type: ''
 })
+
+// 项目列表（复用用例管理页面的数据源）
+const projectOptions = ref([])
+const projectLoading = ref(false)
+
+// 标签相关（复用用例管理页面的数据源）
+const tagOptions = ref([])
+const tagLoading = ref(false)
+const selectedTagMode = ref(null)
+const tagPopoverShow = ref(false)
+
+// 用例属性选项（复用用例管理页面的数据源）
+const caseAttrOptions = [
+  { label: '正用例', value: '正用例' },
+  { label: '反用例', value: '反用例' }
+]
+
+// 用例类型选项
+const caseTypeOptions = [
+  { label: '用户脚本', value: '用户脚本' },
+  { label: '公共脚本', value: '公共脚本' }
+]
+
+// 标签按模式分组
+const tagModeGroups = computed(() => {
+  const groups = {}
+  tagOptions.value.forEach(tag => {
+    const mode = tag.tag_mode || '未分类'
+    if (!groups[mode]) {
+      groups[mode] = []
+    }
+    groups[mode].push(tag)
+  })
+  return groups
+})
+
+// 当前选中模式下的标签列表
+const currentTagNames = computed(() => {
+  if (!selectedTagMode.value) return []
+  return tagModeGroups.value[selectedTagMode.value] || []
+})
+
+// 加载项目列表（复用用例管理页面的数据源）
+const loadProjects = async () => {
+  try {
+    projectLoading.value = true
+    const res = await api.getApiProjectList({
+      page: 1,
+      page_size: 1000,
+      state: 0
+    })
+    if (res?.data) {
+      projectOptions.value = res.data.map(item => ({
+        label: item.project_name,
+        value: item.project_id
+      }))
+    }
+  } catch (error) {
+    console.error('加载项目列表失败:', error)
+  } finally {
+    projectLoading.value = false
+  }
+}
+
+// 加载标签列表（复用用例管理页面的数据源）
+const loadTags = async (projectId = null) => {
+  try {
+    tagLoading.value = true
+    const res = await api.getApiTagList({
+      page: 1,
+      page_size: 1000,
+      state: 0
+    })
+    if (res?.data) {
+      // 如果选择了项目，则过滤该项目的标签；否则显示所有标签
+      if (projectId) {
+        tagOptions.value = res.data.filter(tag => tag.tag_project === projectId)
+      } else {
+        tagOptions.value = res.data
+      }
+      selectedTagMode.value = null
+    }
+  } catch (error) {
+    console.error('加载标签列表失败:', error)
+    tagOptions.value = []
+  } finally {
+    tagLoading.value = false
+  }
+}
+
+// 获取选中的标签名称（用于显示）
+const getSelectedTagNames = () => {
+  const tags = caseForm.case_tags
+  if (!Array.isArray(tags) || tags.length === 0) {
+    return ''
+  }
+  const names = tags
+      .map(tagId => tagOptions.value.find(t => t.tag_id === tagId)?.tag_name)
+      .filter(name => name)
+  return names.join(', ')
+}
+
+// 判断标签是否被选中
+const isTagSelected = (tagId) => {
+  const tags = caseForm.case_tags
+  return Array.isArray(tags) && tags.includes(tagId)
+}
+
+// 选择标签（支持多选）
+const handleTagSelect = (tagId) => {
+  if (!Array.isArray(caseForm.case_tags)) {
+    caseForm.case_tags = []
+  }
+  const index = caseForm.case_tags.indexOf(tagId)
+  if (index > -1) {
+    // 如果已选中，则取消选择
+    caseForm.case_tags.splice(index, 1)
+  } else {
+    // 如果未选中，则添加
+    caseForm.case_tags.push(tagId)
+  }
+}
+
+// 监听项目选择变化，重新加载标签
+watch(() => caseForm.case_project, (newVal) => {
+  loadTags(newVal)
+})
+
+// 确保 case_tags 始终是数组
+watch(() => caseForm.case_tags, (newVal) => {
+  if (!Array.isArray(newVal)) {
+    caseForm.case_tags = []
+  }
+}, { immediate: true })
 const runLoading = ref(false)
 const debugLoading = ref(false)
 const dragState = ref({
@@ -1381,6 +1625,12 @@ watch([() => caseId.value, () => caseCode.value], () => {
 })
 
 onMounted(() => {
+  // 加载项目列表和标签列表（复用用例管理页面的数据源）
+  loadProjects()
+  loadTags()
+  // 先从路由参数中初始化用例信息
+  initCaseInfoFromRoute()
+  // 然后加载步骤树数据
   loadSteps()
 })
 
@@ -2015,6 +2265,62 @@ const RecursiveStepChildren = defineComponent({
 :deep(.add-step-btn) {
   width: 100%;
   margin-bottom: 10px;
+}
+
+/* 标签选择器样式 */
+.tag-mode-selected {
+  background-color: #e3f2fd;
+  font-weight: 500;
+}
+
+.tag-name-selected {
+  background-color: #e3f2fd;
+  font-weight: 500;
+}
+
+.tag-mode-item {
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.tag-mode-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.tag-list-item {
+  cursor: pointer;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  color: #18a058;
+  font-weight: bold;
+}
+
+.tag-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.n-list-item) {
+  transition: background-color 0.2s;
+}
+
+:deep(.n-list-item:hover) {
+  background-color: #f5f5f5;
 }
 
 </style>
