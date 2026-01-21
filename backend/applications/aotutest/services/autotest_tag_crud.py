@@ -99,6 +99,11 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         tag_type: str = tag_in.tag_type.value
         tag_mode: str = tag_in.tag_mode
         tag_name: str = tag_in.tag_name
+        tag_project: int = tag_in.tag_project
+
+        # 业务层验证：检查应用是否存在
+        from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
+        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=tag_project, on_error=True)
 
         # 业务层验证: 检查标签类型是否存在
         existing_tag = await self.model.filter(

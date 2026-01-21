@@ -14,6 +14,7 @@ from .autotest_report_view import autotest_report
 from .autotest_detail_view import autotest_detail
 from .autotest_project_view import autotest_project
 from .autotest_env_view import autotest_env
+from .autotest_tag_view import autotest_tag
 
 autotest = APIRouter()
 
@@ -23,3 +24,4 @@ autotest.include_router(autotest_report, prefix="/report", tags=["报告相关"]
 autotest.include_router(autotest_detail, prefix="/detail", tags=["明细相关"])
 autotest.include_router(autotest_project, prefix="/project", tags=["应用相关"])
 autotest.include_router(autotest_env, prefix="/env", tags=["环境相关"])
+autotest.include_router(autotest_tag, prefix="/tag", tags=["标签相关"])

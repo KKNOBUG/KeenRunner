@@ -679,15 +679,21 @@ const handleSaveAll = async () => {
       ...caseForm
     }
 
-    // 根据是否有caseId判断是新增还是更新
-    if (caseId.value) {
+    // 根据是否有caseId或caseCode判断是新增还是更新
+    if (caseId.value || caseCode.value) {
       // 更新操作：添加case_id和case_code
-      // 从第一个步骤的original中获取case_code
-      const firstStep = steps.value[0]
-      if (firstStep?.original?.case?.case_code) {
-        caseInfo.case_code = firstStep.original.case.case_code
+      if (caseId.value) {
+        caseInfo.case_id = caseId.value
       }
-      caseInfo.case_id = caseId.value
+      if (caseCode.value) {
+        caseInfo.case_code = caseCode.value
+      } else {
+        // 如果只有case_id没有case_code，尝试从步骤数据中获取
+        const firstStep = steps.value[0]
+        if (firstStep?.original?.case?.case_code) {
+          caseInfo.case_code = firstStep.original.case.case_code
+        }
+      }
     } else {
       // 新增操作：case_id和case_code必须为null（schema要求必填但可以为null）
       caseInfo.case_id = null
@@ -785,7 +791,7 @@ const loadSteps = async () => {
     const params = {}
     if (caseId.value) params.case_id = caseId.value
     if (caseCode.value) params.case_code = caseCode.value
-    const res = await api.getStepTree(params)
+    const res = await api.getAutoTestStepTree(params)
     const data = Array.isArray(res?.data) ? res.data : []
     hydrateCaseInfo(data)
     steps.value = data.map(mapBackendStep).filter(Boolean)
