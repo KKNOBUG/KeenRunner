@@ -3,14 +3,14 @@
     <n-card size="small" class="case-info-card" title="用例信息">
       <div class="case-info-fields">
         <div class="case-field">
-          <span class="case-field-label case-field-required">所属项目</span>
+          <span class="case-field-label case-field-required">所属应用</span>
           <n-select
               v-model:value="caseForm.case_project"
               :options="projectOptions"
               :loading="projectLoading"
               clearable
               filterable
-              placeholder="请选择应用"
+              placeholder="所属应用"
               size="small"
               class="case-field-input"
           />
@@ -27,7 +27,7 @@
         </div>
 
         <div class="case-field">
-          <span class="case-field-label">用例标签</span>
+          <span class="case-field-label case-field-required">所属标签</span>
           <n-popover
               v-model:show="tagPopoverShow"
               trigger="click"
@@ -39,7 +39,7 @@
                   :value="getSelectedTagNames()"
                   clearable
                   readonly
-                  placeholder="请选择标签"
+                  placeholder="请选择所属标签"
                   size="small"
                   class="case-field-input"
                   @clear="caseForm.case_tags = []"
@@ -86,7 +86,7 @@
         </div>
 
         <div class="case-field">
-          <span class="case-field-label">用例属性</span>
+          <span class="case-field-label case-field-required">用例属性</span>
           <n-select
               v-model:value="caseForm.case_attr"
               :options="caseAttrOptions"
@@ -98,7 +98,7 @@
         </div>
 
         <div class="case-field">
-          <span class="case-field-label">用例类型</span>
+          <span class="case-field-label case-field-required">用例类型</span>
           <n-select
               v-model:value="caseForm.case_type"
               :options="caseTypeOptions"
@@ -1640,10 +1640,13 @@ onUpdated(() => {
 })
 
 const renderDropdownLabel = (option) => {
+  // 从 addOptions 中查找完整的选项信息，获取图标
+  const fullOption = addOptions.find(opt => opt.key === option.key)
+  const icon = fullOption?.icon || stepDefinitions[option.key]?.icon
   const iconClass = getStepIconClass(option.key)
   return h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}}, [
     h(TheIcon, {
-      icon: option.icon,
+      icon: icon,
       size: 16,
       class: ['step-icon', iconClass]
     }),
@@ -1943,9 +1946,6 @@ const RecursiveStepChildren = defineComponent({
 .case-field-input:hover {
   border-color: #409eff;
 }
-
-
-
 
 /* 响应式调整 */
 @media (max-width: 768px) {

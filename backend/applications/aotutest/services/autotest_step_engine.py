@@ -16,6 +16,7 @@ import httpx
 import requests
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo, AutoTestApiCaseInfo
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
@@ -2061,7 +2062,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 return response_text
             else:
                 if not expr:
-                    raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
+                    raise StepExecutionError(
+                        f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
                 else:
                     try:
                         match = re.search(expr, response_text)
@@ -2197,7 +2199,6 @@ class HttpStepExecutor(BaseStepExecutor):
                 f"错误详情: {e}"
             )
             raise StepExecutionError(error_message) from e
-
 
 
 class DefaultStepExecutor(BaseStepExecutor):
@@ -2344,9 +2345,9 @@ class AutoTestStepExecutionEngine:
 
                 # 对于根步骤（parent_step_id 为 None）, 汇总所有子步骤的日志
                 if step.get("parent_step_id") is None:
-                    root_step_no = step.get("step_no")
-                    if root_step_no is not None:
-                        self._aggregate_root_step_logs(context, result, root_step_no)
+                    root_step_code = step.get("step_code")
+                    if root_step_code is not None:
+                        self._aggregate_root_step_logs(context, result, root_step_code)
 
             # 统计（按 step_code 去重合并）
             all_results = self._collect_all_results(results)
@@ -2387,6 +2388,17 @@ class AutoTestStepExecutionEngine:
                     await AUTOTEST_API_REPORT_CRUD.update_report(report_update)
                 except Exception as e:
                     error_message: str = f"更新测试报告失败: 报告编码={report_code}, 错误详情: {e}"
+                    raise StepExecutionError(error_message) from e
+
+                try:
+                    from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+                    await AUTOTEST_API_CASE_CRUD(AutoTestApiCaseUpdate(
+                        case_id=case_id,
+                        case_state=case_state,
+                        case_last_time=case_ed_time_str
+                    ))
+                except Exception as e:
+                    error_message: str = f"更新测试用例失败: 用例ID={case_id}, 用例代码={case_code}, 错误详情: {e}"
                     raise StepExecutionError(error_message) from e
 
             statistics = {
@@ -2433,13 +2445,13 @@ class AutoTestStepExecutionEngine:
             return step_codes
 
         # 收集所有子步骤的编号（递归收集, 包括子步骤的子步骤）
-        child_step_nos = []
+        child_step_codes = []
         for child in root_result.children:
-            child_step_nos.extend(collect_child_step_nos(child))
+            child_step_codes.extend(collect_child_step_nos(child))
 
         # 汇总所有子步骤的日志（按步骤编号排序）
         aggregated_logs = []
-        for step_code in sorted(child_step_nos):
+        for step_code in sorted(child_step_codes):
             if step_code in context.logs:
                 aggregated_logs.extend(context.logs[step_code])
 

@@ -114,8 +114,10 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_attr = fields.CharEnumField(AutoTestCaseAttr, default=None, null=True, description="用例所属属性")
     case_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="用例标识代码")
     case_steps = fields.IntField(default=0, ge=0, description="用例步骤数量(含所有子级步骤)")
+    case_state = fields.BooleanField(null=True, description="用例执行状态(True:成功, False:失败)")
     case_version = fields.IntField(default=1, ge=1, description="用例更新版本(修改次数)")
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用")
+    case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
     session_variables = fields.JSONField(null=True, description="会话变量(初始变量池)")
     state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
 
