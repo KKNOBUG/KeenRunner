@@ -1,7 +1,7 @@
 <script setup>
 import {h, onMounted, ref, resolveDirective, withDirectives, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NInput, NPopconfirm, NSelect, NPopover, NList, NListItem} from 'naive-ui'
+import {NButton, NInput, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -15,20 +15,13 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 defineOptions({name: '测试用例'})
 
 const $table = ref(null)
-const queryItems = ref({})
+const queryItems = ref({
+  case_tags: [] // 初始化为空数组
+})
 const vPermission = resolveDirective('permission')
 
 const {
-  modalVisible,
-  modalAction,
-  modalTitle,
-  modalLoading,
-  handleAdd,
   handleDelete,
-  handleEdit,
-  handleSave,
-  modalForm,
-  modalFormRef,
 } = useCRUD({
   name: '用例',
   doCreate: api.createApiTestcaseList,
@@ -37,15 +30,16 @@ const {
   refresh: () => $table.value?.handleSearch(),
 })
 
-const pattern = ref('')
-const active = ref(false)
-const ownerOption = ref([])
 const router = useRouter()
 
 // 项目列表
 const projectOptions = ref([])
 const projectLoading = ref(false)
-
+// 用例属性选项
+const caseAttrOptions = [
+  { label: '正用例', value: '正用例' },
+  { label: '反用例', value: '反用例' }
+]
 // 标签相关
 const tagOptions = ref([])
 const tagLoading = ref(false)
@@ -68,10 +62,19 @@ const currentTagNames = computed(() => {
   return tagModeGroups.value[selectedTagMode.value] || []
 })
 
-// 选择标签后关闭 Popover
+// 选择标签（支持多选）
 const handleTagSelect = (tagId) => {
-  queryItems.value.case_tags = tagId
-  tagPopoverShow.value = false
+  if (!Array.isArray(queryItems.value.case_tags)) {
+    queryItems.value.case_tags = []
+  }
+  const index = queryItems.value.case_tags.indexOf(tagId)
+  if (index > -1) {
+    // 如果已选中，则取消选择
+    queryItems.value.case_tags.splice(index, 1)
+  } else {
+    // 如果未选中，则添加
+    queryItems.value.case_tags.push(tagId)
+  }
 }
 
 // 加载项目列表
@@ -97,12 +100,7 @@ const loadProjects = async () => {
 }
 
 // 加载标签列表
-const loadTags = async (projectId) => {
-  if (!projectId) {
-    tagOptions.value = []
-    selectedTagMode.value = null
-    return
-  }
+const loadTags = async (projectId = null) => {
   try {
     tagLoading.value = true
     const res = await api.getApiTagList({
@@ -111,8 +109,12 @@ const loadTags = async (projectId) => {
       state: 0
     })
     if (res?.data) {
-      // 根据 tag_project 过滤标签
-      tagOptions.value = res.data.filter(tag => tag.tag_project === projectId)
+      // 如果选择了项目，则过滤该项目的标签；否则显示所有标签
+      if (projectId) {
+        tagOptions.value = res.data.filter(tag => tag.tag_project === projectId)
+      } else {
+        tagOptions.value = res.data
+      }
       selectedTagMode.value = null
     }
   } catch (error) {
@@ -123,20 +125,40 @@ const loadTags = async (projectId) => {
   }
 }
 
-// 监听项目选择变化
-watch(() => queryItems.value.case_project, (newVal) => {
-  if (newVal) {
-    loadTags(newVal)
-  } else {
-    tagOptions.value = []
-    selectedTagMode.value = null
-    queryItems.value.case_tags = null
+// 获取选中的标签名称（用于显示）
+const getSelectedTagNames = () => {
+  const tags = queryItems.value.case_tags
+  if (!Array.isArray(tags) || tags.length === 0) {
+    return ''
   }
+  const names = tags
+      .map(tagId => tagOptions.value.find(t => t.tag_id === tagId)?.tag_name)
+      .filter(name => name)
+  return names.join(', ')
+}
+
+// 判断标签是否被选中
+const isTagSelected = (tagId) => {
+  const tags = queryItems.value.case_tags
+  return Array.isArray(tags) && tags.includes(tagId)
+}
+
+// 确保 case_tags 始终是数组
+watch(() => queryItems.value.case_tags, (newVal) => {
+  if (newVal !== null && newVal !== undefined && !Array.isArray(newVal)) {
+    queryItems.value.case_tags = []
+  }
+}, { immediate: true })
+
+// 监听项目选择变化，重新加载标签
+watch(() => queryItems.value.case_project, (newVal) => {
+  loadTags(newVal)
 })
 
 onMounted(() => {
   $table.value?.handleSearch()
   loadProjects()
+  loadTags() // 初始加载所有标签
 })
 
 
@@ -159,40 +181,33 @@ const columns = [
     },
   },
   {
+    title: '所属标签',
+    key: 'case_tags',
+    width: 150,
+    align: 'center',
+    render(row) {
+      // case_tags 现在是对象数组，使用NTag展示，每个标签换行
+      if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
+        return h('div', { class: 'tag-container' },
+            row.case_tags
+                .filter(tag => tag.tag_name)
+                .map(tag =>
+                    h(NTag, {
+                      type: 'info',
+                      style: 'margin: 2px 4px 2px 0;'
+                    }, { default: () => tag.tag_name })
+                )
+        )
+      }
+      return h('span', '')
+    },
+  },
+  {
     title: '用例名称',
     key: 'case_name',
     width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例步骤',
-    key: 'case_steps',
-    width: 150,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例版本',
-    key: 'case_version',
-    width: 150,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例标签',
-    key: 'case_tags',
-    width: 150,
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      // case_tags 现在是对象数组，显示所有标签名称，用逗号分隔
-      if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
-        const tagNames = row.case_tags.map(tag => tag.tag_name || '').filter(name => name).join(', ')
-        return h('span', tagNames)
-      }
-      return h('span', '')
-    },
   },
   {
     title: '用例属性',
@@ -209,15 +224,15 @@ const columns = [
     ellipsis: {tooltip: true},
   },
   {
-    title: '用例描述',
-    key: 'case_desc',
+    title: '用例步骤',
+    key: 'case_steps',
     width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
-    title: '用例状态',
-    key: 'state',
+    title: '用例版本',
+    key: 'case_version',
     width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
@@ -340,6 +355,35 @@ const columns = [
 
       <!--  搜索  -->
       <template #queryBar>
+        <QueryBarItem label="用例名称：">
+          <NInput
+              v-model:value="queryItems.case_name"
+              clearable
+              type="text"
+              placeholder="请输入用例名称"
+              class="query-input"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="用例属性：">
+          <NSelect
+              v-model:value="queryItems.case_attr"
+              :options="caseAttrOptions"
+              clearable
+              placeholder="请选择用例属性"
+              class="query-input"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="用例类型：">
+          <NInput
+              v-model:value="queryItems.case_type"
+              clearable
+              type="text"
+              placeholder="请输入用例类型"
+              class="query-input"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
         <QueryBarItem label="所属应用：">
           <NSelect
               v-model:value="queryItems.case_project"
@@ -347,50 +391,39 @@ const columns = [
               :loading="projectLoading"
               clearable
               filterable
-              placeholder="请选择应用"
-              style="width: 200px"
+              placeholder="请选择所属应用"
+              class="query-input"
           />
         </QueryBarItem>
-        <QueryBarItem label="用例名称：">
-          <NInput
-              v-model:value="queryItems.case_name"
-              clearable
-              type="text"
-              placeholder="请输入用例名称"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="用例标签：">
+        <QueryBarItem label="所属标签：">
           <NPopover
               v-model:show="tagPopoverShow"
               trigger="click"
               placement="bottom-start"
-              :disabled="!queryItems.case_project"
               :style="{ width: '400px' }"
           >
             <template #trigger>
               <NInput
-                  :value="queryItems.case_tags ? tagOptions.find(t => t.tag_id === queryItems.case_tags)?.tag_name : ''"
+                  :value="getSelectedTagNames()"
                   clearable
                   readonly
-                  placeholder="请先选择应用，再选择标签"
-                  style="width: 200px"
-                  @clear="queryItems.case_tags = null"
-                  @click="queryItems.case_project && (tagPopoverShow = !tagPopoverShow)"
+                  placeholder="请选择所属标签"
+                  class="query-input"
+                  @clear="queryItems.case_tags = []"
+                  @click="tagPopoverShow = !tagPopoverShow"
               />
             </template>
             <template #default>
               <div style="display: flex; height: 300px; width: 400px;">
-                <div style="width: 50%; border-right: 1px solid #e0e0e0; overflow-y: auto;">
+                <div style="width: 45%; overflow-y: auto;">
                   <NList v-if="Object.keys(tagModeGroups).length > 0">
                     <NListItem
                         v-for="(tags, mode) in tagModeGroups"
                         :key="mode"
-                        :class="{ 'tag-mode-selected': selectedTagMode === mode }"
-                        style="cursor: pointer; padding: 8px 12px;"
+                        :class="{ 'tag-mode-selected': selectedTagMode === mode, 'tag-mode-item': true }"
                         @click="selectedTagMode = mode"
                     >
-                      {{ mode }}
+                      <span class="tag-mode-text" :title="mode">{{ mode }}</span>
                     </NListItem>
                   </NList>
                   <div v-else style="padding: 20px; text-align: center; color: #999;">
@@ -402,11 +435,12 @@ const columns = [
                     <NListItem
                         v-for="tag in currentTagNames"
                         :key="tag.tag_id"
-                        :class="{ 'tag-name-selected': queryItems.case_tags === tag.tag_id }"
-                        style="cursor: pointer; padding: 8px 12px;"
+                        :class="{ 'tag-name-selected': isTagSelected(tag.tag_id) }"
+                        class="tag-list-item"
                         @click="handleTagSelect(tag.tag_id)"
                     >
-                      {{ tag.tag_name }}
+                      <span class="tag-checkbox">{{ isTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
+                      <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
                     </NListItem>
                   </NList>
                   <div v-else style="padding: 20px; text-align: center; color: #999;">
@@ -417,30 +451,23 @@ const columns = [
             </template>
           </NPopover>
         </QueryBarItem>
-        <QueryBarItem label="用例属性：">
-          <NInput
-              v-model:value="queryItems.case_attr"
-              clearable
-              type="text"
-              placeholder="请输入用例属性"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="用例类型：">
-          <NInput
-              v-model:value="queryItems.case_type"
-              clearable
-              type="text"
-              placeholder="请输入用例类型"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
         <QueryBarItem label="创建人员：">
           <NInput
               v-model:value="queryItems.created_user"
               clearable
               type="text"
               placeholder="请输入创建人员"
+              class="query-input"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="更新人员：">
+          <NInput
+              v-model:value="queryItems.updated_user"
+              clearable
+              type="text"
+              placeholder="请输入更新人员"
+              class="query-input"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -484,6 +511,59 @@ const columns = [
 
 :deep(.n-list-item:hover) {
   background-color: #f5f5f5;
+}
+
+/* 统一查询输入框宽度 */
+.query-input {
+  width: 200px;
+}
+
+/* 标签容器样式 - 每个标签换行展示 */
+.tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+/* 标签列表项样式 */
+.tag-list-item {
+  cursor: pointer;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  color: #18a058;
+  font-weight: bold;
+}
+
+.tag-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 标签分类列表项样式 */
+.tag-mode-item {
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.tag-mode-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 
 </style>

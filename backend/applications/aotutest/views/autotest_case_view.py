@@ -162,6 +162,8 @@ async def search_cases(
             q &= Q(case_project=case_in.case_project)
         if case_in.case_version:
             q &= Q(case_version__gte=case_in.case_version)
+        if case_in.case_attr:
+            q &= Q(case_attr=case_in.case_attr.value)
         if case_in.created_user:
             q &= Q(created_user__iexact=case_in.created_user)
         if case_in.updated_user:
@@ -178,8 +180,6 @@ async def search_cases(
             serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={
                     "state",
-                    "created_user", "updated_user",
-                    "created_time", "updated_time",
                     "reserve_1", "reserve_2", "reserve_3"
                 },
                 replace_fields={"id": "case_id"}
