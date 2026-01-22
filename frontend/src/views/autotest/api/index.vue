@@ -768,10 +768,37 @@ const mapBackendStep = (step) => {
   }
 
   if (localType === 'loop') {
+    // 根据后端数据构建循环配置
     base.config = {
-      mode: 'times',
-      times: step.max_cycles || 1,
-      interval: step.wait || 0
+      loop_mode: step.loop_mode || '次数循环',
+      loop_on_error: step.loop_on_error || '继续下一次循环',
+      loop_maximums: step.loop_maximums ? Number(step.loop_maximums) : null,
+      loop_interval: step.loop_interval ? Number(step.loop_interval) : 0,
+      loop_iterable: step.loop_iterable || '',
+      loop_iter_idx: step.loop_iter_idx || '',
+      loop_iter_key: step.loop_iter_key || '',
+      loop_iter_val: step.loop_iter_val || '',
+      loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0
+    }
+    // 解析条件循环的conditions
+    if (step.conditions) {
+      try {
+        const condition = typeof step.conditions === 'string'
+            ? JSON.parse(step.conditions)
+            : step.conditions
+        base.config.condition_value = condition.value || ''
+        base.config.condition_operation = condition.operation || 'not_empty'
+        base.config.condition_except_value = condition.except_value || ''
+      } catch (e) {
+        console.error('解析循环条件失败:', e)
+        base.config.condition_value = ''
+        base.config.condition_operation = 'not_empty'
+        base.config.condition_except_value = ''
+      }
+    } else {
+      base.config.condition_value = ''
+      base.config.condition_operation = 'not_empty'
+      base.config.condition_except_value = ''
     }
     base.children = []
   } else if (localType === 'code') {
@@ -891,9 +918,41 @@ const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
       source: 'Response Json'
     })) : config.extracts) : original.extract_variables || null
   } else if (step.type === 'loop') {
-    backendStep.max_cycles = config.times || original.max_cycles || 1
-    backendStep.max_interval = config.interval || original.max_interval || 0
-    backendStep.wait = config.interval || original.wait || 0
+    // 循环模式必填
+    backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
+    // 错误处理策略必填
+    backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '继续下一次循环'
+    // 循环间隔（所有模式都需要）
+    backendStep.loop_interval = config.loop_interval !== undefined ? Number(config.loop_interval) : (original.loop_interval ? Number(original.loop_interval) : 0)
+
+    // 根据循环模式设置特定字段
+    if (backendStep.loop_mode === '次数循环') {
+      backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums ? Number(original.loop_maximums) : null)
+    } else if (backendStep.loop_mode === '对象循环') {
+      backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
+      backendStep.loop_iter_idx = config.loop_iter_idx !== undefined ? config.loop_iter_idx : (original.loop_iter_idx || '')
+      backendStep.loop_iter_val = config.loop_iter_val !== undefined ? config.loop_iter_val : (original.loop_iter_val || '')
+    } else if (backendStep.loop_mode === '字典循环') {
+      backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
+      backendStep.loop_iter_idx = config.loop_iter_idx !== undefined ? config.loop_iter_idx : (original.loop_iter_idx || '')
+      backendStep.loop_iter_key = config.loop_iter_key !== undefined ? config.loop_iter_key : (original.loop_iter_key || '')
+      backendStep.loop_iter_val = config.loop_iter_val !== undefined ? config.loop_iter_val : (original.loop_iter_val || '')
+    } else if (backendStep.loop_mode === '条件循环') {
+      // 条件循环需要将条件对象转换为JSON字符串
+      if (config.condition_value !== undefined || config.condition_operation !== undefined || config.condition_except_value !== undefined) {
+        const conditionObj = {
+          value: config.condition_value || '',
+          operation: config.condition_operation || 'not_empty',
+          except_value: config.condition_except_value || ''
+        }
+        backendStep.conditions = JSON.stringify(conditionObj)
+      } else if (original.conditions) {
+        backendStep.conditions = typeof original.conditions === 'string' ? original.conditions : JSON.stringify(original.conditions)
+      } else {
+        backendStep.conditions = null
+      }
+      backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
+    }
   } else if (step.type === 'if') {
     const conditions = [{
       value: config.left || '',
@@ -1239,12 +1298,16 @@ const updateStepConfig = (id, config) => {
     step.config = {...step.config, ...config}
     // 根据配置更新步骤名称
     if (step.type === 'loop') {
-      if (config.mode === 'times') {
-        step.name = `Loop 循环 ${config.times || 3} 次`
-      } else if (config.mode === 'for') {
-        step.name = `Loop For ${config.forVar || 'i'}`
+      if (config.loop_mode === '次数循环') {
+        step.name = `循环结构(次数循环)`
+      } else if (config.loop_mode === '对象循环') {
+        step.name = `循环结构(对象循环)`
+      } else if (config.loop_mode === '字典循环') {
+        step.name = `循环结构(字典循环)`
+      } else if (config.loop_mode === '条件循环') {
+        step.name = `循环结构-(条件循环)`
       } else {
-        step.name = `Loop 条件循环`
+        step.name = `循环结构`
       }
     } else if (step.type === 'http') {
       const method = config.method || 'POST'
