@@ -86,6 +86,11 @@ async def logging_middleware(request: Request, call_next):
     request_method: str = request.method
     request_router: str = request.url.path
     request_header: dict = dict(request.headers)
+    if "referer" in request_header and request_header["referer"]:
+        try:
+            request_header["referer"] = unquote(request_header["referer"])
+        except:
+            pass
     request_client: str = request.client.host if request.client else "127.0.0.1"
     request_tags: str = GLOBAL_CONFIG.ROUTER_TAGS.get(request_router or "未定义", "未定义")
     request_summary: str = GLOBAL_CONFIG.ROUTER_SUMMARY.get(request_router or "未定义", "未定义")

@@ -185,7 +185,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise DataAlreadyExistsException(message=error_message)
 
         instance.state = 1
-        await instance.save()
+        await instance.save(update_fields={"state"})
         return instance
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: list) -> tuple:

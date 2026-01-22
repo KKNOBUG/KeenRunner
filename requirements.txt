@@ -34,13 +34,12 @@ idna==3.10
 iso8601==2.1.0
 jsonpath==0.82.2
 jsonpath-ng==1.7.0
-loguru==0.6.0
+loguru==0.7.3
 multidict==6.1.0
 numpy==1.24.4
 openpyxl==3.1.5
 pandas==2.0.3
 passlib==1.7.4
-pip==24.2
 ply==3.11
 portalocker==3.0.0
 propcache==0.2.0
@@ -69,7 +68,6 @@ tzdata==2025.1
 urllib3==2.2.3
 uvicorn==0.33.0
 uvloop==0.21.0
-wheel==0.44.0
 xmltodict==0.14.2
 xpinyin==0.7.6
 yarl==1.15.2

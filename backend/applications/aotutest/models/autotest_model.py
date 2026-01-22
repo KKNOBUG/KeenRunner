@@ -118,7 +118,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_version = fields.IntField(default=1, ge=1, description="用例更新版本(修改次数)")
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用")
     case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
-    session_variables = fields.JSONField(null=True, description="会话变量(初始变量池)")
+    session_variables = fields.JSONField(default=list, null=True, description="会话变量(初始变量池)")
     state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
 
     class Meta:

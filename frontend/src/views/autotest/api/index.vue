@@ -374,6 +374,7 @@ import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, 
 import {useRoute} from 'vue-router'
 import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace, NSelect, NPopover, NList, NListItem} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
+import {renderIcon} from '@/utils'
 import AppPage from "@/components/page/AppPage.vue";
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
 import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
@@ -594,9 +595,8 @@ const dragState = ref({
 const addOptions = Object.entries(stepDefinitions).map(([value, item]) => ({
   label: item.label,
   key: value,
-  icon: item.icon
+  icon: renderIcon(item.icon, { size: 16 })
 }))
-
 
 
 // 计算总步骤数（包括子步骤）
@@ -1640,16 +1640,8 @@ onUpdated(() => {
 })
 
 const renderDropdownLabel = (option) => {
-  // 从 addOptions 中查找完整的选项信息，获取图标
-  const fullOption = addOptions.find(opt => opt.key === option.key)
-  const icon = fullOption?.icon || stepDefinitions[option.key]?.icon
   const iconClass = getStepIconClass(option.key)
   return h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}}, [
-    h(TheIcon, {
-      icon: icon,
-      size: 16,
-      class: ['step-icon', iconClass]
-    }),
     h('span', option.label)
   ])
 }

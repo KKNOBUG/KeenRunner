@@ -134,6 +134,8 @@ def loguru_logging() -> logger:
         rotation=PROJECT_CONFIG.LOGGER_ROTATION,
         retention=PROJECT_CONFIG.LOGGER_RETENTION,
         compression=PROJECT_CONFIG.LOGGER_COMPRESSION,
+        catch=True,  # 捕获处理器异常
+        delay=True,  # 是否延迟创建文件
         enqueue=True,  # 是否启用异步安全队列写入
         backtrace=True,  # 是否启用完整的异常回溯
         filter=lambda record: record["level"].no < logger.level("ERROR").no  # 过滤掉 ERROR 及以上级别的日志
