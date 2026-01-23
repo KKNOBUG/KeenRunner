@@ -226,6 +226,8 @@ const handleDebug = async () => {
 
 .code-card {
   margin: 8px 0;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(204, 204, 204, 0.99);
   border-left: 4px solid #F4511E;
 }
 
@@ -253,7 +255,7 @@ const handleDebug = async () => {
 
 .hint-box {
   background-color: rgba(244, 81, 30, 0.15);
-  border-radius: 4px;
+  border-radius: 10px;
   padding: 12px;
   margin-bottom: 16px;
 }
@@ -294,7 +296,7 @@ const handleDebug = async () => {
 
 .response-editor {
   font-family: 'Fira Code', monospace;
-  border-radius: 4px;
+  border-radius: 10px;
   overflow: hidden;
 }
 </style>

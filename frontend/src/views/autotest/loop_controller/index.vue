@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="true" style="width: 100%;" class="loop-card">
+  <n-card :bordered="false" style="width: 100%;" class="loop-card">
     <n-form label-placement="left" label-width="135px" :model="form">
       <!-- 循环模式选择 -->
       <n-form-item label="循环模式选择" required>
@@ -495,6 +495,9 @@ watch(
 <style scoped>
 .loop-card {
   margin: 8px 0;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(204, 204, 204, 0.99);
+  border-left: 4px solid #F4511E;
 }
 
 .section {

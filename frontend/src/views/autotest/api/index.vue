@@ -1314,7 +1314,7 @@ const updateStepConfig = (id, config) => {
       }
       step.name = `If ${left} ${operatorMap[operator] || operator}`
     } else if (step.type === 'wait') {
-      step.name = `Wait 等待 ${config.seconds || 2} 秒`
+      step.name = `等待控制(${config.seconds || 0}秒)`
     } else if (step.type === 'code') {
       // 如果提供了 step_name，使用用户输入的步骤名称
       if (config.step_name !== undefined) {
