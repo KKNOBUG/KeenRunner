@@ -803,9 +803,8 @@ const mapBackendStep = (step) => {
     base.children = []
   } else if (localType === 'code') {
     base.config = {
-      script: step.code || '',
-      variables: step.defined_variables ? (Array.isArray(step.defined_variables) ? step.defined_variables : Object.entries(step.defined_variables).map(([key, value]) => ({key, value}))) : [],
-      extracts: step.extract_variables ? (Array.isArray(step.extract_variables) ? step.extract_variables : Object.entries(step.extract_variables).map(([key, value]) => ({key, value}))) : []
+      step_name: step.step_name || '',
+      script: step.code || ''
     }
   } else if (localType === 'http') {
     base.config = {
@@ -906,17 +905,7 @@ const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
     backendStep.assert_validators = config.assert_validators || original.assert_validators || null
     backendStep.defined_variables = config.defined_variables || original.defined_variables || null
   } else if (step.type === 'code') {
-    backendStep.code = config.script || original.code || ''
-    backendStep.defined_variables = config.variables ? (Array.isArray(config.variables) ? config.variables.reduce((acc, item) => {
-      if (item.key) acc[item.key] = item.value
-      return acc
-    }, {}) : config.variables) : original.defined_variables || null
-    backendStep.extract_variables = config.extracts ? (Array.isArray(config.extracts) ? config.extracts.map(item => ({
-      name: item.key || '',
-      expr: item.value || '',
-      range: 'SOME',
-      source: 'Response Json'
-    })) : config.extracts) : original.extract_variables || null
+    backendStep.code = config.code !== undefined ? config.code : (original.code || '')
   } else if (step.type === 'loop') {
     // 循环模式必填
     backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
@@ -1146,6 +1135,7 @@ const editorComponent = computed(() => {
 })
 
 const currentStepTitle = computed(() => {
+  // return ''
   if (!currentStep.value) return '步骤配置'
   return stepDefinitions[currentStep.value.type]?.label || '步骤配置'
 })
@@ -1326,7 +1316,10 @@ const updateStepConfig = (id, config) => {
     } else if (step.type === 'wait') {
       step.name = `Wait 等待 ${config.seconds || 2} 秒`
     } else if (step.type === 'code') {
-      step.name = config.name || '执行代码请求(Python)'
+      // 如果提供了 step_name，使用用户输入的步骤名称
+      if (config.step_name !== undefined) {
+        step.name = config.step_name
+      }
     }
     // 更新显示名称
     updateStepDisplayNames()
@@ -1981,7 +1974,6 @@ const RecursiveStepChildren = defineComponent({
 .case-field-label {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
   white-space: nowrap;
   min-width: 70px;
   flex-shrink: 0;
@@ -1989,7 +1981,7 @@ const RecursiveStepChildren = defineComponent({
 
 .case-field-required::before {
   content: '*';
-  color: #d03050;
+  color: #F4511E;
   margin-right: 4px;
 }
 
@@ -1999,7 +1991,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .case-field-input:hover {
-  border-color: #409eff;
+  border-color: #F4511E;
 }
 
 /* 响应式调整 */
@@ -2114,21 +2106,21 @@ const RecursiveStepChildren = defineComponent({
 
 /* 自定义滚动条样式（可选，提升用户体验） */
 .step-tree-container::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .step-tree-container::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 3px;
+  border-radius: 5px;
 }
 
 .step-tree-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: #a8a8a8;
+  border-radius: 5px;
 }
 
 .step-tree-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #F4511E;
 }
 
 .step-header {
@@ -2152,6 +2144,7 @@ const RecursiveStepChildren = defineComponent({
 .add-step-btn {
   width: 100%;
   margin-bottom: 10px;
+  border-radius: 10px;
 }
 
 /* 样式穿透：确保递归组件中所有嵌套层级的样式都能正确应用 */
@@ -2234,7 +2227,7 @@ const RecursiveStepChildren = defineComponent({
   flex: 1;
   font-size: 14px;
   font-weight: 300;
-  background-color: #f5f5f5;
+  background-color: rgba(222, 222, 222, 0.20);
   padding: 8px 8px;
   border-radius: 10px;
   box-sizing: border-box;

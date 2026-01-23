@@ -62,7 +62,8 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     loop_iter_key: Optional[str] = Field(None, max_length=64, description="用于存储字典的键")
     loop_iter_val: Optional[str] = Field(None, max_length=64, description="用于存储字典的值或列表的项")
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
-    loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
+    loop_timeout: Optional[float] = Field(None, ge=0, le=3000,
+                                          description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
     conditions: NON_LIST_DICT_TYPE = Field(None, description="判断条件(循环结构或条件分支)")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
@@ -119,6 +120,33 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
+
+    @field_validator('extract_variables', mode='before')
+    @classmethod
+    def normalize_extract_variables(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+    @field_validator('assert_validators', mode='before')
+    @classmethod
+    def normalize_assert_validators(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+
+class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
+    step_name: str = Field(..., max_length=255, description="步骤名称")
+    code: str = Field(..., description="执行代码(Python)")
 
     @field_validator('extract_variables', mode='before')
     @classmethod

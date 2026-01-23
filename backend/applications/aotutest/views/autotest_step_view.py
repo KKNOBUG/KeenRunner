@@ -27,6 +27,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateList,
     AutoTestStepTreeUpdateItem,
     AutoTestHttpDebugRequest,
+    AutoTestPythonCodeDebugRequest,
     AutoTestStepTreeExecute,
     AutoTestBatchExecuteCases
 )
@@ -983,6 +984,78 @@ async def debug_http_request(
         )
         LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
         return FailureResponse(message=f"HTTP调试请求异常", data=error_message)
+
+
+@autotest_step.post("/python_code_debugging", summary="API自动化测试-Python代码调试")
+async def debug_python_code(
+        step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据")
+):
+    """
+    调试Python代码执行接口
+
+    功能说明：
+    1. 接收前端发送的Python代码和变量配置数据
+    2. 使用StepExecutionContext执行Python代码（不保存到数据库）
+    3. 返回执行结果，包括提取变量、执行日志等信息
+
+    请求参数格式：
+    - step_name: 步骤名称
+    - code: Python代码
+    - defined_variables: 定义的变量（字典，用于变量替换和代码执行上下文）
+    - session_variables: 会话变量（字典，用于变量替换和代码执行上下文）
+
+    返回数据格式：
+    - success: 执行是否成功
+    - extract_variables: 提取变量结果（字典）
+    - logs: 执行日志（数组）
+    - error: 错误信息（如果执行失败）
+    """
+    try:
+        # 提取请求参数
+        code = step_data.code
+        step_name = step_data.step_name or "执行代码请求(Python)调试"
+        defined_variables = step_data.defined_variables or {}
+        session_variables = step_data.session_variables or {}
+
+        # 合并变量到执行上下文
+        initial_variables = {
+            **defined_variables,
+            **session_variables
+        }
+
+        # 创建执行上下文（使用虚拟的case_id和case_code）
+        from backend.applications.aotutest.services.autotest_step_engine import (
+            StepExecutionContext,
+            StepExecutionError
+        )
+
+        # 创建执行上下文
+        async with StepExecutionContext(
+                case_id=0,  # 调试模式使用虚拟ID
+                case_code="DEBUG",
+                initial_variables=initial_variables,
+        ) as context:
+            try:
+                # 执行Python代码
+                new_vars = context.run_python_code(code, namespace=context.clone_state())
+                LOGGER.info(f"Python代码调试成功: {step_name}")
+                return SuccessResponse(message="Python代码调试成功", data=new_vars, total=1)
+            except StepExecutionError as e:
+                # 构建失败响应
+                response_data = {
+                    "error": str(e)
+                }
+                LOGGER.warning(f"Python代码调试失败: {step_name}, 错误: {str(e)}")
+                return SuccessResponse(message="Python代码调试失败", data=response_data, total=1)
+
+    except Exception as e:
+        error_message: str = (
+            f"【Python代码调试】调试过程发生未知错误, "
+            f"错误类型: {type(e).__name__}, "
+            f"错误详情: {e}"
+        )
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"Python代码调试异常", data=error_message)
 
 
 @autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
