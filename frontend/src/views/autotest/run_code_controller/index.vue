@@ -32,11 +32,11 @@
       <div class="hint-box">
         <div class="hint-title">使用说明</div>
         <div class="hint-content">
-          <p>• 仅可定义单个函数作为入口，系统将自动调用该函数；</p>
+          <p>• 仅可定义单个函数作为入口，系统将<code>自动调用</code>该函数；</p>
           <p>• 支持函数内部使用 <code>${变量名}</code> 占位符引用上下文变量；</p>
-          <p>• 支持代码调试查看代码执行结果，如遇错误也会反馈<code>error</code>；</p>
-          <p>• 函数返回的结果类型必须是 <code>Dict[str, Any]</code>类型</p>
-          <p>• 系统会自动的获取该函数返回值，并添加到<code>会话变量池</code></p>
+          <p>• 支持代码调试查看执行结果，如遇异常也会<code>反馈错误消息</code>；</p>
+          <p>• 函数返回的执行结果类型必须是 <code>Dict[str, Any]</code>类型;</p>
+          <p>• 系统会自动的获取该函数执行结果，并添加到<code>会话变量池;</code></p>
         </div>
       </div>
 
@@ -55,7 +55,7 @@
         :bordered="true"
         style="width: 100%; margin-top: 16px;"
         class="response-card"
-        :title="`执行代码调试结果`"
+        :title="`代码调试结果`"
     >
       <monaco-editor
           :value="debugResponseText"
@@ -129,7 +129,7 @@ const responseEditorOptions = {
   automaticLayout: true,
   minimap: {enabled: true},
   lineNumbers: 'on',
-  wordWrap: 'on',
+  wordWrap: 'off',
   scrollBeyondLastLine: false,
   folding: true,
   readOnly: true,
@@ -202,32 +202,16 @@ const handleDebug = async () => {
     }
 
     const response = await api.pythonCodeDebugging(requestData)
-
     if (response.code === '000000' && response.data) {
       debugResponse.value = response.data
-      if (response.data.success) {
-        window.$message?.success?.('代码调试成功')
-      } else {
-        window.$message?.error?.(response.data.error || '未知错误')
-      }
+      window.$message?.success?.(response.message || '代码调试成功')
     } else {
-      window.$message?.error?.(response.message || '未知错误')
-      debugResponse.value = {
-        success: false,
-        error: response.message || '未知错误',
-        extract_variables: {},
-        logs: []
-      }
+      window.$message?.error?.(response.message || '代码调试失败')
+      debugResponse.value = response.data
     }
   } catch (error) {
     console.error('调试请求异常:', error)
-    window.$message?.error?.('调试请求异常：' + (error.message || '未知错误'))
-    debugResponse.value = {
-      success: false,
-      error: error.message || '未知错误',
-      extract_variables: {},
-      logs: []
-    }
+    window.$message?.error?.(error.message || '代码调试异常')
   } finally {
     debugLoading.value = false
   }

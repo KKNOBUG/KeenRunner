@@ -41,7 +41,8 @@ export function resResolve(response) {
   // 从响应对象中解构出数据、状态码和状态文本
   const { data, status, statusText } = response
   // 检查响应数据的 code 和 status 字段是否符合成功条件
-  if (data?.code !== '000000' || data?.status !== 'success') {
+  // if (data?.code !== '000000' || data?.status !== 'success') {
+  if (!data || data?.code === undefined || data?.status === undefined || data?.code.length !== 6) {
     // 如果不符合成功条件，获取错误码，优先使用响应数据中的 code，若不存在则使用状态码
     const code = data?.code ?? status
     /** 根据code处理对应的操作，并返回处理后的message */

@@ -1003,12 +1003,6 @@ async def debug_python_code(
     - code: Python代码
     - defined_variables: 定义的变量（字典，用于变量替换和代码执行上下文）
     - session_variables: 会话变量（字典，用于变量替换和代码执行上下文）
-
-    返回数据格式：
-    - success: 执行是否成功
-    - extract_variables: 提取变量结果（字典）
-    - logs: 执行日志（数组）
-    - error: 错误信息（如果执行失败）
     """
     try:
         # 提取请求参数
@@ -1046,16 +1040,20 @@ async def debug_python_code(
                     "error": str(e)
                 }
                 LOGGER.warning(f"Python代码调试失败: {step_name}, 错误: {str(e)}")
-                return SuccessResponse(message="Python代码调试失败", data=response_data, total=1)
+                return FailureResponse(message="Python代码调试失败", data=response_data, total=1)
 
     except Exception as e:
         error_message: str = (
-            f"【Python代码调试】调试过程发生未知错误, "
-            f"错误类型: {type(e).__name__}, "
-            f"错误详情: {e}"
+            f"【Python代码调试】调试过程发生未知错误, \n"
+            f"错误类型: {type(e).__name__}, \n"
+            f"错误详情: {e}, \n"
+            f"错误回溯: {traceback.format_exc()}"
         )
-        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"Python代码调试异常", data=error_message)
+        response_data = {
+            "error": error_message
+        }
+        LOGGER.error(error_message)
+        return FailureResponse(message=f"Python代码调试异常", data=response_data)
 
 
 @autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
