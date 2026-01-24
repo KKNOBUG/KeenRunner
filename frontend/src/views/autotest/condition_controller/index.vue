@@ -1,34 +1,37 @@
 <template>
   <n-card :bordered="false" size="medium" style="width: 100%;" class="condition-card">
-    <!-- 顶部操作栏：步骤名称 -->
-    <div class="top-bar">
-      <div class="condition-icon" style="color: #F4511E;">
-        <TheIcon icon="tabler:arrow-loop-right-2" :size="32" />
-      </div>
-      <n-input
-          v-model:value="form.step_name"
-          placeholder="条件分支(根据条件判断结果, 选择不同的执行路径)"
-          class="step-name-input"
-      />
+  <!-- 顶部操作栏：步骤名称 -->
+  <div class="top-bar">
+    <div class="condition-icon">
+      <TheIcon icon="tabler:arrow-loop-right-2" :size="32" />
     </div>
+    <n-input
+      v-model:value="form.step_name"
+      autosize
+      placeholder="条件分支(根据条件判断结果, 选择不同的执行路径)"
+      class="step-name-input"
+  />
+  </div>
+  </n-card>
+  <n-card :bordered="false" size="medium" style="width: 100%;" class="condition-card">
 
     <n-form label-placement="left" label-width="100px" :model="form">
-      <n-form-item label="条件值" required>
+      <n-form-item label="条件表达式" required>
         <n-input
             v-model:value="form.value"
             placeholder="变量名或表达式,例如: ${token} 或 ${count}"
             style="width: 80%;"
         />
       </n-form-item>
-      <n-form-item label="比对条件" required>
+      <n-form-item label="条件比较符" required>
         <n-select
             v-model:value="form.operation"
             :options="operatorOptions"
-            placeholder="请选择比对条件"
+            placeholder="请选择条件比较符"
             style="width: 80%;"
         />
       </n-form-item>
-      <n-form-item label="比对值">
+      <n-form-item label="条件比对值">
         <n-input
             v-model:value="form.except_value"
             placeholder="字符串或变量,例如: 3 或 ${target} (非空/为空操作时可不填)"
@@ -261,10 +264,6 @@ watch(
 .top-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
 }
 
 .condition-icon {
@@ -272,12 +271,13 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  height: 30px;
+  color: #F4511E;
+  width: 100px;
 }
 
 .step-name-input {
-  flex: 1;
+  width: 71%;
 }
 
 </style>

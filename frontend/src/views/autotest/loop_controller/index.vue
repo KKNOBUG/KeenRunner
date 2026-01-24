@@ -132,11 +132,11 @@
                 style="width: 80%;"
             />
           </n-form-item>
-          <n-form-item label="比较操作符" required>
+          <n-form-item label="条件比较符" required>
             <n-select
                 v-model:value="form.condition_operation"
                 :options="operatorOptions"
-                placeholder="请选择比较操作符"
+                placeholder="请选择条件比较符"
                 style="width: 80%;"
             />
           </n-form-item>

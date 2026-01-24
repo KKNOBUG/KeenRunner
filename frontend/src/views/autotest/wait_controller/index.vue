@@ -102,7 +102,4 @@ watch(
   border-left: 4px solid #F4511E;
 }
 
-:deep(.n-form-item) {
-  margin-bottom: 12px;
-}
 </style>

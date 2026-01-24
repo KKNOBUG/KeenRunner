@@ -1154,7 +1154,7 @@ const insertStep = (parentId, type, index = null) => {
   const newStep = {
     id: genId(),
     type,
-    name: `${def.label}-${new Date().getTime()}`,
+    name: `${def.label}`,
     config: {}
   }
 
@@ -1314,11 +1314,6 @@ const updateStepConfig = (id, config) => {
       if (config.step_name !== undefined) {
         step.name = config.step_name
       } else {
-        // 否则自动生成步骤名称
-        const left = config.value || ''
-        const operator = config.operation || ''
-        const right = config.except_value || ''
-        // 操作符已经是中文，直接使用
         step.name = `条件分支(根据条件判断结果, 选择不同的执行路径)`
       }
     } else if (step.type === 'wait') {
