@@ -1306,15 +1306,19 @@ const updateStepConfig = (id, config) => {
         step.name = `循环结构`
       }
     } else if (step.type === 'http') {
-      const method = config.method || 'POST'
-      const name = config.name || 'HTTP请求'
-      step.name = `API ${method} ${name}`
-    } else if (step.type === 'if') {
       // 如果提供了 step_name，使用用户输入的步骤名称
-      if (config.step_name !== undefined) {
+      if (config.step_name !== undefined && config.step_name.length > 0) {
         step.name = config.step_name
       } else {
-        step.name = `条件分支(根据条件判断结果, 选择不同的执行路径)`
+        // 否则自动生成步骤名称
+        step.name = `HTTP请求(发送请求并验证响应数据)`
+      }
+    } else if (step.type === 'if') {
+      // 如果提供了 step_name，使用用户输入的步骤名称
+      if (config.step_name !== undefined && config.step_name.length > 0) {
+        step.name = config.step_name
+      } else {
+        step.name = `条件分支(根据判断结果, 执行不同的路径)`
       }
     } else if (step.type === 'wait') {
       step.name = `等待控制(${config.seconds || 0}秒)`

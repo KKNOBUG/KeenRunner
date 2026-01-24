@@ -432,7 +432,7 @@ async def debug_http_request(
                 if isinstance(value, str):
                     pattern = re.compile(r"\$\{([^}]+)}")
 
-                    def replace(match: re.Match[str]) -> str:
+                    def replace(match: re.Match) -> str:
                         var_name = match.group(1)
                         if not var_name:
                             logs.append("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
