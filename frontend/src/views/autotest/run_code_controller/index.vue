@@ -286,7 +286,7 @@ const handleDebug = async () => {
 
 .code-editor {
   font-family: 'Fira Code', monospace;
-  border-radius: 4px;
+  border-radius: 10px;
   overflow: hidden;
 }
 

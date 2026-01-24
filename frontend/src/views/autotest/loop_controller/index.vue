@@ -23,7 +23,7 @@
         />
       </n-form-item>
 
-      <div class="section">
+      <div>
         <!-- 次数循环模式 -->
         <template v-if="form.loop_mode === '次数循环'">
           <n-form-item label="最大循环次数" required>
@@ -498,14 +498,6 @@ watch(
   border-radius: 10px;
   box-shadow: 0 0 12px rgba(204, 204, 204, 0.99);
   border-left: 4px solid #F4511E;
-}
-
-.section {
-  margin-top: 16px;
-}
-
-:deep(.n-form-item) {
-  margin-bottom: 12px;
 }
 
 :deep(.n-radio-group) {

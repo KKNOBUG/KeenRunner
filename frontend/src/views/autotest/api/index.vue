@@ -818,10 +818,13 @@ const mapBackendStep = (step) => {
     }
   } else if (localType === 'if') {
     const parsed = parseJsonSafely(step.conditions) || {}
+    // 处理数组格式（后端可能返回数组）
+    const condition = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : parsed
     base.config = {
-      left: parsed.value || '',
-      operator: parsed.operation || parsed.op || 'not_empty',
-      remark: parsed.desc || ''
+      value: condition.value || '',
+      operation: condition.operation || '非空',
+      except_value: condition.except_value || '',
+      desc: condition.desc || ''
     }
     base.children = []
   } else if (localType === 'wait') {
@@ -943,12 +946,15 @@ const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
       backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
     }
   } else if (step.type === 'if') {
-    const conditions = [{
-      value: config.left || '',
-      operation: config.operator || 'not_empty',
-      desc: config.remark || ''
-    }]
-    backendStep.conditions = conditions
+    // 根据后端 ConditionStepExecutor 的要求，conditions 应该是 JSON 对象，包含 value, operation, except_value, desc
+    const conditionObj = {
+      value: config.value || '',
+      operation: config.operation || '非空',
+      except_value: config.except_value || '',
+      desc: config.desc || ''
+    }
+    // 后端期望 conditions 是 JSON 字符串格式
+    backendStep.conditions = JSON.stringify(conditionObj)
   } else if (step.type === 'wait') {
     backendStep.wait = config.seconds || original.wait || 0
   }
@@ -1304,15 +1310,17 @@ const updateStepConfig = (id, config) => {
       const name = config.name || 'HTTP请求'
       step.name = `API ${method} ${name}`
     } else if (step.type === 'if') {
-      const left = config.left || ''
-      const operator = config.operator || 'not_empty'
-      const operatorMap = {
-        'not_empty': 'not_none',
-        'empty': 'is_none',
-        'eq': '==',
-        'ne': '!='
+      // 如果提供了 step_name，使用用户输入的步骤名称
+      if (config.step_name !== undefined) {
+        step.name = config.step_name
+      } else {
+        // 否则自动生成步骤名称
+        const left = config.value || ''
+        const operator = config.operation || ''
+        const right = config.except_value || ''
+        // 操作符已经是中文，直接使用
+        step.name = `条件分支(根据条件判断结果, 选择不同的执行路径)`
       }
-      step.name = `If ${left} ${operatorMap[operator] || operator}`
     } else if (step.type === 'wait') {
       step.name = `等待控制(${config.seconds || 0}秒)`
     } else if (step.type === 'code') {
