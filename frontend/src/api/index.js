@@ -92,4 +92,18 @@ export default {
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http_debugging', data),
   pythonCodeDebugging: (data = {}) => request.post('/autotest/step/python_code_debugging', data),
   executeStepTree: (data = {}) => request.post('/autotest/step/execute_or_debugging', data),
+  // 报告相关
+  getApiReportList: (data = {}) => request.post('/autotest/report/search', data),
+  deleteApiReport: (params = {}) => {
+    const queryParams = []
+    if (params.report_id) queryParams.push(`report_id=${params.report_id}`)
+    if (params.report_code) queryParams.push(`report_code=${params.report_code}`)
+    return request.delete(`/autotest/report/delete${queryParams.length ? '?' + queryParams.join('&') : ''}`)
+  },
+  getApiReport: (params = {}) => {
+    const queryParams = []
+    if (params.report_id) queryParams.push(`report_id=${params.report_id}`)
+    if (params.report_code) queryParams.push(`report_code=${params.report_code}`)
+    return request.get(`/autotest/report/get${queryParams.length ? '?' + queryParams.join('&') : ''}`)
+  },
 }
