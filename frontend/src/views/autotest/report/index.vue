@@ -172,6 +172,129 @@ const isJsonSessionVariables = computed(() => {
   return typeof currentDetail.value.session_variables === 'object'
 })
 
+// 请求信息相关计算属性
+const stepInfo = computed(() => {
+  return currentDetail.value?.step || {}
+})
+
+const requestMethod = computed(() => {
+  return stepInfo.value.request_method || '-'
+})
+
+const requestUrl = computed(() => {
+  return stepInfo.value.request_url || '-'
+})
+
+const requestHeaders = computed(() => {
+  return stepInfo.value.request_header
+})
+
+const requestParams = computed(() => {
+  const params = stepInfo.value.request_params
+  if (typeof params === 'string') {
+    try {
+      return JSON.parse(params)
+    } catch {
+      return {}
+    }
+  }
+  return params || {}
+})
+
+const requestBody = computed(() => {
+  return stepInfo.value.request_body
+})
+
+const requestFormData = computed(() => {
+  return stepInfo.value.request_form_data
+})
+
+const requestFormUrlencoded = computed(() => {
+  return stepInfo.value.request_form_urlencoded
+})
+
+const requestText = computed(() => {
+  return stepInfo.value.request_text
+})
+
+const hasRequestInfo = computed(() => {
+  return !!(requestMethod.value && requestMethod.value !== '-') ||
+      !!(requestUrl.value && requestUrl.value !== '-') ||
+      !!requestHeaders.value ||
+      !!requestBody.value ||
+      !!requestFormData.value ||
+      !!requestFormUrlencoded.value ||
+      !!requestText.value
+})
+
+const hasRequestBody = computed(() => {
+  return !!(requestBody.value || requestFormData.value || requestFormUrlencoded.value || requestText.value)
+})
+
+const requestBodyType = computed(() => {
+  if (requestBody.value) return 'JSON'
+  if (requestFormData.value) return 'Form Data'
+  if (requestFormUrlencoded.value) return 'x-www-form-urlencoded'
+  if (requestText.value) return 'Text'
+  return 'None'
+})
+
+const requestBodyText = computed(() => {
+  if (requestText.value) return requestText.value
+  if (requestFormUrlencoded.value) {
+    if (typeof requestFormUrlencoded.value === 'object') {
+      return Object.entries(requestFormUrlencoded.value)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('&')
+    }
+    return String(requestFormUrlencoded.value)
+  }
+  return ''
+})
+
+const isJsonRequestHeaders = computed(() => {
+  return requestHeaders.value && typeof requestHeaders.value === 'object'
+})
+
+const isJsonRequestParams = computed(() => {
+  return requestParams.value && typeof requestParams.value === 'object' && Object.keys(requestParams.value).length > 0
+})
+
+const isJsonRequestBody = computed(() => {
+  return requestBody.value && typeof requestBody.value === 'object'
+})
+
+const requestFormDataTable = computed(() => {
+  if (!requestFormData.value) return []
+  if (typeof requestFormData.value === 'object') {
+    return Object.entries(requestFormData.value).map(([key, value]) => ({
+      key,
+      value: typeof value === 'object' ? JSON.stringify(value) : String(value)
+    }))
+  }
+  return []
+})
+
+const formatRequestHeadersText = () => {
+  if (!requestHeaders.value) return ''
+  if (typeof requestHeaders.value === 'object') {
+    return Object.entries(requestHeaders.value)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n')
+  }
+  return String(requestHeaders.value)
+}
+
+const getMethodTagType = (method) => {
+  if (!method || method === '-') return 'default'
+  const upperMethod = method.toUpperCase()
+  if (upperMethod === 'GET') return 'info'
+  if (upperMethod === 'POST') return 'success'
+  if (upperMethod === 'PUT') return 'warning'
+  if (upperMethod === 'DELETE') return 'error'
+  return 'default'
+}
+
 // 获取HTTP状态码
 const getHttpCode = (item) => {
   if (item.response_body && typeof item.response_body === 'object') {
@@ -739,48 +862,109 @@ const columns = [
             <!-- 基本信息 -->
             <NTabPane name="basic" tab="基本信息">
               <NSpace vertical :size="16">
-                <NCollapse :default-expanded-names="['basicInfo']">
-                  <NCollapseItem title="基本信息" name="basicInfo">
+                <NCard title="步骤信息" size="small" :bordered="false">
+                  <NDescriptions bordered :column="2" size="small">
+                    <NDescriptionsItem label="步骤名称">
+                      <NText strong>{{ currentDetail.step_name || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤类型">
+                      <NTag type="info">{{ currentDetail.step_type || '-' }}</NTag>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤序号">
+                      <NText>{{ currentDetail.step_no || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤状态">
+                      <NTag :type="currentDetail.step_state ? 'success' : 'error'" size="small">
+                        {{ currentDetail.step_state ? '成功' : '失败' }}
+                      </NTag>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤标识">
+                      <NText copyable style="font-family: monospace; font-size: 12px;">{{ currentDetail.step_code || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="循环次数" v-if="currentDetail.num_cycles">
+                      <NTag type="warning" size="small">第 {{ currentDetail.num_cycles }} 次</NTag>
+                    </NDescriptionsItem>
+                  </NDescriptions>
+                </NCard>
+
+                <NCard title="执行时间" size="small" :bordered="false">
+                  <NDescriptions bordered :column="2" size="small">
+                    <NDescriptionsItem label="开始时间">
+                      <NText>{{ currentDetail.step_st_time || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="结束时间">
+                      <NText>{{ currentDetail.step_ed_time || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="消耗时间">
+                      <NTag type="info" size="small">{{ currentDetail.step_elapsed || '-' }}s</NTag>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="响应耗时" v-if="currentDetail.response_elapsed">
+                      <NTag type="info" size="small">{{ parseFloat(currentDetail.response_elapsed).toFixed(3) }}s</NTag>
+                    </NDescriptionsItem>
+                  </NDescriptions>
+                </NCard>
+
+                <NCollapse :default-expanded-names="currentDetail.step_exec_except ? ['errorInfo'] : []">
+                  <NCollapseItem title="错误信息" name="errorInfo" v-if="currentDetail.step_exec_except">
+                    <pre style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{ currentDetail.step_exec_except }}</pre>
+                  </NCollapseItem>
+                  <NCollapseItem title="执行日志" name="execLogger" v-if="currentDetail.step_exec_logger">
+                    <pre style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{ currentDetail.step_exec_logger }}</pre>
+                  </NCollapseItem>
+                </NCollapse>
+              </NSpace>
+            </NTabPane>
+
+            <!-- 请求信息 -->
+            <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
+              <NSpace vertical :size="16">
+                <NCollapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']" arrow-placement="right">
+                  <NCollapseItem title="Basic" name="requestBasic">
                     <NDescriptions bordered :column="2" size="small">
-                      <NDescriptionsItem label="用例ID">
-                        <NText>{{ currentDetail.case_id || '-' }}</NText>
+                      <NDescriptionsItem label="请求方法">
+                        <NTag :type="getMethodTagType(requestMethod)" size="small">{{ requestMethod || '-' }}</NTag>
                       </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤序号">
-                        <NText>{{ currentDetail.step_no || '-' }}</NText>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤名称">
-                        <NText>{{ currentDetail.step_name || '-' }}</NText>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤标识">
-                        <NText copyable>{{ currentDetail.step_code || '-' }}</NText>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤类型">
-                        <NTag>{{ currentDetail.step_type || '-' }}</NTag>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤状态">
-                        <NTag :type="currentDetail.step_state ? 'success' : 'error'">
-                          {{ currentDetail.step_state ? '成功' : '失败' }}
-                        </NTag>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤执行时间">
-                        <NText>{{ currentDetail.step_st_time || '-' }}</NText>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤结束时间">
-                        <NText>{{ currentDetail.step_ed_time || '-' }}</NText>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="步骤消耗时间">
-                        <NText>{{ currentDetail.step_elapsed || '-' }}s</NText>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="循环次数" v-if="currentDetail.num_cycles">
-                        <NText>第 {{ currentDetail.num_cycles }} 次</NText>
+                      <NDescriptionsItem label="请求URL">
+                        <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
                       </NDescriptionsItem>
                     </NDescriptions>
                   </NCollapseItem>
-                  <NCollapseItem title="错误信息" name="errorInfo" v-if="currentDetail.step_exec_except">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word; color: #d03050;">{{ currentDetail.step_exec_except }}</pre>
+                  <NCollapseItem title="Headers" name="requestHeaders" v-if="requestHeaders">
+                    <div v-if="isJsonRequestHeaders">
+                      <MonacoEditor
+                          :value="formatJson(requestHeaders)"
+                          :options="monacoEditorOptions(true)"
+                          style="min-height: 200px; height: auto;"
+                      />
+                    </div>
+                    <pre v-else style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{ formatRequestHeadersText() }}</pre>
                   </NCollapseItem>
-                  <NCollapseItem title="执行日志" name="execLogger" v-if="currentDetail.step_exec_logger">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ currentDetail.step_exec_logger }}</pre>
+                  <NCollapseItem title="Params" name="requestParams" v-if="requestParams && Object.keys(requestParams).length > 0">
+                    <div v-if="isJsonRequestParams">
+                      <MonacoEditor
+                          :value="formatJson(requestParams)"
+                          :options="monacoEditorOptions(true)"
+                          style="min-height: 200px; height: auto;"
+                      />
+                    </div>
+                    <pre v-else style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{ formatJson(requestParams) }}</pre>
+                  </NCollapseItem>
+                  <NCollapseItem :title="`Body (${requestBodyType})`" name="requestBody" v-if="hasRequestBody">
+                    <div v-if="isJsonRequestBody">
+                      <MonacoEditor
+                          :value="formatJson(requestBody)"
+                          :options="monacoEditorOptions(true)"
+                          style="min-height: 400px; height: auto;"
+                      />
+                    </div>
+                    <NDataTable
+                        v-else-if="requestFormData"
+                        :columns="[{title: 'Key', key: 'key'}, {title: 'Value', key: 'value'}]"
+                        :data="requestFormDataTable"
+                        size="small"
+                        :bordered="true"
+                    />
+                    <pre v-else style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{ requestBodyText }}</pre>
                   </NCollapseItem>
                 </NCollapse>
               </NSpace>
@@ -867,4 +1051,5 @@ const columns = [
 }
 
 </style>
+
 
