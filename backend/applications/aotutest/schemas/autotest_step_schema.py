@@ -172,20 +172,24 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    case_id: Optional[int] = Field(None, description="用例ID(运行模式必填)")
-    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填)")
+    case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: NON_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
 
     @model_validator(mode='after')
     def validate_mode(self):
         case_id = self.case_id
         steps = self.steps
-        if case_id is None and (steps is None or len(steps) == 0):
-            raise ValueError("运行模式必须提供[case_id]参数，调试模式必须提供[steps]参数")
-        if case_id is not None and steps is not None and len(steps) > 0:
-            raise ValueError("运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
+        # case_id 是必填的（运行模式和调试模式都需要）
+        if case_id is None:
+            raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
+        # 运行模式：只传递 case_id，不传递 steps
+        # 调试模式：传递 case_id 和 steps
+        if steps is not None and len(steps) > 0:
+            # 调试模式：case_id 和 steps 都存在
+            pass
+        # 运行模式：只有 case_id，没有 steps（或 steps 为空）
         return self
-
 
 class AutoTestBatchExecuteCases(BaseModel):
     env: Optional[str] = Field(None, description="执行环境名称")

@@ -25,7 +25,7 @@ from backend.enums.autotest_enum import (
     AutoTestReportType,
     AutoTestLoopMode,
     AutoTestCaseAttr,
-    AutoTestLoopErrorStrategy,
+    AutoTestLoopErrorStrategy
 )
 
 
@@ -46,7 +46,7 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     project_testers = fields.JSONField(default=list, null=True, description="应用测试人员列表")
     project_current_month_env = fields.CharField(max_length=64, null=True, description="应用当前月版环境")
     project_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="应用标识代码")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_project"
@@ -65,7 +65,7 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
     env_name = fields.CharField(max_length=64, index=True, description="环境名称")
     env_host = fields.CharField(max_length=255, description="环境主机(http|https://127.0.0.1:8000)")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_env"
@@ -89,7 +89,7 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
     tag_mode = fields.CharField(max_length=64, null=True, description="标签大类")
     tag_name = fields.CharField(max_length=64, null=True, description="标签名称")
     tag_desc = fields.CharField(max_length=2048, null=True, description="标签描述")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_tag"
@@ -119,7 +119,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用")
     case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
     session_variables = fields.JSONField(default=list, null=True, description="会话变量(初始变量池)")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_case"
@@ -186,7 +186,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_step"
@@ -224,7 +224,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
     task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_report"
@@ -275,7 +275,7 @@ class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
 
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
-    state = fields.SmallIntField(default=-1, index=True, description="状态(-1:启用, 1:禁用)")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_details"

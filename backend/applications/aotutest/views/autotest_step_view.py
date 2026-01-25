@@ -78,6 +78,7 @@ async def create_step(
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"新增步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
@@ -104,6 +105,7 @@ async def delete_step(
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code删除步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -129,6 +131,7 @@ async def update_step(
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code更新步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"修改失败，异常描述: {e}")
 
 
@@ -156,6 +159,7 @@ async def get_step(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -207,6 +211,7 @@ async def search_steps(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按条件查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -223,6 +228,7 @@ async def get_step_tree(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -352,7 +358,7 @@ async def batch_update_steps_tree(
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(str(e))
+        LOGGER.error(f"更新用例及步骤树异常，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新用例及步骤树异常", data=str(e))
 
 
@@ -1073,12 +1079,12 @@ async def execute_step_tree(
         initial_variables = request.initial_variables or {}
 
         # 判断运行模式还是调试模式
-        is_run_mode = case_id is not None
-        is_debug_mode = steps is not None and len(steps) > 0
+        # 运行模式：只传递 case_id，不传递 steps
+        # 调试模式：传递 case_id 和 steps
+        is_run_mode = case_id is not None and (steps is None or len(steps) == 0)
+        is_debug_mode = case_id is not None and steps is not None and len(steps) > 0
         if not is_run_mode and not is_debug_mode:
-            return BadReqResponse(message="必须提供case_id（运行模式）或steps（调试模式）之一")
-        if is_run_mode and is_debug_mode:
-            return BadReqResponse(message="运行模式和调试模式不能同时使用，请只提供case_id或steps之一")
+            return BadReqResponse(message="必须提供case_id参数，运行模式不传递steps，调试模式需要传递steps")
 
         # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
@@ -1143,15 +1149,16 @@ async def execute_step_tree(
                 case_obj = tree_data[0].get("case")
                 if case_obj:
                     case_info = {
-                        "id": case_obj.get("id"),
-                        "case_code": case_obj.get("case_code") or f"tmp-{int(time.time())}",
-                        "case_name": case_obj.get("case_name") or "未命名用例",
+                        "case_id": case_obj.get("case_id"),
+                        "case_code": case_obj.get("case_code"),
+                        "case_name": case_obj.get("case_name"),
                     }
             if not case_info:
+                case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
                 case_info = {
-                    "id": None,
-                    "case_code": f"tmp-{int(time.time())}",
-                    "case_name": "调试用例",
+                    "id": case_instance.id,
+                    "case_code": case_instance.case_code,
+                    "case_name": case_instance.case_name,
                 }
 
             # 3. 规范化步骤数据
@@ -1170,13 +1177,13 @@ async def execute_step_tree(
             if not root_steps:
                 return BadReqResponse(message="没有可执行的根步骤")
 
-            # 6. 执行但不保存到数据库
-            engine = AutoTestStepExecutionEngine(save_report=False)
+            # 6. 执行
+            engine = AutoTestStepExecutionEngine(save_report=True)
             results, logs, report_code, statistics, session_variables = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
                 initial_variables=initial_variables,
-                report_type=AutoTestReportType.EXEC1
+                report_type=AutoTestReportType.EXEC0
             )
 
             # 7. 获取最终会话变量（从执行引擎返回）
@@ -1195,8 +1202,9 @@ async def execute_step_tree(
                 "session_variables": final_session_variables,
                 "saved_to_database": False
             }
-
             return SuccessResponse(message="调试执行完成", data=result_data, )
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         return FailureResponse(message=f"执行失败，异常描述: {str(e)}")
 
@@ -1228,7 +1236,7 @@ async def batch_execute_cases_endpoint(
         #     "task_state": apply_async_resound.state
         # }
 
-        # 即时执行
+        # 异步执行
         exec_result = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables or {},

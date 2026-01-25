@@ -363,44 +363,6 @@
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
           </n-card>
-
-          <!-- 调试结果展示区域 -->
-          <n-card
-              v-if="debugResult"
-              :bordered="true"
-              size="small"
-              style="width: 100%; margin-top: 16px;"
-              title="调试结果"
-          >
-            <n-space vertical :size="12">
-              <!-- 执行统计 -->
-              <div v-if="debugResult.statistics">
-                <n-text strong>执行统计：</n-text>
-                <n-text>总步骤: {{ debugResult.statistics.total_steps || 0 }}, </n-text>
-                <n-text type="success">成功: {{ debugResult.statistics.success_steps || 0 }}, </n-text>
-                <n-text type="error">失败: {{ debugResult.statistics.failed_steps || 0 }}, </n-text>
-                <n-text>成功率: {{ debugResult.statistics.pass_ratio || 0 }}%</n-text>
-              </div>
-
-              <!-- 执行结果树 -->
-              <div v-if="debugResult.results && debugResult.results.length > 0">
-                <n-text strong>执行结果：</n-text>
-                <pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 400px; overflow-y: auto;">{{ formatDebugResult(debugResult.results) }}</pre>
-              </div>
-
-              <!-- 会话变量 -->
-              <div v-if="debugResult.session_variables && Object.keys(debugResult.session_variables).length > 0">
-                <n-text strong>会话变量：</n-text>
-                <pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 200px; overflow-y: auto;">{{ JSON.stringify(debugResult.session_variables, null, 2) }}</pre>
-              </div>
-
-              <!-- 执行日志 -->
-              <div v-if="debugResult.logs && Object.keys(debugResult.logs).length > 0">
-                <n-text strong>执行日志：</n-text>
-                <pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 300px; overflow-y: auto;">{{ formatDebugLogs(debugResult.logs) }}</pre>
-              </div>
-            </n-space>
-          </n-card>
         </n-gi>
       </n-grid>
     </div>
@@ -1229,7 +1191,7 @@ const handleRun = async () => {
   runLoading.value = true
   try {
     const res = await api.executeStepTree({
-      case_id: caseId.value,
+      case_id: caseId.value ? Number(caseId.value) : null,
       initial_variables: {}
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
@@ -1298,10 +1260,14 @@ const handleDebug = async () => {
     window.$message?.warning?.('请先添加测试步骤')
     return
   }
+  if (!caseId.value) {
+    window.$message?.warning?.('请先保存用例或选择已有用例')
+    return
+  }
   debugLoading.value = true
   debugResult.value = null
   try {
-    // 调试模式：不传递 case_id，只传递 steps 和 initial_variables
+    // 调试模式：传递 case_id 和 steps
     // 按照树的前序遍历顺序分配 step_no，确保唯一且按顺序递增
     const stepNoMap = assignStepNumbers(steps.value)
 
@@ -1311,13 +1277,13 @@ const handleDebug = async () => {
     })
 
     const res = await api.executeStepTree({
-      // 调试模式：不传递 case_id
-      case_id: null,
+      // 调试模式：传递 case_id 和 steps
+      case_id: caseId.value ? Number(caseId.value) : null,
       steps: backendSteps,
       initial_variables: {}
     })
-    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
-      const stats = res.data?.statistics || {}
+    if (res?.code === '000000') {
+      const stats = res.data || {}
       const msg = `调试完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
       window.$message?.success?.(msg)
 

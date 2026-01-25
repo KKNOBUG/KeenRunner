@@ -32,7 +32,7 @@ from backend.enums.autotest_enum import (
     AutoTestReportType,
     AutoTestLoopMode,
     AutoTestCaseType,
-    AutoTestLoopErrorStrategy,
+    AutoTestLoopErrorStrategy
 )
 from backend.services.ctx import CTX_USER_ID
 
@@ -2276,10 +2276,10 @@ class AutoTestStepExecutionEngine:
             self,
             case: Dict[str, Any],
             steps: Iterable[Dict[str, Any]],
+            report_type: AutoTestReportType,
             *,
+            execute_environment: Optional[str] = None,
             initial_variables: Optional[Dict[str, Any]] = None,
-            report_type: Optional[AutoTestReportType] = None,
-            execute_environment: Optional[str] = None
     ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], Dict[str, Any]]:
         case_id: int = case.get("case_id")
         case_code: str = case.get("case_code")
@@ -2383,7 +2383,7 @@ class AutoTestStepExecutionEngine:
 
                 try:
                     from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-                    await AUTOTEST_API_CASE_CRUD(AutoTestApiCaseUpdate(
+                    await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
                         case_id=case_id,
                         case_state=case_state,
                         case_last_time=case_ed_time_str

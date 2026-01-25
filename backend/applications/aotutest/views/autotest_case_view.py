@@ -6,6 +6,7 @@
 @Module  : autotest_case_view.py
 @DateTime: 2025/4/28
 """
+import traceback
 from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Body, Query
@@ -59,6 +60,7 @@ async def create_case(
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"新增用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
@@ -85,6 +87,7 @@ async def delete_case(
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code删除用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -110,6 +113,7 @@ async def update_case(
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code更新除用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -137,6 +141,7 @@ async def get_case(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -222,4 +227,5 @@ async def search_cases(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

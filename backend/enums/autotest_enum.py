@@ -25,8 +25,9 @@ class AutoTestTagType(StringEnum):
 
 
 class AutoTestReportType(StringEnum):
-    EXEC1 = "单笔执行"
-    EXEC2 = "批量执行"
+    EXEC0 = "调试执行"
+    EXEC1 = "同步执行"
+    EXEC2 = "异步执行"
     EXEC3 = "定时执行"
 
 

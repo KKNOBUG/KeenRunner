@@ -809,7 +809,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 4. 收集session_variables
         all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
         initial_variables.update(all_session_variables)
-        merged_initial_variables = AutoTestToolService.execute_func_string(initial_variables)
+        AutoTestToolService.execute_func_string(initial_variables)
         LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功, 检查变量引用成功")
 
         # 5. 获取根步骤
@@ -825,9 +825,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             results, logs, report_code, statistics, _ = await engine.execute_case(
                 case=case_dict,
                 steps=root_steps,
-                initial_variables=merged_initial_variables,
+                initial_variables=initial_variables,
                 execute_environment=execute_environment,
-                report_type=report_type
+                report_type=report_type,
             )
 
             # 返回运行模式的简化结果
