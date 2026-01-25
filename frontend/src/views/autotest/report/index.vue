@@ -1,6 +1,27 @@
 <script setup>
-import {h, ref, resolveDirective, withDirectives, computed} from 'vue'
-import {NButton, NInput, NPopconfirm, NSelect, NTag, NDrawer, NDrawerContent, NDataTable, NCheckbox, NSpace, NCard, NTabs, NTabPane, NCollapse, NCollapseItem, NDescriptions, NDescriptionsItem, NText, NCode, NEmpty} from 'naive-ui'
+import {computed, h, ref, resolveDirective, withDirectives} from 'vue'
+import {
+  NButton,
+  NCard,
+  NCheckbox,
+  NCode,
+  NCollapse,
+  NCollapseItem,
+  NDataTable,
+  NDescriptions,
+  NDescriptionsItem,
+  NDrawer,
+  NDrawerContent,
+  NEmpty,
+  NInput,
+  NPopconfirm,
+  NSelect,
+  NSpace,
+  NTabPane,
+  NTabs,
+  NTag,
+  NText
+} from 'naive-ui'
 import {useRouter} from 'vue-router'
 import MonacoEditor from '@/components/monaco/index.vue'
 
@@ -128,9 +149,9 @@ const formatResponseText = () => {
 }
 
 // Monaco编辑器配置
-const monacoEditorOptions = (readOnly = false) => ({
+const monacoEditorOptions = (readOnly = false, language = 'json') => ({
   readOnly,
-  language: 'json',
+  language,
   theme: 'vs',
   automaticLayout: true,
   minimap: {enabled: false},
@@ -864,25 +885,101 @@ const columns = [
               <NSpace vertical :size="16">
                 <NCard title="步骤信息" size="small" :bordered="false">
                   <NDescriptions bordered :column="2" size="small">
-                    <NDescriptionsItem label="步骤名称">
-                      <NText strong>{{ currentDetail.step_name || '-' }}</NText>
+                    <NDescriptionsItem label="用例ID(case_id)">
+                      <NText>{{ currentDetail.case_id || '-' }}</NText>
                     </NDescriptionsItem>
-                    <NDescriptionsItem label="步骤类型">
-                      <NTag type="info">{{ currentDetail.step_type || '-' }}</NTag>
+                    <NDescriptionsItem label="用例标识(case_code)">
+                      <NText copyable style="font-family: monospace; font-size: 12px;">{{
+                          currentDetail.case_code || '-'
+                        }}
+                      </NText>
                     </NDescriptionsItem>
-                    <NDescriptionsItem label="步骤序号">
-                      <NText>{{ currentDetail.step_no || '-' }}</NText>
+                    <NDescriptionsItem label="报告标识(report_code)">
+                      <NText copyable style="font-family: monospace; font-size: 12px;">
+                        {{ currentDetail.report_code || '-' }}
+                      </NText>
                     </NDescriptionsItem>
-                    <NDescriptionsItem label="步骤状态">
+                    <NDescriptionsItem label="步骤标识(step_code)">
+                      <NText copyable style="font-family: monospace; font-size: 12px;">{{
+                          currentDetail.step_code || '-'
+                        }}
+                      </NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤状态(step_state)">
                       <NTag :type="currentDetail.step_state ? 'success' : 'error'" size="small">
                         {{ currentDetail.step_state ? '成功' : '失败' }}
                       </NTag>
                     </NDescriptionsItem>
-                    <NDescriptionsItem label="步骤标识">
-                      <NText copyable style="font-family: monospace; font-size: 12px;">{{ currentDetail.step_code || '-' }}</NText>
+                    <NDescriptionsItem label="步骤序号(step_no)">
+                      <NText>{{ currentDetail.step_no || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤名称(step_name)">
+                      <NText strong>{{ currentDetail.step_name || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="步骤类型(step_type)">
+                      <NTag type="info">{{ currentDetail.step_type || '-' }}</NTag>
                     </NDescriptionsItem>
                     <NDescriptionsItem label="循环次数" v-if="currentDetail.num_cycles">
                       <NTag type="warning" size="small">第 {{ currentDetail.num_cycles }} 次</NTag>
+                    </NDescriptionsItem>
+                  </NDescriptions>
+                </NCard>
+
+                <!-- 循环结构额外信息 -->
+                <NCard v-if="currentDetail.step_type === '循环结构'" title="循环结构配置" size="small"
+                       :bordered="false">
+                  <NDescriptions bordered :column="2" size="small">
+                    <NDescriptionsItem label="最大循环次数(loop_maximums)">
+                      <NText>{{ stepInfo.loop_maximums || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="每次循环间隔时间(loop_interval)">
+                      <NText>{{ stepInfo.loop_interval || '-' }}s</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="循环对象来源(loop_iterable)">
+                      <NText>{{ stepInfo.loop_iterable || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="用于存储enumerate得到的索引值(loop_iter_idx)">
+                      <NText>{{ stepInfo.loop_iter_idx || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="用于存储字典的键(loop_iter_key)">
+                      <NText>{{ stepInfo.loop_iter_key || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="用于存储字典的值或列表的项(loop_iter_val)">
+                      <NText>{{ stepInfo.loop_iter_val || '-' }}</NText>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="循环执行失败时的处理策略(loop_on_error)">
+                      <NTag type="warning">{{ stepInfo.loop_on_error || '-' }}</NTag>
+                    </NDescriptionsItem>
+                    <NDescriptionsItem label="条件循环超时时间(loop_timeout)">
+                      <NText>{{ stepInfo.loop_timeout || '-' }}s</NText>
+                    </NDescriptionsItem>
+                  </NDescriptions>
+                </NCard>
+
+                <!-- 条件分支额外信息 -->
+                <NCard v-if="currentDetail.step_type === '条件分支'" title="条件分支配置" size="small"
+                       :bordered="false">
+                  <NDescriptions bordered :column="1" size="small">
+                    <NDescriptionsItem label="判断条件(conditions)">
+                      <div
+                          v-if="stepInfo.conditions && Array.isArray(stepInfo.conditions) && stepInfo.conditions.length > 0">
+                        <MonacoEditor
+                            :value="formatJson(stepInfo.conditions)"
+                            :options="monacoEditorOptions(true)"
+                            style="min-height: 200px; height: auto;"
+                        />
+                      </div>
+                      <NText v-else>-</NText>
+                    </NDescriptionsItem>
+                  </NDescriptions>
+                </NCard>
+
+                <!-- 等待控制额外信息 -->
+                <NCard v-if="currentDetail.step_type === '等待控制'" title="等待控制配置" size="small"
+                       :bordered="false">
+                  <NDescriptions bordered :column="2" size="small">
+                    <NDescriptionsItem label="等待时间(wait)">
+                      <NTag type="info">{{ stepInfo.wait || '-' }}s</NTag>
                     </NDescriptionsItem>
                   </NDescriptions>
                 </NCard>
@@ -898,18 +995,21 @@ const columns = [
                     <NDescriptionsItem label="消耗时间">
                       <NTag type="info" size="small">{{ currentDetail.step_elapsed || '-' }}s</NTag>
                     </NDescriptionsItem>
-                    <NDescriptionsItem label="响应耗时" v-if="currentDetail.response_elapsed">
-                      <NTag type="info" size="small">{{ parseFloat(currentDetail.response_elapsed).toFixed(3) }}s</NTag>
-                    </NDescriptionsItem>
                   </NDescriptions>
                 </NCard>
 
                 <NCollapse :default-expanded-names="currentDetail.step_exec_except ? ['errorInfo'] : []">
                   <NCollapseItem title="错误信息" name="errorInfo" v-if="currentDetail.step_exec_except">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{ currentDetail.step_exec_except }}</pre>
+                    <pre
+                        style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{
+                        currentDetail.step_exec_except
+                      }}</pre>
                   </NCollapseItem>
                   <NCollapseItem title="执行日志" name="execLogger" v-if="currentDetail.step_exec_logger">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{ currentDetail.step_exec_logger }}</pre>
+                    <pre
+                        style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{
+                        currentDetail.step_exec_logger
+                      }}</pre>
                   </NCollapseItem>
                 </NCollapse>
               </NSpace>
@@ -918,7 +1018,8 @@ const columns = [
             <!-- 请求信息 -->
             <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
               <NSpace vertical :size="16">
-                <NCollapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']" arrow-placement="right">
+                <NCollapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']"
+                           arrow-placement="right">
                   <NCollapseItem title="Basic" name="requestBasic">
                     <NDescriptions bordered :column="2" size="small">
                       <NDescriptionsItem label="请求方法">
@@ -937,9 +1038,13 @@ const columns = [
                           style="min-height: 200px; height: auto;"
                       />
                     </div>
-                    <pre v-else style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{ formatRequestHeadersText() }}</pre>
+                    <pre v-else
+                         style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{
+                        formatRequestHeadersText()
+                      }}</pre>
                   </NCollapseItem>
-                  <NCollapseItem title="Params" name="requestParams" v-if="requestParams && Object.keys(requestParams).length > 0">
+                  <NCollapseItem title="Params" name="requestParams"
+                                 v-if="requestParams && Object.keys(requestParams).length > 0">
                     <div v-if="isJsonRequestParams">
                       <MonacoEditor
                           :value="formatJson(requestParams)"
@@ -947,7 +1052,10 @@ const columns = [
                           style="min-height: 200px; height: auto;"
                       />
                     </div>
-                    <pre v-else style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{ formatJson(requestParams) }}</pre>
+                    <pre v-else
+                         style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{
+                        formatJson(requestParams)
+                      }}</pre>
                   </NCollapseItem>
                   <NCollapseItem :title="`Body (${requestBodyType})`" name="requestBody" v-if="hasRequestBody">
                     <div v-if="isJsonRequestBody">
@@ -964,18 +1072,33 @@ const columns = [
                         size="small"
                         :bordered="true"
                     />
-                    <pre v-else style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{ requestBodyText }}</pre>
+                    <pre v-else
+                         style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{
+                        requestBodyText
+                      }}</pre>
+                  </NCollapseItem>
+                  <!-- Python代码 -->
+                  <NCollapseItem title="Code (Python)" name="requestCode"
+                                 v-if="currentDetail.step_type === '执行代码请求(Python)' && stepInfo.code">
+                    <MonacoEditor
+                        :value="stepInfo.code"
+                        :options="monacoEditorOptions(true, 'python')"
+                        style="min-height: 400px; height: auto;"
+                    />
                   </NCollapseItem>
                 </NCollapse>
               </NSpace>
             </NTabPane>
 
             <!-- 响应信息 -->
-            <NTabPane name="response" tab="响应信息" v-if="currentDetail.response_body || currentDetail.response_header || currentDetail.response_text">
+            <NTabPane name="response" tab="响应信息"
+                      v-if="currentDetail.response_body || currentDetail.response_header || currentDetail.response_text">
               <NSpace vertical :size="16">
                 <NCollapse :default-expanded-names="['responseHeaders', 'responseBody']" arrow-placement="right">
                   <NCollapseItem title="Headers" name="responseHeaders" v-if="currentDetail.response_header">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ formatJson(currentDetail.response_header) }}</pre>
+                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{
+                        formatJson(currentDetail.response_header)
+                      }}</pre>
                   </NCollapseItem>
                   <NCollapseItem title="Cookies" name="responseCookies" v-if="currentDetail.response_cookie">
                     <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ currentDetail.response_cookie }}</pre>
@@ -1032,7 +1155,9 @@ const columns = [
                     style="min-height: 400px; height: auto;"
                 />
               </div>
-              <pre v-else style="white-space: pre-wrap; word-wrap: break-word;">{{ formatJson(currentDetail.session_variables) }}</pre>
+              <pre v-else style="white-space: pre-wrap; word-wrap: break-word;">{{
+                  formatJson(currentDetail.session_variables)
+                }}</pre>
             </NTabPane>
           </NTabs>
         </NCard>
@@ -1051,5 +1176,3 @@ const columns = [
 }
 
 </style>
-
-
