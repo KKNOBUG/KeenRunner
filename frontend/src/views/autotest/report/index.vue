@@ -1,15 +1,14 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives, computed} from 'vue'
+import {h, ref, resolveDirective, withDirectives} from 'vue'
 import {NButton, NInput, NPopconfirm, NSelect, NTag} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {formatDateTime, renderIcon} from '@/utils'
+import {renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
 
 defineOptions({name: '测试报告'})
 
@@ -27,7 +26,7 @@ const {
 
 // 包装 API 调用，默认过滤掉"调试执行"类型的报告
 const getReportList = async (params = {}) => {
-  const queryParams = { ...params }
+  const queryParams = {...params}
   // 处理 case_id：空字符串转换为 null
   if (queryParams.case_id === '' || queryParams.case_id === undefined) {
     queryParams.case_id = null
@@ -53,16 +52,16 @@ const getReportList = async (params = {}) => {
 
 // 报告类型选项
 const reportTypeOptions = [
-  { label: '调试执行', value: '调试执行' },
-  { label: '同步执行', value: '同步执行' },
-  { label: '异步执行', value: '异步执行' },
-  { label: '定时执行', value: '定时执行' }
+  {label: '调试执行', value: '调试执行'},
+  {label: '同步执行', value: '同步执行'},
+  {label: '异步执行', value: '异步执行'},
+  {label: '定时执行', value: '定时执行'}
 ]
 
 // 执行状态选项
 const caseStateOptions = [
-  { label: '成功', value: true },
-  { label: '失败', value: false }
+  {label: '成功', value: true},
+  {label: '失败', value: false}
 ]
 
 const columns = [
@@ -76,12 +75,12 @@ const columns = [
   {
     title: '报告类型',
     key: 'report_type',
-    width: 120,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
-    title: '总步骤',
+    title: '总步骤数',
     key: 'step_total',
     width: 100,
     align: 'center',
@@ -104,13 +103,114 @@ const columns = [
   {
     title: '成功率',
     key: 'step_pass_ratio',
-    width: 100,
+    width: 180,
     align: 'center',
     render(row) {
       const ratio = row.step_pass_ratio
-      if (ratio === null || ratio === undefined) return h('span', '-')
-      const ratioStr = typeof ratio === 'number' ? ratio.toFixed(2) : ratio
-      return h('span', `${ratioStr}%`)
+      if (ratio === null || ratio === undefined) {
+        return h('div', {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            width: '50%'
+          }
+        }, [
+          h('span', {
+            style: {
+              fontSize: '10px',
+            }
+          }, '-')
+        ])
+      }
+
+      // 转换为数字
+      const ratioNum = typeof ratio === 'number' ? ratio : parseFloat(ratio)
+      if (isNaN(ratioNum)) {
+        return h('div', {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            width: '100%'
+          }
+        }, [
+          h('span', {
+            style: {
+              fontSize: '14px',
+            }
+          }, '-')
+        ])
+      }
+
+      // 确保比率在 0-100 之间
+      const passRatio = Math.max(0, Math.min(100, ratioNum))
+      const failRatio = 100 - passRatio
+
+      // 格式化显示文本
+      const ratioStr = passRatio.toFixed(2)
+
+      // 构建进度条的子元素
+      const progressBarChildren = []
+
+      // 绿色部分（通过）- 只有当 passRatio > 0 时才显示
+      if (passRatio > 0) {
+        progressBarChildren.push(
+            h('div', {
+              style: {
+                height: '100%',
+                width: `${passRatio}%`,
+                backgroundColor: '#18a058',
+                transition: 'width 0.3s ease',
+                minWidth: passRatio > 0 ? '1px' : '0'
+              }
+            })
+        )
+      }
+      // 红色部分（失败）- 只有当 failRatio > 0 时才显示
+      if (failRatio > 0) {
+        progressBarChildren.push(
+            h('div', {
+              style: {
+                height: '100%',
+                width: `${failRatio}%`,
+                backgroundColor: '#F4511E',
+                transition: 'width 0.3s ease',
+                minWidth: failRatio > 0 ? '1px' : '0'
+              }
+            })
+        )
+      }
+      return h('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          width: '100%',
+          justifyContent: 'flex-start'
+        }
+      }, [
+        h('div', {
+          style: {
+            display: 'flex',
+            width: '100px',
+            height: '8px',
+            borderRadius: '10px',
+            overflow: 'hidden',
+            backgroundColor: '#F4511E',
+            flexShrink: 0,
+          }
+        }, progressBarChildren),
+        h('span', {
+          style: {
+            fontSize: '14px',
+            whiteSpace: 'nowrap',
+            minWidth: '60px',
+            textAlign: 'left',
+            fontWeight: '500'
+          }
+        }, `${ratioStr}%`)
+      ])
     },
   },
   {
@@ -120,9 +220,9 @@ const columns = [
     align: 'center',
     render(row) {
       if (row.case_state === true || row.case_state === 'true') {
-        return h(NTag, { type: 'success' }, { default: () => '成功' })
+        return h(NTag, {type: 'success'}, {default: () => '成功'})
       } else if (row.case_state === false || row.case_state === 'false') {
-        return h(NTag, { type: 'error' }, { default: () => '失败' })
+        return h(NTag, {type: 'error'}, {default: () => '失败'})
       }
       return h('span', '-')
     },
@@ -137,7 +237,7 @@ const columns = [
   {
     title: '消耗时间',
     key: 'case_elapsed',
-    width: 120,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -151,7 +251,7 @@ const columns = [
   {
     title: '创建人员',
     key: 'created_user',
-    width: 200,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -283,4 +383,5 @@ const columns = [
 .query-input {
   width: 200px;
 }
+
 </style>

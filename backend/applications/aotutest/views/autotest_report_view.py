@@ -169,7 +169,6 @@ async def search_reports(
             await obj.to_dict(
                 exclude_fields={
                     "state",
-                    "created_user", "updated_user",
                     "created_time", "updated_time",
                     "reserve_1", "reserve_2", "reserve_3"
                 },

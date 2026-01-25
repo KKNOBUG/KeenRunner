@@ -106,4 +106,6 @@ export default {
     if (params.report_code) queryParams.push(`report_code=${params.report_code}`)
     return request.get(`/autotest/report/get${queryParams.length ? '?' + queryParams.join('&') : ''}`)
   },
+  // 明细相关
+  getApiDetailList: (data = {}) => request.post('/autotest/detail/search', data),
 }

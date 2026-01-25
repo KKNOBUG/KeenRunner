@@ -2537,7 +2537,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-wait) {
-  color: #48d024;
+  color: #18a058;
 }
 
 :deep(.action-btn) {
