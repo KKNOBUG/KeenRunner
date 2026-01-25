@@ -1516,7 +1516,9 @@ class PythonStepExecutor(BaseStepExecutor):
                 raise StepExecutionError("【执行代码请求(Python)】缺少必要配置: code")
 
             try:
+                run_code_st = datetime.now()
                 new_vars = self.context.run_python_code(code, namespace=self.context.clone_state())
+                run_code_ed = datetime.now()
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -1534,8 +1536,15 @@ class PythonStepExecutor(BaseStepExecutor):
 
             if new_vars:
                 try:
+                    import json
                     self.context.update_variables(new_vars, scope="extract_variables")
                     result.extract_variables.update(new_vars)
+                    result.response = {
+                        "elapsed": f"{(run_code_ed - run_code_st).total_seconds():.3f}",
+                        "headers": {},
+                        "cookies": None,
+                        "text": json.dumps(new_vars, ensure_ascii=False)
+                    }
                 except Exception as e:
                     raise StepExecutionError(f"【更新变量】-【extract_variables】失败: {e}") from e
         except StepExecutionError:
