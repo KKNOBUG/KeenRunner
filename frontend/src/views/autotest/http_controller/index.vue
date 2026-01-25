@@ -1127,19 +1127,21 @@ const validatorObjectOptions = [
   {label: '变量池', value: '变量池'}
 ]
 
-// 断言方法选项
+// 断言方法选项（必须与后端 AutoTestToolService.compare_assertion 中的 op_map 一致）
 const assertionOptions = [
-  {label: '大于', value: '大于'},
-  {label: '小于', value: '小于'},
   {label: '等于', value: '等于'},
   {label: '不等于', value: '不等于'},
+  {label: '大于', value: '大于'},
   {label: '大于等于', value: '大于等于'},
+  {label: '小于', value: '小于'},
   {label: '小于等于', value: '小于等于'},
   {label: '长度等于', value: '长度等于'},
   {label: '包含', value: '包含'},
   {label: '不包含', value: '不包含'},
   {label: '以...开始', value: '以...开始'},
-  {label: '以...结束', value: '以...结束'}
+  {label: '以...结束', value: '以...结束'},
+  {label: '非空', value: '非空'},
+  {label: '为空', value: '为空'}
 ]
 
 // 提取数量计算
@@ -1294,7 +1296,7 @@ const extractColumns = [
   {
     title: '提取来源',
     key: 'source',
-    width: 150,
+    width: 120,
     render: (row) => {
       const sourceMap = {
         'Response Json': 'Response Json',
@@ -1309,7 +1311,7 @@ const extractColumns = [
   {
     title: '提取范围',
     key: 'range',
-    width: 100,
+    width: 120,
     render: (row) => {
       return row.range === 'ALL' ? '全部提取' : '部分提取'
     }
@@ -1317,12 +1319,13 @@ const extractColumns = [
   {
     title: '提取路径',
     key: 'expr',
-    width: 200,
+    width: 120,
     ellipsis: {tooltip: true}
   },
   {
     title: '提取值',
     key: 'extracted_value',
+    width: 120,
     ellipsis: {tooltip: true},
     render: (row) => {
       if (row.extracted_value === null || row.extracted_value === undefined) {
@@ -1331,13 +1334,13 @@ const extractColumns = [
       const value = typeof row.extracted_value === 'object'
           ? JSON.stringify(row.extracted_value)
           : String(row.extracted_value)
-      return value.length > 50 ? value.substring(0, 50) + '...' : value
+      return value.length > 100 ? value.substring(0, 100) + '...' : value
     }
   },
   {
     title: '提取结果',
     key: 'success',
-    width: 100,
+    width: 120,
     render: (row) => {
       return h(NTag, {
         type: row.success ? 'success' : 'error',
@@ -1349,6 +1352,7 @@ const extractColumns = [
   {
     title: '错误信息',
     key: 'error',
+    width: 120,
     ellipsis: {tooltip: true},
     render: (row) => row.error || '-'
   }
@@ -1359,7 +1363,7 @@ const validatorColumns = [
   {
     title: '断言名称',
     key: 'name',
-    width: 150,
+    width: 120,
     ellipsis: {tooltip: true}
   },
   {
@@ -1381,13 +1385,13 @@ const validatorColumns = [
   {
     title: '断言路径',
     key: 'expr',
-    width: 150,
+    width: 130,
     ellipsis: {tooltip: true}
   },
   {
     title: '结果值',
     key: 'actual_value',
-    width: 120,
+    width: 150,
     ellipsis: {tooltip: true},
     render: (row) => {
       if (row.actual_value === null || row.actual_value === undefined) {
@@ -1403,14 +1407,14 @@ const validatorColumns = [
   },
   {
     title: '期望值',
-    key: 'expected_value',
+    key: 'expect_value',
     width: 120,
     ellipsis: {tooltip: true},
     render: (row) => {
-      if (row.expected_value === null || row.expected_value === undefined) {
+      if (row.except_value === null || row.except_value === undefined) {
         return '-'
       }
-      return String(row.expected_value)
+      return String(row.except_value)
     }
   },
   {

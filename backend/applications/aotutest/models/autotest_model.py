@@ -192,7 +192,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         table = "krun_autotest_api_step"
         table_description = "自动化测试-步骤明细表"
         unique_together = (
-            ("case_id", "step_no"),
+            ("case_id", "step_no", "step_code"),
         )
         indexes = (
             ("case_id", "parent_step_id", "step_no"),

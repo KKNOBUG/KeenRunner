@@ -10,7 +10,7 @@ import json
 import re
 import time
 import traceback
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -262,19 +262,11 @@ async def batch_update_steps_tree(
             LOGGER.error(error_message)
             return BadReqResponse(message=f"步骤树结构校验失败", data=error_msg)
 
-        # 2. 准备用例数据
-        cases_data: List[AutoTestApiCaseUpdate] = [case_data]
-
-        # 3. 使用事务执行批量更新/新增
         try:
+            # 2. 使用事务执行批量更新/新增
             async with in_transaction():
-                # 3.1 处理用例信息
-                case_result: Dict[str, Any] = {
-                    "created_count": 0,
-                    "updated_count": 0,
-                    "failed_cases": [],
-                    "passed_cases": []
-                }
+                # 2.1 处理用例信息
+                cases_data: List[AutoTestApiCaseUpdate] = [case_data]
                 if cases_data:
                     case_result: Dict[str, Any] = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(cases_data)
                     created_case_count: int = case_result['created_count']
@@ -302,37 +294,40 @@ async def batch_update_steps_tree(
                                         recursive_update_case_id(step.children, relevant_case_id)
 
                             recursive_update_case_id(steps_data, successful_case_id)
-
-                # 3.2 批量更新/新增步骤信息（递归处理）
+                # 2.2 批量更新/新增步骤信息（递归处理）
                 step_result: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.batch_update_or_create_steps(steps_data)
+                deleted_step_count: int = 0
                 created_step_count: int = step_result['created_count']
                 updated_step_count: int = step_result['updated_count']
-                deleted_step_count: int = step_result['deleted_count']
+                process_step_count: Dict[str, Set] = step_result['process_detail']
                 success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
+                # 2.3 删除多余步骤
+                if process_step_count:
+                    for case_id, step_codes in process_step_count.items():
+                        actual_step_codes = await AUTOTEST_API_STEP_CRUD.model.filter(
+                            case_id=case_id, state__not=1
+                        ).values_list("step_code", flat=True)
+                        missing_step_codes: set = set(actual_step_codes) - step_codes
+                        if missing_step_codes:
+                            deleted_step_count += len(missing_step_codes)
+                            LOGGER.info(
+                                f"删除更新后多余步骤: "
+                                f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
+                            )
+                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).update(state=1)
+
                 LOGGER.info(
                     f"步骤处理完成："
                     f"新增步骤: {created_step_count}个, "
                     f"更新步骤: {updated_step_count}个, "
+                    f"删除步骤: {deleted_step_count}个, "
                     f"成功明细: {success_step_detail}"
                 )
-
                 # 6. 构建返回结果
-                result_data: Dict[str, Any] = {
-                    "cases": case_result,
-                    "steps": step_result
-                }
-
-                # 7. 返回
-                message = (
-                    f"批量处理完成: "
-                    f"用例新增数: {created_case_count}, "
-                    f"用例更新数: {updated_case_count}, "
-                    f"步骤新增数: {created_step_count}, "
-                    f"步骤更新数: {updated_step_count}, "
-                    f"步骤删除数: {deleted_step_count}"
+                return SuccessResponse(
+                    message="更新用例及步骤树成功",
+                    data={"cases": case_result, "steps": step_result}
                 )
-                LOGGER.info(f"更新用例及步骤树成功, 结果数量: {message}")
-                return SuccessResponse(message=message, data=result_data)
         except (TypeRejectException,
                 ParameterException,
                 DataBaseStorageException,
@@ -778,12 +773,12 @@ async def debug_http_request(
                                 f"但得到[{type(validator_config)}]类型: {validator_config}"
                             ))
                             continue
-                        name = validator_config.get("name")
-                        expr = validator_config.get("expr")
-                        operation = validator_config.get("operation")
-                        except_value = validator_config.get("except_value")
-                        source = validator_config.get("source")
-                        if not operation or not operation or except_value:
+                        name: str = validator_config.get("name")
+                        expr: str = validator_config.get("expr")
+                        operation: str = validator_config.get("operation")
+                        except_value: str = validator_config.get("except_value")
+                        source: str = validator_config.get("source")
+                        if not name or not expr or not operation:
                             logs.append(format_log(
                                 f"【断言验证】表达式子项解析无效(跳过): "
                                 f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"

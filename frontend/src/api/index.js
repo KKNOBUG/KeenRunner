@@ -88,6 +88,7 @@ export default {
   // 标签相关
   getApiTagList: (data = {}) => request.post('/autotest/tag/search', data),
   updateStepTree: (data = {}) => request.post('/autotest/step/update/tree', data),
+  updateOrCreateStepTree: (data = {}) => request.post('/autotest/step/update_or_create_tree', data),
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http_debugging', data),
   pythonCodeDebugging: (data = {}) => request.post('/autotest/step/python_code_debugging', data),
   executeStepTree: (data = {}) => request.post('/autotest/step/execute', data),

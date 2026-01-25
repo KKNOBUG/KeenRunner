@@ -1501,20 +1501,11 @@ class ConditionStepExecutor(BaseStepExecutor):
 
     @staticmethod
     def compare(value: Any, operation: str, except_value: Any) -> bool:
-        op_map: Dict[str, Callable[[Any, Any], bool]] = {
-            "等于": lambda a, b: a == b,
-            "不等于": lambda a, b: a != b,
-            "大于": lambda a, b: a > b,
-            "大于等于": lambda a, b: a >= b,
-            "小于": lambda a, b: a < b,
-            "小于等于": lambda a, b: a <= b,
-            "非空": lambda a, _: a is not None and a != "",
-            "为空": lambda a, _: a is None or a == "",
-        }
-        comparator = op_map.get(operation)
-        if comparator is None:
-            raise StepExecutionError(f"【条件分支】不支持的条件操作符: {operation}")
-        return comparator(value, except_value)
+        try:
+            # 使用 AutoTestToolService 的统一比较方法，确保与断言验证逻辑一致
+            return AutoTestToolService.compare_assertion(value, operation, except_value)
+        except ValueError as e:
+            raise StepExecutionError(f"【条件分支】条件比较失败: {e}") from e
 
 
 class PythonStepExecutor(BaseStepExecutor):

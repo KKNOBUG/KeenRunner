@@ -382,6 +382,7 @@ import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import api from "@/api";
+import {useUserStore} from '@/store';
 
 const stepDefinitions = {
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
@@ -759,8 +760,13 @@ const mapBackendStep = (step) => {
     config: {},
     // 保留完整的原始后端步骤数据，供编辑器组件使用
     // 这样编辑器组件可以通过 props.step.original 访问所有原始字段
+    // 注意：后端返回的 step_id 对应数据库主键，需要映射到 original.id（用于更新时传递 step_id）
     original: {
       ...step,
+      // 确保 id 字段被正确映射（后端返回的 step_id 对应数据库主键，用于更新时的 step_id）
+      // 后端使用 replace_fields={"id": "step_id"}，所以返回的是 step_id 而不是 id
+      id: step.step_id || step.id || null, // 数据库主键，用于更新（优先使用 step_id）
+      step_code: step.step_code || null, // 步骤代码，用于更新
       // 确保 children 和 quote_steps 也被保留（但需要递归处理）
       children: undefined, // 先设为 undefined，后面单独处理
       quote_steps: step.quote_steps || []
@@ -877,23 +883,80 @@ const localTypeToBackend = (localType) => {
   return typeMap[localType] || '执行代码请求(Python)'
 }
 
+// 按照树的前序遍历顺序分配 step_no（确保唯一且按顺序递增）
+// 返回一个 Map<step对象, stepNo>，用于在转换时获取正确的 step_no
+const assignStepNumbers = (steps) => {
+  const stepNoMap = new Map()
+  let stepNoCounter = 1
+
+  // 前序遍历函数：先访问节点，再递归访问子节点
+  const traverse = (step) => {
+    // 访问当前节点，分配 step_no
+    stepNoMap.set(step, stepNoCounter++)
+
+    // 递归访问子节点
+    if (step.children && step.children.length > 0) {
+      step.children.forEach(child => {
+        traverse(child)
+      })
+    }
+  }
+
+  // 遍历所有根步骤
+  steps.forEach(step => {
+    traverse(step)
+  })
+
+  return stepNoMap
+}
+
 // 将前端步骤格式转换为后端格式
-const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
+// stepNoMap: Map<step对象, stepNo>，用于获取正确的 step_no
+const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
+  // 从 stepNoMap 获取 step_no，如果没有则使用默认值
+  const stepNo = stepNoMap ? (stepNoMap.get(step) || 1) : 1
   const original = step.original || {}
   const config = step.config || {}
 
+  // 判断是新增还是更新：根据后端逻辑
+  // 如果 original.id 和 original.step_code 都存在，则是更新；否则是新增
+  // 注意：original.id 对应后端的 step_id（数据库主键），original.step_code 对应后端的 step_code
+  const hasStepId = original.id !== undefined && original.id !== null
+  const hasStepCode = original.step_code !== undefined && original.step_code !== null && original.step_code !== ''
+  const isUpdate = hasStepId && hasStepCode
+
+  // 调试日志：帮助排查问题
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[convertStepToBackend] Step ${step.name}:`, {
+      hasStepId,
+      hasStepCode,
+      isUpdate,
+      originalId: original.id,
+      originalStepCode: original.step_code,
+      stepNo
+    })
+  }
+
   // 基础字段
   const backendStep = {
-    step_id: original.id || null,
-    step_code: original.step_code || step.id || null,
     step_name: step.name || original.step_name || '',
     step_desc: original.step_desc || '',
     step_type: localTypeToBackend(step.type),
     step_no: stepNo,
     case_id: original.case_id || caseId.value || null,
     parent_step_id: parentStepId,
-    quote_case_id: original.quote_case_id || null
+    quote_case_id: original.quote_case_id || null,
+    // case_type 从用例信息中获取，必填字段（新增步骤时）
+    case_type: caseForm.case_type || original.case_type || '用户脚本'
   }
+
+  // 只有更新时才传递 step_id 和 step_code（两个都必须存在）
+  // 新增时不传递这两个字段（设置为undefined，让后端排除）
+  if (isUpdate) {
+    backendStep.step_id = original.id
+    backendStep.step_code = original.step_code
+  }
+  // 新增时不设置 step_id 和 step_code，让它们为 undefined，后端会自动排除
 
   // 根据类型设置特定字段
   if (step.type === 'http') {
@@ -904,8 +967,25 @@ const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
     backendStep.request_params = config.params ? (typeof config.params === 'string' ? config.params : JSON.stringify(config.params)) : original.request_params || null
     backendStep.request_form_data = config.form_data || original.request_form_data || null
     backendStep.request_form_urlencoded = config.form_urlencoded || original.request_form_urlencoded || null
-    backendStep.extract_variables = config.extract_variables || original.extract_variables || null
-    backendStep.assert_validators = config.assert_validators || original.assert_validators || null
+
+    // extract_variables 和 assert_validators 应该是列表格式（List[Dict[str, Any]]）
+    if (config.extract_variables !== undefined) {
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
+    } else if (original.extract_variables) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : (original.extract_variables ? [original.extract_variables] : null)
+    } else {
+      backendStep.extract_variables = null
+    }
+
+    if (config.assert_validators !== undefined) {
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : (config.assert_validators ? [config.assert_validators] : null)
+    } else if (original.assert_validators) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : (original.assert_validators ? [original.assert_validators] : null)
+    } else {
+      backendStep.assert_validators = null
+    }
+
+    // defined_variables 是字典格式（Dict[str, Any]）
     backendStep.defined_variables = config.defined_variables || original.defined_variables || null
   } else if (step.type === 'code') {
     backendStep.code = config.code !== undefined ? config.code : (original.code || '')
@@ -930,88 +1010,149 @@ const convertStepToBackend = (step, parentStepId = null, stepNo = 1) => {
       backendStep.loop_iter_key = config.loop_iter_key !== undefined ? config.loop_iter_key : (original.loop_iter_key || '')
       backendStep.loop_iter_val = config.loop_iter_val !== undefined ? config.loop_iter_val : (original.loop_iter_val || '')
     } else if (backendStep.loop_mode === '条件循环') {
-      // 条件循环需要将条件对象转换为JSON字符串
+      // 条件循环需要将条件对象转换为列表格式（后端期望 List[Dict[str, Any]]）
       if (config.condition_value !== undefined || config.condition_operation !== undefined || config.condition_except_value !== undefined) {
         const conditionObj = {
           value: config.condition_value || '',
           operation: config.condition_operation || 'not_empty',
           except_value: config.condition_except_value || ''
         }
-        backendStep.conditions = JSON.stringify(conditionObj)
+        backendStep.conditions = [conditionObj]
       } else if (original.conditions) {
-        backendStep.conditions = typeof original.conditions === 'string' ? original.conditions : JSON.stringify(original.conditions)
+        // 如果原始数据是字符串，先解析；如果是对象，转换为列表；如果已经是列表，直接使用
+        if (typeof original.conditions === 'string') {
+          try {
+            const parsed = JSON.parse(original.conditions)
+            backendStep.conditions = Array.isArray(parsed) ? parsed : [parsed]
+          } catch (e) {
+            backendStep.conditions = null
+          }
+        } else if (Array.isArray(original.conditions)) {
+          backendStep.conditions = original.conditions
+        } else if (typeof original.conditions === 'object') {
+          backendStep.conditions = [original.conditions]
+        } else {
+          backendStep.conditions = null
+        }
       } else {
         backendStep.conditions = null
       }
       backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
     }
   } else if (step.type === 'if') {
-    // 根据后端 ConditionStepExecutor 的要求，conditions 应该是 JSON 对象，包含 value, operation, except_value, desc
+    // 根据后端 ConditionStepExecutor 的要求，conditions 应该是列表格式（List[Dict[str, Any]]）
     const conditionObj = {
       value: config.value || '',
       operation: config.operation || '非空',
       except_value: config.except_value || '',
       desc: config.desc || ''
     }
-    // 后端期望 conditions 是 JSON 字符串格式
-    backendStep.conditions = JSON.stringify(conditionObj)
+    // 后端期望 conditions 是列表格式
+    backendStep.conditions = [conditionObj]
   } else if (step.type === 'wait') {
     backendStep.wait = config.seconds || original.wait || 0
   }
 
-  // 处理子步骤
+  // 处理子步骤（递归处理）
   if (step.children && step.children.length > 0) {
-    backendStep.children = step.children.map((child, index) => {
-      const childStepId = child.original?.id || null
-      return convertStepToBackend(child, childStepId, index + 1)
+    // 如果是更新，使用当前步骤的id作为父步骤id；如果是新增，先传null，后端会处理
+    const parentIdForChildren = isUpdate ? original.id : null
+    // 递归转换子步骤，传递 stepNoMap 以获取正确的 step_no
+    backendStep.children = step.children.map((child) => {
+      return convertStepToBackend(child, parentIdForChildren, stepNoMap)
     })
   }
 
-  return backendStep
+  // 清理字段：确保新增时不传递step_id和step_code，更新时必须同时传递
+  // 根据后端逻辑：如果step_id和step_code都不存在，则是新增；如果都存在，则是更新；如果只存在一个，会报错
+  const cleanedStep = {}
+  for (const key in backendStep) {
+    const value = backendStep[key]
+    // 如果是新增步骤，完全排除step_id和step_code字段（不添加到cleanedStep中）
+    if (!isUpdate && (key === 'step_id' || key === 'step_code')) {
+      continue
+    }
+    // 如果是更新步骤，必须同时有step_id和step_code
+    if (isUpdate && (key === 'step_id' || key === 'step_code')) {
+      if (value === undefined || value === null) {
+        // 更新时如果step_id或step_code为空，跳过（不应该发生）
+        continue
+      }
+    }
+    // 保留所有非undefined的值（包括null，因为null可能是有意义的）
+    if (value !== undefined) {
+      cleanedStep[key] = value
+    }
+  }
+
+  return cleanedStep
 }
 
 const handleSaveAll = async () => {
   try {
-    // 构建用例信息
-    const caseInfo = {
-      ...caseForm
-    }
+    // 获取当前用户信息（用于 updated_user 字段）
+    const userStore = useUserStore()
+    const currentUser = userStore.username || ''
 
-    // 根据是否有caseId或caseCode判断是新增还是更新
-    if (caseId.value || caseCode.value) {
-      // 更新操作：添加case_id和case_code
-      if (caseId.value) {
-        caseInfo.case_id = caseId.value
-      }
-      if (caseCode.value) {
-        caseInfo.case_code = caseCode.value
-      } else {
-        // 如果只有case_id没有case_code，尝试从步骤数据中获取
-        const firstStep = steps.value[0]
-        if (firstStep?.original?.case?.case_code) {
-          caseInfo.case_code = firstStep.original.case.case_code
+    // 计算总步骤数（包括子步骤）
+    const countTotalSteps = (stepList) => {
+      let count = 0
+      for (const step of stepList) {
+        count++
+        if (step.children && step.children.length > 0) {
+          count += countTotalSteps(step.children)
         }
       }
-    } else {
-      // 新增操作：case_id和case_code必须为null（schema要求必填但可以为null）
-      caseInfo.case_id = null
-      caseInfo.case_code = null
+      return count
+    }
+    const totalSteps = countTotalSteps(steps.value)
+
+    // 构建用例信息（AutoTestApiCaseUpdate 格式）
+    const caseInfo = {
+      // 根据是否有caseId或caseCode判断是新增还是更新
+      case_id: caseId.value || null,
+      case_code: caseCode.value || null,
+      case_name: caseForm.case_name || '',
+      case_project: caseForm.case_project || null,
+      case_tags: Array.isArray(caseForm.case_tags) ? caseForm.case_tags : [],
+      case_type: caseForm.case_type || null,
+      case_attr: caseForm.case_attr || null,
+      case_desc: caseForm.case_desc || null,
+      case_steps: totalSteps, // 用例步骤数量(含所有子级步骤)
+      session_variables: null, // 如果需要可以从其他地方获取
+      updated_user: currentUser
     }
 
-    // 转换步骤数据
-    const backendSteps = steps.value.map((step, index) => {
-      const stepId = step.original?.id || null
-      return convertStepToBackend(step, null, index + 1)
+    // 按照树的前序遍历顺序分配 step_no，确保唯一且按顺序递增
+    const stepNoMap = assignStepNumbers(steps.value)
+
+    // 转换步骤数据，使用分配好的 step_no，并保持树结构
+    const backendSteps = steps.value.map((step) => {
+      return convertStepToBackend(step, null, stepNoMap)
     })
 
+    // 构建请求体（AutoTestStepTreeUpdateList 格式）
     const payload = {
       case: caseInfo,
       steps: backendSteps
     }
 
-    const res = await api.updateStepTree(payload)
+    // 调用新的后端接口
+    const res = await api.updateOrCreateStepTree(payload)
     if (res?.code === '000000' || res?.code === 200 || res?.code === 0) {
       window.$message?.success?.(res?.message || '保存成功')
+
+      // 如果保存成功，更新 caseId 和 caseCode（如果是新增）
+      if (res?.data?.cases?.success_detail && res.data.cases.success_detail.length > 0) {
+        const savedCase = res.data.cases.success_detail[0]
+        if (savedCase.case_id && !caseId.value) {
+          caseId.value = savedCase.case_id
+        }
+        if (savedCase.case_code && !caseCode.value) {
+          caseCode.value = savedCase.case_code
+        }
+      }
+
       // 重新加载数据
       await loadSteps()
     } else {
@@ -1243,6 +1384,14 @@ const handleCopyStep = (id) => {
   copiedStep.id = genId()
   copiedStep.name = `${copiedStep.name}(copy)`
 
+  // 复制的步骤是新增的，需要删除 original 中的 id 和 step_code
+  // 这样 convertStepToBackend 会将其识别为新增步骤
+  if (copiedStep.original) {
+    delete copiedStep.original.id
+    delete copiedStep.original.step_code
+    // 保留其他 original 字段（如 case_id, step_type 等），但清除标识字段
+  }
+
   // 确保结构规范：非 loop/if 类型不应该有 children 字段
   const def = stepDefinitions[copiedStep.type]
   if (def && !def.allowChildren && copiedStep.children !== undefined) {
@@ -1253,9 +1402,14 @@ const handleCopyStep = (id) => {
     copiedStep.children = []
   }
 
-  // 递归更新子步骤ID，并确保子步骤结构规范
+  // 递归更新子步骤ID，并确保子步骤结构规范，同时删除子步骤的 original.id 和 original.step_code
   const updateIds = (node) => {
     node.id = genId()
+    // 删除子步骤的 original.id 和 original.step_code（复制的子步骤也是新增的）
+    if (node.original) {
+      delete node.original.id
+      delete node.original.step_code
+    }
     const nodeDef = stepDefinitions[node.type]
     // 确保每个子步骤的结构规范
     if (nodeDef && !nodeDef.allowChildren && node.children !== undefined) {

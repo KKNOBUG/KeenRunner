@@ -46,7 +46,7 @@ def is_download_response(response: Response) -> bool:
 
 def is_longtext_response(response: Response) -> bool:
     content_length: int = response.headers.get("content-length", 0)
-    return int(content_length) > 5000
+    return int(content_length) > 10240
 
 
 async def logging_middleware(request: Request, call_next):
@@ -118,19 +118,19 @@ async def logging_middleware(request: Request, call_next):
     ):
         # 消费响应体
         if is_download:
-            response_body = b"<FILE DOWNLOAD>"
+            response_body: bytes = b"<FILE DOWNLOAD>"
         elif is_html:
-            response_body = b"<HTML CONTENT>"
+            response_body: bytes = b"<HTML CONTENT>"
         elif is_image:
-            response_body = b"IMAGE CONTENT"
+            response_body: bytes = b"IMAGE CONTENT"
         elif is_longtext:
-            response_body = b"LONGTEXT CONTENT"
+            response_body: bytes = b"LONGTEXT CONTENT"
         else:
             body_chunks = []
             async for chunk in response.body_iterator:
                 body_chunks.append(chunk)
 
-            response_body = b"".join(body_chunks).decode("utf-8", errors="ignore")
+            response_body: str = b"".join(body_chunks).decode("utf-8", errors="ignore")
 
             # 重置响应体
             response = Response(

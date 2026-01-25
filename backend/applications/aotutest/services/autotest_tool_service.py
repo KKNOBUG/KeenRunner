@@ -151,6 +151,8 @@ class AutoTestToolService:
             "不包含": lambda a, b: str(b) not in str(a),
             "以...开始": lambda a, b: str(a).startswith(str(b)),
             "以...结束": lambda a, b: str(a).endswith(str(b)),
+            "非空": lambda a, _: a is not None and a != "",
+            "为空": lambda a, _: a is None or a == "",
         }
         comparator = op_map.get(operation)
         if comparator is None:
