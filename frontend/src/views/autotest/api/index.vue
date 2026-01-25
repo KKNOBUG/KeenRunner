@@ -363,6 +363,44 @@
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
           </n-card>
+
+          <!-- 调试结果展示区域 -->
+          <n-card
+              v-if="debugResult"
+              :bordered="true"
+              size="small"
+              style="width: 100%; margin-top: 16px;"
+              title="调试结果"
+          >
+            <n-space vertical :size="12">
+              <!-- 执行统计 -->
+              <div v-if="debugResult.statistics">
+                <n-text strong>执行统计：</n-text>
+                <n-text>总步骤: {{ debugResult.statistics.total_steps || 0 }}, </n-text>
+                <n-text type="success">成功: {{ debugResult.statistics.success_steps || 0 }}, </n-text>
+                <n-text type="error">失败: {{ debugResult.statistics.failed_steps || 0 }}, </n-text>
+                <n-text>成功率: {{ debugResult.statistics.pass_ratio || 0 }}%</n-text>
+              </div>
+
+              <!-- 执行结果树 -->
+              <div v-if="debugResult.results && debugResult.results.length > 0">
+                <n-text strong>执行结果：</n-text>
+                <pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 400px; overflow-y: auto;">{{ formatDebugResult(debugResult.results) }}</pre>
+              </div>
+
+              <!-- 会话变量 -->
+              <div v-if="debugResult.session_variables && Object.keys(debugResult.session_variables).length > 0">
+                <n-text strong>会话变量：</n-text>
+                <pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 200px; overflow-y: auto;">{{ JSON.stringify(debugResult.session_variables, null, 2) }}</pre>
+              </div>
+
+              <!-- 执行日志 -->
+              <div v-if="debugResult.logs && Object.keys(debugResult.logs).length > 0">
+                <n-text strong>执行日志：</n-text>
+                <pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 300px; overflow-y: auto;">{{ formatDebugLogs(debugResult.logs) }}</pre>
+              </div>
+            </n-space>
+          </n-card>
         </n-gi>
       </n-grid>
     </div>
@@ -372,7 +410,7 @@
 <script setup>
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
-import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace, NSelect, NPopover, NList, NListItem} from 'naive-ui'
+import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace, NSelect, NPopover, NList, NListItem, NText} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import {renderIcon} from '@/utils'
 import AppPage from "@/components/page/AppPage.vue";
@@ -584,6 +622,7 @@ watch(() => caseForm.case_tags, (newVal) => {
 }, { immediate: true })
 const runLoading = ref(false)
 const debugLoading = ref(false)
+const debugResult = ref(null)
 const dragState = ref({
   draggingId: null,
   dragOverId: null, // 当前拖拽进入的 loop/if 步骤 ID（焦点高亮）
@@ -1063,6 +1102,24 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     })
   }
 
+  // 添加 case 信息（每个步骤都需要包含 case 信息）
+  // 如果 original.case 存在，使用它；否则从 caseForm 构建
+  if (original.case) {
+    backendStep.case = original.case
+  } else {
+    // 从 caseForm 构建 case 信息
+    backendStep.case = {
+      case_id: caseId.value || null,
+      case_code: caseCode.value || null,
+      case_name: caseForm.case_name || '',
+      case_project: caseForm.case_project || null,
+      case_tags: Array.isArray(caseForm.case_tags) ? caseForm.case_tags : [],
+      case_type: caseForm.case_type || null,
+      case_attr: caseForm.case_attr || null,
+      case_desc: caseForm.case_desc || null
+    }
+  }
+
   // 清理字段：确保新增时不传递step_id和step_code，更新时必须同时传递
   // 根据后端逻辑：如果step_id和step_code都不存在，则是新增；如果都存在，则是更新；如果只存在一个，会报错
   const cleanedStep = {}
@@ -1190,29 +1247,90 @@ const handleRun = async () => {
   }
 }
 
+// 格式化调试结果树
+const formatDebugResult = (results, indent = 0) => {
+  if (!results || !Array.isArray(results)) return ''
+  let output = ''
+  const prefix = '  '.repeat(indent)
+  for (const result of results) {
+    const status = result.success ? '✓' : '✗'
+    output += `${prefix}${status} [${result.step_no || '-'}] ${result.step_name || result.step_type || '未知步骤'}\n`
+    if (result.message) {
+      output += `${prefix}  消息: ${result.message}\n`
+    }
+    if (result.error) {
+      output += `${prefix}  错误: ${result.error}\n`
+    }
+    if (result.elapsed !== undefined && result.elapsed !== null) {
+      output += `${prefix}  耗时: ${result.elapsed}ms\n`
+    }
+    if (result.extract_variables && result.extract_variables.length > 0) {
+      output += `${prefix}  提取变量: ${JSON.stringify(result.extract_variables, null, 2)}\n`
+    }
+    if (result.assert_validators && result.assert_validators.length > 0) {
+      output += `${prefix}  断言结果: ${JSON.stringify(result.assert_validators, null, 2)}\n`
+    }
+    if (result.children && result.children.length > 0) {
+      output += formatDebugResult(result.children, indent + 1)
+    }
+  }
+  return output
+}
+
+// 格式化调试日志
+const formatDebugLogs = (logs) => {
+  if (!logs || typeof logs !== 'object') return ''
+  let output = ''
+  for (const [stepCode, logList] of Object.entries(logs)) {
+    if (Array.isArray(logList) && logList.length > 0) {
+      output += `步骤 ${stepCode}:\n`
+      for (const log of logList) {
+        output += `  ${log}\n`
+      }
+      output += '\n'
+    }
+  }
+  return output || '暂无日志'
+}
+
 const handleDebug = async () => {
   if (!steps.value || steps.value.length === 0) {
     window.$message?.warning?.('请先添加测试步骤')
     return
   }
   debugLoading.value = true
+  debugResult.value = null
   try {
+    // 调试模式：不传递 case_id，只传递 steps 和 initial_variables
+    // 按照树的前序遍历顺序分配 step_no，确保唯一且按顺序递增
+    const stepNoMap = assignStepNumbers(steps.value)
+
+    // 转换步骤数据，使用分配好的 step_no，并保持树结构
+    const backendSteps = steps.value.map((step) => {
+      return convertStepToBackend(step, null, stepNoMap)
+    })
+
     const res = await api.executeStepTree({
-      case_id: caseId.value || 0,
-      case_info: {...caseForm},
-      steps: steps.value,
+      // 调试模式：不传递 case_id
+      case_id: null,
+      steps: backendSteps,
       initial_variables: {}
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
       const stats = res.data?.statistics || {}
       const msg = `调试完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
       window.$message?.success?.(msg)
+
+      // 保存调试结果用于展示
+      debugResult.value = res.data
     } else {
       window.$message?.error?.(res?.message || '调试失败')
+      debugResult.value = null
     }
   } catch (error) {
     console.error('Failed to debug step tree', error)
     window.$message?.error?.(error?.message || '调试失败')
+    debugResult.value = null
   } finally {
     debugLoading.value = false
   }

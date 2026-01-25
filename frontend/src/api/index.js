@@ -91,5 +91,5 @@ export default {
   updateOrCreateStepTree: (data = {}) => request.post('/autotest/step/update_or_create_tree', data),
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http_debugging', data),
   pythonCodeDebugging: (data = {}) => request.post('/autotest/step/python_code_debugging', data),
-  executeStepTree: (data = {}) => request.post('/autotest/step/execute', data),
+  executeStepTree: (data = {}) => request.post('/autotest/step/execute_or_debugging', data),
 }

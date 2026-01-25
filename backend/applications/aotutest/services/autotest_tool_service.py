@@ -261,14 +261,16 @@ class AutoTestToolService:
             合并后的变量字典
         """
         variables = {}
+        if not steps_list:
+            return variables
         for step in steps_list:
             defined_vars = step.get("defined_variables")
 
             if isinstance(defined_vars, dict):
                 variables.update(defined_vars)
             # 递归处理children和quote_steps
-            children = step.get("children", [])
-            quote_steps = step.get("quote_steps", [])
+            children = step.get("children", []) or []
+            quote_steps = step.get("quote_steps", []) or []
             variables.update(cls.collect_session_variables(children))
             variables.update(cls.collect_session_variables(quote_steps))
         return variables

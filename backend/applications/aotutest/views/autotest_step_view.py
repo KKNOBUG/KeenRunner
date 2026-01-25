@@ -1161,7 +1161,7 @@ async def execute_step_tree(
             all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
             initial_variables.update(all_session_variables)
             try:
-                merged_initial_variables = AutoTestToolService.execute_func_string(initial_variables)
+                AutoTestToolService.execute_func_string(initial_variables)
             except Exception as e:
                 return ParameterResponse(message=str(e))
 
@@ -1175,13 +1175,13 @@ async def execute_step_tree(
             results, logs, report_code, statistics, session_variables = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
-                initial_variables=merged_initial_variables,
+                initial_variables=initial_variables,
                 report_type=AutoTestReportType.EXEC1
             )
 
             # 7. 获取最终会话变量（从执行引擎返回）
             final_session_variables = dict(session_variables)
-            final_session_variables.update(merged_initial_variables)
+            final_session_variables.update(initial_variables)
 
             # 8. 返回调试模式的详细结果
             result_data = {
