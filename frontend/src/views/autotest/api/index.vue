@@ -1195,7 +1195,7 @@ const handleRun = async () => {
       initial_variables: {}
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
-      const stats = res.data?.statistics || {}
+      const stats = res.data || {}
       const msg = `执行完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
       window.$message?.success?.(msg)
     } else {
