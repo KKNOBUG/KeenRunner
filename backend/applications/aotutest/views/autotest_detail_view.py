@@ -6,7 +6,7 @@
 @Module  : autotest_detail_view
 @DateTime: 2025/11/27 14:25
 """
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
@@ -18,6 +18,7 @@ from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailSelect
 )
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
+from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     ParameterException,
@@ -178,8 +179,9 @@ async def search_step_details(
             page_size=detail_in.page_size,
             order=detail_in.order
         )
-        data = [
-            await obj.to_dict(
+        detail_serializes: List[Dict[str, Any]] = []
+        for instance in instances:
+            serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={
                     "state",
                     "created_user", "updated_user",
@@ -187,10 +189,24 @@ async def search_step_details(
                     "reserve_1", "reserve_2", "reserve_3"
                 },
                 replace_fields={"id": "detail_id"}
-            ) for obj in instances
-        ]
+            )
+            step_id: int = serialize["step_id"]
+            step_instance = await AUTOTEST_API_STEP_CRUD.get_by_id(
+                on_error=True,
+                step_id=step_id
+            )
+            serialize["step"] = await step_instance.to_dict(
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
+                replace_fields={"id": "step_id"}
+            )
+            detail_serializes.append(serialize)
         LOGGER.info(f"按条件查询明细成功, 结果数量: {total}")
-        return SuccessResponse(message="查询成功", data=data, total=total)
+        return SuccessResponse(message="查询成功", data=detail_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

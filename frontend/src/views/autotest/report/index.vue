@@ -1,6 +1,8 @@
 <script setup>
 import {h, ref, resolveDirective, withDirectives, computed} from 'vue'
-import {NButton, NInput, NPopconfirm, NSelect, NTag, NDrawer, NDrawerContent, NDataTable, NCheckbox, NSpace} from 'naive-ui'
+import {NButton, NInput, NPopconfirm, NSelect, NTag, NDrawer, NDrawerContent, NDataTable, NCheckbox, NSpace, NCard, NTabs, NTabPane, NCollapse, NCollapseItem, NDescriptions, NDescriptionsItem, NText, NCode, NEmpty} from 'naive-ui'
+import {useRouter} from 'vue-router'
+import MonacoEditor from '@/components/monaco/index.vue'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -12,6 +14,8 @@ import api from '@/api'
 
 defineOptions({name: '测试报告'})
 
+const router = useRouter()
+
 const $table = ref(null)
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
@@ -22,6 +26,10 @@ const detailList = ref([])
 const loading = ref(false)
 const onlyShowFailed = ref(false)
 const currentReport = ref(null)
+
+// 详情抽屉相关状态
+const detailDrawerVisible = ref(false)
+const currentDetail = ref(null)
 
 const {
   handleDelete,
@@ -63,6 +71,105 @@ const filteredDetailList = computed(() => {
     return detailList.value
   }
   return detailList.value.filter(item => item.step_state === false || item.step_state === 'false')
+})
+
+// 格式化JSON
+const formatJson = (data) => {
+  if (!data) return ''
+  if (typeof data === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(data), null, 2)
+    } catch {
+      return data
+    }
+  }
+  return JSON.stringify(data, null, 2)
+}
+
+// 判断响应是否为JSON
+const isJsonResponse = computed(() => {
+  if (!currentDetail.value?.response_body) return false
+  try {
+    const body = currentDetail.value.response_body
+    if (typeof body === 'string') {
+      JSON.parse(body)
+    } else if (typeof body === 'object') {
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+})
+
+// 响应语言类型
+const responseLanguage = computed(() => {
+  if (!currentDetail.value?.response_header) return 'text'
+  const headers = currentDetail.value.response_header
+  if (typeof headers === 'object') {
+    const contentType = headers['content-type'] || headers['Content-Type'] || ''
+    if (contentType.includes('json')) return 'json'
+    if (contentType.includes('xml')) return 'xml'
+    if (contentType.includes('html')) return 'html'
+  }
+  return 'text'
+})
+
+// 格式化响应文本
+const formatResponseText = () => {
+  if (!currentDetail.value) return ''
+  if (currentDetail.value.response_text) {
+    return currentDetail.value.response_text
+  }
+  if (currentDetail.value.response_body) {
+    return formatJson(currentDetail.value.response_body)
+  }
+  return ''
+}
+
+// Monaco编辑器配置
+const monacoEditorOptions = (readOnly = false) => ({
+  readOnly,
+  language: 'json',
+  theme: 'vs',
+  automaticLayout: true,
+  minimap: {enabled: false},
+  scrollBeyondLastLine: false,
+  wordWrap: 'on',
+  formatOnPaste: true,
+  formatOnType: true
+})
+
+// 提取变量数据
+const extractVariablesData = computed(() => {
+  if (!currentDetail.value?.extract_variables) return []
+  const vars = currentDetail.value.extract_variables
+  if (typeof vars === 'object' && !Array.isArray(vars)) {
+    return Object.entries(vars).map(([key, value]) => ({
+      key,
+      value: typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
+    }))
+  }
+  return []
+})
+
+// 断言验证器数据
+const assertValidatorsData = computed(() => {
+  if (!currentDetail.value?.assert_validators) return []
+  const validators = currentDetail.value.assert_validators
+  if (Array.isArray(validators)) {
+    return validators.map((v, index) => ({
+      key: `断言 ${index + 1}`,
+      value: typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)
+    }))
+  }
+  return []
+})
+
+// 判断会话变量是否为JSON
+const isJsonSessionVariables = computed(() => {
+  if (!currentDetail.value?.session_variables) return false
+  return typeof currentDetail.value.session_variables === 'object'
 })
 
 // 获取HTTP状态码
@@ -135,12 +242,6 @@ const getUrl = (item) => {
 // 明细表格列定义
 const detailColumns = [
   {
-    title: '用例ID',
-    key: 'case_id',
-    width: 100,
-    align: 'center',
-  },
-  {
     title: '步骤序号',
     key: 'step_no',
     width: 100,
@@ -149,12 +250,6 @@ const detailColumns = [
   {
     title: '步骤名称',
     key: 'step_name',
-    width: 200,
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '步骤标识',
-    key: 'step_code',
     width: 200,
     ellipsis: {tooltip: true},
   },
@@ -229,21 +324,22 @@ const detailColumns = [
           size: 'small',
           type: 'primary',
           onClick: () => {
-            // TODO: 实现详情功能
-            window.$message?.info?.('详情功能待实现')
+            currentDetail.value = row
+            detailDrawerVisible.value = true
           }
         }, {default: () => '详情'}),
         h(NButton, {
           size: 'small',
           type: 'warning',
           onClick: () => {
-            // TODO: 实现跳转功能
-            window.$message?.info?.('跳转功能待实现')
+            router.push({
+              path: '/autotest/api',
+              query: {
+                case_id: row.case_id
+              }
+            })
           }
-        }, {
-          default: () => '跳转',
-          icon: renderIcon('material-symbols:send', {size: 16})
-        })
+        }, {default: () => '跳转'})
       ])
     },
   },
@@ -606,11 +702,10 @@ const columns = [
     </CrudTable>
 
     <!-- 明细抽屉 -->
-    <NDrawer v-model:show="drawerVisible" placement="right" :width="1200">
+    <NDrawer v-model:show="drawerVisible" placement="right" width="50%">
       <NDrawerContent>
         <template #header>
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <span>报告明细</span>
+          <div style="display: flex; align-items: center; justify-content: flex-end; width: 100%;">
             <NCheckbox v-model:checked="onlyShowFailed">
               只看错误/失败步骤
             </NCheckbox>
@@ -627,6 +722,140 @@ const columns = [
       </NDrawerContent>
     </NDrawer>
 
+    <!-- 详情抽屉 -->
+    <NDrawer v-model:show="detailDrawerVisible" placement="left" width="50%">
+      <NDrawerContent title="步骤详情">
+        <NCard v-if="currentDetail" :bordered="false" style="width: 100%;">
+          <template #header-extra>
+            <NSpace align="center">
+              <NTag :type="currentDetail.step_state ? 'success' : 'error'" round size="small">
+                {{ currentDetail.step_state ? '成功' : '失败' }}
+              </NTag>
+              <NTag round size="small">类型: {{ currentDetail.step_type }}</NTag>
+              <NTag round size="small">耗时: {{ currentDetail.step_elapsed || '-' }}s</NTag>
+            </NSpace>
+          </template>
+          <NTabs type="line" animated>
+            <!-- 基本信息 -->
+            <NTabPane name="basic" tab="基本信息">
+              <NSpace vertical :size="16">
+                <NCollapse :default-expanded-names="['basicInfo']">
+                  <NCollapseItem title="基本信息" name="basicInfo">
+                    <NDescriptions bordered :column="2" size="small">
+                      <NDescriptionsItem label="用例ID">
+                        <NText>{{ currentDetail.case_id || '-' }}</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤序号">
+                        <NText>{{ currentDetail.step_no || '-' }}</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤名称">
+                        <NText>{{ currentDetail.step_name || '-' }}</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤标识">
+                        <NText copyable>{{ currentDetail.step_code || '-' }}</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤类型">
+                        <NTag>{{ currentDetail.step_type || '-' }}</NTag>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤状态">
+                        <NTag :type="currentDetail.step_state ? 'success' : 'error'">
+                          {{ currentDetail.step_state ? '成功' : '失败' }}
+                        </NTag>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤执行时间">
+                        <NText>{{ currentDetail.step_st_time || '-' }}</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤结束时间">
+                        <NText>{{ currentDetail.step_ed_time || '-' }}</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="步骤消耗时间">
+                        <NText>{{ currentDetail.step_elapsed || '-' }}s</NText>
+                      </NDescriptionsItem>
+                      <NDescriptionsItem label="循环次数" v-if="currentDetail.num_cycles">
+                        <NText>第 {{ currentDetail.num_cycles }} 次</NText>
+                      </NDescriptionsItem>
+                    </NDescriptions>
+                  </NCollapseItem>
+                  <NCollapseItem title="错误信息" name="errorInfo" v-if="currentDetail.step_exec_except">
+                    <pre style="white-space: pre-wrap; word-wrap: break-word; color: #d03050;">{{ currentDetail.step_exec_except }}</pre>
+                  </NCollapseItem>
+                  <NCollapseItem title="执行日志" name="execLogger" v-if="currentDetail.step_exec_logger">
+                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ currentDetail.step_exec_logger }}</pre>
+                  </NCollapseItem>
+                </NCollapse>
+              </NSpace>
+            </NTabPane>
+
+            <!-- 响应信息 -->
+            <NTabPane name="response" tab="响应信息" v-if="currentDetail.response_body || currentDetail.response_header || currentDetail.response_text">
+              <NSpace vertical :size="16">
+                <NCollapse :default-expanded-names="['responseHeaders', 'responseBody']" arrow-placement="right">
+                  <NCollapseItem title="Headers" name="responseHeaders" v-if="currentDetail.response_header">
+                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ formatJson(currentDetail.response_header) }}</pre>
+                  </NCollapseItem>
+                  <NCollapseItem title="Cookies" name="responseCookies" v-if="currentDetail.response_cookie">
+                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ currentDetail.response_cookie }}</pre>
+                  </NCollapseItem>
+                  <NCollapseItem title="Body" name="responseBody">
+                    <div v-if="isJsonResponse">
+                      <MonacoEditor
+                          :value="formatJson(currentDetail.response_body)"
+                          :options="monacoEditorOptions(true)"
+                          style="min-height: 400px; height: auto;"
+                      />
+                    </div>
+                    <NCode
+                        v-else
+                        :code="formatResponseText()"
+                        :language="responseLanguage"
+                        show-line-numbers
+                    />
+                  </NCollapseItem>
+                </NCollapse>
+              </NSpace>
+            </NTabPane>
+
+            <!-- 数据提取 -->
+            <NTabPane name="extract" tab="数据提取" v-if="currentDetail.extract_variables">
+              <NDataTable
+                  v-if="extractVariablesData.length > 0"
+                  :columns="[{title: '变量名', key: 'key'}, {title: '值', key: 'value'}]"
+                  :data="extractVariablesData"
+                  size="small"
+                  :bordered="true"
+              />
+              <NEmpty v-else description="暂无数据提取结果"/>
+            </NTabPane>
+
+            <!-- 断言结果 -->
+            <NTabPane name="assert" tab="断言结果" v-if="currentDetail.assert_validators">
+              <NDataTable
+                  v-if="assertValidatorsData.length > 0"
+                  :columns="[{title: '断言项', key: 'key'}, {title: '结果', key: 'value'}]"
+                  :data="assertValidatorsData"
+                  size="small"
+                  :bordered="true"
+              />
+              <NEmpty v-else description="暂无断言结果"/>
+            </NTabPane>
+
+            <!-- 会话变量 -->
+            <NTabPane name="variables" tab="会话变量" v-if="currentDetail.session_variables">
+              <div v-if="isJsonSessionVariables">
+                <MonacoEditor
+                    :value="formatJson(currentDetail.session_variables)"
+                    :options="monacoEditorOptions(true)"
+                    style="min-height: 400px; height: auto;"
+                />
+              </div>
+              <pre v-else style="white-space: pre-wrap; word-wrap: break-word;">{{ formatJson(currentDetail.session_variables) }}</pre>
+            </NTabPane>
+          </NTabs>
+        </NCard>
+        <NEmpty v-else description="暂无详情数据"/>
+      </NDrawerContent>
+    </NDrawer>
+
   </CommonPage>
 </template>
 
@@ -638,3 +867,4 @@ const columns = [
 }
 
 </style>
+
