@@ -242,15 +242,26 @@ const run_code = computed(() => {
   return stepInfo.value.code
 })
 
+const hasResponseInfo = computed(() => {
+  const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false;
+  const hasResponseData = !!(currentDetail.value?.response_body) ||
+      !!(currentDetail.value?.response_header) ||
+      !!(currentDetail.value?.response_text) ||
+      !!(currentDetail.value?.response_cookie)
+  return isRequestStep && hasResponseData;
+})
+
 const hasRequestInfo = computed(() => {
-  return !!(requestMethod.value && requestMethod.value !== '-') ||
+  const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false;
+  const hasRequestData = !!(requestMethod.value && requestMethod.value !== '-') ||
       !!(requestUrl.value && requestUrl.value !== '-') ||
       !!requestHeaders.value ||
       !!requestBody.value ||
       !!requestFormData.value ||
       !!requestFormUrlencoded.value ||
       !!requestText.value ||
-      !!run_code.value
+      !!run_code.value;
+  return isRequestStep && hasRequestData;
 })
 
 const hasRequestBody = computed(() => {
@@ -393,39 +404,39 @@ const detailColumns = [
   {
     title: '步骤序号',
     key: 'step_no',
-    width: 100,
+    width: 40,
     align: 'center',
   },
   {
     title: '步骤名称',
     key: 'step_name',
-    width: 200,
+    width: 100,
     ellipsis: {tooltip: true},
   },
   {
     title: '步骤类型',
     key: 'step_type',
-    width: 120,
+    width: 60,
     align: 'center',
   },
   {
-    title: '步骤执行时间',
-    key: 'step_st_time',
-    width: 180,
+    title: '步骤状态',
+    key: 'step_state',
+    width: 40,
     align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '步骤结束时间',
-    key: 'step_ed_time',
-    width: 180,
-    align: 'center',
-    ellipsis: {tooltip: true},
+    render(row) {
+      if (row.step_state === true || row.step_state === 'true') {
+        return h(NTag, {type: 'success'}, {default: () => '成功'})
+      } else if (row.step_state === false || row.step_state === 'false') {
+        return h(NTag, {type: 'error'}, {default: () => '失败'})
+      }
+      return h('span', '-')
+    },
   },
   {
     title: '步骤消耗时间',
     key: 'step_elapsed',
-    width: 130,
+    width: 60,
     align: 'center',
     render(row) {
       const elapsed = row.step_elapsed
@@ -441,30 +452,16 @@ const detailColumns = [
   {
     title: '步骤错误信息',
     key: 'step_exec_except',
-    width: 300,
+    width: 200,
     ellipsis: {tooltip: true},
     render(row) {
       return h('span', row.step_exec_except || '-')
     },
   },
   {
-    title: '步骤状态',
-    key: 'step_state',
-    width: 100,
-    align: 'center',
-    render(row) {
-      if (row.step_state === true || row.step_state === 'true') {
-        return h(NTag, {type: 'success'}, {default: () => '成功'})
-      } else if (row.step_state === false || row.step_state === 'false') {
-        return h(NTag, {type: 'error'}, {default: () => '失败'})
-      }
-      return h('span', '-')
-    },
-  },
-  {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 30,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -856,7 +853,7 @@ const columns = [
         <template #header>
           <div style="display: flex; align-items: center; justify-content: flex-end; width: 100%;">
             <NCheckbox v-model:checked="onlyShowFailed">
-              只看错误/失败步骤
+              仅看失败步骤
             </NCheckbox>
           </div>
         </template>
@@ -864,7 +861,7 @@ const columns = [
             :columns="detailColumns"
             :data="filteredDetailList"
             :loading="loading"
-            :scroll-x="1800"
+            :scroll-x="1200"
             :single-line="false"
             striped
         />
@@ -873,7 +870,7 @@ const columns = [
 
     <!-- 详情抽屉 -->
     <NDrawer v-model:show="detailDrawerVisible" placement="left" width="50%">
-      <NDrawerContent title="步骤详情">
+      <NDrawerContent>
         <NCard v-if="currentDetail" :bordered="false" style="width: 100%;">
           <template #header-extra>
             <NSpace align="center">
@@ -897,25 +894,19 @@ const columns = [
                     <div class="step-info-row">
                       <div class="step-info-label">用例标识：</div>
                       <div class="step-info-value">
-                        <NText copyable style="font-family: monospace; font-size: 12px;">
-                          {{ currentDetail.case_code || '-' }}
-                        </NText>
+                        <NText copyable>{{ currentDetail.case_code || '-' }}</NText>
                       </div>
                     </div>
                     <div class="step-info-row">
                       <div class="step-info-label">报告标识：</div>
                       <div class="step-info-value">
-                        <NText copyable style="font-family: monospace; font-size: 12px;">
-                          {{ currentDetail.report_code || '-' }}
-                        </NText>
+                        <NText copyable>{{ currentDetail.report_code || '-' }}</NText>
                       </div>
                     </div>
                     <div class="step-info-row">
                       <div class="step-info-label">步骤标识：</div>
                       <div class="step-info-value">
-                        <NText copyable style="font-family: monospace; font-size: 12px;">
-                          {{ currentDetail.step_code || '-' }}
-                        </NText>
+                        <NText copyable>{{ currentDetail.step_code || '-' }}</NText>
                       </div>
                     </div>
                     <div class="step-info-row">
@@ -925,7 +916,7 @@ const columns = [
                     <div class="step-info-row">
                       <div class="step-info-label">步骤状态：</div>
                       <div class="step-info-value">
-                        <NTag :type="currentDetail.step_state ? 'success' : 'error'" size="small">
+                        <NTag :type="currentDetail.step_state ? 'success' : 'error'">
                           {{ currentDetail.step_state ? '成功' : '失败' }}
                         </NTag>
                       </div>
@@ -945,7 +936,7 @@ const columns = [
                     <div class="step-info-row" v-if="currentDetail.num_cycles">
                       <div class="step-info-label">循环次数：</div>
                       <div class="step-info-value">
-                        <NTag type="warning" size="small">第 {{ currentDetail.num_cycles }} 次</NTag>
+                        <NTag type="warning">第 {{ currentDetail.num_cycles }} 次循环</NTag>
                       </div>
                     </div>
                   </div>
@@ -961,7 +952,7 @@ const columns = [
                     </div>
                     <div class="step-info-row">
                       <div class="step-info-label">循环间隔时间：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_interval || '-' }}s</div>
+                      <div class="step-info-value">{{ stepInfo.loop_interval ? `${stepInfo.loop_interval}s` : '-' }}</div>
                     </div>
                     <div class="step-info-row">
                       <div class="step-info-label">循环对象来源：</div>
@@ -987,7 +978,7 @@ const columns = [
                     </div>
                     <div class="step-info-row">
                       <div class="step-info-label">循环超时时间：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_timeout || '-' }}s</div>
+                      <div class="step-info-value">{{ stepInfo.loop_timeout ? `${stepInfo.loop_timeout}s` : '-' }}</div>
                     </div>
                   </div>
                 </NCard>
@@ -1010,9 +1001,9 @@ const columns = [
                        :bordered="false">
                   <div class="step-info-grid">
                     <div class="step-info-row">
-                      <div class="step-info-label">等待时间(wait)：</div>
+                      <div class="step-info-label">等待时间：</div>
                       <div class="step-info-value">
-                        <NTag type="info">{{ stepInfo.wait || '-' }}s</NTag>
+                        <NTag type="info">{{ stepInfo.wait ? `${stepInfo.wait}s` : '-' }}</NTag>
                       </div>
                     </div>
                   </div>
@@ -1031,27 +1022,30 @@ const columns = [
                     <div class="step-info-row">
                       <div class="step-info-label">消耗时间：</div>
                       <div class="step-info-value">
-                        <NTag type="info" size="small">{{ currentDetail.step_elapsed || '-' }}s</NTag>
+                        <NTag type="info">{{ currentDetail.step_elapsed ? `${currentDetail.step_elapsed}s` : '-' }}</NTag>
                       </div>
                     </div>
                   </div>
                 </NCard>
 
-                <NCollapse :default-expanded-names="currentDetail.step_exec_except ? ['errorInfo'] : []">
-                  <NCollapseItem title="错误信息" name="errorInfo" v-if="currentDetail.step_exec_except">
+                <NCard title="执行日志" size="small" :bordered="false">
+                <NCollapse :default-expanded-names="['errorInfo', 'execLogger']" arrow-placement="right">
+                  <NCollapseItem title="错误日志" name="errorInfo" v-if="currentDetail.step_exec_except">
                       <pre
                           style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{
                           currentDetail.step_exec_except
                         }}</pre>
                   </NCollapseItem>
-                  <NCollapseItem title="执行日志" name="execLogger" v-if="currentDetail.step_exec_logger">
+                  <NCollapseItem title="普通日志" name="execLogger" v-if="currentDetail.step_exec_logger">
                       <pre
                           style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{
                           currentDetail.step_exec_logger
                         }}</pre>
                   </NCollapseItem>
                 </NCollapse>
+                </NCard>
               </NSpace>
+
             </NTabPane>
 
             <!-- 请求信息 -->
@@ -1130,8 +1124,7 @@ const columns = [
             </NTabPane>
 
             <!-- 响应信息 -->
-            <NTabPane name="response" tab="响应信息"
-                      v-if="currentDetail.response_body || currentDetail.response_header || currentDetail.response_text">
+            <NTabPane name="response" tab="响应信息" v-if="hasResponseInfo">
               <NSpace vertical :size="16">
                 <NCollapse :default-expanded-names="['responseHeaders', 'responseBody']" arrow-placement="right">
                   <NCollapseItem title="Headers" name="responseHeaders" v-if="currentDetail.response_header">
@@ -1140,7 +1133,9 @@ const columns = [
                         }}</pre>
                   </NCollapseItem>
                   <NCollapseItem title="Cookies" name="responseCookies" v-if="currentDetail.response_cookie">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ currentDetail.response_cookie }}</pre>
+                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{
+                        formatJson(currentDetail.response_header)
+                      }}</pre>
                   </NCollapseItem>
                   <NCollapseItem title="Body" name="responseBody">
                     <div v-if="isJsonResponse">
@@ -1223,19 +1218,22 @@ const columns = [
 
 .step-info-row {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 120px 1fr;
   gap: 16px;
   align-items: center;
 }
 
 .step-info-label {
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: bold;
   color: #666;
   flex-shrink: 0;
 }
 
 .step-info-value {
   flex: 1;
+  font-size: 14px;
+  font-weight: 500;
   word-break: break-all;
 }
 
