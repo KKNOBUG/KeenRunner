@@ -692,7 +692,7 @@ class BaseStepExecutor:
     async def execute(self) -> StepExecutionResult:
         start = time.perf_counter()
         step_start_time = datetime.now()
-        step_st_time_str = step_start_time.strftime("%Y-%m-%d %H:%M:%S")
+        step_st_time_str = step_start_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         num_cycles = self.context.step_cycle_index.get(self.step_code)
         if self.step_code:
             self.context.step_cycle_index.setdefault(self.step_code, num_cycles)
@@ -745,7 +745,7 @@ class BaseStepExecutor:
         """保存步骤明细到数据库（含无响应步骤占位；循环多次执行合并）"""
         try:
             step_end_time = datetime.now()
-            step_ed_time_str = step_end_time.strftime("%Y-%m-%d %H:%M:%S")
+            step_ed_time_str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
             step_elapsed = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
 
             step_logs = self.context.logs.get(self.step_code, [])
@@ -2295,7 +2295,7 @@ class AutoTestStepExecutionEngine:
         case_name: str = case.get("case_name")
 
         case_start_time = datetime.now()
-        case_st_time_str = case_start_time.strftime("%Y-%m-%d %H:%M:%S")
+        case_st_time_str = case_start_time.strftime("%Y-%m-%d %H:%M:%S.%f")
 
         report_code = None
         if self._save_report:
