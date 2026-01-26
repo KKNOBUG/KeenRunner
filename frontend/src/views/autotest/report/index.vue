@@ -1051,7 +1051,7 @@ const columns = [
             <!-- 请求信息 -->
             <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
               <NSpace vertical :size="16">
-                <NCollapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']"
+                <NCollapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestCode']"
                            arrow-placement="right">
                   <NCollapseItem title="Basic" name="requestBasic">
                     <NDescriptions bordered :column="2" size="small">

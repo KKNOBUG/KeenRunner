@@ -285,8 +285,12 @@ class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
         )
         indexes = (
             ("case_id", "step_id", "step_no"),
-            ("case_id", "step_type"),
-            ("case_id", "step_state"),
+            # 优化查询性能：添加常用查询条件的组合索引
+            ("report_code", "case_id", "state"),
+            ("case_id", "report_code", "state"),
+            # 优化排序性能：为排序字段添加索引
+            ("report_code", "step_st_time"),
+            ("case_id", "report_code", "step_st_time"),
         )
         ordering = ["-updated_time"]
 

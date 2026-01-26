@@ -6,6 +6,7 @@
 @Module  : autotest_detail_view
 @DateTime: 2025/11/27 14:25
 """
+import traceback
 from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Body, Query
@@ -153,15 +154,15 @@ async def search_step_details(
         if detail_in.case_id:
             q &= Q(case_id=detail_in.case_id)
         if detail_in.case_code:
-            q &= Q(case_code__contains=detail_in.case_code)
+            q &= Q(case_code=detail_in.case_code)
         if detail_in.report_code:
-            q &= Q(report_code__contains=detail_in.report_code)
+            q &= Q(report_code=detail_in.report_code)
         if detail_in.step_id:
             q &= Q(step_id=detail_in.step_id)
         if detail_in.step_no:
             q &= Q(step_no=detail_in.step_no)
         if detail_in.step_code:
-            q &= Q(step_code__contains=detail_in.step_code)
+            q &= Q(step_code=detail_in.step_code)
         if detail_in.step_type:
             q &= Q(step_type=detail_in.step_type.value)
         if detail_in.step_state is not None:
@@ -210,4 +211,5 @@ async def search_step_details(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
