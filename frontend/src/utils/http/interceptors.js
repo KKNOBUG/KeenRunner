@@ -40,19 +40,35 @@ export function reqReject(error) {
 export function resResolve(response) {
   // 从响应对象中解构出数据、状态码和状态文本
   const { data, status, statusText } = response
+
+  // 检查响应数据是否存在
+  if (!data) {
+    const code = status
+    const message = resolveResError(code, statusText || '响应数据为空')
+    window.$message?.error(message, { keepAliveOnHover: true })
+    return Promise.reject({ code, message, error: response })
+  }
+
+  // 将 code 转换为字符串进行比较，以处理可能的类型不匹配问题（数字 vs 字符串）
+  const responseCode = String(data.code || '')
+  const responseStatus = String(data.status || '')
+
   // 检查响应数据的 code 和 status 字段是否符合成功条件
-  // if (data?.code !== '000000' || data?.status !== 'success') {
-  if (!data || data?.code === undefined || data?.status === undefined || data?.code.length !== 6) {
+  // 成功条件：code 必须是 '000000' 且 status 必须是 'success'
+  const isSuccess = responseCode === '000000' && responseStatus === 'success'
+
+  if (!isSuccess) {
     // 如果不符合成功条件，获取错误码，优先使用响应数据中的 code，若不存在则使用状态码
-    const code = data?.code ?? status
+    const code = data.code ?? status
     /** 根据code处理对应的操作，并返回处理后的message */
-    // 调用 resolveResError 函数处理错误信息
-    const message = resolveResError(code, data?.message ?? statusText)
+        // 调用 resolveResError 函数处理错误信息
+    const message = resolveResError(code, data.message ?? statusText ?? '请求失败')
     // 使用 window.$message 显示错误消息，并设置鼠标悬停时不自动关闭
     window.$message?.error(message, { keepAliveOnHover: true })
     // 拒绝 Promise，携带错误码、错误消息和错误数据
     return Promise.reject({ code, message, error: data || response })
   }
+
   // 如果响应数据符合成功条件，返回成功的 Promise，携带响应数据
   return Promise.resolve(data)
 }
@@ -68,7 +84,7 @@ export async function resReject(error) {
     // 如果不存在响应信息，获取错误码
     const code = error?.code
     /** 根据code处理对应的操作，并返回处理后的message */
-    // 调用 resolveResError 函数处理错误信息
+        // 调用 resolveResError 函数处理错误信息
     const message = resolveResError(code, error.message)
     // 使用 window.$message 显示错误消息
     window.$message?.error(message)
@@ -78,8 +94,9 @@ export async function resReject(error) {
   // 从错误对象的响应中解构出数据和状态码
   const { data, status } = error.response
 
-  // 检查响应数据的 code 是否为 401，表示未授权
-  if (data?.code === 401) {
+  // 检查响应数据的 code 是否为 401，表示未授权（支持字符串和数字类型）
+  const responseCode = data?.code
+  if (responseCode === 401 || responseCode === '400401' || String(responseCode) === '401') {
     try {
       // 获取用户状态管理 store
       const userStore = useUserStore()
@@ -91,13 +108,12 @@ export async function resReject(error) {
       return
     }
   }
+
   // 后端返回的response数据，获取错误码，优先使用响应数据中的 code，若不存在则使用状态码
   const code = data?.code ?? status
   // 调用 resolveResError 函数处理错误信息
-  console.error("code:", code)
-  const message = resolveResError(code, data?.message ?? error.message)
+  const message = resolveResError(code, data?.message ?? error.message ?? '请求失败')
   // 使用 window.$message 显示错误消息，并设置鼠标悬停时不自动关闭
-  window.$message?.error(code, { keepAliveOnHover: true })
   window.$message?.error(message, { keepAliveOnHover: true })
   // 拒绝 Promise，携带错误码、错误消息和错误响应数据
   return Promise.reject({ code, message, error: error.response?.data || error.response })
