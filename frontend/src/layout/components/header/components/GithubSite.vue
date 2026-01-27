@@ -6,6 +6,6 @@
 
 <script setup>
 function handleLinkClick() {
-  window.open('https://github.com/mizhexiaoxiao/vue-fastapi-admin')
+  window.open('https://github.com/KKNOBUG/Krun')
 }
 </script>
