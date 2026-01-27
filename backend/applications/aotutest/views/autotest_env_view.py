@@ -6,6 +6,7 @@
 @Module  : autotest_env_view
 @DateTime: 2026/1/2 21:21
 """
+import traceback
 from typing import Optional
 
 from fastapi import APIRouter, Body, Query
@@ -53,6 +54,7 @@ async def create_env_info(env_in: AutoTestApiEnvCreate = Body(..., description="
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"新增环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
@@ -77,6 +79,7 @@ async def delete_env_info(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -100,6 +103,7 @@ async def update_env_info(env_in: AutoTestApiEnvUpdate = Body(..., description="
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code更新环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
@@ -127,6 +131,7 @@ async def get_env_info(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
@@ -172,4 +177,5 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按条件查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")

@@ -6,7 +6,7 @@
 @Module  : autotest_tool_view
 @DateTime: 2026/1/17 16:13
 """
-
+import traceback
 from typing import List
 
 from fastapi import APIRouter
@@ -50,4 +50,5 @@ async def get_func_info():
         LOGGER.info(f"辅助函数查询成功")
         return SuccessResponse(message="查询成功", data=func, total=len(func))
     except Exception as e:
+        LOGGER.error(f"辅助函数查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

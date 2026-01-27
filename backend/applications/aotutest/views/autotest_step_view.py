@@ -345,7 +345,7 @@ async def batch_update_steps_tree(
             LOGGER.error(
                 f"发生未知错误，事务已回滚, "
                 f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}, "
+                f"错误描述: {e}, \n"
                 f"错误回溯: {traceback.format_exc()}"
             )
             raise
@@ -978,13 +978,8 @@ async def debug_http_request(
 
         return SuccessResponse(message="HTTP调试请求成功", data=result_data)
     except Exception as e:
-        error_message: str = (
-            f"【HTTP请求调试】请求服务器发生未知错误，"
-            f"错误类型: {type(e).__name__}, "
-            f"错误详情: {e}"
-        )
-        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"HTTP调试请求异常", data=error_message)
+        LOGGER.error(f"HTTP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
 
 
 @autotest_step.post("/python_code_debugging", summary="API自动化测试-Python代码调试")
@@ -1206,7 +1201,8 @@ async def execute_step_tree(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"执行失败，异常描述: {str(e)}")
+        LOGGER.error(f"执行或调试步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"执行或调试步骤树失败, 异常描述: {e}")
 
 
 @autotest_step.post("/batch_execute", summary="API自动化测试-批量执行用例")
@@ -1244,6 +1240,5 @@ async def batch_execute_cases_endpoint(
             report_type=AutoTestReportType.EXEC2,
         )
         return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)
-
     except Exception as e:
         return FailureResponse(message=f"批量执行失败，异常描述: {str(e)}")

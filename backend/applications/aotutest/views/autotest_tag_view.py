@@ -6,7 +6,7 @@
 @Module  : autotest_tag_view
 @DateTime: 2026/1/17 16:06
 """
-
+import traceback
 from typing import Optional
 
 from fastapi import APIRouter, Body, Query
@@ -57,6 +57,7 @@ async def create_tag_info(tag_in: AutoTestApiTagCreate = Body(..., description="
     except DataAlreadyExistsResponse as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"新增标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
 
 
@@ -83,6 +84,7 @@ async def delete_tag_info(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -110,6 +112,7 @@ async def update_tag_info(tag_in: AutoTestApiTagUpdate = Body(..., description="
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code更新标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -139,6 +142,7 @@ async def get_tag_info(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
+        LOGGER.error(f"按id或code查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -187,4 +191,5 @@ async def search_tags_info(
     except ParameterException as e:
         return ParameterResponse(message=e.message)
     except Exception as e:
+        LOGGER.error(f"按条件查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
