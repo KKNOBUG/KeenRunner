@@ -142,7 +142,7 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
         if env_in.env_id:
             q &= Q(id=env_in.env_id)
         if env_in.env_code:
-            q &= Q(env_code__contains=env_in.env_code)
+            q &= Q(env_code=env_in.env_code)
         if env_in.project_id:
             q &= Q(project_id=env_in.project_id)
         if env_in.env_name:

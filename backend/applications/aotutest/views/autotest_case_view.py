@@ -154,7 +154,7 @@ async def search_cases(
         if case_in.case_id:
             q &= Q(id=case_in.case_id)
         if case_in.case_code:
-            q &= Q(case_code__contains=case_in.case_code)
+            q &= Q(case_code=case_in.case_code)
         if case_in.case_name:
             q &= Q(case_name__contains=case_in.case_name)
         if case_in.case_tags:

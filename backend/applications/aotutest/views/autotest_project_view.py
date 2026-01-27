@@ -145,7 +145,7 @@ async def search_project_info(project_in: AutoTestApiProjectSelect = Body(..., d
         if project_in.project_id:
             q &= Q(id=project_in.project_id)
         if project_in.project_code:
-            q &= Q(project_code__contains=project_in.project_code)
+            q &= Q(project_code=project_in.project_code)
         if project_in.project_state:
             q &= Q(project_state__contains=project_in.project_state)
         if project_in.project_phase:

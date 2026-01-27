@@ -146,15 +146,15 @@ async def search_reports(
         if report_in.case_id:
             q &= Q(case_id=report_in.case_id)
         if report_in.case_code:
-            q &= Q(case_code__contains=report_in.case_code)
+            q &= Q(case_code=report_in.case_code)
         if report_in.report_id:
             q &= Q(id=report_in.report_id)
         if report_in.report_code:
-            q &= Q(report_code__contains=report_in.report_code)
+            q &= Q(report_code=report_in.report_code)
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
         if report_in.task_code:
-            q &= Q(task_code__contains=report_in.task_code)
+            q &= Q(task_code=report_in.task_code)
         if report_in.case_state is not None:
             q &= Q(case_state=report_in.case_state)
         if report_in.created_user:
