@@ -88,6 +88,10 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             error_message: str = f"查询标签信息异常, 错误描述: {e}"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+        except Exception as e:
+            error_message: str = f"查询标签信息发生未知异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
             error_message: str = f"查询标签信息失败, 条件{conditions}不存在"
@@ -122,7 +126,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             instance = await self.create(tag_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增标签信息失败, 违法约束规则: {e}"
+            error_message: str = f"新增标签信息失败, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -163,7 +167,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message)
         except IntegrityError as e:
-            error_message: str = f"更新标签信息异常, 违法约束规则: {e}"
+            error_message: str = f"更新标签信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 

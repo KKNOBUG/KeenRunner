@@ -46,7 +46,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def get_by_code(self, case_code: str, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
         if not case_code:
-            error_message: str = "查询用例信息失败, 参数(case_id)不允许为空"
+            error_message: str = "查询用例信息失败, 参数(case_code)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -70,6 +70,10 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             error_message: str = f"查询用例信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"查询用例信息发生未知异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
             error_message: str = f"查询用例信息失败, 条件{conditions}不存在"
@@ -85,7 +89,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         # 业务层验证: 检查标签是否全部存在
         await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
 
-        # 业务层验证: 检查用例信息是否以及存在
+        # 业务层验证: 检查用例信息是否已经存在
         existing_case = await self.model.filter(case_name=case_name, case_project=case_project, state__not=1).first()
         if existing_case:
             error_message: str = (
@@ -100,7 +104,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             instance = await self.create(case_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增用例信息失败, 违法约束规则: {e}"
+            error_message: str = f"新增用例信息失败, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -114,7 +118,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         else:
             instance = await self.get_by_code(case_code=case_code, on_error=True)
             case_id: int = instance.id
-
         update_dict = case_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
@@ -152,7 +155,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新用例信息异常, 违法约束规则: {e}"
+            error_message: str = f"更新用例信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -297,7 +300,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     case_tags = update_case_dict.get("case_tags", case_instance.case_tags)
                     await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
 
-                # 如果更新了用例名称或项目ID，检查唯一性
+                # 业务层验证：检查应用ID和用例名称的唯一性
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
                     existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                         only_one=True,

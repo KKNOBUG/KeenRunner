@@ -43,8 +43,8 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
 
 
 class AutoTestApiReportUpdate(AutoTestApiReportBase):
-    report_id: int = Field(None, description="报告ID")
-    report_code: str = Field(None, max_length=64, description="报告标识代码")
+    report_id: Optional[int] = Field(None, description="报告ID")
+    report_code: Optional[str] = Field(None, max_length=64, description="报告标识代码")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 

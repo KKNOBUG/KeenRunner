@@ -28,8 +28,8 @@ class AutoTestApiDetailBase(BaseModel):
     num_cycles: Optional[int] = Field(None, le=100, description="循环执行次数(第几次)")
 
     response_cookie: Optional[str] = Field(None, description="响应信息(cookies)")
-    response_header: NON_DICT_TYPE = Field(default={}, description="响应信息(headers)")
-    response_body: NON_DICT_TYPE = Field(default={}, description="响应信息(body)")
+    response_header: NON_DICT_TYPE = Field(default=None, description="响应信息(headers)")
+    response_body: NON_DICT_TYPE = Field(default=None, description="响应信息(body)")
     response_text: Optional[str] = Field(None, description="响应信息(text)")
     response_elapsed: Optional[str] = Field(None, max_length=16, description="响应信息(elapsed)")
 
@@ -69,7 +69,7 @@ class AutoTestApiDetailSelect(BaseModel):
     order: List[str] = Field(default=["step_st_time"], description="排序字段")
 
     case_id: Optional[int] = Field(None, description="用例ID")
-    case_code: Optional[str] = Field(None, description="用例标识代码")
+    case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
 

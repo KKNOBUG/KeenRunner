@@ -53,7 +53,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(detail_code=detail_code, state__not=1).first()
+        instance = await self.model.filter(report_code=detail_code, state__not=1).first()
         if not instance and on_error:
             error_message: str = f"查询明细信息失败, 明细(detail_code={detail_code})不存在"
             LOGGER.error(error_message)
@@ -71,6 +71,10 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             instances = await (stmt.first() if only_one else stmt.all())
         except FieldError as e:
             error_message: str = f"查询明细信息异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"查询明细信息发生未知异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -98,13 +102,12 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             on_error=True,
             conditions={"case_id": case_id, "case_code": case_code, "report_code": report_code}
         )
-
         try:
             report_dict = detail_in.dict(exclude_none=True, exclude_unset=True)
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增明细信息失败, 违法联合唯一约束规则(report_code, case_code, step_code, num_cycles)"
+            error_message: str = f"新增明细信息失败, 违反联合唯一约束规则(report_code, case_code, step_code, num_cycles)"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
@@ -147,7 +150,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
                 conditions={"report_code": report_code, "step_code": step_code},
             )
             detail_id = instance.id
-
         try:
             update_dict = detail_in.model_dump(
                 exclude_none=True,
@@ -157,7 +159,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             instance = await self.update(id=detail_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"更新明细信息失败, 违法约束规则: {e}"
+            error_message: str = f"更新明细信息失败, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -168,7 +170,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             report_code: Optional[int] = None
     ) -> AutoTestApiDetailsInfo:
         if not detail_id and (not report_code or not step_code):
-            error_message: str = f"参数缺失, 更新明细信息时必须传递(detail_id)或(report_code, step_code)字段"
+            error_message: str = f"参数缺失, 删除明细信息时必须传递(detail_id)或(report_code, step_code)字段"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 

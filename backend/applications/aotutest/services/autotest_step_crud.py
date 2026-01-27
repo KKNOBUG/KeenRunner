@@ -80,6 +80,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             error_message: str = f"查询步骤信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"查询步骤信息发生未知异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
             error_message: str = f"查询步骤信息失败, 条件{conditions}不存在"
@@ -100,7 +104,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: int = case_instance.id
 
         # 获取所有根步骤（没有父步骤的步骤）
-        root_steps = await self.model.filter(
+        root_steps: List = await self.model.filter(
             case_id=case_id,
             parent_step_id__isnull=True,
             state__not=1
@@ -162,7 +166,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})所属用例信息完成")
 
             # 获取子步骤（递归构建）
-            children = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("step_no").all()
+            children: List = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("step_no").all()
             if children:
                 LOGGER.info(f"- 获取步骤(step_id={step.id}, step_no={step.step_no})所有子步骤(递归构建)开始 -")
                 step_dict["children"] = [await build_step_tree(child, is_quote=is_quote) for child in children]
@@ -184,7 +188,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 return step_dict
 
             # 获取引用的公共用例的所有步骤(包含子步骤, 递归构建)
-            quote_case_root_steps = await self.model.filter(
+            quote_case_root_steps: List = await self.model.filter(
                 case_id=step.quote_case_id,
                 parent_step_id__isnull=True,
                 state__not=1
@@ -273,7 +277,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             instance = await self.create(step_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增步骤信息失败, 违法约束规则: {e}"
+            error_message: str = f"新增步骤信息失败, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -321,7 +325,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         if "parent_step_id" in update_dict:
             parent_step_id: Optional[int] = update_dict["parent_step_id"]
             if parent_step_id:
-                parent_step = await self.model.filter(
+                parent_step: AutoTestApiStepInfo = await self.model.filter(
                     id=parent_step_id,
                     state__not=1,
                     case_type=AutoTestCaseType.PRIVATE_SCRIPT.value,
@@ -384,7 +388,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新步骤信息异常, 违法约束规则: {e}"
+            error_message: str = f"更新步骤信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -450,7 +454,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 if step_code is not None:
                     conditions["step_code"] = step_code
 
-                step = await self.get_by_conditions(conditions=conditions, only_one=True, on_error=False)
+                step = await self.get_by_conditions(conditions=conditions, only_one=True, on_error=True)
                 if step:
                     LOGGER.warning("单个步骤删除: ")
                     deleted_count = await delete_step_and_children(step_instance=step)

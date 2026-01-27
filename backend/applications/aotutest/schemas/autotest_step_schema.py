@@ -41,7 +41,7 @@ class AutoTestApiStepVarBase(BaseModel):
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     step_id: Optional[int] = Field(None, description="步骤ID(更新必填, 新增不填)")
-    step_no: Optional[int] = Field(None, description="步骤序号")
+    step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码(更新必填, 新增不填)")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
     step_desc: Optional[str] = Field(None, description="步骤描述")
@@ -85,7 +85,7 @@ class AutoTestApiStepUpdate(AutoTestApiStepBase):
     updated_user: Optional[UpperStr] = Field(None, description="更新人员")
 
 
-class AutoTestStepSelect(BaseModel):
+class AutoTestApiStepSelect(BaseModel):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["case_id", "step_no"], description="排序字段")

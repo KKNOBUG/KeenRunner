@@ -17,11 +17,11 @@ from backend.enums.autotest_enum import AutoTestCaseType, AutoTestCaseAttr
 class AutoTestApiCaseCreate(BaseModel):
     case_name: str = Field(..., max_length=255, description="用例名称")
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
-    case_tags: List[int] = Field(..., max_length=255, description="用例标签")
+    case_tags: List[int] = Field(..., description="用例所属标签")
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
-    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始化变量池)")
+    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始变量池)")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
@@ -29,14 +29,14 @@ class AutoTestApiCaseBase(BaseModel):
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
-    case_tags: Optional[List[int]] = Field(None, description="用例标签")
+    case_tags: Optional[List[int]] = Field(None, description="用例所属标签")
     case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(None, description="用例所属属性")
     case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
     case_project: Optional[int] = Field(None, ge=1, description="用例所属应用")
     case_last_time: Optional[str] = Field(None, description="用例执行时间")
-    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始化变量池)")
+    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始变量池)")
     case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
 
 

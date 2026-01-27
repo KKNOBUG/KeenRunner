@@ -72,6 +72,10 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             error_message: str = f"查询报告信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"查询报告信息发生未知异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
             error_message: str = f"查询报告信息失败, 条件{conditions}不存在"
@@ -95,7 +99,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增报告信息异常, 违法约束规则: {e}"
+            error_message: str = f"新增报告信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -119,7 +123,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             instance = await self.update(id=report_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"更新报告信息异常, 违法约束规则: {e}"
+            error_message: str = f"更新报告信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 

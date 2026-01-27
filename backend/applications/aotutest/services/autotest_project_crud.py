@@ -85,6 +85,10 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             error_message: str = f"查询应用信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"查询应用信息发生未知异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
             error_message: str = f"查询应用信息失败, 条件{conditions}不存在"
@@ -115,14 +119,13 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             instance = await self.create(obj_in=project_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增应用信息异常, 违法约束规则: {e}"
+            error_message: str = f"新增应用信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_project(self, project_in: AutoTestApiProjectUpdate) -> AutoTestApiProjectInfo:
         project_id: Optional[int] = project_in.project_id
         project_code: Optional[str] = project_in.project_code
-
         # 业务层验证：检查应用是否存在
         if project_id:
             instance = await self.get_by_id(project_id=project_id, on_error=True)
@@ -135,6 +138,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             exclude_unset=True,
             exclude={"project_id", "project_code"}
         )
+
         # 业务层验证：检查应用名称是否重复
         if "project_name" in update_dict:
             project_name: str = update_dict.get("project_name", instance.project_name)
@@ -151,7 +155,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             instance = await self.update(id=project_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"更新应用信息异常, 违法约束规则: {e}"
+            error_message: str = f"更新应用信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 

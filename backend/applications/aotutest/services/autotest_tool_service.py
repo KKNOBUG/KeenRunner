@@ -164,16 +164,7 @@ class AutoTestToolService:
 
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
-        """
-        校验步骤树结构合法性
-
-        Args:
-            steps_data: 步骤树数据
-
-        Returns:
-            tuple[bool, Optional[str]]: (是否合法, 错误信息)
-        """
-        from backend.applications.aotutest.models.autotest_model import AutoTestStepType
+        from backend.enums.autotest_enum import AutoTestStepType
 
         # 允许有子步骤的步骤类型
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
@@ -220,12 +211,8 @@ class AutoTestToolService:
     def normalize_step(cls, step: Dict[str, Any]) -> Dict[str, Any]:
         """
         规范化步骤数据格式
-
-        Args:
-            step: 步骤数据字典
-
-        Returns:
-            规范化后的步骤数据字典
+        :param step: 步骤数据字典
+        :return: 规范化后的步骤数据字典
         """
         step = step.copy()
 
@@ -254,11 +241,8 @@ class AutoTestToolService:
     def collect_session_variables(cls, steps_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         递归收集所有步骤的defined_variables作为初始变量
-        Args:
-            steps_list: 步骤列表
-
-        Returns:
-            合并后的变量字典
+        :param steps_list: 步骤列表
+        :return: 合并后的变量字典
         """
         variables = {}
         if not steps_list:

@@ -71,6 +71,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
             error_message: str = f"查询环境信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"查询环境信息发生未知异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
             error_message: str = f"查询明细信息失败, 条件{conditions}不存在"
@@ -94,7 +98,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
             instance = await self.create(obj_in=env_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增环境信息异常, 违法约束规则: {e}"
+            error_message: str = f"新增环境信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -132,11 +136,11 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
             instance = await self.update(id=env_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新环境信息失败, 用例(id={env_id}或code={env_code})不存在, 错误描述: {e}"
+            error_message: str = f"更新环境信息失败, 环境(id={env_id}或code={env_code})不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新环境信息异常, 违法约束规则: {e}"
+            error_message: str = f"更新环境信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 

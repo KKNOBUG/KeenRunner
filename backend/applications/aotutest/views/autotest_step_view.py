@@ -23,7 +23,7 @@ from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestA
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
-    AutoTestStepSelect,
+    AutoTestApiStepSelect,
     AutoTestStepTreeUpdateList,
     AutoTestStepTreeUpdateItem,
     AutoTestHttpDebugRequest,
@@ -165,7 +165,7 @@ async def get_step(
 
 @autotest_step.post("/search", summary="API自动化测试-按条件查询步骤")
 async def search_steps(
-        step_in: AutoTestStepSelect = Body(..., description="查询条件")
+        step_in: AutoTestApiStepSelect = Body(..., description="查询条件")
 ):
     try:
         q = Q()
