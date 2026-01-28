@@ -409,20 +409,9 @@ async def init_database_menu():
         autotest_children_menu = [
             Menu(
                 menu_type=MenuType.MENU,
-                name="Api 测试",
-                path="api",
-                order=1,
-                parent_id=autotest_parent_menu.id,
-                icon="simple-icons:aiohttp",
-                is_hidden=False,
-                component="/autotest/api",
-                keepalive=False
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
                 name="Web 测试",
                 path="ui",
-                order=2,
+                order=1,
                 parent_id=autotest_parent_menu.id,
                 icon="mdi:television-guide",
                 is_hidden=False,
@@ -433,7 +422,7 @@ async def init_database_menu():
                 menu_type=MenuType.MENU,
                 name="App 测试",
                 path="ui",
-                order=3,
+                order=2,
                 parent_id=autotest_parent_menu.id,
                 icon="garden:mobile-phone-fill-12",
                 is_hidden=False,
@@ -444,12 +433,23 @@ async def init_database_menu():
                 menu_type=MenuType.MENU,
                 name="测试场景",
                 path="step",
-                order=4,
+                order=3,
                 parent_id=autotest_parent_menu.id,
                 icon="garden:arrow-retweet-stroke-12",
                 is_hidden=False,
                 component="/autotest/step",
                 keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="步骤编辑",
+                path="api",
+                order=4,
+                parent_id=autotest_parent_menu.id,
+                icon="simple-icons:aiohttp",
+                is_hidden=True,
+                component="/autotest/api",
+                keepalive=True
             ),
             Menu(
                 menu_type=MenuType.MENU,
@@ -494,24 +494,24 @@ async def init_database_menu():
         task_children_menu = [
             Menu(
                 menu_type=MenuType.MENU,
-                name="执行记录",
-                path="record",
-                order=1,
-                parent_id=task_parent_menu.id,
-                icon="fluent:document-checkmark-24-regular",
-                is_hidden=False,
-                component="/task/record",
-                keepalive=False
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
                 name="任务列表",
                 path="list",
-                order=2,
+                order=1,
                 parent_id=task_parent_menu.id,
                 icon="fluent:document-text-clock-24-regular",
                 is_hidden=False,
                 component="/task/list",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="执行记录",
+                path="record",
+                order=2,
+                parent_id=task_parent_menu.id,
+                icon="fluent:document-checkmark-24-regular",
+                is_hidden=False,
+                component="/task/record",
                 keepalive=False
             ),
         ]

@@ -795,19 +795,17 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"查询用例信息(case_id={case_id})成功, 结果: {case_dict}")
 
         # 2. 查询步骤树数据
+        tree_data_count: Dict[str, Any] = {}
         tree_data = await self.get_by_case_id(case_id)
-        if not tree_data:
+        if "total_steps" in tree_data[-1]:
+            tree_data_count = tree_data.pop(-1)
+        if not tree_data_count or tree_data_count.get("total_steps") == 0:
             error_message: str = f"查询步骤为空, 用例(case_id={case_id})暂无任何步骤关联"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        tree_data_count: Dict[str, Any] = {}
-        if isinstance(tree_data, list) and tree_data and isinstance(
-                tree_data[-1], dict) and "total_steps" in tree_data[-1]:
-            tree_data_count = tree_data.pop(-1)
-        LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
-
         # 3. 规范化步骤数据
+        LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
         tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
         # 4. 收集session_variables

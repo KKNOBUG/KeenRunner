@@ -25,7 +25,7 @@ from backend.enums.autotest_enum import (
     AutoTestReportType,
     AutoTestLoopMode,
     AutoTestCaseAttr,
-    AutoTestLoopErrorStrategy
+    AutoTestLoopErrorStrategy, AutoTestTaskStatus, AutoTestTaskScheduler
 )
 
 
@@ -138,13 +138,14 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         return self.case_name
 
 
-class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
+class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     step_no = fields.IntField(default=1, ge=1, description="步骤序号")
     step_name = fields.CharField(max_length=255, description="步骤名称")
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤描述")
     step_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="步骤标识代码")
     step_type = fields.CharEnumField(AutoTestStepType, description="步骤类型")
-    case_type = fields.CharEnumField(AutoTestCaseType, default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
+    case_type = fields.CharEnumField(AutoTestCaseType, default=AutoTestCaseType.PRIVATE_SCRIPT,
+                                     description="用例所属类型")
 
     # 用例信息ID（普通字段，不设外键，业务层验证）
     case_id = fields.BigIntField(null=True, index=True, description="步骤所属用例")
@@ -170,14 +171,15 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")
     wait = fields.FloatField(ge=0, null=True, description="等待控制(正浮点数, 单位:秒)")
-    loop_mode = fields.CharEnumField(AutoTestLoopMode, null=True, description="循环模式类型")
+    loop_mode = fields.CharEnumField(AutoTestLoopMode, default=None, null=True, description="循环模式类型")
     loop_maximums = fields.IntField(ge=1, null=True, description="最大循环次数(正整数)")
     loop_interval = fields.FloatField(ge=0, null=True, description="每次循环间隔时间(正浮点数)")
     loop_iterable = fields.CharField(max_length=512, null=True, description="循环对象来源(变量名或可迭代对象)")
     loop_iter_idx = fields.CharField(max_length=64, null=True, description="用于存储enumerate得到的索引值")
     loop_iter_key = fields.CharField(max_length=64, null=True, description="用于存储字典的键")
     loop_iter_val = fields.CharField(max_length=64, null=True, description="用于存储字典的值或列表的项")
-    loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, null=True, description="循环执行失败时的处理策略")
+    loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True,
+                                         description="循环执行失败时的处理策略")
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
     conditions = fields.JSONField(null=True, description="判断条件(循环结构或条件分支)")
 
@@ -208,7 +210,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         return self.step_name
 
 
-class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
+class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     case_st_time = fields.CharField(max_length=32, null=True, description="用例执行开始时间")
@@ -241,7 +243,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
         return self.report_code
 
 
-class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
+class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     # 用例信息相关
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
@@ -296,3 +298,34 @@ class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
     def __str__(self):
         return self.step_code
+
+
+class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    task_env = fields.CharField(max_length=16, description="任务执行环境")
+    task_name = fields.CharField(max_length=255, index=True, description="任务名称")
+    task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
+    task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
+    task_type = fields.CharField(max_length=255, null=True, description="任务类型")
+    task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
+    case_ids = fields.JSONField(description="用例ID集合")
+    last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
+    last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
+    task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务调度状态")
+    task_interval_expr = fields.IntField(null=True, description="任务触发1")
+    task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发2")
+    task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发3")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
+
+    class Meta:
+        table = "krun_autotest_api_task"
+        table_description = "自动化测试-任务信息表"
+        unique_together = (
+            ("task_env", "task_name", "task_project"),
+        )
+        indexes = (
+            ("task_env", "task_name", "task_project"),
+        )
+        ordering = ["-updated_time"]
+
+    def __str__(self):
+        return self.task_name

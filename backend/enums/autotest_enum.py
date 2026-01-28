@@ -58,3 +58,15 @@ class AutoTestLoopErrorStrategy(StringEnum):
     CONTINUE = "继续下一次循环"
     BREAK = "中断循环"
     STOP = "停止整个用例执行"
+
+
+class AutoTestTaskScheduler(StringEnum):
+    SCHEDULER1 = "运行中"
+    SCHEDULER2 = "已停止"
+    SCHEDULER3 = "已完成"
+
+
+class AutoTestTaskStatus(StringEnum):
+    STATUS1 = "全部成功"
+    STATUS2 = "部分成功"
+    STATUS3 = "全部失败"
