@@ -87,8 +87,8 @@ class StepExecutionContext:
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
-        self.defined_variables: Dict[str, Any] = dict(initial_variables or {})
-        self.session_variables: Dict[str, Any] = {}
+        self.defined_variables: Dict[str, Any] = {}
+        self.session_variables: Dict[str, Any] = dict(initial_variables or {})
         self.extract_variables: Dict[str, Any] = {}
         self.logs: Dict[str, List[str]] = {}
         self.step_cycle_index: Dict[str, int] = {}
@@ -143,17 +143,20 @@ class StepExecutionContext:
         self._current_step_code = step_code
 
     def clone_state(self) -> Dict[str, Any]:
+        """
+        克隆当前变量状态，用于Python代码执行的命名空间。
+        :return:
+        """
         return {
             "defined_variables": dict(self.defined_variables),
             "session_variables": dict(self.session_variables),
-            "extract_variables": dict(self.extract_variables),
         }
 
     def update_variables(self, data: Dict[str, Any], *, scope: str = "defined_variables") -> None:
         target_map = {
+            "extract_variables": self.extract_variables,
             "defined_variables": self.defined_variables,
             "session_variables": self.session_variables,
-            "extract_variables": self.extract_variables,
         }
         scope_map = target_map.get(scope)
         if scope_map is None:
@@ -170,13 +173,18 @@ class StepExecutionContext:
             raise StepExecutionError(error_message) from e
 
     def get_variable(self, name: str) -> Any:
-        """获取变量值, 按优先级查找：extract_variables > session_variables > defined_variables"""
+        """
+        获取变量值, 按优先级查找：defined_variables > session_variables
+
+        变量作用域说明：
+        - defined_variables: 当前步骤的临时变量（从步骤配置中获取）
+        - session_variables: 持续累积已执行的步骤产生的变量（所有步骤共享）
+        """
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: 变量名必须是非空字符串, 当前值: {name}")
         for scope_name, scope in [
-            ("extract_variables", self.extract_variables),
+            ("defined_variables", self.defined_variables),
             ("session_variables", self.session_variables),
-            ("defined_variables", self.defined_variables)
         ]:
             if name in scope:
                 try:
@@ -2260,7 +2268,7 @@ class StepExecutorFactory:
 
 
 class AutoTestStepExecutionEngine:
-    """测试步骤执行引擎入口。"""
+    """ 测试步骤执行引擎入口 """
 
     def __init__(
             self, *,
@@ -2282,14 +2290,12 @@ class AutoTestStepExecutionEngine:
             execute_environment: Optional[str] = None,
             initial_variables: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], Dict[str, Any]]:
+        report_code = None
+        case_start_time = datetime.now()
         case_id: int = case.get("case_id")
         case_code: str = case.get("case_code")
         case_name: str = case.get("case_name")
-
-        case_start_time = datetime.now()
         case_st_time_str = case_start_time.strftime("%Y-%m-%d %H:%M:%S.%f")
-
-        report_code = None
         if self._save_report:
             try:
                 user_id = CTX_USER_ID.get(0)
@@ -2328,13 +2334,11 @@ class AutoTestStepExecutionEngine:
         ) as context:
             ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0))
             results: List[StepExecutionResult] = []
-
             for step in ordered_root_steps:
                 context.step_code = step.get("step_code")
                 executor = StepExecutorFactory.create_executor(step, context)
                 result = await executor.execute()
                 results.append(result)
-
                 # 对于根步骤（parent_step_id 为 None）, 汇总所有子步骤的日志
                 if step.get("parent_step_id") is None:
                     root_step_code = step.get("step_code")

@@ -314,6 +314,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     task_interval_expr = fields.IntField(null=True, description="任务触发1")
     task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发2")
     task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发3")
+    task_notify = fields.JSONField(null=True, description="任务执行明细反馈")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
