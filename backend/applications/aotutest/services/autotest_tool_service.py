@@ -238,25 +238,24 @@ class AutoTestToolService:
         return step
 
     @classmethod
-    def collect_session_variables(cls, steps_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def collect_session_variables(cls, steps_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        递归收集所有步骤的defined_variables作为初始变量
+        递归收集所有步骤的session_variables作为初始变量
         :param steps_list: 步骤列表
-        :return: 合并后的变量字典
+        :return: 合并后的变量列表（每个元素包含key、value、desc）
         """
-        variables = {}
+        variables = []
         if not steps_list:
             return variables
         for step in steps_list:
-            defined_vars = step.get("defined_variables")
-
-            if isinstance(defined_vars, dict):
-                variables.update(defined_vars)
+            session_variables = step.get("session_variables")
+            if isinstance(session_variables, list):
+                variables.extend(session_variables)
             # 递归处理children和quote_steps
             children = step.get("children", []) or []
             quote_steps = step.get("quote_steps", []) or []
-            variables.update(cls.collect_session_variables(children))
-            variables.update(cls.collect_session_variables(quote_steps))
+            variables.extend(cls.collect_session_variables(children))
+            variables.extend(cls.collect_session_variables(quote_steps))
         return variables
 
     @classmethod
@@ -274,15 +273,27 @@ class AutoTestToolService:
         return func_name.strip(), args_dict
 
     @classmethod
-    def execute_func_string(cls, session_variables: Dict[str, Any]):
-        for key, func_string in session_variables.items():
+    def execute_func_string(cls, session_variables: List[Dict[str, Any]]):
+        """
+        执行变量中的函数字符串，将函数调用结果替换为实际值
+        :param session_variables: 变量列表（每个元素包含key、value、desc）
+        """
+        if not isinstance(session_variables, list):
+            return
+        for item in session_variables:
+            if not isinstance(item, dict) or "key" not in item or "value" not in item:
+                continue
+            key = item.get("key")
+            func_string = item.get("value")
+            if not key or not isinstance(func_string, str):
+                continue
             func_name, func_args = cls._parse_funcname_funcargs(func_string)
             if not func_name and not func_args:
                 continue
             if not hasattr(GenerateUtils, func_name):
                 raise AttributeError(f"辅助函数[{func_name}]不存在, 无法替换其值")
             try:
-                session_variables[key] = getattr(GenerateUtils, func_name)(**func_args or {})
+                item["value"] = getattr(GenerateUtils, func_name)(**func_args or {})
             except TypeError as e:
                 raise AttributeError(f"辅助函数[{func_name}]参数数量或类型不匹配: {e}")
             except SyntaxError as e:

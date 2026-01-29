@@ -560,17 +560,7 @@ const state = reactive({
 const extractCollapseState = ref({})
 const validatorCollapseState = ref({})
 
-const kvObjectToList = (obj) => {
-  if (!obj || typeof obj !== 'object') return []
-  return Object.entries(obj).map(([key, value]) => ({key, value}))
-}
-
-const kvListToObject = (list) => {
-  return (list || []).reduce((acc, {key, value}) => {
-    if (key) acc[key] = value
-    return acc
-  }, {})
-}
+// 注意：不再使用 kvObjectToList 和 kvListToObject，所有字段都必须是列表格式
 
 const initFromConfig = () => {
   const cfg = props.config || {}
@@ -609,8 +599,9 @@ const initFromConfig = () => {
 
   state.form.method = cfg.method || original.request_method || 'GET'
   state.form.url = cfg.url || original.request_url || ''
-  state.form.headers = kvObjectToList(cfg.headers || original.request_header || {})
-  state.form.params = kvObjectToList(cfg.params || (original.request_params ? JSON.parse(original.request_params) : {}) || {})
+  // headers、params 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
+  state.form.headers = Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : [])
+  state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
 
   // 请求体
   if (cfg.bodyType) {
@@ -625,8 +616,9 @@ const initFromConfig = () => {
     state.form.bodyType = 'none'
   }
 
-  state.form.bodyParams = kvObjectToList(cfg.form_data || {})
-  state.form.bodyForm = kvObjectToList(cfg.form_urlencoded || {})
+  // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
+  state.form.bodyParams = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
+  state.form.bodyForm = Array.isArray(cfg.form_urlencoded) ? cfg.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
 
   try {
     const body = cfg.data || original.request_body || {}
@@ -635,8 +627,8 @@ const initFromConfig = () => {
     state.form.jsonBody = ''
   }
 
-  // 变量（优先使用原始数据）
-  state.form.defined_variables = kvObjectToList(cfg.defined_variables || original.defined_variables || cfg.defined_variables || {})
+  // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
+  state.form.defined_variables = Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
 
   // 提取（优先使用原始数据）
   state.form.extract_variables = {}
@@ -725,9 +717,20 @@ const buildValidatorsForBackend = () => {
 }
 
 const buildConfigFromState = () => {
-  const headersObj = kvListToObject(state.form.headers)
-  const paramsObj = kvListToObject(state.form.params)
-  const variablesObj = kvListToObject(state.form.defined_variables)
+  // 列表格式：每个元素包含 key、value、desc
+  // 确保 headers、params、form_data、form_urlencoded、defined_variables 都是列表格式
+  const headersList = Array.isArray(state.form.headers) ? state.form.headers : []
+  const paramsList = Array.isArray(state.form.params) ? state.form.params : []
+  const variablesList = Array.isArray(state.form.defined_variables) ? state.form.defined_variables : []
+
+  // 确保每个元素都有 key、value、desc 字段
+  const normalizeList = (list) => {
+    return list.map(item => ({
+      key: item.key || '',
+      value: item.value || '',
+      desc: item.desc || ''
+    }))
+  }
 
   let data = null
   let form_data = null
@@ -743,10 +746,10 @@ const buildConfigFromState = () => {
       }
       break
     case 'form-data':
-      form_data = kvListToObject(state.form.bodyParams)
+      form_data = Array.isArray(state.form.bodyParams) ? normalizeList(state.form.bodyParams) : []
       break
     case 'x-www-form-urlencoded':
-      form_urlencoded = kvListToObject(state.form.bodyForm)
+      form_urlencoded = Array.isArray(state.form.bodyForm) ? normalizeList(state.form.bodyForm) : []
       break
     case 'none':
     default:
@@ -757,8 +760,8 @@ const buildConfigFromState = () => {
     step_name: state.form.step_name || '',
     method: state.form.method,
     url: state.form.url,
-    headers: headersObj,
-    params: paramsObj,
+    headers: normalizeList(headersList),
+    params: normalizeList(paramsList),
     bodyType: state.form.bodyType,
     data,
     form_data,
@@ -766,7 +769,7 @@ const buildConfigFromState = () => {
     request_text,
     extract_variables: buildExtractForBackend(),
     assert_validators: buildValidatorsForBackend(),
-    defined_variables: variablesObj
+    defined_variables: normalizeList(variablesList)
   }
 }
 
@@ -1001,11 +1004,20 @@ const debugging = async () => {
   try {
     const cfg = buildConfigFromState()
 
-    const paramsObj = cfg.params || {}
+    // 将列表格式转换为字典格式用于显示（仅用于requestInfo）
+    const headersObj = cfg.headers.reduce((acc, {key, value}) => {
+      if (key) acc[key] = value
+      return acc
+    }, {})
+    const paramsObj = cfg.params.reduce((acc, {key, value}) => {
+      if (key) acc[key] = value
+      return acc
+    }, {})
+
     requestInfo.value = {
       method: cfg.method,
       url: cfg.url,
-      headers: cfg.headers || {},
+      headers: headersObj,
       bodyType: cfg.bodyType || 'none',
       jsonBody: state.form.jsonBody
     }
@@ -1022,13 +1034,14 @@ const debugging = async () => {
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
       request_url: cfg.url,
       request_method: cfg.method,
-      request_params: Object.keys(paramsObj).length ? paramsObj : null,
+      // request_params、request_header、request_form_data、request_form_urlencoded、defined_variables 必须是列表格式
+      request_params: Array.isArray(cfg.params) && cfg.params.length > 0 ? cfg.params : null,
       request_body: cfg.data,
-      request_form_data: cfg.form_data,
-      request_form_urlencoded: cfg.form_urlencoded,
+      request_form_data: Array.isArray(cfg.form_data) && cfg.form_data.length > 0 ? cfg.form_data : null,
+      request_form_urlencoded: Array.isArray(cfg.form_urlencoded) && cfg.form_urlencoded.length > 0 ? cfg.form_urlencoded : null,
       request_text: cfg.request_text,
-      request_header: cfg.headers,
-      defined_variables: cfg.defined_variables,
+      request_header: Array.isArray(cfg.headers) && cfg.headers.length > 0 ? cfg.headers : null,
+      defined_variables: Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null,
       extract_variables: buildExtractForBackend(),
       assert_validators: buildValidatorsForBackend(),
       created_user: currentUser,
@@ -1324,16 +1337,16 @@ const extractColumns = [
   },
   {
     title: '提取值',
-    key: 'extracted_value',
+    key: 'extract_value',
     width: 120,
     ellipsis: {tooltip: true},
     render: (row) => {
-      if (row.extracted_value === null || row.extracted_value === undefined) {
+      if (row.extract_value === null || row.extract_value === undefined) {
         return '-'
       }
-      const value = typeof row.extracted_value === 'object'
-          ? JSON.stringify(row.extracted_value)
-          : String(row.extracted_value)
+      const value = typeof row.extract_value === 'object'
+          ? JSON.stringify(row.extract_value)
+          : String(row.extract_value)
       return value.length > 100 ? value.substring(0, 100) + '...' : value
     }
   },

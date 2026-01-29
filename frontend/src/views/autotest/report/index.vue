@@ -161,27 +161,49 @@ const monacoEditorOptions = (readOnly = false, language = 'json') => ({
   formatOnType: true
 })
 
-// 提取变量数据
+// 数据提取数据（与 HTTP 控制器调试结果布局一致：变量名、提取来源、提取范围、提取路径、提取值、提取结果、错误信息）
 const extractVariablesData = computed(() => {
   if (!currentDetail.value?.extract_variables) return []
   const vars = currentDetail.value.extract_variables
   if (typeof vars === 'object' && !Array.isArray(vars)) {
-    return Object.entries(vars).map(([key, value]) => ({
-      key,
-      value: typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
+    return Object.entries(vars).map(([name, value]) => ({
+      name,
+      source: '-',
+      range: '-',
+      expr: '-',
+      extract_value: value,
+      success: true,
+      error: '-'
+    }))
+  }
+  if (Array.isArray(vars)) {
+    return vars.map((item) => ({
+      name: item.name ?? item.key ?? '-',
+      source: item.source ?? '-',
+      range: item.range ?? '-',
+      expr: item.expr ?? '-',
+      extract_value: item.extract_value ?? item.value ?? '-',
+      success: item.success !== false,
+      error: item.error ?? '-'
     }))
   }
   return []
 })
 
-// 断言验证器数据
+// 断言结果数据（与 HTTP 控制器调试结果布局一致：断言名称、断言对象、断言路径、结果值、断言方式、期望值、断言结果、错误信息）
 const assertValidatorsData = computed(() => {
   if (!currentDetail.value?.assert_validators) return []
   const validators = currentDetail.value.assert_validators
   if (Array.isArray(validators)) {
-    return validators.map((v, index) => ({
-      key: `断言 ${index + 1}`,
-      value: typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)
+    return validators.map((v) => ({
+      name: v.name ?? '-',
+      source: v.source ?? '-',
+      expr: v.expr ?? '-',
+      actual_value: v.actual_value ?? '-',
+      operation: v.operation ?? '-',
+      except_value: v.except_value ?? v.expect_value ?? '-',
+      success: v.success !== false,
+      error: v.error ?? '-'
     }))
   }
   return []
@@ -192,6 +214,112 @@ const isJsonSessionVariables = computed(() => {
   if (!currentDetail.value?.session_variables) return false
   return typeof currentDetail.value.session_variables === 'object'
 })
+
+// 数据提取表格列定义（与 HTTP 控制器调试结果一致）
+const reportExtractColumns = [
+  { title: '变量名', key: 'name', width: 120 },
+  {
+    title: '提取来源',
+    key: 'source',
+    width: 120,
+    render: (row) => {
+      const sourceMap = {
+        'Response Json': 'Response Json',
+        'Response Text': 'Response Text',
+        'Response XML': 'Response XML',
+        'Response Header': 'Response Header',
+        'Response Cookie': 'Response Cookie'
+      }
+      return sourceMap[row.source] || row.source
+    }
+  },
+  {
+    title: '提取范围',
+    key: 'range',
+    width: 120,
+    render: (row) => (row.range === 'ALL' ? '全部提取' : (row.range || '-'))
+  },
+  { title: '提取路径', key: 'expr', width: 120, ellipsis: { tooltip: true } },
+  {
+    title: '提取值',
+    key: 'extract_value',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      if (row.extract_value === null || row.extract_value === undefined) return '-'
+      const value = typeof row.extract_value === 'object'
+          ? JSON.stringify(row.extract_value)
+          : String(row.extract_value)
+      return value.length > 100 ? value.substring(0, 100) + '...' : value
+    }
+  },
+  {
+    title: '提取结果',
+    key: 'success',
+    width: 120,
+    render: (row) => h(NTag, {
+      type: row.success ? 'success' : 'error',
+      round: true,
+      size: 'small'
+    }, { default: () => row.success ? 'pass' : 'fail' })
+  },
+  { title: '错误信息', key: 'error', width: 120, ellipsis: { tooltip: true }, render: (row) => row.error || '-' }
+]
+
+// 断言结果表格列定义（与 HTTP 控制器调试结果一致）
+const reportValidatorColumns = [
+  { title: '断言名称', key: 'name', width: 120, ellipsis: { tooltip: true } },
+  {
+    title: '断言对象',
+    key: 'source',
+    width: 120,
+    render: (row) => {
+      const sourceMap = {
+        'Response Json': 'responseJson',
+        'Response Text': 'responseText',
+        'Response XML': 'responseXml',
+        'Response Header': 'responseHeader',
+        'Response Cookie': 'responseCookie',
+        '变量池': '变量池'
+      }
+      return sourceMap[row.source] || row.source
+    }
+  },
+  { title: '断言路径', key: 'expr', width: 130, ellipsis: { tooltip: true } },
+  {
+    title: '结果值',
+    key: 'actual_value',
+    width: 150,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      if (row.actual_value === null || row.actual_value === undefined) return '-'
+      return String(row.actual_value)
+    }
+  },
+  { title: '断言方式', key: 'operation', width: 100 },
+  {
+    title: '期望值',
+    key: 'expect_value',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      const val = row.except_value ?? row.expect_value
+      if (val === null || val === undefined) return '-'
+      return String(val)
+    }
+  },
+  {
+    title: '断言结果',
+    key: 'success',
+    width: 100,
+    render: (row) => h(NTag, {
+      type: row.success ? 'success' : 'error',
+      round: true,
+      size: 'small'
+    }, { default: () => row.success ? 'pass' : 'fail' })
+  },
+  { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' }
+]
 
 // 请求信息相关计算属性
 const stepInfo = computed(() => {
@@ -986,14 +1114,14 @@ const columns = [
                 <!-- 条件分支额外信息 -->
                 <NCard v-if="currentDetail.step_type === '条件分支'" title="条件分支配置" size="small"
                        :bordered="false">
-                      <div
-                          v-if="stepInfo.conditions && Array.isArray(stepInfo.conditions) && stepInfo.conditions.length > 0">
-                        <MonacoEditor
-                            :value="formatJson(stepInfo.conditions)"
-                            :options="monacoEditorOptions(true)"
-                            style="min-height: 200px; height: auto;"
-                        />
-                      </div>
+                  <div
+                      v-if="stepInfo.conditions && Array.isArray(stepInfo.conditions) && stepInfo.conditions.length > 0">
+                    <MonacoEditor
+                        :value="formatJson(stepInfo.conditions)"
+                        :options="monacoEditorOptions(true)"
+                        style="min-height: 200px; height: auto;"
+                    />
+                  </div>
                 </NCard>
 
                 <!-- 等待控制额外信息 -->
@@ -1029,20 +1157,20 @@ const columns = [
                 </NCard>
 
                 <NCard title="执行日志" size="small" :bordered="false">
-                <NCollapse :default-expanded-names="['errorInfo', 'execLogger']" arrow-placement="right">
-                  <NCollapseItem title="错误日志" name="errorInfo" v-if="currentDetail.step_exec_except">
+                  <NCollapse :default-expanded-names="['errorInfo', 'execLogger']" arrow-placement="right">
+                    <NCollapseItem title="错误日志" name="errorInfo" v-if="currentDetail.step_exec_except">
                       <pre
                           style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{
                           currentDetail.step_exec_except
                         }}</pre>
-                  </NCollapseItem>
-                  <NCollapseItem title="普通日志" name="execLogger" v-if="currentDetail.step_exec_logger">
+                    </NCollapseItem>
+                    <NCollapseItem title="普通日志" name="execLogger" v-if="currentDetail.step_exec_logger">
                       <pre
                           style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{
                           currentDetail.step_exec_logger
                         }}</pre>
-                  </NCollapseItem>
-                </NCollapse>
+                    </NCollapseItem>
+                  </NCollapse>
                 </NCard>
               </NSpace>
 
@@ -1156,11 +1284,11 @@ const columns = [
               </NSpace>
             </NTabPane>
 
-            <!-- 数据提取 -->
-            <NTabPane name="extract" tab="数据提取" v-if="currentDetail.extract_variables">
+            <!-- 数据提取（与 HTTP 控制器调试结果布局一致） -->
+            <NTabPane name="extract" tab="数据提取">
               <NDataTable
                   v-if="extractVariablesData.length > 0"
-                  :columns="[{title: '变量名', key: 'key'}, {title: '值', key: 'value'}]"
+                  :columns="reportExtractColumns"
                   :data="extractVariablesData"
                   size="small"
                   :bordered="true"
@@ -1168,11 +1296,11 @@ const columns = [
               <NEmpty v-else description="暂无数据提取结果"/>
             </NTabPane>
 
-            <!-- 断言结果 -->
-            <NTabPane name="assert" tab="断言结果" v-if="currentDetail.assert_validators">
+            <!-- 断言结果（与 HTTP 控制器调试结果布局一致） -->
+            <NTabPane name="assert" tab="断言结果">
               <NDataTable
                   v-if="assertValidatorsData.length > 0"
-                  :columns="[{title: '断言项', key: 'key', width: 150}, {title: '结果', key: 'value'}]"
+                  :columns="reportValidatorColumns"
                   :data="assertValidatorsData"
                   size="small"
                   :bordered="true"

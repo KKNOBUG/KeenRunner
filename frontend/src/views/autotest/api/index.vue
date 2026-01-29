@@ -817,9 +817,13 @@ const mapBackendStep = (step) => {
     base.config = {
       method: step.request_method || 'POST',
       url: step.request_url || '',
-      params: step.request_params || {},
+      // request_params、request_header、request_form_data、request_form_urlencoded 必须是列表格式，每个元素包含 key、value、desc
+      params: Array.isArray(step.request_params) ? step.request_params : [],
       data: step.request_body || {},
-      headers: step.request_header || {},
+      headers: Array.isArray(step.request_header) ? step.request_header : [],
+      form_data: Array.isArray(step.request_form_data) ? step.request_form_data : [],
+      form_urlencoded: Array.isArray(step.request_form_urlencoded) ? step.request_form_urlencoded : [],
+      request_text: step.request_text || null,
       extract: step.extract_variables || {},
       validators: step.validators || {}
     }
@@ -963,11 +967,14 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   if (step.type === 'http') {
     backendStep.request_method = config.method || original.request_method || 'POST'
     backendStep.request_url = config.url || original.request_url || ''
-    backendStep.request_header = config.headers || original.request_header || {}
+
+    // request_header、request_params、request_form_data、request_form_urlencoded、defined_variables 必须是列表格式
+    // 每个元素包含 key、value、desc，不再兼容旧格式
+    backendStep.request_header = Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : [])
+    backendStep.request_params = Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : [])
+    backendStep.request_form_data = Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
+    backendStep.request_form_urlencoded = Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
     backendStep.request_body = config.data || original.request_body || {}
-    backendStep.request_params = config.params ? (typeof config.params === 'string' ? config.params : JSON.stringify(config.params)) : original.request_params || null
-    backendStep.request_form_data = config.form_data || original.request_form_data || null
-    backendStep.request_form_urlencoded = config.form_urlencoded || original.request_form_urlencoded || null
 
     // extract_variables 和 assert_validators 应该是列表格式（List[Dict[str, Any]]）
     if (config.extract_variables !== undefined) {
@@ -986,8 +993,8 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
       backendStep.assert_validators = null
     }
 
-    // defined_variables 是字典格式（Dict[str, Any]）
-    backendStep.defined_variables = config.defined_variables || original.defined_variables || null
+    // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容旧格式
+    backendStep.defined_variables = Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
   } else if (step.type === 'code') {
     backendStep.code = config.code !== undefined ? config.code : (original.code || '')
   } else if (step.type === 'loop') {
@@ -1192,7 +1199,8 @@ const handleRun = async () => {
   try {
     const res = await api.executeStepTree({
       case_id: caseId.value ? Number(caseId.value) : null,
-      initial_variables: {}
+      // initial_variables 必须是列表格式，每个元素包含 key、value、desc
+      initial_variables: []
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
       const stats = res.data || {}
@@ -1280,7 +1288,8 @@ const handleDebug = async () => {
       // 调试模式：传递 case_id 和 steps
       case_id: caseId.value ? Number(caseId.value) : null,
       steps: backendSteps,
-      initial_variables: {}
+      // initial_variables 必须是列表格式，每个元素包含 key、value、desc
+      initial_variables: []
     })
     if (res?.code === '000000') {
       const stats = res.data || {}
@@ -2537,7 +2546,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-wait) {
-  color: #18a058;
+  color: #48d024;
 }
 
 :deep(.action-btn) {

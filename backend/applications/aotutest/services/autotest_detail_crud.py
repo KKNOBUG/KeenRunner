@@ -14,7 +14,7 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
 from backend import LOGGER
-from backend.applications.aotutest.models.autotest_model import AutoTestApiDetailsInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiDetailInfo
 from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
     AutoTestApiDetailUpdate
@@ -30,11 +30,11 @@ from backend.core.exceptions.base_exceptions import (
 )
 
 
-class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
+class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
     def __init__(self):
-        super().__init__(model=AutoTestApiDetailsInfo)
+        super().__init__(model=AutoTestApiDetailInfo)
 
-    async def get_by_id(self, detail_id: int, on_error: bool = False) -> Optional[AutoTestApiDetailsInfo]:
+    async def get_by_id(self, detail_id: int, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
         if not detail_id:
             error_message: str = "查询明细信息失败, 参数(detail_id)不允许为空"
             LOGGER.error(error_message)
@@ -47,7 +47,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, detail_code: str, on_error: bool = False) -> Optional[AutoTestApiDetailsInfo]:
+    async def get_by_code(self, detail_code: str, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
         if not detail_code:
             error_message: str = "查询明细信息失败, 参数(detail_code)不允许为空"
             LOGGER.error(error_message)
@@ -65,7 +65,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             conditions: Dict[str, Any],
             only_one: bool = True,
             on_error: bool = False
-    ) -> Optional[Union[AutoTestApiDetailsInfo, List[AutoTestApiDetailsInfo]]]:
+    ) -> Optional[Union[AutoTestApiDetailInfo, List[AutoTestApiDetailInfo]]]:
         try:
             stmt: QuerySet = self.model.filter(**conditions, state__not=1)
             instances = await (stmt.first() if only_one else stmt.all())
@@ -84,7 +84,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             raise NotFoundException(message=error_message)
         return instances
 
-    async def create_detail(self, detail_in: AutoTestApiDetailCreate) -> AutoTestApiDetailsInfo:
+    async def create_detail(self, detail_in: AutoTestApiDetailCreate) -> AutoTestApiDetailInfo:
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
 
@@ -115,7 +115,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataAlreadyExistsException(message=error_message) from e
 
-    async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailsInfo:
+    async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
 
@@ -168,7 +168,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailsInfo, AutoTestApiDeta
             detail_id: Optional[int] = None,
             step_code: Optional[int] = None,
             report_code: Optional[int] = None
-    ) -> AutoTestApiDetailsInfo:
+    ) -> AutoTestApiDetailInfo:
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数缺失, 删除明细信息时必须传递(detail_id)或(report_code, step_code)字段"
             LOGGER.error(error_message)

@@ -25,7 +25,9 @@ from backend.enums.autotest_enum import (
     AutoTestReportType,
     AutoTestLoopMode,
     AutoTestCaseAttr,
-    AutoTestLoopErrorStrategy, AutoTestTaskStatus, AutoTestTaskScheduler
+    AutoTestLoopErrorStrategy,
+    AutoTestTaskStatus,
+    AutoTestTaskScheduler
 )
 
 
@@ -63,7 +65,8 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     project_id = fields.BigIntField(index=True, description="环境所属项目")
     env_name = fields.CharField(max_length=64, index=True, description="环境名称")
-    env_host = fields.CharField(max_length=255, description="环境主机(http|https://127.0.0.1:8000)")
+    env_host = fields.CharField(max_length=128, description="环境主机(http|https://127.0.0.1)")
+    env_port = fields.IntField(ge=1, description="环境端口(8000)")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -118,6 +121,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_version = fields.IntField(default=1, ge=1, description="用例更新版本(修改次数)")
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用")
     case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
+    # session_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(default=list, null=True, description="会话变量(初始变量池)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -158,14 +162,18 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")
     request_port = fields.CharField(max_length=16, null=True, description="请求端口")
     request_method = fields.CharField(max_length=16, null=True, description="请求方法(GET/POST/PUT/DELETE等)")
+    """
+    request_header、request_params、request_form_data、request_form_urlencoded、request_form_file字段
+    存储格式为列表嵌套字典, 每个元素包含 key、value、desc 项
+    """
     request_header = fields.JSONField(null=True, description="请求头信息")
-    request_text = fields.TextField(null=True, description="请求体数据(Text格式)")
-    request_body = fields.JSONField(null=True, description="请求体数据(Json格式)")
-    request_params = fields.TextField(null=True, description="请求路径参数(Text格式)")
-    request_form_data = fields.JSONField(null=True, description="请求表单数据(Json格式)")
-    request_form_file = fields.JSONField(null=True, description="请求文件路径(Json格式)")
-    request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据(Json格式)")
-    request_project = fields.BigIntField(max_length=255, null=True, description="请求应用名称")
+    request_text = fields.TextField(null=True, description="请求体数据")
+    request_body = fields.JSONField(null=True, description="请求体数据")
+    request_params = fields.JSONField(null=True, description="请求路径参数")
+    request_form_data = fields.JSONField(null=True, description="请求表单数据")
+    request_form_file = fields.JSONField(null=True, description="请求文件路径")
+    request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据")
+    request_project = fields.BigIntField(null=True, description="请求应用ID")
     request_environment = fields.CharField(max_length=64, null=True, description="请求环境名称")
 
     # 逻辑相关
@@ -184,9 +192,12 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     conditions = fields.JSONField(null=True, description="判断条件(循环结构或条件分支)")
 
     # 变量、断言和逻辑处理
+    # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
     defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
+    # extract_variables 存储为List[Dict[str, Any]]格式，每个元素包含 name、range、source、expr、index 项
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 expr、name、range、operation、except_value 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -243,7 +254,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
         return self.report_code
 
 
-class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     # 用例信息相关
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
@@ -271,9 +282,12 @@ class AutoTestApiDetailsInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     response_elapsed = fields.CharField(max_length=16, null=True, description="响应信息(elapsed)")
 
     # 变量相关
+    # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
     defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
+    # extract_variables 存储为List[Dict[str, Any]]格式，每个元素包含 name、range、source、expr、index、extract_value、success、error 项
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
 
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
@@ -311,9 +325,9 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务调度状态")
-    task_interval_expr = fields.IntField(null=True, description="任务触发1")
-    task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发2")
-    task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发3")
+    task_interval_expr = fields.IntField(null=True, description="任务触发条件1")
+    task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发条件2")
+    task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发条件3")
     task_notify = fields.JSONField(null=True, description="任务执行明细反馈")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 

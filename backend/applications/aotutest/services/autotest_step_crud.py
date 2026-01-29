@@ -780,11 +780,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             self,
             case_id: int,
             report_type: AutoTestReportType,
-            initial_variables: Optional[Dict[str, Any]] = None,
+            initial_variables: Optional[List[Dict[str, Any]]] = None,
             execute_environment: Optional[str] = None,
     ) -> Dict[str, Any]:
         if initial_variables is None:
-            initial_variables = {}
+            initial_variables = []
+        if not isinstance(initial_variables, list):
+            initial_variables = []
 
         # 1. 查询用例信息
         case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
@@ -800,7 +802,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         if "total_steps" in tree_data[-1]:
             tree_data_count = tree_data.pop(-1)
         if not tree_data_count or tree_data_count.get("total_steps") == 0:
-            error_message: str = f"查询步骤为空, 用例(case_id={case_id})暂无任何步骤关联"
+            error_message: str = f"查询步骤为空, 用例(case_id={case_id})没有任何可执行的根步骤"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -808,9 +810,16 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
         tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
-        # 4. 收集session_variables
+        # 4. 合并 initial_variables 和 all_session_variables 如果存在相同的key，使用 all_session_variables 中的值（后收集的优先）
+        mgd_session_variables: Dict[str, Any] = {}
         all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
-        initial_variables.update(all_session_variables)
+        for item in initial_variables:
+            if isinstance(item, dict) and "key" in item:
+                mgd_session_variables[item.get("key")] = item
+        for item in all_session_variables:
+            if isinstance(item, dict) and "key" in item:
+                mgd_session_variables[item.get("key")] = item
+        initial_variables = list(mgd_session_variables.values())
         AutoTestToolService.execute_func_string(initial_variables)
         LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功, 检查变量引用成功")
 
@@ -852,11 +861,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             self,
             case_ids: List[int],
             report_type: AutoTestReportType,
-            initial_variables: Optional[Dict[str, Any]] = None,
+            initial_variables: Optional[List[Dict[str, Any]]] = None,
             execute_environment: Optional[str] = None,
     ) -> Dict[str, Any]:
         if initial_variables is None:
-            initial_variables = {}
+            initial_variables = []
+        if not isinstance(initial_variables, list):
+            initial_variables = []
 
         total_cases: int = len(case_ids)
         success_cases: int = 0

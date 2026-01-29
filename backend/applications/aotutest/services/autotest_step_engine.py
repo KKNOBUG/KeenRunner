@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import json
 import random
 import re
@@ -36,6 +35,10 @@ from backend.enums.autotest_enum import (
 )
 from backend.services.ctx import CTX_USER_ID
 
+_RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+_RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
+_RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
+
 
 class StepExecutionError(Exception):
     """执行过程中出现的业务异常。"""
@@ -55,7 +58,7 @@ class StepExecutionResult:
     response: Optional[Any] = None
     elapsed: Optional[float] = None
     quote_case_id: Optional[int] = None
-    extract_variables: Dict[str, Any] = field(default_factory=dict)
+    extract_variables: List[Dict[str, Any]] = field(default_factory=list)
     assert_validators: List[Dict[str, Any]] = field(default_factory=list)
     children: List["StepExecutionResult"] = field(default_factory=list)
 
@@ -79,7 +82,7 @@ class StepExecutionContext:
             case_code: str,
             *,
             env: Optional[str] = None,
-            initial_variables: Optional[Dict[str, Any]] = None,
+            initial_variables: Optional[List[Dict[str, Any]]] = None,
             http_client: Optional[HttpClientProtocol] = None,
             report_code: Optional[str] = None,
     ) -> None:
@@ -87,9 +90,8 @@ class StepExecutionContext:
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
-        self.defined_variables: Dict[str, Any] = {}
-        self.session_variables: Dict[str, Any] = dict(initial_variables or {})
-        self.extract_variables: Dict[str, Any] = {}
+        self.defined_variables: List[Dict[str, Any]] = []
+        self.session_variables: List[Dict[str, Any]] = initial_variables or []
         self.logs: Dict[str, List[str]] = {}
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[int] = None
@@ -102,22 +104,17 @@ class StepExecutionContext:
         """
         异步上下文管理器入口方法, 初始化HTTP客户端（如未提供）
 
-        若未指定外部HTTP客户端, 将创建一个默认的httpx.AsyncClient实例,
-        并通过AsyncExitStack管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
-        默认超时配置：请求超时10秒, 连接超时5秒。
-
-        Returns:
-            StepExecutionContext: 上下文管理器实例本身, 用于异步with语句
+        若未指定外部HTTP客户端, 将创建一个默认的 httpx.AsyncClient 实例,
+        并通过 AsyncExitStack 管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
+        :return: 上下文管理器实例本身, 用于异步with语句
         """
         try:
             if self._http_client is None:
-                # 创建默认HTTP客户端, 设置超时参数（请求超时10秒, 连接超时5秒）
                 client = httpx.AsyncClient(timeout=httpx.Timeout(timeout=self.timeout, connect=self.connect))
-                # 将客户端纳入异步退出栈管理, 确保上下文退出时自动关闭
                 self._http_client = await self._exit_stack.enter_async_context(client)
             return self
         except Exception as e:
-            error_message: str = f"初始化HTTP客户端连接失败, 无法创建测试执行上下文管理器, 错误描述: {e}"
+            error_message: str = f"异步上下文管理器: 创建HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
             raise StepExecutionError(error_message) from e
 
@@ -125,13 +122,13 @@ class StepExecutionContext:
         try:
             await self._exit_stack.aclose()
         except Exception as e:
-            error_message: str = f"关闭HTTP客户端连接失败, 错误描述: {e}"
+            error_message: str = f"异步上下文管理器: 关闭HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
 
     @property
     def http_client(self) -> HttpClientProtocol:
         if self._http_client is None:
-            raise RuntimeError("HTTP Client 未初始化, 请在异步上下文中使用")
+            raise RuntimeError("异步上下文管理器: HTTP客户端未创建, 请在异步上下文中使用")
         return self._http_client
 
     def log(self, message: str, step_code: Optional[str] = None) -> None:
@@ -142,39 +139,108 @@ class StepExecutionContext:
     def set_current_step_code(self, step_code: Optional[str] = None) -> None:
         self._current_step_code = step_code
 
+    @staticmethod
+    def list_to_dict(variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        将列表格式的变量转换为字典格式（用于Python代码执行的命名空间）
+        :param variable_list:
+        :return:
+        """
+        result = {}
+        if isinstance(variable_list, list):
+            for item in variable_list:
+                if isinstance(item, dict) and "key" in item and "value" in item:
+                    key = item.get("key")
+                    value = item.get("value")
+                    if key:
+                        result[key] = value
+        return result
+
+    @staticmethod
+    def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
+        """
+        从列表格式的变量中获取指定名称的变量值
+        :param variable_list:
+        :param name:
+        :return:
+        """
+        if isinstance(variable_list, list):
+            for item in variable_list:
+                if isinstance(item, dict) and item.get("key") == name:
+                    return item.get("value")
+        return None
+
+    @staticmethod
+    def convert_list_to_dict_for_http(data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        将列表格式（每个元素包含key、value、desc）转换为字典格式（用于HTTP请求）
+        :param data:
+        :return:
+        """
+        if not isinstance(data, list):
+            return {}
+        result = {}
+        for item in data:
+            if isinstance(item, dict) and "key" in item:
+                key = item.get("key")
+                value = item.get("value")
+                if key:
+                    result[key] = value
+        return result
+
     def clone_state(self) -> Dict[str, Any]:
         """
         克隆当前变量状态，用于Python代码执行的命名空间。
         :return:
         """
         return {
-            "defined_variables": dict(self.defined_variables),
-            "session_variables": dict(self.session_variables),
+            "defined_variables": self.list_to_dict(self.defined_variables),
+            "session_variables": self.list_to_dict(self.session_variables),
         }
 
-    def update_variables(self, data: Dict[str, Any], *, scope: str = "defined_variables") -> None:
-        target_map = {
-            "extract_variables": self.extract_variables,
-            "defined_variables": self.defined_variables,
-            "session_variables": self.session_variables,
-        }
-        scope_map = target_map.get(scope)
-        if scope_map is None:
+    def update_variables(
+            self, data: Union[Dict[str, Any], List[Dict[str, Any]]], *, scope: str = "defined_variables"
+    ) -> None:
+        """
+        更新变量
+        :param data: 变量数据，列表格式，每个元素包含 key、value、desc（用于 defined_variables 和 session_variables）
+        :param scope: 变量作用域
+        :return:
+        """
+        if scope in ("defined_variables", "session_variables"):
+            # defined_variables 和 session_variables 使用列表格式
+            if not isinstance(data, list):
+                raise ValueError(f"【更新变量】-【{scope}】错误: {scope}必须是列表类型，每个元素包含key、value、desc")
+
+            target_list = self.defined_variables if scope == "defined_variables" else self.session_variables
+
+            # 更新或添加变量
+            for item in data:
+                if not isinstance(item, dict) or "key" not in item:
+                    continue
+                key = item.get("key")
+                if not key:
+                    continue
+                # 查找是否已存在该key
+                found = False
+                for i, existing_item in enumerate(target_list):
+                    if isinstance(existing_item, dict) and existing_item.get("key") == key:
+                        target_list[i] = item
+                        found = True
+                        break
+                if not found:
+                    target_list.append(item)
+
+            self.log(f"【更新变量】-【{scope}】成功: {data}")
+        else:
             raise ValueError(
                 f"【更新变量】-【{scope}】错误: '{scope}' 不是有效的变量作用域"
-                f"(仅支持defined_variables、session_variables或extract_variables)"
+                f"(仅支持: defined_variables、session_variables)"
             )
-        try:
-            scope_map.update(data)
-            self.log(f"【更新变量】-【{scope}】成功: {data}")
-        except Exception as e:
-            error_message: str = f"【更新变量】-【{scope}】失败, 数据: {data}, 错误描述: {e}"
-            self.log(error_message)
-            raise StepExecutionError(error_message) from e
 
     def get_variable(self, name: str) -> Any:
         """
-        获取变量值, 按优先级查找：defined_variables > session_variables
+        获取变量值
 
         变量作用域说明：
         - defined_variables: 当前步骤的临时变量（从步骤配置中获取）
@@ -182,23 +248,29 @@ class StepExecutionContext:
         """
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: 变量名必须是非空字符串, 当前值: {name}")
-        for scope_name, scope in [
+
+        # 按优先级查找：defined_variables > session_variables
+        for scope_name, scope_list in [
             ("defined_variables", self.defined_variables),
             ("session_variables", self.session_variables),
         ]:
-            if name in scope:
+            value = self.get_value_from_list(scope_list, name)
+            if value is not None:
                 try:
-                    return scope[name]
+                    return value
                 except Exception as e:
                     raise StepExecutionError(f"【获取变量】'{name}'的值时发生错误(作用域: {scope_name}): {e}") from e
 
         raise KeyError(f"【获取变量】变量({name})未定义, 请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
 
     def resolve_placeholders(self, value: Any) -> Any:
-        """支持嵌套结构中的 ${var} 占位符替换。"""
+        """
+        支持嵌套结构中的 ${var} 占位符替换。
+        :param value:
+        :return:
+        """
         try:
             if isinstance(value, str):
-                pattern = re.compile(r"\$\{([^}]+)}")
 
                 def replace(match: re.Match[str]) -> str:
                     var_name = match.group(1)
@@ -221,7 +293,7 @@ class StepExecutionContext:
                             f"【获取变量】将变量[{var_name}]的值[{resolved}]转换为字符串时失败, 保留原值, 错误描述: {e}")
                         return match.group(0)
 
-                return pattern.sub(replace, value)
+                return _RE_PLACEHOLDER.sub(replace, value)
 
             if isinstance(value, dict):
                 try:
@@ -230,11 +302,18 @@ class StepExecutionContext:
                     self.log(f"【获取变量】解析字典中的占位符时发生错误, 键: {list(value.keys())}, 错误: {e}")
                     return value
             if isinstance(value, list):
-                try:
-                    return [self.resolve_placeholders(item) for item in value]
-                except Exception as e:
-                    self.log(f"【获取变量】解析列表中的占位符时发生错误, 列表长度: {len(value)}, 错误: {e}")
-                    return value
+                # 处理列表格式的变量（每个元素包含key、value、desc）
+                result = []
+                for item in value:
+                    if isinstance(item, dict) and "key" in item and "value" in item:
+                        # 列表格式的变量项，只解析value字段
+                        resolved_item = dict(item)
+                        resolved_item["value"] = self.resolve_placeholders(item.get("value"))
+                        result.append(resolved_item)
+                    else:
+                        # 普通列表项，递归解析
+                        result.append(self.resolve_placeholders(item))
+                return result
             return value
         except Exception as e:
             self.log(
@@ -245,6 +324,11 @@ class StepExecutionContext:
             return value
 
     async def sleep(self, seconds: Optional[float]) -> None:
+        """
+
+        :param seconds:
+        :return:
+        """
         if seconds is None:
             return
         try:
@@ -285,6 +369,18 @@ class StepExecutionContext:
             files: Optional[Any] = None,
             timeout: Optional[float] = None,
     ) -> httpx.Response:
+        """
+
+        :param method:
+        :param url:
+        :param headers:
+        :param params:
+        :param data:
+        :param json_data:
+        :param files:
+        :param timeout:
+        :return:
+        """
         try:
             client = self.http_client
             kwargs = {
@@ -322,7 +418,7 @@ class StepExecutionContext:
             except httpx.RequestError as e:
                 error_message: str = (
                     f"【HTTP请求】请求失败: "
-                    f"请求服务器时发生网络错误"
+                    f"请求服务器时发生网络错误, "
                     f"(可能原因: 网络连接问题、DNS解析失败或服务器不可达, "
                     f"错误类型: {type(e).__name__}, "
                     f"错误描述: {e}"
@@ -332,7 +428,7 @@ class StepExecutionContext:
             except Exception as e:
                 error_message: str = (
                     f"【HTTP请求】请求失败: "
-                    f"请求服务器时发生未知错误"
+                    f"请求服务器时发生未知错误, "
                     f"错误类型: {type(e).__name__}, "
                     f"错误描述: {e}"
                 )
@@ -345,11 +441,15 @@ class StepExecutionContext:
             raise StepExecutionError(str(e)) from e
 
     def run_python_code(self, code: str, *, namespace: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """执行 Python 代码块, 返回新增变量。"""
+        """
+        执行 Python 代码块, 返回新增变量。
+        :param code:
+        :param namespace:
+        :return:
+        """
         if not code: return {}
-        resolved_code = self._resolve_code_placeholders(code)
-        prepared = self._normalize_python_code(resolved_code)
-        # 提供安全的全局环境, 包含必要的内置函数和导入功能
+        resolved_code = self.resolve_code_placeholders(code)
+        prepared = self.normalize_python_code(resolved_code)
         safe_globals = {
             "__builtins__": {
                 "__import__": __import__,
@@ -453,7 +553,12 @@ class StepExecutionContext:
         return result
 
     @staticmethod
-    def _normalize_python_code(code: str) -> str:
+    def normalize_python_code(code: str) -> str:
+        """
+
+        :param code:
+        :return:
+        """
         code = code.strip()
         if not code:
             return code
@@ -468,19 +573,15 @@ class StepExecutionContext:
             colon_pos = code.find(":")
             func_def = code[:colon_pos + 1].strip()  # "def generate_var():"
             body = code[colon_pos + 1:].strip()  # "import random return {...}"
-
             # 提取 import/from 语句（必须在 return 之前）
             import_lines = []
             remaining_body = body
-
             # 查找所有 import/from 语句
             while True:
                 import_pos = remaining_body.find("import ")
                 from_pos = remaining_body.find("from ")
-
                 if import_pos == -1 and from_pos == -1:
                     break
-
                 # 找到第一个 import 或 from
                 if from_pos != -1 and (import_pos == -1 or from_pos < import_pos):
                     pos = from_pos
@@ -493,29 +594,23 @@ class StepExecutionContext:
                 remaining_after_keyword = remaining_body[pos + len(keyword):]
                 next_keywords = ["return ", "if ", "for ", "while ", "with ", "import ", "from "]
                 end_pos = len(remaining_after_keyword)
-
                 for kw in next_keywords:
                     kw_pos = remaining_after_keyword.find(kw)
                     if kw_pos != -1 and kw_pos < end_pos:
                         end_pos = kw_pos
-
                 # 提取完整的 import 语句
                 import_stmt = remaining_body[pos:pos + len(keyword) + end_pos].strip()
                 import_lines.append(import_stmt)
-
                 # 继续处理剩余部分
                 remaining_body = remaining_body[pos + len(keyword) + end_pos:].strip()
 
             # 组合格式化后的代码
             normalized_parts = []
-
             # 1. 先添加所有 import 语句（在函数外部）
             if import_lines:
                 normalized_parts.extend(import_lines)
-
             # 2. 添加函数定义
             normalized_parts.append(func_def)
-
             # 3. 添加函数体（需要缩进）
             if remaining_body:
                 # 处理 return 等语句, 确保有正确的缩进
@@ -526,12 +621,10 @@ class StepExecutionContext:
                 else:
                     # 如果没有匹配的关键字, 直接添加并缩进
                     normalized_parts.append(f"    {remaining_body}")
-
             return "\n".join(normalized_parts)
-
         return code
 
-    def _resolve_code_placeholders(self, code: str) -> str:
+    def resolve_code_placeholders(self, code: str) -> str:
         """
         解析Python代码中的占位符，将 ${var_name} 替换为实际变量值。
 
@@ -541,20 +634,19 @@ class StepExecutionContext:
         2. 字符串拼接中的占位符（如 '${item}_1001'）替换为实际值，保持字符串格式
            例如：'${item_1}_1001' 会变成 'test_1001'（假设 item_1 = "test"）
         3. 代码逻辑中的占位符（如 if ${var} == 1:）直接替换为实际值
+        :param code:
+        :return:
         """
         if not code or not isinstance(code, str):
             return code
 
-        pattern = re.compile(r"(['\"])\$\{([^}]+)}\1")
-
+        # 处理字符串字面量中的占位符，如 '${var}' 或 "${var}"
         def replace_string_placeholder(match: re.Match[str]) -> str:
-            """处理字符串字面量中的占位符，如 '${var}' 或 "${var}" """
             quote_char = match.group(1)
             var_name = match.group(2)
             if not var_name:
                 self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
-
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
@@ -576,23 +668,17 @@ class StepExecutionContext:
                 return str(var_value)
 
         # 先处理字符串字面量中的占位符（如 '${var}' 或 "${var}"）
-        code = pattern.sub(replace_string_placeholder, code)
+        code = _RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
 
-        # 再处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
-        # 使用更通用的正则：匹配引号内的内容，包含占位符
-        pattern2 = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
-
+        # 处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
         def replace_string_concat_placeholder(match: re.Match[str]) -> str:
-            """处理字符串拼接中的占位符，如 'prefix_${var}_suffix' """
             quote_char = match.group(1)
             prefix = match.group(2)
             var_name = match.group(3)
             suffix = match.group(4)
-
             if not var_name:
                 self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
-
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
@@ -606,18 +692,14 @@ class StepExecutionContext:
             result = prefix + str(var_value) + suffix
             return quote_char + result + quote_char
 
-        code = pattern2.sub(replace_string_concat_placeholder, code)
+        code = _RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
 
-        # 最后处理代码逻辑中的占位符（不在字符串中的）
-        pattern3 = re.compile(r"\$\{([^}]+)}")
-
+        # 处理代码逻辑中的占位符，如 if ${var} == 1:
         def replace_code_placeholder(match: re.Match[str]) -> str:
-            """处理代码逻辑中的占位符，如 if ${var} == 1: """
             var_name = match.group(1)
             if not var_name:
                 self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
-
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
@@ -638,7 +720,7 @@ class StepExecutionContext:
                 return repr(var_value)
 
         try:
-            resolved_code = pattern3.sub(replace_code_placeholder, code)
+            resolved_code = _RE_PLACEHOLDER.sub(replace_code_placeholder, code)
             return resolved_code
         except Exception as e:
             error_message: str = (
@@ -716,6 +798,9 @@ class BaseStepExecutor:
         # 设置当前步骤编号
         self.context.set_current_step_code(self.step_code)
         previous_step_code: Optional[int] = self.context.current_step_code
+        # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
+        step_defined = self.step.get("defined_variables") or []
+        self.context.defined_variables = list(step_defined) if isinstance(step_defined, list) else []
         try:
             await self._execute(result)
         except Exception as e:
@@ -724,14 +809,21 @@ class BaseStepExecutor:
             self.context.log(str(e), step_code=previous_step_code)
         finally:
             try:
-                if result.extract_variables:
-                    self.context.update_variables(result.extract_variables, scope="session_variables")
-                    self.context.log(
-                        f"【合并变量】-【session_variables】成功: {result.extract_variables}",
-                        step_code=self.step_code
-                    )
+                # 将本步骤的 extract_variables 合并到 session_variables，供后续步骤引用
+                if getattr(result, "extract_variables", None) and isinstance(result.extract_variables, list):
+                    extract_list = [
+                        {"key": item.get("name"), "value": item.get("extract_value"), "desc": ""}
+                        for item in result.extract_variables
+                        if isinstance(item, dict) and item.get("name") is not None
+                    ]
+                    if extract_list:
+                        self.context.update_variables(extract_list, scope="session_variables")
+                        self.context.log(
+                            f"【合并变量】-【session_variables】成功: {[e.get('key') for e in extract_list]}",
+                            step_code=self.step_code
+                        )
             except Exception as e:
-                self.context.log(f"【合并变量】-【session_variables】失败: {e}", step_code=self.step_code)
+                self.context.log(f"【更新变量】-【session_variables】错误: {e}", step_code=self.step_code)
 
             self.context.set_current_step_code(step_code=previous_step_code)
             end = time.perf_counter()
@@ -749,21 +841,24 @@ class BaseStepExecutor:
         return result
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
-        """保存步骤明细到数据库（含无响应步骤占位；循环多次执行合并）"""
+        """
+        保存步骤明细到数据库（含无响应步骤占位；循环多次执行合并）
+        :param result:
+        :param step_st_time_str:
+        :param num_cycles:
+        :return:
+        """
         try:
             step_end_time = datetime.now()
             step_ed_time_str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
             step_elapsed = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
-
             step_logs = self.context.logs.get(self.step_code, [])
             step_exec_logger = "\n".join(step_logs) if step_logs else None
-
             response_header = None
             response_body = None
             response_text = None
             response_cookie = None
             response_elapsed = None
-
             if result.response:
                 response_elapsed = result.response.get("elapsed")
                 response_header = result.response.get("headers")
@@ -777,23 +872,11 @@ class BaseStepExecutor:
                 if cookies:
                     response_cookie = json.dumps(cookies, ensure_ascii=False)
 
-            step_code = self.step_code
-
-            # 1. defined_variables: 从步骤配置中获取用户定义的变量
-            defined_variables = self.step.get("defined_variables") or {}
-
-            # 2. extract_variables: 从响应中提取的变量
-            extract_variables = {}
-            extract_variables_config: List[Dict[str, Any]] = self.step.get("extract_variables")
-            if extract_variables_config and isinstance(extract_variables_config, list) and result.extract_variables:
-                for extract in extract_variables_config:
-                    ext_name = extract.get("name")
-                    if ext_name and ext_name in result.extract_variables:
-                        extract_variables[ext_name] = result.extract_variables[ext_name]
-
-            # 3. session_variables: 累积的会话变量（包含所有步骤产生的变量）
-            session_variables = dict(self.context.session_variables) if self.context.session_variables else {}
-
+            raw_variables = self.step.get("defined_variables")
+            defined_variables = list(raw_variables) if isinstance(raw_variables, list) else []
+            result_extract = getattr(result, "extract_variables", None)
+            extract_variables = list(result_extract) if isinstance(result_extract, list) else []
+            session_variables = list(self.context.session_variables) if self.context.session_variables else []
             detail_create = AutoTestApiDetailCreate(
                 case_id=self.context.case_id,
                 case_code=self.context.case_code,
@@ -801,7 +884,7 @@ class BaseStepExecutor:
                 step_id=self.step_id,
                 step_no=self.step_no,
                 step_name=self.step_name,
-                step_code=step_code,
+                step_code=self.step_code,
                 step_type=self.step_type,
                 step_state=result.success,
                 step_st_time=step_st_time_str,
@@ -818,7 +901,7 @@ class BaseStepExecutor:
                 session_variables=session_variables,
                 defined_variables=defined_variables,
                 extract_variables=extract_variables,
-                assert_validators=result.assert_validators or []
+                assert_validators=result.assert_validators or None
             )
             from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
             await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_create)
@@ -840,7 +923,6 @@ class BaseStepExecutor:
                 child_result = await executor.execute()
                 results.append(child_result)
             except Exception as e:
-                # 子步骤执行失败, 创建失败结果记录
                 case_id: int = child.get("case_id")
                 step_id: int = child.get("step_id")
                 step_no: int = child.get("step_no")
@@ -910,7 +992,9 @@ class LoopStepExecutor(BaseStepExecutor):
                 await self._execute_condition_loop(result, on_error)
             else:
                 raise StepExecutionError(
-                    f"【循环结构】循环模式[{loop_mode_str}]无效(仅允许选择: 次数循环, 对象循环, 字典循环, 条件循环)")
+                    f"【循环结构】循环模式[{loop_mode_str}]无效"
+                    f"(仅允许选择: 次数循环, 对象循环, 字典循环, 条件循环)"
+                )
 
         except StepExecutionError:
             raise
@@ -931,17 +1015,21 @@ class LoopStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
-        """次数循环模式"""
+        """
+        次数循环模式
+        :param result:
+        :param on_error:
+        :return:
+        """
         loop_maximums = self.step.get("loop_maximums")
         if not loop_maximums:
             raise StepExecutionError("【循环结构】次数循环模式不允许loop_maximums参数为空")
 
         loop_interval = self.step.get("loop_interval")
-        guard_limit = 100  # 安全限制
+        guard_limit = 100
 
         self.context.log(f"【循环结构】次数循环开始: 最大循环次数: {loop_maximums}", step_code=self.step_code)
         for iteration in range(1, loop_maximums + 1):
-            # 记录循环次数
             if self.step_code:
                 self.context.step_cycle_index[self.step_code] = iteration
             self.context.log(f"【循环结构】次数循环: 第{iteration}/{loop_maximums}次执行", step_code=self.step_code)
@@ -950,7 +1038,6 @@ class LoopStepExecutor(BaseStepExecutor):
                 if child_code:
                     self.context.step_cycle_index[child_code] = iteration
             try:
-                # 执行子步骤
                 child_results = await self._execute_children()
                 for child in child_results:
                     result.append_child(child)
@@ -958,7 +1045,8 @@ class LoopStepExecutor(BaseStepExecutor):
                         result.success = False
                         if on_error == AutoTestLoopErrorStrategy.STOP:
                             raise StepExecutionError(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行), {child.error}")
+                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行), {child.error}"
+                            )
                         elif on_error == AutoTestLoopErrorStrategy.BREAK:
                             self.context.log(
                                 f"【循环结构】子步骤执行失败(错误处理策略: 中断循环), {child.error}",
@@ -1001,7 +1089,12 @@ class LoopStepExecutor(BaseStepExecutor):
         self.context.log(f"【循环结构】次数循环结束: 共执行{loop_maximums}次", step_code=self.step_code)
 
     async def _execute_iterable_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
-        """对象循环模式"""
+        """
+        对象循环模式
+        :param result:
+        :param on_error:
+        :return:
+        """
         loop_iterable = self.step.get("loop_iterable")
         if not loop_iterable:
             raise StepExecutionError("【循环结构】对象循环模式不允许loop_iterable参数为空")
@@ -1018,9 +1111,8 @@ class LoopStepExecutor(BaseStepExecutor):
         value_var_name = self.step.get("loop_iter_val") or "loop_value"
         loop_interval = self.step.get("loop_interval")
 
-        # 解析可迭代对象来源
         try:
-            iterable_obj = self._parse_iterable_source(loop_iterable)
+            iterable_obj = self.parse_iterable_source(loop_iterable)
             # 验证是否为可迭代对象（排除字符串和字节）
             if isinstance(iterable_obj, (str, bytes)):
                 raise StepExecutionError(
@@ -1064,7 +1156,6 @@ class LoopStepExecutor(BaseStepExecutor):
                     if child_code:
                         self.context.step_cycle_index[child_code] = idx
                 try:
-                    # 执行子步骤
                     child_results = await self._execute_children()
                     for child in child_results:
                         result.append_child(child)
@@ -1114,7 +1205,12 @@ class LoopStepExecutor(BaseStepExecutor):
             raise StepExecutionError(f"【循环结构】对象循环执行异常: {e}") from e
 
     async def _execute_dict_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
-        """字典循环模式"""
+        """
+        字典循环模式
+        :param result:
+        :param on_error:
+        :return:
+        """
         loop_iterable = self.step.get("loop_iterable")
         if not loop_iterable:
             raise StepExecutionError("【循环结构】字典循环模式不允许loop_iterable参数为空")
@@ -1135,7 +1231,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
         try:
             # 解析字典对象来源
-            dict_obj = self._parse_iterable_source(loop_iterable)
+            dict_obj = self.parse_iterable_source(loop_iterable)
             # 验证是否为字典
             if not isinstance(dict_obj, dict):
                 raise StepExecutionError(
@@ -1174,7 +1270,6 @@ class LoopStepExecutor(BaseStepExecutor):
                     if child_code:
                         self.context.step_cycle_index[child_code] = idx
 
-                # 执行子步骤
                 try:
                     child_results = await self._execute_children()
                     for child in child_results:
@@ -1225,22 +1320,26 @@ class LoopStepExecutor(BaseStepExecutor):
             raise StepExecutionError(f"【循环结构】字典循环执行异常: {e}") from e
 
     async def _execute_condition_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
-        """条件循环模式"""
+        """
+        条件循环模式
+        :param result:
+        :param on_error:
+        :return:
+        """
         condition = self.step.get("conditions")
         if not condition:
             raise StepExecutionError("【循环结构】条件循环模式不允许conditions参数为空")
 
         loop_timeout = self.step.get("loop_timeout")
         loop_interval = self.step.get("loop_interval")
-        guard_limit = 1000  # 安全限制
 
-        # 记录开始时间（用于超时控制）
-        start_time = time.time()
+        # 记录开始时间（用于超时控制），并设置安全限制
         iteration = 0
+        guard_limit = 100
         should_continue = True
-
+        start_time = time.time()
         self.context.log(
-            f"【循环结构】条件循环开始: 超时时间={loop_timeout if loop_timeout else '无限制'}秒",
+            f"【循环结构】条件循环开始: 循环超时时间配置 {loop_timeout} 秒",
             step_code=self.step_code
         )
         while should_continue:
@@ -1249,23 +1348,21 @@ class LoopStepExecutor(BaseStepExecutor):
                 elapsed = time.time() - start_time
                 if elapsed >= loop_timeout:
                     self.context.log(
-                        f"【循环结构】条件循环超时: 已执行 {iteration} 次, 耗时 {elapsed:.2f} 秒, 超过限制 {loop_timeout} 秒",
+                        f"【循环结构】条件循环超时: "
+                        f"已执行 {iteration} 次, 耗时 {elapsed:.2f} 秒, 超过限制 {loop_timeout} 秒",
                         step_code=self.step_code
                     )
                     break
             # 记录循环次数
             if self.step_code:
                 self.context.step_cycle_index[self.step_code] = iteration
-
             self.context.log(f"【循环结构】条件循环: 第{iteration}次执行", step_code=self.step_code)
             # 为子步骤记录当前循环次数
             for child in self.children:
                 child_code = child.get("step_code") or child.get("id") or ""
                 if child_code:
                     self.context.step_cycle_index[child_code] = iteration
-
             try:
-                # 执行子步骤
                 child_results = await self._execute_children()
                 for child in child_results:
                     result.append_child(child)
@@ -1308,7 +1405,7 @@ class LoopStepExecutor(BaseStepExecutor):
             if not should_continue:
                 break
             try:
-                if not self._evaluate_condition(condition):
+                if not self.evaluate_condition(condition):
                     self.context.log(f"【循环结构】条件循环: 条件不满足, 结束循环", step_code=self.step_code)
                     should_continue = False
                     break
@@ -1333,11 +1430,15 @@ class LoopStepExecutor(BaseStepExecutor):
 
         self.context.log(f"【循环结构】条件循环结束: 共执行{iteration}次", step_code=self.step_code)
 
-    def _evaluate_condition(self, condition: str) -> bool:
+    def evaluate_condition(self, condition: str) -> bool:
+        """
+        处理 JSON 字符串中可能包含的 Python None/True/False
+        使用正则表达式更精确地替换, 避免误替换字符串中的值
+        替换独立的 None/True/False（前后不是字母数字或下划线）
+        :param condition:
+        :return:
+        """
         try:
-            # 处理 JSON 字符串中可能包含的 Python None/True/False
-            # 使用正则表达式更精确地替换, 避免误替换字符串中的值
-            # 替换独立的 None/True/False（前后不是字母数字或下划线）
             normalized_condition = re.sub(r'\bNone\b', 'null', condition)
             normalized_condition = re.sub(r'\bTrue\b', 'true', normalized_condition)
             normalized_condition = re.sub(r'\bFalse\b', 'false', normalized_condition)
@@ -1348,7 +1449,6 @@ class LoopStepExecutor(BaseStepExecutor):
                 f"错误位置: 第{e.lineno}行, 第{e.colno}列, "
                 f"错误信息: {e.msg}"
             ) from e
-
         except Exception as e:
             raise StepExecutionError(f"【循环结构】条件表达式解析异常, 错误详情: {e}") from e
 
@@ -1377,12 +1477,15 @@ class LoopStepExecutor(BaseStepExecutor):
         except Exception as e:
             raise StepExecutionError(f"【循环结构】条件表达式执行异常, 错误描述: {e}") from e
 
-    def _parse_iterable_source(self, source: Any) -> Any:
-        """解析可迭代对象来源，支持变量引用、JSON字符串和直接对象"""
+    def parse_iterable_source(self, source: Any) -> Any:
+        """
+        解析可迭代对象来源，支持变量引用、JSON字符串和直接对象
+        :param source:
+        :return:
+        """
         try:
             # 先解析占位符
             resolved_source = self.context.resolve_placeholders(source)
-
             # 如果是字符串且以 ${ 开头，尝试获取变量
             if isinstance(resolved_source, str) and resolved_source.startswith("${") and resolved_source.endswith("}"):
                 variable_name = resolved_source[2:-1]
@@ -1396,7 +1499,6 @@ class LoopStepExecutor(BaseStepExecutor):
                     obj = resolved_source
             else:
                 obj = resolved_source
-
             return obj
         except StepExecutionError:
             raise
@@ -1410,10 +1512,6 @@ class ConditionStepExecutor(BaseStepExecutor):
             condition = self.step.get("conditions")
             if not condition:
                 raise StepExecutionError("【条件分支】缺少必要配置: conditions")
-
-            # 处理 JSON 字符串中可能包含的 Python None/True/False
-            # 使用正则表达式更精确地替换, 避免误替换字符串中的值
-            # 替换独立的 None/True/False（前后不是字母数字或下划线）
             try:
                 normalized_condition = re.sub(r'\bNone\b', 'null', condition)
                 normalized_condition = re.sub(r'\bTrue\b', 'true', normalized_condition)
@@ -1432,10 +1530,11 @@ class ConditionStepExecutor(BaseStepExecutor):
             value_expr = condition_obj.get("value")
             operation = condition_obj.get("operation")
             except_value = condition_obj.get("except_value")
-            desc = condition_obj.get("desc", "")
+            desc = condition_obj.get("desc")
             if value_expr is None or operation is None:
                 raise StepExecutionError(
-                    f"【条件分支】条件表达式缺少必要字段: [value={value_expr}, operation={operation}]")
+                    f"【条件分支】条件表达式缺少必要字段: [value={value_expr}, operation={operation}]"
+                )
             try:
                 resolved_value_expr = self.context.resolve_placeholders(value_expr)
             except StepExecutionError:
@@ -1481,7 +1580,6 @@ class ConditionStepExecutor(BaseStepExecutor):
                 result.error = error_message
                 self.context.log(error_message, step_code=self.step_code)
         except Exception as e:
-            # 捕获条件判断的异常, 避免阻断后续执行
             error_message: str = (
                 f"【条件分支】步骤执行失败: "
                 f"用例ID: {self.case_id}, "
@@ -1499,7 +1597,6 @@ class ConditionStepExecutor(BaseStepExecutor):
     @staticmethod
     def compare(value: Any, operation: str, except_value: Any) -> bool:
         try:
-            # 使用 AutoTestToolService 的统一比较方法，确保与断言验证逻辑一致
             return AutoTestToolService.compare_assertion(value, operation, except_value)
         except ValueError as e:
             raise StepExecutionError(f"【条件分支】条件比较失败: {e}") from e
@@ -1511,7 +1608,6 @@ class PythonStepExecutor(BaseStepExecutor):
             code = self.step.get("code")
             if not code:
                 raise StepExecutionError("【执行代码请求(Python)】缺少必要配置: code")
-
             try:
                 run_code_st = datetime.now()
                 new_vars = self.context.run_python_code(code, namespace=self.context.clone_state())
@@ -1534,8 +1630,19 @@ class PythonStepExecutor(BaseStepExecutor):
             if new_vars:
                 try:
                     import json
-                    self.context.update_variables(new_vars, scope="extract_variables")
-                    result.extract_variables.update(new_vars)
+                    result.extract_variables = [
+                        {
+                            "name": k,
+                            "source": "执行代码(Python)",
+                            "range": "ALL",
+                            "expr": None,
+                            "index": None,
+                            "extract_value": v,
+                            "success": True,
+                            "error": ""
+                        }
+                        for k, v in new_vars.items()
+                    ]
                     result.response = {
                         "elapsed": f"{(run_code_ed - run_code_st).total_seconds():.3f}",
                         "headers": {},
@@ -1543,7 +1650,7 @@ class PythonStepExecutor(BaseStepExecutor):
                         "text": json.dumps(new_vars, ensure_ascii=False)
                     }
                 except Exception as e:
-                    raise StepExecutionError(f"【更新变量】-【extract_variables】失败: {e}") from e
+                    raise StepExecutionError(f"【执行代码(Python)】写入提取结果失败: {e}") from e
         except StepExecutionError:
             raise
         except Exception as e:
@@ -1609,7 +1716,6 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             quote_case_id = self.step.get("quote_case_id")
             if not quote_case_id:
                 raise StepExecutionError("【引用公共用例】缺少必要配置: quote_case_id")
-
             try:
                 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
                 quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
@@ -1639,10 +1745,12 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                         step_code=self.step_code
                     )
                     return
+                # 弹出step_counter计数器
                 quote_steps.pop(-1)
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共用例】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}") from e
+                    f"【引用公共用例】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
+                ) from e
 
             self.context.log(
                 f"【引用公共用例】执行用例(id={quote_case_id}, name={quote_case_name})开始",
@@ -1726,55 +1834,80 @@ class HttpStepExecutor(BaseStepExecutor):
             env: str = self.context.env
             step_type: str = self.step.get("step_type")
             request_url: str = self.step.get("request_url")
-            request_project: str = self.step.get("request_project")
+            request_env_id: int = self.step.get("request_env_id")
             request_method: str = self.step.get("request_method", "").upper()
             if env and step_type == AutoTestStepType.HTTP and not request_url.lower().startswith("http"):
                 try:
-                    env_instance: AutoTestApiEnvInfo = await AutoTestApiEnvInfo.filter(
-                        project_id=request_project,
-                        env_name=env,
-                    ).first()
+                    from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+                    env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_id(
+                        on_error=False,
+                        env_id=request_env_id,
+                    )
                     if not env_instance:
-                        raise StepExecutionError(f"【HTTP请求】环境(project_id={request_project}, name={env})配置不存在")
-                    execute_environment_host: str = env_instance.env_host.rstrip("/")
-                    if not execute_environment_host:
+                        raise StepExecutionError(f"【HTTP请求】环境(id={request_env_id}, name={env})配置不存在")
+                    execute_envi_host: str = env_instance.env_host.rstrip(":")
+                    execute_envi_port: int = env_instance.env_port
+                    if not execute_envi_host or not execute_envi_port:
                         raise StepExecutionError(
-                            f"【HTTP请求】环境(project_id={request_project}, "
-                            f"name={env}, host={execute_environment_host})配置异常"
+                            f"【HTTP请求】环境(id={request_env_id}, name={env}, "
+                            f"host={execute_envi_host}, host={execute_envi_port})配置异常"
                         )
-                    request_url = f"{execute_environment_host}/{request_url.lstrip('/')}"
+                    request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
                 except StepExecutionError:
                     raise
                 except Exception as e:
                     raise StepExecutionError(f"【HTTP请求】环境配置查询异常, 错误描述: {e}") from e
 
             if request_url and not request_url.startswith("http"):
-                raise StepExecutionError(
-                    f"【HTTP请求】请求URL({request_url})不是有效的HTTP/HTTPS地址"
-                )
+                raise StepExecutionError(f"【HTTP请求】请求URL({request_url})不是有效的HTTP/HTTPS地址")
             if not request_url:
                 raise StepExecutionError("【HTTP请求】HTTP请求配置错误: 请求URL(request_url)未配置")
 
             # 处理变量占位符
-            headers = self.context.resolve_placeholders(self.step.get("request_header") or {})
-            params = self.context.resolve_placeholders(self.step.get("request_params") or {})
-            form_data = self.context.resolve_placeholders(self.step.get("request_form_data") or {})
-            urlencoded = self.context.resolve_placeholders(self.step.get("request_form_urlencoded") or {})
+            # request_header、request_params、request_form_data、request_form_urlencoded 必须是列表格式
+            # 每个元素包含 key、value、desc
+            request_header_raw = self.step.get("request_header")
+            request_params_raw = self.step.get("request_params")
+            request_form_data_raw = self.step.get("request_form_data")
+            request_form_urlencoded_raw = self.step.get("request_form_urlencoded")
+            request_form_file_raw = self.step.get("request_form_file")
+
+            # 确保是列表格式，如果不是则转换为空列表
+            if not isinstance(request_header_raw, list):
+                request_header_raw = []
+            if not isinstance(request_params_raw, list):
+                request_params_raw = []
+            if not isinstance(request_form_data_raw, list):
+                request_form_data_raw = []
+            if not isinstance(request_form_urlencoded_raw, list):
+                request_form_urlencoded_raw = []
+
+            # 解析占位符
+            headers_list = self.context.resolve_placeholders(request_header_raw)
+            params_list = self.context.resolve_placeholders(request_params_raw)
+            form_data_list = self.context.resolve_placeholders(request_form_data_raw)
+            urlencoded_list = self.context.resolve_placeholders(request_form_urlencoded_raw)
+            form_files_list = self.context.resolve_placeholders(request_form_file_raw)
             request_body = self.context.resolve_placeholders(self.step.get("request_body"))
             request_text = self.context.resolve_placeholders(self.step.get("request_text"))
-            form_files = self.step.get("request_form_file")
+
+            # 转换为字典格式（用于HTTP请求）
+            headers = self.context.convert_list_to_dict_for_http(headers_list)
+            params_payload = self.context.convert_list_to_dict_for_http(params_list)
+            form_data = self.context.convert_list_to_dict_for_http(form_data_list)
+            urlencoded = self.context.convert_list_to_dict_for_http(urlencoded_list)
+            form_files = self.context.convert_list_to_dict_for_http(form_files_list)
+
             data_payload: Optional[Any] = None
             json_payload: Optional[Any] = None
             if request_text:
-                data_payload = self.context.resolve_placeholders(request_text)
+                data_payload = request_text
             elif form_data:
                 data_payload = form_data
             elif urlencoded:
                 data_payload = urlencoded
             if request_body:
                 json_payload = request_body
-
-            params_payload = params if isinstance(params, dict) else None
 
             try:
                 response = await self.context.send_http_request(
@@ -1807,7 +1940,6 @@ class HttpStepExecutor(BaseStepExecutor):
                 if response.cookies:
                     for cookie in response.cookies.jar:
                         cookies[cookie.name] = cookie.value
-
                 result.response = {
                     "status_code": response.status_code,
                     "headers": dict(response.headers),
@@ -1830,26 +1962,23 @@ class HttpStepExecutor(BaseStepExecutor):
                 response_json = None
 
             try:
-                extract_variables = self._extract_variables(
+                extract_variables_dict, extract_results_list = self.extract_variables(
                     response_json=response_json,
                     response_text=result.response.get("text") if result.response else None,
                     response_headers=result.response.get("response_headers") if result.response else None,
                     response_cookies=result.response.get("response_cookies") if result.response else None,
                 )
-                if extract_variables:
-                    # 提取变量同时放入会话变量, 便于后续步骤引用
-                    self.context.update_variables(extract_variables, scope="session_variables")
-                    self.context.update_variables(extract_variables, scope="extract_variables")
-                    result.extract_variables.update(extract_variables)
+                # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
+                result.extract_variables = extract_results_list
             except StepExecutionError:
                 raise
             except Exception as e:
-                error_message: str = f"【HTTP请求】变量提取失败: {e}"
                 # 变量提取失败不影响请求成功, 只记录错误
+                error_message: str = f"【HTTP请求】变量提取失败: {e}"
                 self.context.log(error_message, step_code=self.step_code)
 
             try:
-                validator_results = self._run_validators(
+                validator_results = self.run_validators(
                     response_json=response_json,
                     response_text=result.response.get("text") if result.response else None,
                     response_headers=result.response.get("response_headers") if result.response else None,
@@ -1896,7 +2025,7 @@ class HttpStepExecutor(BaseStepExecutor):
             self.context.log(error_message, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 
-    def _extract_variables(
+    def extract_variables(
             self,
             *,
             response_text: Optional[str] = None,
@@ -1904,18 +2033,27 @@ class HttpStepExecutor(BaseStepExecutor):
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
 
-    ) -> Dict[str, Any]:
+    ) -> tuple:
+        """
+        返回 (name->value 字典用于上下文更新, 与 HTTP 调试一致的完整结果列表)。
+        :param response_text:
+        :param response_json:
+        :param response_headers:
+        :param response_cookies:
+        :return:
+        """
         try:
             extract_variables = self.step.get("extract_variables")
             if not extract_variables or response_json is None:
-                return {}
+                return {}, []
             if not isinstance(extract_variables, list):
                 raise StepExecutionError(
                     f"【变量提取】表达式列表解析失败: "
                     f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
                     f"但得到[{type(extract_variables)}]类型"
                 )
-            extract_results = {}
+            extract_results_dict: Dict[str, Any] = {}
+            extract_results_list: List[Dict[str, Any]] = []
             for ext_config in extract_variables:
                 if not isinstance(ext_config, dict):
                     self.context.log(
@@ -1936,7 +2074,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     )
                     continue
                 try:
-                    extracted_value = self._extract_from_source(
+                    extract_value = self.extract_from_source(
                         source=source,
                         expr=expr,
                         range_type=range_type,
@@ -1947,20 +2085,40 @@ class HttpStepExecutor(BaseStepExecutor):
                         response_cookies=response_cookies,
                         operation_type="变量提取"
                     )
-                    extract_results[name] = extracted_value
+                    extract_results_dict[name] = extract_value
+                    extract_results_list.append({
+                        "name": name,
+                        "source": source,
+                        "range": range_type,
+                        "expr": expr,
+                        "index": index,
+                        "extract_value": extract_value,
+                        "success": True,
+                        "error": None
+                    })
                     self.context.log(
-                        f"【变量提取】[{name}]: 从[{source}]中提取成功, 数据: {extracted_value}",
+                        f"【变量提取】[{name}]: 从[{source}]中提取成功, 数据: {extract_value}",
                         step_code=self.step_code
                     )
                 except StepExecutionError:
                     raise
                 except Exception as e:
-                    # 继续处理其他变量, 不中断
+                    error_msg = str(e)
                     self.context.log(
                         f"【变量提取】[{name}]: 从[{source}]中提取失败, 原因: {e}",
                         step_code=self.step_code
                     )
-            return extract_results
+                    extract_results_list.append({
+                        "name": name,
+                        "source": source,
+                        "range": range_type,
+                        "expr": expr,
+                        "index": index,
+                        "extract_value": None,
+                        "success": False,
+                        "error": error_msg
+                    })
+            return extract_results_dict, extract_results_list
         except StepExecutionError:
             raise
         except Exception as e:
@@ -1976,7 +2134,7 @@ class HttpStepExecutor(BaseStepExecutor):
             )
             raise StepExecutionError(error_message) from e
 
-    def _extract_from_source(
+    def extract_from_source(
             self,
             *,
             source: str,
@@ -1989,7 +2147,19 @@ class HttpStepExecutor(BaseStepExecutor):
             response_cookies: Optional[Dict[str, Any]] = None,
             operation_type: str = "变量提取"
     ):
+        """
 
+        :param source:
+        :param expr:
+        :param range_type:
+        :param index:
+        :param response_text:
+        :param response_json:
+        :param response_headers:
+        :param response_cookies:
+        :param operation_type:
+        :return:
+        """
         if source.lower() == "response json":
             if not response_json:
                 raise StepExecutionError(f"【{operation_type}】响应内容不是有效的JSON数据")
@@ -2003,6 +2173,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     extracted = AutoTestToolService.resolve_json_path(data=response_json, expr=expr)
                 except Exception as e:
                     raise StepExecutionError(str(e)) from e
+
                 if isinstance(extracted, list) and index is not None:
                     try:
                         index_int: int = int(index)
@@ -2010,7 +2181,8 @@ class HttpStepExecutor(BaseStepExecutor):
                             return extracted[index_int]
                         else:
                             raise StepExecutionError(
-                                f"【{operation_type}】数组越界, 给定索引[{index_int}]不可大于数组长度[{len(extracted)}]"
+                                f"【{operation_type}】数组越界, "
+                                f"给定索引[{index_int}]不可大于数组长度[{len(extracted)}]"
                             )
                     except (ValueError, TypeError) as e:
                         raise StepExecutionError(
@@ -2027,33 +2199,33 @@ class HttpStepExecutor(BaseStepExecutor):
                 if not expr:
                     raise StepExecutionError(
                         f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
-                else:
-                    try:
-                        response_xml = ET.fromstring(response_text)
-                        elements = response_xml.findall(expr)
-                        if not elements:
-                            raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
-                        if index is not None:
-                            try:
-                                index_int: int = int(index)
-                                if index_int < len(elements):
-                                    element = elements[index_int]
-                                    return element.text if element.text else ET.tostring(element, encoding='Unicode')
-                                else:
-                                    raise StepExecutionError(
-                                        f"【{operation_type}】数组越界, 给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
-                                    )
-                            except (ValueError, TypeError) as e:
+                try:
+                    response_xml = ET.fromstring(response_text)
+                    elements = response_xml.findall(expr)
+                    if not elements:
+                        raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
+                    if index is not None:
+                        try:
+                            index_int: int = int(index)
+                            if index_int < len(elements):
+                                element = elements[index_int]
+                                return element.text if element.text else ET.tostring(element, encoding='Unicode')
+                            else:
                                 raise StepExecutionError(
-                                    f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}"
-                                ) from e
-                        else:
-                            element = elements[-1]
-                            return element.text if element.text else ET.tostring(element, encoding='Unicode')
-                    except ET.ParseError as e:
-                        raise StepExecutionError(f"【{operation_type}】响应内容不是XML格式, 错误描述: {e}") from e
-                    except Exception as e:
-                        raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误描述: {e}") from e
+                                    f"【{operation_type}】数组越界, "
+                                    f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
+                                )
+                        except (ValueError, TypeError) as e:
+                            raise StepExecutionError(
+                                f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}"
+                            ) from e
+                    else:
+                        element = elements[-1]
+                        return element.text if element.text else ET.tostring(element, encoding='Unicode')
+                except ET.ParseError as e:
+                    raise StepExecutionError(f"【{operation_type}】响应内容不是XML格式, 错误描述: {e}") from e
+                except Exception as e:
+                    raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误描述: {e}") from e
 
         elif source.lower() == "response text":
             if not response_text:
@@ -2064,15 +2236,14 @@ class HttpStepExecutor(BaseStepExecutor):
                 if not expr:
                     raise StepExecutionError(
                         f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
-                else:
-                    try:
-                        match = re.search(expr, response_text)
-                        if match:
-                            return match.group(0)
-                        else:
-                            raise StepExecutionError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
-                    except re.error as e:
-                        raise StepExecutionError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
+                try:
+                    match = re.search(expr, response_text)
+                    if match:
+                        return match.group(0)
+                    else:
+                        raise StepExecutionError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
+                except re.error as e:
+                    raise StepExecutionError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
 
         elif source.lower() == "response header":
             if not response_headers:
@@ -2111,7 +2282,7 @@ class HttpStepExecutor(BaseStepExecutor):
         else:
             raise StepExecutionError(f"【{operation_type}】源类型 {source} 不被支持")
 
-    def _run_validators(
+    def run_validators(
             self,
             *,
             response_text: Optional[str] = None,
@@ -2150,9 +2321,8 @@ class HttpStepExecutor(BaseStepExecutor):
                         step_code=self.step_code
                     )
                     continue
-
                 try:
-                    actual_value = self._extract_from_source(
+                    actual_value = self.extract_from_source(
                         source=source,
                         expr=expr,
                         range_type="SOME",
@@ -2167,7 +2337,6 @@ class HttpStepExecutor(BaseStepExecutor):
                     raise
                 except Exception as e:
                     raise StepExecutionError(f"【断言验证】提取实际值失败, 错误描述: {e}") from e
-
                 try:
                     success = ConditionStepExecutor.compare(actual_value, operation, except_value)
                 except StepExecutionError:
@@ -2182,8 +2351,8 @@ class HttpStepExecutor(BaseStepExecutor):
                     "except_value": except_value,
                     "actual_value": actual_value,
                     "success": success,
+                    "error": "" if success else "断言失败",
                 })
-
             return valid_results
         except StepExecutionError:
             raise
@@ -2204,7 +2373,6 @@ class HttpStepExecutor(BaseStepExecutor):
 class DefaultStepExecutor(BaseStepExecutor):
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
-            # 默认只执行子步骤
             child_results = await self._execute_children()
             for child in child_results:
                 result.append_child(child)
@@ -2247,16 +2415,13 @@ class StepExecutorFactory:
             step_type_str = step.get("step_type")
             if not step_type_str:
                 raise StepExecutionError("步骤类型未定义")
-
             try:
                 step_type = AutoTestStepType(step_type_str)
             except (ValueError, TypeError) as exc:
                 raise StepExecutionError(f"无效的步骤类型: {step_type_str}") from exc
-
             executor_cls = cls.EXECUTOR_MAP.get(step_type, DefaultStepExecutor)
             if executor_cls is None:
                 raise StepExecutionError(f"未找到步骤类型 {step_type} 对应的执行器")
-
             try:
                 return executor_cls(step, context)
             except Exception as exc:
@@ -2288,8 +2453,8 @@ class AutoTestStepExecutionEngine:
             report_type: AutoTestReportType,
             *,
             execute_environment: Optional[str] = None,
-            initial_variables: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], Dict[str, Any]]:
+            initial_variables: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]]]:
         report_code = None
         case_start_time = datetime.now()
         case_id: int = case.get("case_id")
@@ -2335,7 +2500,6 @@ class AutoTestStepExecutionEngine:
             ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0))
             results: List[StepExecutionResult] = []
             for step in ordered_root_steps:
-                context.step_code = step.get("step_code")
                 executor = StepExecutorFactory.create_executor(step, context)
                 result = await executor.execute()
                 results.append(result)
@@ -2343,10 +2507,10 @@ class AutoTestStepExecutionEngine:
                 if step.get("parent_step_id") is None:
                     root_step_code = step.get("step_code")
                     if root_step_code is not None:
-                        self._aggregate_root_step_logs(context, result, root_step_code)
+                        self.aggregate_root_step_logs(context, result, root_step_code)
 
             # 统计（按 step_code 去重合并）
-            all_results = self._collect_all_results(results)
+            all_results = self.collect_all_results(results)
             unique_states: Dict[str, bool] = {}
             for r in all_results:
                 key = r.step_code
@@ -2359,12 +2523,10 @@ class AutoTestStepExecutionEngine:
             success_steps = sum(1 for v in unique_states.values() if v)
             failed_steps = total_steps - success_steps
             pass_ratio = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
-
             case_end_time = datetime.now()
             case_ed_time_str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
             case_elapsed = f"{(case_end_time - case_start_time).total_seconds():.3f}"
             case_state = failed_steps == 0
-
             if self._save_report and report_code:
                 try:
                     user_id = CTX_USER_ID.get(0)
@@ -2403,21 +2565,19 @@ class AutoTestStepExecutionEngine:
                 "failed_steps": failed_steps,
                 "pass_ratio": round(pass_ratio, 2)
             }
-
-            # 返回会话变量（用于调试模式）
-            session_variables = dict(context.session_variables) if context.session_variables else {}
+            session_variables = context.session_variables if isinstance(context.session_variables, list) else []
             return results, context.logs, report_code, statistics, session_variables
 
     @staticmethod
-    def _collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:
+    def collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:
         all_res = []
         for r in results:
             all_res.append(r)
-            all_res.extend(AutoTestStepExecutionEngine._collect_all_results(r.children))
+            all_res.extend(AutoTestStepExecutionEngine.collect_all_results(r.children))
         return all_res
 
     @staticmethod
-    def _aggregate_root_step_logs(
+    def aggregate_root_step_logs(
             context: StepExecutionContext,
             root_result: StepExecutionResult,
             root_step_code: str
@@ -2425,14 +2585,18 @@ class AutoTestStepExecutionEngine:
         """
         汇总根步骤的所有子步骤日志`
 
-        Args:
-            context: 执行上下文
-            root_result: 根步骤的执行结果
-            root_step_no: 根步骤编号
+        :param context: 执行上下文
+        :param root_result: 根步骤的执行结果
+        :param root_step_code: 根步骤编号
+        :return:
         """
 
         def collect_child_step_nos(result: StepExecutionResult) -> List[str]:
-            """递归收集所有子步骤的编号"""
+            """
+            递归收集所有子步骤的编号
+            :param result:
+            :return:
+            """
             step_codes = []
             if result.step_code is not None:
                 step_codes.append(result.step_code)
@@ -2454,7 +2618,6 @@ class AutoTestStepExecutionEngine:
         # 将根步骤的日志替换为：根步骤自己的日志 + 所有子步骤的汇总日志
         if root_step_code in context.logs:
             root_logs = context.logs[root_step_code]
-            # 根步骤日志 + 子步骤汇总日志
             context.logs[root_step_code] = root_logs + aggregated_logs
         else:
             # 如果根步骤没有自己的日志, 直接使用子步骤的汇总日志

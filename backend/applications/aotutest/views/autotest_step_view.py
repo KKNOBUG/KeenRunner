@@ -316,7 +316,7 @@ async def batch_update_steps_tree(
                         missing_step_codes: set = set(actual_step_codes) - step_codes
                         if missing_step_codes:
                             deleted_step_count += len(missing_step_codes)
-                            LOGGER.info(
+                            LOGGER.warning(
                                 f"删除更新后多余步骤: "
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
@@ -334,11 +334,11 @@ async def batch_update_steps_tree(
                     message="更新用例及步骤树成功",
                     data={"cases": case_result, "steps": step_result}
                 )
-        except (TypeRejectException,
-                ParameterException,
-                DataBaseStorageException,
-                DataAlreadyExistsException,
-                NotFoundException) as e:
+        except (
+                TypeRejectException,
+                NotFoundException, ParameterException,
+                DataBaseStorageException, DataAlreadyExistsException,
+                ) as e:
             return FailureResponse(message=e.message)
         except Exception as e:
             # 事务会自动回滚
@@ -366,53 +366,41 @@ async def batch_update_steps_tree(
 async def debug_http_request(
         step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据")
 ):
-    """
-    调试HTTP请求接口
-
-    功能说明：
-    1. 接收前端发送的HTTP请求配置数据
-    2. 使用httpx发送HTTP请求（不保存到数据库）
-    3. 执行数据提取和断言验证
-    4. 返回格式化的响应数据，包括状态码、响应头、响应体、耗时、提取结果、断言结果、执行日志等信息
-
-    请求参数格式（与步骤数据结构一致）：
-    - request_url: 请求URL
-    - request_method: 请求方法（GET/POST/PUT/DELETE等）
-    - request_header: 请求头（字典）
-    - request_params: 请求参数（字典或字符串）
-    - request_body: JSON请求体（字典）
-    - request_form_data: form-data格式数据（字典）
-    - request_form_urlencoded: x-www-form-urlencoded格式数据（字典）
-    - request_text: 文本格式请求体（字符串）
-    - defined_variables: 定义的变量（字典，用于变量替换）
-    - extract_variables: 提取变量配置（数组或对象）
-    - assert_validators: 断言配置（数组或对象）
-
-    返回数据格式：
-    - status: HTTP状态码
-    - headers: 响应头（字典）
-    - cookies: Cookies（字典）
-    - data: 响应数据（JSON对象或文本）
-    - duration: 请求耗时（毫秒）
-    - size: 响应大小（KB或B）
-    - extract_results: 数据提取结果（数组）
-    - validator_results: 断言结果（数组）
-    - logs: 执行日志（数组）
-    """
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
         request_url = step_data.request_url
         request_method = (step_data.request_method or "GET").upper()
-        request_header = step_data.request_header or {}
-        request_params = step_data.request_params
+        request_header_raw = step_data.request_header or []
+        request_params_raw = step_data.request_params or []
+        request_form_data_raw = step_data.request_form_data or []
+        request_form_urlencoded_raw = step_data.request_form_urlencoded or []
         request_body = step_data.request_body
-        request_form_data = step_data.request_form_data
-        request_form_urlencoded = step_data.request_form_urlencoded
         request_text = step_data.request_text
-        defined_variables = step_data.defined_variables or {}
+        defined_variables_raw = step_data.defined_variables or []
         extract_variables = step_data.extract_variables or []
         assert_validators = step_data.assert_validators or []
         step_name = step_data.step_name or "HTTP调试"
+
+        # 确保是列表格式
+        if not isinstance(request_header_raw, list):
+            request_header_raw = []
+        if not isinstance(request_params_raw, list):
+            request_params_raw = []
+        if not isinstance(request_form_data_raw, list):
+            request_form_data_raw = []
+        if not isinstance(request_form_urlencoded_raw, list):
+            request_form_urlencoded_raw = []
+        if not isinstance(defined_variables_raw, list):
+            defined_variables_raw = []
+
+        # 将列表格式的 defined_variables 转换为字典格式（用于变量查找）
+        defined_variables = {}
+        for item in defined_variables_raw:
+            if isinstance(item, dict) and "key" in item:
+                key = item.get("key")
+                value = item.get("value")
+                if key:
+                    defined_variables[key] = value
 
         # 日志辅助函数：添加时间戳和步骤名称
         from datetime import datetime
@@ -466,7 +454,18 @@ async def debug_http_request(
 
                 if isinstance(value, list):
                     try:
-                        return [resolve_placeholders(item) for item in value]
+                        # 处理列表格式的变量（每个元素包含key、value、desc）
+                        result = []
+                        for item in value:
+                            if isinstance(item, dict) and "key" in item and "value" in item:
+                                # 列表格式的变量项，只解析value字段
+                                resolved_item = dict(item)
+                                resolved_item["value"] = resolve_placeholders(item.get("value"))
+                                result.append(resolved_item)
+                            else:
+                                # 普通列表项，递归解析
+                                result.append(resolve_placeholders(item))
+                        return result
                     except Exception as e:
                         logs.append(f"【获取变量】解析列表中的占位符时发生错误, 列表长度: {len(value)}, 错误: {e}")
                         return value
@@ -479,9 +478,30 @@ async def debug_http_request(
                 )
                 return value
 
-        # 解析请求参数
-        headers = resolve_placeholders(request_header)
-        params = resolve_placeholders(request_params) if request_params else None
+        # 解析请求参数（列表格式）
+        headers_list = resolve_placeholders(request_header_raw)
+        params_list = resolve_placeholders(request_params_raw)
+        form_data_list = resolve_placeholders(request_form_data_raw)
+        urlencoded_list = resolve_placeholders(request_form_urlencoded_raw)
+
+        # 将列表格式转换为字典格式（用于HTTP请求）
+        def convert_list_to_dict(data_list):
+            """将列表格式（每个元素包含key、value、desc）转换为字典格式"""
+            if not isinstance(data_list, list):
+                return {}
+            result = {}
+            for item in data_list:
+                if isinstance(item, dict) and "key" in item:
+                    key = item.get("key")
+                    value = item.get("value")
+                    if key:
+                        result[key] = value
+            return result
+
+        headers = convert_list_to_dict(headers_list)
+        params = convert_list_to_dict(params_list)
+        form_data = convert_list_to_dict(form_data_list)
+        urlencoded = convert_list_to_dict(urlencoded_list)
 
         # 处理请求体
         json_data = None
@@ -491,12 +511,12 @@ async def debug_http_request(
         if request_text:
             # 文本格式请求体
             data = resolve_placeholders(request_text)
-        elif request_form_data:
+        elif form_data:
             # form-data格式
-            data = resolve_placeholders(request_form_data)
-        elif request_form_urlencoded:
+            data = form_data
+        elif urlencoded:
             # x-www-form-urlencoded格式
-            data = resolve_placeholders(request_form_urlencoded)
+            data = urlencoded
         elif request_body:
             # JSON格式
             json_data = resolve_placeholders(request_body)
@@ -945,9 +965,9 @@ async def debug_http_request(
             actual_body_type = "json"
             actual_body = json_data
         elif data is not None:
-            if request_form_data:
+            if form_data:
                 actual_body_type = "form-data"
-            elif request_form_urlencoded:
+            elif urlencoded:
                 actual_body_type = "x-www-form-urlencoded"
             else:
                 actual_body_type = "text"
@@ -997,21 +1017,31 @@ async def debug_python_code(
     请求参数格式：
     - step_name: 步骤名称
     - code: Python代码
-    - defined_variables: 定义的变量（字典，用于变量替换和代码执行上下文）
-    - session_variables: 会话变量（字典，用于变量替换和代码执行上下文）
+    - defined_variables: 定义的变量（列表格式，每个元素包含key、value、desc，用于变量替换和代码执行上下文）
+    - session_variables: 会话变量（列表格式，每个元素包含key、value、desc，用于变量替换和代码执行上下文）
     """
     try:
         # 提取请求参数
         code = step_data.code
         step_name = step_data.step_name or "执行代码请求(Python)调试"
-        defined_variables = step_data.defined_variables or {}
-        session_variables = step_data.session_variables or {}
+        # defined_variables、session_variables 必须是列表格式
+        defined_variables = step_data.defined_variables or []
+        session_variables = step_data.session_variables or []
+        if not isinstance(defined_variables, list):
+            defined_variables = []
+        if not isinstance(session_variables, list):
+            session_variables = []
 
-        # 合并变量到执行上下文
-        initial_variables = {
-            **defined_variables,
-            **session_variables
-        }
+        # 合并变量到执行上下文（列表格式）
+        # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）
+        merged_variables = {}
+        for item in session_variables:
+            if isinstance(item, dict) and "key" in item:
+                merged_variables[item.get("key")] = item
+        for item in defined_variables:
+            if isinstance(item, dict) and "key" in item:
+                merged_variables[item.get("key")] = item
+        initial_variables = list(merged_variables.values())
 
         # 创建执行上下文（使用虚拟的case_id和case_code）
         from backend.applications.aotutest.services.autotest_step_engine import (
@@ -1071,7 +1101,10 @@ async def execute_step_tree(
     try:
         case_id = request.case_id
         steps = request.steps
-        initial_variables = request.initial_variables or {}
+        # initial_variables 必须是列表格式，每个元素包含 key、value、desc
+        initial_variables = request.initial_variables or []
+        if not isinstance(initial_variables, list):
+            initial_variables = []
 
         # 判断运行模式还是调试模式
         # 运行模式：只传递 case_id，不传递 steps
@@ -1160,9 +1193,23 @@ async def execute_step_tree(
             tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
             # 4. 收集defined_variables
+            # initial_variables 和 all_session_variables 都是列表格式，每个元素包含 key、value、desc
             all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
-            initial_variables.update(all_session_variables)
+            # 合并两个列表，如果存在相同的key，使用 all_session_variables 中的值（后收集的优先）
+            merged_variables = {}
+            # 先添加 initial_variables
+            if isinstance(initial_variables, list):
+                for item in initial_variables:
+                    if isinstance(item, dict) and "key" in item:
+                        merged_variables[item.get("key")] = item
+            # 再添加 all_session_variables（会覆盖相同的key）
+            if isinstance(all_session_variables, list):
+                for item in all_session_variables:
+                    if isinstance(item, dict) and "key" in item:
+                        merged_variables[item.get("key")] = item
             try:
+                # 转换回列表格式
+                initial_variables = list(merged_variables.values())
                 AutoTestToolService.execute_func_string(initial_variables)
             except Exception as e:
                 return ParameterResponse(message=str(e))
@@ -1182,8 +1229,21 @@ async def execute_step_tree(
             )
 
             # 7. 获取最终会话变量（从执行引擎返回）
-            final_session_variables = dict(session_variables)
-            final_session_variables.update(initial_variables)
+            # session_variables 和 initial_variables 都是列表格式，每个元素包含 key、value、desc
+            # 合并两个列表，如果存在相同的key，使用 session_variables 中的值（后执行的优先）
+            final_session_variables = {}
+            # 先添加 initial_variables
+            if isinstance(initial_variables, list):
+                for item in initial_variables:
+                    if isinstance(item, dict) and "key" in item:
+                        final_session_variables[item.get("key")] = item
+            # 再添加 session_variables（会覆盖相同的key）
+            if isinstance(session_variables, list):
+                for item in session_variables:
+                    if isinstance(item, dict) and "key" in item:
+                        final_session_variables[item.get("key")] = item
+            # 转换回列表格式
+            final_session_variables = list(final_session_variables.values())
 
             # 8. 返回调试模式的详细结果
             result_data = {
@@ -1212,7 +1272,9 @@ async def batch_execute_cases_endpoint(
     try:
         case_ids = request.case_ids
         execute_environment = request.env
-        initial_variables = request.initial_variables or {}
+        initial_variables = request.initial_variables if request.initial_variables is not None else []
+        if not isinstance(initial_variables, list):
+            initial_variables = []
         if not case_ids or len(case_ids) == 0:
             return BadReqResponse(message="case_ids列表不能为空")
 
@@ -1235,7 +1297,7 @@ async def batch_execute_cases_endpoint(
         # 异步执行
         exec_result = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
             case_ids=case_ids,
-            initial_variables=initial_variables or {},
+            initial_variables=initial_variables,
             execute_environment=execute_environment,
             report_type=AutoTestReportType.EXEC2,
         )

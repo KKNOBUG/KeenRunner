@@ -7,7 +7,7 @@
 @DateTime: 2026/1/2 21:21
 """
 import traceback
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
@@ -19,6 +19,7 @@ from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvSelect
 )
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
@@ -160,8 +161,9 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
             page_size=env_in.page_size,
             order=env_in.order
         )
-        data = [
-            await obj.to_dict(
+        env_serializes: List[Dict[str, Any]] = []
+        for instance in instances:
+            serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={
                     "state",
                     "created_user", "updated_user",
@@ -170,10 +172,14 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
                 },
                 replace_fields={"id": "env_id"}
             )
-            for obj in instances
-        ]
+            project_id: int = serialize["project_id"]
+            project_instance = await AUTOTEST_API_PROJECT_CRUD.model.filter(
+                id=project_id,
+            ).first().values("project_name")
+            serialize["project_name"] = project_instance["project_name"]
+            env_serializes.append(serialize)
         LOGGER.info(f"按条件查询环境成功, 结果数量: {total}")
-        return SuccessResponse(message="查询成功", data=data, total=1)
+        return SuccessResponse(message="查询成功", data=env_serializes, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

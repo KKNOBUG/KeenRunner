@@ -120,7 +120,7 @@
 
         <!-- Description列 -->
         <n-gi :span="6">
-          <n-input v-model:value="item.description" placeholder="请输入变量描述" clearable/>
+          <n-input v-model:value="item.desc" placeholder="请输入变量描述" clearable/>
         </n-gi>
 
         <!-- 删除列，显示“删除”按钮，点击后触发 handleRemove 方法 -->
@@ -153,7 +153,7 @@
       <n-input
           type="textarea"
           v-model:value="batchInput"
-          placeholder="按 key:value:description 格式输入"
+          placeholder="按 key:value:desc 格式输入，每行一个"
           :rows="10"
           style="min-height: 6rem; margin-bottom: 1rem;"
           resize="vertical"
@@ -197,8 +197,8 @@ const isFormDataAndForBody = computed(() => props.bodyType === 'form-data' && pr
 
 // 处理添加键值对的方法
 const handleAdd = () => {
-  // 创建一个新的键值对对象
-  const newItems = [...props.items, {key: '', value: '', type: 'text'}];
+  // 创建一个新的键值对对象，包含 key、value、desc 字段
+  const newItems = [...props.items, {key: '', value: '', desc: '', type: 'text'}];
   // 触发 update:items 事件，更新父组件的 items 数据
   emit('update:items', newItems);
   // 触发 add 事件
@@ -220,11 +220,11 @@ const openBatchAddModal = () => {
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
-  // 将当前的键值对信息格式化为 key:value:description 格式，填充到批量输入框中
+  // 将当前的键值对信息格式化为 key:value:desc 格式，填充到批量输入框中
   const nonEmptyItems = props.items.filter(item => item.key || item.value);
   batchInput.value = nonEmptyItems.map(item => {
-    if (item.description) {
-      return `${item.key}:${item.value}:${item.description}`;
+    if (item.desc) {
+      return `${item.key}:${item.value}:${item.desc}`;
     }
     return `${item.key}:${item.value}`;
   }).join('\n');
@@ -240,12 +240,12 @@ const handleBatchAdd = () => {
     if (parts.length === 2) {
       const key = parts[0].trim();
       const value = parts[1].trim();
-      newItems.push({key, value, type: "text", description: ''});
+      newItems.push({key, value, desc: '', type: "text"});
     } else if (parts.length === 3) {
       const key = parts[0].trim();
       const value = parts[1].trim();
       const desc = parts[2].trim();
-      newItems.push({key, value, type: "text", description: desc});
+      newItems.push({key, value, desc, type: "text"});
     }
   });
   emit('update:items', newItems);

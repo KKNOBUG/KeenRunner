@@ -21,7 +21,7 @@ class AutoTestApiCaseCreate(BaseModel):
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
-    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始变量池)")
+    session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
@@ -36,7 +36,7 @@ class AutoTestApiCaseBase(BaseModel):
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
     case_project: Optional[int] = Field(None, ge=1, description="用例所属应用")
     case_last_time: Optional[str] = Field(None, description="用例执行时间")
-    session_variables: Optional[Dict[str, Any]] = Field(None, description="会话变量(初始变量池)")
+    session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
     case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
 
 
