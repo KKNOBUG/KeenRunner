@@ -6,6 +6,7 @@
 @Module  : global_config.py
 @DateTime: 2025/1/16 15:30
 """
+from functools import lru_cache
 from typing import Dict, Any
 
 from pydantic_settings import BaseSettings
@@ -20,4 +21,9 @@ class GlobalConfig(BaseSettings):
     DATETIME_FORMAT2: str = "%Y-%m-%d %H:%M:%S"
 
 
-GLOBAL_CONFIG = GlobalConfig()
+@lru_cache(maxsize=1)
+def get_global_config():
+    return GlobalConfig()
+
+
+GLOBAL_CONFIG = get_global_config()
