@@ -616,9 +616,21 @@ const initFromConfig = () => {
     state.form.bodyType = 'none'
   }
 
-  // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
-  state.form.bodyParams = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
-  state.form.bodyForm = Array.isArray(cfg.form_urlencoded) ? cfg.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
+  // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc、type（form-data 需 type 供 KeyValueEditor 显示「数据」列）
+  const bodyParamsRaw = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
+  state.form.bodyParams = bodyParamsRaw.map(item => ({
+    key: item.key || '',
+    value: item.value ?? '',
+    desc: item.desc || '',
+    type: item.type || 'text'
+  }))
+  const bodyFormRaw = Array.isArray(cfg.form_urlencoded) ? cfg.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
+  state.form.bodyForm = bodyFormRaw.map(item => ({
+    key: item.key || '',
+    value: item.value ?? '',
+    desc: item.desc || '',
+    type: item.type || 'text'
+  }))
 
   try {
     const body = cfg.data || original.request_body || {}
@@ -630,11 +642,15 @@ const initFromConfig = () => {
   // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
   state.form.defined_variables = Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
 
-  // 提取（优先使用原始数据）
+  // 提取：无默认内容，仅当 config/original 有数据时填充（与后端字段对齐：expr, name, source, range, index）
   state.form.extract_variables = {}
   extractCollapseState.value = {}
-  const extractSource = cfg.extract_variables || original.extract_variables || {}
-  const extractList = Array.isArray(extractSource) ? extractSource : (extractSource && typeof extractSource === 'object' && !Array.isArray(extractSource) ? [extractSource] : [])
+  const extractSource = cfg.extract_variables ?? original.extract_variables
+  const extractList = !extractSource
+      ? []
+      : Array.isArray(extractSource)
+          ? extractSource
+          : (typeof extractSource === 'object' && Object.keys(extractSource).length > 0 ? [extractSource] : [])
   extractList.forEach((item, index) => {
     const key = String(index + 1)
     state.form.extract_variables[key] = {
@@ -643,16 +659,20 @@ const initFromConfig = () => {
       extractScope: item.range === 'ALL' ? '全部提取' : '部分提取',
       jsonpath: item.expr || '',
       continueExtract: item.continueExtract || false,
-      extractIndex: item.extractIndex ?? 0
+      extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null
     }
     extractCollapseState.value[key] = false
   })
 
-  // 断言（优先使用原始数据）
+  // 断言：无默认内容，仅当 config/original 有数据时填充（与后端字段对齐：expr, name, source, operation, except_value）
   state.form.assert_validators = {}
   validatorCollapseState.value = {}
-  const validatorsSource = cfg.assert_validators || original.assert_validators || {}
-  const validatorsList = Array.isArray(validatorsSource) ? validatorsSource : (validatorsSource && typeof validatorsSource === 'object' && !Array.isArray(validatorsSource) ? [validatorsSource] : [])
+  const validatorsSource = cfg.assert_validators ?? original.assert_validators
+  const validatorsList = !validatorsSource
+      ? []
+      : Array.isArray(validatorsSource)
+          ? validatorsSource
+          : (typeof validatorsSource === 'object' && Object.keys(validatorsSource).length > 0 ? [validatorsSource] : [])
   validatorsList.forEach((item, index) => {
     const key = String(index + 1)
     state.form.assert_validators[key] = {
@@ -695,24 +715,25 @@ watch(
     { deep: true, immediate: false }
 )
 
+// 与后端 autotest_step_engine 提取字段一致：expr, name, source, range, index
 const buildExtractForBackend = () => {
   return Object.values(state.form.extract_variables || {}).map(item => ({
     expr: item.jsonpath || '',
     name: item.name || '',
     range: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
     source: item.object || 'Response Json',
-    continueExtract: item.continueExtract || false,
-    extractIndex: item.extractIndex ?? 0
+    index: item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== '' ? Number(item.extractIndex) : null
   }))
 }
 
+// 与后端 autotest_step_engine 断言字段一致：expr, name, source, operation, except_value
 const buildValidatorsForBackend = () => {
   return Object.values(state.form.assert_validators || {}).map(item => ({
     expr: item.jsonpath || '',
     name: item.name || '',
     source: item.object || 'Response Json',
     operation: item.assertion || '等于',
-    except_value: item.value
+    except_value: item.value != null ? String(item.value) : ''
   }))
 }
 
@@ -723,7 +744,7 @@ const buildConfigFromState = () => {
   const paramsList = Array.isArray(state.form.params) ? state.form.params : []
   const variablesList = Array.isArray(state.form.defined_variables) ? state.form.defined_variables : []
 
-  // 确保每个元素都有 key、value、desc 字段
+  // 确保每个元素都有 key、value、desc 字段；form-data 需保留 type 以便 re-init 后 Text/File 选择不丢失
   const normalizeList = (list) => {
     return list.map(item => ({
       key: item.key || '',
@@ -731,11 +752,21 @@ const buildConfigFromState = () => {
       desc: item.desc || ''
     }))
   }
+  const normalizeBodyParams = (list) => {
+    return (Array.isArray(list) ? list : []).map(item => ({
+      key: item.key || '',
+      value: item.value ?? '',
+      desc: item.desc || '',
+      type: item.type || 'text'
+    }))
+  }
 
   let data = null
-  let form_data = null
-  let form_urlencoded = null
   let request_text = null
+
+  // 始终从当前表单带出 form_data / form_urlencoded，避免切到 none 再切回时被 initFromConfig 清空
+  const form_data = normalizeBodyParams(state.form.bodyParams)
+  const form_urlencoded = Array.isArray(state.form.bodyForm) ? normalizeList(state.form.bodyForm) : []
 
   switch (state.form.bodyType) {
     case 'json':
@@ -745,15 +776,9 @@ const buildConfigFromState = () => {
         data = {}
       }
       break
-    case 'form-data':
-      form_data = Array.isArray(state.form.bodyParams) ? normalizeList(state.form.bodyParams) : []
-      break
-    case 'x-www-form-urlencoded':
-      form_urlencoded = Array.isArray(state.form.bodyForm) ? normalizeList(state.form.bodyForm) : []
-      break
     case 'none':
     default:
-      request_text = null
+      break
   }
 
   return {
@@ -1337,16 +1362,16 @@ const extractColumns = [
   },
   {
     title: '提取值',
-    key: 'extract_value',
+    key: 'extracted_value',
     width: 120,
     ellipsis: {tooltip: true},
     render: (row) => {
-      if (row.extract_value === null || row.extract_value === undefined) {
+      if (row.extracted_value === null || row.extracted_value === undefined) {
         return '-'
       }
-      const value = typeof row.extract_value === 'object'
-          ? JSON.stringify(row.extract_value)
-          : String(row.extract_value)
+      const value = typeof row.extracted_value === 'object'
+          ? JSON.stringify(row.extracted_value)
+          : String(row.extracted_value)
       return value.length > 100 ? value.substring(0, 100) + '...' : value
     }
   },

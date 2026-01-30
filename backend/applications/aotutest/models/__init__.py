@@ -14,3 +14,14 @@ def print_hi(name):
 
 if __name__ == '__main__':
     print_hi('Python')
+
+
+def unique_identify() -> str:
+    import datetime
+    import uuid
+    timestamp = int(datetime.datetime.now().timestamp())
+    uuid4_str = uuid.uuid4().hex.upper()
+    return f"{timestamp}-{uuid4_str}"
+
+
+print(unique_identify())

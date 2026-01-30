@@ -1920,7 +1920,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     )
                     if not env_instance:
                         raise StepExecutionError(f"【HTTP请求】环境(id={request_env_id}, name={env})配置不存在")
-                    execute_envi_host: str = env_instance.env_host.rstrip(":")
+                    execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
                     execute_envi_port: int = env_instance.env_port
                     if not execute_envi_host or not execute_envi_port:
                         raise StepExecutionError(

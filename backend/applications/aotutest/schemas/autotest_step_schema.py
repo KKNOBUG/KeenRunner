@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import AutoTestCaseType, AutoTestStepType, AutoTestLoopMode, AutoTestLoopErrorStrategy
+from backend.enums.autotest_enum import AutoTestCaseType, AutoTestStepType, AutoTestLoopMode, AutoTestLoopErrorStrategy, \
+    AutoTestReqArgsType
 from backend.enums.http_enum import HTTPMethod
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
@@ -31,6 +32,7 @@ class AutoTestApiStepReqBase(BaseModel):
     request_form_urlencoded: NON_LIST_DICT_TYPE = Field(None, description="请求键值对数据")
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
     request_env_id: Optional[int] = Field(None, description="请求环境ID")
+    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="AutoTestReqArgsType")
 
 
 class AutoTestApiStepVarBase(BaseModel):

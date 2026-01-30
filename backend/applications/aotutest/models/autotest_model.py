@@ -27,7 +27,7 @@ from backend.enums.autotest_enum import (
     AutoTestCaseAttr,
     AutoTestLoopErrorStrategy,
     AutoTestTaskStatus,
-    AutoTestTaskScheduler
+    AutoTestTaskScheduler, AutoTestReqArgsType
 )
 
 
@@ -174,6 +174,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_form_file = fields.JSONField(null=True, description="请求文件路径")
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据")
     request_env_id = fields.BigIntField(null=True, description="请求环境ID")
+    request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
 
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")

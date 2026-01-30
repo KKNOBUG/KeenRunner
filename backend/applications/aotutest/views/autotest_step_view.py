@@ -804,10 +804,10 @@ async def debug_http_request(
                         operation: str = validator_config.get("operation")
                         except_value: str = validator_config.get("except_value")
                         source: str = validator_config.get("source")
-                        if not name or not expr or not operation:
+                        if not name or not expr or not operation or not source:
                             logs.append(format_log(
                                 f"【断言验证】表达式子项解析无效(跳过): "
-                                f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"
+                                f"参数[name, expr, operation, source]是必须的, 非空断言时需添加[except_value]参数"
                             ))
                             continue
 

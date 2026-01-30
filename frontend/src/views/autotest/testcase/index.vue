@@ -156,9 +156,10 @@ watch(() => queryItems.value.case_project, (newVal) => {
 })
 
 onMounted(() => {
-  $table.value?.handleSearch()
+  // 所属应用、所属标签：进入页面时默认加载，供搜索条件使用
   loadProjects()
-  loadTags() // 初始加载所有标签
+  loadTags()
+  // 用例列表：不默认查询，由用户点击「搜索」按钮触发
 })
 
 
@@ -351,9 +352,10 @@ const columns = [
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        :is-pagination="false"
+        :is-pagination="true"
         :columns="columns"
         :get-data="api.getApiTestcaseList"
+        :row-key="'case_id'"
         :single-line="true"
     >
 
@@ -571,4 +573,3 @@ const columns = [
 }
 
 </style>
-

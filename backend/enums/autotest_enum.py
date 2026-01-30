@@ -70,3 +70,12 @@ class AutoTestTaskStatus(StringEnum):
     STATUS1 = "全部成功"
     STATUS2 = "部分成功"
     STATUS3 = "全部失败"
+
+
+class AutoTestReqArgsType(StringEnum):
+    RAW = "raw"
+    NONE = "none"
+    JSON = "json"
+    PARAMS = "params"
+    FORM_DATA = "form-data"
+    X_WWW_FORM_URLENCODED = "x-www-form-urlencoded"

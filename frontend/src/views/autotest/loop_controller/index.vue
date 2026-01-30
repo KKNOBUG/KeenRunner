@@ -257,8 +257,8 @@ const initFormFromOriginal = (original) => {
 
   const formData = {
     loop_mode: original.loop_mode || '次数循环',
-    loop_on_error: original.loop_on_error || '继续下一次循环',
-    loop_maximums: original.loop_maximums ? Number(original.loop_maximums) : null,
+    loop_on_error: original.loop_on_error || '中断循环',
+    loop_maximums: original.loop_maximums ? Number(original.loop_maximums) : 5,
     loop_interval: original.loop_interval ? Number(original.loop_interval) : 1,
     loop_iterable: original.loop_iterable || '',
     loop_iter_idx: original.loop_iter_idx || '',
@@ -287,8 +287,8 @@ const mergeConfigAndOriginal = (config, original) => {
   // 优先使用config，如果没有则使用original
   const merged = {
     loop_mode: config.loop_mode || original?.loop_mode || '次数循环',
-    loop_on_error: config.loop_on_error || original?.loop_on_error || '继续下一次循环',
-    loop_maximums: config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original?.loop_maximums ? Number(original.loop_maximums) : null),
+    loop_on_error: config.loop_on_error || original?.loop_on_error || '中断循环',
+    loop_maximums: config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original?.loop_maximums ? Number(original.loop_maximums) : 5),
     loop_interval: config.loop_interval !== undefined ? Number(config.loop_interval) : (original?.loop_interval ? Number(original.loop_interval) : 0),
     loop_iterable: config.loop_iterable !== undefined ? config.loop_iterable : (original?.loop_iterable || ''),
     loop_iter_idx: config.loop_iter_idx !== undefined ? config.loop_iter_idx : (original?.loop_iter_idx || ''),
@@ -318,8 +318,8 @@ const mergeConfigAndOriginal = (config, original) => {
 
 const defaults = {
   loop_mode: '次数循环',
-  loop_on_error: '继续下一次循环',
-  loop_maximums: null,
+  loop_on_error: '中断循环',
+  loop_maximums: 5,
   loop_interval: 0,
   loop_iterable: '',
   loop_iter_idx: '',

@@ -998,16 +998,17 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   } else if (step.type === 'code') {
     backendStep.code = config.code !== undefined ? config.code : (original.code || '')
   } else if (step.type === 'loop') {
-    // 循环模式必填
+    // 循环模式必填（与 loop_controller 默认一致）
     backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
-    // 错误处理策略必填
-    backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '继续下一次循环'
+    // 错误处理策略必填（默认与 loop_controller 一致：中断循环）
+    backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '中断循环'
     // 循环间隔（所有模式都需要）
     backendStep.loop_interval = config.loop_interval !== undefined ? Number(config.loop_interval) : (original.loop_interval ? Number(original.loop_interval) : 0)
 
     // 根据循环模式设置特定字段
     if (backendStep.loop_mode === '次数循环') {
-      backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums ? Number(original.loop_maximums) : null)
+      // 最大循环次数默认 5，与 loop_controller 一致
+      backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums != null ? Number(original.loop_maximums) : 5)
     } else if (backendStep.loop_mode === '对象循环') {
       backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
       backendStep.loop_iter_idx = config.loop_iter_idx !== undefined ? config.loop_iter_idx : (original.loop_iter_idx || '')
@@ -1384,12 +1385,16 @@ const insertStep = (parentId, type, index = null) => {
   const def = stepDefinitions[type]
   if (!def) return null
 
-  // 创建新步骤，遵循结构规范
+  // 创建新步骤，遵循结构规范；循环步骤使用与 loop_controller 一致的默认值并参与保存
+  const defaultConfig = type === 'loop'
+      ? { loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5 }
+      : {}
+  const defaultName = type === 'loop' ? '循环结构(次数循环)' : `${def.label}`
   const newStep = {
     id: genId(),
     type,
-    name: `${def.label}`,
-    config: {}
+    name: defaultName,
+    config: defaultConfig
   }
 
   // 只有 loop/if 类型才有 children 字段（即使是空数组）
