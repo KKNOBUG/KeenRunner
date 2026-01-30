@@ -111,8 +111,8 @@ async def update_report(
 
 @autotest_report.get("/get", summary="API自动化测试-按id或code查询报告")
 async def get_report(
-        report_id: Optional[int] = Query(..., description="报告ID"),
-        report_code: Optional[str] = Query(..., description="报告标识代码"),
+        report_id: Optional[int] = Query(None, description="报告ID"),
+        report_code: Optional[str] = Query(None, description="报告标识代码"),
 ):
     try:
         if report_id:

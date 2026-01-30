@@ -69,10 +69,10 @@ class ProjectConfig(BaseSettings):
     # 项目路径相关配置
     PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     APPLICATIONS_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "applications"))
+    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "celery_scheduler"))
     COMMON_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "common"))
     CONFIGURE_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "configure"))
     CORE_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "core"))
-    DECORATORS_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "decorators"))
     ENUMS_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "enums"))
     OUTPUT_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "output"))
     OUTPUT_LOGS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "logs"))

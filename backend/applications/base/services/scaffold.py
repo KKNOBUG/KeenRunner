@@ -7,14 +7,15 @@
 @DateTime: 2025/1/18 10:48
 """
 import asyncio
-from decimal import Decimal
 from datetime import datetime, date, time
+from decimal import Decimal
 from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, Set
 
-from pydantic import BaseModel
-from tortoise.models import Model
-from tortoise.expressions import Q
+from pydantic import BaseModel, GetCoreSchemaHandler
+from pydantic_core import core_schema
 from tortoise import fields, models
+from tortoise.expressions import Q
+from tortoise.models import Model
 
 from backend import GLOBAL_CONFIG
 
@@ -93,7 +94,7 @@ class ScaffoldModel(models.Model):
     @classmethod
     async def __format_value(cls, value: Any):
         if isinstance(value, datetime):
-            value = value.strftime(GLOBAL_CONFIG.DATETIME_FORMAT)
+            value = value.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
         elif isinstance(value, date):
             value = value.strftime(GLOBAL_CONFIG.DATE_FORMAT)
         elif isinstance(value, time):
@@ -293,36 +294,43 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return obj
 
 
-UpperStr = str
+class UpperStr(str):
 
+    @classmethod
+    def __get_pydantic_core_schema__(
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            cls._validate,
+            handler(str),
+            serialization=core_schema.to_string_ser_schema(),
+        )
 
-# class UpperStr(str):
-#     @classmethod
-#     def __get__validators__(cls):
-#         yield cls.validate
-#
-#     @classmethod
-#     def validate(cls, v, *args):
-#         if v is None:
-#             return v
-#         if isinstance(v, str):
-#             return v.upper()
-#         return v
+    @classmethod
+    def _validate(cls, v: str, info: Any) -> 'UpperStr':
+        if not isinstance(v, str):
+            raise ValueError("必须是字符串类型")
+        return cls(v.upper())
 
 
 class LowerStr(str):
-    @classmethod
-    def __get__validators__(cls):
-        yield cls.validate
 
     @classmethod
-    def validate(cls, v, *args):
-        if v is None:
-            return v
-        if isinstance(v, str):
-            return v.lower()
-        return v
+    def __get_pydantic_core_schema__(
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            cls._validate,
+            handler(str),
+            serialization=core_schema.to_string_ser_schema(),
+        )
 
     @classmethod
-    def __get__pydantic__json_schema__(cls, core_schema, hanlder):
-        return {"type": "string", "description": "字符串(自动转换小写)"}
+    def _validate(cls, v: str, info: Any) -> 'LowerStr':
+        if not isinstance(v, str):
+            raise ValueError("必须是字符串类型")
+        return cls(v.lower())

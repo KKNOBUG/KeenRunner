@@ -61,8 +61,8 @@ async def create_project_info(project_in: AutoTestApiProjectCreate = Body(..., d
 
 @autotest_project.post("/delete", summary="API自动化测试-按id或code删除应用")
 async def delete_project_info(
-        project_id: Optional[int] = Query(..., description="应用ID"),
-        project_code: Optional[str] = Query(..., description="应用标识代码"),
+        project_id: Optional[int] = Query(None, description="应用ID"),
+        project_code: Optional[str] = Query(None, description="应用标识代码"),
 ):
     try:
         instance = await AUTOTEST_API_PROJECT_CRUD.delete_project(project_id=project_id, project_code=project_code)
@@ -112,8 +112,8 @@ async def update_project_info(project_in: AutoTestApiProjectUpdate = Body(..., d
 
 @autotest_project.get("/get", summary="API自动化测试-按id或code查询应用")
 async def get_project_info(
-        project_id: Optional[int] = Query(..., description="应用ID"),
-        project_code: Optional[str] = Query(..., description="应用标识代码"),
+        project_id: Optional[int] = Query(None, description="应用ID"),
+        project_code: Optional[str] = Query(None, description="应用标识代码"),
 ):
     try:
         if project_id:

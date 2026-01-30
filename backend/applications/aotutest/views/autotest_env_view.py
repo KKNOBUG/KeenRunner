@@ -59,10 +59,10 @@ async def create_env_info(env_in: AutoTestApiEnvCreate = Body(..., description="
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
-@autotest_env.post("/delete", summary="API自动化测试-按id或code删除环境")
+@autotest_env.delete("/delete", summary="API自动化测试-按id或code删除环境")
 async def delete_env_info(
-        env_id: Optional[int] = Query(..., description="环境ID"),
-        env_code: Optional[str] = Query(..., description="环境标识代码"),
+        env_id: Optional[int] = Query(None, description="环境ID"),
+        env_code: Optional[str] = Query(None, description="环境标识代码"),
 ):
     try:
         instance = await AUTOTEST_API_ENV_CRUD.delete_env(env_id=env_id, env_code=env_code)
@@ -110,8 +110,8 @@ async def update_env_info(env_in: AutoTestApiEnvUpdate = Body(..., description="
 
 @autotest_env.get("/get", summary="API自动化测试-按id或code查询环境")
 async def get_env_info(
-        env_id: Optional[int] = Query(..., description="环境ID"),
-        env_code: Optional[str] = Query(..., description="环境标识代码"),
+        env_id: Optional[int] = Query(None, description="环境ID"),
+        env_code: Optional[str] = Query(None, description="环境标识代码"),
 ):
     try:
         if env_id:

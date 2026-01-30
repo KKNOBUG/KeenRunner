@@ -194,9 +194,11 @@ class FileUtils:
     def get_all_files(abspath: Union[str, Path],
                       return_full_path: bool = True,
                       return_precut_path: Optional[str] = None,
-                      startswith: Optional[str] = None, endswith: Optional[str] = None,
+                      startswith: Optional[str] = None,
+                      endswith: Optional[str] = None,
                       extension: Optional[str] = None,
-                      exclude_startswith: Optional[str] = None, exclude_endswith: Optional[str] = None,
+                      exclude_startswith: Optional[str] = None,
+                      exclude_endswith: Optional[str] = None,
                       exclude_extension: Optional[str] = None) -> list:
         """
         获取指定路径下的所有文件，并根据条件进行过滤。

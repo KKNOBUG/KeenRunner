@@ -52,7 +52,7 @@ def is_longtext_response(response: Response) -> bool:
 async def logging_middleware(request: Request, call_next):
     # 接口服务时间
     start_time = time.time()
-    request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(start_time))
+    request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(start_time))
 
     # 变量初始化
     request_body, response_body = b'', b''
@@ -142,7 +142,7 @@ async def logging_middleware(request: Request, call_next):
 
         # 接口服务结束时间
         end_time = time.time()
-        response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(end_time))
+        response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(end_time))
         response_elapsed = f"{end_time - start_time:.4f}s"
 
         # 记录日志
@@ -218,7 +218,7 @@ class ReqResLoggerMiddleware:
 
         # 接口服务开始时间
         start_time = time.time()
-        request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(start_time))
+        request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(start_time))
 
         # 重载 starlette 的 receive 函数，转存消费
         receive_ = await receive()
@@ -286,7 +286,7 @@ class ReqResLoggerMiddleware:
 
         # 接口服务结束时间
         end_time = time.time()
-        response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT, time.localtime(end_time))
+        response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(end_time))
 
         # 计算耗时
         response_elapsed = end_time - start_time

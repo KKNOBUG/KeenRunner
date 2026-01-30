@@ -30,8 +30,7 @@ class AutoTestApiStepReqBase(BaseModel):
     request_form_data: NON_LIST_DICT_TYPE = Field(None, description="请求表单数据")
     request_form_urlencoded: NON_LIST_DICT_TYPE = Field(None, description="请求键值对数据")
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
-    request_project: Optional[int] = Field(None, description="请求应用(项目ID，用于环境解析)")
-    request_environment: Optional[str] = Field(None, max_length=64, description="请求环境名称")
+    request_env_id: Optional[int] = Field(None, description="请求环境ID")
 
 
 class AutoTestApiStepVarBase(BaseModel):
@@ -184,14 +183,10 @@ class AutoTestStepTreeExecute(BaseModel):
         case_id = self.case_id
         steps = self.steps
         # case_id 是必填的（运行模式和调试模式都需要）
-        if case_id is None:
-            raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
         # 运行模式：只传递 case_id，不传递 steps
         # 调试模式：传递 case_id 和 steps
-        if steps is not None and len(steps) > 0:
-            # 调试模式：case_id 和 steps 都存在
-            pass
-        # 运行模式：只有 case_id，没有 steps（或 steps 为空）
+        if case_id is None:
+            raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
         return self
 
 

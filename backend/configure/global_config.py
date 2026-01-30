@@ -16,8 +16,8 @@ class GlobalConfig(BaseSettings):
     ROUTER_TAGS: Dict[str, Any] = {}
     DATE_FORMAT: str = "%Y-%m-%d"
     TIME_FORMAT: str = "%H:%M:%S"
-    DATETIME_SCHEMA: str = "%Y%m%d%H%M%S"
-    DATETIME_FORMAT: str = "%Y-%m-%d %H:%M:%S"
+    DATETIME_FORMAT1: str = "%Y%m%d%H%M%S"
+    DATETIME_FORMAT2: str = "%Y-%m-%d %H:%M:%S"
 
 
 GLOBAL_CONFIG = GlobalConfig()

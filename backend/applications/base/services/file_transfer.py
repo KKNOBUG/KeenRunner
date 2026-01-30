@@ -121,7 +121,7 @@ class FileTransfer:
 
         # 检查是否需要添加文件上传时间戳
         if add_timestamp:
-            datetime_stamp: str = datetime.now().strftime(GLOBAL_CONFIG.DATETIME_SCHEMA)
+            datetime_stamp: str = datetime.now().strftime(GLOBAL_CONFIG.DATETIME_FORMAT1)
             filename = f"{datetime_stamp}_{filename}"
 
         try:

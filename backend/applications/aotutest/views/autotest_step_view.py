@@ -495,7 +495,7 @@ async def debug_http_request(
                     key = item.get("key")
                     value = item.get("value")
                     if key:
-                        result[key] = value
+                        result[key] = str(value)
             return result
 
         headers = convert_list_to_dict(headers_list)
