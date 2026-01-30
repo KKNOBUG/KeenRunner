@@ -103,7 +103,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             conditions={"case_id": case_id, "case_code": case_code, "report_code": report_code}
         )
         try:
-            report_dict = detail_in.dict(exclude_none=True, exclude_unset=True)
+            report_dict = detail_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
@@ -166,8 +166,8 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
     async def delete_detail(
             self,
             detail_id: Optional[int] = None,
-            step_code: Optional[int] = None,
-            report_code: Optional[int] = None
+            step_code: Optional[str] = None,
+            report_code: Optional[str] = None
     ) -> AutoTestApiDetailInfo:
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数缺失, 删除明细信息时必须传递(detail_id)或(report_code, step_code)字段"

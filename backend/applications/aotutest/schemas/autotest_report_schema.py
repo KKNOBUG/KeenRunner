@@ -21,7 +21,7 @@ class AutoTestApiReportBase(BaseModel):
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
 
     step_total: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
-    step_fill_count: Optional[int] = Field(None, ge=0, description="用例步骤失败数量(含所有子级步骤)")
+    step_fail_count: Optional[int] = Field(None, ge=0, description="用例步骤失败数量(含所有子级步骤)")
     step_pass_count: Optional[int] = Field(None, ge=0, description="用例步骤成功数量(含所有子级步骤)")
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
 
@@ -34,7 +34,7 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
     case_state: bool = Field(default=False, description="用例执行状态(True:成功, False:失败)")
 
     step_total: int = Field(default=0, ge=0, description="用例步骤数量(含所有子级步骤)")
-    step_fill_count: int = Field(default=0, ge=0, description="用例步骤失败数量(含所有子级步骤)")
+    step_fail_count: int = Field(default=0, ge=0, description="用例步骤失败数量(含所有子级步骤)")
     step_pass_count: int = Field(default=0, ge=0, description="用例步骤成功数量(含所有子级步骤)")
     step_pass_ratio: float = Field(default=0.0, ge=0, description="用例步骤成功率(含所有子级步骤)")
 

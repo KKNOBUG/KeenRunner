@@ -2474,7 +2474,7 @@ class AutoTestStepExecutionEngine:
                     case_st_time=case_st_time_str,
                     case_state=False,
                     step_total=0,
-                    step_fill_count=0,
+                    step_fail_count=0,
                     step_pass_count=0,
                     step_pass_ratio=0.0,
                     report_type=final_report_type,
@@ -2537,7 +2537,7 @@ class AutoTestStepExecutionEngine:
                         case_elapsed=case_elapsed,
                         case_state=case_state,
                         step_total=total_steps,
-                        step_fill_count=failed_steps,
+                        step_fail_count=failed_steps,
                         step_pass_count=success_steps,
                         step_pass_ratio=pass_ratio,
                         updated_user=user_name

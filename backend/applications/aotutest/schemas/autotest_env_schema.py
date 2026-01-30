@@ -27,7 +27,7 @@ class AutoTestApiEnvBase(BaseModel):
     project_id: Optional[int] = Field(None, description="环境所属项目")
     env_name: Optional[UpperStr] = Field(None, max_length=64, description="环境名称")
     env_port: Optional[int] = Field(None, ge=1, description="环境端口(8000)")
-    env_host: Optional[str] = Field(None, max_length=255, description="环境主机(http|https://127.0.0.1)")
+    env_host: Optional[str] = Field(None, max_length=128, description="环境主机(http|https://127.0.0.1)")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 

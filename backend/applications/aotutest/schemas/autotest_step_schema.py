@@ -76,7 +76,7 @@ class AutoTestApiStepChildren(BaseModel):
 
 class AutoTestApiStepCreate(AutoTestApiStepBase):
     step_no: int = Field(..., ge=1, description="步骤序号")
-    step_name: str = Field(..., max_length=64, description="步骤名称")
+    step_name: str = Field(..., max_length=255, description="步骤名称")
     case_type: AutoTestCaseType = Field(..., description="用例所属类型")
     step_type: AutoTestStepType = Field(..., description="步骤所属类型")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")
@@ -102,7 +102,7 @@ class AutoTestApiStepSelect(BaseModel):
     quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, description="更新人员")
-    state: Optional[int] = Field(0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
 
 class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):

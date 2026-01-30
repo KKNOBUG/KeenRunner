@@ -215,7 +215,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             case_code: Optional[str] = case_data.case_code
             case_name: Optional[str] = case_data.case_name
             case_tags: Optional[List[int]] = case_data.case_tags
-            case_project: Optional[str] = case_data.case_project
+            case_project: Optional[int] = case_data.case_project
             if case_id and case_code and (case_id, case_code) in processed_case:
                 continue
 

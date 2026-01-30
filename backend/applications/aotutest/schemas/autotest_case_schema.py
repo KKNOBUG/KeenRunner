@@ -52,4 +52,4 @@ class AutoTestApiCaseSelect(AutoTestApiCaseBase):
 
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
-    state: Optional[int] = Field(0, description="状态(0:启用, 1:禁用)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

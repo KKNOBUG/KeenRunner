@@ -35,7 +35,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
     async def get_by_id(self, project_id: int, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
         if not project_id:
-            error_message: str = "查询应用信息失败, 参数(env_id)不允许为空"
+            error_message: str = "查询应用信息失败, 参数(project_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 

@@ -173,8 +173,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_form_data = fields.JSONField(null=True, description="请求表单数据")
     request_form_file = fields.JSONField(null=True, description="请求文件路径")
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据")
-    request_project = fields.BigIntField(null=True, description="请求应用ID")
-    request_environment = fields.CharField(max_length=64, null=True, description="请求环境名称")
+    request_env_id = fields.BigIntField(null=True, description="请求环境ID")
 
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")
@@ -230,7 +229,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     case_state = fields.BooleanField(null=True, description="用例执行状态(True:成功, False:失败)")
 
     step_total = fields.IntField(default=0, ge=0, description="用例步骤数量(含所有子级步骤)")
-    step_fill_count = fields.IntField(default=0, ge=0, description="用例步骤失败数量(含所有子级步骤)")
+    step_fail_count = fields.IntField(default=0, ge=0, description="用例步骤失败数量(含所有子级步骤)")
     step_pass_count = fields.IntField(default=0, ge=0, description="用例步骤成功数量(含所有子级步骤)")
     step_pass_ratio = fields.FloatField(default=0.0, ge=0.0, description="用例步骤成功率(含所有子级步骤)")
 

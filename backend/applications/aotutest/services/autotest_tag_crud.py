@@ -144,7 +144,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             exclude_unset=True,
             exclude={"tag_id", "tag_code"}
         )
-        if "tag_name" in update_dict or "tag_mode" in update_dict or "tag_name" in update_dict:
+        if "tag_type" in update_dict or "tag_mode" in update_dict or "tag_name" in update_dict:
             tag_type: str = update_dict.get("tag_type", instance.tag_type)
             tag_mode: str = update_dict.get("tag_mode", instance.tag_mode)
             tag_name: str = update_dict.get("tag_name", instance.tag_name)
@@ -165,7 +165,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         except DoesNotExist as e:
             error_message: str = f"更新标签信息失败, 标签(id={tag_id}或code={tag_code})不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise NotFoundException(message=error_message)
+            raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
             error_message: str = f"更新标签信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
@@ -178,7 +178,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             instance = await self.get_by_code(tag_code=tag_code, on_error=True)
 
         from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-        cases_count = await AUTOTEST_API_CASE_CRUD.model.filter(case_tags__in=tag_id, state__not=1).count()
+        cases_count = await AUTOTEST_API_CASE_CRUD.model.filter(case_tags__contains=[tag_id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 标签(id={instance.id})被{cases_count}个用例关联"
             LOGGER.error(error_message)
