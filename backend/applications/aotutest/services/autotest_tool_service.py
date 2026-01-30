@@ -17,12 +17,18 @@ from backend.common.generate_utils import GenerateUtils
 
 
 class AutoTestToolService:
-
-    def __init__(self):
-        ...
+    """自动化测试步骤与断言相关的工具类，不依赖实例状态，方法均为类方法或静态方法。"""
 
     @classmethod
     def resolve_json_path(cls, data: Any, expr: str) -> Any:
+        """
+        按简化版 JSONPath 表达式从 data 中取值(仅支持以 '$.' 开头的路径，如 '$.a.b[0]')
+
+        :param data: 待取值的对象（dict/list 或嵌套结构）。
+        :param expr: 非空字符串，必须以 '$.' 开头。
+        :return: 路径指向的值。
+        :raises ValueError: 表达式非法、路径不存在或类型不支持时。
+        """
         try:
             if not expr or not isinstance(expr, str):
                 raise ValueError(
@@ -82,25 +88,23 @@ class AutoTestToolService:
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:
         """
-        标准化值的类型，用于比较
-        - 如果值是可以转换为数字的字符串，则转换为数字
-        - 如果值是布尔型字符串，则转换为布尔值
+        将值标准化为便于比较的类型：数字字符串转 int/float，'true'/'false' 转 bool，其余原样返回。
+
+        :param value: 任意值。
+        :return: 标准化后的值，或原值。
         """
         if value is None:
             return None
         if isinstance(value, (int, float, bool)):
             return value
         if isinstance(value, str):
-            # 尝试转换为整数
             if value.isdigit() or (value.startswith('-') and value[1:].isdigit()):
                 return int(value)
-            # 尝试转换为浮点数
             try:
                 if '.' in value:
                     return float(value)
             except ValueError:
                 pass
-            # 尝试转换为布尔值
             if value.lower() == 'true':
                 return True
             if value.lower() == 'false':
@@ -110,9 +114,11 @@ class AutoTestToolService:
     @classmethod
     def _type_aware_equals(cls, actual: Any, expected: Any) -> bool:
         """
-        类型感知的相等比较
-        - 先尝试直接比较
-        - 如果类型不同，尝试标准化后比较
+        类型感知的相等比较：先直接比较，若不等则对两值做 _normalize_value 后再比较。
+
+        :param actual: 实际值。
+        :param expected: 期望值。
+        :return: 是否相等。
         """
         # 直接比较
         if actual == expected:
@@ -125,7 +131,12 @@ class AutoTestToolService:
     @classmethod
     def _type_aware_compare(cls, actual: Any, expected: Any, comparator) -> bool:
         """
-        类型感知的数值比较（用于大于、小于等）
+        类型感知的大小比较：先标准化再比较；若标准化后均为数值则用数值比较，否则用字符串比较。
+
+        :param actual: 实际值。
+        :param expected: 期望值。
+        :param comparator: 二元谓词 (a, b) -> bool，如 lambda x, y: x > y。
+        :return: 比较结果。
         """
         norm_actual = cls._normalize_value(actual)
         norm_expected = cls._normalize_value(expected)
@@ -137,7 +148,15 @@ class AutoTestToolService:
 
     @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
-        """比较断言结果，支持类型智能转换"""
+        """
+        根据操作符对实际值与期望值做断言比较，支持等于、不等于、大于、小于、包含、非空等。
+
+        :param actual: 实际值。
+        :param operation: 操作符名称（如 "等于"、"包含"、"非空"）。
+        :param expected: 期望值（部分操作符可忽略）。
+        :return: 断言是否通过。
+        :raises ValueError: 不支持的操作符或比较过程异常。
+        """
         op_map = {
             "等于": lambda a, b: cls._type_aware_equals(a, b),
             "不等于": lambda a, b: not cls._type_aware_equals(a, b),
@@ -164,13 +183,18 @@ class AutoTestToolService:
 
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
+        """
+        校验步骤树结构：无自循环引用，且仅有「循环结构」「条件分支」类型可包含子步骤。
+
+        :param steps_data: 根步骤列表（每项可为带 children 的树节点）。
+        :return: (True, None) 表示通过；(False, str) 表示失败及错误信息。
+        """
         from backend.enums.autotest_enum import AutoTestStepType
 
         # 允许有子步骤的步骤类型
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
 
         def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: set, path: list) -> tuple:
-            """递归检查步骤"""
             step_id = step.step_id
             step_code = step.step_code
 
@@ -210,9 +234,10 @@ class AutoTestToolService:
     @classmethod
     def normalize_step(cls, step: Dict[str, Any]) -> Dict[str, Any]:
         """
-        规范化步骤数据格式
-        :param step: 步骤数据字典
-        :return: 规范化后的步骤数据字典
+        规范化单条步骤数据：conditions 转为 JSON 字符串、移除 case/quote_case，并递归规范化 children 与 quote_steps。
+
+        :param step: 步骤数据字典（可含 conditions、children、quote_steps 等）。
+        :return: 规范化后的新字典，不修改入参。
         """
         step = step.copy()
 
@@ -240,9 +265,10 @@ class AutoTestToolService:
     @classmethod
     def collect_session_variables(cls, steps_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        递归收集所有步骤的session_variables作为初始变量
-        :param steps_list: 步骤列表
-        :return: 合并后的变量列表（每个元素包含key、value、desc）
+        递归收集步骤树中所有步骤的 session_variables，合并为扁平列表（每项含 key、value、desc）。
+
+        :param steps_list: 步骤列表，每项可含 children、quote_steps。
+        :return: 合并后的变量列表。
         """
         variables = []
         if not steps_list:
@@ -260,6 +286,12 @@ class AutoTestToolService:
 
     @classmethod
     def _parse_funcname_funcargs(cls, func_string: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        从形如 "func_name(key1=val1, key2=val2)" 的字符串中解析出函数名与参数字典。
+
+        :param func_string: 函数调用形式的字符串。
+        :return: (函数名, 参数字典)，无法解析时返回 (None, None)。
+        """
         if not isinstance(func_string, str):
             return None, None
         if not func_string.endswith(")") or func_string.find("(") == -1:
@@ -275,8 +307,10 @@ class AutoTestToolService:
     @classmethod
     def execute_func_string(cls, session_variables: List[Dict[str, Any]]):
         """
-        执行变量中的函数字符串，将函数调用结果替换为实际值
-        :param session_variables: 变量列表（每个元素包含key、value、desc）
+        对会话变量列表中 value 为 "func_name(...)" 形式的项，调用 GenerateUtils 中同名函数并用返回值替换 value。
+
+        :param session_variables: 变量列表，每项为含 key、value、desc 的字典。
+        :raises AttributeError: 函数不存在、参数不匹配或执行失败时。
         """
         if not isinstance(session_variables, list):
             return
