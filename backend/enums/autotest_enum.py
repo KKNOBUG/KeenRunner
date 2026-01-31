@@ -61,15 +61,16 @@ class AutoTestLoopErrorStrategy(StringEnum):
 
 
 class AutoTestTaskScheduler(StringEnum):
-    SCHEDULER1 = "运行中"
-    SCHEDULER2 = "已停止"
-    SCHEDULER3 = "已完成"
+    CRON = "cron"
+    INTERVAL = "interval"
+    DATETIME = "datetime"
 
 
 class AutoTestTaskStatus(StringEnum):
-    STATUS1 = "全部成功"
-    STATUS2 = "部分成功"
-    STATUS3 = "全部失败"
+    PENDING = "等待执行"
+    RUNNING = "正在执行"
+    SUCCESS = "成功"
+    FAILURE = "失败"
 
 
 class AutoTestReqArgsType(StringEnum):
