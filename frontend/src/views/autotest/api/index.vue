@@ -371,7 +371,7 @@
 
 <script setup>
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
-import {useRoute} from 'vue-router'
+import {useRoute, useRouter} from 'vue-router'
 import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace, NSelect, NPopover, NList, NListItem, NText} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import {renderIcon} from '@/utils'
@@ -407,6 +407,7 @@ const genId = () => `step-${seed++}`
 const steps = ref([])
 const selectedKeys = ref([])
 const route = useRoute()
+const router = useRouter()
 const caseId = computed(() => route.query.case_id || null)
 const caseCode = computed(() => route.query.case_code || null)
 
@@ -866,14 +867,20 @@ const hydrateCaseInfo = (data) => {
   if (firstStepCase) {
     caseForm.case_project = firstStepCase.case_project || ''
     caseForm.case_name = firstStepCase.case_name || ''
-    caseForm.case_tags = firstStepCase.case_tags || ''
+    caseForm.case_tags = firstStepCase.case_tags ?? (Array.isArray(firstStepCase.case_tags) ? firstStepCase.case_tags : [])
     caseForm.case_desc = firstStepCase.case_desc || ''
-  } else {
+    caseForm.case_attr = firstStepCase.case_attr || ''
+    caseForm.case_type = firstStepCase.case_type || ''
+  } else if (Array.isArray(data) && data.length > 0) {
+    // 有步骤但首条无 case 信息时才清空（例如接口返回异常）
     caseForm.case_project = ''
     caseForm.case_name = ''
-    caseForm.case_tags = ''
+    caseForm.case_tags = []
     caseForm.case_desc = ''
+    caseForm.case_attr = ''
+    caseForm.case_type = ''
   }
+  // 当 data 为空（如新增用例保存后尚未有步骤）时保留当前 caseForm，不清空用户刚填写的内容
 }
 
 // 将前端类型转换为后端类型
@@ -1142,13 +1149,40 @@ const validateJsonBodyInSteps = (stepList) => {
   return { valid: true }
 }
 
+// 校验用例信息必填项（所属应用、用例名称、所属标签、用例属性、用例类型）
+const validateCaseForm = () => {
+  if (!caseForm.case_project) {
+    return { valid: false, message: '请选择所属应用' }
+  }
+  if (!caseForm.case_name || !String(caseForm.case_name).trim()) {
+    return { valid: false, message: '请输入用例名称' }
+  }
+  if (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0) {
+    return { valid: false, message: '请选择所属标签' }
+  }
+  if (!caseForm.case_attr) {
+    return { valid: false, message: '请选择用例属性' }
+  }
+  if (!caseForm.case_type) {
+    return { valid: false, message: '请选择用例类型' }
+  }
+  return { valid: true }
+}
+
 const handleSaveAll = async () => {
   try {
+    // 用例信息必填项校验
+    const caseValidation = validateCaseForm()
+    if (!caseValidation.valid) {
+      window.$message?.error?.(caseValidation.message)
+      return
+    }
+
     // 请求体为 json 时校验 JSON 语法，有错误则提示并阻止保存
     const jsonValidation = validateJsonBodyInSteps(steps.value)
     if (!jsonValidation.valid) {
       window.$message?.error?.(
-          `步骤 [${jsonValidation.stepName}] 请求体参数输入错误`
+          `步骤「${jsonValidation.stepName}」请求体 JSON 格式错误，请修正后再保存。${jsonValidation.message ? ' ' + jsonValidation.message : ''}`
       )
       return
     }
@@ -1205,18 +1239,18 @@ const handleSaveAll = async () => {
     if (res?.code === '000000' || res?.code === 200 || res?.code === 0) {
       window.$message?.success?.(res?.message || '保存成功')
 
-      // 如果保存成功，更新 caseId 和 caseCode（如果是新增）
+      // 新增用例保存成功后，将 case_id / case_code 写入 URL，以便后续加载和刷新保留
       if (res?.data?.cases?.success_detail && res.data.cases.success_detail.length > 0) {
         const savedCase = res.data.cases.success_detail[0]
         if (savedCase.case_id && !caseId.value) {
-          caseId.value = savedCase.case_id
-        }
-        if (savedCase.case_code && !caseCode.value) {
-          caseCode.value = savedCase.case_code
+          router.replace({
+            path: route.path,
+            query: { ...route.query, case_id: String(savedCase.case_id), case_code: savedCase.case_code || '' }
+          })
         }
       }
 
-      // 重新加载数据
+      // 重新加载数据（URL 已更新，loadSteps 会带上 case_id；若无步骤，hydrateCaseInfo 会保留当前 caseForm）
       await loadSteps()
     } else {
       window.$message?.error?.(res?.message || '保存失败')
