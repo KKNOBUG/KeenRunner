@@ -70,7 +70,10 @@ const props = defineProps({
   // 主题
   theme: {
     type: String,
-    default: 'vs-dark',   // vs ||  hc-black || vs-dark
+    // vs：浅色默认主题（适合白天使用）
+    // vs-dark：深色主题（VS Code 默认深色，推荐）
+    // hc-black：高对比度黑色主题（适配视觉障碍用户）
+    default: 'vs-dark',
   },
   //lineNumbers
   options: {

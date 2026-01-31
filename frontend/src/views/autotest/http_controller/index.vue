@@ -70,15 +70,20 @@
         <n-radio-group v-model:value="state.form.bodyType" name="bodyType">
           <n-space>
             <n-radio value="none">none</n-radio>
+            <n-radio value="params">params</n-radio>
             <n-radio value="form-data">form-data</n-radio>
             <n-radio value="x-www-form-urlencoded">x-www-form-urlencoded</n-radio>
             <n-radio value="json">json</n-radio>
+            <n-radio value="raw">raw</n-radio>
           </n-space>
         </n-radio-group>
-        <n-button
-            class="ml-10" size="tiny" type="primary" round text
-            v-if="state.form.bodyType === 'json'" @click="formatJson">美化
-        </n-button>
+        <div v-if="state.form.bodyType === 'params'">
+          <KeyValueEditor
+              v-model:items="state.form.bodyForm"
+              :body-type="'none'"
+              :is-for-body="true"
+          />
+        </div>
         <div v-if="state.form.bodyType === 'form-data'">
           <KeyValueEditor
               v-model:items="state.form.bodyParams"
@@ -97,9 +102,19 @@
         <div v-if="state.form.bodyType === 'json'">
           <monaco-editor
               v-model:value="state.form.jsonBody"
-              :options="monacoEditorOptions(false)"
+              lang="json"
+              :options="monacoEditorOptionsForBody()"
               class="json-editor"
               style="min-height: 400px; height: auto; margin-top: 12px;"
+          />
+        </div>
+        <div v-if="state.form.bodyType === 'raw'">
+          <n-input
+              v-model:value="state.form.rawBody"
+              type="textarea"
+              placeholder="请输入 raw 请求体文本"
+              :rows="12"
+              style="margin-top: 12px;"
           />
         </div>
 
@@ -353,7 +368,10 @@
               </n-space>
             </n-collapse-item>
             <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
-              <div v-if="isJsonRequest">
+              <div v-if="isRawRequest" class="request-raw-body">
+                <pre>{{ requestInfo.rawBody || '(空)' }}</pre>
+              </div>
+              <div v-else-if="isJsonRequest">
                 <monaco-editor
                     v-model:value="formattedRequestJson"
                     :options="monacoEditorOptions(true)"
@@ -548,6 +566,7 @@ const state = reactive({
     bodyParams: [],
     bodyForm: [],
     jsonBody: '',
+    rawBody: '',
     step_name: '',
     description: '',
     defined_variables: [],
@@ -603,18 +622,23 @@ const initFromConfig = () => {
   state.form.headers = Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : [])
   state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
 
-  // 请求体
+  // 请求体类型（与后端 request_args_type 枚举一致：none, params, form-data, x-www-form-urlencoded, json, raw）
   if (cfg.bodyType) {
     state.form.bodyType = cfg.bodyType
+  } else if (original.request_args_type) {
+    state.form.bodyType = original.request_args_type
   } else if (cfg.data) {
     state.form.bodyType = 'json'
   } else if (cfg.form_data) {
     state.form.bodyType = 'form-data'
   } else if (cfg.form_urlencoded) {
     state.form.bodyType = 'x-www-form-urlencoded'
+  } else if (cfg.request_text != null && cfg.request_text !== '') {
+    state.form.bodyType = 'raw'
   } else {
     state.form.bodyType = 'none'
   }
+  state.form.rawBody = cfg.request_text ?? original.request_text ?? ''
 
   // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc、type（form-data 需 type 供 KeyValueEditor 显示「数据」列）
   const bodyParamsRaw = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
@@ -632,11 +656,23 @@ const initFromConfig = () => {
     type: item.type || 'text'
   }))
 
-  try {
-    const body = cfg.data || original.request_body || {}
-    state.form.jsonBody = Object.keys(body).length ? JSON.stringify(body, null, 2) : ''
-  } catch {
-    state.form.jsonBody = ''
+  // JSON 请求体：优先使用配置中的原始文本，避免格式错误时被清空
+  const jsonBodyText = cfg.jsonBodyText
+  if (jsonBodyText !== undefined && jsonBodyText !== null) {
+    state.form.jsonBody = String(jsonBodyText)
+  } else {
+    try {
+      const body = cfg.data ?? original.request_body
+      if (body === null || body === undefined) {
+        state.form.jsonBody = ''
+      } else if (typeof body === 'string') {
+        state.form.jsonBody = body
+      } else {
+        state.form.jsonBody = Object.keys(body).length ? JSON.stringify(body, null, 2) : ''
+      }
+    } catch {
+      state.form.jsonBody = state.form.jsonBody ?? ''
+    }
   }
 
   // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
@@ -768,6 +804,7 @@ const buildConfigFromState = () => {
   const form_data = normalizeBodyParams(state.form.bodyParams)
   const form_urlencoded = Array.isArray(state.form.bodyForm) ? normalizeList(state.form.bodyForm) : []
 
+  let jsonBodyText = undefined
   switch (state.form.bodyType) {
     case 'json':
       try {
@@ -775,6 +812,10 @@ const buildConfigFromState = () => {
       } catch {
         data = {}
       }
+      jsonBodyText = state.form.jsonBody ?? ''
+      break
+    case 'raw':
+      request_text = state.form.rawBody ?? ''
       break
     case 'none':
     default:
@@ -788,7 +829,9 @@ const buildConfigFromState = () => {
     headers: normalizeList(headersList),
     params: normalizeList(paramsList),
     bodyType: state.form.bodyType,
+    request_args_type: state.form.bodyType,
     data,
+    jsonBodyText,
     form_data,
     form_urlencoded,
     request_text,
@@ -801,7 +844,7 @@ const buildConfigFromState = () => {
 // 使用防抖，避免频繁触发
 let emitTimer = null
 watch(
-    () => [state.form.step_name, state.form.method, state.form.url, state.form.headers, state.form.params, state.form.bodyType, state.form.bodyParams, state.form.bodyForm, state.form.jsonBody, state.form.defined_variables, state.form.extract_variables, state.form.assert_validators],
+    () => [state.form.step_name, state.form.method, state.form.url, state.form.headers, state.form.params, state.form.bodyType, state.form.bodyParams, state.form.bodyForm, state.form.jsonBody, state.form.rawBody, state.form.defined_variables, state.form.extract_variables, state.form.assert_validators],
     () => {
       // 如果正在从外部更新，不触发 emit
       if (isExternalUpdate) return
@@ -826,12 +869,15 @@ watch(
 /* 请求体数量计算 */
 const getBodyCount = computed(() => {
   switch (state.form.bodyType) {
-    case 'form-data':
-      return state.form.bodyParams.length
+    case 'params':
     case 'x-www-form-urlencoded':
       return state.form.bodyForm.length
+    case 'form-data':
+      return state.form.bodyParams.length
     case 'json':
-      return state.form.jsonBody.trim() ? 1 : 0 // JSON内容存在则计1
+      return state.form.jsonBody.trim() ? 1 : 0
+    case 'raw':
+      return state.form.rawBody.trim() ? 1 : 0
     default:
       return 0
   }
@@ -861,7 +907,7 @@ const monacoEditorOptions = (readOnly) => {
     },
     lineNumbers: 'on',
     renderLineHighlight: 'line',
-    wordWrap: 'off',
+    wordWrap: 'on',
     scrollBeyondLastLine: false,
     // 其他
     folding: true,
@@ -874,6 +920,13 @@ const monacoEditorOptions = (readOnly) => {
   }
 
   return options
+}
+
+// 请求体 JSON 编辑器：黑色背景 + JSON 语法校验（红色波浪线）
+const monacoEditorOptionsForBody = () => {
+  return {
+    ...monacoEditorOptions(false),
+  }
 }
 
 /* ======================================== */
@@ -973,14 +1026,18 @@ const methodTagType = computed(() => {
 
 const requestBodyType = computed(() => {
   const typeMap = {
+    'none': 'None',
+    'params': 'Params',
     'form-data': 'Form Data',
     'x-www-form-urlencoded': 'Form URL Encoded',
-    'json': 'JSON'
+    'json': 'JSON',
+    'raw': 'Raw'
   }
   return typeMap[requestInfo.value.bodyType] || 'Params'
 })
 
 const isJsonRequest = computed(() => requestInfo.value.bodyType === 'json')
+const isRawRequest = computed(() => requestInfo.value.bodyType === 'raw')
 
 const formattedRequestJson = computed(() => {
   try {
@@ -998,6 +1055,7 @@ const requestBodyData = computed(() => {
         return Object.entries(requestInfo.value.formData).map(([key, value]) => ({key, value}))
       }
       return state.form.bodyParams.filter(item => item.key)
+    case 'params':
     case 'x-www-form-urlencoded':
       // 优先使用后端返回的处理后数据
       if (requestInfo.value.formUrlencoded && typeof requestInfo.value.formUrlencoded === 'object') {
@@ -1044,7 +1102,10 @@ const debugging = async () => {
       url: cfg.url,
       headers: headersObj,
       bodyType: cfg.bodyType || 'none',
-      jsonBody: state.form.jsonBody
+      jsonBody: state.form.jsonBody,
+      rawBody: state.form.rawBody ?? '',
+      formData: state.form.bodyType === 'form-data' ? state.form.bodyParams : null,
+      formUrlencoded: (state.form.bodyType === 'params' || state.form.bodyType === 'x-www-form-urlencoded') ? state.form.bodyForm : null
     }
 
     const caseId = route.query.case_id ? Number(route.query.case_id) : null
@@ -1053,18 +1114,17 @@ const debugging = async () => {
     const original = props.step?.original || {}
 
     const debugPayload = {
-      // 与后端步骤结构保持一致的关键字段
       case_id: caseId,
       step_type: original.step_type || 'HTTP/HTTPS协议网络请求',
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
       request_url: cfg.url,
       request_method: cfg.method,
-      // request_params、request_header、request_form_data、request_form_urlencoded、defined_variables 必须是列表格式
+      request_args_type: cfg.request_args_type ?? cfg.bodyType ?? original.request_args_type ?? 'none',
       request_params: Array.isArray(cfg.params) && cfg.params.length > 0 ? cfg.params : null,
       request_body: cfg.data,
       request_form_data: Array.isArray(cfg.form_data) && cfg.form_data.length > 0 ? cfg.form_data : null,
       request_form_urlencoded: Array.isArray(cfg.form_urlencoded) && cfg.form_urlencoded.length > 0 ? cfg.form_urlencoded : null,
-      request_text: cfg.request_text,
+      request_text: cfg.request_text ?? null,
       request_header: Array.isArray(cfg.headers) && cfg.headers.length > 0 ? cfg.headers : null,
       defined_variables: Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null,
       extract_variables: buildExtractForBackend(),
@@ -1098,7 +1158,8 @@ const debugging = async () => {
           bodyType: reqInfo.body_type || 'none',
           jsonBody: reqInfo.body_type === 'json' && reqInfo.body ? JSON.stringify(reqInfo.body, null, 2) : '',
           formData: reqInfo.body_type === 'form-data' ? reqInfo.body : null,
-          formUrlencoded: reqInfo.body_type === 'x-www-form-urlencoded' ? reqInfo.body : null
+          formUrlencoded: (reqInfo.body_type === 'params' || reqInfo.body_type === 'x-www-form-urlencoded') ? reqInfo.body : null,
+          rawBody: reqInfo.body_type === 'raw' && reqInfo.request_text != null ? reqInfo.request_text : (requestInfo.value.rawBody ?? '')
         }
       }
       $message.success('调试成功');
@@ -1119,29 +1180,6 @@ const debugging = async () => {
     debugLoading.value = false
   }
 };
-
-const formatJson = () => {
-  const inputJson = state.form.jsonBody.trim();
-  if (inputJson === '') {
-    $message.warning('输入的 JSON 为空，请输入有效的 JSON 内容。');
-    return;
-  }
-
-  try {
-    const jsonData = JSON.parse(inputJson);
-    state.form.jsonBody = JSON.stringify(jsonData, null, 2);
-  } catch (parseError) {
-    try {
-      // 尝试使用 eval 处理可能不规范的 JSON
-      const jsonData = eval('(' + inputJson + ')');
-      state.form.jsonBody = JSON.stringify(jsonData, null, 2);
-    } catch (evalError) {
-      $message.error(`JSON 格式化失败，请检查输入的 JSON 格式是否正确。详细错误信息：${parseError.message}`);
-      console.error('JSON 格式化失败，解析错误:', parseError);
-      console.error('JSON 格式化失败，eval 处理也失败:', evalError);
-    }
-  }
-}
 
 /* ======================================= */
 /* =============== Extract =============== */
@@ -1522,6 +1560,7 @@ const validatorColumns = [
   min-height: 90px;
   height: auto !important;
 }
+
 
 /* 添加必要的布局样式 */
 .response-code {

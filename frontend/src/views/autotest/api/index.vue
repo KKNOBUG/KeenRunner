@@ -817,13 +817,13 @@ const mapBackendStep = (step) => {
     base.config = {
       method: step.request_method || 'POST',
       url: step.request_url || '',
-      // request_params、request_header、request_form_data、request_form_urlencoded 必须是列表格式，每个元素包含 key、value、desc
       params: Array.isArray(step.request_params) ? step.request_params : [],
       data: step.request_body || {},
       headers: Array.isArray(step.request_header) ? step.request_header : [],
       form_data: Array.isArray(step.request_form_data) ? step.request_form_data : [],
       form_urlencoded: Array.isArray(step.request_form_urlencoded) ? step.request_form_urlencoded : [],
       request_text: step.request_text || null,
+      bodyType: step.request_args_type || 'none',
       extract: step.extract_variables || {},
       validators: step.validators || {}
     }
@@ -967,9 +967,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   if (step.type === 'http') {
     backendStep.request_method = config.method || original.request_method || 'POST'
     backendStep.request_url = config.url || original.request_url || ''
+    backendStep.request_args_type = config.request_args_type ?? config.bodyType ?? original.request_args_type ?? 'none'
+    backendStep.request_text = config.request_text ?? original.request_text ?? null
 
-    // request_header、request_params、request_form_data、request_form_urlencoded、defined_variables 必须是列表格式
-    // 每个元素包含 key、value、desc，不再兼容旧格式
     backendStep.request_header = Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : [])
     backendStep.request_params = Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : [])
     backendStep.request_form_data = Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
@@ -1115,8 +1115,44 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   return cleanedStep
 }
 
+// 递归校验步骤树中所有 HTTP 步骤：若请求体为 json，则校验 JSON 语法
+const validateJsonBodyInSteps = (stepList) => {
+  for (const step of stepList) {
+    if (step.type === 'http') {
+      const config = step.config || {}
+      const bodyType = config.bodyType ?? config.request_args_type ?? 'none'
+      if (bodyType === 'json') {
+        const raw = config.jsonBodyText ?? (config.data != null ? JSON.stringify(config.data) : '')
+        const trimmed = (raw || '').trim()
+        if (trimmed !== '') {
+          try {
+            JSON.parse(trimmed)
+          } catch (e) {
+            const stepName = step.name || config.step_name || '未命名步骤'
+            return { valid: false, message: e.message || 'JSON 格式错误', stepName }
+          }
+        }
+      }
+    }
+    if (step.children && step.children.length > 0) {
+      const childResult = validateJsonBodyInSteps(step.children)
+      if (!childResult.valid) return childResult
+    }
+  }
+  return { valid: true }
+}
+
 const handleSaveAll = async () => {
   try {
+    // 请求体为 json 时校验 JSON 语法，有错误则提示并阻止保存
+    const jsonValidation = validateJsonBodyInSteps(steps.value)
+    if (!jsonValidation.valid) {
+      window.$message?.error?.(
+          `步骤 [${jsonValidation.stepName}] 请求体参数输入错误`
+      )
+      return
+    }
+
     // 获取当前用户信息（用于 updated_user 字段）
     const userStore = useUserStore()
     const currentUser = userStore.username || ''
