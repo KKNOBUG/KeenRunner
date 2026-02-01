@@ -8,7 +8,9 @@
 """
 import os.path
 import platform
+from functools import lru_cache
 from typing import List, Dict, Any
+from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings
 
@@ -219,12 +221,17 @@ class ProjectConfig(BaseSettings):
         }
     }
 
-    # Redis 配置
+    # Redis 配置（仅 requirepass 时用户名留空；密码含 @/: 等会做 URL 编码）
     REDIS_USERNAME: str = ""
-    REDIS_PASSWORD: str = ""
-    REDIS_HOST: str = ""
-    REDIS_PORT: str = ""
+    REDIS_PASSWORD: str = quote_plus("!qaz@wsx")
+    REDIS_HOST: str = "127.0.0.1"
+    REDIS_PORT: str = "6379"
     REDIS_URL: str = f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
+
+
+@lru_cache(maxsize=1)
+def get_project_config():
+    return ProjectConfig()
 
 
 PROJECT_CONFIG = ProjectConfig()

@@ -17,6 +17,7 @@ certifi==2025.4.26
 cffi==1.17.1
 charset-normalizer==3.4.1
 click==8.1.8
+croniter==6.0.0
 concurrent-log-handler==0.9.25
 DBUtils==3.1.0
 dictdiffer==0.9.0

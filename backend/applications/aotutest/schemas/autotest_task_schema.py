@@ -6,7 +6,7 @@
 @Module  : autotest_task_schema
 @DateTime: 2026/1/31 12:40
 """
-from typing import Optional, List, Any
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,7 @@ class AutoTestApiTaskCreate(BaseModel):
     task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="任务触发条件3(Cron)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
+    task_enabled: Optional[bool] = Field(False, description="是否启动调度(True/False)")
 
 
 class AutoTestApiTaskUpdate(BaseModel):
@@ -46,13 +47,15 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="任务触发条件3(Cron)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
+    task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
 
 
 class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=100, description="每页数量")
-    order: List[str] = Field(default=["-updated_time"], description="排序字段")
+    order: List[str] = Field(default=["-created_time"], description="排序字段")
 
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

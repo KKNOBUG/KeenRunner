@@ -24,17 +24,18 @@ class CeleryConfig(BaseSettings):
     CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "celery_scheduler"))
     CELERY_BROKER_URL: str = (
         f"redis://"
-        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ''}"
-        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else ''}"
+        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ':'}"
+        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else '@'}"
         f"{PROJECT_CONFIG.REDIS_HOST or 'localhost'}:"
         f"{PROJECT_CONFIG.REDIS_PORT or '6379'}/1"
     )
 
     # Celery Result Backend配置（Redis作为结果存储）
+    # f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
     CELERY_RESULT_BACKEND: str = (
         f"redis://"
-        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ''}"
-        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else ''}"
+        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ':'}"
+        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else '@'}"
         f"{PROJECT_CONFIG.REDIS_HOST or 'localhost'}:"
         f"{PROJECT_CONFIG.REDIS_PORT or '6379'}/2"
     )
@@ -43,8 +44,8 @@ class CeleryConfig(BaseSettings):
     CELERY_BEAT_SCHEDULER: str = "redbeat.schedulers:RedBeatScheduler"
     CELERY_REDBEAT_REDIS_URL: str = (
         f"redis://"
-        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ''}"
-        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else ''}"
+        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ':'}"
+        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else '@'}"
         f"{PROJECT_CONFIG.REDIS_HOST or 'localhost'}:"
         f"{PROJECT_CONFIG.REDIS_PORT or '6379'}/3"
     )
@@ -70,7 +71,10 @@ class CeleryConfig(BaseSettings):
         "result_expires": 3600,  # 结果过期时间（秒）
         "result_persistent": True,  # 持久化结果
 
-        # 任务配置
+        "task_routes": {
+            "backend.celery_scheduler.tasks.task_autotest_case.execute_batch_cases_task": {"queue": "autotest_queue"},
+            "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {"queue": "autotest_queue"},
+        },
         "task_default_queue": "default",
         "task_default_exchange": "default",
         "task_default_exchange_type": "direct",
@@ -88,21 +92,32 @@ class CeleryConfig(BaseSettings):
         # Beat调度器配置（使用Redis Beat解决多服务器单点问题）
         "beat_scheduler": CELERY_BEAT_SCHEDULER,
         "redbeat_redis_url": CELERY_REDBEAT_REDIS_URL,
-        "redbeat_lock_timeout": 120,  # Beat锁超时时间（秒），防止多Beat进程冲突
-        "redbeat_lock_renewal_interval": 90,
+        # 锁超时与续期：长时间运行或单次 tick 较慢时，锁可能在续期前过期导致 LockNotOwnedError，故适当放大
+        "redbeat_lock_timeout": 600,  # Beat 锁超时（秒），建议大于 renewal_interval 的 1.5 倍
+        "redbeat_lock_renewal_interval": 420,  # 续期间隔（秒），在超时前完成续期
+
+        # 定时任务：每分钟扫描 AutoTestApiTaskInfo，到期则下发执行
+        "beat_schedule": {
+            "scan-autotest-tasks": {
+                "task": "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks",
+                "schedule": 60.0,  # 每 60 秒
+                "options": {"queue": "default"},
+            },
+        },
 
         # 日志配置
         "worker_log_format": "[%(asctime)s][%(levelname)s] -> [%(name)s][%(filename)s][line:%(lineno)d] -> %(message)s",
         "worker_task_log_format": "[%(asctime)s][%(levelname)s] -> [%(name)s][%(filename)s][line:%(lineno)d] -> %(message)s",
         "worker_log_color": False,  # 禁用日志颜色（文件日志不需要）
 
-        # 任务导入配置
+
+        # 任务导入配置（必须导入 celery_service，否则 run_autotest_task 等任务未注册）
         "imports": [
             tasks
             for tasks in FileUtils.get_all_files(
                 abspath=os.path.join(CELERY_SCHEDULER_DIR, "tasks"),
                 return_full_path=False,
-                return_precut_path=f"celery_scheduler.tasks.",
+                return_precut_path="backend.celery_scheduler.tasks.",
                 startswith="task",
                 extension=".py",
                 exclude_startswith="__",

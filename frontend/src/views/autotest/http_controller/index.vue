@@ -610,11 +610,11 @@ const initFromConfig = () => {
   console.log('==================================================')
 
   // 从原始数据中获取步骤名称和描述
-  // 优先使用 config.step_name，然后是 step.name，最后是 original.step_name
+  // 优先使用 config（含 emit 回写），再回退到 original，避免失焦时被旧 original 覆盖
   state.form.step_name = cfg.step_name !== undefined
       ? cfg.step_name
       : (step.name || original.step_name || '')
-  state.form.description = original.step_desc || ''
+  state.form.description = cfg.step_desc !== undefined ? (cfg.step_desc ?? '') : (original.step_desc || '')
 
   state.form.method = cfg.method || original.request_method || 'GET'
   state.form.url = cfg.url || original.request_url || ''
@@ -824,6 +824,7 @@ const buildConfigFromState = () => {
 
   return {
     step_name: state.form.step_name || '',
+    step_desc: state.form.description ?? '',
     method: state.form.method,
     url: state.form.url,
     headers: normalizeList(headersList),
@@ -844,7 +845,7 @@ const buildConfigFromState = () => {
 // 使用防抖，避免频繁触发
 let emitTimer = null
 watch(
-    () => [state.form.step_name, state.form.method, state.form.url, state.form.headers, state.form.params, state.form.bodyType, state.form.bodyParams, state.form.bodyForm, state.form.jsonBody, state.form.rawBody, state.form.defined_variables, state.form.extract_variables, state.form.assert_validators],
+    () => [state.form.step_name, state.form.description, state.form.method, state.form.url, state.form.headers, state.form.params, state.form.bodyType, state.form.bodyParams, state.form.bodyForm, state.form.jsonBody, state.form.rawBody, state.form.defined_variables, state.form.extract_variables, state.form.assert_validators],
     () => {
       // 如果正在从外部更新，不触发 emit
       if (isExternalUpdate) return

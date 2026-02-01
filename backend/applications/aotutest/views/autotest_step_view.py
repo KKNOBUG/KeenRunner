@@ -338,7 +338,7 @@ async def batch_update_steps_tree(
                 TypeRejectException,
                 NotFoundException, ParameterException,
                 DataBaseStorageException, DataAlreadyExistsException,
-                ) as e:
+        ) as e:
             return FailureResponse(message=e.message)
         except Exception as e:
             # 事务会自动回滚
@@ -1140,7 +1140,7 @@ async def execute_step_tree(
                 result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                     case_id=case_id,
                     initial_variables=initial_variables,
-                    report_type=AutoTestReportType.EXEC1
+                    report_type=AutoTestReportType.SYNC_EXEC
                 )
                 return SuccessResponse(message="执行步骤成功并已保存到数据库", data=result_data)
             except NotFoundException as e:
@@ -1225,7 +1225,7 @@ async def execute_step_tree(
                 case=case_info,
                 steps=root_steps,
                 initial_variables=initial_variables,
-                report_type=AutoTestReportType.EXEC0
+                report_type=AutoTestReportType.DEBUG_EXEC
             )
 
             # 7. 获取最终会话变量（从执行引擎返回）
@@ -1285,7 +1285,7 @@ async def batch_execute_cases_endpoint(
         #         "case_ids": case_ids,
         #         "initial_variables": initial_variables,
         #         "execute_environment": execute_environment,
-        #         "report_type": AutoTestApiReportType.EXEC2
+        #         "report_type": AutoTestApiReportType.ASYNC_EXEC
         #     },
         #     expires=3600,
         # )
@@ -1299,7 +1299,7 @@ async def batch_execute_cases_endpoint(
             case_ids=case_ids,
             initial_variables=initial_variables,
             execute_environment=execute_environment,
-            report_type=AutoTestReportType.EXEC2,
+            report_type=AutoTestReportType.ASYNC_EXEC,
         )
         return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)
     except Exception as e:

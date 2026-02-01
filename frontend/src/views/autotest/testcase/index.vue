@@ -106,6 +106,7 @@ const loadTags = async (projectId = null) => {
     const res = await api.getApiTagList({
       page: 1,
       page_size: 1000,
+      tag_type: "脚本",
       state: 0
     })
     if (res?.data) {

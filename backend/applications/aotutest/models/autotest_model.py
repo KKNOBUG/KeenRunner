@@ -27,7 +27,8 @@ from backend.enums.autotest_enum import (
     AutoTestCaseAttr,
     AutoTestLoopErrorStrategy,
     AutoTestTaskStatus,
-    AutoTestTaskScheduler, AutoTestReqArgsType
+    AutoTestTaskScheduler,
+    AutoTestReqArgsType
 )
 
 
@@ -319,7 +320,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     task_name = fields.CharField(max_length=255, index=True, description="任务名称")
     task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
-    task_type = fields.CharField(max_length=255, null=True, description="任务类型")
+    task_type = fields.CharField(max_length=512, null=True, description="任务实现函数的完全限定名")
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
     case_ids = fields.JSONField(description="用例ID集合")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
@@ -330,6 +331,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发条件3")
     task_notify = fields.JSONField(null=True, description="任务执行明细反馈")
     task_notifier = fields.JSONField(null=True, description="任务执行通知人员")
+    task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -345,3 +347,36 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 
     def __str__(self):
         return self.task_name
+
+
+class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
+    task_id = fields.BigIntField(null=True, index=True, description="任务ID(krun_autotest_api_task表主键)")
+    task_name = fields.CharField(max_length=255, null=True, index=True, description="任务名称")
+    task_args = fields.JSONField(default=dict, null=True, description="定时任务实现函数的位置参数")
+    task_kwargs = fields.JSONField(default=dict, null=True, description="定时任务实现函数的关键字参数")
+    task_result = fields.TextField(null=True, description="任务的执行结果")
+    task_case_ids = fields.JSONField(default=list, null=True, description="任务关联的用例ID列表")
+    task_summary = fields.TextField(null=True, description="任务的执行摘要")
+    task_error = fields.TextField(null=True, description="任务的错误信息")
+    celery_id = fields.CharField(max_length=255, index=True, description="调度ID")
+    celery_node = fields.CharField(max_length=512, null=True, index=True, description="调度节点")
+    celery_trace_id = fields.CharField(max_length=255, null=True, index=True, description="调度回溯ID")
+    celery_status = fields.CharEnumField(AutoTestTaskStatus, default=AutoTestTaskStatus.RUNNING, description="调度状态")
+    celery_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="调度方式")
+    celery_start_time = fields.DatetimeField(null=True, description="开始时间")
+    celery_end_time = fields.DatetimeField(null=True, description="结束时间")
+    celery_duration = fields.CharField(max_length=64, null=True, description="耗时(秒或描述)")
+
+    class Meta:
+        table = "krun_autotest_api_record"
+        table_description = "自动化测试-任务执行记录表"
+        indexes = (
+            ("celery_id",),
+            ("task_id",),
+            ("celery_status",),
+            ("celery_start_time",),
+        )
+        ordering = ["-celery_start_time", "-id"]
+
+    def __str__(self):
+        return f"{self.celery_id or ''}-{self.task_name or ''}"

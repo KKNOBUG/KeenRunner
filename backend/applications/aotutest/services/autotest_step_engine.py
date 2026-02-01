@@ -2576,8 +2576,8 @@ class AutoTestStepExecutionEngine:
             try:
                 user_id = CTX_USER_ID.get(0)
                 user_name = str(user_id) if user_id else None
-                # 如果没有指定report_type, 默认使用EXEC1（执行方式1）
-                final_report_type = report_type if report_type is not None else AutoTestReportType.EXEC1
+                # 如果没有指定report_type, 默认使用SYNC_EXEC
+                final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
                 report_create = AutoTestApiReportCreate(
                     case_id=case_id,
                     case_code=case_code,

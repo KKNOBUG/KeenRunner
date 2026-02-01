@@ -7,9 +7,11 @@
 @DateTime: 2026/1/31 12:42
 """
 import traceback
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List
+from typing import Union
 
-from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
+from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
@@ -19,10 +21,10 @@ from backend.applications.aotutest.schemas.autotest_task_schema import AutoTestA
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
-    ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
+from backend.core.exceptions.base_exceptions import ParameterException
 
 
 class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
@@ -162,6 +164,13 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
         instance.state = 1
         await instance.save()
+        return instance
+
+    async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:
+        """设置是否启动调度（仅改 task_enabled，state 保留为软删除）。"""
+        instance = await self.get_by_id(task_id=task_id, on_error=True)
+        instance.task_enabled = enabled
+        await instance.save(update_fields=["task_enabled"])
         return instance
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: list) -> tuple:

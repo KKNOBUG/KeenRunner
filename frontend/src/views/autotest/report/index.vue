@@ -171,7 +171,7 @@ const extractVariablesData = computed(() => {
       source: '-',
       range: '-',
       expr: '-',
-      extract_value: value,
+      extracted_value: value,
       success: true,
       error: '-'
     }))
@@ -182,7 +182,7 @@ const extractVariablesData = computed(() => {
       source: item.source ?? '-',
       range: item.range ?? '-',
       expr: item.expr ?? '-',
-      extract_value: item.extract_value ?? item.value ?? '-',
+      extracted_value: item.extracted_value ?? item.value ?? '-',
       success: item.success !== false,
       error: item.error ?? '-'
     }))
@@ -242,14 +242,14 @@ const reportExtractColumns = [
   { title: '提取路径', key: 'expr', width: 120, ellipsis: { tooltip: true } },
   {
     title: '提取值',
-    key: 'extract_value',
+    key: 'extracted_value',
     width: 120,
     ellipsis: { tooltip: true },
     render: (row) => {
-      if (row.extract_value === null || row.extract_value === undefined) return '-'
-      const value = typeof row.extract_value === 'object'
-          ? JSON.stringify(row.extract_value)
-          : String(row.extract_value)
+      if (row.extracted_value === null || row.extracted_value === undefined) return '-'
+      const value = typeof row.extracted_value === 'object'
+          ? JSON.stringify(row.extracted_value)
+          : String(row.extracted_value)
       return value.length > 100 ? value.substring(0, 100) + '...' : value
     }
   },
@@ -636,10 +636,8 @@ const getReportList = async (params = {}) => {
   // 如果用户没有明确选择报告类型，则过滤掉"调试执行"类型的报告
   // 如果用户明确选择了报告类型（包括"调试执行"），则显示用户选择的结果
   if (!queryParams.report_type && res?.data) {
-    const originalTotal = res.total || 0
     res.data = res.data.filter(item => item.report_type !== '调试执行')
-    // 更新总数（过滤后的数量）
-    res.total = res.data.length
+    // 分页时保留后端返回的 total，不改为当前页条数
   }
 
   return res
@@ -905,7 +903,8 @@ const columns = [
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        :is-pagination="false"
+        :is-pagination="true"
+        :remote="true"
         :columns="columns"
         :get-data="getReportList"
         :single-line="true"

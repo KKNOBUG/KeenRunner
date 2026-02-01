@@ -87,7 +87,6 @@ export default {
   getApiProjectList: (data = {}) => request.post('/autotest/project/search', data),
   // 标签相关
   getApiTagList: (data = {}) => request.post('/autotest/tag/search', data),
-  updateStepTree: (data = {}) => request.post('/autotest/step/update/tree', data),
   updateOrCreateStepTree: (data = {}) => request.post('/autotest/step/update_or_create_tree', data),
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http_debugging', data),
   pythonCodeDebugging: (data = {}) => request.post('/autotest/step/python_code_debugging', data),
@@ -108,4 +107,24 @@ export default {
   },
   // 明细相关
   getApiDetailList: (data = {}) => request.post('/autotest/detail/search', data),
+
+  // 任务相关
+  getApiTaskList: (data = {}) => request.post('/autotest/task/search', data),
+  getApiTask: (params = {}) => request.get('/autotest/task/get', { params }),
+  createApiTaskList: (data = {}) => request.post('/autotest/task/create', data),
+  updateApiTaskList: (data = {}) => request.post('/autotest/task/update', data),
+  deleteApiTaskList: (data = {}) => {
+    const q = []
+    if (data.task_id != null) q.push(`task_id=${data.task_id}`)
+    if (data.task_code != null) q.push(`task_code=${encodeURIComponent(data.task_code)}`)
+    return request.delete(`/autotest/task/delete${q.length ? '?' + q.join('&') : ''}`)
+  },
+  // 立即执行任务（下发 Celery）
+  runApiTask: (data = {}) => request.post('/autotest/task/run', data),
+  // 启动任务（启用调度，task_enabled=true）
+  startApiTask: (data = {}) => request.post('/autotest/task/start', data),
+  // 停止任务（关闭调度，task_enabled=false）
+  stopApiTask: (data = {}) => request.post('/autotest/task/stop', data),
+  // 任务执行记录
+  getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
 }

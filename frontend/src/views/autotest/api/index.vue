@@ -949,10 +949,10 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     })
   }
 
-  // 基础字段
+  // 基础字段（step_desc 优先用 config，来自 HTTP 等编辑器的 emit）
   const backendStep = {
     step_name: step.name || original.step_name || '',
-    step_desc: original.step_desc || '',
+    step_desc: config.step_desc !== undefined ? (config.step_desc ?? '') : (original.step_desc || ''),
     step_type: localTypeToBackend(step.type),
     step_no: stepNo,
     case_id: original.case_id || caseId.value || null,

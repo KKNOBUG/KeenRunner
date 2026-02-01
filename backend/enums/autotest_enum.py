@@ -10,8 +10,8 @@ from backend.enums.base_error_enum import StringEnum
 
 
 class AutoTestCaseAttr(StringEnum):
-    ATTR1 = "正用例"
-    ATTR2 = "反用例"
+    TRUE_CASE = "正用例"
+    FALSE_CASE = "反用例"
 
 
 class AutoTestCaseType(StringEnum):
@@ -25,10 +25,10 @@ class AutoTestTagType(StringEnum):
 
 
 class AutoTestReportType(StringEnum):
-    EXEC0 = "调试执行"
-    EXEC1 = "同步执行"
-    EXEC2 = "异步执行"
-    EXEC3 = "定时执行"
+    SYNC_EXEC = "同步执行"
+    ASYNC_EXEC = "异步执行"
+    DEBUG_EXEC = "调试执行"
+    SCHEDULE_EXEC = "定时执行"
 
 
 class AutoTestStepType(StringEnum):
