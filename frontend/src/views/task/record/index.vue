@@ -223,17 +223,7 @@ const columns = [
     },
   },
   {
-    title: '任务参数(args)',
-    key: 'task_args',
-    width: 200,
-    ellipsis: { tooltip: true },
-    render(row) {
-      const s = formatJsonBrief(row.task_args, 40)
-      return h('span', { title: JSON.stringify(row.task_args) }, s)
-    },
-  },
-  {
-    title: '任务参数(kwargs)',
+    title: '任务参数',
     key: 'task_kwargs',
     width: 320,
     ellipsis: { tooltip: true },

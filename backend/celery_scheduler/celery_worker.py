@@ -12,7 +12,7 @@ import traceback
 import uuid
 from abc import ABC
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from celery import Celery
 from celery import Task
@@ -47,9 +47,6 @@ async def _create_task_record(
         celery_trace_id: str,
         task_id: str,
         celery_task_name: str,
-        trigger_type: int,
-        task_args: Dict[str, Any],
-        task_kwargs: Dict[str, Any],
 ):
     """
     创建任务执行记录（状态 RUNNING），由 task_prerun 通过事件循环池调用。
@@ -58,47 +55,28 @@ async def _create_task_record(
     :param celery_trace_id: 对应 celery_trace_id（调度回溯ID）
     :param task_id: 对应 task_id（任务信息表主键，来自 __task_id，可为空）
     :param celery_task_name: Celery 任务完全限定名，用于判断是否从业务任务表取 task_name/case_ids
-    :param trigger_type: __task_type（10 手动 20 调度），用于解析 celery_scheduler
-    :param task_args: 定时任务实现函数的位置参数（request.args），写入记录 task_args
-    :param task_kwargs: 定时任务实现函数的关键字参数（request.kwargs），写入记录 task_kwargs
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
     from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
-    from backend.enums.autotest_enum import AutoTestTaskStatus, AutoTestTaskScheduler, AutoTestReportType
-    task_args = list(task_args) if task_args else []
-    task_kwargs = dict(task_kwargs) if task_kwargs else {}
-    task_case_ids: List[int] = []
+    from backend.enums.autotest_enum import AutoTestTaskStatus, AutoTestTaskScheduler
+    task_name: Optional[str] = None
+    task_kwargs: Dict[str, Any] = {}
     celery_scheduler: Optional[str] = None
-    record_task_name: str = ""
+    # task_id 来自 apply_async(..., __task_id=task_id)；未传 __task_id 时此处为 None，不查任务表，record 无 task_id/task_name/task_case_ids。
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
-        t = await AutoTestApiTaskInfo.filter(id=task_id).first()
-        if t:
-            record_task_name = (getattr(t, "task_name", None) or "").strip() or ""
-            task_case_ids = getattr(t, "case_ids", None) or []
-            if trigger_type == 20 and getattr(t, "task_scheduler", None):
-                try:
-                    celery_scheduler = AutoTestTaskScheduler(t.task_scheduler) if isinstance(
-                        t.task_scheduler, str) else t.task_scheduler
-                except (ValueError, TypeError):
-                    pass
-            # 将 task_args/task_kwargs 替换为真正调用 batch_execute_cases 时的参数
-            rpt_enum = getattr(AutoTestReportType, "SCHEDULE_EXEC", None)
-            task_args = []
-            task_kwargs = {
-                "case_ids": list(task_case_ids),
-                "initial_variables": [],
-                "execute_environment": (getattr(t, "task_env", None) or "").strip() or None,
-                "report_type": rpt_enum.value if rpt_enum else "定时执行",
-            }
+        task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
+        if task_instance:
+            task_name = getattr(task_instance, "task_name", None)
+            task_kwargs = getattr(task_instance, "task_kwargs", None) or {}
+            celery_scheduler = AutoTestTaskScheduler(task_instance.task_scheduler) if isinstance(
+                task_instance.task_scheduler, str) else task_instance.task_scheduler
     data: Dict[str, Any] = {
         "task_id": task_id,
-        "task_name": record_task_name or None,
-        "task_args": task_args,
+        "task_name": task_name,
         "task_kwargs": task_kwargs,
-        "task_case_ids": task_case_ids,
         "celery_id": celery_id,
-        "celery_node": (celery_node or "").strip() or None,
-        "celery_trace_id": (celery_trace_id or "").strip() or None,
+        "celery_node": celery_node,
+        "celery_trace_id": celery_trace_id,
         "celery_status": AutoTestTaskStatus.RUNNING,
         "celery_scheduler": celery_scheduler,
         "celery_start_time": datetime.now(),
@@ -134,7 +112,6 @@ async def _update_task_record_on_end(
         "celery_status": status_enum,
         "celery_end_time": now,
         "task_summary": summary,
-        "task_result": summary,
         "task_error": None if success else (traceback_str or summary),
     }
     record = await AUTOTEST_API_RECORD_CRUD.get_by_celery_id(celery_id=celery_id)
@@ -162,6 +139,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
     """
     try:
         ensure_tortoise_orm_initialized()
+        # 来自 apply_async(..., __task_id=..., __task_type=...)，随 Celery 消息传到 Worker 的 request.properties。
         task_id = task.request.properties.get("__task_id", None)
         task_type = task.request.properties.get("__task_type", None)
         trace_id = task.request.headers.get("trace_id", None)
@@ -169,7 +147,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
             f"【Krun-Celery-Worker】【trace_id={trace_id}】任务提交完成: "
             f"task_id=[{task_id}], "
             f"task_name=[{task.name}], "
-            f"task_type=[{task_type}]"
+            f"task_type=[{task_type}], "
             f"celery_id=[{task.request.id}], "
         )
         # 写入任务执行记录（含 celery_trace_id）；扫描任务不落表
@@ -179,8 +157,6 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
         _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
         if task.name != _SCAN_TASK_NAME:
             try:
-                req_args = getattr(task.request, "args", []) or []
-                req_kwargs = getattr(task.request, "kwargs", {}) or {}
                 h = getattr(task.request, "headers", None) or {}
                 if isinstance(h, dict):
                     celery_trace_id_val = h.get("trace_id") or (h.get("headers") or {}).get("trace_id") or ""
@@ -190,14 +166,11 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                 get_async_event_loop_pool().run(
                     _create_task_record(
                         trace_id=trace_id,
+                        task_id=task_id,
                         celery_id=task.request.id,
                         celery_node=celery_node_val,
                         celery_trace_id=celery_trace_id_val,
-                        task_id=task_id,
                         celery_task_name=task.name,
-                        trigger_type=task_type if task_type is not None else 10,
-                        task_args=req_args,
-                        task_kwargs=req_kwargs,
                     )
                 )
             except Exception as e:
@@ -274,16 +247,18 @@ def create_celery():
 
         def apply_async(self, args=None, kwargs=None, task_id=None, producer=None,
                         link=None, link_error=None, shadow=None, **options):
-            """下发时注入 trace_id 与 __task_type。"""
+            """下发时注入 trace_id、__task_type、__task_id（业务任务主键），供 Worker task_prerun 写 record 用。"""
 
             __task_type = options.get("__task_type", None)
             __task_type = __task_type if __task_type else 10
+            __task_id = options.get("__task_id", None)
 
             headers = {
                 "headers": {
                     "trace_id": LOCAL_CONTEXT_VAR.trace_id or str(uuid.uuid4())
                 },
-                "__task_type": __task_type
+                "__task_type": __task_type,
+                "__task_id": __task_id,
             }
 
             if options:
@@ -376,15 +351,6 @@ def create_celery():
 
 celery = create_celery()
 
-# celery_worker 专用于 celery 的 worker
-# worker windows 启动，只能单线程
-# celery -A celery_worker.worker worker --pool=solo -l INFO
-# worker linux  启动
-# celery -A celery_worker.worker worker --pool=solo -c 10 -l INFO
-# beat
-# celery -A celery_worker.worker beat -l INFO  启动节拍器，定时任务需要
-# beat 数据库
-# celery -A celery_worker.worker beat -S celery_worker.scheduler.schedulers:DatabaseScheduler -l INFO
 # ========== 启动命令（在项目根目录 Krun_副本_new 下执行，且保证 PYTHONPATH 含 backend 所在目录）==========
 # Worker（消费 default + autotest_queue）：
 #   Windows（单线程）：celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue --pool=solo -l INFO

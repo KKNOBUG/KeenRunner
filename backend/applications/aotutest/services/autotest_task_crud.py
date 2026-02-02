@@ -82,7 +82,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         return instances
 
     async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestApiTaskInfo:
-        task_env: str = task_in.task_env
         task_name: str = task_in.task_name
         task_project: int = task_in.task_project
 
@@ -90,15 +89,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
         await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=task_project, on_error=True)
 
-        # 业务层验证：检查 (task_env, task_name, task_project) 唯一
+        # 业务层验证：检查 (task_name, task_project) 唯一
         existing_task = await self.model.filter(
-            task_env=task_env,
             task_name=task_name,
             task_project=task_project,
             state__not=1
         ).first()
         if existing_task:
-            error_message: str = f"任务(task_env={task_env}, task_name={task_name}, task_project={task_project})已存在"
+            error_message: str = f"任务(task_name={task_name}, task_project={task_project})已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
@@ -130,17 +128,15 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         if "task_scheduler" in update_dict and update_dict["task_scheduler"] is not None:
             update_dict["task_scheduler"] = update_dict["task_scheduler"].value
 
-        task_env = update_dict.get("task_env", instance.task_env)
         task_name = update_dict.get("task_name", instance.task_name)
         task_project = update_dict.get("task_project", instance.task_project)
         existing_task = await self.model.filter(
-            task_env=task_env,
             task_name=task_name,
             task_project=task_project,
             state__not=1
         ).exclude(id=task_id).first()
         if existing_task:
-            error_message: str = f"任务(task_env={task_env}, task_name={task_name}, task_project={task_project})已存在"
+            error_message: str = f"任务(task_name={task_name}, task_project={task_project})已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 

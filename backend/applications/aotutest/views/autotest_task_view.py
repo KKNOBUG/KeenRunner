@@ -148,8 +148,6 @@ async def search_tasks_info(
             q &= Q(id=task_in.task_id)
         if task_in.task_code:
             q &= Q(task_code=task_in.task_code)
-        if task_in.task_env:
-            q &= Q(task_env__contains=task_in.task_env)
         if task_in.task_name:
             q &= Q(task_name__contains=task_in.task_name)
         if task_in.task_project:
@@ -194,11 +192,17 @@ async def run_task_info(task_in: dict = Body(..., description="任务ID")):
             return ParameterResponse(message="参数 task_id 不能为空")
         await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
+        from backend.enums.autotest_enum import AutoTestReportType
+        # __task_id / __task_type 会随消息传到 Worker，task_prerun 从 request.properties 取出；
+        # 只有传了 __task_id，Worker 端 _create_task_record 才会查任务表并写入 record 的 task_id/task_name/task_case_ids。
         run_autotest_task.apply_async(
-            args=[task_id],
+            kwargs={
+                "task_id": task_id,
+                "report_type": AutoTestReportType.ASYNC_EXEC,
+            },
             queue="autotest_queue",
             __task_type=10,
-            __business_id=task_id,
+            __task_id=task_id
         )
         LOGGER.info(f"已下发执行任务 task_id={task_id}")
         return SuccessResponse(message="已下发执行，请稍后在报告中查看结果", data={"task_id": task_id}, total=1)

@@ -6,7 +6,7 @@
 @Module  : autotest_task_schema
 @DateTime: 2026/1/31 12:40
 """
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -15,12 +15,11 @@ from backend.enums.autotest_enum import AutoTestTaskScheduler
 
 
 class AutoTestApiTaskCreate(BaseModel):
-    task_env: str = Field(..., max_length=16, description="任务执行环境")
     task_name: str = Field(..., max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[str] = Field(None, max_length=255, description="任务类型")
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
-    case_ids: List[int] = Field(..., description="用例ID集合")
+    task_kwargs: Dict[str, Any] = Field(None, description="任务参数字典")
     task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务调度状态")
     task_interval_expr: Optional[int] = Field(None, description="任务触发条件1(间隔)")
     task_datetime_expr: Optional[str] = Field(None, max_length=64, description="任务触发条件2(日期时间)")
@@ -32,13 +31,12 @@ class AutoTestApiTaskCreate(BaseModel):
 
 class AutoTestApiTaskUpdate(BaseModel):
     task_id: Optional[int] = Field(None, description="任务ID")
-    task_env: Optional[str] = Field(None, max_length=16, description="任务执行环境")
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[str] = Field(None, max_length=255, description="任务类型")
     task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
-    case_ids: Optional[List[int]] = Field(None, description="用例ID集合")
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务参数字典")
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskScheduler] = Field(None, description="最后执行状态")
     task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务调度状态")

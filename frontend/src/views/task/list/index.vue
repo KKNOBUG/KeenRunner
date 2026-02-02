@@ -93,14 +93,13 @@ const INTERVAL_UNITS = [
 const taskForm = ref({
   task_id: null,
   task_code: null,
-  task_env: '',
   task_name: '',
   task_desc: '',
   task_type: '',
   task_project: null,
   task_notify: null,
   task_notifier: [],
-  case_ids: [],
+  task_kwargs: { execute_environment: '' },
   task_scheduler: 'cron',
   task_interval_expr: null,
   task_datetime_expr: '',
@@ -235,14 +234,13 @@ const openAdd = () => {
   taskForm.value = {
     task_id: null,
     task_code: null,
-    task_env: '',
     task_name: '',
     task_desc: '',
     task_type: '',
     task_project: null,
     task_notify: null,
     task_notifier: [],
-    case_ids: [],
+    task_kwargs: { execute_environment: '' },
     task_scheduler: 'cron',
     task_interval_expr: null,
     task_datetime_expr: '',
@@ -262,18 +260,18 @@ const openEdit = async (row) => {
   try {
     const res = await api.getApiTask({ task_id: row.task_id })
     const d = res?.data || {}
-    const caseIds = Array.isArray(d.case_ids) ? d.case_ids : []
+    const taskKwargs = d.task_kwargs && typeof d.task_kwargs === 'object' ? d.task_kwargs : {}
+    const caseIds = Array.isArray(taskKwargs.case_ids) ? taskKwargs.case_ids : []
     taskForm.value = {
       task_id: d.task_id,
       task_code: d.task_code || null,
-      task_env: d.task_env || '',
       task_name: d.task_name || '',
       task_desc: d.task_desc || '',
       task_type: d.task_type || '',
       task_project: d.task_project ?? null,
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
-      case_ids: caseIds,
+      task_kwargs: { ...taskKwargs, case_ids: caseIds, execute_environment: taskKwargs.execute_environment ?? taskKwargs.env_name ?? '' },
       task_scheduler: d.task_scheduler || 'cron',
       task_interval_expr: d.task_interval_expr ?? null,
       task_datetime_expr: d.task_datetime_expr || '',
@@ -328,21 +326,27 @@ const handleSubmit = async () => {
     window.$message?.warning?.('请至少勾选一个用例')
     return
   }
-  if (!taskForm.value.task_env?.trim()) {
-    window.$message?.warning?.('请输入运行环境')
+  const executeEnvironment = taskForm.value.task_kwargs?.execute_environment?.trim?.() || ''
+  if (!executeEnvironment) {
+    window.$message?.warning?.('请在任务参数中填写执行环境')
     return
   }
   modalLoading.value = true
   try {
+    // 任务参数字典：case_ids、execute_environment 等，后端与 Celery 从 task_kwargs 读取
+    const taskKwargsPayload = {
+      ...(taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object' ? taskForm.value.task_kwargs : {}),
+      case_ids: caseIds,
+      execute_environment: executeEnvironment,
+    }
     const payload = {
-      task_env: taskForm.value.task_env.trim(),
       task_name: taskForm.value.task_name.trim(),
       task_desc: taskForm.value.task_desc || null,
       task_type: taskForm.value.task_type || null,
       task_project: taskForm.value.task_project,
       task_notify: Array.isArray(taskForm.value.task_notify) ? taskForm.value.task_notify : null,
       task_notifier: Array.isArray(taskForm.value.task_notifier) ? taskForm.value.task_notifier : null,
-      case_ids: caseIds,
+      task_kwargs: taskKwargsPayload,
       task_scheduler: taskForm.value.task_scheduler || null,
       task_interval_expr: taskForm.value.task_scheduler === 'interval' ? intervalToSeconds(intervalValue.value, intervalUnit.value) : null,
       task_datetime_expr: taskForm.value.task_scheduler === 'datetime' ? (datetimePickerValue.value ? dayjs(datetimePickerValue.value).format('YYYY-MM-DD HH:mm:ss') : null) : null,
@@ -447,10 +451,14 @@ const columns = [
   },
   {
     title: '执行环境',
-    key: 'task_env',
+    key: 'task_kwargs',
     width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
+    render(row) {
+      const env = row.task_kwargs?.execute_environment ?? row.task_kwargs?.env_name ?? ''
+      return h('span', env || '-')
+    },
   },
   {
     title: '任务名称',
@@ -488,25 +496,13 @@ const columns = [
   },
   {
     title: '关联用例数',
-    key: 'case_ids',
+    key: 'task_kwargs',
     width: 100,
     align: 'center',
     render(row) {
-      const ids = row.case_ids
+      const ids = row.task_kwargs?.case_ids
       const count = Array.isArray(ids) ? ids.length : 0
       return h('span', `${count} 个`)
-    },
-  },
-  {
-    title: '最后执行时间',
-    key: 'last_execute_time',
-    width: 160,
-    align: 'center',
-    render(row) {
-      const val = row.last_execute_time
-      if (val == null || val === '') return h('span', '-')
-      const formatted = formatDateTime(val)
-      return h('span', formatted || '-')
     },
   },
   {
@@ -521,20 +517,32 @@ const columns = [
     },
   },
   {
-    title: '创建人员',
-    key: 'created_user',
-    width: 100,
+    title: '最后执行时间',
+    key: 'last_execute_time',
+    width: 180,
     align: 'center',
-    ellipsis: { tooltip: true },
+    render(row) {
+      const val = row.last_execute_time
+      if (val == null || val === '') return h('span', '-')
+      const formatted = formatDateTime(val)
+      return h('span', formatted || '-')
+    },
   },
   {
-    title: '更新时间',
+    title: '最后更新时间',
     key: 'updated_time',
-    width: 160,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.updated_time))
     },
+  },
+  {
+    title: '更新人员',
+    key: 'updated_user',
+    width: 100,
+    align: 'center',
+    ellipsis: { tooltip: true },
   },
   {
     title: '操作',
@@ -651,15 +659,6 @@ onMounted(() => {
         :single-line="true"
     >
       <template #queryBar>
-        <QueryBarItem label="执行环境：">
-          <NInput
-              v-model:value="queryItems.task_env"
-              clearable
-              placeholder="请输入执行环境"
-              class="query-input"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
         <QueryBarItem label="任务名称：">
           <NInput
               v-model:value="queryItems.task_name"
@@ -715,8 +714,8 @@ onMounted(() => {
           <NForm label-placement="left" label-width="100px" size="small">
             <NFormItem label="执行环境" required>
               <NInput
-                  v-model:value="taskForm.task_env"
-                  placeholder="请输入执行环境"
+                  v-model:value="taskForm.task_kwargs.execute_environment"
+                  placeholder="请输入执行环境（存入 task_kwargs）"
                   clearable
               />
             </NFormItem>

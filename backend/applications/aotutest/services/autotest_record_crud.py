@@ -51,7 +51,7 @@ class AutoTestApiTaskRecordCrud(
         record = await self.get_by_celery_id(celery_id=celery_id)
         if not record:
             return None
-        allow_none_keys = ("task_summary", "task_error", "task_result")
+        allow_none_keys = ("task_summary", "task_error")
         update_dict = {k: v for k, v in data.items() if hasattr(record, k) and (v is not None or k in allow_none_keys)}
         for key, value in update_dict.items():
             setattr(record, key, value)

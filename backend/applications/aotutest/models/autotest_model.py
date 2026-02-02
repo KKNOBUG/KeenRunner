@@ -316,21 +316,20 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
 
 
 class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    task_env = fields.CharField(max_length=16, description="任务执行环境")
     task_name = fields.CharField(max_length=255, index=True, description="任务名称")
     task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
-    task_type = fields.CharField(max_length=512, null=True, description="任务实现函数的完全限定名")
+    task_type = fields.CharField(max_length=1024, null=True, description="任务实现函数的完全限定名")
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
-    case_ids = fields.JSONField(description="用例ID集合")
+    task_kwargs = fields.JSONField(default=dict, null=True, description="任务参数字典")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务调度状态")
     task_interval_expr = fields.IntField(null=True, description="任务触发条件1")
     task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发条件2")
     task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发条件3")
-    task_notify = fields.JSONField(null=True, description="任务执行明细反馈")
-    task_notifier = fields.JSONField(null=True, description="任务执行通知人员")
+    task_notify = fields.JSONField(default=None, null=True, description="任务执行明细反馈")
+    task_notifier = fields.JSONField(default=None, null=True, description="任务执行通知人员")
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -338,10 +337,10 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         table = "krun_autotest_api_task"
         table_description = "自动化测试-任务信息表"
         unique_together = (
-            ("task_env", "task_name", "task_project"),
+            ("task_name", "task_project"),
         )
         indexes = (
-            ("task_env", "task_name", "task_project"),
+            ("task_name", "task_project"),
         )
         ordering = ["-updated_time"]
 
@@ -352,10 +351,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
     task_id = fields.BigIntField(null=True, index=True, description="任务ID(krun_autotest_api_task表主键)")
     task_name = fields.CharField(max_length=255, null=True, index=True, description="任务名称")
-    task_args = fields.JSONField(default=dict, null=True, description="定时任务实现函数的位置参数")
     task_kwargs = fields.JSONField(default=dict, null=True, description="定时任务实现函数的关键字参数")
-    task_result = fields.TextField(null=True, description="任务的执行结果")
-    task_case_ids = fields.JSONField(default=list, null=True, description="任务关联的用例ID列表")
     task_summary = fields.TextField(null=True, description="任务的执行摘要")
     task_error = fields.TextField(null=True, description="任务的错误信息")
     celery_id = fields.CharField(max_length=255, index=True, description="调度ID")
