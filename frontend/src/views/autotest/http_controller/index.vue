@@ -7,7 +7,7 @@
         label-width="80px"
         ref="formRef"
     >
-      <!-- 请求方式和地址 -->
+      <!-- 请求方式、所属应用、请求地址 -->
       <n-form-item label="请求方式" path="method">
         <n-select
             v-model:value="state.form.method"
@@ -15,6 +15,15 @@
             :options="methodOptions"
             :render-label="renderMethodLabel"
             style="width: 100px;"
+        />
+        <n-select
+            v-model:value="state.form.request_project_id"
+            placeholder="所属应用"
+            :options="projectOptions"
+            :loading="projectLoading"
+            clearable
+            filterable
+            style="width: 160px;"
         />
         <n-input
             v-model:value="state.form.url"
@@ -143,11 +152,17 @@
             <n-card size="small" hoverable>
               <template #header>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>{{ item.name || '未命名提取' }} {{ getExtractObjectLabel(item.object) }}{{ item.extractScope === '部分提取' && item.jsonpath ? `( ${item.jsonpath} )` : item.extractScope === '全部提取' ? '( 全部提取 )' : '' }}</span>
+                  <span>{{ item.name || '未命名提取' }} {{
+                      getExtractObjectLabel(item.object)
+                    }}{{
+                      item.extractScope === '部分提取' && item.jsonpath ? `( ${item.jsonpath} )` : item.extractScope === '全部提取' ? '( 全部提取 )' : ''
+                    }}</span>
                   <n-space>
                     <n-button text @click="toggleExtractCollapse(key)" size="small">
                       <template #icon>
-                        <TheIcon :icon="extractCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'" :size="18"/>
+                        <TheIcon
+                            :icon="extractCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                            :size="18"/>
                       </template>
                     </n-button>
                     <n-button text @click="duplicateExtract(key)" type="info" size="small">
@@ -185,7 +200,8 @@
                       </n-radio-group>
                       <n-tooltip trigger="hover">
                         <template #trigger>
-                          <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help; margin-left: 8px;"/>
+                          <TheIcon icon="material-symbols:help-outline" :size="18"
+                                   style="cursor: help; margin-left: 8px;"/>
                         </template>
                         选择提取范围：部分提取需要指定JSONPath/XPath等表达式，全部提取将提取整个响应内容
                       </n-tooltip>
@@ -234,11 +250,15 @@
             <n-card size="small" hoverable>
               <template #header>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{ item.jsonpath || '' }} )</span>
+                  <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
+                      item.jsonpath || ''
+                    }} )</span>
                   <n-space>
                     <n-button text @click="toggleValidatorCollapse(key)" size="small">
                       <template #icon>
-                        <TheIcon :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'" :size="18"/>
+                        <TheIcon
+                            :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                            :size="18"/>
                       </template>
                     </n-button>
                     <n-button text @click="duplicateValidator(key)" type="info" size="small">
@@ -328,14 +348,14 @@
       </n-space>
       <n-tag v-if="debugLoading" type="info" round size="small">
         <template #icon>
-          <n-spin size="small" />
+          <n-spin size="small"/>
         </template>
         请求中...
       </n-tag>
     </template>
     <!-- 加载状态 -->
     <div v-if="debugLoading" class="debug-loading">
-      <n-spin size="large" description="正在发送请求，请稍候..." />
+      <n-spin size="large" description="正在发送请求，请稍候..."/>
     </div>
     <!-- 响应内容 -->
     <n-tabs v-else type="line" animated>
@@ -466,8 +486,34 @@
 </template>
 
 <script setup>
-import {computed, h, reactive, ref, watch, nextTick} from 'vue'
-import {NDataTable, NDescriptions, NDescriptionsItem, NTag, NText, NSwitch, NInputNumber, NTooltip, NRadioGroup, NRadio, NEmpty, NSpin, NForm, NFormItem, NInput, NSelect, NButton, NSpace, NCard, NTabs, NTabPane, NCollapse, NCollapseItem, NCode, NBadge} from 'naive-ui'
+import {computed, h, nextTick, reactive, ref, watch} from 'vue'
+import {
+  NBadge,
+  NButton,
+  NCard,
+  NCode,
+  NCollapse,
+  NCollapseItem,
+  NDataTable,
+  NDescriptions,
+  NDescriptionsItem,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputNumber,
+  NRadio,
+  NRadioGroup,
+  NSelect,
+  NSpace,
+  NSpin,
+  NSwitch,
+  NTabPane,
+  NTabs,
+  NTag,
+  NText,
+  NTooltip
+} from 'naive-ui'
 import api from "@/api";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
@@ -508,6 +554,14 @@ const props = defineProps({
   step: {
     type: Object,
     default: () => ({})
+  },
+  projectOptions: {
+    type: Array,
+    default: () => []
+  },
+  projectLoading: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -625,10 +679,10 @@ const initFromConfig = () => {
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
 
   // 请求体类型（与后端 request_args_type 枚举一致：none, params, form-data, x-www-form-urlencoded, json, raw）
-  if (cfg.bodyType) {
-    state.form.bodyType = cfg.bodyType
-  } else if (original.request_args_type) {
-    state.form.bodyType = original.request_args_type
+  // 请求体类型：统一用 request_args_type（与后端枚举一致），form 内用 bodyType 仅作 UI 绑定
+  const requestArgsType = cfg.request_args_type ?? original.request_args_type
+  if (requestArgsType) {
+    state.form.bodyType = requestArgsType
   } else if (cfg.data) {
     state.form.bodyType = 'json'
   } else if (cfg.form_data) {
@@ -731,26 +785,23 @@ initFromConfig()
 // 标记是否正在从外部更新，避免循环触发
 let isExternalUpdate = false
 
-// 监听 props.step 和 props.config 的变化，重新初始化
+// 仅在切换步骤或步骤原始数据变化时重新初始化，不监听 props.config，避免用户编辑（如请求地址全选删除/剪切）后被 config 回写覆盖
 watch(
-    () => [props.step?.id, props.config, props.step?.original, props.step?.name],
-    ([stepId, config, original, stepName]) => {
-      // 当步骤变化时，重新初始化表单
+    () => [props.step?.id, props.step?.original, props.step?.name],
+    ([stepId, original, stepName]) => {
       isExternalUpdate = true
       initFromConfig()
-      // 特别处理 step_name，确保与步骤树同步
       const cfg = props.config || {}
       const step = props.step || {}
       const orig = step.original || {}
       state.form.step_name = cfg.step_name !== undefined
           ? cfg.step_name
           : (stepName || orig.step_name || '')
-      // 使用 nextTick 确保在下一个 tick 重置标志
       nextTick(() => {
         isExternalUpdate = false
       })
     },
-    { deep: true, immediate: false }
+    {deep: true, immediate: false}
 )
 
 // 与后端 autotest_step_engine 提取字段一致：expr, name, source, range, index
@@ -831,7 +882,6 @@ const buildConfigFromState = () => {
     url: state.form.url,
     headers: normalizeList(headersList),
     params: normalizeList(paramsList),
-    bodyType: state.form.bodyType,
     request_args_type: state.form.bodyType,
     request_project_id: state.form.request_project_id ?? null,
     data,
@@ -849,7 +899,7 @@ const buildConfigFromState = () => {
 let emitTimer = null
 watch(
     () => [
-        state.form.step_name, state.form.description, state.form.method,
+      state.form.step_name, state.form.description, state.form.method,
       state.form.url, state.form.headers, state.form.params,
       state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
       state.form.jsonBody, state.form.rawBody, state.form.request_project_id,
@@ -1111,7 +1161,7 @@ const debugging = async () => {
       method: cfg.method,
       url: cfg.url,
       headers: headersObj,
-      bodyType: cfg.bodyType || 'none',
+      bodyType: cfg.request_args_type ?? 'none',
       jsonBody: state.form.jsonBody,
       rawBody: state.form.rawBody ?? '',
       formData: state.form.bodyType === 'form-data' ? state.form.bodyParams : null,
@@ -1129,7 +1179,7 @@ const debugging = async () => {
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
       request_url: cfg.url,
       request_method: cfg.method,
-      request_args_type: cfg.request_args_type ?? cfg.bodyType ?? original.request_args_type ?? 'none',
+      request_args_type: cfg.request_args_type ?? original.request_args_type ?? 'none',
       request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
       request_params: Array.isArray(cfg.params) && cfg.params.length > 0 ? cfg.params : null,
       request_body: cfg.data,

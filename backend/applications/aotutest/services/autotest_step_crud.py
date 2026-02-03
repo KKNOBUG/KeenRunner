@@ -810,16 +810,20 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
         tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
-        # 4. 合并 initial_variables 和 all_session_variables 如果存在相同的key，使用 all_session_variables 中的值（后收集的优先）
-        mgd_session_variables: Dict[str, Any] = {}
-        all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
+        # 4. 合并会话变量：用例级 session_variables → 步骤树中收集的 session_variables → 入参 initial_variables（同 key 后者覆盖）
+        merge_all_variables: Dict[str, Any] = {}
+        case_session_variables = getattr(case_instance, "session_variables", None) or []
+        all_step_session_variables = AutoTestToolService.collect_session_variables(tree_data)
+        for item in case_session_variables:
+            if isinstance(item, dict) and item.get("key"):
+                merge_all_variables[item["key"]] = item
+        for item in all_step_session_variables:
+            if isinstance(item, dict) and "key" in item:
+                merge_all_variables[item.get("key")] = item
         for item in initial_variables:
             if isinstance(item, dict) and "key" in item:
-                mgd_session_variables[item.get("key")] = item
-        for item in all_session_variables:
-            if isinstance(item, dict) and "key" in item:
-                mgd_session_variables[item.get("key")] = item
-        initial_variables = list(mgd_session_variables.values())
+                merge_all_variables[item.get("key")] = item
+        initial_variables = list(merge_all_variables.values())
         AutoTestToolService.execute_func_string(initial_variables)
         LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功, 检查变量引用成功")
 

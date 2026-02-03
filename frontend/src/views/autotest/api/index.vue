@@ -359,6 +359,8 @@
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
+                :project-options="currentStep?.type === 'http' ? projectOptions : []"
+                :project-loading="currentStep?.type === 'http' ? projectLoading : false"
                 @update:config="(val) => updateStepConfig(currentStep.id, val)"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
@@ -818,13 +820,14 @@ const mapBackendStep = (step) => {
     base.config = {
       method: step.request_method || 'POST',
       url: step.request_url || '',
+      request_args_type: step.request_args_type || 'none',
+      request_project_id: step.request_project_id ?? null,
       params: Array.isArray(step.request_params) ? step.request_params : [],
       data: step.request_body || {},
       headers: Array.isArray(step.request_header) ? step.request_header : [],
       form_data: Array.isArray(step.request_form_data) ? step.request_form_data : [],
       form_urlencoded: Array.isArray(step.request_form_urlencoded) ? step.request_form_urlencoded : [],
       request_text: step.request_text || null,
-      bodyType: step.request_args_type || 'none',
       extract: step.extract_variables || {},
       validators: step.validators || {}
     }
@@ -974,11 +977,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   if (step.type === 'http') {
     backendStep.request_method = config.method || original.request_method || 'POST'
     backendStep.request_url = config.url || original.request_url || ''
-    backendStep.request_args_type = config.request_args_type ?? config.bodyType ?? original.request_args_type ?? 'none'
+    backendStep.request_args_type = config.request_args_type ?? original.request_args_type ?? 'none'
     backendStep.request_text = config.request_text ?? original.request_text ?? null
-    // request_project_id：优先用 HTTP 控制器 form 或步骤原始值；新建步骤无值时用用例所属项目（caseForm.case_project）作为默认
-    backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? (caseForm.case_project != null ? (typeof caseForm.case_project === 'object' ? caseForm.case_project.project_id : caseForm.case_project) : null) ?? null
-
+    backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
     backendStep.request_header = Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : [])
     backendStep.request_params = Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : [])
     backendStep.request_form_data = Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
@@ -1129,8 +1130,8 @@ const validateJsonBodyInSteps = (stepList) => {
   for (const step of stepList) {
     if (step.type === 'http') {
       const config = step.config || {}
-      const bodyType = config.bodyType ?? config.request_args_type ?? 'none'
-      if (bodyType === 'json') {
+      const requestArgsType = config.request_args_type ?? 'none'
+      if (requestArgsType === 'json') {
         const raw = config.jsonBodyText ?? (config.data != null ? JSON.stringify(config.data) : '')
         const trimmed = (raw || '').trim()
         if (trimmed !== '') {
@@ -1184,7 +1185,7 @@ const handleSaveAll = async () => {
     const jsonValidation = validateJsonBodyInSteps(steps.value)
     if (!jsonValidation.valid) {
       window.$message?.error?.(
-          `步骤「${jsonValidation.stepName}」请求体 JSON 格式错误，请修正后再保存。${jsonValidation.message ? ' ' + jsonValidation.message : ''}`
+          `步骤「${jsonValidation.stepName}」请求体 JSON 格式错误，请修正后再保存。}`
       )
       return
     }

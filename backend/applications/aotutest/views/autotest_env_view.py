@@ -136,8 +136,8 @@ async def get_env_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env.get("/get", summary="API自动化测试-查询环境名称(去重)")
-async def get_env_info():
+@autotest_env.get("/get_names", summary="API自动化测试-查询环境名称(去重)")
+async def get_env_name_list():
     try:
         names: List[str] = await AUTOTEST_API_ENV_CRUD.model.filter(
             tate__not=1).distinct().values_list("env_name", flat=True)

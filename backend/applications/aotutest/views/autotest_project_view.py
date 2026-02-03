@@ -7,7 +7,7 @@
 @DateTime: 2026/1/2 21:37
 """
 import traceback
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
@@ -135,6 +135,20 @@ async def get_project_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按id或code查询应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_project.get("/get_names", summary="API自动化测试-查询应用名称(去重)")
+async def get_env_name_list():
+    try:
+        names: List[str] = await AUTOTEST_API_PROJECT_CRUD.model.filter(
+            tate__not=1).distinct().values_list("project_name", flat=True)
+        LOGGER.info(f"查询应用名称(去重)成功, 结果明细: {names}")
+        return SuccessResponse(message="查询成功", data=names, total=len(names))
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询应用名称(去重)失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 

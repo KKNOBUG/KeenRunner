@@ -96,7 +96,7 @@ class StepExecutionContext:
         :param case_id: 用例 ID。
         :param case_code: 用例编码。
         :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
-        :param initial_variables: 初始会话变量列表（key/value/desc）。
+        :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
         :param http_client: 可选 HTTP 客户端，不传则在 __aenter__ 中创建。
         :param report_code: 报告编码，用于保存步骤明细。
         """
@@ -2560,7 +2560,7 @@ class AutoTestStepExecutionEngine:
         :param steps: 根步骤可迭代对象。
         :param report_type: 报告类型。
         :param env_name: 执行环境名称，用于 HTTP 步骤补全 URL。
-        :param initial_variables: 初始会话变量列表。
+        :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；传入 StepExecutionContext 后作为 context.session_variables 的初始值，供步骤执行时变量池与占位符解析使用。
         :return: Tuple: (results, logs, report_code, statistics, session_variables)。
                  - results: 根步骤执行结果列表。
                  - logs: 按 step_code 分组的日志。

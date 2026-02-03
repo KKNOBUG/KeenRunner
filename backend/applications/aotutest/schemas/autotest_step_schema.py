@@ -120,6 +120,7 @@ class AutoTestStepTreeUpdateList(BaseModel):
 
 
 class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
@@ -176,6 +177,7 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 
 
 class AutoTestStepTreeExecute(BaseModel):
+    env_name: str = Field(..., max_length=64, description="环境名称")
     case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None,
                                                               description="步骤树数据(调试模式必填, 运行模式不填)")

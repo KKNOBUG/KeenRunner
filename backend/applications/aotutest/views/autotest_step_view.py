@@ -373,37 +373,48 @@ async def debug_http_request(
         step_name = step_data.step_name
         request_url = step_data.request_url
         request_method = (step_data.request_method or "GET").upper()
-        request_header_raw = step_data.request_header or []
-        request_params_raw = step_data.request_params or []
-        request_form_data_raw = step_data.request_form_data or []
-        request_form_urlencoded_raw = step_data.request_form_urlencoded or []
-        request_body = step_data.request_body
-        request_text = step_data.request_text
-        request_project_id = step_data.request_project_id
-        defined_variables_raw = step_data.defined_variables or []
-        extract_variables = step_data.extract_variables or []
-        assert_validators = step_data.assert_validators or []
+        request_header = step_data.request_header or []
+        request_params = step_data.request_params or []
+        request_form_data = step_data.request_form_data or []
+        request_form_urlencoded = step_data.request_form_urlencoded or []
+        request_body: Optional[Dict[str, Any]] = step_data.request_body
+        request_text: Optional[str] = step_data.request_text
+        request_project_id: int = step_data.request_project_id
+        session_variables: List[Dict[str, Any]] = step_data.session_variables or []
+        defined_variables: List[Dict[str, Any]] = step_data.defined_variables or []
+        extract_variables: List[Dict[str, Any]] = step_data.extract_variables or []
+        assert_validators: List[Dict[str, Any]] = step_data.assert_validators or []
 
         # 确保是列表格式
-        if not isinstance(request_header_raw, list):
-            request_header_raw = []
-        if not isinstance(request_params_raw, list):
-            request_params_raw = []
-        if not isinstance(request_form_data_raw, list):
-            request_form_data_raw = []
-        if not isinstance(request_form_urlencoded_raw, list):
-            request_form_urlencoded_raw = []
-        if not isinstance(defined_variables_raw, list):
-            defined_variables_raw = []
+        if not isinstance(request_header, list):
+            request_header = []
+        if not isinstance(request_params, list):
+            request_params = []
+        if not isinstance(request_form_data, list):
+            request_form_data = []
+        if not isinstance(request_form_urlencoded, list):
+            request_form_urlencoded = []
+        if not isinstance(session_variables, list):
+            session_variables = []
+        if not isinstance(defined_variables, list):
+            defined_variables = []
+        if not isinstance(extract_variables, list):
+            extract_variables = []
+        if not isinstance(assert_validators, list):
+            assert_validators = []
 
-        # 将列表格式的 defined_variables 转换为字典格式（用于变量查找）
-        defined_variables = {}
-        for item in defined_variables_raw:
-            if isinstance(item, dict) and "key" in item:
-                key = item.get("key")
-                value = item.get("value")
-                if key:
-                    defined_variables[key] = value
+        # 将列表格式的 defined_variables\session_variables 转换为字典格式（用于变量查找）
+        merge_all_variables: Dict[str, Any] = {}
+        defined_variables_dict: Dict[str, Any] = {
+            item["key"]: item.get("value")
+            for item in defined_variables if isinstance(item, dict) and "key" in item
+        }
+        session_variables_dict: Dict[str, Any] = {
+            item["key"]: item.get("value")
+            for item in session_variables if isinstance(item, dict) and "key" in item
+        }
+        merge_all_variables.update(defined_variables_dict)
+        merge_all_variables.update(session_variables_dict)
 
         # 日志辅助函数：添加时间戳和步骤名称
         from datetime import datetime
@@ -453,7 +464,7 @@ async def debug_http_request(
                             logs.append("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
                             return match.group(0)
                         try:
-                            resolved = defined_variables[var_name]
+                            resolved = merge_all_variables[var_name]
                         except KeyError:
                             logs.append(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
                             return match.group(0)
@@ -505,10 +516,10 @@ async def debug_http_request(
                 return value
 
         # 解析请求参数（列表格式）
-        headers_list = resolve_placeholders(request_header_raw)
-        params_list = resolve_placeholders(request_params_raw)
-        form_data_list = resolve_placeholders(request_form_data_raw)
-        urlencoded_list = resolve_placeholders(request_form_urlencoded_raw)
+        headers_list = resolve_placeholders(request_header)
+        params_list = resolve_placeholders(request_params)
+        form_data_list = resolve_placeholders(request_form_data)
+        urlencoded_list = resolve_placeholders(request_form_urlencoded)
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         def convert_list_to_dict(data_list):
@@ -763,7 +774,7 @@ async def debug_http_request(
 
                             elif source.lower() == "session_variables" or source == "变量池":
                                 if expr:
-                                    extracted_value = defined_variables.get(expr)
+                                    extracted_value = merge_all_variables.get(expr)
                                     if extracted_value is None:
                                         error_msg = f"【变量提取】在变量池[Session Variables Pool]中未找到[{expr}]变量"
                                 else:
@@ -915,7 +926,7 @@ async def debug_http_request(
                                 if not defined_variables:
                                     error_msg = "【断言验证】变量池 session_variables 为空"
                                 elif expr:
-                                    actual_value = defined_variables.get(expr)
+                                    actual_value = merge_all_variables.get(expr)
                                     if actual_value is None:
                                         error_msg = f"变量池 session_variables 中不存在: {expr}"
                                 else:
@@ -1125,12 +1136,10 @@ async def execute_step_tree(
       返回：完整的步骤级执行结果（含每一步的状态、日志、变量提取结果、会话变量的累积）+ 整体执行汇总。
     """
     try:
+        env_name = request.env_name
         case_id = request.case_id
         steps = request.steps
-        # initial_variables 必须是列表格式，每个元素包含 key、value、desc
-        initial_variables = request.initial_variables or []
-        if not isinstance(initial_variables, list):
-            initial_variables = []
+        initial_variables = request.initial_variables
 
         # 判断运行模式还是调试模式
         # 运行模式：只传递 case_id，不传递 steps
@@ -1165,6 +1174,7 @@ async def execute_step_tree(
                 # 使用公共函数执行单个用例
                 result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                     case_id=case_id,
+                    env_name=env_name,
                     initial_variables=initial_variables,
                     report_type=AutoTestReportType.SYNC_EXEC
                 )
@@ -1250,6 +1260,7 @@ async def execute_step_tree(
             results, logs, report_code, statistics, session_variables = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
+                env_name=env_name,
                 initial_variables=initial_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC
             )
