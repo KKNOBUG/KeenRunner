@@ -136,6 +136,20 @@ async def get_env_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
+@autotest_env.get("/get", summary="API自动化测试-查询环境名称(去重)")
+async def get_env_info():
+    try:
+        names: List[str] = await AUTOTEST_API_ENV_CRUD.model.filter(
+            tate__not=1).distinct().values_list("env_name", flat=True)
+        LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
+        return SuccessResponse(message="查询成功", data=names, total=len(names))
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询环境名称(去重)环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
 @autotest_env.post("/search", summary="API自动化测试-按条件查询环境")
 async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="查询条件")):
     try:

@@ -99,7 +99,7 @@ const taskForm = ref({
   task_project: null,
   task_notify: null,
   task_notifier: [],
-  task_kwargs: { execute_environment: '' },
+  task_kwargs: { env_name: '' },
   task_scheduler: 'cron',
   task_interval_expr: null,
   task_datetime_expr: '',
@@ -240,7 +240,7 @@ const openAdd = () => {
     task_project: null,
     task_notify: null,
     task_notifier: [],
-    task_kwargs: { execute_environment: '' },
+    task_kwargs: { env_name: '' },
     task_scheduler: 'cron',
     task_interval_expr: null,
     task_datetime_expr: '',
@@ -271,7 +271,7 @@ const openEdit = async (row) => {
       task_project: d.task_project ?? null,
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
-      task_kwargs: { ...taskKwargs, case_ids: caseIds, execute_environment: taskKwargs.execute_environment ?? taskKwargs.env_name ?? '' },
+      task_kwargs: { ...taskKwargs, case_ids: caseIds, env_name: taskKwargs.env_name ?? '' },
       task_scheduler: d.task_scheduler || 'cron',
       task_interval_expr: d.task_interval_expr ?? null,
       task_datetime_expr: d.task_datetime_expr || '',
@@ -326,18 +326,18 @@ const handleSubmit = async () => {
     window.$message?.warning?.('请至少勾选一个用例')
     return
   }
-  const executeEnvironment = taskForm.value.task_kwargs?.execute_environment?.trim?.() || ''
+  const executeEnvironment = taskForm.value.task_kwargs?.env_name?.trim?.() || ''
   if (!executeEnvironment) {
     window.$message?.warning?.('请在任务参数中填写执行环境')
     return
   }
   modalLoading.value = true
   try {
-    // 任务参数字典：case_ids、execute_environment 等，后端与 Celery 从 task_kwargs 读取
+    // 任务参数字典：case_ids、env_name 等，后端与 Celery 从 task_kwargs 读取
     const taskKwargsPayload = {
       ...(taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object' ? taskForm.value.task_kwargs : {}),
       case_ids: caseIds,
-      execute_environment: executeEnvironment,
+      env_name: executeEnvironment,
     }
     const payload = {
       task_name: taskForm.value.task_name.trim(),
@@ -456,7 +456,7 @@ const columns = [
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
-      const env = row.task_kwargs?.execute_environment ?? row.task_kwargs?.env_name ?? ''
+      const env = row.task_kwargs?.env_name ?? ''
       return h('span', env || '-')
     },
   },
@@ -714,7 +714,7 @@ onMounted(() => {
           <NForm label-placement="left" label-width="100px" size="small">
             <NFormItem label="执行环境" required>
               <NInput
-                  v-model:value="taskForm.task_kwargs.execute_environment"
+                  v-model:value="taskForm.task_kwargs.env_name"
                   placeholder="请输入执行环境（存入 task_kwargs）"
                   clearable
               />

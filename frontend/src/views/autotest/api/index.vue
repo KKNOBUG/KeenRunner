@@ -976,6 +976,8 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_url = config.url || original.request_url || ''
     backendStep.request_args_type = config.request_args_type ?? config.bodyType ?? original.request_args_type ?? 'none'
     backendStep.request_text = config.request_text ?? original.request_text ?? null
+    // request_project_id：优先用 HTTP 控制器 form 或步骤原始值；新建步骤无值时用用例所属项目（caseForm.case_project）作为默认
+    backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? (caseForm.case_project != null ? (typeof caseForm.case_project === 'object' ? caseForm.case_project.project_id : caseForm.case_project) : null) ?? null
 
     backendStep.request_header = Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : [])
     backendStep.request_params = Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : [])

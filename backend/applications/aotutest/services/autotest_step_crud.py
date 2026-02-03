@@ -781,7 +781,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: int,
             report_type: AutoTestReportType,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
-            execute_environment: Optional[str] = None,
+            env_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         if initial_variables is None:
             initial_variables = []
@@ -837,7 +837,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 case=case_dict,
                 steps=root_steps,
                 initial_variables=initial_variables,
-                execute_environment=execute_environment,
+                env_name=env_name,
                 report_type=report_type,
             )
 
@@ -862,7 +862,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_ids: List[int],
             report_type: AutoTestReportType,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
-            execute_environment: Optional[str] = None,
+            env_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         if initial_variables is None:
             initial_variables = []
@@ -882,7 +882,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 result = await self.execute_single_case(
                     case_id=case_id,
                     initial_variables=initial_variables,
-                    execute_environment=execute_environment,
+                    env_name=env_name,
                     report_type=report_type
                 )
                 result["error"] = None

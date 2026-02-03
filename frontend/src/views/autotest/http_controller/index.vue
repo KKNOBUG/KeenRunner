@@ -569,6 +569,7 @@ const state = reactive({
     rawBody: '',
     step_name: '',
     description: '',
+    request_project_id: null, // 请求项目ID（与 request_args_type 等一致，从 form 读写；无 UI 时由 init 从 config/original 带入）
     defined_variables: [],
     extract_variables: {},
     assert_validators: {},
@@ -621,6 +622,7 @@ const initFromConfig = () => {
   // headers、params 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
   state.form.headers = Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : [])
   state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
+  state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
 
   // 请求体类型（与后端 request_args_type 枚举一致：none, params, form-data, x-www-form-urlencoded, json, raw）
   if (cfg.bodyType) {
@@ -831,6 +833,7 @@ const buildConfigFromState = () => {
     params: normalizeList(paramsList),
     bodyType: state.form.bodyType,
     request_args_type: state.form.bodyType,
+    request_project_id: state.form.request_project_id ?? null,
     data,
     jsonBodyText,
     form_data,
@@ -845,7 +848,13 @@ const buildConfigFromState = () => {
 // 使用防抖，避免频繁触发
 let emitTimer = null
 watch(
-    () => [state.form.step_name, state.form.description, state.form.method, state.form.url, state.form.headers, state.form.params, state.form.bodyType, state.form.bodyParams, state.form.bodyForm, state.form.jsonBody, state.form.rawBody, state.form.defined_variables, state.form.extract_variables, state.form.assert_validators],
+    () => [
+        state.form.step_name, state.form.description, state.form.method,
+      state.form.url, state.form.headers, state.form.params,
+      state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
+      state.form.jsonBody, state.form.rawBody, state.form.request_project_id,
+      state.form.defined_variables, state.form.extract_variables, state.form.assert_validators
+    ],
     () => {
       // 如果正在从外部更新，不触发 emit
       if (isExternalUpdate) return
@@ -1121,6 +1130,7 @@ const debugging = async () => {
       request_url: cfg.url,
       request_method: cfg.method,
       request_args_type: cfg.request_args_type ?? cfg.bodyType ?? original.request_args_type ?? 'none',
+      request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
       request_params: Array.isArray(cfg.params) && cfg.params.length > 0 ? cfg.params : null,
       request_body: cfg.data,
       request_form_data: Array.isArray(cfg.form_data) && cfg.form_data.length > 0 ? cfg.form_data : null,

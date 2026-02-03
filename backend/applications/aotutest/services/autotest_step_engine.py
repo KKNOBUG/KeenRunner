@@ -86,7 +86,7 @@ class StepExecutionContext:
             case_id: int,
             case_code: str,
             *,
-            env: Optional[str] = None,
+            env_name: Optional[str] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             http_client: Optional[HttpClientProtocol] = None,
             report_code: Optional[str] = None,
@@ -95,12 +95,12 @@ class StepExecutionContext:
         初始化步骤执行上下文。
         :param case_id: 用例 ID。
         :param case_code: 用例编码。
-        :param env: 执行环境名称，用于 HTTP 步骤补全 base URL。
+        :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
         :param initial_variables: 初始会话变量列表（key/value/desc）。
         :param http_client: 可选 HTTP 客户端，不传则在 __aenter__ 中创建。
         :param report_code: 报告编码，用于保存步骤明细。
         """
-        self.env = env
+        self.env_name = env_name
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
@@ -1902,29 +1902,31 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
 
 class HttpStepExecutor(BaseStepExecutor):
-    """HTTP 步骤执行器：发请求、解析占位符、按 request_env_id 补全 URL，并执行变量提取与断言。"""
+    """HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
-            env: str = self.context.env
-            step_type: str = self.step.get("step_type")
+            env_name: str = self.context.env_name
             request_url: str = self.step.get("request_url")
-            request_env_id: int = self.step.get("request_env_id")
+            request_project_id: int = self.step.get("request_project_id")
             request_method: str = self.step.get("request_method", "").upper()
-            if env and step_type == AutoTestStepType.HTTP and not request_url.lower().startswith("http"):
+            if env_name and not request_url.lower().startswith("http"):
                 try:
                     from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
-                    env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_id(
+                    env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                        only_one=True,
                         on_error=False,
-                        env_id=request_env_id,
+                        conditions={"project_id": request_project_id, "env_name": env_name},
                     )
                     if not env_instance:
-                        raise StepExecutionError(f"【HTTP请求】环境(id={request_env_id}, name={env})配置不存在")
+                        raise StepExecutionError(
+                            f"【HTTP请求】环境(project_id={request_project_id}, env_name={env_name})配置不存在"
+                        )
                     execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
                     execute_envi_port: int = env_instance.env_port
                     if not execute_envi_host or not execute_envi_port:
                         raise StepExecutionError(
-                            f"【HTTP请求】环境(id={request_env_id}, name={env}, "
+                            f"【HTTP请求】环境(project_id={request_project_id}, env_name={env_name}, "
                             f"host={execute_envi_host}, host={execute_envi_port})配置异常"
                         )
                     request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
@@ -2549,7 +2551,7 @@ class AutoTestStepExecutionEngine:
             steps: Iterable[Dict[str, Any]],
             report_type: AutoTestReportType,
             *,
-            execute_environment: Optional[str] = None,
+            env_name: Optional[str] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]]]:
         """
@@ -2557,7 +2559,7 @@ class AutoTestStepExecutionEngine:
         :param case: 用例信息，含 case_id、case_code、case_name。
         :param steps: 根步骤可迭代对象。
         :param report_type: 报告类型。
-        :param execute_environment: 执行环境名称，用于 HTTP 步骤补全 URL。
+        :param env_name: 执行环境名称，用于 HTTP 步骤补全 URL。
         :param initial_variables: 初始会话变量列表。
         :return: Tuple: (results, logs, report_code, statistics, session_variables)。
                  - results: 根步骤执行结果列表。
@@ -2603,7 +2605,7 @@ class AutoTestStepExecutionEngine:
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,
-                env=execute_environment,
+                env_name=env_name,
                 initial_variables=initial_variables,
                 http_client=self._http_client,
                 report_code=report_code,

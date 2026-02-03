@@ -19,6 +19,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from backend import LOGGER
+from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -368,6 +369,8 @@ async def debug_http_request(
 ):
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
+        env_name = step_data.env_name
+        step_name = step_data.step_name
         request_url = step_data.request_url
         request_method = (step_data.request_method or "GET").upper()
         request_header_raw = step_data.request_header or []
@@ -376,10 +379,10 @@ async def debug_http_request(
         request_form_urlencoded_raw = step_data.request_form_urlencoded or []
         request_body = step_data.request_body
         request_text = step_data.request_text
+        request_project_id = step_data.request_project_id
         defined_variables_raw = step_data.defined_variables or []
         extract_variables = step_data.extract_variables or []
         assert_validators = step_data.assert_validators or []
-        step_name = step_data.step_name or "HTTP调试"
 
         # 确保是列表格式
         if not isinstance(request_header_raw, list):
@@ -407,6 +410,29 @@ async def debug_http_request(
         def format_log(message: str) -> str:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
+
+        if not request_url.lower().startswith("http"):
+            try:
+                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+                env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                    only_one=True,
+                    on_error=False,
+                    conditions={"project_id": request_project_id, "env_name": env_name},
+                )
+                if not env_instance:
+                    return FailureResponse(
+                        message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
+                    )
+                execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
+                execute_envi_port: int = env_instance.env_port
+                if not execute_envi_host or not execute_envi_port:
+                    return FailureResponse(
+                        message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不正确"
+                    )
+                request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
+            except Exception as e:
+                LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
+                return FailureResponse(f"HTTP请求调试异常, 错误描述: {e}")
 
         # 执行日志
         logs = [
@@ -1271,7 +1297,7 @@ async def batch_execute_cases_endpoint(
 ):
     try:
         case_ids = request.case_ids
-        execute_environment = request.env
+        env_name = request.env_name
         initial_variables = request.initial_variables if request.initial_variables is not None else []
         if not isinstance(initial_variables, list):
             initial_variables = []
@@ -1284,7 +1310,7 @@ async def batch_execute_cases_endpoint(
         #     kwargs={
         #         "case_ids": case_ids,
         #         "initial_variables": initial_variables,
-        #         "execute_environment": execute_environment,
+        #         "env_name": env_name,
         #         "report_type": AutoTestApiReportType.ASYNC_EXEC
         #     },
         #     expires=3600,
@@ -1298,7 +1324,7 @@ async def batch_execute_cases_endpoint(
         exec_result = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables,
-            execute_environment=execute_environment,
+            env_name=env_name,
             report_type=AutoTestReportType.ASYNC_EXEC,
         )
         return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)

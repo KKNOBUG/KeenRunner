@@ -174,7 +174,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_form_data = fields.JSONField(null=True, description="请求表单数据")
     request_form_file = fields.JSONField(null=True, description="请求文件路径")
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据")
-    request_env_id = fields.BigIntField(null=True, description="请求环境ID")
+    request_project_id = fields.BigIntField(null=True, description="请求应用ID")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
 
     # 逻辑相关

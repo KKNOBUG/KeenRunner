@@ -71,7 +71,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
             case_ids=case_ids,
             report_type=exec_report_type,
             initial_variables=initial_variables,
-            execute_environment=env_name,
+            env_name=env_name,
         )
         all_ok = result.get("summary", {}).get("all_success", False)
         task.last_execute_state = Status.SUCCESS if all_ok else Status.FAILURE
@@ -127,7 +127,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
 def execute_batch_cases_task(
         case_ids: List[int],
         initial_variables: Optional[List[Dict[str, Any]]] = None,
-        execute_environment: Optional[str] = None,
+        env_name: Optional[str] = None,
         report_type: Optional[str] = None,
 ):
     """
@@ -135,7 +135,7 @@ def execute_batch_cases_task(
 
     :param case_ids: 用例 ID 列表
     :param initial_variables: 初始变量（可选）
-    :param execute_environment: 执行环境（可选）
+    :param env_name: 执行环境（可选）
     :param report_type: 报告类型（可选，默认异步执行）
     """
     crud = get_step_crud()
@@ -147,7 +147,7 @@ def execute_batch_cases_task(
         crud.batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables or [],
-            execute_environment=execute_environment,
+            env_name=env_name,
             report_type=report_type,
         )
     )

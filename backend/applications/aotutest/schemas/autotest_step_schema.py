@@ -31,7 +31,7 @@ class AutoTestApiStepReqBase(BaseModel):
     request_form_data: NON_LIST_DICT_TYPE = Field(None, description="请求表单数据")
     request_form_urlencoded: NON_LIST_DICT_TYPE = Field(None, description="请求键值对数据")
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
-    request_env_id: Optional[int] = Field(None, description="请求环境ID")
+    request_project_id: Optional[int] = Field(None, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="AutoTestReqArgsType")
 
 
@@ -123,6 +123,7 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
+    request_project_id: int = Field(..., description="请求应用ID")
 
     @field_validator('extract_variables', mode='before')
     @classmethod
@@ -193,7 +194,7 @@ class AutoTestStepTreeExecute(BaseModel):
 
 
 class AutoTestBatchExecuteCases(BaseModel):
-    env: Optional[str] = Field(None, description="执行环境名称")
+    env_name: Optional[str] = Field(None, description="执行环境名称")
     case_ids: List[int] = Field(..., min_length=1, description="用例ID列表")
     initial_variables: NON_LIST_DICT_TYPE = Field(None, description="初始变量(会应用到所有用例)")
 
