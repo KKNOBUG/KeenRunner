@@ -108,7 +108,6 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
             if await check_task_expired(task):
                 run_autotest_task.apply_async(
                     args=[task.id],
-                    __task_type=20,
                     __task_id=task.id,
                 )
                 dispatched += 1

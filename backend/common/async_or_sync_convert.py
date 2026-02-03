@@ -88,7 +88,7 @@ class AsyncEventLoopContextIOPool:
         try:
             # 检查是否已有运行中的事件循环
             aio.get_running_loop()
-            raise SystemError("There is already a running event loop in this thread!")
+            raise SystemError("此线程中已存在一个正在运行的循环！")
         except RuntimeError:
             pass
 

@@ -193,15 +193,14 @@ async def run_task_info(task_in: dict = Body(..., description="任务ID")):
         await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums.autotest_enum import AutoTestReportType
-        # __task_id / __task_type 会随消息传到 Worker，task_prerun 从 request.properties 取出；
-        # 只有传了 __task_id，Worker 端 _create_task_record 才会查任务表并写入 record 的 task_id/task_name/task_case_ids。
+        # __task_id 会随消息传到 Worker，task_prerun 从 request.properties 取出；
+        # 只有传了 __task_id，Worker 端 _create_task_record 才会查任务表并写入 record 的 task_id/task_name。
         run_autotest_task.apply_async(
             kwargs={
                 "task_id": task_id,
                 "report_type": AutoTestReportType.ASYNC_EXEC,
             },
             queue="autotest_queue",
-            __task_type=10,
             __task_id=task_id
         )
         LOGGER.info(f"已下发执行任务 task_id={task_id}")

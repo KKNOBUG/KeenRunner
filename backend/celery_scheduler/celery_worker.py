@@ -62,7 +62,7 @@ async def _create_task_record(
     task_name: Optional[str] = None
     task_kwargs: Dict[str, Any] = {}
     celery_scheduler: Optional[str] = None
-    # task_id 来自 apply_async(..., __task_id=task_id)；未传 __task_id 时此处为 None，不查任务表，record 无 task_id/task_name/task_case_ids。
+    # task_id 来自 apply_async(..., __task_id=task_id)；未传 __task_id 时此处为 None，不查任务表，record 无 task_id/task_name。
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
         task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
         if task_instance:
@@ -139,15 +139,13 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
     """
     try:
         ensure_tortoise_orm_initialized()
-        # 来自 apply_async(..., __task_id=..., __task_type=...)，随 Celery 消息传到 Worker 的 request.properties。
+        # 来自 apply_async(..., __task_id=...)，随 Celery 消息传到 Worker 的 request.properties。
         task_id = task.request.properties.get("__task_id", None)
-        task_type = task.request.properties.get("__task_type", None)
         trace_id = task.request.headers.get("trace_id", None)
         LOGGER.info(
             f"【Krun-Celery-Worker】【trace_id={trace_id}】任务提交完成: "
             f"task_id=[{task_id}], "
             f"task_name=[{task.name}], "
-            f"task_type=[{task_type}], "
             f"celery_id=[{task.request.id}], "
         )
         # 写入任务执行记录（含 celery_trace_id）；扫描任务不落表
@@ -238,7 +236,7 @@ def create_celery():
             return super().send_task(*args, **kwargs)
 
     class ContextTask(Task, ABC):
-        """自定义 Task：支持异步 run、apply_async 注入 trace_id/__task_type，结束时更新任务记录。"""
+        """自定义 Task：支持异步 run、apply_async 注入 trace_id，结束时更新任务记录。"""
 
         Request = TaskRequest
 
@@ -247,17 +245,14 @@ def create_celery():
 
         def apply_async(self, args=None, kwargs=None, task_id=None, producer=None,
                         link=None, link_error=None, shadow=None, **options):
-            """下发时注入 trace_id、__task_type、__task_id（业务任务主键），供 Worker task_prerun 写 record 用。"""
+            """下发时注入 trace_id、__task_id（业务任务主键），供 Worker task_prerun 写 record 用。"""
 
-            __task_type = options.get("__task_type", None)
-            __task_type = __task_type if __task_type else 10
             __task_id = options.get("__task_id", None)
 
             headers = {
                 "headers": {
                     "trace_id": LOCAL_CONTEXT_VAR.trace_id or str(uuid.uuid4())
                 },
-                "__task_type": __task_type,
                 "__task_id": __task_id,
             }
 
