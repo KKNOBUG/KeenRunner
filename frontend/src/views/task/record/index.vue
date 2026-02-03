@@ -175,12 +175,13 @@ const columns = [
     },
   },
   {
-    title: '关联用例集',
-    key: 'task_case_ids',
-    width: 120,
+    title: '任务参数',
+    key: 'task_kwargs',
+    width: 320,
     ellipsis: { tooltip: true },
     render(row) {
-      return h('span', { title: formatCaseIds(row) }, formatCaseIds(row))
+      const s = formatJsonBrief(row.task_kwargs, 40)
+      return h('span', { title: JSON.stringify(row.task_kwargs) }, s)
     },
   },
   {
@@ -220,16 +221,6 @@ const columns = [
       const s = row.task_error
       if (!s) return h('span', '-')
       return h('span', { title: s }, s.length > 30 ? s.slice(0, 100) + '...' : s)
-    },
-  },
-  {
-    title: '任务参数',
-    key: 'task_kwargs',
-    width: 320,
-    ellipsis: { tooltip: true },
-    render(row) {
-      const s = formatJsonBrief(row.task_kwargs, 40)
-      return h('span', { title: JSON.stringify(row.task_kwargs) }, s)
     },
   },
   {
