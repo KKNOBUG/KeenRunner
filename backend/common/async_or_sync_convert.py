@@ -107,8 +107,8 @@ class AsyncEventLoopContextIOPool:
 
         self.loop_runner.start()
 
-        # 设置当前线程的事件循环
-        aio.set_event_loop(self.loop)
+        # 设置当前线程的事件循环(废弃：会导致DB初始化和数据库操作与celery服务不在同一循环事件导致报错)
+        # aio.set_event_loop(self.loop)
 
     def run(self, task_function: Union[AnyCallable, AnyCoroutine], *args: Any, **kwargs: Any) -> Any:
         """
