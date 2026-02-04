@@ -124,7 +124,7 @@
           <n-space justify="end">
             <n-button type="success" :loading="runLoading" @click="handleRun">运行</n-button>
             <n-button type="primary" :loading="debugLoading" @click="handleDebug">调试</n-button>
-            <n-button type="info" @click="handleSaveAll">保存</n-button>
+            <n-button type="info" :loading="saveLoading" @click="handleSaveAll">保存</n-button>
           </n-space>
         </div>
       </div>
@@ -383,6 +383,7 @@ import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
+import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
 import api from "@/api";
 import {useUserStore} from '@/store';
 
@@ -392,7 +393,8 @@ const stepDefinitions = {
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   if: {label: '分支条件', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
-  database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'}
+  database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
+  user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
 }
 
 const editorMap = {
@@ -400,7 +402,8 @@ const editorMap = {
   code: ApiCodeEditor,
   http: ApiHttpEditor,
   if: ApiIfEditor,
-  wait: ApiWaitEditor
+  wait: ApiWaitEditor,
+  user_variables: ApiUserVariablesEditor,
 }
 
 let seed = 1000
@@ -587,6 +590,7 @@ watch(() => caseForm.case_tags, (newVal) => {
 }, { immediate: true })
 const runLoading = ref(false)
 const debugLoading = ref(false)
+const saveLoading = ref(false)
 const debugResult = ref(null)
 const dragState = ref({
   draggingId: null,
@@ -711,6 +715,8 @@ const backendTypeToLocal = (step_type) => {
       return 'wait'
     case '循环结构':
       return 'loop'
+    case '用户变量':
+      return 'user_variables'
     default:
       return 'code'
   }
@@ -846,6 +852,12 @@ const mapBackendStep = (step) => {
     base.config = {
       seconds: step.wait || 0
     }
+  } else if (localType === 'user_variables') {
+    base.config = {
+      step_name: step.step_name || '',
+      step_desc: step.step_desc || '',
+      session_variables: Array.isArray(step.session_variables) ? step.session_variables : []
+    }
   }
 
   if (step.children && step.children.length && stepDefinitions[localType]?.allowChildren) {
@@ -893,7 +905,8 @@ const localTypeToBackend = (localType) => {
     'code': '执行代码请求(Python)',
     'if': '条件分支',
     'wait': '等待控制',
-    'loop': '循环结构'
+    'loop': '循环结构',
+    'user_variables': '用户变量'
   }
   return typeMap[localType] || '执行代码请求(Python)'
 }
@@ -923,6 +936,12 @@ const assignStepNumbers = (steps) => {
   })
 
   return stepNoMap
+}
+
+// 键值对列表去空：只保留 key 非空（trim 后）的项，避免 Key 为空时被保存
+const filterKeyValueList = (list) => {
+  if (!Array.isArray(list)) return []
+  return list.filter((item) => item && String(item.key ?? '').trim() !== '')
 }
 
 // 将前端步骤格式转换为后端格式
@@ -980,10 +999,10 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_args_type = config.request_args_type ?? original.request_args_type ?? 'none'
     backendStep.request_text = config.request_text ?? original.request_text ?? null
     backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
-    backendStep.request_header = Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : [])
-    backendStep.request_params = Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : [])
-    backendStep.request_form_data = Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
-    backendStep.request_form_urlencoded = Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
+    backendStep.request_header = filterKeyValueList(Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : []))
+    backendStep.request_params = filterKeyValueList(Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : []))
+    backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
+    backendStep.request_form_urlencoded = filterKeyValueList(Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : []))
     backendStep.request_body = config.data || original.request_body || {}
 
     // extract_variables 和 assert_validators 应该是列表格式（List[Dict[str, Any]]）
@@ -1003,8 +1022,8 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
       backendStep.assert_validators = null
     }
 
-    // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容旧格式
-    backendStep.defined_variables = Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
+    // defined_variables 必须是列表格式，每个元素包含 key、value、desc；Key 为空的项不保存
+    backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
   } else if (step.type === 'code') {
     backendStep.code = config.code !== undefined ? config.code : (original.code || '')
   } else if (step.type === 'loop') {
@@ -1070,6 +1089,16 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.conditions = [conditionObj]
   } else if (step.type === 'wait') {
     backendStep.wait = config.seconds || original.wait || 0
+  } else if (step.type === 'user_variables') {
+    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || '')
+    backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
+    const sv = config.session_variables ?? original.session_variables
+    const list = Array.isArray(sv) ? sv : []
+    backendStep.session_variables = filterKeyValueList(list.map(item => ({
+      key: item.key || '',
+      value: item.value ?? '',
+      desc: item.desc ?? item.description ?? ''
+    })))
   }
 
   // 处理子步骤（递归处理）
@@ -1125,6 +1154,40 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   return cleanedStep
 }
 
+
+// 检查键值对列表中是否存在 key 为空（trim 后）的项
+const hasEmptyKeyInList = (list) => {
+  if (!Array.isArray(list)) return false
+  return list.some((item) => item != null && String(item.key ?? '').trim() === '' && String(item.value ?? '').trim() !== '')
+}
+
+// 递归校验步骤树中是否存在“键为空”的键值对（请求头/请求体/变量/用户变量等），若存在则不允许保存
+const validateEmptyKeyInSteps = (stepList) => {
+  for (const step of stepList) {
+    const config = step.config || {}
+    const original = step.original || {}
+    const getList = (key) => (Array.isArray(config[key]) ? config[key] : Array.isArray(original[key]) ? original[key] : [])
+    let listName = ''
+    if (step.type === 'http') {
+      if (hasEmptyKeyInList(getList('headers')) || hasEmptyKeyInList(getList('request_header'))) listName = '请求头'
+      else if (hasEmptyKeyInList(getList('params')) || hasEmptyKeyInList(getList('request_params'))) listName = '请求体 params'
+      else if (hasEmptyKeyInList(getList('form_data')) || hasEmptyKeyInList(getList('request_form_data'))) listName = '请求体 form-data'
+      else if (hasEmptyKeyInList(getList('form_urlencoded')) || hasEmptyKeyInList(getList('request_form_urlencoded'))) listName = '请求体 x-www-form-urlencoded'
+      else if (hasEmptyKeyInList(getList('defined_variables'))) listName = '变量'
+    } else if (step.type === 'user_variables') {
+      if (hasEmptyKeyInList(getList('session_variables'))) listName = '用户变量'
+    }
+    if (listName) {
+      return { valid: false, stepName: step.name || step.original?.step_name || '未命名步骤', listName }
+    }
+    if (step.children && step.children.length > 0) {
+      const childResult = validateEmptyKeyInSteps(step.children)
+      if (!childResult.valid) return childResult
+    }
+  }
+  return { valid: true }
+}
+
 // 递归校验步骤树中所有 HTTP 步骤：若请求体为 json，则校验 JSON 语法
 const validateJsonBodyInSteps = (stepList) => {
   for (const step of stepList) {
@@ -1172,7 +1235,29 @@ const validateCaseForm = () => {
   return { valid: true }
 }
 
+// 将后端返回的 success_detail（前序顺序）写回步骤树，使下次保存走更新而非新增，避免重复保存产生重复步骤
+const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
+  if (!Array.isArray(detailList) || detailList.length === 0) return
+  let idx = 0
+  const traverse = (list) => {
+    if (!Array.isArray(list)) return
+    for (const step of list) {
+      const detail = detailList[idx]
+      if (detail && (detail.step_id != null || detail.step_code != null)) {
+        if (!step.original) step.original = {}
+        if (detail.step_id != null) step.original.id = detail.step_id
+        if (detail.step_code != null) step.original.step_code = detail.step_code
+      }
+      idx += 1
+      if (step.children && step.children.length > 0) traverse(step.children)
+    }
+  }
+  traverse(stepList)
+}
+
 const handleSaveAll = async () => {
+  if (saveLoading.value) return
+  saveLoading.value = true
   try {
     // 用例信息必填项校验
     const caseValidation = validateCaseForm()
@@ -1186,6 +1271,16 @@ const handleSaveAll = async () => {
     if (!jsonValidation.valid) {
       window.$message?.error?.(
           `步骤「${jsonValidation.stepName}」请求体 JSON 格式错误，请修正后再保存。}`
+      )
+      return
+    }
+
+
+    // 键值对去空校验：存在 Key 为空的项时不允许保存
+    const emptyKeyValidation = validateEmptyKeyInSteps(steps.value)
+    if (!emptyKeyValidation.valid) {
+      window.$message?.error?.(
+          `步骤 [${emptyKeyValidation.stepName}] : [${emptyKeyValidation.listName}] 存在键为空的项，请填写或删除后再保存。`
       )
       return
     }
@@ -1242,11 +1337,17 @@ const handleSaveAll = async () => {
     if (res?.code === '000000' || res?.code === 200 || res?.code === 0) {
       window.$message?.success?.(res?.message || '保存成功')
 
+      // 将本次保存返回的 step_id/step_code 写回当前步骤树，避免重复点击保存时再次被当作新增
+      const stepDetail = res?.data?.steps?.success_detail
+      if (Array.isArray(stepDetail) && stepDetail.length > 0) {
+        mergeStepTreeWithSuccessDetail(steps.value, stepDetail)
+      }
+
       // 新增用例保存成功后，将 case_id / case_code 写入 URL，以便后续加载和刷新保留
       if (res?.data?.cases?.success_detail && res.data.cases.success_detail.length > 0) {
         const savedCase = res.data.cases.success_detail[0]
         if (savedCase.case_id && !caseId.value) {
-          router.replace({
+          await router.replace({
             path: route.path,
             query: { ...route.query, case_id: String(savedCase.case_id), case_code: savedCase.case_code || '' }
           })
@@ -1261,6 +1362,8 @@ const handleSaveAll = async () => {
   } catch (error) {
     console.error('Failed to save step tree', error)
     window.$message?.error?.(error?.response?.data?.message || error?.message || '保存失败')
+  } finally {
+    saveLoading.value = false
   }
 }
 
@@ -1668,7 +1771,8 @@ const getStepIconClass = (type) => {
     code: 'icon-code',
     http: 'icon-http',
     if: 'icon-if',
-    wait: 'icon-wait'
+    wait: 'icon-wait',
+    user_variables: 'icon-user_variables',
   }
   return classMap[type] || ''
 }
@@ -2625,6 +2729,10 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-icon.icon-wait) {
   color: #48d024;
+}
+
+:deep(.step-icon.icon-user_variables) {
+  color: #FF69B4;
 }
 
 :deep(.action-btn) {

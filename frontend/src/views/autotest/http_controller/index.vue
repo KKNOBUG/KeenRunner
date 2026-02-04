@@ -804,26 +804,30 @@ watch(
     {deep: true, immediate: false}
 )
 
-// 与后端 autotest_step_engine 提取字段一致：expr, name, source, range, index
+// 与后端 autotest_step_engine 提取字段一致：expr, name, source, range, index；剔除提取名称或提取路径为空的项
 const buildExtractForBackend = () => {
-  return Object.values(state.form.extract_variables || {}).map(item => ({
-    expr: item.jsonpath || '',
-    name: item.name || '',
-    range: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
-    source: item.object || 'Response Json',
-    index: item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== '' ? Number(item.extractIndex) : null
-  }))
+  return Object.values(state.form.extract_variables || {})
+      .map(item => ({
+        expr: item.jsonpath || '',
+        name: item.name || '',
+        range: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+        source: item.object || 'Response Json',
+        index: item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== '' ? Number(item.extractIndex) : null
+      }))
+      .filter(item => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== '')
 }
 
-// 与后端 autotest_step_engine 断言字段一致：expr, name, source, operation, except_value
+// 与后端 autotest_step_engine 断言字段一致：expr, name, source, operation, except_value；剔除断言名称或断言表达式为空的项
 const buildValidatorsForBackend = () => {
-  return Object.values(state.form.assert_validators || {}).map(item => ({
-    expr: item.jsonpath || '',
-    name: item.name || '',
-    source: item.object || 'Response Json',
-    operation: item.assertion || '等于',
-    except_value: item.value != null ? String(item.value) : ''
-  }))
+  return Object.values(state.form.assert_validators || {})
+      .map(item => ({
+        expr: item.jsonpath || '',
+        name: item.name || '',
+        source: item.object || 'Response Json',
+        operation: item.assertion || '等于',
+        except_value: item.value != null ? String(item.value) : ''
+      }))
+      .filter(item => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== '')
 }
 
 const buildConfigFromState = () => {

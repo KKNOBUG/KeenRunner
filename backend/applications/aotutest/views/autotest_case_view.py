@@ -136,6 +136,38 @@ async def get_case(
             },
             replace_fields={"id": "case_id"}
         )
+        project_id: int = data.pop("case_project")
+        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(
+            on_error=True,
+            project_id=project_id
+        )
+        data["case_project"] = await project_instance.to_dict(
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3"
+            },
+            replace_fields={"id": "project_id"}
+        )
+        tag_ids: List[int] = data.pop("case_tags")
+        data["case_tags"] = [
+            await obj.to_dict(
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
+                replace_fields={"id": "tag_id"}
+            ) for obj in (
+                await AUTOTEST_API_TAG_CRUD.get_by_ids(
+                    tag_ids=tag_ids,
+                    on_error=True,
+                    return_obj=True
+                )
+            )
+        ]
         LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:

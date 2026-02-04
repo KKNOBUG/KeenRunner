@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import random
 import re
@@ -1781,6 +1782,42 @@ class WaitStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
+class UserVariablesStepExecutor(BaseStepExecutor):
+    """用户变量步骤执行器：读取 step.session_variables，对 value 为 func_name(...) 的项调用 GenerateUtils 解析并替换，再合并到上下文 session_variables。"""
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        try:
+            raw_variables = self.step.get("session_variables")
+            if not isinstance(raw_variables, list):
+                return
+            # 深拷贝后在副本上执行解析，避免修改原始步骤数据
+            variables = copy.deepcopy(raw_variables)
+            AutoTestToolService.execute_func_string(variables)
+            if variables:
+                self.context.update_variables(variables, scope="session_variables")
+                self.context.log(
+                    f"【用户变量】合并到 session_variables: {[e.get('key') for e in variables]}",
+                    step_code=self.step_code
+                )
+        except (AttributeError, StepExecutionError) as e:
+            raise StepExecutionError(f"【用户变量】解析或执行失败: {e}") from e
+        except Exception as e:
+            error_message: str = (
+                f"【用户变量】步骤执行异常: "
+                f"用例ID: {self.case_id}, "
+                f"步骤序号: {self.step_no}, "
+                f"步骤标识: {self.step_code}, "
+                f"步骤名称: {self.step_name}, "
+                f"步骤类型: {self.step_type}, "
+                f"错误类型: {type(e).__name__}, "
+                f"错误详情: {e}"
+            )
+            result.success = False
+            result.error = error_message
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
+
+
 class QuoteCaseStepExecutor(BaseStepExecutor):
     """引用公共用例执行器：加载引用用例的步骤树，规范化后按 step_no 顺序执行并挂到 result.children。"""
 
@@ -2494,6 +2531,7 @@ class StepExecutorFactory:
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
+        AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
     }
 
     @classmethod

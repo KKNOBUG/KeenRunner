@@ -41,6 +41,7 @@ class AutoTestStepType(StringEnum):
     WAIT = "等待控制"
     LOOP = "循环结构"
     QUOTE = "引用公共用例"
+    USER_VARIABLES = "用户变量"
 
 
 class AutoTestLoopMode(StringEnum):
