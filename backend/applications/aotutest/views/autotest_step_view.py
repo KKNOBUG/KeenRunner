@@ -1030,8 +1030,7 @@ async def debug_http_request(
             }
         }
 
-        LOGGER.info(
-            f"HTTP调试请求成功: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
+        LOGGER.info(f"HTTP调试请求成功: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
 
         return SuccessResponse(message="HTTP调试请求成功", data=result_data)
     except Exception as e:
