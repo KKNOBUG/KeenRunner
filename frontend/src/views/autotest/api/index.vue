@@ -1564,8 +1564,18 @@ const insertStep = (parentId, type, index = null) => {
   // 创建新步骤，遵循结构规范；循环步骤使用与 loop_controller 一致的默认值并参与保存
   const defaultConfig = type === 'loop'
       ? { loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5 }
-      : {}
-  const defaultName = type === 'loop' ? '循环结构(次数循环)' : `${def.label}`
+      : type === 'wait'
+          ? { seconds: 2 }
+          : type === 'user_variables'
+              ? { step_name: '用户定义变量' }
+              : {}
+  const defaultName = type === 'loop'
+      ? '循环结构(次数循环)'
+      : type === 'wait'
+          ? '控制等待(2秒)'
+          : type === 'user_variables'
+              ? '用户定义变量'
+              : `${def.label}`
   const newStep = {
     id: genId(),
     type,
@@ -1736,7 +1746,7 @@ const updateStepConfig = (id, config) => {
     } else if (step.type === 'http') {
       // 如果提供了 step_name，使用用户输入的步骤名称
       if (config.step_name !== undefined && config.step_name.length > 0) {
-        step.name = config.step_name
+        step.name = String(config.step_name).trim() || 'HTTP请求(发送请求并验证响应数据)'
       } else {
         // 否则自动生成步骤名称
         step.name = `HTTP请求(发送请求并验证响应数据)`
@@ -1749,11 +1759,16 @@ const updateStepConfig = (id, config) => {
         step.name = `条件分支(根据判断结果, 执行不同的路径)`
       }
     } else if (step.type === 'wait') {
-      step.name = `等待控制(${config.seconds || 0}秒)`
+      step.name = `控制等待(${config.seconds ?? 2}秒)`
+    } else if (step.type === 'user_variables') {
+      // 用户变量：步骤名称必填，修改时同步到步骤树（与等待控制一致）
+      if (config.step_name !== undefined && config.step_name !== null) {
+        step.name = String(config.step_name).trim() || '用户定义变量'
+      }
     } else if (step.type === 'code') {
       // 如果提供了 step_name，使用用户输入的步骤名称
       if (config.step_name !== undefined) {
-        step.name = config.step_name
+        step.name = String(config.step_name).trim() || '执行代码请求(Python)'
       }
     }
     // 更新显示名称

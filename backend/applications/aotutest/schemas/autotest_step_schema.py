@@ -49,7 +49,6 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
     step_desc: Optional[str] = Field(None, description="步骤描述")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤所属类型")
-    case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
 
     case_id: Optional[int] = Field(None, description="步骤所属用例")
     quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
@@ -79,7 +78,6 @@ class AutoTestApiStepChildren(BaseModel):
 class AutoTestApiStepCreate(AutoTestApiStepBase):
     step_no: int = Field(..., ge=1, description="步骤序号")
     step_name: str = Field(..., max_length=255, description="步骤名称")
-    case_type: AutoTestCaseType = Field(..., description="用例所属类型")
     step_type: AutoTestStepType = Field(..., description="步骤所属类型")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")
 
@@ -99,7 +97,6 @@ class AutoTestApiStepSelect(BaseModel):
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
 
     case_id: Optional[int] = Field(None, description="用例ID")
-    case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
     quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")

@@ -149,8 +149,6 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤描述")
     step_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="步骤标识代码")
     step_type = fields.CharEnumField(AutoTestStepType, description="步骤类型")
-    case_type = fields.CharEnumField(AutoTestCaseType, default=AutoTestCaseType.PRIVATE_SCRIPT,
-                                     description="用例所属类型")
 
     # 用例信息ID（普通字段，不设外键，业务层验证）
     case_id = fields.BigIntField(null=True, index=True, description="步骤所属用例")
