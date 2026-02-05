@@ -127,4 +127,6 @@ export default {
   stopApiTask: (data = {}) => request.post('/autotest/task/stop', data),
   // 任务执行记录
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
+  // 辅助函数列表（用户变量/占位符解析）
+  getAssistFuncList: (params = {}) => request.get('/autotest/tool/get', { params }),
 }

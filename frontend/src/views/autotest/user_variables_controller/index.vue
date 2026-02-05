@@ -30,7 +30,8 @@
           v-model:items="form.session_variables"
           :body-type="'none'"
           :is-for-body="false"
-          :show-description="true"
+          :available-variable-list="props.availableVariableList"
+          :assist-functions="props.assistFunctions"
       />
     </div>
   </n-card>
@@ -49,6 +50,14 @@ const props = defineProps({
   step: {
     type: Object,
     default: () => ({})
+  },
+  availableVariableList: {
+    type: Array,
+    default: () => []
+  },
+  assistFunctions: {
+    type: Array,
+    default: () => []
   }
 })
 

@@ -72,19 +72,60 @@
                 clearable
                 style="flex: 1;"
             />
-            <!-- 点击关联数据按钮，触发 handleDataAssociation 方法 -->
-            <n-button
-                circle
-                tertiary
-                type="primary"
-                size="small"
-                @click="handleDataAssociation(index)"
-                class="join-button"
+            <n-popover
+                :show="associationTargetIndex === index"
+                @update:show="(v) => { if (!v) associationTargetIndex = -1 }"
+                trigger="click"
+                placement="bottom-start"
+                :width="320"
             >
-              <template #icon>
-                <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+              <template #trigger>
+                <n-button
+                    circle
+                    tertiary
+                    type="primary"
+                    size="small"
+                    class="join-button"
+                    @click="associationTargetIndex = index"
+                >
+                  <template #icon>
+                    <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                  </template>
+                </n-button>
               </template>
-            </n-button>
+              <div class="association-popover-content">
+                <div v-if="availableVariableList.length > 0" class="association-section">
+                  <div class="association-section-title">可选变量</div>
+                  <n-scrollbar style="max-height: 180px;">
+                    <div
+                        v-for="(name, i) in availableVariableList"
+                        :key="'v-' + i"
+                        class="association-item"
+                        @click="insertAssociationValue(index, '${' + name + '}')"
+                    >
+                      {{ name }}
+                    </div>
+                  </n-scrollbar>
+                </div>
+                <div v-if="assistFunctions.length > 0" class="association-section">
+                  <div class="association-section-title">辅助函数</div>
+                  <n-scrollbar style="max-height: 200px;">
+                    <div
+                        v-for="(fn, i) in assistFunctions"
+                        :key="'f-' + i"
+                        class="association-item association-item-fn"
+                        @click="insertAssociationValue(index, '${' + (fn.name || fn) + '}')"
+                    >
+                      <span class="association-fn-name">{{ fn.name || fn }}</span>
+                      <span v-if="fn.desc" class="association-fn-desc">{{ fn.desc }}</span>
+                    </div>
+                  </n-scrollbar>
+                </div>
+                <div v-if="!availableVariableList.length && !assistFunctions.length" class="association-empty">
+                  暂无可用变量或辅助函数
+                </div>
+              </div>
+            </n-popover>
           </div>
           <!-- 如果是 form-data 模式且是请求体部分并且类型为 file，显示文件上传按钮和清除文件按钮 -->
           <div v-else-if="isFormDataAndForBody && item.type === 'file'" class="file-upload-wrapper">
@@ -183,6 +224,16 @@ const props = defineProps({
   isForBody: {
     type: Boolean,
     default: false
+  },
+  // 当前步骤之前可用的变量名列表，用于“关联数据”插入 ${xxx}
+  availableVariableList: {
+    type: Array,
+    default: () => []
+  },
+  // 辅助函数列表 [{ name, desc }]，用于“关联数据”插入 func_name()
+  assistFunctions: {
+    type: Array,
+    default: () => []
   }
 });
 // 定义组件的自定义事件
@@ -191,6 +242,8 @@ const emit = defineEmits(['add', 'remove', 'update:items']);
 const isBatchAddModalVisible = ref(false);
 // 存储批量输入的内容
 const batchInput = ref('');
+// 当前打开“关联数据”弹层的行索引，-1 表示未打开
+const associationTargetIndex = ref(-1);
 
 // 计算是否为 form-data 模式且是请求体部分
 const isFormDataAndForBody = computed(() => props.bodyType === 'form-data' && props.isForBody);
@@ -297,11 +350,13 @@ const handleTypeChange = (value, index) => {
   emit('update:items', newItems);
 };
 
-// 处理数据关联的方法，点击关联数据按钮时触发
-const handleDataAssociation = (index) => {
-  // 这里可以添加数据关联的逻辑
-  $message.warning(`点击了第 ${index} 项的数据关联按钮`)
-  console.log(`点击了第 ${index} 项的数据关联按钮`);
+// 在指定行的 value 中插入一段文本（变量占位符或辅助函数调用），并关闭弹层
+const insertAssociationValue = (index, text) => {
+  const newItems = [...props.items];
+  const cur = newItems[index]?.value ?? '';
+  newItems[index] = { ...newItems[index], value: cur + text };
+  emit('update:items', newItems);
+  associationTargetIndex.value = -1;
 };
 
 </script>
@@ -349,6 +404,53 @@ const handleDataAssociation = (index) => {
   align-items: center;
   justify-content: center;
   padding: 0;
+}
+
+.association-popover-content {
+  padding: 4px 0;
+}
+.association-section {
+  margin-bottom: 8px;
+}
+.association-section:last-child {
+  margin-bottom: 0;
+}
+.association-section-title {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  margin-bottom: 6px;
+  padding: 0 12px;
+}
+.association-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.association-item:hover {
+  background: var(--n-color-hover);
+}
+.association-item-fn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.association-fn-name {
+  font-family: monospace;
+  font-size: 12px;
+}
+.association-fn-desc {
+  font-size: 11px;
+  color: var(--n-text-color-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.association-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--n-text-color-3);
+  font-size: 13px;
 }
 
 </style>

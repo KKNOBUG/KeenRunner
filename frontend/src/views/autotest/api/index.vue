@@ -361,6 +361,8 @@
                 :step="currentStep"
                 :project-options="currentStep?.type === 'http' ? projectOptions : []"
                 :project-loading="currentStep?.type === 'http' ? projectLoading : false"
+                :available-variable-list="availableVariableList"
+                :assist-functions="assistFunctionsList"
                 @update:config="(val) => updateStepConfig(currentStep.id, val)"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
@@ -703,6 +705,70 @@ const findStepParent = (id, list = steps.value, parent = null) => {
   return null
 }
 
+/** 前序遍历步骤树，得到扁平列表（用于计算当前步骤之前的可用变量） */
+const flattenStepsPreOrder = (list, out = []) => {
+  if (!list || !list.length) return out
+  for (const step of list) {
+    out.push(step)
+    if (step.children && step.children.length) {
+      flattenStepsPreOrder(step.children, out)
+    }
+  }
+  return out
+}
+
+/** 从单个步骤中收集变量名：session_variables.key、defined_variables.key、extract_variables.name */
+const collectVariableNamesFromStep = (step) => {
+  const names = []
+  if (!step) return names
+  const cfg = step.config || {}
+  const orig = step.original || {}
+  const sv = cfg.session_variables ?? orig.session_variables
+  const dv = cfg.defined_variables ?? orig.defined_variables
+  const ev = cfg.extract_variables ?? orig.extract_variables
+  if (Array.isArray(sv)) {
+    sv.forEach((x) => { if (x && x.key) names.push(String(x.key).trim()) })
+  }
+  if (Array.isArray(dv)) {
+    dv.forEach((x) => { if (x && x.key) names.push(String(x.key).trim()) })
+  }
+  if (Array.isArray(ev)) {
+    ev.forEach((x) => { if (x && x.name) names.push(String(x.name).trim()) })
+  } else if (ev && typeof ev === 'object') {
+    Object.values(ev).forEach((x) => { if (x && x.name) names.push(String(x.name).trim()) })
+  }
+  return names
+}
+
+const flattenedSteps = computed(() => flattenStepsPreOrder(steps.value))
+
+const currentStepIndex = computed(() => {
+  const step = currentStep.value
+  if (!step) return -1
+  const list = flattenedSteps.value
+  const idx = list.findIndex((s) => s.id === step.id)
+  return idx
+})
+
+/** 当前步骤之前所有步骤中的可用变量名（去重，保持顺序） */
+const availableVariableList = computed(() => {
+  const list = flattenedSteps.value
+  const idx = currentStepIndex.value
+  if (idx <= 0) return []
+  const seen = new Set()
+  const result = []
+  for (let i = 0; i < idx; i++) {
+    collectVariableNamesFromStep(list[i]).forEach((name) => {
+      if (name && !seen.has(name)) {
+        seen.add(name)
+        result.push(name)
+      }
+    })
+  }
+  return result
+})
+
+const assistFunctionsList = ref([])
 const backendTypeToLocal = (step_type) => {
   switch (step_type) {
     case 'HTTP请求':
@@ -2131,7 +2197,7 @@ watch([() => caseId.value, () => caseCode.value], () => {
   loadSteps()
 })
 
-onMounted(() => {
+onMounted(async () => {
   // 加载项目列表和标签列表（复用用例管理页面的数据源）
   loadProjects()
   loadTags()
@@ -2139,6 +2205,15 @@ onMounted(() => {
   initCaseInfoFromRoute()
   // 然后加载步骤树数据
   loadSteps()
+  // 辅助函数列表（用于用户变量/关联数据）
+  try {
+    const res = await api.getAssistFuncList()
+    const data = res?.data ?? res
+    assistFunctionsList.value = Array.isArray(data) ? data : (data?.data ?? [])
+  } catch (e) {
+    console.warn('获取辅助函数列表失败', e)
+    assistFunctionsList.value = []
+  }
 })
 
 onUpdated(() => {

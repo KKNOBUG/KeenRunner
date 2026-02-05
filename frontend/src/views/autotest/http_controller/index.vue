@@ -68,6 +68,8 @@
             v-model:items="state.form.headers"
             :body-type="'none'"
             :is-for-body="false"
+            :available-variable-list="props.availableVariableList"
+            :assist-functions="props.assistFunctions"
         />
       </n-tab-pane>
       <n-tab-pane name="params" tab="请求体">
@@ -91,6 +93,8 @@
               v-model:items="state.form.bodyForm"
               :body-type="'none'"
               :is-for-body="true"
+              :available-variable-list="props.availableVariableList"
+              :assist-functions="props.assistFunctions"
           />
         </div>
         <div v-if="state.form.bodyType === 'form-data'">
@@ -99,6 +103,8 @@
               :body-type="state.form.bodyType"
               :enableFile="true"
               :is-for-body="true"
+              :available-variable-list="props.availableVariableList"
+              :assist-functions="props.assistFunctions"
           />
         </div>
         <div v-if="state.form.bodyType === 'x-www-form-urlencoded'">
@@ -106,6 +112,8 @@
               v-model:items="state.form.bodyForm"
               :body-type="state.form.bodyType"
               :is-for-body="true"
+              :available-variable-list="props.availableVariableList"
+              :assist-functions="props.assistFunctions"
           />
         </div>
         <div v-if="state.form.bodyType === 'json'">
@@ -138,6 +146,8 @@
             v-model:items="state.form.defined_variables"
             :body-type="'none'"
             :is-for-body="false"
+            :available-variable-list="props.availableVariableList"
+            :assist-functions="props.assistFunctions"
         />
       </n-tab-pane>
       <n-tab-pane name="extract_variables" tab="提取">
@@ -562,6 +572,14 @@ const props = defineProps({
   projectLoading: {
     type: Boolean,
     default: false
+  },
+  availableVariableList: {
+    type: Array,
+    default: () => []
+  },
+  assistFunctions: {
+    type: Array,
+    default: () => []
   }
 })
 

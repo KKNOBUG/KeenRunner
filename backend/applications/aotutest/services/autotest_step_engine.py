@@ -36,8 +36,11 @@ from backend.enums.autotest_enum import (
 )
 from backend.services.ctx import CTX_USER_ID
 
+# 1.匹配裸的占位符，如: ${xxx}
 _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+# 匹配同一引号包裹的占位符，如: "${var}"
 _RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
+# 3.匹配同一引号内的拼接，如: "prefix_${var}_suffix"
 _RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
 
 
@@ -679,7 +682,6 @@ class StepExecutionContext:
         if not code or not isinstance(code, str):
             return code
 
-        # 处理字符串字面量中的占位符，如 '${var}' 或 "${var}"
         def replace_string_placeholder(match: re.Match[str]) -> str:
             quote_char = match.group(1)
             var_name = match.group(2)
@@ -709,7 +711,6 @@ class StepExecutionContext:
         # 先处理字符串字面量中的占位符（如 '${var}' 或 "${var}"）
         code = _RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
 
-        # 处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
         def replace_string_concat_placeholder(match: re.Match[str]) -> str:
             quote_char = match.group(1)
             prefix = match.group(2)
@@ -731,9 +732,9 @@ class StepExecutionContext:
             result = prefix + str(var_value) + suffix
             return quote_char + result + quote_char
 
+        # 处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
         code = _RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
 
-        # 处理代码逻辑中的占位符，如 if ${var} == 1:
         def replace_code_placeholder(match: re.Match[str]) -> str:
             var_name = match.group(1)
             if not var_name:
@@ -759,6 +760,7 @@ class StepExecutionContext:
                 return repr(var_value)
 
         try:
+            # 处理代码逻辑中的占位符，如 if ${var} == 1:
             resolved_code = _RE_PLACEHOLDER.sub(replace_code_placeholder, code)
             return resolved_code
         except Exception as e:
@@ -1791,7 +1793,7 @@ class UserVariablesStepExecutor(BaseStepExecutor):
             if not isinstance(raw_variables, list):
                 return
             # 深拷贝后在副本上执行解析，避免修改原始步骤数据
-            variables = copy.deepcopy(raw_variables)
+            variables: List[Dict[str, Any]] = copy.deepcopy(raw_variables)
             AutoTestToolService.execute_func_string(variables)
             if variables:
                 self.context.update_variables(variables, scope="session_variables")
