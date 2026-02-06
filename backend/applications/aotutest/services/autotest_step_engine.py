@@ -108,13 +108,13 @@ class StepExecutionContext:
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
-        self.defined_variables: List[Dict[str, Any]] = []
-        self.session_variables: List[Dict[str, Any]] = initial_variables or []
         self.logs: Dict[str, List[str]] = {}
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[int] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
+        self.defined_variables: List[Dict[str, Any]] = []
+        self.session_variables: List[Dict[str, Any]] = self.resolve_placeholders(initial_variables or [])
         self.timeout: float = 30.0
         self.connect: float = 10.0
 
@@ -315,10 +315,19 @@ class StepExecutionContext:
             if isinstance(value, str):
 
                 def replace(match: re.Match[str]) -> str:
-                    var_name = match.group(1)
+                    var_name = match.group(1).strip() if match.group(1) else ""
                     if not var_name:
                         self.log("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
                         return match.group(0)
+                    # 引用函数规则：内容含左右括号则执行 GenerateUtils 并替换
+                    if "(" in var_name and ")" in var_name:
+                        try:
+                            resolved = AutoTestToolService.execute_func_string_single(var_name)
+                            self.log("【获取变量】占位符(函数)解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                            return str(resolved)
+                        except (AttributeError, Exception) as e:
+                            self.log(f"【获取变量】占位符(函数)解析失败, 保留原值, 错误描述: {e}")
+                            return match.group(0)
                     try:
                         resolved = self.get_variable(var_name)
                     except KeyError:
@@ -1785,7 +1794,7 @@ class WaitStepExecutor(BaseStepExecutor):
 
 
 class UserVariablesStepExecutor(BaseStepExecutor):
-    """用户变量步骤执行器：读取 step.session_variables，对 value 为 func_name(...) 的项调用 GenerateUtils 解析并替换，再合并到上下文 session_variables。"""
+    """用户变量步骤执行器：对 step.session_variables 调用 resolve_placeholders（变量与含括号的函数占位符一次遍历解析），再合并到上下文。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
@@ -1794,7 +1803,7 @@ class UserVariablesStepExecutor(BaseStepExecutor):
                 return
             # 深拷贝后在副本上执行解析，避免修改原始步骤数据
             variables: List[Dict[str, Any]] = copy.deepcopy(raw_variables)
-            AutoTestToolService.execute_func_string(variables)
+            variables = self.context.resolve_placeholders(variables)
             if variables:
                 self.context.update_variables(variables, scope="session_variables")
                 self.context.log(
@@ -2612,7 +2621,6 @@ class AutoTestStepExecutionEngine:
         case_start_time = datetime.now()
         case_id: int = case.get("case_id")
         case_code: str = case.get("case_code")
-        case_name: str = case.get("case_name")
         case_st_time_str = case_start_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         if self._save_report:
             try:
@@ -2623,7 +2631,6 @@ class AutoTestStepExecutionEngine:
                 report_create = AutoTestApiReportCreate(
                     case_id=case_id,
                     case_code=case_code,
-                    case_name=case_name,
                     case_st_time=case_st_time_str,
                     case_state=False,
                     step_total=0,
@@ -2650,7 +2657,7 @@ class AutoTestStepExecutionEngine:
                 http_client=self._http_client,
                 report_code=report_code,
         ) as context:
-            ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0))
+            ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0) or 0)
             results: List[StepExecutionResult] = []
             for step in ordered_root_steps:
                 executor = StepExecutorFactory.create_executor(step, context)

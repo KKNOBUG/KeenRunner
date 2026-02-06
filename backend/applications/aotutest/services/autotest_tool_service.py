@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import ast
 import json
-from typing import Any, Dict, List, Optional, Tuple
+import re
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 from backend.common.generate_utils import GenerateUtils
@@ -300,12 +301,14 @@ class AutoTestToolService:
         func_args: str = func_args.rstrip(")")
         args_dict: Dict[str, Any] = {}
         if func_args.strip():
-            args_ast = ast.parse(f"dict({func_args})", mode="eval")
-            args_dict = ast.literal_eval(args_ast)
+            _args = func_args.split(",")
+            for item in _args:
+                key, value = item.split("=")
+                args_dict[str(key).strip()] = eval(value)
         return func_name.strip(), args_dict
 
     @classmethod
-    def execute_func_string(cls, session_variables: List[Dict[str, Any]]):
+    def execute_func_string2(cls, session_variables: List[Dict[str, Any]]):
         """
         对会话变量列表中 value 为 "func_name(...)" 形式的项，调用 GenerateUtils 中同名函数并用返回值替换 value。
 
@@ -334,3 +337,68 @@ class AutoTestToolService:
                 raise AttributeError(f"辅助函数[{func_name}]语法解析失败或未定义: {e}")
             except Exception as e:
                 raise AttributeError(f"辅助函数[{func_name}]执行失败, 错误描述: {e}")
+
+    @classmethod
+    def execute_func_string_single(cls, content: str) -> Any:
+        """
+        将 content 解析为 func_name(...) 并调用 GenerateUtils 中同名方法，返回结果。
+        供 resolve_placeholders 在「含括号」占位符时调用。
+
+        :param content: 如 "generate_uuid()"、"generate_string(length=2)"。
+        :return: 函数返回值。
+        :raises AttributeError: 非函数形式或函数不存在/执行失败。
+        """
+        func_name, func_args = cls._parse_funcname_funcargs(content)
+        if not func_name:
+            raise AttributeError(f"占位符内容不是有效的函数调用形式: {content!r}")
+        if not hasattr(GenerateUtils, func_name):
+            raise AttributeError(f"辅助函数[{func_name}]不存在, 无法替换其值")
+        try:
+            execute_result = getattr(GenerateUtils(), func_name)(**(func_args or {}))
+            return execute_result
+        except TypeError as e:
+            raise AttributeError(f"辅助函数[{func_name}]参数数量或类型不匹配: {e}") from e
+        except SyntaxError as e:
+            raise AttributeError(f"辅助函数[{func_name}]语法解析失败: {e}") from e
+        except Exception as e:
+            raise AttributeError(f"辅助函数[{func_name}]执行失败: {e}") from e
+
+    _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+
+    @classmethod
+    def resolve_value_placeholders(
+        cls,
+        value_str: str,
+        get_variable: Callable[[str], Any],
+    ) -> str:
+        """
+        对字符串中的每个 ${...} 做一次遍历：内容为函数调用则执行并替换，否则按变量名用 get_variable 替换。
+        支持混合形式如 name_${name}、${name}${age}、${name}${generate_uuid()} 等，无需先变量后函数两遍遍历。
+
+        :param value_str: 可能包含 ${var} 或 ${func()} 的字符串。
+        :param get_variable: 按变量名取值的可调用对象，未定义时应抛出 KeyError。
+        :return: 替换后的字符串；变量未定义时保留原占位符。
+        """
+        if not isinstance(value_str, str):
+            return value_str
+
+        def replace(match: re.Match[str]) -> str:
+            content = match.group(1).strip()
+            if not content:
+                return match.group(0)
+            func_name, func_args = cls._parse_funcname_funcargs(content)
+            if func_name and hasattr(GenerateUtils, func_name):
+                try:
+                    result = getattr(GenerateUtils, func_name)(**(func_args or {}))
+                    return str(result)
+                except (TypeError, SyntaxError, Exception) as e:
+                    raise AttributeError(f"辅助函数[{func_name}]执行失败: {e}") from e
+            try:
+                resolved = get_variable(content)
+                return str(resolved) if resolved is not None else ""
+            except KeyError:
+                return match.group(0)
+            except Exception:
+                return match.group(0)
+
+        return cls._RE_PLACEHOLDER.sub(replace, value_str)

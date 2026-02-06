@@ -9,7 +9,6 @@
 import random
 import string
 import threading
-import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Literal, Union
@@ -76,87 +75,73 @@ class GenerateUtils:
             54: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}%f{6}".format("年", "月", "日", "时", "分", "秒", "毫秒"),
         }
 
-    @property
     def generate_country(self):
         return self.faker_cn.country()
 
-    @property
     def generate_province(self):
         return self.faker_cn.province()
 
-    @property
     def generate_city(self):
         return self.faker_cn.city()
 
-    @property
     def generate_district(self):
         return self.faker_cn.district()
 
-    @property
     def generate_address(self):
         return self.faker_cn.address()
 
-    @property
     def generate_company(self):
         return self.faker_cn.company()
 
-    @property
     def generate_bank_account_number(self):
         return self.faker_cn.credit_card_number()
 
-    @property
     def generate_email(self):
         return self.faker_cn.email()
 
-    @property
     def generate_job(self):
         return self.faker_cn.job()
 
-    @property
     def generate_name(self):
         return self.faker_cn.name()
 
-    @property
     def generate_phone(self):
         return self.faker_cn.phone_number()
 
-    @property
-    def generate_week_number(self):
+    @classmethod
+    def generate_week_number(cls):
         today = datetime.today()
         return today.isocalendar()[:2][1]
 
-    @property
     def generate_week_name(self):
         return self.faker_cn.day_of_week()
 
-    @property
-    def generate_day(self):
+    @classmethod
+    def generate_day(cls):
         return datetime.now().timetuple().tm_yday
 
-    @property
     def generate_am_or_pm(self):
         return "上午" if self.faker_cn.am_pm() == "AM" else "下午"
 
-    @property
     def generate_ident_card_number(self):
         return self.faker_cn.ssn(min_age=18, max_age=65)
 
     def generate_ident_card_number_condition(self, min_age: int, max_age: int):
         return self.faker_cn.ssn(min_age=min_age, max_age=max_age)
 
-    @staticmethod
-    def generate_ident_card_birthday(ident_card_number: str):
+    @classmethod
+    def generate_ident_card_birthday(cls, ident_card_number: str):
         return ident_card_number[6:-4]
 
-    @staticmethod
-    def generate_ident_card_gender(ident_card_number: str):
+    @classmethod
+    def generate_ident_card_gender(cls, ident_card_number: str):
         return "女" if int(ident_card_number[-2]) % 2 == 0 else "男"
 
     def generates(self, funcname: str, funcargs: Optional[dict] = None, funclocale: Literal["en", "cn"] = "cn"):
         return getattr(eval("self.faker_" + funclocale), funcname)(**funcargs or {})
 
-    @staticmethod
-    def generate_random_number(min: int, max: int) -> int:
+    @classmethod
+    def generate_random_number(cls, min: int, max: int) -> int:
         return random.randint(min, max)
 
     @staticmethod
@@ -239,12 +224,12 @@ class GenerateUtils:
 
     def generate_information(self, minAge: int = 18, maxAge: int = 65,
                              convert: Literal["lower", "upper", "capitalize"] = "upper"):
-        ident_card_name: str = self.generate_name
+        ident_card_name: str = self.generate_name()
         ident_card_number: str = self.generate_ident_card_number_condition(minAge, maxAge)
         ident_card_gender: str = self.generate_ident_card_gender(ident_card_number)
         ident_card_birthday: str = self.generate_ident_card_birthday(ident_card_number)
         ident_card_age: int = int(self.generate_datetime(fmt=11)) - int(ident_card_birthday[:4])
-        bank_card_name: str = self.generate_bank_account_number
+        bank_card_name: str = self.generate_bank_account_number()
         resp: dict = {
             "name": ident_card_name,
             "alias": self.generate_pinyin(chars=ident_card_name, convert=convert),
@@ -263,7 +248,6 @@ class GenerateUtils:
         }
         return resp
 
-    @property
     def generate_global_serial_number(self):
         """
         全局流水号，28位（年 + 月 + 日 + 时 + 分 + 秒 + 毫秒 + 9999 + 4位随机数）
@@ -274,18 +258,18 @@ class GenerateUtils:
         g3 = stamp + "9999" + self.generate_string(length=4)
         return g1, g2, g3
 
-    @property
-    def generate_uuid(self):
+    @classmethod
+    def generate_uuid(cls):
         return uuid.uuid4().__str__()
 
-    @property
-    def generate_timestamp(self):
+    @classmethod
+    def generate_timestamp(cls):
         now = datetime.now()
         timestamp = (now - datetime(1970, 1, 1)).total_seconds() * 1000000
         return int(timestamp)
 
-    @property
-    def generate_seconds_until_22h(self):
+    @classmethod
+    def generate_seconds_until_22h(cls):
         now = datetime.now()
         midnight = now.replace(hour=22, minute=0, second=0, microsecond=0)
         if now >= midnight:
@@ -314,17 +298,17 @@ GENERATE = GenerateUtils()
 
 if __name__ == '__main__':
     vd = GenerateUtils()
-    # print("国家：", vd.generate_country)
-    # print("地址：", vd.generate_address)
-    # print("姓名：", vd.generate_name)
-    # print("银行卡号：", vd.generate_bank_account_number)
-    # print("身份证号码：", vd.generate_ident_card_number)
+    # print("国家：", vd.generate_country())
+    # print("地址：", vd.generate_address())
+    # print("姓名：", vd.generate_name())
+    # print("银行卡号：", vd.generate_bank_account_number())
+    # print("身份证号码：", vd.generate_ident_card_number())
     # print("身份证号码：", vd.generate_ident_card_number_condition(1, 10))
     # print("身份证生日：", vd.generate_ident_card_birthday(idn))
     # print("身份证性别：", vd.generate_ident_card_gender(idn))
-    # print("周名：", vd.generate_week_name)
-    # print("周号：", vd.generate_week_number)
-    # print("天：", vd.generate_day)
+    # print("周名：", vd.generate_week_name())
+    # print("周号：", vd.generate_week_number())
+    # print("天：", vd.generate_day())
     # print("反射：", vd.generates(funcname="ssn"))
     # print("反射：", vd.generates(funcname="ssn", funcargs={"min_age": 18, "max_age": 18}))
     # print("反射：", vd.generates(funcname="profile", funcargs={"fields": None, "sex": "F"}))
@@ -338,7 +322,7 @@ if __name__ == '__main__':
     # print("时间：", vd.generate_datetime(fmt="%Y----%m"))
     # print("时间：", vd.generate_datetime(year=int("-1"), fmt=23))
     # print("时间：", vd.generate_datetime(fmt="%Y----%23"))
-    print("时间戳：", vd.generate_timestamp)
+    print("时间戳：", vd.generate_timestamp())
     # print("拼音：", vd.generate_pinyin("上海银行"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-", convert="upper"))
@@ -347,7 +331,7 @@ if __name__ == '__main__':
     # print(vd.generate_string(length=10, chinese=True))
     # print(vd.generate_string(length=10, digit=True))
     # print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
-    print(vd.generate_global_serial_number)
-    print(vd.generate_seconds_until_22h)
+    print(vd.generate_global_serial_number())
+    print(vd.generate_seconds_until_22h())
     print(vd.generate_seconds_until())
     print(vd.generate_seconds_until(minute=3, second=59))

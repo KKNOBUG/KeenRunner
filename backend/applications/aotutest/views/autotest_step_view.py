@@ -1245,7 +1245,6 @@ async def execute_step_tree(
             try:
                 # 转换回列表格式
                 initial_variables = list(merged_variables.values())
-                AutoTestToolService.execute_func_string(initial_variables)
             except Exception as e:
                 return ParameterResponse(message=str(e))
 

@@ -533,10 +533,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     error_message: str = f"第({sid})条步骤新增失败, 步骤类型(step_type)字段不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
-                if not step_data.case_type:
-                    error_message: str = f"第({sid})条步骤新增失败, 用例所属类型(case_type)字段不允许为空"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
 
                 # 业务层验证: 检查用例是否存在
                 await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step_data.case_id, on_error=True)
@@ -824,8 +820,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             if isinstance(item, dict) and "key" in item:
                 merge_all_variables[item.get("key")] = item
         initial_variables = list(merge_all_variables.values())
-        AutoTestToolService.execute_func_string(initial_variables)
-        LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功, 检查变量引用成功")
+        LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功")
 
         # 5. 获取根步骤
         root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
