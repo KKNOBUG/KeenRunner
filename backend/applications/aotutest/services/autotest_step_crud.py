@@ -6,7 +6,9 @@
 @Module  : autotest_step_crud.py
 @DateTime: 2025/4/28
 """
+import datetime
 import traceback
+import uuid
 from typing import Optional, List, Dict, Any, Set
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
@@ -778,6 +780,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             report_type: AutoTestReportType,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             env_name: Optional[str] = None,
+            task_code: Optional[str] = None,
+            batch_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         if initial_variables is None:
             initial_variables = []
@@ -831,7 +835,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 6. 使用事务执行并保存到数据库
         async with in_transaction():
-            engine = AutoTestStepExecutionEngine(save_report=True)
+            engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code)
             results, logs, report_code, statistics, _ = await engine.execute_case(
                 case=case_dict,
                 steps=root_steps,
@@ -862,6 +866,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             report_type: AutoTestReportType,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             env_name: Optional[str] = None,
+            task_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         if initial_variables is None:
             initial_variables = []
@@ -874,6 +879,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         results: List[Dict[str, Any]] = []
         LOGGER.info(f"{'= ' * 20}批量执行开始{'= ' * 20}")
         LOGGER.info(f"本次批量执行的用例ID列表: {case_ids}")
+        batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
         for case_id in case_ids:
             try:
                 # 每个用例独立开启事务执行
@@ -882,7 +888,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     case_id=case_id,
                     initial_variables=initial_variables,
                     env_name=env_name,
-                    report_type=report_type
+                    report_type=report_type,
+                    task_code=task_code,
+                    batch_code=batch_code,
                 )
                 result["error"] = None
                 results.append(result)

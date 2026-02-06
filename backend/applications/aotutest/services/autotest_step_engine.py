@@ -2588,6 +2588,7 @@ class AutoTestStepExecutionEngine:
             http_client: Optional[HttpClientProtocol] = None,
             save_report: bool = True,
             task_code: Optional[str] = None,
+            batch_code: Optional[str] = None,
     ) -> None:
         """
         初始化执行引擎。
@@ -2598,6 +2599,7 @@ class AutoTestStepExecutionEngine:
         self._http_client = http_client
         self._save_report = save_report
         self._task_code = task_code
+        self._batch_code = batch_code
         self._report_code: Optional[str] = None
 
     async def execute_case(
@@ -2645,7 +2647,8 @@ class AutoTestStepExecutionEngine:
                     step_pass_ratio=0.0,
                     report_type=final_report_type,
                     created_user=user_name,
-                    task_code=self._task_code
+                    task_code=self._task_code,
+                    batch_code=self._batch_code
                 )
                 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
                 report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_create)

@@ -26,6 +26,7 @@ class AutoTestApiReportBase(BaseModel):
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
 
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
+    batch_code: Optional[str] = Field(None, max_length=64, description="批次标识代码")
 
 
 class AutoTestApiReportCreate(AutoTestApiReportBase):
