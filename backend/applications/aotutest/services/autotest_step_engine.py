@@ -741,8 +741,14 @@ class StepExecutionContext:
             result = prefix + str(var_value) + suffix
             return quote_char + result + quote_char
 
-        # 处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
-        code = _RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
+        # # 处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）
+        # code = _RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
+        # 处理字符串拼接中的占位符（如 '${var}_suffix' 或 'prefix_${var}'）；循环直到无匹配，避免 "a_${x}_${y}" 中后一个占位符被误当代码逻辑用 repr 产生多余引号
+        while True:
+            new_code = _RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
+            if new_code == code:
+                break
+            code = new_code
 
         def replace_code_placeholder(match: re.Match[str]) -> str:
             var_name = match.group(1)
