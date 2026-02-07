@@ -370,15 +370,72 @@
         </n-gi>
       </n-grid>
     </div>
+
+    <!-- 引用公共脚本抽屉：宽度约 60%，内容同测试用例管理，请求时 case_type=公共脚本 -->
+    <n-drawer
+        v-model:show="quotePublicScriptDrawerVisible"
+        :width="'61%'"
+        placement="right"
+        :trap-focus="false"
+        block-scroll
+    >
+      <n-drawer-content title="选择公共脚本" closable>
+        <CrudTable
+            ref="quotePublicScriptTableRef"
+            v-model:query-items="quotePublicScriptQueryItems"
+            :is-pagination="true"
+            :columns="quotePublicScriptColumns"
+            :get-data="getPublicScriptList"
+            :row-key="'case_id'"
+        >
+          <template #queryBar>
+            <QueryBarItem label="用例名称：" :label-width="90">
+              <n-input
+                  v-model:value="quotePublicScriptQueryItems.case_name"
+                  clearable
+                  placeholder="请输入用例名称"
+                  class="query-input"
+                  @keypress.enter="quotePublicScriptTableRef?.handleSearch?.()"
+              />
+            </QueryBarItem>
+            <QueryBarItem label="创建人员：" :label-width="90">
+              <n-input
+                  v-model:value="quotePublicScriptQueryItems.created_user"
+                  clearable
+                  placeholder="请输入创建人员"
+                  class="query-input"
+                  @keypress.enter="quotePublicScriptTableRef?.handleSearch?.()"
+              />
+            </QueryBarItem>
+          </template>
+        </CrudTable>
+      </n-drawer-content>
+    </n-drawer>
   </AppPage>
 </template>
 
 <script setup>
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {NButton, NCard, NDropdown, NEmpty, NGi, NGrid, NPopconfirm, NInput, NSpace, NSelect, NPopover, NList, NListItem, NText} from 'naive-ui'
+import {
+  NButton,
+  NCard,
+  NDrawer,
+  NDropdown,
+  NEmpty,
+  NGi,
+  NGrid,
+  NInput,
+  NList,
+  NListItem,
+  NPopconfirm,
+  NPopover,
+  NSelect,
+  NSpace,
+  NTag
+} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
-import {renderIcon} from '@/utils'
+import {formatDateTime, renderIcon} from '@/utils'
 import AppPage from "@/components/page/AppPage.vue";
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
 import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
@@ -386,6 +443,9 @@ import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
+import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
+import CrudTable from '@/components/table/CrudTable.vue'
+import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
 import {useUserStore} from '@/store';
 
@@ -397,6 +457,7 @@ const stepDefinitions = {
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
+  quote: {label: '引用公共用例', allowChildren: false, icon: 'material-symbols:link'},
 }
 
 const editorMap = {
@@ -406,6 +467,7 @@ const editorMap = {
   if: ApiIfEditor,
   wait: ApiWaitEditor,
   user_variables: ApiUserVariablesEditor,
+  quote: ApiQuoteEditor,
 }
 
 let seed = 1000
@@ -469,14 +531,167 @@ const tagPopoverShow = ref(false)
 
 // 用例属性选项（复用用例管理页面的数据源）
 const caseAttrOptions = [
-  { label: '正用例', value: '正用例' },
-  { label: '反用例', value: '反用例' }
+  {label: '正用例', value: '正用例'},
+  {label: '反用例', value: '反用例'}
 ]
 
 // 用例类型选项
 const caseTypeOptions = [
-  { label: '用户脚本', value: '用户脚本' },
-  { label: '公共脚本', value: '公共脚本' }
+  {label: '用户脚本', value: '用户脚本'},
+  {label: '公共脚本', value: '公共脚本'}
+]
+
+// 引用公共脚本抽屉
+const quotePublicScriptDrawerVisible = ref(false)
+const quotePublicScriptParentId = ref(null)
+const quotePublicScriptTableRef = ref(null)
+const quotePublicScriptQueryItems = ref({
+  case_name: '',
+  case_type: '公共脚本',
+  created_user: ''
+})
+
+// 请求前规范化入参：仅传用例名称、创建人员及固定 case_type
+const getPublicScriptList = (params) => {
+  const body = {...params, case_type: '公共脚本'}
+  if (body.case_name === '') delete body.case_name
+  if (body.created_user === '') delete body.created_user
+  return api.getApiTestcaseList(body)
+}
+const onSelectPublicScript = (row) => {
+  const parentId = quotePublicScriptParentId.value
+  const created = insertStep(parentId, 'quote', null, {
+    quote_case_id: row.case_id,
+    step_name: row.case_name || '引用公共脚本'
+  })
+  if (created) {
+    selectedKeys.value = [created.id]
+    updateStepDisplayNames()
+  }
+  quotePublicScriptDrawerVisible.value = false
+  quotePublicScriptParentId.value = null
+}
+
+watch(quotePublicScriptDrawerVisible, (visible) => {
+  if (visible) {
+    nextTick(() => {
+      quotePublicScriptTableRef.value?.handleSearch?.()
+    })
+  }
+})
+
+const quotePublicScriptColumns = [
+  {
+    title: '所属应用',
+    key: 'case_project',
+    width: 150,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      // case_project 现在是对象，显示 project_name
+      return h('span', row.case_project?.project_name || '')
+    },
+  },
+  {
+    title: '所属标签',
+    key: 'case_tags',
+    width: 150,
+    align: 'center',
+    render(row) {
+      // case_tags 现在是对象数组，使用NTag展示，每个标签换行
+      if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
+        return h('div', {class: 'tag-container'},
+            row.case_tags
+                .filter(tag => tag.tag_name)
+                .map(tag =>
+                    h(NTag, {
+                      type: 'info',
+                      style: 'margin: 2px 4px 2px 0;'
+                    }, {default: () => tag.tag_name})
+                )
+        )
+      }
+      return h('span', '')
+    },
+  },
+  {
+    title: '用例名称',
+    key: 'case_name',
+    width: 300,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例属性',
+    key: 'case_attr',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例类型',
+    key: 'case_type',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例步骤',
+    key: 'case_steps',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例版本',
+    key: 'case_version',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '创建人员',
+    key: 'created_user',
+    width: 150,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '更新人员',
+    key: 'updated_user',
+    width: 150,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '创建时间',
+    key: 'created_time',
+    width: 200,
+    align: 'center',
+    render(row) {
+      return h('span', formatDateTime(row.created_time))
+    },
+  },
+  {
+    title: '更新时间',
+    key: 'updated_time',
+    width: 200,
+    align: 'center',
+    render(row) {
+      return h('span', formatDateTime(row.updated_time))
+    },
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 80,
+    fixed: 'right',
+    render: (row) => h(NButton, {
+      size: 'small',
+      type: 'primary',
+      onClick: () => onSelectPublicScript(row)
+    }, {default: () => '选择'})
+  }
 ]
 
 // 标签按模式分组
@@ -589,7 +804,7 @@ watch(() => caseForm.case_tags, (newVal) => {
   if (!Array.isArray(newVal)) {
     caseForm.case_tags = []
   }
-}, { immediate: true })
+}, {immediate: true})
 const runLoading = ref(false)
 const debugLoading = ref(false)
 const saveLoading = ref(false)
@@ -603,11 +818,21 @@ const dragState = ref({
   insertTargetId: null // 插入目标步骤 ID（用于显示指示器）
 })
 
-const addOptions = Object.entries(stepDefinitions).map(([value, item]) => ({
-  label: item.label,
-  key: value,
-  icon: renderIcon(item.icon, { size: 16 })
-}))
+// 下拉只展示“引用公共脚本”（不展示“引用公共用例”）；quote 仅用于后端步骤类型与展示
+const addOptions = [
+  ...Object.entries(stepDefinitions)
+      .filter(([key]) => key !== 'quote')
+      .map(([value, item]) => ({
+        label: item.label,
+        key: value,
+        icon: renderIcon(item.icon, {size: 16})
+      })),
+  {
+    label: '引用公共脚本',
+    key: 'quote_public_script',
+    icon: renderIcon('material-symbols:library-books-outline', {size: 16})
+  }
+]
 
 
 // 计算总步骤数（包括子步骤）
@@ -727,15 +952,23 @@ const collectVariableNamesFromStep = (step) => {
   const dv = cfg.defined_variables ?? orig.defined_variables
   const ev = cfg.extract_variables ?? orig.extract_variables
   if (Array.isArray(sv)) {
-    sv.forEach((x) => { if (x && x.key) names.push(String(x.key).trim()) })
+    sv.forEach((x) => {
+      if (x && x.key) names.push(String(x.key).trim())
+    })
   }
   if (Array.isArray(dv)) {
-    dv.forEach((x) => { if (x && x.key) names.push(String(x.key).trim()) })
+    dv.forEach((x) => {
+      if (x && x.key) names.push(String(x.key).trim())
+    })
   }
   if (Array.isArray(ev)) {
-    ev.forEach((x) => { if (x && x.name) names.push(String(x.name).trim()) })
+    ev.forEach((x) => {
+      if (x && x.name) names.push(String(x.name).trim())
+    })
   } else if (ev && typeof ev === 'object') {
-    Object.values(ev).forEach((x) => { if (x && x.name) names.push(String(x.name).trim()) })
+    Object.values(ev).forEach((x) => {
+      if (x && x.name) names.push(String(x.name).trim())
+    })
   }
   return names
 }
@@ -769,6 +1002,7 @@ const availableVariableList = computed(() => {
 })
 
 const assistFunctionsList = ref([])
+
 const backendTypeToLocal = (step_type) => {
   switch (step_type) {
     case 'HTTP请求':
@@ -783,6 +1017,8 @@ const backendTypeToLocal = (step_type) => {
       return 'loop'
     case '用户变量':
       return 'user_variables'
+    case '引用公共用例':
+      return 'quote'
     default:
       return 'code'
   }
@@ -924,6 +1160,11 @@ const mapBackendStep = (step) => {
       step_desc: step.step_desc || '',
       session_variables: Array.isArray(step.session_variables) ? step.session_variables : []
     }
+  } else if (localType === 'quote') {
+    base.config = {
+      quote_case_id: step.quote_case_id ?? null,
+      step_name: step.step_name || (step.quote_case?.case_name || '引用公共用例')
+    }
   }
 
   if (step.children && step.children.length && stepDefinitions[localType]?.allowChildren) {
@@ -972,7 +1213,8 @@ const localTypeToBackend = (localType) => {
     'if': '条件分支',
     'wait': '等待控制',
     'loop': '循环结构',
-    'user_variables': '用户变量'
+    'user_variables': '用户变量',
+    'quote': '引用公共用例'
   }
   return typeMap[localType] || '执行代码请求(Python)'
 }
@@ -1165,6 +1407,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
       value: item.value ?? '',
       desc: item.desc ?? item.description ?? ''
     })))
+  } else if (step.type === 'quote') {
+    backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
+    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共用例')
   }
 
   // 处理子步骤（递归处理）
@@ -1244,14 +1489,14 @@ const validateEmptyKeyInSteps = (stepList) => {
       if (hasEmptyKeyInList(getList('session_variables'))) listName = '用户变量'
     }
     if (listName) {
-      return { valid: false, stepName: step.name || step.original?.step_name || '未命名步骤', listName }
+      return {valid: false, stepName: step.name || step.original?.step_name || '未命名步骤', listName}
     }
     if (step.children && step.children.length > 0) {
       const childResult = validateEmptyKeyInSteps(step.children)
       if (!childResult.valid) return childResult
     }
   }
-  return { valid: true }
+  return {valid: true}
 }
 
 // 递归校验步骤树中所有 HTTP 步骤：若请求体为 json，则校验 JSON 语法
@@ -1268,7 +1513,7 @@ const validateJsonBodyInSteps = (stepList) => {
             JSON.parse(trimmed)
           } catch (e) {
             const stepName = step.name || config.step_name || '未命名步骤'
-            return { valid: false, message: e.message || 'JSON 格式错误', stepName }
+            return {valid: false, message: e.message || 'JSON 格式错误', stepName}
           }
         }
       }
@@ -1278,27 +1523,27 @@ const validateJsonBodyInSteps = (stepList) => {
       if (!childResult.valid) return childResult
     }
   }
-  return { valid: true }
+  return {valid: true}
 }
 
 // 校验用例信息必填项（所属应用、用例名称、所属标签、用例属性、用例类型）
 const validateCaseForm = () => {
   if (!caseForm.case_project) {
-    return { valid: false, message: '请选择所属应用' }
+    return {valid: false, message: '请选择所属应用'}
   }
   if (!caseForm.case_name || !String(caseForm.case_name).trim()) {
-    return { valid: false, message: '请输入用例名称' }
+    return {valid: false, message: '请输入用例名称'}
   }
   if (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0) {
-    return { valid: false, message: '请选择所属标签' }
+    return {valid: false, message: '请选择所属标签'}
   }
   if (!caseForm.case_attr) {
-    return { valid: false, message: '请选择用例属性' }
+    return {valid: false, message: '请选择用例属性'}
   }
   if (!caseForm.case_type) {
-    return { valid: false, message: '请选择用例类型' }
+    return {valid: false, message: '请选择用例类型'}
   }
-  return { valid: true }
+  return {valid: true}
 }
 
 // 将后端返回的 success_detail（前序顺序）写回步骤树，使下次保存走更新而非新增，避免重复保存产生重复步骤
@@ -1415,7 +1660,7 @@ const handleSaveAll = async () => {
         if (savedCase.case_id && !caseId.value) {
           await router.replace({
             path: route.path,
-            query: { ...route.query, case_id: String(savedCase.case_id), case_code: savedCase.case_code || '' }
+            query: {...route.query, case_id: String(savedCase.case_id), case_code: savedCase.case_code || ''}
           })
         }
       }
@@ -1623,30 +1868,42 @@ const currentStepTitle = computed(() => {
   return stepDefinitions[currentStep.value.type]?.label || '步骤配置'
 })
 
-const insertStep = (parentId, type, index = null) => {
+const insertStep = (parentId, type, index = null, extraConfig = null) => {
   const def = stepDefinitions[type]
   if (!def) return null
 
-  // 创建新步骤，遵循结构规范；循环步骤使用与 loop_controller 一致的默认值并参与保存
   const defaultConfig = type === 'loop'
-      ? { loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5 }
+      ? {loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5}
       : type === 'wait'
-          ? { seconds: 2 }
+          ? {seconds: 2}
           : type === 'user_variables'
-              ? { step_name: '用户定义变量' }
-              : {}
+              ? {step_name: '用户定义变量'}
+              : type === 'quote'
+                  ? {quote_case_id: null, step_name: '引用公共用例'}
+                  : {}
   const defaultName = type === 'loop'
       ? '循环结构(次数循环)'
       : type === 'wait'
           ? '控制等待(2秒)'
           : type === 'user_variables'
               ? '用户定义变量'
-              : `${def.label}`
+              : type === 'quote' && extraConfig?.step_name
+                  ? extraConfig.step_name
+                  : `${def.label}`
+  const config = extraConfig ? {...defaultConfig, ...extraConfig} : defaultConfig
   const newStep = {
     id: genId(),
     type,
-    name: defaultName,
-    config: defaultConfig
+    name: type === 'quote' && config.step_name ? config.step_name : defaultName,
+    config
+  }
+  if (type === 'quote') {
+    newStep.original = {
+      quote_case_id: newStep.config.quote_case_id ?? null,
+      step_name: newStep.config.step_name || newStep.name,
+      step_code: null,
+      id: null
+    }
   }
 
   // 只有 loop/if 类型才有 children 字段（即使是空数组）
@@ -1682,12 +1939,14 @@ const insertStep = (parentId, type, index = null) => {
 }
 
 const handleAddStep = (type, parentId) => {
-  // 如果parentId存在，说明是要添加到某个父步骤的子级
-  // 如果parentId为null，说明是要添加到根级别
+  if (type === 'quote_public_script') {
+    quotePublicScriptParentId.value = parentId
+    quotePublicScriptDrawerVisible.value = true
+    return
+  }
   const created = insertStep(parentId, type)
   if (created) {
     selectedKeys.value = [created.id]
-    // 更新显示名称
     updateStepDisplayNames()
   }
 }
@@ -1854,6 +2113,8 @@ const getStepIconClass = (type) => {
     if: 'icon-if',
     wait: 'icon-wait',
     user_variables: 'icon-user_variables',
+    quote: 'icon-quote',
+    quote_public_script: 'icon-quote',
   }
   return classMap[type] || ''
 }
@@ -2470,6 +2731,7 @@ const RecursiveStepChildren = defineComponent({
   overflow: hidden;
   min-height: 0; /* 允许容器缩小 */
 }
+
 .case-info-card {
   margin-bottom: 16px;
   border-radius: 8px;
@@ -2548,6 +2810,7 @@ const RecursiveStepChildren = defineComponent({
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
 /* Grid 容器：使用 flex 布局，占满可用高度 */
 .grid-container {
   height: 100%;
@@ -2823,6 +3086,10 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-icon.icon-user_variables) {
   color: #FF69B4;
+}
+
+:deep(.step-icon.icon-quote) {
+  color: #18a058;
 }
 
 :deep(.action-btn) {

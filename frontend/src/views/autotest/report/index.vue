@@ -688,7 +688,7 @@ const columns = [
   },
   {
     title: '失败步骤',
-    key: 'step_fill_count',
+    key: 'step_fail_count',
     width: 100,
     align: 'center',
     ellipsis: {tooltip: true},

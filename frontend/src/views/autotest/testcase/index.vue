@@ -207,35 +207,35 @@ const columns = [
   {
     title: '用例名称',
     key: 'case_name',
-    width: 150,
+    width: 300,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '用例属性',
     key: 'case_attr',
-    width: 150,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '用例类型',
     key: 'case_type',
-    width: 150,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '用例步骤',
     key: 'case_steps',
-    width: 150,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '用例版本',
     key: 'case_version',
-    width: 150,
+    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -256,7 +256,7 @@ const columns = [
   {
     title: '创建时间',
     key: 'created_time',
-    width: 150,
+    width: 200,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.created_time))
@@ -265,7 +265,7 @@ const columns = [
   {
     title: '更新时间',
     key: 'updated_time',
-    width: 150,
+    width: 200,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.updated_time))

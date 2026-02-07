@@ -15,7 +15,6 @@ class AutoTestCaseAttr(StringEnum):
 
 
 class AutoTestCaseType(StringEnum):
-    PUBLIC_API = "公共接口"
     PUBLIC_SCRIPT = "公共脚本"
     PRIVATE_SCRIPT = "用户脚本"
 
