@@ -363,6 +363,7 @@
                 :project-loading="currentStep?.type === 'http' ? projectLoading : false"
                 :available-variable-list="availableVariableList"
                 :assist-functions="assistFunctionsList"
+                :on-reselect="handleQuoteReselect"
                 @update:config="(val) => updateStepConfig(currentStep.id, val)"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
@@ -541,9 +542,10 @@ const caseTypeOptions = [
   {label: '公共脚本', value: '公共脚本'}
 ]
 
-// 引用公共脚本抽屉
+// 引用公共脚本抽屉（新增步骤时 parentId 有值；重新选择时 replaceStepId 有值）
 const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
+const quotePublicScriptReplaceStepId = ref(null)
 const quotePublicScriptTableRef = ref(null)
 const quotePublicScriptQueryItems = ref({
   case_name: '',
@@ -559,17 +561,28 @@ const getPublicScriptList = (params) => {
   return api.getApiTestcaseList(body)
 }
 const onSelectPublicScript = (row) => {
-  const parentId = quotePublicScriptParentId.value
-  const created = insertStep(parentId, 'quote', null, {
-    quote_case_id: row.case_id,
-    step_name: row.case_name || '引用公共脚本'
-  })
-  if (created) {
-    selectedKeys.value = [created.id]
-    updateStepDisplayNames()
+  const replaceId = quotePublicScriptReplaceStepId.value
+  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
+  if (replaceId) {
+    updateStepConfig(replaceId, config)
+    quotePublicScriptReplaceStepId.value = null
+  } else {
+    const parentId = quotePublicScriptParentId.value
+    const created = insertStep(parentId, 'quote', null, config)
+    if (created) {
+      selectedKeys.value = [created.id]
+      updateStepDisplayNames()
+    }
+    quotePublicScriptParentId.value = null
   }
   quotePublicScriptDrawerVisible.value = false
+}
+
+const handleQuoteReselect = () => {
+  if (!currentStep.value?.id) return
+  quotePublicScriptReplaceStepId.value = currentStep.value.id
   quotePublicScriptParentId.value = null
+  quotePublicScriptDrawerVisible.value = true
 }
 
 watch(quotePublicScriptDrawerVisible, (visible) => {
@@ -2094,6 +2107,10 @@ const updateStepConfig = (id, config) => {
       // 如果提供了 step_name，使用用户输入的步骤名称
       if (config.step_name !== undefined) {
         step.name = String(config.step_name).trim() || '执行代码请求(Python)'
+      }
+    } else if (step.type === 'quote' || step.type === 'quote_public_script') {
+      if (config.step_name !== undefined && config.step_name !== null) {
+        step.name = String(config.step_name).trim() || '引用公共脚本'
       }
     }
     // 更新显示名称

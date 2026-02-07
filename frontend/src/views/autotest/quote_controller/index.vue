@@ -3,6 +3,19 @@
     <n-form label-placement="left" label-width="100px">
       <n-form-item label="引用用例">
         <n-text>{{ displayName }}</n-text>
+        <n-button
+            v-if="onReselect"
+            type="primary"
+            quaternary
+            size="small"
+            style="margin-left: 8px;"
+            @click="onReselect"
+        >
+          <template #icon>
+            <TheIcon icon="material-symbols:refresh" :size="14"/>
+          </template>
+          重新选择
+        </n-button>
       </n-form-item>
       <n-form-item v-if="quoteCaseId" label="用例 ID">
         <n-text>{{ quoteCaseId }}</n-text>
@@ -13,11 +26,13 @@
 
 <script setup>
 import { computed } from 'vue'
-import { NCard, NForm, NFormItem, NText } from 'naive-ui'
+import { NCard, NForm, NFormItem, NText, NButton } from 'naive-ui'
+import TheIcon from '@/components/icon/TheIcon.vue'
 
 const props = defineProps({
   config: { type: Object, default: () => ({}) },
-  step: { type: Object, default: () => ({}) }
+  step: { type: Object, default: () => ({}) },
+  onReselect: { type: Function, default: null }
 })
 
 const displayName = computed(() => {
