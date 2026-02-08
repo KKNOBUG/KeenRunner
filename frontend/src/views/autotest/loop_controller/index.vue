@@ -3,7 +3,7 @@
     <n-form label-placement="left" label-width="135px" :model="form">
       <!-- 循环模式选择 -->
       <n-form-item label="循环模式选择" required>
-        <n-radio-group v-model:value="form.loop_mode" name="loop-mode">
+        <n-radio-group v-model:value="form.loop_mode" name="loop-mode" :disabled="props.readonly">
           <n-space>
             <n-radio value="次数循环">次数循环</n-radio>
             <n-radio value="对象循环">对象循环</n-radio>
@@ -20,6 +20,7 @@
             :options="errorStrategyOptions"
             placeholder="请选择错误处理策略"
             style="width: 80%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
 
@@ -32,6 +33,7 @@
                 :min="1"
                 placeholder="请输入最大循环次数, 最多循环100次"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -42,6 +44,7 @@
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
         </template>
@@ -53,6 +56,7 @@
                 v-model:value="form.loop_iterable"
                 placeholder="变量名或可迭代的数据对象, 例如: ${list} 或 [1, 2, 3, 4, 5]"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="索引变量名称">
@@ -60,6 +64,7 @@
                 v-model:value="form.loop_iter_idx"
                 placeholder="用于存储列表项的索引, 默认: loop_index"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="数据变量名称">
@@ -67,6 +72,7 @@
                 v-model:value="form.loop_iter_val"
                 placeholder="用于存储列表项的值, 默认: loop_value"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -77,6 +83,7 @@
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
         </template>
@@ -88,6 +95,7 @@
                 v-model:value="form.loop_iterable"
                 placeholder="变量名或字典对象，例如: ${dict} 或 {key1: value1, key2: value2}"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="索引变量名称">
@@ -95,6 +103,7 @@
                 v-model:value="form.loop_iter_idx"
                 placeholder="用于存储字典项的索引, 默认: loop_index"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="键变量名称">
@@ -102,6 +111,7 @@
                 v-model:value="form.loop_iter_key"
                 placeholder="用于存储字典项的键，默认: loop_key"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="值变量名称">
@@ -109,6 +119,7 @@
                 v-model:value="form.loop_iter_val"
                 placeholder="用于存储字典项的值, 默认: loop_value"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -119,6 +130,7 @@
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
         </template>
@@ -130,6 +142,7 @@
                 v-model:value="form.condition_value"
                 placeholder="变量名, 例如: ${count} 或 ${status}"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="条件比较符" required>
@@ -138,6 +151,7 @@
                 :options="operatorOptions"
                 placeholder="请选择条件比较符"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="条件比较值">
@@ -145,6 +159,7 @@
                 v-model:value="form.condition_except_value"
                 placeholder="字符串或变量, 例如: 3 或 ${target}"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -155,6 +170,7 @@
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="最大循环时间">
@@ -165,6 +181,7 @@
                 suffix="秒"
                 placeholder="0 表示不超时, 最大循环时间: 300"
                 style="width: 80%;"
+                :disabled="props.readonly"
             />
           </n-form-item>
         </template>
@@ -185,7 +202,8 @@ const props = defineProps({
   step: {
     type: Object,
     default: () => ({})
-  }
+  },
+  readonly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:config'])

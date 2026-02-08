@@ -1,17 +1,18 @@
 <template>
   <n-card :bordered="false" size="medium" style="width: 100%;" class="condition-card">
-  <!-- 顶部操作栏：步骤名称 -->
-  <div class="top-bar">
-    <div class="condition-icon">
-      <TheIcon icon="tabler:arrow-loop-right-2" :size="32" />
+    <!-- 顶部操作栏：步骤名称 -->
+    <div class="top-bar">
+      <div class="condition-icon">
+        <TheIcon icon="tabler:arrow-loop-right-2" :size="32" />
+      </div>
+      <n-input
+          v-model:value="form.step_name"
+          autosize
+          placeholder="条件分支(根据条件判断结果, 选择不同的执行路径)"
+          class="step-name-input"
+          :disabled="props.readonly"
+      />
     </div>
-    <n-input
-      v-model:value="form.step_name"
-      autosize
-      placeholder="条件分支(根据条件判断结果, 选择不同的执行路径)"
-      class="step-name-input"
-  />
-  </div>
   </n-card>
   <n-card :bordered="false" size="medium" style="width: 100%;" class="condition-card">
 
@@ -21,6 +22,7 @@
             v-model:value="form.value"
             placeholder="变量名或表达式,例如: ${token} 或 ${count}"
             style="width: 80%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
       <n-form-item label="条件比较符" required>
@@ -29,6 +31,7 @@
             :options="operatorOptions"
             placeholder="请选择条件比较符"
             style="width: 80%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
       <n-form-item label="条件比对值">
@@ -36,6 +39,7 @@
             v-model:value="form.except_value"
             placeholder="字符串或变量,例如: 3 或 ${target} (非空/为空操作时可不填)"
             style="width: 80%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
       <n-form-item label="备注">
@@ -43,6 +47,7 @@
             v-model:value="form.desc"
             placeholder="请输入备注"
             style="width: 80%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
     </n-form>
@@ -62,7 +67,8 @@ const props = defineProps({
   step: {
     type: Object,
     default: () => ({})
-  }
+  },
+  readonly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:config'])

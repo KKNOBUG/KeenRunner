@@ -22,8 +22,9 @@
             v-model:value="form.step_name"
             placeholder="执行代码请求(Python)"
             class="step-name-input"
+            :disabled="props.readonly"
         />
-        <n-button strong secondary type="primary" :loading="debugLoading" @click="handleDebug">
+        <n-button v-if="!props.readonly" strong secondary type="primary" :loading="debugLoading" @click="handleDebug">
           调试
         </n-button>
       </div>
@@ -43,7 +44,7 @@
       <!-- 代码编辑器 -->
       <monaco-editor
           v-model:value="form.code"
-          :options="monacoEditorOptions"
+          :options="codeEditorOptions"
           class="code-editor"
           style="min-height: 400px; height: auto;"
       />
@@ -82,7 +83,8 @@ const props = defineProps({
   step: {
     type: Object,
     default: () => ({})
-  }
+  },
+  readonly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:config'])
@@ -120,6 +122,11 @@ const monacoEditorOptions = {
   scrollBeyondLastLine: false,
   folding: true,
 }
+
+const codeEditorOptions = computed(() => ({
+  ...monacoEditorOptions,
+  readOnly: props.readonly
+}))
 
 const responseEditorOptions = {
   theme: 'vs-dark',

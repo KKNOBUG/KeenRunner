@@ -16,7 +16,7 @@
         <n-text strong>描述</n-text>
       </n-gi>
       <n-gi :span="2">
-        <n-button @click="openBatchAddModal" type="primary" tertiary>
+        <n-button v-if="!disabled" @click="openBatchAddModal" type="primary" tertiary>
           批量
         </n-button>
       </n-gi>
@@ -35,6 +35,7 @@
                 placeholder="请输入变量名称"
                 clearable
                 style="flex: 1;"
+                :disabled="disabled"
             />
             <!-- 如果是 form-data 模式且是请求体部分，显示下拉选择框用于选择类型 -->
             <n-space v-else align="center" :wrap-item="false" style="flex: 1;">
@@ -46,6 +47,7 @@
                   ]"
                   size="medium"
                   style="width: 80px; flex-shrink: 0;"
+                  :disabled="disabled"
                   @update:value="(value) => handleTypeChange(value, index)"
               />
             </n-space>
@@ -59,6 +61,7 @@
               placeholder="请输入变量数据"
               clearable
               style="flex: 1;"
+              :disabled="disabled"
           />
         </n-gi>
 
@@ -71,8 +74,10 @@
                 placeholder="请输入变量数据"
                 clearable
                 style="flex: 1;"
+                :disabled="disabled"
             />
             <n-popover
+                v-if="!disabled"
                 :show="associationTargetIndex === index"
                 @update:show="(v) => { if (!v) associationTargetIndex = -1 }"
                 trigger="click"
@@ -134,7 +139,7 @@
                 @change="({ file }) => handleFileChange(file, index)"
                 class="file-upload"
             >
-              <n-button block class="upload-button">
+              <n-button block class="upload-button" :disabled="disabled">
                 <template #icon>
                   <TheIcon icon="material-symbols:upload-file" :size="18"/>
                 </template>
@@ -144,6 +149,7 @@
             </n-upload>
             <!-- 点击清除文件按钮，触发 handleClearFile 方法 -->
             <n-button
+                v-if="!disabled"
                 circle
                 tertiary
                 type="primary"
@@ -161,12 +167,12 @@
 
         <!-- Description列 -->
         <n-gi :span="6">
-          <n-input v-model:value="item.desc" placeholder="请输入变量描述" clearable/>
+          <n-input v-model:value="item.desc" placeholder="请输入变量描述" clearable :disabled="disabled"/>
         </n-gi>
 
         <!-- 删除列，显示“删除”按钮，点击后触发 handleRemove 方法 -->
         <n-gi :span="2">
-          <n-button @click="handleRemove(index)" type="primary" tertiary>
+          <n-button v-if="!disabled" @click="handleRemove(index)" type="primary" tertiary>
             删除
           </n-button>
         </n-gi>
@@ -174,7 +180,7 @@
     </div>
 
     <!-- 操作行，显示“添加”按钮，点击后触发 handleAdd 方法 -->
-    <div class="add-button-container">
+    <div v-if="!disabled" class="add-button-container">
       <n-button @click="handleAdd" type="primary" dashed block class="add-button">
         添加
       </n-button>
@@ -234,6 +240,11 @@ const props = defineProps({
   assistFunctions: {
     type: Array,
     default: () => []
+  },
+  // 只读/置灰，不编辑（如引用脚本步骤查看）
+  disabled: {
+    type: Boolean,
+    default: false
   }
 });
 // 定义组件的自定义事件

@@ -9,6 +9,7 @@
             suffix="秒"
             placeholder="请输入等待时间（秒）"
             style="width: 30%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
     </n-form>
@@ -27,7 +28,8 @@ const props = defineProps({
   step: {
     type: Object,
     default: () => ({})
-  }
+  },
+  readonly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:config'])

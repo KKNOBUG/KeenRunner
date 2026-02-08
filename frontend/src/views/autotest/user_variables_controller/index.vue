@@ -13,6 +13,7 @@
             placeholder="请输入步骤名称"
             clearable
             style="width: 100%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
       <n-form-item label="步骤描述" path="step_desc">
@@ -22,6 +23,7 @@
             placeholder="请输入步骤描述"
             clearable
             style="width: 100%; min-height: 4rem;"
+            :disabled="props.readonly"
         />
       </n-form-item>
     </n-form>
@@ -32,6 +34,7 @@
           :is-for-body="false"
           :available-variable-list="props.availableVariableList"
           :assist-functions="props.assistFunctions"
+          :disabled="props.readonly"
       />
     </div>
   </n-card>
@@ -58,7 +61,8 @@ const props = defineProps({
   assistFunctions: {
     type: Array,
     default: () => []
-  }
+  },
+  readonly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:config'])

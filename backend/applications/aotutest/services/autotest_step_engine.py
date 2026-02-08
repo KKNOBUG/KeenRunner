@@ -677,14 +677,14 @@ class StepExecutionContext:
 
     def resolve_code_placeholders(self, code: str) -> str:
         """
-        解析代码中的 ${var}：引号内整段替换为值，拼接形式保留字符串；代码逻辑中替换为 Python 字面量。
+        解析代码中的 ${var}：引号内替换为合法 Python 字面量，拼接形式保留字符串；代码逻辑中替换为 Python 字面量。
 
         处理规则：
-        1. 字符串字面量中的占位符（如 '${var}'）替换为实际值，去掉占位符周围的引号
-           例如：'${idx_1}' == 1 会变成 1 == 1（假设 idx_1 = 1）
+        1. 字符串字面量中的占位符（如 '${var}'）替换为合法字面量：字符串用 repr 保留引号，数值/布尔/None 裸写
+           例如：dic["k"] = "${name}" -> dic["k"] = '邵刚'；'${idx_1}' == 1 -> 1 == 1（idx_1=1）
         2. 字符串拼接中的占位符（如 '${item}_1001'）替换为实际值，保持字符串格式
            例如：'${item_1}_1001' 会变成 'test_1001'（假设 item_1 = "test"）
-        3. 代码逻辑中的占位符（如 if ${var} == 1:）直接替换为实际值
+        3. 代码逻辑中的占位符（如 if ${var} == 1:）直接替换为实际值的 Python 表示
         :param code: 含占位符的 Python 代码字符串。
         :return: 占位符替换后的代码；异常时返回原 code。
         """
@@ -706,16 +706,18 @@ class StepExecutionContext:
                 self.log(f"【执行代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
                 return match.group(0)
 
-            # 在字符串字面量中，替换为实际值（去掉引号）
-            # 例如：'${idx_1}' == 1 变成 1 == 1
+            # 在字符串字面量中，替换为合法的 Python 字面量，避免产生无效代码（如 dic["k"] = 邵刚 导致 NameError）
+            # 字符串用 repr 保留引号：'${name}' -> '邵刚'；数值/布尔/None 裸写：'${idx}' == 1 -> 1 == 1
             if isinstance(var_value, str):
-                return var_value
+                # return var_value
+                return repr(var_value)
             elif isinstance(var_value, (int, float, bool)):
                 return str(var_value)
             elif var_value is None:
                 return "None"
             else:
-                return str(var_value)
+                # return str(var_value)
+                return repr(var_value)
 
         # 先处理字符串字面量中的占位符（如 '${var}' 或 "${var}"）
         code = _RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)

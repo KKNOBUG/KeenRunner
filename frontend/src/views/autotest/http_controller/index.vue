@@ -15,6 +15,7 @@
             :options="methodOptions"
             :render-label="renderMethodLabel"
             style="width: 100px;"
+            :disabled="props.readonly"
         />
         <n-select
             v-model:value="state.form.request_project_id"
@@ -24,14 +25,16 @@
             clearable
             filterable
             style="width: 160px;"
+            :disabled="props.readonly"
         />
         <n-input
             v-model:value="state.form.url"
             placeholder="请输入请求地址"
             clearable
             style="flex: 1;"
+            :disabled="props.readonly"
         />
-        <n-button type="primary" @click="debugging" :loading="debugLoading">调试</n-button>
+        <n-button v-if="!props.readonly" type="primary" @click="debugging" :loading="debugLoading">调试</n-button>
       </n-form-item>
 
       <!-- 步骤名称 -->
@@ -41,6 +44,7 @@
             placeholder="请输入步骤名称"
             clearable
             style="width: 100%;"
+            :disabled="props.readonly"
         />
       </n-form-item>
 
@@ -52,6 +56,7 @@
             placeholder="请输入步骤描述"
             clearable
             style="width: 100%; min-height: 6rem;"
+            :disabled="props.readonly"
         />
       </n-form-item>
     </n-form>
@@ -70,6 +75,7 @@
             :is-for-body="false"
             :available-variable-list="props.availableVariableList"
             :assist-functions="props.assistFunctions"
+            :disabled="props.readonly"
         />
       </n-tab-pane>
       <n-tab-pane name="params" tab="请求体">
@@ -78,7 +84,7 @@
             <span>请求体</span>
           </n-badge>
         </template>
-        <n-radio-group v-model:value="state.form.bodyType" name="bodyType">
+        <n-radio-group v-model:value="state.form.bodyType" name="bodyType" :disabled="props.readonly">
           <n-space>
             <n-radio value="none">none</n-radio>
             <n-radio value="params">params</n-radio>
@@ -95,6 +101,7 @@
               :is-for-body="true"
               :available-variable-list="props.availableVariableList"
               :assist-functions="props.assistFunctions"
+              :disabled="props.readonly"
           />
         </div>
         <div v-if="state.form.bodyType === 'form-data'">
@@ -105,6 +112,7 @@
               :is-for-body="true"
               :available-variable-list="props.availableVariableList"
               :assist-functions="props.assistFunctions"
+              :disabled="props.readonly"
           />
         </div>
         <div v-if="state.form.bodyType === 'x-www-form-urlencoded'">
@@ -114,6 +122,7 @@
               :is-for-body="true"
               :available-variable-list="props.availableVariableList"
               :assist-functions="props.assistFunctions"
+              :disabled="props.readonly"
           />
         </div>
         <div v-if="state.form.bodyType === 'json'">
@@ -132,6 +141,7 @@
               placeholder="请输入 raw 请求体文本"
               :rows="12"
               style="margin-top: 12px;"
+              :disabled="props.readonly"
           />
         </div>
 
@@ -148,6 +158,7 @@
             :is-for-body="false"
             :available-variable-list="props.availableVariableList"
             :assist-functions="props.assistFunctions"
+            :disabled="props.readonly"
         />
       </n-tab-pane>
       <n-tab-pane name="extract_variables" tab="提取">
@@ -580,7 +591,8 @@ const props = defineProps({
   assistFunctions: {
     type: Array,
     default: () => []
-  }
+  },
+  readonly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:config'])

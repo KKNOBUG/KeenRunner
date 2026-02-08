@@ -322,6 +322,31 @@
                         </div>
                       </div>
                     </div>
+                    <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存） -->
+                    <div v-if="step.type === 'quote'" class="quote-inner-steps">
+                      <div class="quote-inner-list">
+                        <div
+                            v-for="(item, idx) in getQuoteStepsFlattened(quoteStepsMap[step.id] || [])"
+                            :key="'quote-' + step.id + '-' + idx + '-' + (item.step.id || '')"
+                            class="step-item quote-inner-item"
+                            :class="{ 'is-selected': selectedKeys.includes(getQuoteInnerKey(step.id, idx)) }"
+                            :style="{ marginLeft: (item.depth * 14) + 'px' }"
+                            @click.stop="handleSelect([getQuoteInnerKey(step.id, idx)])"
+                        >
+                          <span class="step-name">
+                            <TheIcon
+                                :icon="getStepIcon(item.step.type)"
+                                :size="16"
+                                class="step-icon"
+                                :class="getStepIconClass(item.step.type)"
+                            />
+                            <span class="step-name-text">{{ item.step.name || '步骤' }}</span>
+                            <span class="step-number">#{{ idx + 1 }}</span>
+                          </span>
+                        </div>
+                        <div v-if="!getQuoteStepsFlattened(quoteStepsMap[step.id] || []).length" class="quote-inner-empty">暂无步骤</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -355,7 +380,7 @@
             -->
             <component
                 v-if="currentStep"
-                :key="currentStep.id"
+                :key="currentStep.id + (currentStep.isQuoteInner ? '-readonly' : '')"
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
@@ -363,8 +388,9 @@
                 :project-loading="currentStep?.type === 'http' ? projectLoading : false"
                 :available-variable-list="availableVariableList"
                 :assist-functions="assistFunctionsList"
-                :on-reselect="handleQuoteReselect"
-                @update:config="(val) => updateStepConfig(currentStep.id, val)"
+                :on-reselect="currentStep?.isQuoteInner ? undefined : handleQuoteReselect"
+                :readonly="!!currentStep?.isQuoteInner"
+                @update:config="(val) => { if (!currentStep?.isQuoteInner) updateStepConfig(currentStep.id, val) }"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
           </n-card>
@@ -547,6 +573,8 @@ const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
 const quotePublicScriptReplaceStepId = ref(null)
 const quotePublicScriptTableRef = ref(null)
+// 引用步骤内展示的公共脚本步骤（仅展示，不参与保存）：quoteStepId -> 前端树节点数组
+const quoteStepsMap = ref({})
 const quotePublicScriptQueryItems = ref({
   case_name: '',
   case_type: '公共脚本',
@@ -565,6 +593,8 @@ const onSelectPublicScript = (row) => {
   const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
   if (replaceId) {
     updateStepConfig(replaceId, config)
+    const updated = findStep(replaceId)
+    if (updated) loadQuoteStepsForStep(updated)
     quotePublicScriptReplaceStepId.value = null
   } else {
     const parentId = quotePublicScriptParentId.value
@@ -572,6 +602,7 @@ const onSelectPublicScript = (row) => {
     if (created) {
       selectedKeys.value = [created.id]
       updateStepDisplayNames()
+      loadQuoteStepsForStep(created)
     }
     quotePublicScriptParentId.value = null
   }
@@ -941,6 +972,74 @@ const findStepParent = (id, list = steps.value, parent = null) => {
     }
   }
   return null
+}
+
+/** 前序遍历步骤树，对每个步骤执行 fn（不包含引用步骤内加载的虚拟子步骤） */
+const forEachStep = (list, fn) => {
+  if (!list || !Array.isArray(list)) return
+  for (const step of list) {
+    fn(step)
+    if (step.children && step.children.length) forEachStep(step.children, fn)
+  }
+}
+
+/** 加载单个引用步骤对应的公共脚本步骤树（仅用于展示，不写入当前用例） */
+const loadQuoteStepsForStep = async (step) => {
+  if (step.type !== 'quote' || !step.config?.quote_case_id) {
+    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
+    return
+  }
+  try {
+    const res = await api.getAutoTestStepTree({ case_id: step.config.quote_case_id })
+    const data = Array.isArray(res?.data) ? res.data : []
+    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: data.map(mapBackendStep).filter(Boolean) }
+  } catch (e) {
+    console.error('加载引用脚本步骤失败', e)
+    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
+  }
+}
+
+/** 加载所有引用步骤的公共脚本步骤 */
+const loadQuoteStepsForAllQuoteSteps = () => {
+  forEachStep(steps.value, (step) => {
+    if (step.type === 'quote') loadQuoteStepsForStep(step)
+  })
+}
+
+/** 将引用脚本步骤树前序扁平化，得到带层级的列表（用于只读展示，含递归子级） */
+const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
+  if (!list || !Array.isArray(list)) return out
+  for (const step of list) {
+    out.push({ step, depth })
+    if (step.children && step.children.length) {
+      getQuoteStepsFlattened(step.children, depth + 1, out)
+    }
+  }
+  return out
+}
+
+const QUOTE_INNER_PREFIX = 'quote-inner:'
+const getQuoteInnerKey = (quoteStepId, flatIndex) => `${QUOTE_INNER_PREFIX}${quoteStepId}:${flatIndex}`
+const parseQuoteInnerKey = (key) => {
+  if (!key || typeof key !== 'string' || !key.startsWith(QUOTE_INNER_PREFIX)) return null
+  const rest = key.slice(QUOTE_INNER_PREFIX.length)
+  const colon = rest.indexOf(':')
+  if (colon === -1) return null
+  const quoteStepId = rest.slice(0, colon)
+  const flatIndex = parseInt(rest.slice(colon + 1), 10)
+  if (Number.isNaN(flatIndex)) return null
+  return { quoteStepId, flatIndex }
+}
+
+/** 根据 quote-inner key 解析出对应的步骤对象（用于右侧只读展示） */
+const getQuoteInnerStep = (key) => {
+  const parsed = parseQuoteInnerKey(key)
+  if (!parsed) return null
+  const list = quoteStepsMap.value[parsed.quoteStepId] || []
+  const flat = getQuoteStepsFlattened(list)
+  const item = flat[parsed.flatIndex]
+  if (!item) return null
+  return { ...item.step, isQuoteInner: true }
 }
 
 /** 前序遍历步骤树，得到扁平列表（用于计算当前步骤之前的可用变量） */
@@ -1829,11 +1928,13 @@ const loadSteps = async () => {
     hydrateCaseInfo(data)
     steps.value = data.map(mapBackendStep).filter(Boolean)
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+    loadQuoteStepsForAllQuoteSteps()
   } catch (error) {
     console.error('Failed to load step tree', error)
     steps.value = []
     selectedKeys.value = []
     hydrateCaseInfo([])
+    quoteStepsMap.value = {}
   }
 }
 
@@ -1844,6 +1945,8 @@ const handleSelect = (keys) => {
 const currentStep = computed(() => {
   const key = selectedKeys.value?.[0]
   if (!key) return null
+  const quoteInner = getQuoteInnerStep(key)
+  if (quoteInner) return quoteInner
   return findStep(key)
 })
 
@@ -1876,9 +1979,9 @@ const editorComponent = computed(() => {
 })
 
 const currentStepTitle = computed(() => {
-  // return ''
   if (!currentStep.value) return '步骤配置'
-  return stepDefinitions[currentStep.value.type]?.label || '步骤配置'
+  const label = stepDefinitions[currentStep.value.type]?.label || '步骤配置'
+  return currentStep.value.isQuoteInner ? `${label}（只读）` : label
 })
 
 const insertStep = (parentId, type, index = null, extraConfig = null) => {
@@ -3122,6 +3225,41 @@ const RecursiveStepChildren = defineComponent({
 :deep(.step-add-btn) {
   padding-top: 5px;
   padding-left: 12px;
+}
+
+/* 引用步骤：脚本内步骤展示（只读，含递归子级） */
+:deep(.quote-inner-steps) {
+  margin-top: 6px;
+  margin-left: 12px;
+  border-left: 2px solid #18a058;
+  padding-left: 8px;
+}
+:deep(.quote-inner-list) {
+  margin-top: 6px;
+}
+:deep(.quote-inner-item) {
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  background: rgba(24, 160, 88, 0.06);
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+}
+:deep(.quote-inner-item:hover) {
+  background: rgba(24, 160, 88, 0.12);
+}
+:deep(.quote-inner-item .step-name) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+:deep(.quote-inner-item .step-number) {
+  margin-left: auto;
+}
+:deep(.quote-inner-empty) {
+  font-size: 12px;
+  color: #999;
+  padding: 6px 0;
 }
 
 :deep(.add-step-btn) {
