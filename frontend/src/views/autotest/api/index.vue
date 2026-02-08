@@ -575,6 +575,8 @@ const quotePublicScriptReplaceStepId = ref(null)
 const quotePublicScriptTableRef = ref(null)
 // 引用步骤内展示的公共脚本步骤（仅展示，不参与保存）：quoteStepId -> 前端树节点数组
 const quoteStepsMap = ref({})
+// 从「用户脚本」切到「公共脚本」时暂存的引用步骤，切回「用户脚本」时可恢复
+const stashedQuoteStepsWhenPublic = ref([])
 const quotePublicScriptQueryItems = ref({
   case_name: '',
   case_type: '公共脚本',
@@ -849,6 +851,32 @@ watch(() => caseForm.case_tags, (newVal) => {
     caseForm.case_tags = []
   }
 }, {immediate: true})
+
+// 当用例类型改为「公共脚本」时，自动移除步骤树中所有「引用公共脚本」步骤；若从「用户脚本」切来则暂存，切回「用户脚本」时可恢复
+watch(() => caseForm.case_type, (newType, oldType) => {
+  if (newType === '公共脚本') {
+    const fromUserScript = oldType === '用户脚本'
+    if (fromUserScript) {
+      const toStash = collectQuoteStepsWithPosition()
+      const removedCount = removeAllQuoteSteps()
+      if (removedCount > 0) {
+        stashedQuoteStepsWhenPublic.value = toStash
+        window.$message?.warning?.(`切换为公共脚本，已临时移除 ${removedCount} 个「引用公共脚本」步骤（若误操作，可切回用户脚本恢复）`)
+      }
+    } else {
+      const removedCount = removeAllQuoteSteps()
+      if (removedCount > 0) {
+        window.$message?.warning?.(`切换为公共脚本，已自动移除 ${removedCount} 个「引用公共脚本」步骤（公共脚本不可引用其他脚本）`)
+      }
+    }
+  } else if (newType === '用户脚本' && stashedQuoteStepsWhenPublic.value.length > 0) {
+    const restoredCount = restoreStashedQuoteSteps()
+    if (restoredCount > 0) {
+      window.$message?.info?.(`已恢复 ${restoredCount} 个「引用公共脚本」步骤。`)
+    }
+  }
+})
+
 const runLoading = ref(false)
 const debugLoading = ref(false)
 const saveLoading = ref(false)
@@ -863,20 +891,25 @@ const dragState = ref({
 })
 
 // 下拉只展示“引用公共脚本”（不展示“引用公共用例”）；quote 仅用于后端步骤类型与展示
-const addOptions = [
-  ...Object.entries(stepDefinitions)
-      .filter(([key]) => key !== 'quote')
-      .map(([value, item]) => ({
-        label: item.label,
-        key: value,
-        icon: renderIcon(item.icon, {size: 16})
-      })),
-  {
-    label: '引用公共脚本',
-    key: 'quote_public_script',
-    icon: renderIcon('material-symbols:library-books-outline', {size: 16})
-  }
-]
+// 当用例类型为“公共脚本”时，“引用公共脚本”置灰，防止循环引用
+const addOptions = computed(() => {
+  const isPublicScript = caseForm.case_type === '公共脚本'
+  return [
+    ...Object.entries(stepDefinitions)
+        .filter(([key]) => key !== 'quote')
+        .map(([value, item]) => ({
+          label: item.label,
+          key: value,
+          icon: renderIcon(item.icon, {size: 16})
+        })),
+    {
+      label: '引用公共脚本',
+      key: 'quote_public_script',
+      icon: renderIcon('material-symbols:library-books-outline', {size: 16}),
+      disabled: isPublicScript
+    }
+  ]
+})
 
 
 // 计算总步骤数（包括子步骤）
@@ -1913,6 +1946,7 @@ const handleDebug = async () => {
 
 const loadSteps = async () => {
   stepExpandStates.value = new Map()
+  stashedQuoteStepsWhenPublic.value = []
   if (!caseId.value && !caseCode.value) {
     steps.value = []
     selectedKeys.value = []
@@ -2100,6 +2134,73 @@ const handleDeleteStep = (id) => {
   if (selectedKeys.value[0] === id) {
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
   }
+}
+
+/** 当用例类型改为「公共脚本」时，移除步骤树中所有「引用公共脚本」步骤，防止循环引用。返回被移除的步骤数量。 */
+const removeAllQuoteSteps = () => {
+  const quoteIds = []
+  forEachStep(steps.value, (step) => {
+    if (step.type === 'quote' || step.type === 'quote_public_script') {
+      quoteIds.push(step.id)
+    }
+  })
+  if (quoteIds.length === 0) return 0
+  quoteIds.forEach((id) => {
+    const step = findStep(id)
+    if (step) {
+      stepExpandStates.value.delete(id)
+      removeStep(id)
+    }
+  })
+  quoteIds.forEach((id) => {
+    quoteStepsMap.value = { ...quoteStepsMap.value, [id]: [] }
+  })
+  if (quoteIds.includes(selectedKeys.value?.[0])) {
+    selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+  }
+  updateStepDisplayNames()
+  return quoteIds.length
+}
+
+/** 收集所有「引用公共脚本」步骤及其位置（用于暂存，切回用户脚本时可恢复） */
+const collectQuoteStepsWithPosition = () => {
+  const list = []
+  forEachStep(steps.value, (step) => {
+    if (step.type !== 'quote' && step.type !== 'quote_public_script') return
+    const parent = findStepParent(step.id)
+    const parentId = parent?.id ?? null
+    const siblings = parentId === null ? steps.value : (parent?.children || [])
+    const index = siblings.findIndex((s) => s.id === step.id)
+    if (index === -1) return
+    list.push({
+      step: JSON.parse(JSON.stringify(step)),
+      parentId,
+      index
+    })
+  })
+  return list
+}
+
+/** 将暂存的引用步骤恢复回步骤树 */
+const restoreStashedQuoteSteps = () => {
+  const stashed = stashedQuoteStepsWhenPublic.value
+  if (!stashed || stashed.length === 0) return 0
+  const sorted = [...stashed].sort((a, b) => {
+    const pa = a.parentId ?? ''
+    const pb = b.parentId ?? ''
+    if (pa !== pb) return String(pa).localeCompare(String(pb))
+    return a.index - b.index
+  })
+  for (const { step, parentId, index } of sorted) {
+    const list = parentId === null ? steps.value : (findStep(parentId)?.children || null)
+    if (!list) continue
+    const safeIndex = Math.min(index, list.length)
+    list.splice(safeIndex, 0, step)
+  }
+  stashedQuoteStepsWhenPublic.value = []
+  updateStepDisplayNames()
+  loadQuoteStepsForAllQuoteSteps()
+  return sorted.length
 }
 
 const handleCopyStep = (id) => {
@@ -2819,7 +2920,7 @@ const RecursiveStepChildren = defineComponent({
         }, [
           h(NDropdown, {
             trigger: 'click',
-            options: capturedAddOptions,
+            options: capturedAddOptions.value,
             renderLabel: capturedRenderDropdownLabel,
             onSelect: (key) => {
               capturedHandleAddStep(key, step.id)

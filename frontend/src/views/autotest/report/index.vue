@@ -1,5 +1,5 @@
 <script setup>
-import {computed, h, ref, resolveDirective, withDirectives} from 'vue'
+import {computed, h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
 import {
   NButton,
   NCard,
@@ -8,26 +8,29 @@ import {
   NCollapse,
   NCollapseItem,
   NDataTable,
+  NDatePicker,
   NDescriptions,
   NDescriptionsItem,
   NDrawer,
   NDrawerContent,
   NEmpty,
   NInput,
+  NPagination,
   NPopconfirm,
   NSelect,
   NSpace,
   NTabPane,
   NTabs,
   NTag,
-  NText
+  NText,
+  NTooltip
 } from 'naive-ui'
 import {useRouter} from 'vue-router'
 import MonacoEditor from '@/components/monaco/index.vue'
 
 import CommonPage from '@/components/page/CommonPage.vue'
+import QueryBar from '@/components/query-bar/QueryBar.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
-import CrudTable from '@/components/table/CrudTable.vue'
 
 import {renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
@@ -37,9 +40,33 @@ defineOptions({name: '测试报告'})
 
 const router = useRouter()
 
-const $table = ref(null)
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
+
+// 执行日期范围（用于查询条件，按 case_st_time 筛选）
+const getTodayRange = () => {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date()
+  end.setHours(23, 59, 59, 999)
+  return [start.getTime(), end.getTime()]
+}
+const dateRange = ref(getTodayRange())
+const formatDateForQuery = (ts) => {
+  if (ts == null) return null
+  const d = new Date(ts)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+const handleDateRangeChange = (value) => {
+  if (value == null) {
+    queryItems.value.date_from = null
+    queryItems.value.date_to = null
+  } else {
+    queryItems.value.date_from = formatDateForQuery(value[0])
+    queryItems.value.date_to = formatDateForQuery(value[1])
+  }
+}
 
 // 抽屉相关状态
 const drawerVisible = ref(false)
@@ -57,7 +84,153 @@ const {
 } = useCRUD({
   name: '报告',
   doDelete: api.deleteApiReport,
-  refresh: () => $table.value?.handleSearch(),
+  refresh: () => handleSearch(),
+})
+
+// ---------- 分组 + 可折叠：状态与分页 ----------
+// 分组规则：
+// 1. 不存在 task_code 或不存在 batch_code：不分组，直接在列表中平铺显示。
+// 2. 同时存在 task_code 和 batch_code：分组展示。第一层按 task_code 分组（展开显示 task_code），第二层按 batch_code 分组（一个 task_code 下可有多个 batch_code），再展开展示报告行。默认折叠。
+const BATCH_KEY_SEP = '::'
+const rawReportList = ref([])
+const totalCount = ref(0)
+const tableLoading = ref(false)
+const expandedKeys = ref({}) // 第一层 key = task_code；第二层 key = 'batch::' + task_code + '::' + batch_code
+const pagination = reactive({
+  page: 1,
+  pageSize: 10,
+  pageSizes: [10, 20, 50, 100],
+  showSizePicker: true,
+  itemCount: 0,
+  prefix({ itemCount }) {
+    return `共 ${itemCount} 条`
+  },
+})
+
+function hasTaskAndBatch(row) {
+  return !!(row.task_code && String(row.task_code).trim() && row.batch_code && String(row.batch_code).trim())
+}
+
+// 扁平化：先平铺「无 task_code 或 无 batch_code」的报告；再按 task_code → batch_code 两层分组输出（默认折叠）
+const flattenedTableData = computed(() => {
+  const list = rawReportList.value || []
+  const result = []
+  const flatReports = list.filter(r => !hasTaskAndBatch(r))
+  const groupable = list.filter(hasTaskAndBatch)
+
+  // 1. 不分组：直接平铺
+  for (const r of flatReports) {
+    result.push({ ...r, _isGroup: false })
+  }
+
+  // 2. 按 task_code 分组，再按 batch_code 分组
+  const taskCodeMap = new Map()
+  for (const r of groupable) {
+    const tk = String(r.task_code).trim()
+    if (!taskCodeMap.has(tk)) taskCodeMap.set(tk, [])
+    taskCodeMap.get(tk).push(r)
+  }
+  for (const [taskCode, reports] of taskCodeMap) {
+    const groupExpanded = expandedKeys.value[taskCode] === true
+    const passCount = reports.filter(r => r.case_state === true || r.case_state === 'true').length
+    const failCount = reports.filter(r => r.case_state === false || r.case_state === 'false').length
+    result.push({
+      _isGroup: true,
+      _groupKey: taskCode,
+      task_code_display: taskCode,
+      report_count: reports.length,
+      pass_count: passCount,
+      fail_count: failCount,
+      expanded: groupExpanded,
+    })
+    if (!groupExpanded) continue
+    const batchMap = new Map()
+    for (const r of reports) {
+      const bk = String(r.batch_code).trim()
+      if (!batchMap.has(bk)) batchMap.set(bk, [])
+      batchMap.get(bk).push(r)
+    }
+    for (const [batchCode, batchReports] of batchMap) {
+      const batchKey = 'batch' + BATCH_KEY_SEP + taskCode + BATCH_KEY_SEP + batchCode
+      const batchExpanded = expandedKeys.value[batchKey] === true
+      result.push({
+        _isBatchGroup: true,
+        _batchKey: batchKey,
+        _batchCodeDisplay: batchCode,
+        report_count: batchReports.length,
+        expanded: batchExpanded,
+      })
+      if (batchExpanded) {
+        for (const r of batchReports) result.push({ ...r, _isGroup: false })
+      }
+    }
+  }
+  return result
+})
+
+function toggleExpand(groupKey) {
+  expandedKeys.value = { ...expandedKeys.value, [groupKey]: !expandedKeys.value[groupKey] }
+}
+
+async function handleQuery() {
+  try {
+    tableLoading.value = true
+    const queryParams = {
+      ...queryItems.value,
+      page: pagination.page,
+      page_size: pagination.pageSize,
+    }
+    if (queryParams.case_id === '' || queryParams.case_id === undefined) {
+      queryParams.case_id = null
+    } else if (queryParams.case_id !== null) {
+      queryParams.case_id = Number(queryParams.case_id)
+    }
+    const res = await api.getApiReportList(queryParams)
+    let data = res?.data || []
+    const total = res?.total ?? 0
+    if (!queryParams.report_type && data.length) {
+      data = data.filter(item => item.report_type !== '调试执行')
+    }
+    rawReportList.value = data
+    totalCount.value = total
+    pagination.itemCount = total
+  } catch (e) {
+    rawReportList.value = []
+    totalCount.value = 0
+    pagination.itemCount = 0
+  } finally {
+    tableLoading.value = false
+  }
+}
+
+function handleSearch() {
+  pagination.page = 1
+  handleQuery()
+}
+
+function handleReset() {
+  for (const key of Object.keys(queryItems.value)) {
+    queryItems.value[key] = null
+  }
+  dateRange.value = null
+  handleDateRangeChange(null)
+  pagination.page = 1
+  handleQuery()
+}
+
+function onPageChange(page) {
+  pagination.page = page
+  handleQuery()
+}
+
+function onPageSizeChange(pageSize) {
+  pagination.pageSize = pageSize
+  pagination.page = 1
+  handleQuery()
+}
+
+onMounted(() => {
+  handleQuery()
 })
 
 // 查看明细
@@ -619,30 +792,6 @@ const detailColumns = [
   },
 ]
 
-// 包装 API 调用，默认过滤掉"调试执行"类型的报告
-const getReportList = async (params = {}) => {
-  const queryParams = {...params}
-  // 处理 case_id：空字符串转换为 null
-  if (queryParams.case_id === '' || queryParams.case_id === undefined) {
-    queryParams.case_id = null
-  } else if (queryParams.case_id !== null) {
-    // 确保 case_id 是数字类型
-    queryParams.case_id = Number(queryParams.case_id)
-  }
-
-  // 调用后端 API
-  const res = await api.getApiReportList(queryParams)
-
-  // 如果用户没有明确选择报告类型，则过滤掉"调试执行"类型的报告
-  // 如果用户明确选择了报告类型（包括"调试执行"），则显示用户选择的结果
-  if (!queryParams.report_type && res?.data) {
-    res.data = res.data.filter(item => item.report_type !== '调试执行')
-    // 分页时保留后端返回的 total，不改为当前页条数
-  }
-
-  return res
-}
-
 // 报告类型选项
 const reportTypeOptions = [
   {label: '调试执行', value: '调试执行'},
@@ -657,7 +806,90 @@ const caseStateOptions = [
   {label: '失败', value: false}
 ]
 
-const columns = [
+// 分组表头列：顶层组行 / 批次子头行 / 报告行
+const groupLeadColumn = {
+  title: '任务/批次',
+  key: '_taskOrBatch',
+  width: 280,
+  align: 'left',
+  render(row) {
+    if (row._isGroup) {
+      const expandIconVNode = renderIcon(
+          row.expanded ? 'material-symbols:expand-less' : 'material-symbols:expand-more',
+          { size: 20 }
+      )()
+      return h(NSpace, { size: 6, align: 'center' }, [
+        h(NButton, {
+          quaternary: true,
+          size: 'tiny',
+          style: { width: '24px', minWidth: '24px', padding: 0 },
+          onClick: (e) => {
+            e.stopPropagation()
+            toggleExpand(row._groupKey)
+          },
+        }, { default: () => expandIconVNode }),
+        h(NTooltip, { trigger: 'hover' }, {
+          trigger: () => h('span', { style: { fontWeight: 600 } }, shortenCode(row.task_code_display)),
+          default: () => row.task_code_display,
+        }),
+        h('span', { style: { color: '#999', fontSize: '12px' } }, `（${row.report_count} 条）`),
+      ])
+    }
+    if (row._isBatchGroup) {
+      const expandIconVNode = renderIcon(
+          row.expanded ? 'material-symbols:expand-less' : 'material-symbols:expand-more',
+          { size: 18 }
+      )()
+      return h(NSpace, { size: 6, align: 'center' }, [
+        h('span', { style: { width: '28px', display: 'inline-block' } }),
+        h(NButton, {
+          quaternary: true,
+          size: 'tiny',
+          style: { width: '22px', minWidth: '22px', padding: 0 },
+          onClick: (e) => {
+            e.stopPropagation()
+            toggleExpand(row._batchKey)
+          },
+        }, { default: () => expandIconVNode }),
+        h(NTooltip, { trigger: 'hover' }, {
+          trigger: () => h('span', { style: { fontSize: '13px' } }, shortenCode(row._batchCodeDisplay)),
+          default: () => row._batchCodeDisplay,
+        }),
+        h('span', { style: { color: '#999', fontSize: '12px' } }, `（${row.report_count} 条）`),
+      ])
+    }
+    const reportBatchCode = row.batch_code ?? '-'
+    return h(NTooltip, { trigger: 'hover' }, {
+      trigger: () => h('span', { style: { paddingLeft: '56px' } }, shortenCode(reportBatchCode)),
+      default: () => (row.batch_code != null && row.batch_code !== '' ? row.batch_code : reportBatchCode),
+    })
+  },
+}
+
+// 任务/批次列中长码显示：前 10 位 + 省略 + 后 5 位
+function shortenCode(str, head = 10, tail = 5) {
+  if (str == null || str === '' || str === '-') return str === '' ? '' : (str ?? '-')
+  const s = String(str)
+  if (s.length <= head + tail) return s
+  return s.slice(0, head) + '…' + s.slice(-tail)
+}
+
+// 将普通列包装为：组行与批次行显示 '-'，报告行走原逻辑
+function wrapColumnForGroup(col) {
+  const origRender = col.render
+  const key = col.key
+  return {
+    ...col,
+    render(row) {
+      if (row._isGroup || row._isBatchGroup) return h('span', '-')
+      if (origRender) return origRender(row)
+      const val = row[key]
+      return h('span', { ellipsis: { tooltip: true } }, val != null ? String(val) : '-')
+    },
+  }
+}
+
+const columnsBase = [
   {
     title: '用例ID',
     key: 'case_id',
@@ -835,13 +1067,6 @@ const columns = [
     ellipsis: {tooltip: true},
   },
   {
-    title: '任务代码',
-    key: 'task_code',
-    width: 200,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
     title: '创建人员',
     key: 'created_user',
     width: 100,
@@ -851,7 +1076,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -895,84 +1120,126 @@ const columns = [
   },
 ]
 
+// 带分组支持的列：首列任务/批次 + 其余列对组行显示 '-'
+const columns = [groupLeadColumn, ...columnsBase.map(wrapColumnForGroup)]
+
+// 表格行 key：组行用 groupKey，报告行用 report_code
+const rowKey = (row) => {
+  if (row._isGroup) return `group-${row._groupKey}`
+  if (row._isBatchGroup) return row._batchKey
+  return row.report_code ?? row.report_id ?? row.id
+}
+
 </script>
 
 <template>
   <CommonPage show-footer title="测试报告">
-    <!--  搜索&表格  -->
-    <CrudTable
-        ref="$table"
-        v-model:query-items="queryItems"
-        :is-pagination="true"
-        :remote="true"
-        :columns="columns"
-        :get-data="getReportList"
-        :single-line="true"
-    >
+    <!--  搜索栏  -->
+    <QueryBar mb-30 @search="handleSearch" @reset="handleReset">
+      <QueryBarItem label="用例ID：">
+        <NInput
+            v-model:value="queryItems.case_id"
+            clearable
+            type="text"
+            placeholder="请输入用例ID"
+            class="query-input"
+            @keypress.enter="handleSearch"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="报告类型：">
+        <NSelect
+            v-model:value="queryItems.report_type"
+            :options="reportTypeOptions"
+            clearable
+            placeholder="请选择报告类型"
+            class="query-input"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="执行状态：">
+        <NSelect
+            v-model:value="queryItems.case_state"
+            :options="caseStateOptions"
+            clearable
+            placeholder="请选择执行状态"
+            class="query-input"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="成功率：">
+        <NInput
+            v-model:value="queryItems.step_pass_ratio"
+            clearable
+            type="text"
+            placeholder="请输入成功率"
+            class="query-input"
+            @keypress.enter="handleSearch"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="任务标识：">
+        <NInput
+            v-model:value="queryItems.task_code"
+            clearable
+            type="text"
+            placeholder="请输入任务标识"
+            class="query-input"
+            @keypress.enter="handleSearch"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="批次标识：">
+        <NInput
+            v-model:value="queryItems.batch_code"
+            clearable
+            type="text"
+            placeholder="请输入批次标识"
+            class="query-input"
+            @keypress.enter="handleSearch"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="执行日期：">
+        <NDatePicker
+            v-model:value="dateRange"
+            type="daterange"
+            clearable
+            class="query-input"
+            placeholder="请选择执行日期范围"
+            @update:value="handleDateRangeChange"
+        />
+      </QueryBarItem>
+      <QueryBarItem label="创建人员：">
+        <NInput
+            v-model:value="queryItems.created_user"
+            clearable
+            type="text"
+            placeholder="请输入创建人员"
+            class="query-input"
+            @keypress.enter="handleSearch"
+        />
+      </QueryBarItem>
+    </QueryBar>
 
-      <!--  搜索  -->
-      <template #queryBar>
-        <QueryBarItem label="用例ID：">
-          <NInput
-              v-model:value="queryItems.case_id"
-              clearable
-              type="text"
-              placeholder="请输入用例ID"
-              class="query-input"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="报告类型：">
-          <NSelect
-              v-model:value="queryItems.report_type"
-              :options="reportTypeOptions"
-              clearable
-              placeholder="请选择报告类型"
-              class="query-input"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="执行状态：">
-          <NSelect
-              v-model:value="queryItems.case_state"
-              :options="caseStateOptions"
-              clearable
-              placeholder="请选择执行状态"
-              class="query-input"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="成功率：">
-          <NInput
-              v-model:value="queryItems.step_pass_ratio"
-              clearable
-              type="text"
-              placeholder="请输入成功率"
-              class="query-input"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="任务代码：">
-          <NInput
-              v-model:value="queryItems.task_code"
-              clearable
-              type="text"
-              placeholder="请输入任务代码"
-              class="query-input"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="创建人员：">
-          <NInput
-              v-model:value="queryItems.created_user"
-              clearable
-              type="text"
-              placeholder="请输入创建人员"
-              class="query-input"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-      </template>
-
-    </CrudTable>
+    <!--  按任务分组 + 可折叠 表格  -->
+    <div class="report-table-wrap">
+      <NDataTable
+          :loading="tableLoading"
+          :columns="columns"
+          :data="flattenedTableData"
+          :row-key="rowKey"
+          :row-class-name="(row) => row._isGroup ? 'report-group-row' : row._isBatchGroup ? 'report-batch-row' : ''"
+          :scroll-x="1400"
+          :single-line="true"
+      />
+    </div>
+    <div v-if="pagination.itemCount > 0" class="report-pagination mt-4 flex justify-end">
+      <NPagination
+          v-model:page="pagination.page"
+          :page-count="Math.ceil(pagination.itemCount / pagination.pageSize)"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          show-size-picker
+          :prefix="pagination.prefix"
+          @update:page="onPageChange"
+          @update:page-size="onPageSizeChange"
+      />
+    </div>
 
     <!-- 明细抽屉 -->
     <NDrawer v-model:show="drawerVisible" placement="right" width="50%">
@@ -1362,6 +1629,26 @@ const columns = [
   font-size: 14px;
   font-weight: 500;
   word-break: break-all;
+}
+
+/* 顶层组头行 */
+:deep(.report-group-row) {
+  background-color: #f5f5f5;
+}
+
+/* 批次执行任务下按 batch_code 的子头行 */
+:deep(.report-batch-row) {
+  background-color: #fafafa;
+}
+/* 报告表格容器：保证横向滚动、避免挤压 */
+.report-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  min-height: 200px;
+}
+
+.report-table-wrap .n-data-table {
+  min-width: 100%;
 }
 
 </style>

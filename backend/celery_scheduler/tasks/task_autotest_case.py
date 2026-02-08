@@ -67,11 +67,13 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
             exec_report_type = ReportType.ASYNC_EXEC
         env_name = task_kwargs.get("env_name") if isinstance(task_kwargs, dict) else None
         initial_variables = (task_kwargs.get("initial_variables") or []) if isinstance(task_kwargs, dict) else []
+        task_code = getattr(task, "task_code", None)
         result = await crud.batch_execute_cases(
             case_ids=case_ids,
             report_type=exec_report_type,
             initial_variables=initial_variables,
             env_name=env_name,
+            task_code=task_code
         )
         all_ok = result.get("summary", {}).get("all_success", False)
         task.last_execute_state = Status.SUCCESS if all_ok else Status.FAILURE

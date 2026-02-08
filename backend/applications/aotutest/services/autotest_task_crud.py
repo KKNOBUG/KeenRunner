@@ -159,6 +159,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             instance = await self.get_by_code(task_code=task_code, on_error=True)
 
         instance.state = 1
+        instance.task_enabled = False
         await instance.save()
         return instance
 

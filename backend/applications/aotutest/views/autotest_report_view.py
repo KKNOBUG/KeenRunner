@@ -154,7 +154,9 @@ async def search_reports(
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
         if report_in.task_code:
-            q &= Q(task_code=report_in.task_code)
+            q &= Q(task_code__contains=report_in.task_code)
+        if report_in.batch_code:
+            q &= Q(batch_code__contains=report_in.batch_code)
         if report_in.case_state is not None:
             q &= Q(case_state=report_in.case_state)
         if report_in.created_user:
@@ -163,6 +165,17 @@ async def search_reports(
             q &= Q(updated_user__iexact=report_in.updated_user)
         if report_in.step_pass_ratio:
             q &= Q(step_pass_ratio__gte=report_in.step_pass_ratio)
+        # 执行时间范围：按 case_st_time 筛选，仅日期时补全为当天起止
+        if report_in.date_from:
+            date_from = report_in.date_from.strip()
+            if len(date_from) == 10:  # YYYY-MM-DD
+                date_from = f"{date_from} 00:00:00"
+            q &= Q(case_st_time__gte=date_from)
+        if report_in.date_to:
+            date_to = report_in.date_to.strip()
+            if len(date_to) == 10:
+                date_to = f"{date_to} 23:59:59"
+            q &= Q(case_st_time__lte=date_to)
         q &= Q(state=report_in.state)
         total, instances = await AUTOTEST_API_REPORT_CRUD.select_reports(
             search=q,

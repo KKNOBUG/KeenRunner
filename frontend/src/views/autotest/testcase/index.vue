@@ -40,6 +40,11 @@ const caseAttrOptions = [
   { label: '正用例', value: '正用例' },
   { label: '反用例', value: '反用例' }
 ]
+// 用例类型选项（与后端 AutoTestCaseType 一致）
+const caseTypeOptions = [
+  { label: '公共脚本', value: '公共脚本' },
+  { label: '用户脚本', value: '用户脚本' }
+]
 // 标签相关
 const tagOptions = ref([])
 const tagLoading = ref(false)
@@ -382,13 +387,12 @@ const columns = [
           />
         </QueryBarItem>
         <QueryBarItem label="用例类型：">
-          <NInput
+          <NSelect
               v-model:value="queryItems.case_type"
+              :options="caseTypeOptions"
               clearable
-              type="text"
-              placeholder="请输入用例类型"
+              placeholder="请选择用例类型"
               class="query-input"
-              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="所属应用：">
