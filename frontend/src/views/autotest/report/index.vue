@@ -936,7 +936,7 @@ const columnsBase = [
   {
     title: '成功率',
     key: 'step_pass_ratio',
-    width: 180,
+    width: 200,
     align: 'center',
     render(row) {
       const ratio = row.step_pass_ratio
@@ -1063,7 +1063,7 @@ const columnsBase = [
   {
     title: '执行时间',
     key: 'case_st_time',
-    width: 180,
+    width: 200,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -1225,14 +1225,14 @@ const rowKey = (row) => {
     </QueryBar>
 
     <!--  按任务分组 + 可折叠 表格  -->
-    <div class="report-table-wrap">
+    <div>
       <NDataTable
           :loading="tableLoading"
           :columns="columns"
           :data="flattenedTableData"
           :row-key="rowKey"
           :row-class-name="(row) => row._isGroup ? 'report-group-row' : row._isBatchGroup ? 'report-batch-row' : ''"
-          :scroll-x="1400"
+          :scroll-x="1800"
           :single-line="true"
       />
     </div>
@@ -1648,16 +1648,5 @@ const rowKey = (row) => {
 :deep(.report-batch-row) {
   background-color: #fafafa;
 }
-/* 报告表格容器：保证横向滚动、避免挤压 */
-.report-table-wrap {
-  width: 100%;
-  overflow-x: auto;
-  min-height: 200px;
-}
-
-.report-table-wrap .n-data-table {
-  min-width: 100%;
-}
-
 </style>
 
