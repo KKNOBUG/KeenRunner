@@ -94,7 +94,6 @@ const {
 // 2. 同时存在 task_code 和 batch_code：分组展示。第一层按 task_code 分组（展开显示 task_code），第二层按 batch_code 分组（一个 task_code 下可有多个 batch_code），再展开展示报告行。默认折叠。
 const BATCH_KEY_SEP = '::'
 const rawReportList = ref([])
-const totalCount = ref(0)
 const tableLoading = ref(false)
 const expandedKeys = ref({}) // 第一层 key = task_code；第二层 key = 'batch::' + task_code + '::' + batch_code
 const pagination = reactive({
@@ -190,11 +189,9 @@ async function handleQuery() {
     const data = res?.data || []
     const total = res?.total ?? 0
     rawReportList.value = data
-    totalCount.value = total
     pagination.itemCount = total
   } catch (e) {
     rawReportList.value = []
-    totalCount.value = 0
     pagination.itemCount = 0
   } finally {
     tableLoading.value = false
@@ -228,7 +225,7 @@ function onPageSizeChange(pageSize) {
 }
 
 onMounted(() => {
-  // 报告类型默认「定时执行」；执行日期默认当天（dateRange 已初始为当天，需同步到 queryItems）
+  // 报告类型默认「定时执行」；执行日期默认最近三天，需同步到 queryItems
   if (queryItems.value.report_type == null) queryItems.value.report_type = '定时执行'
   if (queryItems.value.date_from == null && dateRange.value) handleDateRangeChange(dateRange.value)
   handleQuery()
@@ -632,73 +629,6 @@ const getMethodTagType = (method) => {
   if (upperMethod === 'PUT') return 'warning'
   if (upperMethod === 'DELETE') return 'error'
   return 'default'
-}
-
-// 获取HTTP状态码
-const getHttpCode = (item) => {
-  if (item.response_body && typeof item.response_body === 'object') {
-    return item.response_body.status_code || item.response_body.code || item.response_body.status || '-'
-  }
-  return '-'
-}
-
-// 获取HTTP状态码显示样式
-const getHttpCodeTag = (code) => {
-  if (!code || code === '-') return {type: 'default', text: '-'}
-  const codeNum = parseInt(code)
-  if (codeNum >= 200 && codeNum < 300) {
-    return {type: 'success', text: `${code} OK`}
-  } else if (codeNum >= 400 && codeNum < 500) {
-    return {type: 'warning', text: `${code}`}
-  } else if (codeNum >= 500) {
-    return {type: 'error', text: `${code}`}
-  }
-  return {type: 'default', text: `${code}`}
-}
-
-// 获取请求方法
-const getRequestMethod = (item) => {
-  // 尝试从 session_variables 中获取（可能存储了请求信息）
-  if (item.session_variables && typeof item.session_variables === 'object') {
-    if (item.session_variables.request_method) {
-      return item.session_variables.request_method
-    }
-  }
-  // 尝试从 response_body 中获取
-  if (item.response_body && typeof item.response_body === 'object') {
-    if (item.response_body.request_info && item.response_body.request_info.method) {
-      return item.response_body.request_info.method
-    }
-    if (item.response_body.method) {
-      return item.response_body.method
-    }
-  }
-  // 如果步骤类型是 api/http，可能需要从其他字段获取
-  if (item.step_type === 'api' || item.step_type === 'http') {
-    // 默认返回 POST，实际应该从数据中获取
-    return 'POST'
-  }
-  return '-'
-}
-
-// 获取URL
-const getUrl = (item) => {
-  // 尝试从 session_variables 中获取
-  if (item.session_variables && typeof item.session_variables === 'object') {
-    if (item.session_variables.request_url) {
-      return item.session_variables.request_url
-    }
-  }
-  // 尝试从 response_body 中获取
-  if (item.response_body && typeof item.response_body === 'object') {
-    if (item.response_body.request_info && item.response_body.request_info.url) {
-      return item.response_body.request_info.url
-    }
-    if (item.response_body.url || item.response_body.request_url) {
-      return item.response_body.url || item.response_body.request_url
-    }
-  }
-  return '-'
 }
 
 // 明细表格列定义
