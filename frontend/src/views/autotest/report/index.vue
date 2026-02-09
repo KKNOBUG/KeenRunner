@@ -43,12 +43,13 @@ const router = useRouter()
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
 
-// 执行日期范围（用于查询条件，按 case_st_time 筛选）
+// 执行日期范围（用于查询条件，按 case_st_time 筛选）：默认最近三天（当天减去两天 ～ 当天）
 const getTodayRange = () => {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
   const end = new Date()
   end.setHours(23, 59, 59, 999)
+  const start = new Date()
+  start.setDate(start.getDate() - 2)
+  start.setHours(0, 0, 0, 0)
   return [start.getTime(), end.getTime()]
 }
 const dateRange = ref(getTodayRange())
@@ -186,11 +187,8 @@ async function handleQuery() {
       queryParams.case_id = Number(queryParams.case_id)
     }
     const res = await api.getApiReportList(queryParams)
-    let data = res?.data || []
+    const data = res?.data || []
     const total = res?.total ?? 0
-    if (!queryParams.report_type && data.length) {
-      data = data.filter(item => item.report_type !== '调试执行')
-    }
     rawReportList.value = data
     totalCount.value = total
     pagination.itemCount = total
@@ -230,6 +228,9 @@ function onPageSizeChange(pageSize) {
 }
 
 onMounted(() => {
+  // 报告类型默认「定时执行」；执行日期默认当天（dateRange 已初始为当天，需同步到 queryItems）
+  if (queryItems.value.report_type == null) queryItems.value.report_type = '定时执行'
+  if (queryItems.value.date_from == null && dateRange.value) handleDateRangeChange(dateRange.value)
   handleQuery()
 })
 
@@ -808,9 +809,9 @@ const caseStateOptions = [
 
 // 分组表头列：顶层组行 / 批次子头行 / 报告行
 const groupLeadColumn = {
-  title: '任务/批次',
+  title: '任务代码/批次代码',
   key: '_taskOrBatch',
-  width: 280,
+  width: 300,
   align: 'left',
   render(row) {
     if (row._isGroup) {
@@ -832,7 +833,7 @@ const groupLeadColumn = {
           trigger: () => h('span', { style: { fontWeight: 600 } }, shortenCode(row.task_code_display)),
           default: () => row.task_code_display,
         }),
-        h('span', { style: { color: '#999', fontSize: '12px' } }, `（${row.report_count} 条）`),
+        h('span', { style: { color: '#999', fontSize: '12px' } }, `(共${row.report_count}条)`),
       ])
     }
     if (row._isBatchGroup) {
@@ -852,10 +853,10 @@ const groupLeadColumn = {
           },
         }, { default: () => expandIconVNode }),
         h(NTooltip, { trigger: 'hover' }, {
-          trigger: () => h('span', { style: { fontSize: '13px' } }, shortenCode(row._batchCodeDisplay)),
+          trigger: () => h('span', { style: { fontSize: '13px', fontWeight: 600  } }, shortenCode(row._batchCodeDisplay)),
           default: () => row._batchCodeDisplay,
         }),
-        h('span', { style: { color: '#999', fontSize: '12px' } }, `（${row.report_count} 条）`),
+        h('span', { style: { color: '#999', fontSize: '12px' } }, `(共${row.report_count}条)`),
       ])
     }
     const reportBatchCode = row.batch_code ?? '-'
@@ -866,8 +867,8 @@ const groupLeadColumn = {
   },
 }
 
-// 任务/批次列中长码显示：前 10 位 + 省略 + 后 5 位
-function shortenCode(str, head = 10, tail = 5) {
+// 任务/批次列中长码显示：前 10 位 + 省略 + 后 6 位
+function shortenCode(str, head = 10, tail = 6) {
   if (str == null || str === '' || str === '-') return str === '' ? '' : (str ?? '-')
   const s = String(str)
   if (s.length <= head + tail) return s
@@ -894,6 +895,13 @@ const columnsBase = [
     title: '用例ID',
     key: 'case_id',
     width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例名称',
+    key: 'case_name',
+    width: 300,
     align: 'center',
     ellipsis: {tooltip: true},
   },

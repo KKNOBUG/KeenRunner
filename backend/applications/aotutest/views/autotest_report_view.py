@@ -6,6 +6,7 @@
 @Module  : autotest_report_view
 @DateTime: 2025/11/27 09:33
 """
+import asyncio
 import traceback
 from typing import Optional
 
@@ -17,6 +18,7 @@ from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate, AutoTestApiReportSelect, AutoTestApiReportUpdate
 )
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
+from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.core.exceptions.base_exceptions import (
     DataAlreadyExistsException,
     NotFoundException,
@@ -183,15 +185,30 @@ async def search_reports(
             page_size=report_in.page_size,
             order=report_in.order
         )
-        data = [
-            await obj.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_time", "updated_time",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
+        # 批量获取 case_id 并查询 case_name
+        data = []
+        case_ids = [obj.case_id for obj in instances]
+        unique_case_ids = list(set(case_ids))
+        case_name_map = {}
+        if unique_case_ids:
+            case_name_map = dict(
+                await AUTOTEST_API_CASE_CRUD.model.filter(
+                    id__in=unique_case_ids,
+                    state__not=1
+                ).values_list("id", "case_name")
+            )
+        # 并发执行所有 to_dict 操作（核心：用gather批量处理异步任务）
+        report_instances = await asyncio.gather(*[
+            obj.to_dict(
+                exclude_fields={"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"},
                 replace_fields={"id": "report_id"}
-            ) for obj in instances
+            )
+            for obj in instances
+        ])
+        # 用列表推导式填充 case_name 并生成最终数据
+        data = [
+            {**item, "case_name": case_name_map.get(item["case_id"], "")}
+            for item in report_instances
         ]
         LOGGER.info(f"按条件查询报告成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
