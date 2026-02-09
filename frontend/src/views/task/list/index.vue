@@ -517,6 +517,13 @@ const columns = [
     },
   },
   {
+    title: '任务标识',
+    key: 'task_code',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
     title: '最后执行时间',
     key: 'last_execute_time',
     width: 180,
