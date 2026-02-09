@@ -180,6 +180,7 @@ const loadCases = async () => {
       page_size: casePageSize.value,
       state: 0,
       case_project: projectId,
+      case_type: '用户脚本', // 任务仅可选用户脚本，过滤掉公共脚本
       case_name: filterCaseName.value || undefined,
       case_tags: filterCaseTags.value?.length ? filterCaseTags.value : undefined,
     })
@@ -209,6 +210,10 @@ const onCasePageSizeChange = (pageSize) => {
   loadCases()
 }
 const onCaseFilter = () => {
+  if (taskForm.value.task_project == null) {
+    window.$message?.warning?.('请先选择所属应用')
+    return
+  }
   casePage.value = 1
   loadCases()
 }
