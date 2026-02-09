@@ -1,21 +1,25 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives, computed, watch} from 'vue'
+import {computed, h, onMounted, ref, resolveDirective, watch} from 'vue'
 import {
   NButton,
-  NInput,
-  NInputNumber,
-  NPopconfirm,
-  NSelect,
-  NModal,
+  NDataTable,
+  NDatePicker,
+  NDrawer,
+  NDrawerContent,
+  NDropdown,
+  NDynamicTags,
   NForm,
   NFormItem,
-  NGrid,
   NGi,
-  NTabs,
+  NGrid,
+  NInput,
+  NInputNumber,
+  NModal,
+  NSelect,
+  NSpace,
+  NSpin,
   NTabPane,
-  NDataTable,
-  NDynamicTags,
-  NDatePicker,
+  NTabs,
 } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -35,9 +39,9 @@ defineOptions({name: '任务管理'})
 
 // 与后端 autotest_enum.py 一致
 const TASK_SCHEDULER_OPTIONS = [
-  { label: 'Crontab', value: 'cron' },
-  { label: '间隔', value: 'interval' },
-  { label: '指定时间', value: 'datetime' },
+  {label: 'Crontab', value: 'cron'},
+  {label: '间隔', value: 'interval'},
+  {label: '指定时间', value: 'datetime'},
 ]
 const TASK_STATUS_MAP = {
   '等待执行': '等待执行',
@@ -75,8 +79,106 @@ const checkedRowKeys = ref([])
 const cronNextRunTimes = ref([])
 const cronNextRunVisible = ref(false)
 
+// 历史（报告）抽屉
+const historyDrawerVisible = ref(false)
+const historyTaskName = ref('')
+const historyReportList = ref([])
+const historyReportLoading = ref(false)
+const historyReportColumns = [
+  {title: '开始时间', key: 'case_st_time', width: 160, ellipsis: {tooltip: true}},
+  {title: '结束时间', key: 'case_ed_time', width: 160, ellipsis: {tooltip: true}},
+  {title: '耗时', key: 'case_elapsed', width: 80},
+  {
+    title: '状态',
+    key: 'case_state',
+    width: 80,
+    render: (r) => (r.case_state === true ? '成功' : r.case_state === false ? '失败' : '-')
+  },
+  {
+    title: '通过率',
+    key: 'step_pass_ratio',
+    width: 90,
+    render: (r) => (r.step_pass_ratio != null ? `${(Number(r.step_pass_ratio) * 100).toFixed(1)}%` : '-')
+  },
+]
+const historyReportGrouped = computed(() => {
+  const list = historyReportList.value || []
+  const map = new Map()
+  for (const item of list) {
+    const batch = item.batch_code ?? ''
+    if (!map.has(batch)) map.set(batch, [])
+    map.get(batch).push(item)
+  }
+  return Array.from(map.entries()).map(([batch_code, items]) => ({
+    batch_code,
+    items: items.sort((a, b) => (b.case_st_time || '').localeCompare(a.case_st_time || '')),
+  })).sort((a, b) => (b.items[0]?.case_st_time || '').localeCompare(a.items[0]?.case_st_time || ''))
+})
+
+// 日志（执行记录）抽屉
+const logDrawerVisible = ref(false)
+const logTaskName = ref('')
+const logRecordList = ref([])
+const logRecordLoading = ref(false)
+const logRecordColumns = [
+  {title: '开始时间', key: 'celery_start_time', width: 170, render: (r) => formatDateTime(r.celery_start_time) || '-'},
+  {title: '结束时间', key: 'celery_end_time', width: 170, render: (r) => formatDateTime(r.celery_end_time) || '-'},
+  {title: '耗时', key: 'celery_duration', width: 100},
+  {title: '状态', key: 'celery_status', width: 90},
+  {title: '调度方式', key: 'celery_scheduler', width: 90},
+  {title: '节点', key: 'celery_node', width: 120, ellipsis: {tooltip: true}},
+]
+
+const openHistory = async (row) => {
+  historyTaskName.value = row.task_name ?? ''
+  historyDrawerVisible.value = true
+  historyReportList.value = []
+  historyReportLoading.value = true
+  try {
+    const res = await api.getApiReportList({
+      task_code: row.task_code,
+      page: 1,
+      page_size: 500,
+      order: ['-case_st_time']
+    })
+    historyReportList.value = res?.data ?? []
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '加载报告失败')
+  } finally {
+    historyReportLoading.value = false
+  }
+}
+
+const openLog = async (row) => {
+  logTaskName.value = row.task_name ?? ''
+  logDrawerVisible.value = true
+  logRecordList.value = []
+  logRecordLoading.value = true
+  try {
+    const res = await api.getApiTaskRecordList({
+      task_id: row.task_id,
+      page: 1,
+      page_size: 200,
+      order: ['-celery_start_time', '-id']
+    })
+    logRecordList.value = res?.data ?? []
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '加载执行记录失败')
+  } finally {
+    logRecordLoading.value = false
+  }
+}
+
 // 新增/编辑弹窗：卡片居中，左右各 15% 留白
-const taskModalStyle = { width: '70%', marginLeft: '15%', marginRight: '15%', marginTop: '5vh', marginBottom: '5vh', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: '8px' }
+const taskModalStyle = {
+  width: '70%',
+  marginLeft: '15%',
+  marginRight: '15%',
+  marginTop: '5vh',
+  marginBottom: '5vh',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+  borderRadius: '8px'
+}
 const modalVisible = ref(false)
 const modalLoading = ref(false)
 const isEdit = ref(false)
@@ -85,10 +187,10 @@ const intervalUnit = ref('hours')
 const intervalValue = ref(1)
 const datetimePickerValue = ref(null)
 const INTERVAL_UNITS = [
-  { label: 'days', value: 'days' },
-  { label: 'hours', value: 'hours' },
-  { label: 'minutes', value: 'minutes' },
-  { label: 'seconds', value: 'seconds' },
+  {label: 'days', value: 'days'},
+  {label: 'hours', value: 'hours'},
+  {label: 'minutes', value: 'minutes'},
+  {label: 'seconds', value: 'seconds'},
 ]
 const taskForm = ref({
   task_id: null,
@@ -99,7 +201,7 @@ const taskForm = ref({
   task_project: null,
   task_notify: null,
   task_notifier: [],
-  task_kwargs: { env_name: '' },
+  task_kwargs: {env_name: ''},
   task_scheduler: 'cron',
   task_interval_expr: null,
   task_datetime_expr: '',
@@ -116,10 +218,10 @@ watch(() => taskForm.value.task_project, (projectId) => {
     return
   }
   loadTags(projectId)
-}, { immediate: false })
+}, {immediate: false})
 
 const tagOptionsForFilter = computed(() =>
-    tagOptions.value.map(t => ({ label: t.tag_name ?? t.tag_id, value: t.tag_id }))
+    tagOptions.value.map(t => ({label: t.tag_name ?? t.tag_id, value: t.tag_id}))
 )
 
 const loadProjects = async () => {
@@ -245,7 +347,7 @@ const openAdd = () => {
     task_project: null,
     task_notify: null,
     task_notifier: [],
-    task_kwargs: { env_name: '' },
+    task_kwargs: {env_name: ''},
     task_scheduler: 'cron',
     task_interval_expr: null,
     task_datetime_expr: '',
@@ -263,7 +365,7 @@ const openEdit = async (row) => {
   filterCaseName.value = ''
   filterCaseTags.value = []
   try {
-    const res = await api.getApiTask({ task_id: row.task_id })
+    const res = await api.getApiTask({task_id: row.task_id})
     const d = res?.data || {}
     const taskKwargs = d.task_kwargs && typeof d.task_kwargs === 'object' ? d.task_kwargs : {}
     const caseIds = Array.isArray(taskKwargs.case_ids) ? taskKwargs.case_ids : []
@@ -276,7 +378,7 @@ const openEdit = async (row) => {
       task_project: d.task_project ?? null,
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
-      task_kwargs: { ...taskKwargs, case_ids: caseIds, env_name: taskKwargs.env_name ?? '' },
+      task_kwargs: {...taskKwargs, case_ids: caseIds, env_name: taskKwargs.env_name ?? ''},
       task_scheduler: d.task_scheduler || 'cron',
       task_interval_expr: d.task_interval_expr ?? null,
       task_datetime_expr: d.task_datetime_expr || '',
@@ -284,7 +386,7 @@ const openEdit = async (row) => {
     }
     schedulerTab.value = d.task_scheduler || 'cron'
     if (d.task_scheduler === 'interval' && d.task_interval_expr != null) {
-      const { value, unit } = secondsToInterval(d.task_interval_expr)
+      const {value, unit} = secondsToInterval(d.task_interval_expr)
       intervalValue.value = value
       intervalUnit.value = unit
     } else {
@@ -309,12 +411,18 @@ const openEdit = async (row) => {
 
 // 右侧用例列表列（勾选 + 分页）
 const caseColumns = [
-  { type: 'selection', disabled: () => false },
-  { title: '序号', key: '_idx', width: 64, align: 'center', render: (row, index) => (casePage.value - 1) * casePageSize.value + index + 1 },
-  { title: '用例名称', key: 'case_name', ellipsis: { tooltip: true }, minWidth: 120 },
-  { title: '用例描述', key: 'case_desc', ellipsis: { tooltip: true }, render: row => row.case_desc || '-', minWidth: 100 },
-  { title: '创建时间', key: 'created_time', width: 160, render: row => formatDateTime(row.created_time) || '-' },
-  { title: '创建人', key: 'created_user', width: 90 },
+  {type: 'selection', disabled: () => false},
+  {
+    title: '序号',
+    key: '_idx',
+    width: 64,
+    align: 'center',
+    render: (row, index) => (casePage.value - 1) * casePageSize.value + index + 1
+  },
+  {title: '用例名称', key: 'case_name', ellipsis: {tooltip: true}, minWidth: 120},
+  {title: '用例描述', key: 'case_desc', ellipsis: {tooltip: true}, render: row => row.case_desc || '-', minWidth: 100},
+  {title: '创建时间', key: 'created_time', width: 160, render: row => formatDateTime(row.created_time) || '-'},
+  {title: '创建人', key: 'created_user', width: 90},
 ]
 
 const handleSubmit = async () => {
@@ -377,7 +485,7 @@ const handleSubmit = async () => {
 /** 立即执行任务（下发 Celery 异步执行） */
 const handleRunTask = async (row) => {
   try {
-    await api.runApiTask({ task_id: row.task_id })
+    await api.runApiTask({task_id: row.task_id})
     window.$message?.success?.(`已下发执行：${row.task_name}，请稍后在报告中查看结果`)
     $table.value?.handleSearch?.()
   } catch (e) {
@@ -388,7 +496,7 @@ const handleRunTask = async (row) => {
 /** 启动任务（启用调度，task_enabled=true） */
 const handleStartTask = async (row) => {
   try {
-    await api.startApiTask({ task_id: row.task_id })
+    await api.startApiTask({task_id: row.task_id})
     window.$message?.success?.(`已启动：${row.task_name}，将按调度执行`)
     $table.value?.handleSearch?.()
   } catch (e) {
@@ -399,7 +507,7 @@ const handleStartTask = async (row) => {
 /** 停止任务（关闭调度，task_enabled=false） */
 const handleStopTask = async (row) => {
   try {
-    await api.stopApiTask({ task_id: row.task_id })
+    await api.stopApiTask({task_id: row.task_id})
     window.$message?.success?.(`已停止：${row.task_name}，将不再按调度执行`)
     $table.value?.handleSearch?.()
   } catch (e) {
@@ -438,12 +546,12 @@ const intervalToSeconds = (val, unit) => {
 }
 
 const secondsToInterval = (totalSeconds) => {
-  if (totalSeconds == null || totalSeconds <= 0) return { value: 1, unit: 'hours' }
+  if (totalSeconds == null || totalSeconds <= 0) return {value: 1, unit: 'hours'}
   const s = Number(totalSeconds)
-  if (s % 86400 === 0) return { value: s / 86400, unit: 'days' }
-  if (s % 3600 === 0) return { value: s / 3600, unit: 'hours' }
-  if (s % 60 === 0) return { value: s / 60, unit: 'minutes' }
-  return { value: s, unit: 'seconds' }
+  if (s % 86400 === 0) return {value: s / 86400, unit: 'days'}
+  if (s % 3600 === 0) return {value: s / 3600, unit: 'hours'}
+  if (s % 60 === 0) return {value: s / 60, unit: 'minutes'}
+  return {value: s, unit: 'seconds'}
 }
 
 const columns = [
@@ -452,14 +560,14 @@ const columns = [
     key: 'task_id',
     width: 90,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
   },
   {
     title: '执行环境',
     key: 'task_kwargs',
     width: 100,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
     render(row) {
       const env = row.task_kwargs?.env_name ?? ''
       return h('span', env || '-')
@@ -470,14 +578,14 @@ const columns = [
     key: 'task_name',
     width: 150,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
   },
   {
     title: '所属应用',
     key: 'task_project',
     width: 120,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
     render(row) {
       const opt = projectOptions.value.find(p => p.value === row.task_project)
       return h('span', opt?.label ?? row.task_project ?? '')
@@ -488,7 +596,7 @@ const columns = [
     key: 'task_scheduler',
     width: 90,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
   },
   {
     title: '启动状态',
@@ -496,7 +604,7 @@ const columns = [
     width: 90,
     align: 'center',
     render(row) {
-      return h('span', { class: row.task_enabled ? 'text-success' : 'text-secondary' }, row.task_enabled ? '已启动' : '未启动')
+      return h('span', {class: row.task_enabled ? 'text-success' : 'text-secondary'}, row.task_enabled ? '已启动' : '未启动')
     },
   },
   {
@@ -515,7 +623,7 @@ const columns = [
     key: 'last_execute_state',
     width: 110,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
     render(row) {
       const v = row.last_execute_state
       return h('span', v ? (TASK_STATUS_MAP[v] || v) : '-')
@@ -526,7 +634,7 @@ const columns = [
     key: 'task_code',
     width: 200,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
   },
   {
     title: '最后执行时间',
@@ -554,94 +662,104 @@ const columns = [
     key: 'updated_user',
     width: 100,
     align: 'center',
-    ellipsis: { tooltip: true },
+    ellipsis: {tooltip: true},
   },
   {
     title: '操作',
     key: 'actions',
-    width: 400,
+    width: 260,
     align: 'center',
     fixed: 'right',
     render(row) {
-      return [
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'small',
-                  type: 'primary',
-                  style: 'margin-right: 6px;',
-                  onClick: () => openEdit(row),
-                },
-                {
-                  default: () => '编辑',
-                  icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
-                }
-            ),
-            [[vPermission, 'post/api/v1/role/update']]
-        ),
-        h(
-            NButton,
-            {
-              size: 'small',
-              type: 'info',
-              style: 'margin-right: 6px;',
-              onClick: () => handleRunTask(row),
-            },
-            {
-              default: () => '执行',
-              icon: renderIcon('material-symbols:play-arrow', { size: 16 }),
-            }
-        ),
-        row.task_enabled
-            ? h(
-                NButton,
-                {
-                  size: 'small',
-                  type: 'warning',
-                  style: 'margin-right: 6px;',
-                  onClick: () => handleStopTask(row),
-                },
-                {
-                  default: () => '停止',
-                  icon: renderIcon('material-symbols:stop-circle-outline', { size: 16 }),
-                }
-            )
-            : h(
-                NButton,
-                {
-                  size: 'small',
-                  type: 'success',
-                  style: 'margin-right: 6px;',
-                  onClick: () => handleStartTask(row),
-                },
-                {
-                  default: () => '启动',
-                  icon: renderIcon('material-symbols:rocket-launch', { size: 16 }),
-                }
-            ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({ task_id: row.task_id }, false),
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          { size: 'small', type: 'error' },
-                          {
-                            default: () => '删除',
-                            icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                          }
-                      ),
-                      [[vPermission, 'delete/api/v1/role/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该任务吗？'),
-            }
-        ),
+      const dropdownOptions = [
+        {
+          label: '日志',
+          key: 'log',
+          icon: renderIcon('material-symbols:description-outline', {size: 16}),
+          onClick: () => openLog(row)
+        },
+        {
+          label: '历史',
+          key: 'history',
+          icon: renderIcon('material-symbols:add-task-rounded', {size: 16}),
+          onClick: () => openHistory(row)
+        },
+        {
+          label: '编辑',
+          key: 'edit',
+          icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+          onClick: () => openEdit(row)
+        },
+        {
+          label: '删除',
+          key: 'delete',
+          icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+          onClick: () => {
+            if (window.confirm('确定删除该任务吗？')) handleDelete({task_id: row.task_id}, false)
+          }
+        },
       ]
+      return h(NSpace, {size: 8, wrap: false}, {
+        default: () => [
+          h(
+              NButton,
+              {
+                size: 'small',
+                type: 'info',
+                style: 'margin-right: 6px;',
+                onClick: () => handleRunTask(row),
+              },
+              {
+                default: () => '执行',
+                icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+              }
+          ),
+          row.task_enabled
+              ? h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'primary',
+                    style: 'margin-right: 6px;',
+                    onClick: () => openEdit(row),
+                  },
+                  {
+                    default: () => '停止',
+                    icon: renderIcon('material-symbols:stop-circle-outline', {size: 16}),
+                  }
+              )
+              : h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'primary',
+                    style: 'margin-right: 6px;',
+                    onClick: () => openEdit(row),
+                  },
+                  {
+                    default: () => '启动',
+                    icon: renderIcon('material-symbols:rocket-launch', {size: 16}),
+                  }
+              ),
+          h(NDropdown, {
+            trigger: 'click',
+            options: dropdownOptions.map(opt => ({label: opt.label, key: opt.key, icon: opt.icon})),
+            onSelect: (key) => dropdownOptions.find(o => o.key === key)?.onClick?.(),
+          }, {
+            default: () =>
+                h(NButton,
+                    {
+                      size: 'small',
+                      type: 'warning',
+                    },
+                    {
+                      default: () => '更多',
+                      icon: renderIcon('material-symbols:more-horiz', {size: 16}),
+                    }
+                ),
+          }),
+        ],
+      })
     },
   },
 ]
@@ -770,7 +888,8 @@ onMounted(() => {
               />
             </NFormItem>
             <NFormItem label="调度模式">
-              <NTabs v-model:value="schedulerTab" type="line" size="small" class="scheduler-tabs" @update:value="onSchedulerTabChange">
+              <NTabs v-model:value="schedulerTab" type="line" size="small" class="scheduler-tabs"
+                     @update:value="onSchedulerTabChange">
                 <NTabPane name="cron" tab="Crontab">
                   <div class="cron-block">
                     <label class="cron-label">crontab</label>
@@ -781,7 +900,9 @@ onMounted(() => {
                           clearable
                           class="cron-input"
                       />
-                      <NButton size="small" tertiary type="primary" class="cron-view-btn" @click="showCronNextRun">查看执行时间</NButton>
+                      <NButton size="small" tertiary type="primary" class="cron-view-btn" @click="showCronNextRun">
+                        查看执行时间
+                      </NButton>
                     </div>
                     <div class="cron-desc-block">
                       <div class="cron-desc-title">Crontab表达式说明:</div>
@@ -798,7 +919,7 @@ onMounted(() => {
                 <NTabPane name="interval" tab="Interval">
                   <div class="interval-block">
                     <NTabs v-model:value="intervalUnit" type="line" size="small" class="interval-unit-tabs">
-                      <NTabPane v-for="u in INTERVAL_UNITS" :key="u.value" :name="u.value" :tab="u.label" />
+                      <NTabPane v-for="u in INTERVAL_UNITS" :key="u.value" :name="u.value" :tab="u.label"/>
                     </NTabs>
                     <div class="interval-input-wrap">
                       <NInputNumber
@@ -881,6 +1002,44 @@ onMounted(() => {
       </div>
       <div v-else class="cron-times-empty">无法解析该表达式</div>
     </NModal>
+
+    <NDrawer v-model:show="historyDrawerVisible" :width="640" placement="right">
+      <NDrawerContent :title="historyTaskName ? `执行历史（${historyTaskName}）` : '执行历史'">
+        <NSpin :show="historyReportLoading">
+          <div v-if="historyReportGrouped.length" class="drawer-content">
+            <div v-for="(group, gIdx) in historyReportGrouped" :key="gIdx" class="history-group">
+              <div class="history-group-title">批次：{{ group.batch_code || '未分组' }}</div>
+              <NDataTable
+                  :columns="historyReportColumns"
+                  :data="group.items"
+                  :row-key="r => r.report_code || r.id"
+                  size="small"
+                  :bordered="false"
+                  max-height="280"
+              />
+            </div>
+          </div>
+          <div v-else class="drawer-empty">暂无报告数据</div>
+        </NSpin>
+      </NDrawerContent>
+    </NDrawer>
+
+    <NDrawer v-model:show="logDrawerVisible" :width="720" placement="right">
+      <NDrawerContent :title="logTaskName ? `执行日志（${logTaskName}）` : '执行日志'">
+        <NSpin :show="logRecordLoading">
+          <NDataTable
+              v-if="logRecordList.length"
+              :columns="logRecordColumns"
+              :data="logRecordList"
+              :row-key="r => r.id"
+              size="small"
+              :bordered="false"
+              max-height="520"
+          />
+          <div v-else class="drawer-empty">暂无执行记录</div>
+        </NSpin>
+      </NDrawerContent>
+    </NDrawer>
   </CommonPage>
 </template>
 
@@ -901,19 +1060,24 @@ onMounted(() => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
 }
+
 .task-modal :deep(.n-card__content) {
   padding: 20px;
 }
+
 .task-modal-grid {
   min-height: 420px;
 }
+
 .task-modal-left {
   border-right: 1px solid #e0e0e0;
   padding-right: 16px;
 }
+
 .task-modal-right {
   padding-left: 8px;
 }
+
 .case-toolbar {
   display: flex;
   align-items: center;
@@ -921,43 +1085,53 @@ onMounted(() => {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
 .scheduler-tabs {
   width: 100%;
 }
+
 .cron-block {
   width: 100%;
 }
+
 .cron-label {
   display: block;
   font-size: 14px;
   color: #000;
   margin-bottom: 8px;
 }
+
 .cron-input-row {
   display: flex;
   gap: 8px;
   align-items: center;
   margin-bottom: 12px;
 }
+
 .cron-input-row .cron-input {
   flex: 1;
 }
+
 .cron-view-btn {
   flex-shrink: 0;
 }
+
 .cron-desc-block {
   margin-top: 12px;
 }
+
 .cron-desc-title {
   font-size: 12px;
   color: #000;
   margin-bottom: 8px;
 }
+
 .cron-desc-fields {
   display: flex;
   flex-wrap: wrap;
   gap: 16px 24px;
 }
+
 .cron-desc-item {
   display: flex;
   flex-direction: column;
@@ -965,43 +1139,73 @@ onMounted(() => {
   font-size: 12px;
   color: #000;
 }
+
 .cron-asterisk {
   font-size: 14px;
   margin-bottom: 2px;
 }
+
 .interval-block {
   width: 100%;
 }
+
 .interval-unit-tabs {
   margin-bottom: 12px;
 }
+
 .interval-input-wrap {
   margin-top: 8px;
 }
+
 .cron-desc {
   font-size: 12px;
   color: #999999;
   margin-top: 8px;
   line-height: 1.4;
 }
+
 .case-table {
   margin-top: 8px;
 }
+
 .case-section .case-table-hint {
   font-size: 12px;
   color: #999999;
   margin: 0 0 8px 0;
   line-height: 1.5;
 }
+
 .cron-times-list {
   max-height: 320px;
   overflow-y: auto;
 }
+
 .cron-time-item {
   padding: 6px 0;
   border-bottom: 1px solid #e0e0e0;
 }
+
 .cron-times-empty {
   color: #999999;
+}
+
+.drawer-content {
+  padding: 0 4px;
+}
+
+.history-group {
+  margin-bottom: 20px;
+}
+
+.history-group-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--n-text-color);
+}
+
+.drawer-empty {
+  color: #999;
+  text-align: center;
+  padding: 24px;
 }
 </style>

@@ -67,7 +67,7 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
     project_id = fields.BigIntField(index=True, description="环境所属项目")
     env_name = fields.CharField(max_length=64, index=True, description="环境名称")
     env_host = fields.CharField(max_length=128, description="环境主机(http|https://127.0.0.1)")
-    env_port = fields.IntField(ge=1, description="环境端口(8000)")
+    env_port = fields.CharField(max_length=8, description="环境端口(8000)")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
