@@ -1162,7 +1162,7 @@ const rowKey = (row) => {
           :data="flattenedTableData"
           :row-key="rowKey"
           :row-class-name="(row) => row._isGroup ? 'report-group-row' : row._isBatchGroup ? 'report-batch-row' : ''"
-          :scroll-x="1800"
+          :scroll-x="2000"
           :single-line="true"
       />
     </div>

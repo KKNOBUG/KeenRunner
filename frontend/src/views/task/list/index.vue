@@ -15,11 +15,13 @@ import {
   NInput,
   NInputNumber,
   NModal,
+  NPagination,
   NSelect,
   NSpace,
   NSpin,
   NTabPane,
   NTabs,
+  NTag,
 } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -79,58 +81,100 @@ const checkedRowKeys = ref([])
 const cronNextRunTimes = ref([])
 const cronNextRunVisible = ref(false)
 
-// 历史（报告）抽屉
+// 抽屉宽度：屏幕 80%
+const drawerWidth = ref(1400)
+
+// 历史（报告）抽屉：数据来源与测试报告页面一致，按 task_code 请求
 const historyDrawerVisible = ref(false)
 const historyTaskName = ref('')
+const historyTaskCode = ref('')
 const historyReportList = ref([])
 const historyReportLoading = ref(false)
 const historyReportColumns = [
-  {title: '开始时间', key: 'case_st_time', width: 160, ellipsis: {tooltip: true}},
-  {title: '结束时间', key: 'case_ed_time', width: 160, ellipsis: {tooltip: true}},
-  {title: '耗时', key: 'case_elapsed', width: 80},
+  { title: '用例ID', key: 'case_id', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '用例名称', key: 'case_name', width: 200, ellipsis: { tooltip: true } },
+  { title: '报告类型', key: 'report_type', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '总步骤数', key: 'step_total', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '成功步骤', key: 'step_pass_count', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '失败步骤', key: 'step_fail_count', width: 100, align: 'center', ellipsis: { tooltip: true } },
   {
-    title: '状态',
-    key: 'case_state',
-    width: 80,
-    render: (r) => (r.case_state === true ? '成功' : r.case_state === false ? '失败' : '-')
-  },
-  {
-    title: '通过率',
+    title: '成功率',
     key: 'step_pass_ratio',
-    width: 90,
-    render: (r) => (r.step_pass_ratio != null ? `${(Number(r.step_pass_ratio) * 100).toFixed(1)}%` : '-')
+    width: 100,
+    align: 'center',
+    render: (r) => (r.step_pass_ratio != null ? `${(Number(r.step_pass_ratio) * 100).toFixed(2)}%` : '-')
   },
+  {
+    title: '执行状态',
+    key: 'case_state',
+    width: 100,
+    align: 'center',
+    render: (row) => {
+      if (row.case_state === true || row.case_state === 'true') return h(NTag, { type: 'success', size: 'small' }, () => '成功')
+      if (row.case_state === false || row.case_state === 'false') return h(NTag, { type: 'error', size: 'small' }, () => '失败')
+      return h('span', '-')
+    }
+  },
+  { title: '执行时间', key: 'case_st_time', width: 180, align: 'center', ellipsis: { tooltip: true } },
+  { title: '消耗时间', key: 'case_elapsed', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '创建人员', key: 'created_user', width: 100, align: 'center', ellipsis: { tooltip: true } },
 ]
-const historyReportGrouped = computed(() => {
-  const list = historyReportList.value || []
-  const map = new Map()
-  for (const item of list) {
-    const batch = item.batch_code ?? ''
-    if (!map.has(batch)) map.set(batch, [])
-    map.get(batch).push(item)
-  }
-  return Array.from(map.entries()).map(([batch_code, items]) => ({
-    batch_code,
-    items: items.sort((a, b) => (b.case_st_time || '').localeCompare(a.case_st_time || '')),
-  })).sort((a, b) => (b.items[0]?.case_st_time || '').localeCompare(a.items[0]?.case_st_time || ''))
-})
 
-// 日志（执行记录）抽屉
-const logDrawerVisible = ref(false)
+// 日志（执行记录）弹框：数据来源与任务记录页面一致，按 task_id 请求，弹框大小与新增/编辑任务一致
+const logModalVisible = ref(false)
 const logTaskName = ref('')
+const logTaskId = ref(null)
 const logRecordList = ref([])
 const logRecordLoading = ref(false)
+const logPage = ref(1)
+const logPageSize = ref(10)
+const logTotal = ref(0)
+const logPageSizes = [10, 20, 50, 100]
+const logTableScrollX = 2000
+const formatJsonBrief = (val, maxLen = 50) => {
+  if (val == null) return '-'
+  if (typeof val === 'string') {
+    try {
+      const o = JSON.parse(val)
+      const s = JSON.stringify(o)
+      return s.length > maxLen ? s.slice(0, maxLen) + '...' : s
+    } catch {
+      return val.length > maxLen ? val.slice(0, maxLen) + '...' : val
+    }
+  }
+  const s = JSON.stringify(val)
+  return s.length > maxLen ? s.slice(0, maxLen) + '...' : s
+}
 const logRecordColumns = [
-  {title: '开始时间', key: 'celery_start_time', width: 170, render: (r) => formatDateTime(r.celery_start_time) || '-'},
-  {title: '结束时间', key: 'celery_end_time', width: 170, render: (r) => formatDateTime(r.celery_end_time) || '-'},
-  {title: '耗时', key: 'celery_duration', width: 100},
-  {title: '状态', key: 'celery_status', width: 90},
-  {title: '调度方式', key: 'celery_scheduler', width: 90},
-  {title: '节点', key: 'celery_node', width: 120, ellipsis: {tooltip: true}},
+  { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true }, render: (row) => h('span', row.record_id ?? row.id ?? '-') },
+  { title: '任务ID', key: 'task_id', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '任务名称', key: 'task_name', width: 180, ellipsis: { tooltip: true } },
+  { title: '任务节点', key: 'celery_node', width: 180, ellipsis: { tooltip: true }, render: (row) => h('span', { title: row.celery_node || '' }, row.celery_node ?? '-') },
+  { title: '任务参数', key: 'task_kwargs', width: 200, ellipsis: { tooltip: true }, render: (row) => h('span', { title: JSON.stringify(row.task_kwargs) }, formatJsonBrief(row.task_kwargs, 40)) },
+  { title: '调度方式', key: 'celery_scheduler', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  {
+    title: '调度状态',
+    key: 'celery_status',
+    width: 100,
+    align: 'center',
+    render: (row) => {
+      const typeMap = { '等待执行': 'default', '正在执行': 'warning', '成功': 'success', '失败': 'error' }
+      return h(NTag, { type: typeMap[row.celery_status] || 'default', size: 'small', round: true }, () => row.celery_status || '-')
+    }
+  },
+  { title: '执行摘要', key: 'task_summary', width: 220, ellipsis: { tooltip: true }, render: (row) => (row.task_summary ? (row.task_summary.length > 50 ? row.task_summary.slice(0, 50) + '...' : row.task_summary) : '-') },
+  { title: '错误信息', key: 'task_error', width: 220, ellipsis: { tooltip: true }, render: (row) => (row.task_error ? (row.task_error.length > 50 ? row.task_error.slice(0, 50) + '...' : row.task_error) : '-') },
+  { title: '调度ID', key: 'celery_id', width: 200, ellipsis: { tooltip: true } },
+  { title: '回溯ID', key: 'celery_trace_id', width: 200, ellipsis: { tooltip: true } },
+  { title: '开始时间', key: 'celery_start_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_start_time) || '-') },
+  { title: '结束时间', key: 'celery_end_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_end_time) || '-') },
+  { title: '耗时', key: 'celery_duration', width: 80, align: 'center', ellipsis: { tooltip: true } },
 ]
 
 const openHistory = async (row) => {
+  drawerWidth.value = Math.floor(window.innerWidth * 0.8)
   historyTaskName.value = row.task_name ?? ''
+  historyTaskCode.value = row.task_code ?? ''
   historyDrawerVisible.value = true
   historyReportList.value = []
   historyReportLoading.value = true
@@ -149,19 +193,19 @@ const openHistory = async (row) => {
   }
 }
 
-const openLog = async (row) => {
-  logTaskName.value = row.task_name ?? ''
-  logDrawerVisible.value = true
-  logRecordList.value = []
+const loadLogRecords = async () => {
+  const id = logTaskId.value
+  if (id == null) return
   logRecordLoading.value = true
   try {
     const res = await api.getApiTaskRecordList({
-      task_id: row.task_id,
-      page: 1,
-      page_size: 200,
+      task_id: id,
+      page: logPage.value,
+      page_size: logPageSize.value,
       order: ['-celery_start_time', '-id']
     })
     logRecordList.value = res?.data ?? []
+    logTotal.value = res?.total ?? 0
   } catch (e) {
     window.$message?.error?.(e?.message || e?.data?.message || '加载执行记录失败')
   } finally {
@@ -169,11 +213,30 @@ const openLog = async (row) => {
   }
 }
 
+const openLog = async (row) => {
+  logTaskName.value = row.task_name ?? ''
+  logTaskId.value = row.task_id
+  logPage.value = 1
+  logModalVisible.value = true
+  await loadLogRecords()
+}
+
+const onLogPageChange = (page) => {
+  logPage.value = page
+  loadLogRecords()
+}
+
+const onLogPageSizeChange = (pageSize) => {
+  logPageSize.value = pageSize
+  logPage.value = 1
+  loadLogRecords()
+}
+
 // 新增/编辑弹窗：卡片居中，左右各 15% 留白
 const taskModalStyle = {
-  width: '70%',
-  marginLeft: '15%',
-  marginRight: '15%',
+  width: '80%',
+  marginLeft: '10%',
+  marginRight: '10%',
   marginTop: '5vh',
   marginBottom: '5vh',
   boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
@@ -907,8 +970,8 @@ onMounted(() => {
                     <div class="cron-desc-block">
                       <div class="cron-desc-title">Crontab表达式说明:</div>
                       <div class="cron-desc-fields">
-                        <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>分钟(0-59)</span></div>
-                        <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>小时(0-23)</span></div>
+                        <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>分(0-59)</span></div>
+                        <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>时(0-23)</span></div>
                         <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>日(1-31)</span></div>
                         <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>月(1-12)</span></div>
                         <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>周(0-7)</span></div>
@@ -1003,43 +1066,57 @@ onMounted(() => {
       <div v-else class="cron-times-empty">无法解析该表达式</div>
     </NModal>
 
-    <NDrawer v-model:show="historyDrawerVisible" :width="640" placement="right">
+    <NDrawer v-model:show="historyDrawerVisible" :width="drawerWidth" placement="left">
       <NDrawerContent :title="historyTaskName ? `执行历史（${historyTaskName}）` : '执行历史'">
         <NSpin :show="historyReportLoading">
-          <div v-if="historyReportGrouped.length" class="drawer-content">
-            <div v-for="(group, gIdx) in historyReportGrouped" :key="gIdx" class="history-group">
-              <div class="history-group-title">批次：{{ group.batch_code || '未分组' }}</div>
-              <NDataTable
-                  :columns="historyReportColumns"
-                  :data="group.items"
-                  :row-key="r => r.report_code || r.id"
-                  size="small"
-                  :bordered="false"
-                  max-height="280"
-              />
-            </div>
-          </div>
+          <NDataTable
+              v-if="historyReportList.length"
+              :columns="historyReportColumns"
+              :data="historyReportList"
+              :row-key="r => r.report_code || r.report_id || r.id"
+              size="small"
+              :bordered="false"
+              class="drawer-table"
+          />
           <div v-else class="drawer-empty">暂无报告数据</div>
         </NSpin>
       </NDrawerContent>
     </NDrawer>
 
-    <NDrawer v-model:show="logDrawerVisible" :width="720" placement="right">
-      <NDrawerContent :title="logTaskName ? `执行日志（${logTaskName}）` : '执行日志'">
-        <NSpin :show="logRecordLoading">
+    <NModal
+        v-model:show="logModalVisible"
+        :title="logTaskName ? `执行日志（${logTaskName}）` : '执行日志'"
+        preset="card"
+        class="task-modal log-modal"
+        :style="taskModalStyle"
+        @close="logModalVisible = false"
+    >
+      <NSpin :show="logRecordLoading">
+        <div v-if="logRecordList.length" class="log-modal-table-wrap">
           <NDataTable
-              v-if="logRecordList.length"
               :columns="logRecordColumns"
               :data="logRecordList"
-              :row-key="r => r.id"
+              :row-key="r => r.id || r.record_id"
               size="small"
               :bordered="false"
-              max-height="520"
+              :scroll-x="logTableScrollX"
           />
-          <div v-else class="drawer-empty">暂无执行记录</div>
-        </NSpin>
-      </NDrawerContent>
-    </NDrawer>
+        </div>
+        <div v-else class="log-modal-empty">暂无执行记录</div>
+        <div v-if="logTotal > 0" class="log-modal-pagination">
+          <NPagination
+              v-model:page="logPage"
+              v-model:page-size="logPageSize"
+              :page-sizes="logPageSizes"
+              :item-count="logTotal"
+              show-size-picker
+              :prefix="() => `共 ${logTotal} 条`"
+              @update:page="onLogPageChange"
+              @update:page-size="onLogPageSizeChange"
+          />
+        </div>
+      </NSpin>
+    </NModal>
   </CommonPage>
 </template>
 
@@ -1051,9 +1128,9 @@ onMounted(() => {
 /* 弹窗卡片：居中，左右各 15% 留白（70% 宽度） */
 .task-modal :deep(.n-card),
 .task-modal :deep(.n-modal-body-wrapper) {
-  width: 70% !important;
-  margin-left: 15% !important;
-  margin-right: 15% !important;
+  width: 80% !important;
+  margin-left: 10% !important;
+  margin-right: 10% !important;
   margin-top: 5vh !important;
   margin-bottom: 5vh !important;
   max-width: none;
@@ -1203,9 +1280,29 @@ onMounted(() => {
   color: var(--n-text-color);
 }
 
+.drawer-table {
+  max-height: calc(100vh - 140px);
+}
+
 .drawer-empty {
   color: #999;
   text-align: center;
   padding: 24px;
+}
+
+/* 执行日志弹框：表格横向滚动 + 分页 */
+.log-modal-table-wrap {
+  overflow-x: auto;
+  max-height: calc(100vh - 280px);
+  margin-bottom: 16px;
+}
+.log-modal-empty {
+  color: #999;
+  text-align: center;
+  padding: 24px;
+}
+.log-modal-pagination {
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
