@@ -82,7 +82,7 @@
                 @update:show="(v) => { if (!v) associationTargetIndex = -1 }"
                 trigger="click"
                 placement="bottom-start"
-                :width="320"
+                :width="500"
             >
               <template #trigger>
                 <n-button
@@ -101,7 +101,7 @@
               <div class="association-popover-content">
                 <div v-if="availableVariableList.length > 0" class="association-section">
                   <div class="association-section-title">可选变量</div>
-                  <n-scrollbar style="max-height: 180px;">
+                  <n-scrollbar style="max-height: 200px;">
                     <div
                         v-for="(name, i) in availableVariableList"
                         :key="'v-' + i"
@@ -114,7 +114,7 @@
                 </div>
                 <div v-if="assistFunctions.length > 0" class="association-section">
                   <div class="association-section-title">辅助函数</div>
-                  <n-scrollbar style="max-height: 200px;">
+                  <n-scrollbar style="max-height: 300px">
                     <div
                         v-for="(fn, i) in assistFunctions"
                         :key="'f-' + i"
@@ -418,8 +418,11 @@ const insertAssociationValue = (index, text) => {
 }
 
 .association-popover-content {
-  padding: 4px 0;
+  padding: 8px 0;
+  min-width: 380px;
+  min-height: 120px;
 }
+
 .association-section {
   margin-bottom: 8px;
 }
@@ -440,6 +443,11 @@ const insertAssociationValue = (index, text) => {
 }
 .association-item:hover {
   background: var(--n-color-hover);
+  color: #F4511E;
+}
+.association-item:hover .association-fn-name,
+.association-item:hover .association-fn-desc {
+  color: #F4511E;
 }
 .association-item-fn {
   display: flex;

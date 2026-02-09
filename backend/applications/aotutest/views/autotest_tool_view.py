@@ -59,7 +59,7 @@ FUNC_LIST: List[Dict[str, Any]] = [
     {"name": "generate_ident_card_number_condition(min_age=18, max_age=65)", "desc": ""},
     {"name": 'generate_ident_card_birthday(ident_card_number="310224199508081212")', "desc": ""},
     {"name": 'generate_ident_card_gender(ident_card_number="310224199508081212")', "desc": ""},
-    {"name": "generate_string(length=1, digit=False, char=False, chinese=False)", "desc": ""},
+    {"name": "generate_string(length=6, digit=False, char=False, chinese=False)", "desc": ""},
     {"name": "generate_global_serial_number()", "desc": ""},
     {"name": "generate_information(minAge=18, maxAge=60)", "desc": ""},
     {"name": "generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)", "desc": ""},
