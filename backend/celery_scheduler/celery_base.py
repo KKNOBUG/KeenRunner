@@ -28,11 +28,22 @@ _init_threading_safe_lock = threading.Lock()
 logger = logging.getLogger(__name__)
 
 
+def reset_tortoise_orm_state() -> None:
+    """
+    重置 Tortoise 初始化标记，供 Celery worker_process_init 在 prefork 子进程里调用。
+    子进程不应沿用父进程的 _tortoise_orm_initialized，否则会误以为已 init 而跳过，导致
+    使用的连接池实为父进程的、与当前进程的池 loop 不一致。
+    """
+    global _tortoise_orm_initialized
+    _tortoise_orm_initialized = False
+
+
 def run_async(func: Union[Coroutine, Awaitable]) -> Any:
     """
-    异步函数调用辅助函数，在 Celery 任务中执行异步函数。
-    始终使用 AsyncEventLoopContextIOPool 的同一事件循环运行，避免每次 asyncio.run() 新建/关闭 loop
-    导致 Tortoise 连接池被关闭（Event loop is closed / Cannot acquire connection after closing pool）。
+    在 Celery 任务（同步上下文）中执行异步协程的入口。
+    统一通过 AsyncEventLoopContextIOPool.run_in_pool 投递到池的 loop 执行，保证 Tortoise 等
+    与池的 loop 一致；禁止在任务里 asyncio.run()/run_until_complete() 新建并关闭 loop，
+    否则 Tortoise 连接池会绑到已关闭的 loop，出现 "Event loop is closed" 等。
     """
     from backend.common.async_or_sync_convert import AsyncEventLoopContextIOPool
     return AsyncEventLoopContextIOPool.run_in_pool(func)
@@ -40,10 +51,11 @@ def run_async(func: Union[Coroutine, Awaitable]) -> Any:
 
 async def init_tortoise_orm() -> None:
     """
-    初始化 Tortoise ORM 数据库连接
-
-    这个函数确保在 Celery worker 中 Tortoise ORM 已正确初始化
-    如果已经初始化，则检查连接是否可用
+    在「当前 running loop」所在线程中初始化 Tortoise（创建连接池）。
+    必须在池线程、池的 loop 里调用（即由 run(init_tortoise_orm()) 或 run(_ensure_tortoise_then_...) 调用），
+    这样 Tortoise/aiomysql 绑定的 loop 与后续 _create_task_record、业务任务使用的 loop 一致；
+    若在其它 loop 或线程中 init，会触发 "Task got Future attached to a different loop"。
+    若已初始化则仅做连接可用性检查（SELECT 1）。
     """
     global _tortoise_orm_initialized
 
@@ -108,10 +120,10 @@ async def init_tortoise_orm() -> None:
 
 def ensure_tortoise_orm_initialized():
     """
-    同步函数：确保数据库已初始化
-    在异步任务执行前调用，使用 AsyncIOPool 来执行异步初始化
-
-    这个函数在 task_prerun 信号中被调用，确保每次任务执行前数据库连接可用
+    同步封装：在池的 loop 里执行 init_tortoise_orm()，阻塞直到完成。
+    用于：扫描任务的 task_prerun（只 init 不写记录）；ContextTask.__call__ 的兜底（保证任务体
+    跑前 Tortoise 已可用）。非扫描任务的「init + 写记录」由 _ensure_tortoise_then_create_task_record
+    在一次 run() 内完成，不依赖本函数做 init。
     """
     from backend.common.async_or_sync_convert import AsyncEventLoopContextIOPool
 

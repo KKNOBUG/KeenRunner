@@ -5,6 +5,54 @@
 @Project : Krun
 @Module  : celery_worker
 @DateTime: 2026/1/27 16:25
+
+=============================================================================
+【原理】Celery 中跑 async + Tortoise 时的 "attached to a different loop" 与执行顺序
+=============================================================================
+
+一、问题根因
+-----------
+Celery 的 worker 主线程是同步的，async 任务通过 AsyncEventLoopContextIOPool 投递到「池线程」的
+一个长期存活的 event loop 里执行。Tortoise/aiomysql 在初始化时会创建连接池，池内部的 Future（如
+Pool._wakeup）会绑定到「调用 Tortoise.init() 时所在线程的 get_running_loop() / get_event_loop()」。
+若「init 时绑定的 loop」和「执行 _create_task_record / 业务任务时所在的 loop」不是同一个，在
+release 连接时就会报：Task got Future (Pool._wakeup) attached to a different loop。
+
+导致不一致的典型情况：
+  - 两次 run()：先 run(init_tortoise_orm())，再 run(_create_task_record(...))。两次虽然都进池，
+    但若池线程内未对当前线程 set_event_loop，或 init 与 create_record 在不同「运行」中完成，
+    aiomysql 池可能绑到错误的 loop。
+  - prefork：子进程继承了父进程的池单例和 _tortoise_orm_initialized，但池的 loop_runner 线程
+    不会在子进程中存在，导致子进程里用的池/loop 状态错乱。
+
+二、当前机制与执行顺序
+---------------------
+1. worker_process_init（prefork 子进程刚启动）
+   → 清空 _async_event_loop_pool、AsyncEventLoopContextIOPool.singleton、_tortoise_orm_initialized，
+   保证子进程第一次跑任务时自己建池、自己 init Tortoise。
+
+2. 任务开始：task_prerun (receiver_task_pre_run)
+   - 扫描任务 (scan_and_dispatch_autotest_tasks)：只调 ensure_tortoise_orm_initialized()
+     （一次 run(init_tortoise_orm())），不写执行记录。
+   - 非扫描任务（如 run_autotest_task）：只调一次
+     get_async_event_loop_pool().run(_ensure_tortoise_then_create_task_record(...))。
+     该协程内顺序执行：await init_tortoise_orm() → await _create_task_record(...)。
+     这样 Tortoise 的 init 与写记录在「同一次 run、同一个协程、同一个 loop」内完成，从根上避免
+     连接池与使用方 loop 不一致。
+
+3. 任务体执行：ContextTask.__call__
+   - 主线程里 ensure_tortoise_orm_initialized()（若前面未 init 则补一次）。
+   - 若 self.run 是 async：get_async_event_loop_pool().run(self.run(*args, **kwargs))，在池里跑。
+   - 若 self.run 是 sync（如 run_autotest_task）：直接 self.run(...)，内部再 run_async(业务协程)。
+
+4. 任务结束：on_success / on_failure
+   → handel_task_record → get_async_event_loop_pool().run(_update_task_record_on_end(...))，在池里更新记录。
+
+三、要点小结
+-----------
+- 所有涉及 Tortoise 的 async 逻辑（init、写记录、业务 _run_autotest_task_impl）都必须在「池的
+  同一个 event loop」里执行；通过「单次 run 内先 init 再写记录」和 prefork 后重置状态保证这一点。
+- 池单例 + 惰性创建：避免 Web 进程 import 时建池；子进程通过 worker_process_init 清空后各自建池。
 """
 import asyncio
 import logging
@@ -17,27 +65,73 @@ from typing import Dict, Any, Optional
 from celery import Celery
 from celery import Task
 from celery._state import _task_stack
-from celery.signals import setup_logging, task_prerun
+from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
 from backend import LOGGER
 from backend.common.async_or_sync_convert import AsyncEventLoopContextIOPool
 from backend.configure.celery_config import CELERY_CONFIG
 from backend.configure.logging_config import InterceptHandler
-from .celery_base import ensure_tortoise_orm_initialized, LOCAL_CONTEXT_VAR
+from .celery_base import (
+    ensure_tortoise_orm_initialized,
+    init_tortoise_orm,
+    reset_tortoise_orm_state,
+    LOCAL_CONTEXT_VAR,
+)
 
 _async_event_loop_pool = None
 
 
+@worker_process_init.connect
+def _reset_async_pool_and_tortoise_after_fork(**kwargs):
+    """
+    prefork 子进程初始化：清空事件循环池与 Tortoise 状态。
+    子进程 fork 后只继承父进程内存，池的 loop_runner 线程不会在子进程中存在；若沿用父进程的
+    池单例和 _tortoise_orm_initialized，子进程内跑任务时会用「不存在的线程/错误的 loop」，
+    导致 "attached to a different loop"。清空后子进程首次任务会重新建池、重新 init Tortoise。
+    """
+    global _async_event_loop_pool
+    _async_event_loop_pool = None
+    AsyncEventLoopContextIOPool.reset_process_state()
+    reset_tortoise_orm_state()
+    LOGGER.debug("【Krun-Celery-Worker】worker_process_init: 已重置异步池与 Tortoise 状态")
+
+
 def get_async_event_loop_pool():
     """
-    惰性获取异步事件循环池，仅在 Worker 执行任务时创建，避免 Web 进程导入时创建事件循环。
-    :return:
+    惰性获取异步事件循环池，仅在 Worker 执行任务时创建。
+    避免 Web 进程 import celery_worker 时创建事件循环；prefork 子进程内由 worker_process_init
+    清空后，每个子进程在首次执行任务时再创建自己的池。
     """
     global _async_event_loop_pool
     if _async_event_loop_pool is None:
         _async_event_loop_pool = AsyncEventLoopContextIOPool()
     return _async_event_loop_pool
+
+
+async def _ensure_tortoise_then_create_task_record(
+        trace_id: str,
+        celery_id: str,
+        celery_node: str,
+        celery_trace_id: str,
+        task_id: str,
+        celery_task_name: str,
+):
+    """
+    在同一协程内先 init Tortoise 再写执行记录，保证「连接池创建」与「使用连接池写记录」在
+    同一次 run()、同一个 event loop 中完成，从而避免 aiomysql Pool._wakeup 等 Future 绑定到
+    与当前运行 loop 不一致的 loop（"Task got Future attached to a different loop"）。
+    执行顺序：await init_tortoise_orm() → await _create_task_record(...)。
+    """
+    await init_tortoise_orm()
+    await _create_task_record(
+        trace_id=trace_id,
+        celery_id=celery_id,
+        celery_node=celery_node,
+        celery_trace_id=celery_trace_id,
+        task_id=task_id,
+        celery_task_name=celery_task_name,
+    )
 
 
 async def _create_task_record(
@@ -49,7 +143,7 @@ async def _create_task_record(
         celery_task_name: str,
 ):
     """
-    创建任务执行记录（状态 RUNNING），由 task_prerun 通过事件循环池调用。
+    创建任务执行记录（状态 RUNNING），由 _ensure_tortoise_then_create_task_record 或事件循环池调用。
     :param celery_id: 对应 celery_id
     :param celery_node: 调度节点（Celery 任务完全限定名，如 run_autotest_task）
     :param celery_trace_id: 对应 celery_trace_id（调度回溯ID）
@@ -131,14 +225,11 @@ async def _update_task_record_on_end(
 @task_prerun.connect
 def receiver_task_pre_run(task: Task, *args, **kwargs):
     """
-    任务执行前：初始化 Tortoise、写入任务执行记录（RUNNING），扫描任务不落表。
-    :param task: task 实例
-    :param args: 位置参数
-    :param kwargs: 关键字参数
-    :return:
+    任务执行前：按任务类型初始化 Tortoise、写入执行记录（RUNNING）。
+    扫描任务不写记录；非扫描任务通过「单次 run(_ensure_tortoise_then_create_task_record)」保证
+    init 与写记录在同一 loop（见模块头注释）。
     """
     try:
-        ensure_tortoise_orm_initialized()
         # 来自 apply_async(..., __task_id=...)，随 Celery 消息传到 Worker 的 request.properties。
         task_id = task.request.properties.get("__task_id", None)
         trace_id = task.request.headers.get("trace_id", None)
@@ -148,12 +239,12 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
             f"task_name=[{task.name}], "
             f"celery_id=[{task.request.id}], "
         )
-        # 写入任务执行记录（含 celery_trace_id）；扫描任务不落表
-        # trace_id 作用：在 send_task 时自动注入到消息 headers，Worker 执行时从 request.headers 取出，
-        # 用于一次“用户操作 → API → Celery”的整条链路追踪。记录到表的 celery_trace_id 后，便于按记录
-        # 反查日志（grep trace_id=xxx）或与前端/网关的 trace 关联。
         _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
-        if task.name != _SCAN_TASK_NAME:
+        if task.name == _SCAN_TASK_NAME:
+            # 扫描任务：只做 Tortoise 初始化（一次 run(init_tortoise_orm())），不写执行记录
+            ensure_tortoise_orm_initialized()
+        else:
+            # 非扫描任务：单次 run( init → create_record )，保证 Tortoise 与写记录同一 loop
             try:
                 h = getattr(task.request, "headers", None) or {}
                 if isinstance(h, dict):
@@ -162,7 +253,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                     celery_trace_id_val = ""
                 celery_node_val = (task.name or "").strip() or ""
                 get_async_event_loop_pool().run(
-                    _create_task_record(
+                    _ensure_tortoise_then_create_task_record(
                         trace_id=trace_id,
                         task_id=task_id,
                         celery_id=task.request.id,
@@ -211,11 +302,8 @@ class TaskRequest(Request):
 
 def create_celery():
     """
-    原生Celery采取的是对象入列模式因此只能执行同步函数，无法直接调用async def函数；
-    由于所有的数据库操作都是异步的（Tortoise-ORM是纯异步实现，不像Sqlalchemy属于同步异步混合模式），
-    改造异步至同步代码存在工作量，且为了celery降低数据库方面的性能不值得，
-    所以需要改造Celery，让其支持异步函数调用（利用单例线程池整合异步事件循环的环境信息）
-    :return:
+    创建支持 async 任务体的 Celery 应用：通过自定义 Task.__call__ 将 async 任务投递到
+    AsyncEventLoopContextIOPool 的 loop 执行，保证 Tortoise 与任务体在同一 loop（见模块头原理说明）。
     """
 
     class NewCelery(Celery):
@@ -310,7 +398,11 @@ def create_celery():
             return super(ContextTask, self).on_failure(exc, task_id, args, kwargs, einfo)
 
         def __call__(self, *args, **kwargs):
-            """执行任务：恢复 trace_id、推请求入栈，异步任务经事件循环池执行，最后出栈。"""
+            """
+            执行任务：恢复 trace_id、推请求入栈；若为 async 任务则投递到池的 loop 执行，否则直接执行。
+            非扫描任务在 task_prerun 里已通过 _ensure_tortoise_then_create_task_record 完成 init+写记录；
+            此处 ensure_tortoise_orm_initialized() 用于扫描任务或兜底，保证任务体跑前 Tortoise 可用。
+            """
             try:
                 ensure_tortoise_orm_initialized()
 

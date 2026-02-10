@@ -64,9 +64,17 @@ def async_to_sync(coroutine: Awaitable, *args, **kwargs):
 
 class AsyncEventLoopContextIOPool:
     """
-    自定义的异步 IO 池，用于在 Celery worker 中执行异步函数
+    自定义的异步 IO 池，用于在 Celery worker 中执行 async 函数（含 Tortoise）。
 
-    该类创建一个独立的事件循环线程，允许在同步的 Celery worker 中执行异步函数
+    机制简述：
+    - 主线程：Celery 同步 worker 线程，不跑 event loop；通过 run(coro) 把协程投递到池。
+    - 池线程：单独一条线程，target=loop.run_forever()，长期跑一个 event loop。
+    - run(coro)：用 run_coroutine_threadsafe(coro, self.loop) 把协程投到池的 loop 执行，主线程
+      result.result() 阻塞等待完成。
+    - Tortoise/aiomysql 的连接池会绑定到「init 时 get_running_loop()/get_event_loop() 返回的 loop」，
+      因此必须保证：init 与所有使用 Tortoise 的协程都在「池线程 + 池的 loop」里执行。单例保证
+      进程内只有一个池、一个 loop；池线程内 set_event_loop(self.loop) 保证该线程内 get_event_loop()
+      与 running loop 一致，避免依赖库拿到错误 loop。
     """
     loop: aio.AbstractEventLoop
     loop_runner: threading.Thread
@@ -107,18 +115,28 @@ class AsyncEventLoopContextIOPool:
 
         self.loop_runner.start()
 
-        # 设置当前线程的事件循环(废弃：会导致DB初始化和数据库操作与celery服务不在同一循环事件导致报错)
-        # aio.set_event_loop(self.loop)
+        # 主线程：设置当前线程的事件循环（供主线程侧 get_event_loop 使用）
+        aio.set_event_loop(self.loop)
+
+        # 池线程：必须在「跑协程的线程」里也 set_event_loop，否则 Tortoise/aiomysql 在池线程里
+        # 用 get_event_loop() 会拿到别的 loop，导致 Pool._wakeup 等 Future 绑定到错误 loop，引发
+        # "Task got Future attached to a different loop"
+        _done = threading.Event()
+
+        def _set_loop_in_pool_thread():
+            aio.set_event_loop(self.loop)
+            _done.set()
+
+        self.loop.call_soon_threadsafe(_set_loop_in_pool_thread)
+        _done.wait(timeout=2.0)
 
     def run(self, task_function: Union[AnyCallable, AnyCoroutine], *args: Any, **kwargs: Any) -> Any:
         """
-        在池的事件循环中运行任务函数
-        :param task_function: 要执行的函数或协程
-        :param args: 位置参数
-        :param kwargs: 关键字参数
-        :return: 任务的执行结果
+        在池线程的 event loop 中执行 task_function（协程或可调用），主线程阻塞直到完成。
+        调用方（如 task_prerun、ContextTask.__call__）在同步上下文中调用，通过 run_coroutine_threadsafe
+        把协程投递到 self.loop，保证所有 async 逻辑（含 Tortoise）都在同一 loop 上执行。
         """
-        # 如果是异步函数，调用它并获取协程
+        # 若是 async 函数，先调用得到协程
         if inspect.iscoroutinefunction(task_function):
             task_function = task_function(*args, **kwargs)
 
@@ -156,6 +174,16 @@ class AsyncEventLoopContextIOPool:
             worker_pool = cls()
 
         return worker_pool.run(task_function, *args, **kwargs)
+
+    @classmethod
+    def reset_process_state(cls) -> None:
+        """
+        重置进程内单例，供 Celery worker_process_init 在 prefork 子进程里调用。
+        fork 后子进程只有主线程，池的 loop_runner 线程不会复制到子进程；若沿用父进程的
+        singleton，子进程内 run() 会往「无人驱动的 loop」投递协程，导致挂起或 loop 错乱。
+        清空后子进程首次 run_in_pool 会新建池、新建 loop_runner 线程，并在该线程中 init Tortoise。
+        """
+        cls.singleton = None
 
     async def shutdown(self) -> None:
         """关闭 worker 池"""
