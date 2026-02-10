@@ -319,7 +319,7 @@
               <MonacoEditor
                   :value="formatJson(currentDetail.session_variables)"
                   :options="monacoEditorOptions(true)"
-                  style="min-height: 400px; height: auto;"
+                  style="min-height: 500px; height: auto;"
               />
             </div>
             <pre v-else style="white-space: pre-wrap; word-wrap: break-word;">{{
