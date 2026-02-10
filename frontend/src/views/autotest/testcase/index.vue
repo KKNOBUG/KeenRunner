@@ -32,6 +32,31 @@ const {
 
 const router = useRouter()
 
+// 运行用例：以运行模式调用 execute_or_debugging，仅传 case_id，不传 steps。仅当前行的「运行」按钮显示 loading
+const runningCaseId = ref(null)
+const handleRunCase = async (row) => {
+  runningCaseId.value = row.case_id ?? null
+  try {
+    const res = await api.executeStepTree({
+      case_id: row.case_id ? Number(row.case_id) : null,
+      initial_variables: [],
+    })
+    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
+      const stats = res.data || {}
+      const msg = `执行完成，总步骤: ${stats.total_steps ?? '-'}, 成功: ${stats.success_steps ?? '-'}, 失败: ${stats.failed_steps ?? '-'}, 成功率: ${stats.pass_ratio ?? '-'}%`
+      window.$message?.success?.(msg)
+      $table.value?.handleSearch?.()
+    } else {
+      window.$message?.error?.(res?.message || '执行失败')
+    }
+  } catch (error) {
+    console.error('运行用例失败', error)
+    window.$message?.error?.(error?.message || error?.data?.message || '执行失败')
+  } finally {
+    runningCaseId.value = null
+  }
+}
+
 // 项目列表
 const projectOptions = ref([])
 const projectLoading = ref(false)
@@ -174,8 +199,36 @@ const customHandleAdd = () => {
   router.push({path: '/autotest/api'})
 }
 
-
-const columns = [
+// 使用 computed 使 columns 依赖 runLoading，点击运行后表格会重新渲染以显示按钮 loading 状态
+const columns = computed(() => [
+  {
+    title: '用例名称',
+    key: 'case_name',
+    width: 300,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例属性',
+    key: 'case_attr',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例类型',
+    key: 'case_type',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例步骤',
+    key: 'case_steps',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
   {
     title: '所属应用',
     key: 'case_project',
@@ -208,34 +261,6 @@ const columns = [
       }
       return h('span', '')
     },
-  },
-  {
-    title: '用例名称',
-    key: 'case_name',
-    width: 300,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例属性',
-    key: 'case_attr',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例类型',
-    key: 'case_type',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例步骤',
-    key: 'case_steps',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
   },
   {
     title: '用例版本',
@@ -279,11 +304,26 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 260,
     align: 'center',
     fixed: 'right',
     render(row) {
       return [
+        h(
+            NButton,
+            {
+              size: 'small',
+              type: 'info',
+              style: 'margin-right: 6px;',
+              loading: runningCaseId.value === (row.case_id ?? null),
+              disabled: runningCaseId.value != null,
+              onClick: () => handleRunCase(row),
+            },
+            {
+              default: () => '执行',
+              icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+            }
+        ),
         withDirectives(
             h(
                 NButton,
@@ -340,7 +380,7 @@ const columns = [
       ]
     },
   },
-]
+])
 
 
 </script>

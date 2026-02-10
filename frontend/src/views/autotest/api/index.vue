@@ -122,9 +122,9 @@
         <!-- 按钮放在表单内部 -->
         <div class="case-field case-field-full case-field-buttons">
           <n-space justify="end">
-            <n-button type="success" :loading="runLoading" @click="handleRun">运行</n-button>
+            <n-button type="info" :loading="runLoading" @click="handleRun">执行</n-button>
             <n-button type="primary" :loading="debugLoading" @click="handleDebug">调试</n-button>
-            <n-button type="info" :loading="saveLoading" @click="handleSaveAll">保存</n-button>
+            <n-button type="success" :loading="saveLoading" @click="handleSaveAll">保存</n-button>
           </n-space>
         </div>
       </div>
