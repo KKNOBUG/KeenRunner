@@ -7,6 +7,7 @@
         :remote="true"
         :columns="columns"
         :get-data="getTaskRecordList"
+        :scroll-x="3000"
         :single-line="true"
     >
       <template #queryBar>

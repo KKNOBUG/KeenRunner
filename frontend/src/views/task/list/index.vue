@@ -1064,6 +1064,7 @@ onMounted(() => {
         :columns="columns"
         :get-data="api.getApiTaskList"
         :row-key="'task_id'"
+        :scroll-x="2000"
         :single-line="true"
     >
       <template #queryBar>

@@ -362,6 +362,7 @@ const columns = [
         :columns="columns"
         :get-data="api.getApiTestcaseList"
         :row-key="'case_id'"
+        :scroll-x="2000"
         :single-line="true"
     >
 
