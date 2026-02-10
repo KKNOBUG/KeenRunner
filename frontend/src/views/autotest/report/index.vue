@@ -2,43 +2,27 @@
 import {computed, h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
 import {
   NButton,
-  NCard,
-  NCheckbox,
-  NCode,
-  NCollapse,
-  NCollapseItem,
   NDataTable,
   NDatePicker,
-  NDescriptions,
-  NDescriptionsItem,
-  NDrawer,
-  NDrawerContent,
-  NEmpty,
   NInput,
   NPagination,
   NPopconfirm,
   NSelect,
   NSpace,
-  NTabPane,
-  NTabs,
   NTag,
   NText,
   NTooltip
 } from 'naive-ui'
-import {useRouter} from 'vue-router'
-import MonacoEditor from '@/components/monaco/index.vue'
-
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBar from '@/components/query-bar/QueryBar.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
+import ReportDetailDrawer from '@/components/autotest/ReportDetailDrawer.vue'
 
 import {renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 
 defineOptions({name: '测试报告'})
-
-const router = useRouter()
 
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
@@ -69,16 +53,9 @@ const handleDateRangeChange = (value) => {
   }
 }
 
-// 抽屉相关状态
+// 报告明细抽屉：由 ReportDetailDrawer 组件负责展示步骤列表与步骤详情
 const drawerVisible = ref(false)
-const detailList = ref([])
-const loading = ref(false)
-const onlyShowFailed = ref(false)
 const currentReport = ref(null)
-
-// 详情抽屉相关状态
-const detailDrawerVisible = ref(false)
-const currentDetail = ref(null)
 
 const {
   handleDelete,
@@ -131,7 +108,7 @@ const flattenedTableData = computed(() => {
     taskCodeMap.get(tk).push(r)
   }
   for (const [taskCode, reports] of taskCodeMap) {
-    const groupExpanded = expandedKeys.value[taskCode] === true
+    const groupExpanded = expandedKeys.value[taskCode] !== false
     const passCount = reports.filter(r => r.case_state === true || r.case_state === 'true').length
     const failCount = reports.filter(r => r.case_state === false || r.case_state === 'false').length
     result.push({
@@ -152,7 +129,7 @@ const flattenedTableData = computed(() => {
     }
     for (const [batchCode, batchReports] of batchMap) {
       const batchKey = 'batch' + BATCH_KEY_SEP + taskCode + BATCH_KEY_SEP + batchCode
-      const batchExpanded = expandedKeys.value[batchKey] === true
+      const batchExpanded = expandedKeys.value[batchKey] !== false
       result.push({
         _isBatchGroup: true,
         _batchKey: batchKey,
@@ -169,7 +146,7 @@ const flattenedTableData = computed(() => {
 })
 
 function toggleExpand(groupKey) {
-  expandedKeys.value = { ...expandedKeys.value, [groupKey]: !expandedKeys.value[groupKey] }
+  expandedKeys.value = { ...expandedKeys.value, [groupKey]: expandedKeys.value[groupKey] }
 }
 
 async function handleQuery() {
@@ -231,497 +208,11 @@ onMounted(() => {
   handleQuery()
 })
 
-// 查看明细
-const handleViewDetails = async (row) => {
+// 查看明细：打开报告明细抽屉，由 ReportDetailDrawer 内部根据 reportRow 请求步骤列表并展示
+const handleViewDetails = (row) => {
   currentReport.value = row
   drawerVisible.value = true
-  loading.value = true
-  try {
-    const res = await api.getApiDetailList({
-      case_id: row.case_id,
-      report_code: row.report_code,
-      page: 1,
-      page_size: 1000, // 获取所有明细
-      state: 0
-    })
-    if (res?.data) {
-      detailList.value = res.data
-    } else {
-      detailList.value = []
-    }
-  } catch (error) {
-    window.$message?.error?.('查询明细失败')
-    detailList.value = []
-  } finally {
-    loading.value = false
-  }
 }
-
-// 过滤后的明细列表
-const filteredDetailList = computed(() => {
-  if (!onlyShowFailed.value) {
-    return detailList.value
-  }
-  return detailList.value.filter(item => item.step_state === false || item.step_state === 'false')
-})
-
-// 格式化JSON
-const formatJson = (data) => {
-  if (!data) return ''
-  if (typeof data === 'string') {
-    try {
-      return JSON.stringify(JSON.parse(data), null, 2)
-    } catch {
-      return data
-    }
-  }
-  return JSON.stringify(data, null, 2)
-}
-
-// 判断响应是否为JSON
-const isJsonResponse = computed(() => {
-  if (!currentDetail.value?.response_body) return false
-  try {
-    const body = currentDetail.value.response_body
-    if (typeof body === 'string') {
-      JSON.parse(body)
-    } else if (typeof body === 'object') {
-      return true
-    }
-    return false
-  } catch {
-    return false
-  }
-})
-
-// 响应语言类型
-const responseLanguage = computed(() => {
-  if (!currentDetail.value?.response_header) return 'text'
-  const headers = currentDetail.value.response_header
-  if (typeof headers === 'object') {
-    const contentType = headers['content-type'] || headers['Content-Type'] || ''
-    if (contentType.includes('json')) return 'json'
-    if (contentType.includes('xml')) return 'xml'
-    if (contentType.includes('html')) return 'html'
-  }
-  return 'text'
-})
-
-// 格式化响应文本
-const formatResponseText = () => {
-  if (!currentDetail.value) return ''
-  if (currentDetail.value.response_text) {
-    return currentDetail.value.response_text
-  }
-  if (currentDetail.value.response_body) {
-    return formatJson(currentDetail.value.response_body)
-  }
-  return ''
-}
-
-// Monaco编辑器配置
-const monacoEditorOptions = (readOnly = false, language = 'json') => ({
-  readOnly,
-  language,
-  theme: 'vs',
-  automaticLayout: true,
-  minimap: {enabled: false},
-  scrollBeyondLastLine: false,
-  wordWrap: 'on',
-  formatOnPaste: true,
-  formatOnType: true
-})
-
-// 数据提取数据（与 HTTP 控制器调试结果布局一致：变量名、提取来源、提取范围、提取路径、提取值、提取结果、错误信息）
-const extractVariablesData = computed(() => {
-  if (!currentDetail.value?.extract_variables) return []
-  const vars = currentDetail.value.extract_variables
-  if (typeof vars === 'object' && !Array.isArray(vars)) {
-    return Object.entries(vars).map(([name, value]) => ({
-      name,
-      source: '-',
-      range: '-',
-      expr: '-',
-      extracted_value: value,
-      success: true,
-      error: '-'
-    }))
-  }
-  if (Array.isArray(vars)) {
-    return vars.map((item) => ({
-      name: item.name ?? item.key ?? '-',
-      source: item.source ?? '-',
-      range: item.range ?? '-',
-      expr: item.expr ?? '-',
-      extracted_value: item.extracted_value ?? item.value ?? '-',
-      success: item.success !== false,
-      error: item.error ?? '-'
-    }))
-  }
-  return []
-})
-
-// 断言结果数据（与 HTTP 控制器调试结果布局一致：断言名称、断言对象、断言路径、结果值、断言方式、期望值、断言结果、错误信息）
-const assertValidatorsData = computed(() => {
-  if (!currentDetail.value?.assert_validators) return []
-  const validators = currentDetail.value.assert_validators
-  if (Array.isArray(validators)) {
-    return validators.map((v) => ({
-      name: v.name ?? '-',
-      source: v.source ?? '-',
-      expr: v.expr ?? '-',
-      actual_value: v.actual_value ?? '-',
-      operation: v.operation ?? '-',
-      except_value: v.except_value ?? v.expect_value ?? '-',
-      success: v.success !== false,
-      error: v.error ?? '-'
-    }))
-  }
-  return []
-})
-
-// 判断会话变量是否为JSON
-const isJsonSessionVariables = computed(() => {
-  if (!currentDetail.value?.session_variables) return false
-  return typeof currentDetail.value.session_variables === 'object'
-})
-
-// 数据提取表格列定义（与 HTTP 控制器调试结果一致）
-const reportExtractColumns = [
-  { title: '变量名', key: 'name', width: 120 },
-  {
-    title: '提取来源',
-    key: 'source',
-    width: 120,
-    render: (row) => {
-      const sourceMap = {
-        'Response Json': 'Response Json',
-        'Response Text': 'Response Text',
-        'Response XML': 'Response XML',
-        'Response Header': 'Response Header',
-        'Response Cookie': 'Response Cookie'
-      }
-      return sourceMap[row.source] || row.source
-    }
-  },
-  {
-    title: '提取范围',
-    key: 'range',
-    width: 120,
-    render: (row) => (row.range === 'ALL' ? '全部提取' : (row.range || '-'))
-  },
-  { title: '提取路径', key: 'expr', width: 120, ellipsis: { tooltip: true } },
-  {
-    title: '提取值',
-    key: 'extracted_value',
-    width: 120,
-    ellipsis: { tooltip: true },
-    render: (row) => {
-      if (row.extracted_value === null || row.extracted_value === undefined) return '-'
-      const value = typeof row.extracted_value === 'object'
-          ? JSON.stringify(row.extracted_value)
-          : String(row.extracted_value)
-      return value.length > 100 ? value.substring(0, 100) + '...' : value
-    }
-  },
-  {
-    title: '提取结果',
-    key: 'success',
-    width: 120,
-    render: (row) => h(NTag, {
-      type: row.success ? 'success' : 'error',
-      round: true,
-      size: 'small'
-    }, { default: () => row.success ? 'pass' : 'fail' })
-  },
-  { title: '错误信息', key: 'error', width: 120, ellipsis: { tooltip: true }, render: (row) => row.error || '-' }
-]
-
-// 断言结果表格列定义（与 HTTP 控制器调试结果一致）
-const reportValidatorColumns = [
-  { title: '断言名称', key: 'name', width: 120, ellipsis: { tooltip: true } },
-  {
-    title: '断言对象',
-    key: 'source',
-    width: 120,
-    render: (row) => {
-      const sourceMap = {
-        'Response Json': 'responseJson',
-        'Response Text': 'responseText',
-        'Response XML': 'responseXml',
-        'Response Header': 'responseHeader',
-        'Response Cookie': 'responseCookie',
-        '变量池': '变量池'
-      }
-      return sourceMap[row.source] || row.source
-    }
-  },
-  { title: '断言路径', key: 'expr', width: 130, ellipsis: { tooltip: true } },
-  {
-    title: '结果值',
-    key: 'actual_value',
-    width: 150,
-    ellipsis: { tooltip: true },
-    render: (row) => {
-      if (row.actual_value === null || row.actual_value === undefined) return '-'
-      return String(row.actual_value)
-    }
-  },
-  { title: '断言方式', key: 'operation', width: 100 },
-  {
-    title: '期望值',
-    key: 'expect_value',
-    width: 120,
-    ellipsis: { tooltip: true },
-    render: (row) => {
-      const val = row.except_value ?? row.expect_value
-      if (val === null || val === undefined) return '-'
-      return String(val)
-    }
-  },
-  {
-    title: '断言结果',
-    key: 'success',
-    width: 100,
-    render: (row) => h(NTag, {
-      type: row.success ? 'success' : 'error',
-      round: true,
-      size: 'small'
-    }, { default: () => row.success ? 'pass' : 'fail' })
-  },
-  { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' }
-]
-
-// 请求信息相关计算属性
-const stepInfo = computed(() => {
-  return currentDetail.value?.step || {}
-})
-
-const requestMethod = computed(() => {
-  return stepInfo.value.request_method || '-'
-})
-
-const requestUrl = computed(() => {
-  return stepInfo.value.request_url || '-'
-})
-
-const requestHeaders = computed(() => {
-  return stepInfo.value.request_header
-})
-
-const requestParams = computed(() => {
-  const params = stepInfo.value.request_params
-  if (typeof params === 'string') {
-    try {
-      return JSON.parse(params)
-    } catch {
-      return {}
-    }
-  }
-  return params || {}
-})
-
-const requestBody = computed(() => {
-  return stepInfo.value.request_body
-})
-
-const requestFormData = computed(() => {
-  return stepInfo.value.request_form_data
-})
-
-const requestFormUrlencoded = computed(() => {
-  return stepInfo.value.request_form_urlencoded
-})
-
-const requestText = computed(() => {
-  return stepInfo.value.request_text
-})
-
-const run_code = computed(() => {
-  return stepInfo.value.code
-})
-
-const hasResponseInfo = computed(() => {
-  const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false;
-  const hasResponseData = !!(currentDetail.value?.response_body) ||
-      !!(currentDetail.value?.response_header) ||
-      !!(currentDetail.value?.response_text) ||
-      !!(currentDetail.value?.response_cookie)
-  return isRequestStep && hasResponseData;
-})
-
-const hasRequestInfo = computed(() => {
-  const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false;
-  const hasRequestData = !!(requestMethod.value && requestMethod.value !== '-') ||
-      !!(requestUrl.value && requestUrl.value !== '-') ||
-      !!requestHeaders.value ||
-      !!requestBody.value ||
-      !!requestFormData.value ||
-      !!requestFormUrlencoded.value ||
-      !!requestText.value ||
-      !!run_code.value;
-  return isRequestStep && hasRequestData;
-})
-
-const hasRequestBody = computed(() => {
-  return !!(requestBody.value || requestFormData.value || requestFormUrlencoded.value || requestText.value)
-})
-
-const requestBodyType = computed(() => {
-  if (requestBody.value) return 'JSON'
-  if (requestFormData.value) return 'Form Data'
-  if (requestFormUrlencoded.value) return 'x-www-form-urlencoded'
-  if (requestText.value) return 'Text'
-  return 'None'
-})
-
-const requestBodyText = computed(() => {
-  if (requestText.value) return requestText.value
-  if (requestFormUrlencoded.value) {
-    if (typeof requestFormUrlencoded.value === 'object') {
-      return Object.entries(requestFormUrlencoded.value)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('&')
-    }
-    return String(requestFormUrlencoded.value)
-  }
-  return ''
-})
-
-const isJsonRequestHeaders = computed(() => {
-  return requestHeaders.value && typeof requestHeaders.value === 'object'
-})
-
-const isJsonRequestParams = computed(() => {
-  return requestParams.value && typeof requestParams.value === 'object' && Object.keys(requestParams.value).length > 0
-})
-
-const isJsonRequestBody = computed(() => {
-  return requestBody.value && typeof requestBody.value === 'object'
-})
-
-const requestFormDataTable = computed(() => {
-  if (!requestFormData.value) return []
-  if (typeof requestFormData.value === 'object') {
-    return Object.entries(requestFormData.value).map(([key, value]) => ({
-      key,
-      value: typeof value === 'object' ? JSON.stringify(value) : String(value)
-    }))
-  }
-  return []
-})
-
-const formatRequestHeadersText = () => {
-  if (!requestHeaders.value) return ''
-  if (typeof requestHeaders.value === 'object') {
-    return Object.entries(requestHeaders.value)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n')
-  }
-  return String(requestHeaders.value)
-}
-
-const getMethodTagType = (method) => {
-  if (!method || method === '-') return 'default'
-  const upperMethod = method.toUpperCase()
-  if (upperMethod === 'GET') return 'info'
-  if (upperMethod === 'POST') return 'success'
-  if (upperMethod === 'PUT') return 'warning'
-  if (upperMethod === 'DELETE') return 'error'
-  return 'default'
-}
-
-// 明细表格列定义
-const detailColumns = [
-  {
-    title: '步骤序号',
-    key: 'step_no',
-    width: 40,
-    align: 'center',
-  },
-  {
-    title: '步骤名称',
-    key: 'step_name',
-    width: 100,
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '步骤类型',
-    key: 'step_type',
-    width: 60,
-    align: 'center',
-  },
-  {
-    title: '步骤状态',
-    key: 'step_state',
-    width: 40,
-    align: 'center',
-    render(row) {
-      if (row.step_state === true || row.step_state === 'true') {
-        return h(NTag, {type: 'success'}, {default: () => '成功'})
-      } else if (row.step_state === false || row.step_state === 'false') {
-        return h(NTag, {type: 'error'}, {default: () => '失败'})
-      }
-      return h('span', '-')
-    },
-  },
-  {
-    title: '步骤消耗时间',
-    key: 'step_elapsed',
-    width: 60,
-    align: 'center',
-    render(row) {
-      const elapsed = row.step_elapsed
-      if (elapsed) {
-        const elapsedNum = parseFloat(elapsed)
-        if (!isNaN(elapsedNum)) {
-          return h('span', elapsedNum.toFixed(3))
-        }
-      }
-      return h('span', '-')
-    },
-  },
-  {
-    title: '步骤错误信息',
-    key: 'step_exec_except',
-    width: 200,
-    ellipsis: {tooltip: true},
-    render(row) {
-      return h('span', row.step_exec_except || '-')
-    },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 30,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return h(NSpace, {size: 'small'}, [
-        h(NButton, {
-          size: 'small',
-          type: 'primary',
-          onClick: () => {
-            currentDetail.value = row
-            detailDrawerVisible.value = true
-          }
-        }, {default: () => '详情'}),
-        h(NButton, {
-          size: 'small',
-          type: 'warning',
-          onClick: () => {
-            router.push({
-              path: '/autotest/api',
-              query: {
-                case_id: row.case_id
-              }
-            })
-          }
-        }, {default: () => '跳转'})
-      ])
-    },
-  },
-]
 
 // 报告类型选项
 const reportTypeOptions = [
@@ -741,7 +232,7 @@ const caseStateOptions = [
 const groupLeadColumn = {
   title: '任务代码/批次代码',
   key: '_taskOrBatch',
-  width: 300,
+  width: 250,
   align: 'left',
   render(row) {
     if (row._isGroup) {
@@ -822,20 +313,6 @@ function wrapColumnForGroup(col) {
 
 const columnsBase = [
   {
-    title: '用例ID',
-    key: 'case_id',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例名称',
-    key: 'case_name',
-    width: 300,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
     title: '报告类型',
     key: 'report_type',
     width: 100,
@@ -843,23 +320,30 @@ const columnsBase = [
     ellipsis: {tooltip: true},
   },
   {
-    title: '总步骤数',
-    key: 'step_total',
-    width: 100,
+    title: '用例ID',
+    key: 'case_id',
+    width: 80,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例名称',
+    key: 'case_name',
+    width: 220,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '成功步骤',
     key: 'step_pass_count',
-    width: 100,
+    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '失败步骤',
     key: 'step_fail_count',
-    width: 100,
+    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -977,9 +461,16 @@ const columnsBase = [
     },
   },
   {
+    title: '总步骤数',
+    key: 'step_total',
+    width: 80,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
     title: '执行状态',
     key: 'case_state',
-    width: 100,
+    width: 80,
     align: 'center',
     render(row) {
       if (row.case_state === true || row.case_state === 'true') {
@@ -1000,7 +491,7 @@ const columnsBase = [
   {
     title: '消耗时间',
     key: 'case_elapsed',
-    width: 100,
+    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -1014,7 +505,7 @@ const columnsBase = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -1179,357 +670,12 @@ const rowKey = (row) => {
       />
     </div>
 
-    <!-- 明细抽屉 -->
-    <NDrawer v-model:show="drawerVisible" placement="right" width="50%">
-      <NDrawerContent>
-        <template #header>
-          <div style="display: flex; align-items: center; justify-content: flex-end; width: 100%;">
-            <NCheckbox v-model:checked="onlyShowFailed">
-              仅看失败步骤
-            </NCheckbox>
-          </div>
-        </template>
-        <NDataTable
-            :columns="detailColumns"
-            :data="filteredDetailList"
-            :loading="loading"
-            :scroll-x="1200"
-            :single-line="false"
-            striped
-        />
-      </NDrawerContent>
-    </NDrawer>
-
-    <!-- 详情抽屉 -->
-    <NDrawer v-model:show="detailDrawerVisible" placement="left" width="50%">
-      <NDrawerContent>
-        <NCard v-if="currentDetail" :bordered="false" style="width: 100%;">
-          <template #header-extra>
-            <NSpace align="center">
-              <NTag :type="currentDetail.step_state ? 'success' : 'error'" round size="small">
-                {{ currentDetail.step_state ? '成功' : '失败' }}
-              </NTag>
-              <NTag round size="small">类型: {{ currentDetail.step_type }}</NTag>
-              <NTag round size="small">耗时: {{ currentDetail.step_elapsed || '-' }}s</NTag>
-            </NSpace>
-          </template>
-          <NTabs type="line" animated>
-            <!-- 基本信息 -->
-            <NTabPane name="basic" tab="基本信息">
-              <NSpace vertical :size="16">
-                <NCard title="步骤信息" size="small" :bordered="false">
-                  <div class="step-info-grid">
-                    <div class="step-info-row">
-                      <div class="step-info-label">用例ID：</div>
-                      <div class="step-info-value">{{ currentDetail.case_id || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">用例标识：</div>
-                      <div class="step-info-value">
-                        <NText copyable>{{ currentDetail.case_code || '-' }}</NText>
-                      </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">报告标识：</div>
-                      <div class="step-info-value">
-                        <NText copyable>{{ currentDetail.report_code || '-' }}</NText>
-                      </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">步骤标识：</div>
-                      <div class="step-info-value">
-                        <NText copyable>{{ currentDetail.step_code || '-' }}</NText>
-                      </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">步骤序号：</div>
-                      <div class="step-info-value">{{ currentDetail.step_no || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">步骤状态：</div>
-                      <div class="step-info-value">
-                        <NTag :type="currentDetail.step_state ? 'success' : 'error'">
-                          {{ currentDetail.step_state ? '成功' : '失败' }}
-                        </NTag>
-                      </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">步骤名称：</div>
-                      <div class="step-info-value">
-                        <NText strong>{{ currentDetail.step_name || '-' }}</NText>
-                      </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">步骤类型：</div>
-                      <div class="step-info-value">
-                        <NTag type="info">{{ currentDetail.step_type || '-' }}</NTag>
-                      </div>
-                    </div>
-                    <div class="step-info-row" v-if="currentDetail.num_cycles">
-                      <div class="step-info-label">循环次数：</div>
-                      <div class="step-info-value">
-                        <NTag type="warning">第 {{ currentDetail.num_cycles }} 次循环</NTag>
-                      </div>
-                    </div>
-                  </div>
-                </NCard>
-
-                <!-- 循环结构额外信息 -->
-                <NCard v-if="currentDetail.step_type === '循环结构'" title="循环结构配置" size="small"
-                       :bordered="false">
-                  <div class="step-info-grid">
-                    <div class="step-info-row">
-                      <div class="step-info-label">最大循环次数：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_maximums || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">循环间隔时间：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_interval ? `${stepInfo.loop_interval}s` : '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">循环对象来源：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_iterable || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">索引变量名称：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_iter_idx || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">键的变量名称：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_iter_key || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">数据变量名称：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_iter_val || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">错误处理策略：</div>
-                      <div class="step-info-value">
-                        <NTag type="warning">{{ stepInfo.loop_on_error || '-' }}</NTag>
-                      </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">循环超时时间：</div>
-                      <div class="step-info-value">{{ stepInfo.loop_timeout ? `${stepInfo.loop_timeout}s` : '-' }}</div>
-                    </div>
-                  </div>
-                </NCard>
-
-                <!-- 条件分支额外信息 -->
-                <NCard v-if="currentDetail.step_type === '条件分支'" title="条件分支配置" size="small"
-                       :bordered="false">
-                  <div
-                      v-if="stepInfo.conditions && Array.isArray(stepInfo.conditions) && stepInfo.conditions.length > 0">
-                    <MonacoEditor
-                        :value="formatJson(stepInfo.conditions)"
-                        :options="monacoEditorOptions(true)"
-                        style="min-height: 200px; height: auto;"
-                    />
-                  </div>
-                </NCard>
-
-                <!-- 等待控制额外信息 -->
-                <NCard v-if="currentDetail.step_type === '等待控制'" title="等待控制配置" size="small"
-                       :bordered="false">
-                  <div class="step-info-grid">
-                    <div class="step-info-row">
-                      <div class="step-info-label">等待时间：</div>
-                      <div class="step-info-value">
-                        <NTag type="info">{{ stepInfo.wait ? `${stepInfo.wait}s` : '-' }}</NTag>
-                      </div>
-                    </div>
-                  </div>
-                </NCard>
-
-                <NCard title="执行时间" size="small" :bordered="false">
-                  <div class="step-info-grid">
-                    <div class="step-info-row">
-                      <div class="step-info-label">开始时间：</div>
-                      <div class="step-info-value">{{ currentDetail.step_st_time || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">结束时间：</div>
-                      <div class="step-info-value">{{ currentDetail.step_ed_time || '-' }}</div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">消耗时间：</div>
-                      <div class="step-info-value">
-                        <NTag type="info">{{ currentDetail.step_elapsed ? `${currentDetail.step_elapsed}s` : '-' }}</NTag>
-                      </div>
-                    </div>
-                  </div>
-                </NCard>
-
-                <NCard title="执行日志" size="small" :bordered="false">
-                  <NCollapse :default-expanded-names="['errorInfo', 'execLogger']" arrow-placement="right">
-                    <NCollapseItem title="错误日志" name="errorInfo" v-if="currentDetail.step_exec_except">
-                      <pre
-                          style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{
-                          currentDetail.step_exec_except
-                        }}</pre>
-                    </NCollapseItem>
-                    <NCollapseItem title="普通日志" name="execLogger" v-if="currentDetail.step_exec_logger">
-                      <pre
-                          style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{
-                          currentDetail.step_exec_logger
-                        }}</pre>
-                    </NCollapseItem>
-                  </NCollapse>
-                </NCard>
-              </NSpace>
-
-            </NTabPane>
-
-            <!-- 请求信息 -->
-            <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
-              <NSpace vertical :size="16">
-                <NCollapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestCode']"
-                           arrow-placement="right">
-                  <NCollapseItem title="Basic" name="requestBasic">
-                    <NDescriptions bordered :column="2" size="small">
-                      <NDescriptionsItem label="请求方法">
-                        <NTag :type="getMethodTagType(requestMethod)" size="small">{{ requestMethod || '-' }}</NTag>
-                      </NDescriptionsItem>
-                      <NDescriptionsItem label="请求URL">
-                        <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
-                      </NDescriptionsItem>
-                    </NDescriptions>
-                  </NCollapseItem>
-                  <NCollapseItem title="Headers" name="requestHeaders" v-if="requestHeaders">
-                    <div v-if="isJsonRequestHeaders">
-                      <MonacoEditor
-                          :value="formatJson(requestHeaders)"
-                          :options="monacoEditorOptions(true)"
-                          style="min-height: 200px; height: auto;"
-                      />
-                    </div>
-                    <pre v-else
-                         style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{
-                        formatRequestHeadersText()
-                      }}</pre>
-                  </NCollapseItem>
-                  <NCollapseItem title="Params" name="requestParams"
-                                 v-if="requestParams && Object.keys(requestParams).length > 0">
-                    <div v-if="isJsonRequestParams">
-                      <MonacoEditor
-                          :value="formatJson(requestParams)"
-                          :options="monacoEditorOptions(true)"
-                          style="min-height: 200px; height: auto;"
-                      />
-                    </div>
-                    <pre v-else
-                         style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{
-                        formatJson(requestParams)
-                      }}</pre>
-                  </NCollapseItem>
-                  <NCollapseItem :title="`Body (${requestBodyType})`" name="requestBody" v-if="hasRequestBody">
-                    <div v-if="isJsonRequestBody">
-                      <MonacoEditor
-                          :value="formatJson(requestBody)"
-                          :options="monacoEditorOptions(true)"
-                          style="min-height: 400px; height: auto;"
-                      />
-                    </div>
-                    <NDataTable
-                        v-else-if="requestFormData"
-                        :columns="[{title: 'Key', key: 'key'}, {title: 'Value', key: 'value'}]"
-                        :data="requestFormDataTable"
-                        size="small"
-                        :bordered="true"
-                    />
-                    <pre v-else
-                         style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;">{{
-                        requestBodyText
-                      }}</pre>
-                  </NCollapseItem>
-                  <!-- Python代码 -->
-                  <NCollapseItem title="Code (Python)" name="requestCode"
-                                 v-if="currentDetail.step_type === '执行代码请求(Python)' && stepInfo.code">
-                    <MonacoEditor
-                        :value="stepInfo.code"
-                        :options="monacoEditorOptions(true, 'python')"
-                        style="min-height: 400px; height: auto;"
-                    />
-                  </NCollapseItem>
-                </NCollapse>
-              </NSpace>
-            </NTabPane>
-
-            <!-- 响应信息 -->
-            <NTabPane name="response" tab="响应信息" v-if="hasResponseInfo">
-              <NSpace vertical :size="16">
-                <NCollapse :default-expanded-names="['responseHeaders', 'responseBody']" arrow-placement="right">
-                  <NCollapseItem title="Headers" name="responseHeaders" v-if="currentDetail.response_header">
-                      <pre style="white-space: pre-wrap; word-wrap: break-word;">{{
-                          formatJson(currentDetail.response_header)
-                        }}</pre>
-                  </NCollapseItem>
-                  <NCollapseItem title="Cookies" name="responseCookies" v-if="currentDetail.response_cookie">
-                    <pre style="white-space: pre-wrap; word-wrap: break-word;">{{
-                        formatJson(currentDetail.response_header)
-                      }}</pre>
-                  </NCollapseItem>
-                  <NCollapseItem title="Body" name="responseBody">
-                    <div v-if="isJsonResponse">
-                      <MonacoEditor
-                          :value="formatJson(currentDetail.response_body)"
-                          :options="monacoEditorOptions(true)"
-                          style="min-height: 400px; height: auto;"
-                      />
-                    </div>
-                    <NCode
-                        v-else
-                        :code="formatResponseText()"
-                        :language="responseLanguage"
-                        show-line-numbers
-                    />
-                  </NCollapseItem>
-                </NCollapse>
-              </NSpace>
-            </NTabPane>
-
-            <!-- 数据提取（与 HTTP 控制器调试结果布局一致） -->
-            <NTabPane name="extract" tab="数据提取">
-              <NDataTable
-                  v-if="extractVariablesData.length > 0"
-                  :columns="reportExtractColumns"
-                  :data="extractVariablesData"
-                  size="small"
-                  :bordered="true"
-              />
-              <NEmpty v-else description="暂无数据提取结果"/>
-            </NTabPane>
-
-            <!-- 断言结果（与 HTTP 控制器调试结果布局一致） -->
-            <NTabPane name="assert" tab="断言结果">
-              <NDataTable
-                  v-if="assertValidatorsData.length > 0"
-                  :columns="reportValidatorColumns"
-                  :data="assertValidatorsData"
-                  size="small"
-                  :bordered="true"
-              />
-              <NEmpty v-else description="暂无断言结果"/>
-            </NTabPane>
-
-            <!-- 会话变量 -->
-            <NTabPane name="variables" tab="会话变量" v-if="currentDetail.session_variables">
-              <div v-if="isJsonSessionVariables">
-                <MonacoEditor
-                    :value="formatJson(currentDetail.session_variables)"
-                    :options="monacoEditorOptions(true)"
-                    style="min-height: 400px; height: auto;"
-                />
-              </div>
-              <pre v-else style="white-space: pre-wrap; word-wrap: break-word;">{{
-                  formatJson(currentDetail.session_variables)
-                }}</pre>
-            </NTabPane>
-          </NTabs>
-        </NCard>
-        <NEmpty v-else description="暂无详情数据"/>
-      </NDrawerContent>
-    </NDrawer>
+    <!-- 报告明细 + 步骤详情：共用组件，右侧步骤列表、左侧步骤详情（含请求/响应/提取/断言/会话变量等） -->
+    <ReportDetailDrawer
+        v-model:show="drawerVisible"
+        :report-row="currentReport"
+        title="报告明细"
+    />
 
   </CommonPage>
 </template>
@@ -1539,34 +685,6 @@ const rowKey = (row) => {
 /* 统一查询输入框宽度 */
 .query-input {
   width: 200px;
-}
-
-/* 步骤信息两列布局 */
-.step-info-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.step-info-row {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 16px;
-  align-items: center;
-}
-
-.step-info-label {
-  font-size: 14px;
-  font-weight: bold;
-  color: #666;
-  flex-shrink: 0;
-}
-
-.step-info-value {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 500;
-  word-break: break-all;
 }
 
 /* 顶层组头行 */
