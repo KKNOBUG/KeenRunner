@@ -145,8 +145,9 @@ const flattenedTableData = computed(() => {
   return result
 })
 
+// 切换展开/折叠：computed 中 expanded = (expandedKeys[key] !== false)，故取反为 expandedKeys[key] === false
 function toggleExpand(groupKey) {
-  expandedKeys.value = { ...expandedKeys.value, [groupKey]: expandedKeys.value[groupKey] }
+  expandedKeys.value = { ...expandedKeys.value, [groupKey]: expandedKeys.value[groupKey] === false }
 }
 
 async function handleQuery() {
