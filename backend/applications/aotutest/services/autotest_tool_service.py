@@ -8,10 +8,11 @@
 """
 from __future__ import annotations
 
-import ast
 import json
 import re
 from typing import Any, Dict, List, Optional, Tuple, Callable
+
+from jsonpath_ng import parse as jsonpath_parse
 
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 from backend.common.generate_utils import GenerateUtils
@@ -23,68 +24,32 @@ class AutoTestToolService:
     @classmethod
     def resolve_json_path(cls, data: Any, expr: str) -> Any:
         """
-        按简化版 JSONPath 表达式从 data 中取值(仅支持以 '$.' 开头的路径，如 '$.a.b[0]')
+        使用 JSONPath 表达式从 data 中取值，支持标准 JSONPath（如 $.data[0].id、$.list[*].name）。
 
         :param data: 待取值的对象（dict/list 或嵌套结构）。
-        :param expr: 非空字符串，必须以 '$.' 开头。
-        :return: 路径指向的值。
-        :raises ValueError: 表达式非法、路径不存在或类型不支持时。
+        :param expr: 非空字符串，合法 JSONPath 表达式（如 $.a.b、$.data[0].id、$.items[*].id）。
+        :return: 单匹配时返回该值，多匹配时返回值的列表。无匹配时抛出 ValueError。
+        :raises ValueError: 表达式非法、路径无匹配或解析异常时。
         """
+        expr = expr.strip()
+        if not expr or not isinstance(expr, str):
+            raise ValueError(f"【JSONPath解析】表达式必须是非空字符串, 当前表达式: {expr} (类型: {type(expr).__name__})")
+        if not expr.startswith("$."):
+            raise ValueError(f"【JSONPath解析】表达式必须以$.字符开头, 当前表达式: {expr} (示例: $.data.user.name)")
+        if data is None:
+            raise ValueError("【JSONPath解析】表达式执行数据源不允许为空, 请检查响应数据是否正常返回")
+
         try:
-            if not expr or not isinstance(expr, str):
-                raise ValueError(
-                    f"【JSONPath解析】格式错误: 表达式必须是非空字符串, 当前值: {expr} (类型: {type(expr).__name__})")
-
-            if not expr.startswith("$."):
-                raise ValueError(
-                    f"【JSONPath解析】格式错误: 表达式必须以 '$.' 开头, 当前表达式: '{expr}', 示例: '$.data.user.name'")
-
-            if data is None:
-                raise ValueError("【JSONPath解析】响应数据为空, 无法从空数据中提取值, 请检查响应是否正常返回")
-
-            parts = [part for part in expr[2:].split(".") if part]
-            if not parts:
-                raise ValueError(
-                    f"【JSONPath解析】路径为空, 表达式 '{expr}' 在去除 '$.' 前缀后没有有效的路径部分")
-
-            current: Any = data
-            for i, part in enumerate(parts):
-                if isinstance(current, dict):
-                    if part not in current:
-                        current_path = '$.' + '.'.join(parts[:i + 1])
-                        available_keys = list(current.keys())[:10]  # 只显示前10个键
-                        keys_hint = ', '.join(available_keys) + ('...' if len(current) > 10 else '')
-                        raise ValueError(
-                            f"【JSONPath解析】路径不存在: "
-                            f"路径 '{current_path}' 中的键 '{part}' 在数据中不存在, 可用键: [{keys_hint}]"
-                        )
-                    current = current.get(part)
-                elif isinstance(current, list):
-                    try:
-                        index = int(part)
-                    except ValueError as e:
-                        raise ValueError(
-                            f"【JSONPath解析】列表索引错误: 路径中的索引 '{part}' 不是有效的整数, 列表索引必须是数字"
-                        ) from e
-                    try:
-                        current = current[index]
-                    except IndexError as e:
-                        current_path = '$.' + '.'.join(parts[:i + 1])
-                        raise ValueError(
-                            f"【JSONPath解析】列表索引越界: 路径 '{current_path}' 中的索引 {part} 超出范围, "
-                            f"列表长度为 {len(current)}, 有效索引范围: 0-{len(current) - 1}"
-                        ) from e
-                else:
-                    current_path = '$.' + '.'.join(parts[:i + 1])
-                    raise ValueError(
-                        f"【JSONPath解析】类型错误: "
-                        f"路径 '{current_path}' 中的 '{part}' 无法在 {type(current).__name__} 类型上应用, "
-                        f"期望字典(dict)或列表(list)类型"
-                    )
-
-            return current
+            json_path_expr = jsonpath_parse(expr)
         except Exception as e:
-            raise ValueError(f"【JSONPath解析】异常: {e}") from e
+            raise ValueError(f"【JSONPath解析】表达式{expr}解析异常, 错误描述: {e} (示例: '$.list[0].id', '$.list[*].name')") from e
+
+        json_path_matches = json_path_expr.find(data)
+        if not json_path_matches:
+            raise ValueError(f"【JSONPath解析】表达式{expr}在当前数据源中无任何匹配结果, 请检查路径或响应结构")
+
+        values = [match.value for match in json_path_matches]
+        return values[0] if len(values) == 1 else values
 
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:
@@ -367,9 +332,9 @@ class AutoTestToolService:
 
     @classmethod
     def resolve_value_placeholders(
-        cls,
-        value_str: str,
-        get_variable: Callable[[str], Any],
+            cls,
+            value_str: str,
+            get_variable: Callable[[str], Any],
     ) -> str:
         """
         对字符串中的每个 ${...} 做一次遍历：内容为函数调用则执行并替换，否则按变量名用 get_variable 替换。
