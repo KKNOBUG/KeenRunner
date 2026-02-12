@@ -25,14 +25,16 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
     AutoTestApiStepSelect,
-    AutoTestStepTreeUpdateList,
+    AutoTestBatchExecuteCases,
     AutoTestStepTreeUpdateItem,
+    AutoTestStepTreeUpdateList,
     AutoTestHttpDebugRequest,
-    AutoTestPythonCodeDebugRequest,
     AutoTestStepTreeExecute,
-    AutoTestBatchExecuteCases
+    AutoTestPythonCodeDebugRequest,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
+from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
@@ -52,7 +54,7 @@ from backend.core.responses.http_response import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
-from backend.enums.autotest_enum import AutoTestReportType
+from backend.enums.autotest_enum import AutoTestReportType, AutoTestReqArgsType
 
 autotest_step = APIRouter()
 
@@ -377,9 +379,11 @@ async def debug_http_request(
         request_params = step_data.request_params or []
         request_form_data = step_data.request_form_data or []
         request_form_urlencoded = step_data.request_form_urlencoded or []
+        request_form_file = step_data.request_form_file or []
         request_body: Optional[Dict[str, Any]] = step_data.request_body
         request_text: Optional[str] = step_data.request_text
         request_project_id: int = step_data.request_project_id
+        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
         session_variables: List[Dict[str, Any]] = step_data.session_variables or []
         defined_variables: List[Dict[str, Any]] = step_data.defined_variables or []
         extract_variables: List[Dict[str, Any]] = step_data.extract_variables or []
@@ -394,6 +398,8 @@ async def debug_http_request(
             request_form_data = []
         if not isinstance(request_form_urlencoded, list):
             request_form_urlencoded = []
+        if not isinstance(request_form_file, list):
+            request_form_file = []
         if not isinstance(session_variables, list):
             session_variables = []
         if not isinstance(defined_variables, list):
@@ -520,6 +526,7 @@ async def debug_http_request(
         params_list = resolve_placeholders(request_params)
         form_data_list = resolve_placeholders(request_form_data)
         urlencoded_list = resolve_placeholders(request_form_urlencoded)
+        form_files_list = resolve_placeholders(request_form_file)
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         def convert_list_to_dict(data_list):
@@ -539,24 +546,35 @@ async def debug_http_request(
         params = convert_list_to_dict(params_list)
         form_data = convert_list_to_dict(form_data_list)
         urlencoded = convert_list_to_dict(urlencoded_list)
+        form_files = convert_list_to_dict(form_files_list)
 
         # 处理请求体
-        json_data = None
-        data = None
-        files = None
-
-        if request_text:
-            # 文本格式请求体
-            data = resolve_placeholders(request_text)
-        elif form_data:
-            # form-data格式
-            data = form_data
-        elif urlencoded:
-            # x-www-form-urlencoded格式
-            data = urlencoded
-        elif request_body:
-            # JSON格式
-            json_data = resolve_placeholders(request_body)
+        data_payload: Optional[Any] = None
+        json_payload: Optional[Any] = None
+        file_payload: Optional[Any] = None
+        if request_args_type is None:
+            # 未配置时保持兼容：优先 raw -> form-data -> urlencoded 作为 data，若有 request_body 则作为 json
+            if request_text:
+                data_payload = request_text
+            elif form_data or form_files:
+                data_payload = form_data
+                file_payload = form_files if form_files else None
+            elif urlencoded:
+                data_payload = urlencoded
+            if request_body and not data_payload:
+                json_payload = request_body
+        elif request_args_type == AutoTestReqArgsType.NONE or request_args_type == AutoTestReqArgsType.PARAMS:
+            # 无请求体或仅查询参数
+            pass
+        elif request_args_type == AutoTestReqArgsType.RAW:
+            data_payload = request_text
+        elif request_args_type == AutoTestReqArgsType.JSON:
+            json_payload = request_body
+        elif request_args_type == AutoTestReqArgsType.FORM_DATA:
+            data_payload = form_data
+            file_payload = form_files if form_files else None
+        elif request_args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
+            data_payload = urlencoded
 
         # 构建请求参数
         logs.append(format_log("参数替换结束"))
@@ -565,12 +583,12 @@ async def debug_http_request(
             "params": params if params else None,
         }
 
-        if json_data is not None:
-            request_kwargs["json"] = json_data
-        elif data is not None:
-            request_kwargs["data"] = data
-        if files is not None:
-            request_kwargs["files"] = files
+        if data_payload is not None:
+            request_kwargs["json"] = data_payload
+        elif json_payload is not None:
+            request_kwargs["data"] = json_payload
+        if file_payload is not None:
+            request_kwargs["files"] = file_payload
 
         # 过滤None值
         request_kwargs = {k: v for k, v in request_kwargs.items() if v is not None}
@@ -998,18 +1016,22 @@ async def debug_http_request(
         # 确定实际发送的请求体类型和内容
         actual_body_type = "none"
         actual_body = None
-        if json_data is not None:
+        if json_payload is not None:
             actual_body_type = "json"
-            actual_body = json_data
-        elif data is not None:
-            if form_data:
+            actual_body = json_payload
+        elif data_payload is not None:
+            if request_args_type == AutoTestReqArgsType.FORM_DATA:
                 actual_body_type = "form-data"
-            elif urlencoded:
+            elif request_args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
                 actual_body_type = "x-www-form-urlencoded"
-            else:
+            elif request_args_type == AutoTestReqArgsType.RAW:
                 actual_body_type = "text"
-            actual_body = data
-
+            else:
+                actual_body_type = "form-data" if (form_data or form_files) else "x-www-form-urlencoded"
+            actual_body = data_payload
+        if file_payload is not None:
+            actual_body = actual_body = {}
+            actual_body = {**actual_body, "__files": json_payload}
         result_data = {
             "status": response.status_code,
             "headers": dict(response.headers),
@@ -1255,13 +1277,30 @@ async def execute_step_tree(
 
             # 6. 执行
             engine = AutoTestStepExecutionEngine(save_report=True)
-            results, logs, report_code, statistics, session_variables = await engine.execute_case(
+            results, logs, report_code, statistics, session_variables, report_create_for_defer, pending_details_for_defer = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
                 env_name=env_name,
                 initial_variables=initial_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC
             )
+            if report_create_for_defer is not None and pending_details_for_defer is not None:
+                try:
+                    async with in_transaction():
+                        report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_create_for_defer)
+                        created_report_code = report_instance.report_code
+                        for detail_create in (pending_details_for_defer or []):
+                            detail_with_report = detail_create.model_copy(update={"report_code": created_report_code})
+                            await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_with_report)
+                        case_state = statistics.get("failed_steps", 0) == 0
+                        case_last_time = report_create_for_defer.case_ed_time
+                        await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
+                            case_id=case_id,
+                            case_state=case_state,
+                            case_last_time=case_last_time,
+                        ))
+                except Exception as e:
+                    LOGGER.error(f"执行或调试步骤树(调试模式)时发生未知异常，错误描述: {e}\n{traceback.format_exc()}")
 
             # 7. 获取最终会话变量（从执行引擎返回）
             # session_variables 和 initial_variables 都是列表格式，每个元素包含 key、value、desc
@@ -1290,9 +1329,9 @@ async def execute_step_tree(
                 "results": [serialize_result(r) for r in results],
                 "logs": {str(k): v for k, v in logs.items()},
                 "session_variables": final_session_variables,
-                "saved_to_database": False
+                "saved_to_database": True
             }
-            return SuccessResponse(message="调试执行完成", data=result_data, )
+            return SuccessResponse(message="调试执行完成", data=result_data)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

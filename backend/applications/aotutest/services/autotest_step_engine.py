@@ -16,12 +16,9 @@ import httpx
 import requests
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo, AutoTestApiCaseInfo
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
-from backend.applications.aotutest.schemas.autotest_report_schema import (
-    AutoTestApiReportCreate,
-    AutoTestApiReportUpdate
-)
+from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
@@ -32,7 +29,8 @@ from backend.enums.autotest_enum import (
     AutoTestReportType,
     AutoTestLoopMode,
     AutoTestCaseType,
-    AutoTestLoopErrorStrategy
+    AutoTestLoopErrorStrategy,
+    AutoTestReqArgsType
 )
 from backend.services.ctx import CTX_USER_ID
 
@@ -94,6 +92,7 @@ class StepExecutionContext:
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             http_client: Optional[HttpClientProtocol] = None,
             report_code: Optional[str] = None,
+            pending_details: Optional[List[Any]] = None,
     ) -> None:
         """
         初始化步骤执行上下文。
@@ -103,11 +102,13 @@ class StepExecutionContext:
         :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
         :param http_client: 可选 HTTP 客户端，不传则在 __aenter__ 中创建。
         :param report_code: 报告编码，用于保存步骤明细。
+        :param pending_details: 延后落库时收集明细的列表，非 None 时 _save_step_detail 只追加不写库。
         """
         self.env_name = env_name
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
+        self.pending_details = pending_details
         self.logs: Dict[str, List[str]] = {}
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[int] = None
@@ -914,6 +915,7 @@ class BaseStepExecutor:
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
         """
         将本步骤执行结果写入明细表（含响应、变量、断言、日志等）。
+        若 context.pending_details 非空则仅追加到该列表，不写库（延后落库模式）。
         :param result: 本步骤执行结果对象。
         :param step_st_time_str: 步骤开始时间字符串。
         :param num_cycles: 循环第几轮（非循环步骤可为 None）。
@@ -974,6 +976,9 @@ class BaseStepExecutor:
                 extract_variables=extract_variables,
                 assert_validators=result.assert_validators or None
             )
+            if self.context.pending_details is not None:
+                self.context.pending_details.append(detail_create)
+                return
             from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
             await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_create)
         except Exception as e:
@@ -2031,17 +2036,39 @@ class HttpStepExecutor(BaseStepExecutor):
             urlencoded = self.context.convert_list_to_dict_for_http(urlencoded_list)
             form_files = self.context.convert_list_to_dict_for_http(form_files_list)
 
+            # 按 request_args_type 选取请求体类型，仅使用一种方式，避免冲突
+            request_args_type_raw = self.step.get("request_args_type")
+            try:
+                args_type = AutoTestReqArgsType(request_args_type_raw) if request_args_type_raw is not None else None
+            except (ValueError, TypeError):
+                args_type = None
+
             data_payload: Optional[Any] = None
             json_payload: Optional[Any] = None
-            if request_text:
+            file_payload: Optional[Any] = None
+            if args_type is None:
+                # 未配置时保持兼容：优先 raw -> form-data -> urlencoded 作为 data，若有 request_body 则作为 json
+                if request_text:
+                    data_payload = request_text
+                elif form_data or form_files:
+                    data_payload = form_data
+                    file_payload = form_files if form_files else None
+                elif urlencoded:
+                    data_payload = urlencoded
+                if request_body and not data_payload:
+                    json_payload = request_body
+            elif args_type == AutoTestReqArgsType.NONE or args_type == AutoTestReqArgsType.PARAMS:
+                # 无请求体或仅查询参数
+                pass
+            elif args_type == AutoTestReqArgsType.RAW:
                 data_payload = request_text
-            elif form_data:
-                data_payload = form_data
-            elif urlencoded:
-                data_payload = urlencoded
-            if request_body:
+            elif args_type == AutoTestReqArgsType.JSON:
                 json_payload = request_body
-
+            elif args_type == AutoTestReqArgsType.FORM_DATA:
+                data_payload = form_data
+                file_payload = form_files if form_files else None
+            elif args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
+                data_payload = urlencoded
             try:
                 response = await self.context.send_http_request(
                     request_method,
@@ -2050,7 +2077,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     params=params_payload,
                     data=data_payload,
                     json_data=json_payload,
-                    files=form_files,
+                    files=file_payload,
                 )
             except httpx.RequestError as e:
                 raise StepExecutionError(
@@ -2591,18 +2618,22 @@ class AutoTestStepExecutionEngine:
             save_report: bool = True,
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
+            defer_save: bool = False,
     ) -> None:
         """
         初始化执行引擎。
         :param http_client: 可选 HTTP 客户端，不传则上下文内自动创建。
         :param save_report: 是否创建并更新报告与步骤明细。
         :param task_code: 任务编码，写入报告。
+        :param defer_save: True 时仅收集报告/明细数据不写库，由调用方在短事务内一次性落库，保证原子性且不长时间持锁。
         """
         self._http_client = http_client
         self._save_report = save_report
         self._task_code = task_code
         self._batch_code = batch_code
+        self._defer_save = defer_save
         self._report_code: Optional[str] = None
+        self._pending_details: List[AutoTestApiDetailCreate] = []
 
     async def execute_case(
             self,
@@ -2612,8 +2643,9 @@ class AutoTestStepExecutionEngine:
             *,
             env_name: Optional[str] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
-    ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]]]:
+    ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]], Optional[AutoTestApiReportCreate], Optional[List[AutoTestApiDetailCreate]]]:
         """
+
         执行单用例：可选创建/更新报告与用例状态，在上下文中按 step_no 执行 steps。
         :param case: 用例信息，含 case_id、case_code、case_name。
         :param steps: 根步骤可迭代对象。
@@ -2626,6 +2658,10 @@ class AutoTestStepExecutionEngine:
                  - report_code: 报告编码，未保存报告时为 None。
                  - statistics: 含 total_steps、success_steps、failed_steps、pass_ratio。
                  - session_variables: 执行结束后的会话变量列表。
+
+                执行单用例：在上下文中按 step_no 执行 steps；若需保存报告则仅收集报告与明细数据，由调用方在短事务内一次性落库。
+        :return: Tuple: (results, logs, report_code_placeholder, statistics, session_variables, report_create_for_defer, pending_details_for_defer)。
+                 _save_report 为 True 时最后两项为报告创建体与明细列表，调用方需先 create_report 取得真实 report_code，再为每条明细赋该 report_code 后 create_detail，最后 update_case。
         """
         report_code = None
         case_start_time = datetime.now()
@@ -2633,33 +2669,10 @@ class AutoTestStepExecutionEngine:
         case_code: str = case.get("case_code")
         case_st_time_str = case_start_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         if self._save_report:
-            try:
-                user_id = CTX_USER_ID.get(0)
-                user_name = str(user_id) if user_id else None
-                # 如果没有指定report_type, 默认使用SYNC_EXEC
-                final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
-                report_create = AutoTestApiReportCreate(
-                    case_id=case_id,
-                    case_code=case_code,
-                    case_st_time=case_st_time_str,
-                    case_state=False,
-                    step_total=0,
-                    step_fail_count=0,
-                    step_pass_count=0,
-                    step_pass_ratio=0.0,
-                    report_type=final_report_type,
-                    created_user=user_name,
-                    task_code=self._task_code,
-                    batch_code=self._batch_code
-                )
-                from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
-                report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_create)
-                report_code = report_instance.report_code
-                self._report_code = report_code
-            except Exception as e:
-                error_message: str = f"创建测试报告失败: 用例ID={case_id}, 用例编码={case_code}, 错误详情: {e}"
-                raise StepExecutionError(error_message) from e
-
+            report_code = unique_identify()
+            self._report_code = report_code
+            self._pending_details = []
+        pending_details_arg: Optional[List[AutoTestApiDetailCreate]] = self._pending_details if self._save_report else None
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,
@@ -2667,6 +2680,7 @@ class AutoTestStepExecutionEngine:
                 initial_variables=initial_variables,
                 http_client=self._http_client,
                 report_code=report_code,
+                pending_details=pending_details_arg,
         ) as context:
             ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0) or 0)
             results: List[StepExecutionResult] = []
@@ -2698,37 +2712,29 @@ class AutoTestStepExecutionEngine:
             case_ed_time_str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
             case_elapsed = f"{(case_end_time - case_start_time).total_seconds():.3f}"
             case_state = failed_steps == 0
+            report_create_for_defer: Optional[AutoTestApiReportCreate] = None
+            pending_details_for_defer: Optional[List[AutoTestApiDetailCreate]] = None
             if self._save_report and report_code:
-                try:
-                    user_id = CTX_USER_ID.get(0)
-                    user_name = str(user_id) if user_id else None
-                    report_update = AutoTestApiReportUpdate(
-                        report_code=report_code,
-                        case_ed_time=case_ed_time_str,
-                        case_elapsed=case_elapsed,
-                        case_state=case_state,
-                        step_total=total_steps,
-                        step_fail_count=failed_steps,
-                        step_pass_count=success_steps,
-                        step_pass_ratio=pass_ratio,
-                        updated_user=user_name
-                    )
-                    from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
-                    await AUTOTEST_API_REPORT_CRUD.update_report(report_update)
-                except Exception as e:
-                    error_message: str = f"更新测试报告失败: 报告编码={report_code}, 错误详情: {e}"
-                    raise StepExecutionError(error_message) from e
-
-                try:
-                    from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-                    await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
-                        case_id=case_id,
-                        case_state=case_state,
-                        case_last_time=case_ed_time_str
-                    ))
-                except Exception as e:
-                    error_message: str = f"更新测试用例失败: 用例ID={case_id}, 用例代码={case_code}, 错误详情: {e}"
-                    raise StepExecutionError(error_message) from e
+                user_id = CTX_USER_ID.get(0)
+                user_name = str(user_id) if user_id else None
+                final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
+                report_create_for_defer = AutoTestApiReportCreate(
+                    case_id=case_id,
+                    case_code=case_code,
+                    case_st_time=case_st_time_str,
+                    case_ed_time=case_ed_time_str,
+                    case_elapsed=case_elapsed,
+                    case_state=case_state,
+                    step_total=total_steps,
+                    step_fail_count=failed_steps,
+                    step_pass_count=success_steps,
+                    step_pass_ratio=pass_ratio,
+                    report_type=final_report_type,
+                    created_user=user_name,
+                    task_code=self._task_code,
+                    batch_code=self._batch_code,
+                )
+                pending_details_for_defer = list(self._pending_details)
 
             statistics = {
                 "total_steps": total_steps,
@@ -2737,7 +2743,7 @@ class AutoTestStepExecutionEngine:
                 "pass_ratio": round(pass_ratio, 2)
             }
             session_variables = context.session_variables if isinstance(context.session_variables, list) else []
-            return results, context.logs, report_code, statistics, session_variables
+            return results, context.logs, report_code, statistics, session_variables, report_create_for_defer, pending_details_for_defer
 
     @staticmethod
     def collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:

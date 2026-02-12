@@ -77,9 +77,6 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         unique_together = (
             ("project_id", "env_name"),
         )
-        indexes = (
-            ("project_id", "env_name"),
-        )
         ordering = ["-updated_time"]
 
     def __str__(self):
@@ -134,7 +131,8 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         )
         indexes = (
             ("case_project", "state"),
-            ("case_project", "case_name"),
+            ("case_project", "case_name", "case_type"),
+            ("case_project", "case_name", "state"),
             ("case_name", "state"),
         )
         ordering = ["-updated_time"]
@@ -208,11 +206,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         )
         indexes = (
             ("case_id", "parent_step_id", "step_no"),
-            ("case_id", "state"),
+            ("case_id", "state", "step_no"),
             ("case_id", "step_type"),
             ("step_name", "state"),
-            ("parent_step_id",),
-            ("quote_case_id",),
         )
         ordering = ["case_id", "step_no"]
 
@@ -338,9 +334,6 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         unique_together = (
             ("task_name", "task_project"),
         )
-        indexes = (
-            ("task_name", "task_project"),
-        )
         ordering = ["-updated_time"]
 
     def __str__(self):
@@ -366,8 +359,6 @@ class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
         table = "krun_autotest_api_record"
         table_description = "自动化测试-任务执行记录表"
         indexes = (
-            ("celery_id",),
-            ("task_id",),
             ("celery_status",),
             ("celery_start_time",),
         )

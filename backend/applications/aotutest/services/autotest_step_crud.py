@@ -19,14 +19,17 @@ from tortoise.transactions import in_transaction
 from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import (
     AutoTestApiStepInfo,
-    AutoTestApiCaseInfo
+    AutoTestApiCaseInfo,
 )
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
     AutoTestStepTreeUpdateItem
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
+from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -833,16 +836,32 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 6. 使用事务执行并保存到数据库
-        async with in_transaction():
-            engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code)
-            results, logs, report_code, statistics, _ = await engine.execute_case(
-                case=case_dict,
-                steps=root_steps,
-                initial_variables=initial_variables,
-                env_name=env_name,
-                report_type=report_type,
-            )
+        # 6. 执行用例（延后落库）：执行阶段不持事务，落库阶段单事务，保证「要么全部成功要么全部失败」且不长时间占锁
+        engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code, defer_save=True)
+        results, logs, report_code, statistics, session_variables, report_create_for_defer, pending_details_for_defer = await engine.execute_case(
+            case=case_dict,
+            steps=root_steps,
+            initial_variables=initial_variables,
+            env_name=env_name,
+            report_type=report_type,
+        )
+        if report_create_for_defer is not None and pending_details_for_defer is not None:
+            try:
+                async with in_transaction():
+                    report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_create_for_defer)
+                    created_report_code = report_instance.report_code
+                    for detail_create in (pending_details_for_defer or []):
+                        detail_with_report = detail_create.model_copy(update={"report_code": created_report_code})
+                        await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_with_report)
+                    case_state = statistics.get("failed_steps", 0) == 0
+                    case_last_time = report_create_for_defer.case_ed_time
+                    await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
+                        case_id=case_id,
+                        case_state=case_state,
+                        case_last_time=case_last_time,
+                    ))
+            except Exception as e:
+                LOGGER.error(f"执行或调试步骤树(运行模式)时发生未知异常，错误描述: {e}\n{traceback.format_exc()}")
 
             # 返回运行模式的简化结果
             result_data = {
@@ -851,7 +870,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 "success_steps": statistics.get("success_steps", 0),
                 "failed_steps": statistics.get("failed_steps", 0),
                 "pass_ratio": statistics.get("pass_ratio", 0.0),
-                "report_code": report_code,
+                "report_code": created_report_code,
                 "saved_to_database": True,
                 "case_id": case_id,
                 "case_code": case_dict.get("case_code"),
