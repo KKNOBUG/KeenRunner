@@ -25,6 +25,7 @@ from backend.core.exceptions.base_exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
+from backend.enums.autotest_enum import AutoTestCaseType
 
 
 class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
@@ -85,15 +86,16 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
         case_tags: List[int] = case_in.case_tags
+        case_type: Optional[AutoTestCaseType] = case_in.AutoTestCaseType
 
         # 业务层验证: 检查标签是否全部存在
         await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
 
         # 业务层验证: 检查用例信息是否已经存在
-        existing_case = await self.model.filter(case_name=case_name, case_project=case_project, state__not=1).first()
+        existing_case = await self.model.filter(case_project=case_project, case_name=case_name, state__not=1).first()
         if existing_case:
             error_message: str = (
-                f"根据(case_project={case_project}, case_name={case_name})条件查询用例信息失败, "
+                f"根据(case_project={case_project}, case_name={case_name}, case_type={case_type})条件查询用例信息失败, "
                 f"相同应用下用例名称不允许重复"
             )
             LOGGER.error(error_message)
@@ -111,6 +113,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
     async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
         case_id: Optional[int] = case_in.case_id
         case_code: Optional[str] = case_in.case_code
+        case_type: Optional[AutoTestCaseType] = case_in.AutoTestCaseType
 
         # 业务层验证：检查用例信息是否存在
         if case_id:
@@ -134,13 +137,13 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             case_name = update_dict.get("case_name", instance.case_name)
             case_project = update_dict.get("case_project", instance.case_project)
             existing_case = await self.model.filter(
-                case_name=case_name,
                 case_project=case_project,
+                case_name=case_name,
                 state__not=1
             ).exclude(id=case_id).first()
             if existing_case:
                 error_message: str = (
-                    f"根据(case_project={case_project}, case_name={case_name})条件检查用例信息失败, "
+                    f"根据(case_project={case_project}, case_name={case_name}, case_type={case_type})条件检查用例信息失败, "
                     f"相同应用下用例名称不允许重复"
                 )
                 LOGGER.error(error_message)
@@ -216,6 +219,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             case_name: Optional[str] = case_data.case_name
             case_tags: Optional[List[int]] = case_data.case_tags
             case_project: Optional[int] = case_data.case_project
+            case_type: Optional[AutoTestCaseType] = case_data.AutoTestCaseType
             if case_id and case_code and (case_id, case_code) in processed_case:
                 continue
 
@@ -246,12 +250,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 # 业务层验证：检查应用ID和用例名称是否唯一
                 existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                     only_one=True,
-                    conditions={"case_name": case_name, "case_project": case_project}
+                    conditions={"case_project": case_project, "case_name": case_name, "case_type": case_type}
                 )
                 if existing_case_instance:
                     error_message: str = (
                         f"第({cid})条用例新增失败, "
-                        f"根据(case_project={case_project}, case_name={case_name})条件检查用例信息失败, "
+                        f"根据(case_project={case_project}, case_name={case_name}, case_type={case_type})条件检查用例信息失败, "
                         f"相同应用下用例名称不允许重复"
                     )
                     LOGGER.error(error_message)
@@ -304,12 +308,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
                     existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                         only_one=True,
-                        conditions={"case_name": case_name, "case_project": case_project, "id__not": case_id}
+                        conditions={"case_project": case_project, "case_name": case_name, "case_type": case_type, "id__not": case_id}
                     )
                     if existing_case_instance:
                         error_message: str = (
                             f"第({cid})条用例更新失败, "
-                            f"根据(case_project={case_project}, case_name={case_name})条件检查用例信息失败, "
+                            f"根据(case_project={case_project}, case_name={case_name}, case_type={case_type})条件检查用例信息失败, "
                             f"相同应用下用例名称不允许重复"
                         )
                         LOGGER.error(error_message)
