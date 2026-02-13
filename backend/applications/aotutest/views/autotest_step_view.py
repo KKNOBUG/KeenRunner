@@ -1276,7 +1276,7 @@ async def execute_step_tree(
                 return BadReqResponse(message="没有可执行的根步骤")
 
             # 6. 执行
-            engine = AutoTestStepExecutionEngine(save_report=True)
+            engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
             results, logs, report_code, statistics, session_variables, report_create_for_defer, pending_details_for_defer = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
