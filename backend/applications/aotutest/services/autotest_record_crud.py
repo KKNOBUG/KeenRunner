@@ -22,23 +22,36 @@ from backend.core.exceptions.base_exceptions import ParameterException
 
 
 class _RecordCreatePlaceholder(BaseModel):
+    """占位用 schema，任务执行记录由业务直接写字典，不走 Create/Update schema。"""
+
     pass
 
 
 class AutoTestApiTaskRecordCrud(
     ScaffoldCrud[AutoTestApiRecordInfo, _RecordCreatePlaceholder, _RecordCreatePlaceholder]
 ):
+    """自动化测试任务执行记录的 CRUD 服务，负责记录的创建、按 celery_id 更新及分页查询。"""
+
     def __init__(self):
+        """初始化 CRUD，绑定模型 AutoTestApiRecordInfo。"""
         super().__init__(model=AutoTestApiRecordInfo)
 
     async def get_by_celery_id(self, celery_id: str) -> Optional[AutoTestApiRecordInfo]:
-        """按调度ID(celery_id)查询一条记录。"""
+        """根据 Celery 调度 ID 查询单条执行记录。
+
+        :param celery_id: Celery 任务/调度 ID。
+        :returns: 记录实例或 None（celery_id 为空或未找到时）。
+        """
         if not celery_id:
             return None
         return await self.model.filter(celery_id=celery_id).first()
 
     async def create_record(self, data: Dict[str, Any]) -> AutoTestApiRecordInfo:
-        """创建一条执行记录（由 Worker task_prerun 调用）。"""
+        """创建一条任务执行记录，通常由 Worker task_prerun 调用。
+
+        :param data: 记录字段字典，需符合 AutoTestApiRecordInfo 字段。
+        :returns: 创建后的记录实例。
+        """
         instance = await self.create(data)
         return instance
 
@@ -47,7 +60,12 @@ class AutoTestApiTaskRecordCrud(
             celery_id: str,
             data: Dict[str, Any],
     ) -> Optional[AutoTestApiRecordInfo]:
-        """按调度ID(celery_id)更新记录（由 Worker on_success/on_failure 调用）。"""
+        """根据 Celery 调度 ID 更新记录，通常由 Worker on_success/on_failure 调用。
+
+        :param celery_id: Celery 任务/调度 ID。
+        :param data: 要更新的字段字典；task_summary、task_error 允许为 None。
+        :returns: 更新后的记录实例，未找到时返回 None。
+        """
         record = await self.get_by_celery_id(celery_id=celery_id)
         if not record:
             return None
@@ -62,7 +80,12 @@ class AutoTestApiTaskRecordCrud(
             self,
             record_in: AutoTestApiRecordSelect,
     ) -> tuple:
-        """分页按条件查询任务执行记录。"""
+        """分页按条件查询任务执行记录，支持 celery_id、task_id、时间范围等筛选。
+
+        :param record_in: 查询条件 schema（AutoTestApiRecordSelect），含分页与排序。
+        :returns: (总条数, 当前页记录列表) 元组。
+        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        """
         try:
             q = Q()
             if record_in.celery_id:

@@ -30,10 +30,21 @@ from backend.core.exceptions.base_exceptions import (
 
 
 class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiProjectCreate, AutoTestApiProjectUpdate]):
+    """自动化测试应用（项目）的 CRUD 服务，负责项目的增删改查。"""
+
     def __init__(self):
+        """初始化 CRUD，绑定模型 AutoTestApiProjectInfo。"""
         super().__init__(model=AutoTestApiProjectInfo)
 
     async def get_by_id(self, project_id: int, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
+        """根据项目主键 ID 查询单条项目（排除已删除）。
+
+        :param project_id: 项目主键 ID。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 项目实例或 None。
+        :raises ParameterException: 当 project_id 为空时。
+        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        """
         if not project_id:
             error_message: str = "查询应用信息失败, 参数(project_id)不允许为空"
             LOGGER.error(error_message)
@@ -47,6 +58,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instance
 
     async def get_by_code(self, project_code: str, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
+        """根据项目标识代码查询单条项目（排除已删除）。
+
+        :param project_code: 项目标识代码。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 项目实例或 None。
+        :raises ParameterException: 当 project_code 为空时。
+        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        """
         if not project_code:
             error_message: str = "查询应用信息失败, 参数(project_code)不允许为空"
             LOGGER.error(error_message)
@@ -60,6 +79,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instance
 
     async def get_by_name(self, project_name: str, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
+        """根据项目名称查询单条项目（排除已删除）。
+
+        :param project_name: 项目名称。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 项目实例或 None。
+        :raises ParameterException: 当 project_name 为空时。
+        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        """
         if not project_name:
             error_message: str = "查询应用信息失败, 参数(project_name)不允许为空"
             LOGGER.error(error_message)
@@ -78,6 +105,15 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[Union[AutoTestApiProjectInfo, List[AutoTestApiProjectInfo]]]:
+        """根据条件查询项目（排除已删除）。
+
+        :param conditions: 查询条件字典。
+        :param only_one: 为 True 时返回单条记录，否则返回列表。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 单条项目、项目列表或 None。
+        :raises ParameterException: 条件非法或查询异常时。
+        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
+        """
         try:
             stmt: QuerySet = self.model.filter(**conditions, state__not=1)
             instances = await (stmt.first() if only_one else stmt.all())
@@ -97,6 +133,13 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instances
 
     async def create_project(self, project_in: AutoTestApiProjectCreate) -> AutoTestApiProjectInfo:
+        """创建项目，校验项目名称全局唯一。
+
+        :param project_in: 项目创建 schema。
+        :returns: 创建后的项目实例。
+        :raises DataAlreadyExistsException: 项目名已存在时。
+        :raises DataBaseStorageException: 违反数据库约束时。
+        """
         project_name: str = project_in.project_name
 
         # 业务层验证：检查应用名称是否重复
@@ -124,6 +167,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_project(self, project_in: AutoTestApiProjectUpdate) -> AutoTestApiProjectInfo:
+        """更新项目，支持按 project_id 或 project_code 定位，并校验项目名唯一。
+
+        :param project_in: 项目更新 schema。
+        :returns: 更新后的项目实例。
+        :raises NotFoundException: 项目不存在时。
+        :raises DataAlreadyExistsException: 项目名重复时。
+        :raises DataBaseStorageException: 违反约束时。
+        """
         project_id: Optional[int] = project_in.project_id
         project_code: Optional[str] = project_in.project_code
         # 业务层验证：检查应用是否存在
@@ -164,6 +215,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             project_id: Optional[int] = None,
             project_code: Optional[str] = None
     ) -> AutoTestApiProjectInfo:
+        """软删除项目（state=1），需无关联用例。
+
+        :param project_id: 项目主键 ID，与 project_code 二选一。
+        :param project_code: 项目标识代码，与 project_id 二选一。
+        :returns: 软删除后的项目实例。
+        :raises NotFoundException: 项目不存在时。
+        :raises DataBaseStorageException: 存在关联用例时。
+        """
         # 业务层验证：检查应用是否存在
         if project_id:
             instance = await self.get_by_id(project_id=project_id, on_error=True)
@@ -186,6 +245,15 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instance
 
     async def select_projects(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+        """分页查询项目列表。
+
+        :param search: Tortoise Q 查询条件。
+        :param page: 页码。
+        :param page_size: 每页条数。
+        :param order: 排序字段列表。
+        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
+        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:

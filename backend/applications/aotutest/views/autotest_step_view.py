@@ -1284,14 +1284,13 @@ async def execute_step_tree(
                 initial_variables=initial_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC
             )
-            if report_create_for_defer is not None and pending_details_for_defer is not None:
+            if report_create_for_defer is not None:
                 try:
                     async with in_transaction():
-                        report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_create_for_defer)
-                        created_report_code = report_instance.report_code
+                        await AUTOTEST_API_REPORT_CRUD.create_report(report_in=report_create_for_defer)
                         for detail_create in (pending_details_for_defer or []):
-                            detail_with_report = detail_create.model_copy(update={"report_code": created_report_code})
-                            await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_with_report)
+                            detail_schema = detail_create.model_copy(update={"report_code": report_code})
+                            await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_schema)
                         case_state = statistics.get("failed_steps", 0) == 0
                         case_last_time = report_create_for_defer.case_ed_time
                         await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(

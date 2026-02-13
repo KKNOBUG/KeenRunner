@@ -3,450 +3,346 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : file_utils.py
-@DateTime: 2025/1/14 12:28
+@Module  : generate_utils.py
+@DateTime: 2025/1/15 13:57
 """
-import shutil, os, threading, glob, mimetypes, zipfile
-from datetime import datetime
-from pathlib import Path
-from typing import Union, Optional
+import random
+import string
+import threading
+import uuid
+from datetime import datetime, timedelta
+from typing import Optional, Literal, Union
 
-import yaml
-
-from backend.core.exceptions.base_exceptions import (
-    TypeRejectException, NotFoundException, NotImplementedException, ParameterException
-)
+from dateutil.relativedelta import relativedelta
+from faker import Faker
+from xpinyin import Pinyin
 
 
-class FileUtils:
-    """
-    FileUtils类提供了一系列用于文件和目录操作的静态方法，采用单例模式确保在整个应用程序中只有一个实例。
-    """
-    __slots__ = []
+class GenerateUtils:
+    """数据生成工具类（单例），提供随机字符串、时间、姓名、地址等生成方法，供占位符与测试数据使用。"""
+
     # 用于存储该类的唯一实例
     __private_instance = None
     __private_initialized = False
     __private_lock = threading.Lock()
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> object:
         """
         创建并返回类的唯一实例。
 
-        使用单例模式，在整个应用程序的生命周期内仅创建一个 `FileUtils` 实例。
-        在多线程环境下，通过 `threading.Lock` 确保线程安全。
+        使用单例模式，在整个应用程序的生命周期内仅创建一个 GenerateUtils 实例。
+        在多线程环境下，通过 ``threading.Lock`` 确保线程安全。
 
-        :param args: 位置参数
-        :param kwargs: 关键字参数
-        :return: `FileUtils` 类的实例
+        :param args: 位置参数（未使用）。
+        :param kwargs: 关键字参数（未使用）。
+        :returns: GenerateUtils 类的唯一实例。
         """
         if not cls.__private_instance and not cls.__private_initialized:
             with cls.__private_lock:
                 if not cls.__private_instance and not cls.__private_initialized:
                     cls.__private_instance = super().__new__(cls)
                     cls.__private_initialized = True
+
         return cls.__private_instance
 
-    @staticmethod
-    def str_to_path(abspath: Union[str, Path]):
-        """
-        将输入的绝对路径（字符串或 Path 对象）转换为 Path 对象。
+    def __init__(self, *args, **kwargs):
+        """初始化 Faker 与 Pinyin 实例及日期时间格式映射。"""
+        super().__init__(*args, **kwargs)
+        self.faker_cn = Faker(locale="zh_CN")
+        self.faker_en = Faker(locale="en_US")
+        self.pinyin = Pinyin()
+        self.formats: dict = {
+            11: "%Y",
+            12: "%m",
+            13: "%d",
+            14: "%H",
+            15: "%M",
+            16: "%S",
 
-        :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
-        :return: 转换后的 Path 对象
-        :raises TypeRejectException: 如果输入的路径不是字符串或 Path 对象类型
-        """
-        if not isinstance(abspath, (str, Path)):
-            raise TypeRejectException()
+            21: "%Y%m%d",
+            22: "%Y-%m-%d",
+            23: "%Y{0}%m{1}%d{2}".format("年", "月", "日"),
 
-        if isinstance(abspath, str):
-            abspath: Path = Path(abspath)
+            31: "%H%M%S",
+            32: "%H:%M:%S",
+            33: "%H{0}%M{1}%S{2}".format("时", "分", "秒"),
 
-        return abspath
+            41: "%Y%m%d%H%M%S",
+            42: "%Y-%m-%d %H:%M:%S",
+            43: "%Y/%m/%d %H:%M:%S",
+            44: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}".format("年", "月", "日", "时", "分", "秒"),
 
-    def is_file(self, abspath: Union[str, Path]) -> bool:
-        """
-        检查指定路径是否为文件。
-
-        :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
-        :return: 如果是文件返回 True，否则返回 False
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        return abspath.is_file()
-
-    def is_dir(self, abspath: Union[str, Path]) -> bool:
-        """
-        检查指定路径是否为目录。
-
-        :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
-        :return: 如果是目录返回 True，否则返回 False
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        return abspath.is_dir()
-
-    def delete_file(self, abspath: Union[str, Path]) -> bool:
-        """
-        删除指定路径的文件。
-
-        :param abspath: 要删除的文件的绝对路径，可以是字符串或 Path 对象
-        :return: 如果文件成功删除返回 True，否则返回 False
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        if abspath.exists() and abspath.is_file():
-            os.remove(abspath)
-            return True
-        return False
-
-    def delete_directory(self, abspath: Union[str, Path]) -> bool:
-        """
-        删除指定路径的目录及其所有内容。
-
-        :param abspath: 要删除的目录的绝对路径，可以是字符串或 Path 对象
-        :return: 如果目录成功删除返回 True，否则返回 False
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        if abspath.exists() and abspath.is_dir():
-            shutil.rmtree(abspath)
-            return True
-        return False
-
-    def create_file(self, abspath: Union[str, Path], safe: bool = True) -> bool:
-        """
-        创建一个新文件。
-
-        :param abspath: 要创建的文件的绝对路径，可以是字符串或 Path 对象
-        :param safe: 如果为 True，且文件已存在则不覆盖；如果为 False，且文件已存在则删除并重新创建
-        :return: 如果文件成功创建返回 True，否则返回 False
-        """
-        abspath = self.str_to_path(abspath=abspath)
-
-        def create(path):
-            with open(path, 'w') as file:
-                file.write('')
-
-        if not abspath.exists():
-            create(path=abspath)
-            return True
-
-        if safe is False and abspath.is_file():
-            self.delete_file(abspath=abspath)
-            create(path=abspath)
-            return True
-
-        return False
-
-    def create_directory(self, abspath: Union[str, Path], safe: bool = True) -> bool:
-        """
-        创建一个新目录。
-
-        :param abspath: 要创建的目录的绝对路径，可以是字符串或 Path 对象
-        :param safe: 如果为 True，且目录已存在则不覆盖；如果为 False，且目录已存在则删除并重新创建
-        :return: 如果目录成功创建返回 True，否则返回 False
-        """
-        abspath = self.str_to_path(abspath=abspath)
-
-        if not abspath.exists():
-            abspath.mkdir()
-            return True
-
-        if safe is False and abspath.is_dir():
-            self.delete_directory(abspath=abspath)
-            abspath.mkdir()
-            return True
-
-        return False
-
-    @staticmethod
-    def get_all_dirs(abspath: Union[str, Path], return_full_path: bool = True,
-                     startswith: Optional[str] = None, endswith: Optional[str] = None,
-                     exclude_startswith: Optional[str] = None, exclude_endswith: Optional[str] = None) -> list:
-        """
-        获取指定路径下的所有目录，并根据条件进行过滤。
-
-        :param abspath: 要查找目录的绝对路径，可以是字符串或 Path 对象。
-        :param return_full_path: 是否返回完整路径。默认为 True。
-        :param startswith: 仅返回以该字符串开头的目录名。默认为 None。
-        :param endswith: 仅返回以该字符串结尾的目录名。默认为 None。
-        :param exclude_startswith: 排除以该字符串开头的目录名。默认为 None。
-        :param exclude_endswith: 排除以该字符串结尾的目录名。默认为 None。
-        :return: 满足条件的目录列表，如果 return_full_path 为 True，则返回完整路径，否则返回目录的基本名称。
-        """
-        # 获取指定路径下所有的目录
-        dirs = [d for d in glob.glob(os.path.join(abspath, "*")) if os.path.isdir(d)]
-
-        # 过滤目录名
-        if startswith:
-            dirs = [d for d in dirs if os.path.basename(d).startswith(startswith)]
-        if endswith:
-            dirs = [d for d in dirs if os.path.basename(d).endswith(endswith)]
-
-        # 排除目录名
-        if exclude_startswith:
-            dirs = [d for d in dirs if not os.path.basename(d).startswith(exclude_startswith)]
-        if exclude_endswith:
-            dirs = [d for d in dirs if not os.path.basename(d).endswith(exclude_endswith)]
-
-        if return_full_path:
-            return dirs
-
-        return [os.path.basename(d) for d in dirs]
-
-    @staticmethod
-    def get_all_files(abspath: Union[str, Path],
-                      return_full_path: bool = True,
-                      return_precut_path: Optional[str] = None,
-                      startswith: Optional[str] = None,
-                      endswith: Optional[str] = None,
-                      extension: Optional[str] = None,
-                      exclude_startswith: Optional[str] = None,
-                      exclude_endswith: Optional[str] = None,
-                      exclude_extension: Optional[str] = None) -> list:
-        """
-        获取指定路径下的所有文件，并根据条件进行过滤。
-
-        :param abspath: 要查找文件的绝对路径，可以是字符串或 Path 对象。
-        :param return_full_path: 是否返回完整路径。默认为 True。
-        :param return_precut_path: 是否返回包含额外前缀的路径，默认为 False。
-        :param startswith: 仅返回以该字符串开头的文件名。默认为 None。
-        :param endswith: 仅返回以该字符串结尾的文件名（不包括扩展名）。默认为 None。
-        :param extension: 仅返回具有该扩展名的文件。默认为 None。
-        :param exclude_startswith: 排除以该字符串开头的文件名。默认为 None。
-        :param exclude_endswith: 排除以该字符串结尾的文件名（不包括扩展名）。默认为 None。
-        :param exclude_extension: 排除具有该扩展名的文件。默认为 None。
-        :return: 满足条件的文件列表，如果 return_full_path 为 True，则返回完整路径；如果 return_precut_path 为 True，则返回带有额外前缀的文件名；否则返回文件的基本名称。
-        """
-        # 获取指定路径下所有的目录
-        files = [file for file in glob.glob(os.path.join(abspath, "*")) if os.path.isfile(file)]
-
-        # 过滤文件名
-        if startswith:
-            files = [file for file in files if os.path.basename(file).startswith(startswith)]
-        if endswith:
-            files = [file for file in files if os.path.splitext(os.path.basename(file))[0].endswith(endswith)]
-        if extension:
-            files = [file for file in files if file.endswith(extension)]
-
-        # 排除文件名
-        if exclude_startswith:
-            files = [file for file in files if not os.path.basename(file).startswith(exclude_startswith)]
-        if exclude_endswith:
-            files = [file for file in files if
-                     not os.path.splitext(os.path.basename(file))[0].endswith(exclude_endswith)]
-        if exclude_extension:
-            files = [file for file in files if not file.endswith(exclude_extension)]
-
-        if return_full_path:
-            return files
-        elif return_precut_path:
-            return [return_precut_path + os.path.splitext(os.path.basename(file))[0] for file in files]
-
-        return [os.path.basename(file) for file in files]
-
-    @staticmethod
-    def get_file_info(abspath: Union[str, bytes, Path], filename: str = None) -> Union[bytes, tuple]:
-        """
-        获取文件的信息，包括文件名、文件字节内容和 MIME 类型。
-
-        :param abspath: 输入的文件信息，可以是文件路径（str 或 Path）或文件字节数据（bytes）
-        :param filename: 当输入为字节数据时需要提供的文件名
-        :return: 如果输入是文件路径，返回 (文件名, 文件字节内容, MIME 类型) 的元组；如果输入是字节数据，返回 (文件名, 字节数据, MIME 类型) 的元组；其他情况抛出 NotImplementedException
-        """
-        if isinstance(abspath, (str, Path)):
-            filename = os.path.basename(str(abspath))
-            with open(file=abspath, mode="rb") as file:
-                file_bytes = file.read()
-
-            mime_type = mimetypes.guess_type(abspath)[0]
-            return filename, file_bytes, mime_type
-
-        elif isinstance(abspath, bytes):
-            if not filename:
-                raise ValueError("文件名称在传递字节数据时为必填")
-
-            mime_type = mimetypes.guess_type(filename)[0]
-            return filename, abspath, mime_type
-
-        else:
-            raise NotImplementedException(message="未实现非文件路径或字节以外的功能")
-
-    def get_file_size(self, abspath: Union[str, Path], unit: str = 'B') -> float:
-        """
-        获取指定文件的大小，并将其转换为指定的单位。
-
-        :param abspath: 文件的绝对路径，可以是字符串或 Path 对象
-        :param unit: 要转换的目标单位，可选值包括 'B'（字节）、'KB'（千字节）、'MB'（兆字节）、'GB'（吉字节）等
-        :return: 转换为指定单位后的文件大小，保留两位小数，四舍五入
-        :raises NotFoundException: 如果文件不存在
-        :raises NotImplementedException: 如果指定的单位不在支持的转换单位列表中
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        if not abspath.exists():
-            raise NotFoundException(message=f"文件或目录不存在: {abspath}")
-
-        file_size_bytes = os.path.getsize(abspath)
-
-        # 定义单位转换的映射
-        unit_mapping = {
-            'B': 1,
-            'KB': 1024,
-            'MB': 1024 * 1024,
-            'GB': 1024 * 1024 * 1024,
-            # 可以根据需要添加更多单位
+            51: "%Y%m%d%H%M%S%f",
+            52: "%Y-%m-%d %H:%M:%S:%f",
+            53: "%Y/%m/%d %H:%M:%S:%f",
+            54: "%Y{0}%m{1}%d{2} %H{3}%M{4}%S{5}%f{6}".format("年", "月", "日", "时", "分", "秒", "毫秒"),
         }
 
-        if unit not in unit_mapping:
-            raise NotImplementedException(message=f"给定换算单位无效，必须是其中之一: {', '.join(unit_mapping.keys())}")
+    def generate_country(self):
+        """生成随机国家名称（中文）。"""
+        return self.faker_cn.country()
 
-        # 转换文件大小到指定单位
-        file_size_unit = round(file_size_bytes / unit_mapping[unit], 2)
+    def generate_province(self):
+        """生成随机省份名称（中文）。"""
+        return self.faker_cn.province()
 
-        return file_size_unit
+    def generate_city(self):
+        """生成随机城市名称（中文）。"""
+        return self.faker_cn.city()
 
-    def get_last_modified_time(self, abspath: Union[str, Path]) -> datetime:
-        """
-        获取指定文件的最后修改时间。
+    def generate_district(self):
+        """生成随机区县名称（中文）。"""
+        return self.faker_cn.district()
 
-        :param abspath: 文件的绝对路径，可以是字符串或 Path 对象
-        :return: 文件的最后修改时间
-        :raises NotFoundException: 如果文件不存在
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        if not abspath.exists():
-            raise NotFoundException(message=f"文件或目录不存在: {abspath}")
+    def generate_address(self):
+        """生成随机地址（中文）。"""
+        return self.faker_cn.address()
 
-        return datetime.fromtimestamp(os.path.getmtime(abspath))
+    def generate_company(self):
+        """生成随机公司名称（中文）。"""
+        return self.faker_cn.company()
 
-    def get_last_file_name(self, abspath: Union[str, Path]) -> str:
-        """
-        获取指定目录中最后创建的文件的名称。
+    def generate_bank_account_number(self):
+        """生成随机银行卡号。"""
+        return self.faker_cn.credit_card_number()
 
-        :param abspath: 目录的绝对路径，可以是字符串或 Path 对象
-        :return: 最后创建的文件的名称
-        :raises NotFoundException: 如果目录不存在或目录中没有文件
-        """
-        abspath = self.str_to_path(abspath=abspath)
-        if not abspath.exists():
-            raise NotFoundException(message=f"目录不存在: {abspath}")
+    def generate_email(self):
+        """生成随机邮箱地址。"""
+        return self.faker_cn.email()
 
-        # 获取目录中的所有文件
-        files = [f for f in os.listdir(abspath) if os.path.isfile(os.path.join(abspath, f))]
-        if not files:
-            raise NotFoundException(message=f"目录中不存在文件: {abspath}")
+    def generate_job(self):
+        return self.faker_cn.job()
 
-        # 按创建时间排序，取最后创建的文件
-        last_file_name = max(files, key=lambda f: os.path.getctime(os.path.join(abspath, f)))
-        return last_file_name
+    def generate_name(self):
+        return self.faker_cn.name()
 
-    def get_last_dir_name(self, abspath: Union[str, Path]) -> str:
-        """
-        获取指定目录中最后创建的目录的名称。
+    def generate_phone(self):
+        return self.faker_cn.phone_number()
 
-        :param abspath: 父目录的绝对路径，可以是字符串或 Path 对象
-        :return: 最后创建的目录的名称
-        """
-        last_dir_name = ""
-        last_dir_time = 0
+    @classmethod
+    def generate_week_number(cls):
+        today = datetime.today()
+        return today.isocalendar()[:2][1]
 
-        # 遍历指定目录下的所子目录
-        abspath = self.str_to_path(abspath=abspath)
-        for entry in os.scandir(abspath):
-            if entry.is_dir(follow_symlinks=False):
-                # 获取目录的创建时间
-                dir_time = entry.stat().st_ctime
+    def generate_week_name(self):
+        return self.faker_cn.day_of_week()
 
-                # 比较时间，如果当前目录创建时间晚于之前记录的，则更新记录
-                if dir_time > last_dir_time:
-                    last_dir_time = dir_time
-                    last_dir_name = entry.name
+    @classmethod
+    def generate_day(cls):
+        return datetime.now().timetuple().tm_yday
 
-        return last_dir_name
+    def generate_am_or_pm(self):
+        return "上午" if self.faker_cn.am_pm() == "AM" else "下午"
+
+    def generate_ident_card_number(self):
+        return self.faker_cn.ssn(min_age=18, max_age=65)
+
+    def generate_ident_card_number_condition(self, min_age: int, max_age: int):
+        return self.faker_cn.ssn(min_age=min_age, max_age=max_age)
+
+    @classmethod
+    def generate_ident_card_birthday(cls, ident_card_number: str):
+        return ident_card_number[6:-4]
+
+    @classmethod
+    def generate_ident_card_gender(cls, ident_card_number: str):
+        return "女" if int(ident_card_number[-2]) % 2 == 0 else "男"
+
+    def generates(self, funcname: str, funcargs: Optional[dict] = None, funclocale: Literal["en", "cn"] = "cn"):
+        return getattr(eval("self.faker_" + funclocale), funcname)(**funcargs or {})
+
+    @classmethod
+    def generate_random_number(cls, min: int, max: int) -> int:
+        return random.randint(min, max)
 
     @staticmethod
-    def copy_directory(src_abspath: Union[str, Path], dst_abspath: Union[str, Path]) -> bool:
-        """
-        复制目录或文件到指定目标路径。
-
-        :param src_abspath: 源文件或目录的绝对路径，可以是字符串或 Path 对象
-        :param dst_abspath: 目标文件或目录的绝对路径，可以是字符串或 Path 对象
-        :return: 如果复制成功返回 True，否则返回 False
-        """
-        if not os.path.exists(src_abspath):
-            return False
+    def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
         try:
-            if os.path.isdir(src_abspath):
-                shutil.copytree(src=src_abspath, dst=dst_abspath, dirs_exist_ok=True)
-                return True
-            if os.path.isfile(src_abspath):
-                shutil.copy(src=src_abspath, dst=dst_abspath)
-                return True
-            return False
-        except Exception as e:
-            return False
+            length: int = int(length)
+            number = "".join(random.sample(string.digits * length, length))
+            english = "".join(random.sample(string.ascii_letters * length, length))
+            word = str("".join([chr(random.randint(0x4e00, 0x9fbf)) for _ in range(length)]))
+        except ValueError as ve:
+            raise ValueError(f"随机生成字符串失败，处理长度参数[{length}]时发生意外错误：{ve}")
 
-    @staticmethod
-    def move_directory(src_abspath: Union[str, Path], dst_abspath: Union[str, Path]) -> bool:
-        """
-        移动目录或文件到指定目标路径。
+        # 1.随机一种
+        if digit and not char and not chinese:
+            generate_string = number
+        elif char and not digit and not chinese:
+            generate_string = english
+        elif chinese and not digit and not char:
+            generate_string = english
 
-        :param src_abspath: 源文件或目录的绝对路径，可以是字符串或 Path 对象
-        :param dst_abspath: 目标文件或目录的绝对路径，可以是字符串或 Path 对象
-        :return: 如果复制成功返回 True，否则返回 False
-        """
-        # 检查原始文件或目录是否存在
-        if not os.path.exists(src_abspath):
-            raise NotFoundException(message=f"目录中不存在文件: {src_abspath}")
+        # 2.随机两种
+        elif digit and char and not chinese:
+            generate_string = "".join(random.sample(number + english, length))
+        elif digit and chinese and not char:
+            generate_string = "".join(random.sample(number + word, length))
+        elif char and chinese and not digit:
+            generate_string = "".join(random.sample(english + word, length))
 
-        # 检查目标目录是否存在
-        dst_dir = os.path.dirname(dst_abspath)
-        if not os.path.exists(dst_dir):
-            os.makedirs(dst_dir, exist_ok=True)
+        # 3.随机三种
+        elif digit and char and chinese:
+            generate_string = "".join(random.sample(number + word + english, length))
 
-        # 检查目标文件是否存在
-        if os.path.exists(dst_abspath):
-            raise ParameterException(message=f"目标目录下存在同名文件: {dst_abspath}")
-
-        shutil.move(src=src_abspath, dst=dst_abspath)
-        return True
-
-    @staticmethod
-    def zip_files(zip_file_name: str, zip_dir_path: str) -> str:
-        """
-        压缩指定目录下的所有文件到一个 zip 文件。
-
-        :param zip_file_name: 压缩文件的名称
-        :param zip_dir_path: 要压缩的目录的路径
-        :return: 压缩文件的名称
-        """
-        parent_name = os.path.dirname(zip_dir_path)
-        # 压缩文件最后需要close，为了方便我们直接用with
-        with zipfile.ZipFile(file=zip_file_name, mode="w", compression=zipfile.ZIP_STORED) as zip:
-            for root, dirs, files in os.walk(zip_dir_path):
-                for file in files:
-                    if str(file).startswith("~$"):
-                        continue
-                    filepath = os.path.join(root, file)
-                    writepath = os.path.relpath(filepath, parent_name)
-                    zip.write(filepath, writepath)
-            zip.close()
-        return zip_file_name
-
-    def read_file(self, file_path: str, file_type: str) -> str:
-        with open(file_path, 'r') as file:
-            if file_type == 'yml':
-                content = yaml.safe_load(file)
-            else:
-                content = file.readlines()
-        return content
-
-    def read_files(self, path: str, file_type: str) -> str:
-        list_file = [item for item in os.listdir(path) if item.endswith(f'.{file_type}')]
-        documentation = []
-        if len(list_file) == 1:
-            file_path = f"{path}/{list_file[0]}"
-            response = self.read_file(file_path, file_type)
-            return response
+        # 默认
         else:
-            for item in list_file:
-                file_path = f"{path}/{item}"
-                file = self.read_file(file_path, file_type)
-                documentation += file
-            return '\n'.join(documentation)
+            generate_string = number
+
+        return generate_string[::-1]
+
+    def generate_datetime(self, year: int = 0, month: int = 0, day: int = 0,
+                          hour: int = 0, minute: int = 0, second: int = 0,
+                          fmt: Optional[Union[int, str]] = None, isMicrosecond: bool = False) -> Union[datetime, str]:
+        """
+        根据当前日期时间自定义修改年、月、日、时、分、秒和格式
+        :param year:    非必填项，年份控制
+        :param month:   非必填项，月份控制
+        :param day:     非必填项，日份控制
+        :param hour:    非必填项，小时控制
+        :param minute:  非必填项，分钟控制
+        :param second:  非必填项，秒数控制
+        :param fmt:  非必填项，格式控制
+        :param isMicrosecond:  非必填项，毫秒控制
+        :return: 默认以XXXX-XX-XX XX:XX:XX格式返回当前日期时间
+        """
+        # 获取当前日期时间
+        current_datetime = datetime.now()
+        if not isMicrosecond:
+            current_datetime = current_datetime.replace(microsecond=0)
+
+        # 计算偏移量
+        current_datetime = current_datetime + relativedelta(**{
+            "years": year, "months": month, "days": day,
+            "hours": hour, "minutes": minute, "seconds": second
+        })
+
+        # 格式化
+        if fmt:
+            if fmt not in (23, 33, 43, 53):
+                current_datetime = current_datetime.strftime(self.formats.get(fmt, fmt))
+            else:
+                current_datetime = current_datetime.strftime(
+                    self.formats.get(fmt, fmt).encode("unicode_escape").decode('utf-8')
+                ).encode("utf-8").decode("unicode_escape")
+
+        return current_datetime
+
+    def generate_pinyin(self, chars: str, splitter: str = "",
+                        convert: Literal["lower", "upper", "capitalize"] = "lower"):
+        # 暂时无法处理多音字
+        return self.pinyin.get_pinyin(chars=chars, splitter=splitter, convert=convert)
+
+    def generate_information(self, minAge: int = 18, maxAge: int = 65,
+                             convert: Literal["lower", "upper", "capitalize"] = "upper"):
+        ident_card_name: str = self.generate_name()
+        ident_card_number: str = self.generate_ident_card_number_condition(minAge, maxAge)
+        ident_card_gender: str = self.generate_ident_card_gender(ident_card_number)
+        ident_card_birthday: str = self.generate_ident_card_birthday(ident_card_number)
+        ident_card_age: int = int(self.generate_datetime(fmt=11)) - int(ident_card_birthday[:4])
+        bank_card_name: str = self.generate_bank_account_number()
+        resp: dict = {
+            "name": ident_card_name,
+            "alias": self.generate_pinyin(chars=ident_card_name, convert=convert),
+            "age": str(ident_card_age),
+            "gender": ident_card_gender,
+            "ssn": ident_card_number,
+            "card": bank_card_name,
+            "phone": self.generate_phone,
+            "email": self.generate_email,
+            "address": self.generate_address,
+            "company": self.generate_company,
+            "company_address": self.generate_address,
+            "job": self.generate_job,
+            "birthday1": ident_card_birthday,
+            "birthday2": ident_card_birthday[:4] + "-" + ident_card_birthday[4:-2] + "-" + ident_card_birthday[-2:],
+        }
+        return resp
+
+    def generate_global_serial_number(self):
+        """
+        全局流水号，28位（年 + 月 + 日 + 时 + 分 + 秒 + 毫秒 + 9999 + 4位随机数）
+        """
+        stamp = self.generate_datetime(fmt=51, isMicrosecond=True)
+        g1 = stamp + "9999" + self.generate_string(length=4)
+        g2 = stamp + "9999" + self.generate_string(length=4)
+        g3 = stamp + "9999" + self.generate_string(length=4)
+        return g1, g2, g3
+
+    @classmethod
+    def generate_uuid(cls):
+        return uuid.uuid4().__str__()
+
+    @classmethod
+    def generate_timestamp(cls):
+        now = datetime.now()
+        timestamp = (now - datetime(1970, 1, 1)).total_seconds() * 1000000
+        return int(timestamp)
+
+    @classmethod
+    def generate_seconds_until_22h(cls):
+        now = datetime.now()
+        midnight = now.replace(hour=22, minute=0, second=0, microsecond=0)
+        if now >= midnight:
+            midnight += timedelta(days=1)
+        delta = midnight - now
+        return int(delta.total_seconds())
+
+    @classmethod
+    def generate_seconds_until(cls, year: int = 0, month: int = 0, day: int = 0,
+                               hour: int = 0, minute: int = 0, second: int = 0) -> int:
+        # 当前时间
+        current_datetime: datetime = datetime.now()
+        target_datetime: datetime = current_datetime
+        # 时间偏移
+        target_datetime = target_datetime + relativedelta(**{
+            "years": year, "months": month, "days": day,
+            "hours": hour, "minutes": minute, "seconds": second
+        })
+        # 计算时间差
+        time_difference: timedelta = target_datetime - current_datetime
+        total_seconds: int = int(time_difference.total_seconds())
+        return total_seconds if total_seconds > 0 else 0
+
+
+GENERATE = GenerateUtils()
+
+if __name__ == '__main__':
+    vd = GenerateUtils()
+    # print("国家：", vd.generate_country())
+    # print("地址：", vd.generate_address())
+    # print("姓名：", vd.generate_name())
+    # print("银行卡号：", vd.generate_bank_account_number())
+    # print("身份证号码：", vd.generate_ident_card_number())
+    # print("身份证号码：", vd.generate_ident_card_number_condition(1, 10))
+    # print("身份证生日：", vd.generate_ident_card_birthday(idn))
+    # print("身份证性别：", vd.generate_ident_card_gender(idn))
+    # print("周名：", vd.generate_week_name())
+    # print("周号：", vd.generate_week_number())
+    # print("天：", vd.generate_day())
+    # print("反射：", vd.generates(funcname="ssn"))
+    # print("反射：", vd.generates(funcname="ssn", funcargs={"min_age": 18, "max_age": 18}))
+    # print("反射：", vd.generates(funcname="profile", funcargs={"fields": None, "sex": "F"}))
+    # print("反射：", vd.generates(funcname="simple_profile", funcargs={"sex": "M"}))
+    # print("个人档案：", vd.generates(funcname="profile"))
+    # print("个人档案：", vd.generate_information())
+    # print("时间：", vd.generate_datetime(fmt=11))
+    # print("时间：", vd.generate_datetime(fmt=21))
+    # print("时间：", vd.generate_datetime(fmt=31))
+    # print("时间：", vd.generate_datetime(fmt=41))
+    # print("时间：", vd.generate_datetime(fmt="%Y----%m"))
+    # print("时间：", vd.generate_datetime(year=int("-1"), fmt=23))
+    # print("时间：", vd.generate_datetime(fmt="%Y----%23"))
+    print("时间戳：", vd.generate_timestamp())
+    # print("拼音：", vd.generate_pinyin("上海银行"))
+    # print("拼音：", vd.generate_pinyin("上海银行", splitter="-"))
+    # print("拼音：", vd.generate_pinyin("上海银行", splitter="-", convert="upper"))
+    # print(vd.generate_string(length=10))
+    # print(vd.generate_string(length=10, char=True))
+    # print(vd.generate_string(length=10, chinese=True))
+    # print(vd.generate_string(length=10, digit=True))
+    # print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
+    print(vd.generate_global_serial_number())
+    print(vd.generate_seconds_until_22h())
+    print(vd.generate_seconds_until())
+    print(vd.generate_seconds_until(minute=3, second=59))

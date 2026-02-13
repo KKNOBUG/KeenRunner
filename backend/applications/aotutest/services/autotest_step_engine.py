@@ -92,7 +92,7 @@ class StepExecutionContext:
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             http_client: Optional[HttpClientProtocol] = None,
             report_code: Optional[str] = None,
-            pending_details: Optional[List[Any]] = None,
+            pending_details: Optional[List[AutoTestApiDetailCreate]] = None,
     ) -> None:
         """
         初始化步骤执行上下文。
@@ -2644,24 +2644,14 @@ class AutoTestStepExecutionEngine:
             env_name: Optional[str] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]], Optional[AutoTestApiReportCreate], Optional[List[AutoTestApiDetailCreate]]]:
-        """
+        """执行单用例：在上下文中按 step_no 执行根步骤，可选收集报告与明细供调用方落库。
 
-        执行单用例：可选创建/更新报告与用例状态，在上下文中按 step_no 执行 steps。
-        :param case: 用例信息，含 case_id、case_code、case_name。
-        :param steps: 根步骤可迭代对象。
-        :param report_type: 报告类型。
-        :param env_name: 执行环境名称，用于 HTTP 步骤补全 URL。
-        :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；传入 StepExecutionContext 后作为 context.session_variables 的初始值，供步骤执行时变量池与占位符解析使用。
-        :return: Tuple: (results, logs, report_code, statistics, session_variables)。
-                 - results: 根步骤执行结果列表。
-                 - logs: 按 step_code 分组的日志。
-                 - report_code: 报告编码，未保存报告时为 None。
-                 - statistics: 含 total_steps、success_steps、failed_steps、pass_ratio。
-                 - session_variables: 执行结束后的会话变量列表。
-
-                执行单用例：在上下文中按 step_no 执行 steps；若需保存报告则仅收集报告与明细数据，由调用方在短事务内一次性落库。
-        :return: Tuple: (results, logs, report_code_placeholder, statistics, session_variables, report_create_for_defer, pending_details_for_defer)。
-                 _save_report 为 True 时最后两项为报告创建体与明细列表，调用方需先 create_report 取得真实 report_code，再为每条明细赋该 report_code 后 create_detail，最后 update_case。
+        :param case: 用例信息字典，含 case_id、case_code、case_name。
+        :param steps: 根步骤可迭代对象（已排序按 step_no）。
+        :param report_type: 报告类型枚举。
+        :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
+        :param initial_variables: 初始会话变量列表，每项含 key、value、desc。
+        :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。results 为根步骤执行结果列表；logs 按 step_code 分组；report_code 未保存时为 None；statistics 含 total_steps、success_steps、failed_steps、pass_ratio；session_variables 为执行后变量列表。当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case。
         """
         report_code = None
         case_start_time = datetime.now()
@@ -2712,13 +2702,13 @@ class AutoTestStepExecutionEngine:
             case_ed_time_str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
             case_elapsed = f"{(case_end_time - case_start_time).total_seconds():.3f}"
             case_state = failed_steps == 0
-            report_create_for_defer: Optional[AutoTestApiReportCreate] = None
-            pending_details_for_defer: Optional[List[AutoTestApiDetailCreate]] = None
+            defer_create_report: Optional[AutoTestApiReportCreate] = None
+            pending_create_details: Optional[List[AutoTestApiDetailCreate]] = None
             if self._save_report and report_code:
                 user_id = CTX_USER_ID.get(0)
                 user_name = str(user_id) if user_id else None
                 final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
-                report_create_for_defer = AutoTestApiReportCreate(
+                defer_create_report = AutoTestApiReportCreate(
                     case_id=case_id,
                     case_code=case_code,
                     case_st_time=case_st_time_str,
@@ -2734,7 +2724,7 @@ class AutoTestStepExecutionEngine:
                     task_code=self._task_code,
                     batch_code=self._batch_code,
                 )
-                pending_details_for_defer = list(self._pending_details)
+                pending_create_details = list(self._pending_details)
 
             statistics = {
                 "total_steps": total_steps,
@@ -2743,7 +2733,7 @@ class AutoTestStepExecutionEngine:
                 "pass_ratio": round(pass_ratio, 2)
             }
             session_variables = context.session_variables if isinstance(context.session_variables, list) else []
-            return results, context.logs, report_code, statistics, session_variables, report_create_for_defer, pending_details_for_defer
+            return results, context.logs, report_code, statistics, session_variables, defer_create_report, pending_create_details
 
     @staticmethod
     def collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:

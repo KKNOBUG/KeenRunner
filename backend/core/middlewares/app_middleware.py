@@ -22,34 +22,64 @@ from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
 from backend.services.dependency import AuthControl
 
-
 def is_upload_request(request: Request) -> bool:
+    """判断当前请求是否为文件上传请求（multipart/form-data 或路径含 upload）。
+
+    :param request: FastAPI/Starlette 请求对象。
+    :returns: 是上传请求返回 True，否则 False。
+    """
     path: str = request.url.path.lower()
     content_type: str = request.headers.get("content-type", "")
     return "multipart/form-data" in content_type.lower() or path.startswith("upload") or path.endswith("upload")
 
 
 def is_html_response(response: Response) -> bool:
+    """判断响应是否为 HTML 或 XML 文本类型。
+
+    :param response: 响应对象。
+    :returns: Content-Type 含 text/html 或 application/xml 时返回 True。
+    """
     content_type: str = response.headers.get("content-type", "")
     return "text/html" in content_type.lower() or "application/xml" in content_type.lower()
 
 
 def is_image_response(response: Response) -> bool:
+    """判断响应是否为图片类型。
+
+    :param response: 响应对象。
+    :returns: Content-Type 含 image 时返回 True。
+    """
     content_type: str = response.headers.get("content-type", "")
     return "image" in content_type.lower()
 
 
 def is_download_response(response: Response) -> bool:
+    """判断响应是否为附件下载（Content-Disposition 含 attachment）。
+
+    :param response: 响应对象。
+    :returns: 为附件下载时返回 True。
+    """
     content_disposition: str = response.headers.get("content-disposition", "")
     return "attachment" in content_disposition.lower()
 
 
 def is_longtext_response(response: Response) -> bool:
+    """判断响应体是否超过 5000 字节（用于决定是否截断审计日志中的响应体）。
+
+    :param response: 响应对象。
+    :returns: Content-Length 大于 5000 时返回 True。
+    """
     content_length: int = response.headers.get("content-length", 0)
     return int(content_length) > 10240
 
 
 async def logging_middleware(request: Request, call_next):
+    """记录请求与响应摘要、耗时，并写入审计表；对上传/下载/大响应体做特殊处理。
+
+    :param request: 当前请求。
+    :param call_next: 下一层 ASGI 可调用对象。
+    :returns: 下游返回的 Response。
+    """
     # 接口服务时间
     start_time = time.time()
     request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(start_time))

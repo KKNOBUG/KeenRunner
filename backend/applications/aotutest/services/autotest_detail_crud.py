@@ -31,10 +31,21 @@ from backend.core.exceptions.base_exceptions import (
 
 
 class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
+    """自动化测试步骤执行明细的 CRUD 服务，负责明细的增删改查。"""
+
     def __init__(self):
+        """初始化 CRUD，绑定模型 AutoTestApiDetailInfo。"""
         super().__init__(model=AutoTestApiDetailInfo)
 
     async def get_by_id(self, detail_id: int, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
+        """根据明细主键 ID 查询单条明细（排除已删除）。
+
+        :param detail_id: 明细主键 ID。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 明细实例或 None。
+        :raises ParameterException: 当 detail_id 为空时。
+        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        """
         if not detail_id:
             error_message: str = "查询明细信息失败, 参数(detail_id)不允许为空"
             LOGGER.error(error_message)
@@ -48,6 +59,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         return instance
 
     async def get_by_code(self, detail_code: str, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
+        """根据明细标识（report_code）查询单条明细（排除已删除）。
+
+        :param detail_code: 报告标识代码 report_code，此处参数名为 detail_code。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 明细实例或 None。
+        :raises ParameterException: 当 detail_code 为空时。
+        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        """
         if not detail_code:
             error_message: str = "查询明细信息失败, 参数(detail_code)不允许为空"
             LOGGER.error(error_message)
@@ -66,6 +85,15 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[Union[AutoTestApiDetailInfo, List[AutoTestApiDetailInfo]]]:
+        """根据条件查询明细（排除已删除）。
+
+        :param conditions: 查询条件字典。
+        :param only_one: 为 True 时返回单条记录，否则返回列表。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :returns: 单条明细、明细列表或 None。
+        :raises ParameterException: 条件非法或查询异常时。
+        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
+        """
         try:
             stmt: QuerySet = self.model.filter(**conditions, state__not=1)
             instances = await (stmt.first() if only_one else stmt.all())
@@ -84,7 +112,16 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             raise NotFoundException(message=error_message)
         return instances
 
-    async def create_detail(self, detail_in: AutoTestApiDetailCreate) -> AutoTestApiDetailInfo:
+    async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestApiDetailInfo:
+        """创建一条执行明细，校验用例与报告存在性（可选跳过报告校验）。
+
+        :param detail_in: 明细创建 schema。
+        :param skip_report_check: 为 True 时不校验 report 是否存在。
+        :returns: 创建后的明细实例。
+        :raises NotFoundException: 用例或报告不存在时。
+        :raises DataBaseStorageException: 违反唯一约束时。
+        :raises DataAlreadyExistsException: 其他写入冲突时。
+        """
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
 
@@ -96,12 +133,13 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         )
 
         # 业务层验证：检查报告是否存在
-        report_code: str = detail_in.report_code
-        await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
-            only_one=True,
-            on_error=True,
-            conditions={"case_id": case_id, "case_code": case_code, "report_code": report_code}
-        )
+        if not skip_report_check:
+            report_code: str = detail_in.report_code
+            await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
+                only_one=True,
+                on_error=True,
+                conditions={"case_id": case_id, "case_code": case_code, "report_code": report_code}
+            )
         try:
             report_dict = detail_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.create(report_dict)
@@ -116,6 +154,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             raise DataAlreadyExistsException(message=error_message) from e
 
     async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
+        """更新明细，需提供 detail_id 或 (report_code, step_code) 定位。
+
+        :param detail_in: 明细更新 schema，含 case_id/case_code 及定位字段。
+        :returns: 更新后的明细实例。
+        :raises ParameterException: 定位参数缺失或用例/报告不存在时。
+        :raises NotFoundException: 明细不存在时。
+        :raises DataBaseStorageException: 违反约束时。
+        """
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
 
@@ -169,6 +215,15 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             step_code: Optional[str] = None,
             report_code: Optional[str] = None
     ) -> AutoTestApiDetailInfo:
+        """软删除明细，需提供 detail_id 或 (report_code, step_code)。
+
+        :param detail_id: 明细主键 ID，与 (report_code, step_code) 二选一。
+        :param step_code: 步骤标识代码，与 detail_id 二选一时必填。
+        :param report_code: 报告标识代码，与 detail_id 二选一时必填。
+        :returns: 软删除后的明细实例。
+        :raises ParameterException: 参数缺失时。
+        :raises NotFoundException: 明细不存在时。
+        """
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数缺失, 删除明细信息时必须传递(detail_id)或(report_code, step_code)字段"
             LOGGER.error(error_message)
@@ -196,6 +251,15 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         return instance
 
     async def select_details(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+        """分页查询明细列表。
+
+        :param search: Tortoise Q 查询条件。
+        :param page: 页码。
+        :param page_size: 每页条数。
+        :param order: 排序字段列表。
+        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
+        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:

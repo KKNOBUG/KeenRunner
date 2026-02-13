@@ -33,12 +33,19 @@ from backend.enums.autotest_enum import (
 
 
 def unique_identify() -> str:
+    """生成唯一标识字符串，由时间戳与 UUID 组合而成。
+
+    :returns: 格式为 ``{timestamp}-{uuid4_hex}`` 的唯一标识字符串。
+    :rtype: str
+    """
     timestamp = int(datetime.datetime.now().timestamp())
     uuid4_str = uuid.uuid4().hex.upper()
     return f"{timestamp}-{uuid4_str}"
 
 
 class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试应用（项目）信息模型，对应表 krun_autotest_api_project。"""
+
     project_name = fields.CharField(max_length=255, unique=True, description="应用名称")
     project_desc = fields.CharField(max_length=2048, null=True, description="应用描述")
     project_state = fields.CharField(max_length=64, null=True, description="应用状态")
@@ -60,10 +67,13 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回项目名称。"""
         return self.project_name
 
 
 class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试环境信息模型，对应表 krun_autotest_api_env。"""
+
     project_id = fields.BigIntField(index=True, description="环境所属项目")
     env_name = fields.CharField(max_length=64, index=True, description="环境名称")
     env_host = fields.CharField(max_length=128, description="环境主机(http|https://127.0.0.1)")
@@ -80,10 +90,13 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回环境名称。"""
         return self.env_name
 
 
 class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试标签信息模型，对应表 krun_autotest_api_tag。"""
+
     tag_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="标签标识代码")
     tag_type = fields.CharEnumField(AutoTestTagType, description="标签所属类型")
     tag_project = fields.IntField(default=1, ge=1, index=True, description="标签所属应用")
@@ -104,10 +117,13 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回标签名称。"""
         return self.tag_name
 
 
 class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试用例信息模型，对应表 krun_autotest_api_case。"""
+
     case_name = fields.CharField(max_length=255, index=True, description="用例名称")
     case_desc = fields.CharField(max_length=2048, null=True, description="用例描述")
     case_tags = fields.JSONField(default=list, description="用例所属标签")
@@ -138,10 +154,13 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回用例名称。"""
         return self.case_name
 
 
 class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试步骤信息模型，对应表 krun_autotest_api_step。"""
+
     step_no = fields.IntField(default=1, ge=1, description="步骤序号")
     step_name = fields.CharField(max_length=255, description="步骤名称")
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤描述")
@@ -213,10 +232,13 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["case_id", "step_no"]
 
     def __str__(self):
+        """返回步骤名称。"""
         return self.step_name
 
 
 class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试报告信息模型，对应表 krun_autotest_api_report。"""
+
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     case_st_time = fields.CharField(max_length=32, null=True, description="用例执行开始时间")
@@ -247,10 +269,13 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回报告标识代码。"""
         return self.report_code
 
 
 class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试步骤执行明细信息模型，对应表 krun_autotest_api_details。"""
+
     # 用例信息相关
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
@@ -307,10 +332,13 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回步骤标识代码。"""
         return self.step_code
 
 
 class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试任务信息模型，对应表 krun_autotest_api_task。"""
+
     task_name = fields.CharField(max_length=255, index=True, description="任务名称")
     task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
@@ -337,10 +365,13 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-updated_time"]
 
     def __str__(self):
+        """返回任务名称。"""
         return self.task_name
 
 
 class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
+    """自动化测试任务执行记录模型，对应表 krun_autotest_api_record。"""
+
     task_id = fields.BigIntField(null=True, index=True, description="任务ID(krun_autotest_api_task表主键)")
     task_name = fields.CharField(max_length=255, null=True, index=True, description="任务名称")
     task_kwargs = fields.JSONField(default=dict, null=True, description="定时任务实现函数的关键字参数")
@@ -365,4 +396,5 @@ class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
         ordering = ["-celery_start_time", "-id"]
 
     def __str__(self):
+        """返回 celery_id 与 task_name 的组合字符串。"""
         return f"{self.celery_id or ''}-{self.task_name or ''}"
