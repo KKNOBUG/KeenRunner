@@ -948,9 +948,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         if defer_create_report is not None:
             try:
                 async with in_transaction():
-                    await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
+                    report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
                     for detail_create in (pending_create_details or []):
-                        detail_schema = detail_create.model_copy(update={"report_code": report_code})
+                        detail_schema = detail_create.model_copy(update={"report_code": report_instance.report_code})
                         await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_schema)
                     case_state = statistics.get("failed_steps", 0) == 0
                     case_last_time = defer_create_report.case_ed_time

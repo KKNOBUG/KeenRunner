@@ -19,6 +19,8 @@ from xpinyin import Pinyin
 
 
 class GenerateUtils:
+    """数据生成工具类（单例），提供随机字符串、时间、姓名、地址等生成方法，供占位符与测试数据使用。"""
+
     # 用于存储该类的唯一实例
     __private_instance = None
     __private_initialized = False
@@ -28,12 +30,12 @@ class GenerateUtils:
         """
         创建并返回类的唯一实例。
 
-        使用单例模式，在整个应用程序的生命周期内仅创建一个 `RequestSyncUtils` 实例。
-        在多线程环境下，通过 `threading.Lock` 确保线程安全。
+        使用单例模式，在整个应用程序的生命周期内仅创建一个 GenerateUtils 实例。
+        在多线程环境下，通过 ``threading.Lock`` 确保线程安全。
 
-        :param args: 位置参数
-        :param kwargs: 关键字参数
-        :return: `RequestSyncUtils` 类的实例
+        :param args: 位置参数（未使用）。
+        :param kwargs: 关键字参数（未使用）。
+        :returns: GenerateUtils 类的唯一实例。
         """
         if not cls.__private_instance and not cls.__private_initialized:
             with cls.__private_lock:
@@ -44,6 +46,7 @@ class GenerateUtils:
         return cls.__private_instance
 
     def __init__(self, *args, **kwargs):
+        """初始化 Faker 与 Pinyin 实例及日期时间格式映射。"""
         super().__init__(*args, **kwargs)
         self.faker_cn = Faker(locale="zh_CN")
         self.faker_en = Faker(locale="en_US")
@@ -76,171 +79,84 @@ class GenerateUtils:
         }
 
     def generate_country(self):
-        """
-        国家名称
-        :return:
-        """
+        """生成随机国家名称（中文）。"""
         return self.faker_cn.country()
 
     def generate_province(self):
-        """
-        省份名称
-        :return:
-        """
+        """生成随机省份名称（中文）。"""
         return self.faker_cn.province()
 
     def generate_city(self):
-        """
-        城市名称
-        :return:
-        """
+        """生成随机城市名称（中文）。"""
         return self.faker_cn.city()
 
     def generate_district(self):
-        """
-        区县名称
-        :return:
-        """
+        """生成随机区县名称（中文）。"""
         return self.faker_cn.district()
 
     def generate_address(self):
-        """
-        详细地址
-        :return:
-        """
+        """生成随机地址（中文）。"""
         return self.faker_cn.address()
 
     def generate_company(self):
-        """
-        公司名称
-        :return:
-        """
+        """生成随机公司名称（中文）。"""
         return self.faker_cn.company()
 
     def generate_bank_account_number(self):
-        """
-        银行卡号
-        :return:
-        """
+        """生成随机银行卡号。"""
         return self.faker_cn.credit_card_number()
 
     def generate_email(self):
-        """
-        电子邮箱
-        :return:
-        """
+        """生成随机邮箱地址。"""
         return self.faker_cn.email()
 
     def generate_job(self):
-        """
-        工作职务
-        :return:
-        """
         return self.faker_cn.job()
 
     def generate_name(self):
-        """个人名称"""
         return self.faker_cn.name()
 
     def generate_phone(self):
-        """手机号码"""
         return self.faker_cn.phone_number()
 
     @classmethod
     def generate_week_number(cls):
-        """
-        今天是一年的第几周
-        :return:
-        """
         today = datetime.today()
         return today.isocalendar()[:2][1]
 
     def generate_week_name(self):
-        """
-        今天是一周的第几天
-        :return:
-        """
         return self.faker_cn.day_of_week()
 
     @classmethod
     def generate_day(cls):
-        """
-        今天是一年的第几天
-        :return:
-        """
         return datetime.now().timetuple().tm_yday
 
     def generate_am_or_pm(self):
-        """
-        当前是上午还是下午
-        :return:
-        """
         return "上午" if self.faker_cn.am_pm() == "AM" else "下午"
 
     def generate_ident_card_number(self):
-        """
-        生成18～65岁身份证号码
-        :return:
-        """
         return self.faker_cn.ssn(min_age=18, max_age=65)
 
     def generate_ident_card_number_condition(self, min_age: int, max_age: int):
-        """
-        生成指定年龄范围的身份证号码
-        :param min_age:
-        :param max_age:
-        :return:
-        """
         return self.faker_cn.ssn(min_age=min_age, max_age=max_age)
 
     @classmethod
     def generate_ident_card_birthday(cls, ident_card_number: str):
-        """
-        截取身份证号码的出生年月日
-        :param ident_card_number: 身份证号码
-        :return:
-        """
         return ident_card_number[6:-4]
 
     @classmethod
     def generate_ident_card_gender(cls, ident_card_number: str):
-        """
-        根据身份证号码判断性别
-        :param ident_card_number: 身份证号码
-        :return:
-        """
         return "女" if int(ident_card_number[-2]) % 2 == 0 else "男"
 
     def generates(self, funcname: str, funcargs: Optional[dict] = None, funclocale: Literal["en", "cn"] = "cn"):
-        """
-        反射虚拟造数工具类的方法
-        :param funcname: 方法名称
-        :param funcargs: 方法参数
-        :param funclocale: 方法地区
-        :return:
-        """
         return getattr(eval("self.faker_" + funclocale), funcname)(**funcargs or {})
 
     @classmethod
     def generate_random_number(cls, min: int, max: int) -> int:
-        """
-        生成1位指定范围的随机数
-        :param min: 最小值
-        :param max: 最大值
-        :return:
-        """
         return random.randint(min, max)
 
     @staticmethod
     def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
-        """
-        生成指定长度的随机数
-        :param length: 长度
-        :param digit: 是否启用数字因子
-        :param char: 是否启用字符因子
-        :param chinese: 是否启用中文因子
-        :return:
-        """
         try:
             length: int = int(length)
             number = "".join(random.sample(string.digits * length, length))
@@ -314,25 +230,11 @@ class GenerateUtils:
 
     def generate_pinyin(self, chars: str, splitter: str = "",
                         convert: Literal["lower", "upper", "capitalize"] = "lower"):
-        """
-        生成指定中文的拼音
-        :param chars: 中文
-        :param splitter: 连接符
-        :param convert: 转换标识
-        :return:
-        """
         # 暂时无法处理多音字
         return self.pinyin.get_pinyin(chars=chars, splitter=splitter, convert=convert)
 
     def generate_information(self, minAge: int = 18, maxAge: int = 65,
                              convert: Literal["lower", "upper", "capitalize"] = "upper"):
-        """
-        生成个人信息
-        :param minAge: 最小年龄
-        :param maxAge: 最大年龄
-        :param convert: 转换标识
-        :return:
-        """
         ident_card_name: str = self.generate_name()
         ident_card_number: str = self.generate_ident_card_number_condition(minAge, maxAge)
         ident_card_gender: str = self.generate_ident_card_gender(ident_card_number)
@@ -346,12 +248,12 @@ class GenerateUtils:
             "gender": ident_card_gender,
             "ssn": ident_card_number,
             "card": bank_card_name,
-            "phone": self.generate_phone(),
-            "email": self.generate_email(),
-            "address": self.generate_address(),
-            "company": self.generate_company(),
-            "company_address": self.generate_address(),
-            "job": self.generate_job(),
+            "phone": self.generate_phone,
+            "email": self.generate_email,
+            "address": self.generate_address,
+            "company": self.generate_company,
+            "company_address": self.generate_address,
+            "job": self.generate_job,
             "birthday1": ident_card_birthday,
             "birthday2": ident_card_birthday[:4] + "-" + ident_card_birthday[4:-2] + "-" + ident_card_birthday[-2:],
         }
@@ -369,18 +271,10 @@ class GenerateUtils:
 
     @classmethod
     def generate_uuid(cls):
-        """
-        生成uuid字符
-        :return:
-        """
         return uuid.uuid4().__str__()
 
     @classmethod
     def generate_timestamp(cls):
-        """
-        生成时间戳
-        :return:
-        """
         now = datetime.now()
         timestamp = (now - datetime(1970, 1, 1)).total_seconds() * 1000000
         return int(timestamp)
@@ -426,8 +320,6 @@ if __name__ == '__main__':
     # print("周名：", vd.generate_week_name())
     # print("周号：", vd.generate_week_number())
     # print("天：", vd.generate_day())
-    # print("上午：", vd.generate_am_or_pm())
-    # print("随机数：", vd.generate_random_number(1, 10))
     # print("反射：", vd.generates(funcname="ssn"))
     # print("反射：", vd.generates(funcname="ssn", funcargs={"min_age": 18, "max_age": 18}))
     # print("反射：", vd.generates(funcname="profile", funcargs={"fields": None, "sex": "F"}))

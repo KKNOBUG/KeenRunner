@@ -1277,22 +1277,22 @@ async def execute_step_tree(
 
             # 6. 执行
             engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
-            results, logs, report_code, statistics, session_variables, report_create_for_defer, pending_details_for_defer = await engine.execute_case(
+            results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
                 env_name=env_name,
                 initial_variables=initial_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC
             )
-            if report_create_for_defer is not None:
+            if defer_create_report is not None:
                 try:
                     async with in_transaction():
-                        await AUTOTEST_API_REPORT_CRUD.create_report(report_in=report_create_for_defer)
-                        for detail_create in (pending_details_for_defer or []):
-                            detail_schema = detail_create.model_copy(update={"report_code": report_code})
+                        report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
+                        for detail_create in (pending_create_details or []):
+                            detail_schema = detail_create.model_copy(update={"report_code": report_instance.report_code})
                             await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_schema)
                         case_state = statistics.get("failed_steps", 0) == 0
-                        case_last_time = report_create_for_defer.case_ed_time
+                        case_last_time = defer_create_report.case_ed_time
                         await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
                             case_id=case_id,
                             case_state=case_state,
