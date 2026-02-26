@@ -1327,7 +1327,7 @@ const doDebugRequest = async (env_name) => {
       $message.error(`请求失败：${responseData.message}`);
     }
   } catch (error) {
-    $message.error(`调试失败：${error.message}`);
+    $message.error(`${error.message}`);
   } finally {
     // 关闭加载状态
     debugLoading.value = false
