@@ -438,6 +438,29 @@
         </CrudTable>
       </n-drawer-content>
     </n-drawer>
+
+    <!-- 执行/调试前选择环境 -->
+    <n-modal
+        v-model:show="execModalVisible"
+        preset="dialog"
+        :title="execMode === 'run' ? '选择执行环境' : '选择调试环境'"
+        positive-text="确定"
+        negative-text="取消"
+        @positive-click="confirmExecModal"
+    >
+      <div style="padding: 8px 0;">
+        <div style="margin-bottom: 8px;">执行环境：</div>
+        <n-select
+            v-model:value="selectedEnvName"
+            :options="envOptions"
+            :loading="envLoading"
+            placeholder="请选择执行环境"
+            clearable
+            filterable
+            style="width: 100%;"
+        />
+      </div>
+    </n-modal>
   </AppPage>
 </template>
 
@@ -1823,31 +1846,12 @@ const handleSaveAll = async () => {
   }
 }
 
-const handleRun = async () => {
+const handleRun = () => {
   if (!caseId.value) {
     window.$message?.warning?.('请先选择或创建测试用例')
     return
   }
-  runLoading.value = true
-  try {
-    const res = await api.executeStepTree({
-      case_id: caseId.value ? Number(caseId.value) : null,
-      // initial_variables 必须是列表格式，每个元素包含 key、value、desc
-      initial_variables: []
-    })
-    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
-      const stats = res.data || {}
-      const msg = `执行完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
-      window.$message?.success?.(msg)
-    } else {
-      window.$message?.error?.(res?.message || '执行失败')
-    }
-  } catch (error) {
-    console.error('Failed to run step tree', error)
-    window.$message?.error?.(error?.message || '执行失败')
-  } finally {
-    runLoading.value = false
-  }
+  openExecModal('run')
 }
 
 // 格式化调试结果树
@@ -1896,7 +1900,7 @@ const formatDebugLogs = (logs) => {
   return output || '暂无日志'
 }
 
-const handleDebug = async () => {
+const handleDebug = () => {
   if (!steps.value || steps.value.length === 0) {
     window.$message?.warning?.('请先添加测试步骤')
     return
@@ -1905,31 +1909,88 @@ const handleDebug = async () => {
     window.$message?.warning?.('请先保存用例或选择已有用例')
     return
   }
+  openExecModal('debug')
+}
+
+const execModalVisible = ref(false)
+const execMode = ref('run')
+const envOptions = ref([])
+const envLoading = ref(false)
+const selectedEnvName = ref(null)
+
+const loadEnvNames = async () => {
+  envLoading.value = true
+  try {
+    const res = await api.getApiEnvNames()
+    const list = res?.data ?? []
+    envOptions.value = list.map((name) => ({ label: name, value: name }))
+    if (envOptions.value.length > 0 && !selectedEnvName.value) {
+      selectedEnvName.value = envOptions.value[0].value
+    }
+  } catch (e) {
+    console.error('加载环境名称失败', e)
+    envOptions.value = []
+  } finally {
+    envLoading.value = false
+  }
+}
+
+const openExecModal = (mode) => {
+  execMode.value = mode
+  selectedEnvName.value = null
+  execModalVisible.value = true
+  loadEnvNames()
+}
+
+const confirmExecModal = async () => {
+  const env_name = selectedEnvName.value ?? undefined
+  execModalVisible.value = false
+  if (execMode.value === 'run') {
+    await doRun(env_name)
+  } else {
+    await doDebug(env_name)
+  }
+}
+
+const doRun = async (env_name) => {
+  runLoading.value = true
+  try {
+    const res = await api.executeStepTree({
+      case_id: caseId.value ? Number(caseId.value) : null,
+      initial_variables: [],
+      env_name
+    })
+    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
+      const stats = res.data || {}
+      const msg = `执行完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
+      window.$message?.success?.(msg)
+    } else {
+      window.$message?.error?.(res?.message || '执行失败')
+    }
+  } catch (error) {
+    console.error('Failed to run step tree', error)
+    window.$message?.error?.(error?.message || '执行失败')
+  } finally {
+    runLoading.value = false
+  }
+}
+
+const doDebug = async (env_name) => {
   debugLoading.value = true
   debugResult.value = null
   try {
-    // 调试模式：传递 case_id 和 steps
-    // 按照树的前序遍历顺序分配 step_no，确保唯一且按顺序递增
     const stepNoMap = assignStepNumbers(steps.value)
-
-    // 转换步骤数据，使用分配好的 step_no，并保持树结构
-    const backendSteps = steps.value.map((step) => {
-      return convertStepToBackend(step, null, stepNoMap)
-    })
-
+    const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
     const res = await api.executeStepTree({
-      // 调试模式：传递 case_id 和 steps
       case_id: caseId.value ? Number(caseId.value) : null,
       steps: backendSteps,
-      // initial_variables 必须是列表格式，每个元素包含 key、value、desc
-      initial_variables: []
+      initial_variables: [],
+      env_name
     })
     if (res?.code === '000000') {
       const stats = res.data || {}
       const msg = `调试完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
       window.$message?.success?.(msg)
-
-      // 保存调试结果用于展示
       debugResult.value = res.data
     } else {
       window.$message?.error?.(res?.message || '调试失败')

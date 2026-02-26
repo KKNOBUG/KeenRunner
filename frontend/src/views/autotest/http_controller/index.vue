@@ -504,6 +504,29 @@
       </n-tab-pane>
     </n-tabs>
   </n-card>
+
+  <!-- 调试前选择执行环境 -->
+  <n-modal
+      v-model:show="debugModalVisible"
+      preset="dialog"
+      title="选择调试环境"
+      positive-text="确定"
+      negative-text="取消"
+      @positive-click="confirmDebugModal"
+  >
+    <div style="padding: 8px 0;">
+      <div style="margin-bottom: 8px;">执行环境：</div>
+      <n-select
+          v-model:value="selectedEnvName"
+          :options="envOptions"
+          :loading="envLoading"
+          placeholder="请选择执行环境"
+          clearable
+          filterable
+          style="width: 100%;"
+      />
+    </div>
+  </n-modal>
 </template>
 
 <script setup>
@@ -1164,24 +1187,59 @@ const requestBodyData = computed(() => {
 
 const debugResultRef = ref(null)
 
-/* 调试方法 */
-const debugging = async () => {
-  const userStore = useUserStore(); // 获取用户状态管理 store
-  const currentUser = userStore.username; // 获取当前登录用户信息
-  const valid = await formRef.value.validate();
-  if (!valid) {
-    $message.warning("请填写必填字段");
-    return;
-  }
+const debugModalVisible = ref(false)
+const envOptions = ref([])
+const envLoading = ref(false)
+const selectedEnvName = ref(null)
 
-  // 设置加载状态
+const loadEnvNames = async () => {
+  envLoading.value = true
+  try {
+    const res = await api.getApiEnvNames()
+    const list = res?.data ?? []
+    envOptions.value = list.map((name) => ({ label: name, value: name }))
+    if (envOptions.value.length > 0 && !selectedEnvName.value) {
+      selectedEnvName.value = envOptions.value[0].value
+    }
+  } catch (e) {
+    console.error('加载环境名称失败', e)
+    envOptions.value = []
+  } finally {
+    envLoading.value = false
+  }
+}
+
+const openDebugModal = () => {
+  selectedEnvName.value = null
+  debugModalVisible.value = true
+  loadEnvNames()
+}
+
+const confirmDebugModal = () => {
+  debugModalVisible.value = false
+  doDebugRequest(selectedEnvName.value ?? '')
+}
+
+/* 调试方法：先选环境再发请求 */
+const debugging = async () => {
+  try {
+    await formRef.value?.validate?.()
+  } catch (_) {
+    $message.warning("请填写必填字段")
+    return
+  }
+  openDebugModal()
+}
+
+const doDebugRequest = async (env_name) => {
+  const userStore = useUserStore()
+  const currentUser = userStore.username
   debugLoading.value = true
-  response.value = null // 清空之前的响应数据
+  response.value = null
 
   try {
     const cfg = buildConfigFromState()
 
-    // 将列表格式转换为字典格式用于显示（仅用于requestInfo）
     const headersObj = cfg.headers.reduce((acc, {key, value}) => {
       if (key) acc[key] = value
       return acc
@@ -1203,11 +1261,10 @@ const debugging = async () => {
     }
 
     const caseId = route.query.case_id ? Number(route.query.case_id) : null
-
-    // 获取步骤的原始数据
     const original = props.step?.original || {}
 
     const debugPayload = {
+      env_name: env_name || '',
       case_id: caseId,
       step_type: original.step_type || 'HTTP/HTTPS协议网络请求',
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
@@ -1222,6 +1279,7 @@ const debugging = async () => {
       request_text: cfg.request_text ?? null,
       request_header: Array.isArray(cfg.headers) && cfg.headers.length > 0 ? cfg.headers : null,
       defined_variables: Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null,
+      session_variables: Array.isArray(cfg.session_variables) && cfg.session_variables.length > 0 ? cfg.session_variables : null,
       extract_variables: buildExtractForBackend(),
       assert_validators: buildValidatorsForBackend(),
       created_user: currentUser,

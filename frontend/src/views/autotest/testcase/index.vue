@@ -1,7 +1,7 @@
 <script setup>
 import {h, onMounted, ref, resolveDirective, withDirectives, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NInput, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag} from 'naive-ui'
+import {NButton, NInput, NModal, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -32,14 +32,48 @@ const {
 
 const router = useRouter()
 
-// 运行用例：以运行模式调用 execute_or_debugging，仅传 case_id，不传 steps。仅当前行的「运行」按钮显示 loading
+// 执行用例：先弹框选择执行环境，再以运行模式调用 execute_or_debugging
 const runningCaseId = ref(null)
-const handleRunCase = async (row) => {
+const runModalVisible = ref(false)
+const runRow = ref(null)
+const envOptions = ref([])
+const envLoading = ref(false)
+const selectedEnvName = ref(null)
+
+const loadEnvNames = async () => {
+  envLoading.value = true
+  try {
+    const res = await api.getApiEnvNames()
+    const list = res?.data ?? []
+    envOptions.value = list.map((name) => ({ label: name, value: name }))
+    if (envOptions.value.length > 0 && !selectedEnvName.value) {
+      selectedEnvName.value = envOptions.value[0].value
+    }
+  } catch (e) {
+    console.error('加载环境名称失败', e)
+    envOptions.value = []
+  } finally {
+    envLoading.value = false
+  }
+}
+
+const openRunModal = (row) => {
+  runRow.value = row
+  selectedEnvName.value = null
+  runModalVisible.value = true
+  loadEnvNames()
+}
+
+const confirmRunCase = async () => {
+  const row = runRow.value
+  if (!row) return
+  runModalVisible.value = false
   runningCaseId.value = row.case_id ?? null
   try {
     const res = await api.executeStepTree({
       case_id: row.case_id ? Number(row.case_id) : null,
       initial_variables: [],
+      env_name: selectedEnvName.value ?? undefined,
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
       const stats = res.data || {}
@@ -317,7 +351,7 @@ const columns = computed(() => [
               style: 'margin-right: 6px;',
               loading: runningCaseId.value === (row.case_id ?? null),
               disabled: runningCaseId.value != null,
-              onClick: () => handleRunCase(row),
+              onClick: () => openRunModal(row),
             },
             {
               default: () => '执行',
@@ -527,7 +561,28 @@ const columns = computed(() => [
 
     </CrudTable>
 
-
+    <!-- 执行前选择环境 -->
+    <NModal
+        v-model:show="runModalVisible"
+        preset="dialog"
+        title="选择执行环境"
+        positive-text="确定执行"
+        negative-text="取消"
+        @positive-click="confirmRunCase"
+    >
+      <div style="padding: 8px 0;">
+        <div style="margin-bottom: 8px;">执行环境：</div>
+        <NSelect
+            v-model:value="selectedEnvName"
+            :options="envOptions"
+            :loading="envLoading"
+            placeholder="请选择执行环境"
+            clearable
+            filterable
+            style="width: 100%;"
+        />
+      </div>
+    </NModal>
   </CommonPage>
 </template>
 

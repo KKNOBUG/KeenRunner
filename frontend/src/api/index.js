@@ -129,4 +129,6 @@ export default {
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
   // 辅助函数列表（用户变量/占位符解析）
   getAssistFuncList: (params = {}) => request.get('/autotest/tool/get', { params }),
+  // 环境相关：查询环境名称列表(去重)，用于执行/调试时选择执行环境
+  getApiEnvNames: () => request.get('/autotest/env/get_names'),
 }
