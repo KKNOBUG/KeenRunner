@@ -273,7 +273,7 @@ class AutoTestToolService:
         return func_name.strip(), args_dict
 
     @classmethod
-    def execute_func_string2(cls, session_variables: List[Dict[str, Any]]):
+    def execute_func_string(cls, session_variables: List[Dict[str, Any]]):
         """
         对会话变量列表中 value 为 "func_name(...)" 形式的项，调用 GenerateUtils 中同名函数并用返回值替换 value。
 
@@ -295,7 +295,7 @@ class AutoTestToolService:
             if not hasattr(GenerateUtils, func_name):
                 raise AttributeError(f"辅助函数[{func_name}]不存在, 无法替换其值")
             try:
-                item["value"] = getattr(GenerateUtils, func_name)(**func_args or {})
+                item["value"] = getattr(GenerateUtils(), func_name)(**func_args or {})
             except TypeError as e:
                 raise AttributeError(f"辅助函数[{func_name}]参数数量或类型不匹配: {e}")
             except SyntaxError as e:
@@ -315,7 +315,7 @@ class AutoTestToolService:
         """
         func_name, func_args = cls._parse_funcname_funcargs(content)
         if not func_name:
-            raise AttributeError(f"占位符内容不是有效的函数调用形式: {content!r}")
+            raise AttributeError(f"占位符内容不是有效的函数调用形式: {content}")
         if not hasattr(GenerateUtils, func_name):
             raise AttributeError(f"辅助函数[{func_name}]不存在, 无法替换其值")
         try:

@@ -373,13 +373,13 @@ async def debug_http_request(
         # 提取请求参数（使用 Pydantic 模型，自动验证）
         env_name = step_data.env_name
         step_name = step_data.step_name
-        request_url = step_data.request_url
+        request_url = step_data.request_url.lstrip("/")
         request_method = (step_data.request_method or "GET").upper()
         request_header = step_data.request_header or []
         request_params = step_data.request_params or []
         request_form_data = step_data.request_form_data or []
-        request_form_urlencoded = step_data.request_form_urlencoded or []
         request_form_file = step_data.request_form_file or []
+        request_form_urlencoded = step_data.request_form_urlencoded or []
         request_body: Optional[Dict[str, Any]] = step_data.request_body
         request_text: Optional[str] = step_data.request_text
         request_project_id: int = step_data.request_project_id
@@ -421,6 +421,9 @@ async def debug_http_request(
         }
         merge_all_variables.update(defined_variables_dict)
         merge_all_variables.update(session_variables_dict)
+        for var_name, var_value in list(merge_all_variables.items()):
+            if "(" in var_value and ")" in var_value and not var_name:
+                AutoTestToolService.execute_func_string_single(content=var_value)
 
         # 日志辅助函数：添加时间戳和步骤名称
         from datetime import datetime
@@ -440,13 +443,16 @@ async def debug_http_request(
                     return FailureResponse(
                         message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
                     )
-                execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
-                execute_envi_port: int = env_instance.env_port
-                if not execute_envi_host or not execute_envi_port:
+                execute_env_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
+                execute_env_port: str = env_instance.env_port
+                if not execute_env_host:
                     return FailureResponse(
                         message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不正确"
                     )
-                request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
+                if not execute_env_port:
+                    request_url = f"{execute_env_host}/{request_url.lstrip('/')}"
+                else:
+                    request_url = f"{execute_env_host}:{execute_env_port}/{request_url.lstrip('/')}"
             except Exception as e:
                 LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(f"HTTP请求调试异常, 错误描述: {e}")
@@ -521,12 +527,17 @@ async def debug_http_request(
                 )
                 return value
 
-        # 解析请求参数（列表格式）
+        # 解析请求参数（列表格式）及 request_body、request_text 中的占位符
         headers_list = resolve_placeholders(request_header)
         params_list = resolve_placeholders(request_params)
         form_data_list = resolve_placeholders(request_form_data)
         urlencoded_list = resolve_placeholders(request_form_urlencoded)
         form_files_list = resolve_placeholders(request_form_file)
+        if request_body is not None:
+            request_body = resolve_placeholders(request_body)
+        if request_text is not None:
+            request_text = resolve_placeholders(request_text)
+
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         def convert_list_to_dict(data_list):
@@ -604,12 +615,14 @@ async def debug_http_request(
                     url=request_url,
                     **request_kwargs
                 )
-            except httpx.TimeoutException:
-                return FailureResponse(message="请求超时，请检查URL是否可访问或网络连接是否正常")
+            except httpx.InvalidURL as e:
+                return FailureResponse(message=f"请求无效, 请求URL地址不符合规范: {e}")
+            except httpx.TimeoutException as e:
+                return FailureResponse(message=f"请求超市, 在规定时间范围内未能从服务器获取到响应数据: {e}")
             except httpx.ConnectError as e:
-                return FailureResponse(message=f"连接失败: {str(e)}")
+                return FailureResponse(message=f"请求失败, 无法建立到达目标服务器的连接: {e}")
             except httpx.RequestError as e:
-                return FailureResponse(message=f"请求失败: {str(e)}")
+                return FailureResponse(message=f"请求异常, 目标服务器无法完成该请求处理: {e}")
             except Exception as e:
                 error_message: str = (
                     f"【HTTP请求调试】请求服务器发生未知错误, "

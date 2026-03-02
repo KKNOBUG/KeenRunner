@@ -139,8 +139,7 @@ async def get_env_info(
 @autotest_env.get("/get_names", summary="API自动化测试-查询环境名称(去重)")
 async def get_env_name_list():
     try:
-        names: List[str] = await AUTOTEST_API_ENV_CRUD.model.filter(
-            tate__not=1).distinct().values_list("env_name", flat=True)
+        names: List[str] = await AUTOTEST_API_ENV_CRUD.model.filter(state__not=1).distinct().values_list("env_name", flat=True)
         LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except (NotFoundException, ParameterException) as e:

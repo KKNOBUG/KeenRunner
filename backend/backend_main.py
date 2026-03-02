@@ -86,6 +86,6 @@ if __name__ == '__main__':
     # 记录依赖：pip list --format=freeze > requirements.txt
     # Redis停止：终端执行 sudo lsof -i:6379 | grep -v PID | awk '{print $2}' | xargs sudo kill -9
     # Redis停止：终端执行 sudo lsof -i:6379 | grep -v PID | awk '{print $2}' | xargs sudo kill -9 2>/dev/null
-    # /usr/local/bin/redis-server
+    # Redis启动：终端执行 /usr/local/bin/redis-server
     # redis配置文件：/usr/local/etc/redis-6.2.9/redis.conf
     # redis持久文件：/usr/local/etc/redis-6.2.9/dump

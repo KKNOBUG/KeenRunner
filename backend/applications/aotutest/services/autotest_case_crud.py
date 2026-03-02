@@ -158,7 +158,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         case_id: Optional[int] = case_in.case_id
         case_code: Optional[str] = case_in.case_code
-        case_type: Optional[AutoTestCaseType] = case_in.AutoTestCaseType
+        case_type: Optional[AutoTestCaseType] = case_in.case_type
 
         # 业务层验证：检查用例信息是否存在
         if case_id:
@@ -290,7 +290,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             case_name: Optional[str] = case_data.case_name
             case_tags: Optional[List[int]] = case_data.case_tags
             case_project: Optional[int] = case_data.case_project
-            case_type: Optional[AutoTestCaseType] = case_data.AutoTestCaseType
+            case_type: Optional[AutoTestCaseType] = case_data.case_type
             if case_id and case_code and (case_id, case_code) in processed_case:
                 continue
 

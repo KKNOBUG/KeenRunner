@@ -174,7 +174,6 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    # todo：env_name 暂且实现
     env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None,

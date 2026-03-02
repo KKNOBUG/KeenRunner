@@ -314,7 +314,6 @@ class StepExecutionContext:
         """
         try:
             if isinstance(value, str):
-
                 def replace(match: re.Match[str]) -> str:
                     var_name = match.group(1).strip() if match.group(1) else ""
                     if not var_name:
@@ -327,7 +326,7 @@ class StepExecutionContext:
                             self.log("【获取变量】占位符(函数)解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
                             return str(resolved)
                         except (AttributeError, Exception) as e:
-                            self.log(f"【获取变量】占位符(函数)解析失败, 保留原值, 错误描述: {e}")
+                            self.log(f"【获取变量】占位符解析失败, 引用函数({var_name})引发未知异常, 保留原值, 错误描述: {e}")
                             return match.group(0)
                     try:
                         resolved = self.get_variable(var_name)
@@ -346,7 +345,6 @@ class StepExecutionContext:
                         return match.group(0)
 
                 return _RE_PLACEHOLDER.sub(replace, value)
-
             if isinstance(value, dict):
                 try:
                     return {k: self.resolve_placeholders(v) for k, v in value.items()}
@@ -457,6 +455,16 @@ class StepExecutionContext:
                     f"响应耗时: {response.elapsed.total_seconds()}"
                 )
                 return response
+            except httpx.InvalidURL as e:
+                error_message: str = (
+                    f"【HTTP请求】请求无效: "
+                    f"请求的URL地址不符合规范"
+                    f"(可能原因: 地址或端口拼写错误或目标服务器处于宕机状态), "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误描述: {e}"
+                )
+                self.log(error_message)
+                raise StepExecutionError(error_message) from e
             except httpx.TimeoutException as e:
                 error_message: str = (
                     f"【HTTP请求】请求超时: "
@@ -467,11 +475,21 @@ class StepExecutionContext:
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message) from e
-            except httpx.RequestError as e:
+            except httpx.ConnectError as e:
                 error_message: str = (
                     f"【HTTP请求】请求失败: "
-                    f"请求服务器时发生网络错误, "
-                    f"(可能原因: 网络连接问题、DNS解析失败或服务器不可达, "
+                    f"无法建立到达目标服务器的连接"
+                    f"(可能原因: 网络连接不可达、DNS解析失败或目标服务器处于拒绝状态), "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误描述: {e}"
+                )
+                self.log(error_message)
+                raise StepExecutionError(error_message) from e
+            except httpx.RequestError as e:
+                error_message: str = (
+                    f"【HTTP请求】请求异常: "
+                    f"目标服务器无法完成该请求处理, "
+                    f"(可能原因: 网络连接异常、数据包缺少或丢失, "
                     f"错误类型: {type(e).__name__}, "
                     f"错误描述: {e}"
                 )
@@ -1983,14 +2001,17 @@ class HttpStepExecutor(BaseStepExecutor):
                         raise StepExecutionError(
                             f"【HTTP请求】环境(project_id={request_project_id}, env_name={env_name})配置不存在"
                         )
-                    execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
-                    execute_envi_port: int = env_instance.env_port
-                    if not execute_envi_host or not execute_envi_port:
+                    execute_env_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
+                    execute_env_port: str = env_instance.env_port
+                    if not execute_env_host:
                         raise StepExecutionError(
                             f"【HTTP请求】环境(project_id={request_project_id}, env_name={env_name}, "
-                            f"host={execute_envi_host}, host={execute_envi_port})配置异常"
+                            f"host={execute_env_host}, host={execute_env_port})配置异常"
                         )
-                    request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
+                    if not execute_env_port:
+                        request_url = f"{execute_env_host}/{request_url.lstrip('/')}"
+                    else:
+                        request_url = f"{execute_env_host}:{execute_env_port}/{request_url.lstrip('/')}"
                 except StepExecutionError:
                     raise
                 except Exception as e:
