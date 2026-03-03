@@ -173,8 +173,6 @@ def register_routers(app: FastAPI) -> None:
     from backend.applications.department.views.department_view import dept
     from backend.applications.user.views.user_view import user
     from backend.applications.toolbox.views import toolbox
-    from backend.applications.program.views import program
-    from backend.applications.testcase.views import testcase
     from backend.applications.aotutest.views import autotest
 
     # 挂在路由蓝图
@@ -182,6 +180,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=user, prefix="/user", tags=["用户服务"])
     app.include_router(router=dept, prefix="/dept", tags=["部门服务"])
     app.include_router(router=toolbox, prefix="/toolbox", tags=["工具箱服务"])
-    app.include_router(router=program, prefix="/program", tags=["应用管理服务"])
-    app.include_router(router=testcase, prefix="/testcase", tags=["测试用例服务"])
     app.include_router(router=autotest, prefix="/autotest")

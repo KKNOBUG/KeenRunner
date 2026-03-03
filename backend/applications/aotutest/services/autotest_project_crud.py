@@ -20,6 +20,8 @@ from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectUpdate
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
@@ -215,30 +217,43 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             project_id: Optional[int] = None,
             project_code: Optional[str] = None
     ) -> AutoTestApiProjectInfo:
-        """软删除项目（state=1），需无关联用例。
+        """软删除项目（state=1），需无关联用例、环境、标签。
 
         :param project_id: 项目主键 ID，与 project_code 二选一。
         :param project_code: 项目标识代码，与 project_id 二选一。
         :returns: 软删除后的项目实例。
         :raises NotFoundException: 项目不存在时。
-        :raises DataBaseStorageException: 存在关联用例时。
+        :raises DataBaseStorageException: 存在关联用例/环境/标签时。
         """
-        # 业务层验证：检查应用是否存在
+        # 业务层验证：检查应用是否存在（project_id 与 project_code 二选一，不能都为空）
+        if not project_id and not project_code:
+            error_message: str = "查询应用信息失败, 参数(project_id)与(project_code)至少传一个"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if project_id:
             instance = await self.get_by_id(project_id=project_id, on_error=True)
         else:
             instance = await self.get_by_code(project_code=project_code, on_error=True)
 
-        # 业务层验证：检查应用信息是否存在关联
-        project_id = instance.id
-        cases_count = await AUTOTEST_API_CASE_CRUD.model.filter(case_project=project_id, state__not=1).count()
+        pid: int = instance.id
+        # 业务层验证：检查是否存在关联用例
+        cases_count = await AUTOTEST_API_CASE_CRUD.model.filter(case_project=pid, state__not=1).count()
         if cases_count > 0:
-            error_message: str = (
-                f"根据(case_project={project_id})条件检查用例信息失败, "
-                f"应用(name={instance.project_name})存在{cases_count}个用例, 无法直接删除"
-            )
-            LOGGER.error(error_message)
-            raise DataBaseStorageException(message=error_message)
+            msg = f"应用(name={instance.project_name})下存在{cases_count}个用例, 无法删除，请先解除关联"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
+        # 业务层验证：检查是否存在关联环境
+        env_count = await AUTOTEST_API_ENV_CRUD.model.filter(project_id=pid, state__not=1).count()
+        if env_count > 0:
+            msg = f"应用(name={instance.project_name})下存在{env_count}个环境, 无法删除，请先解除关联"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
+        # 业务层验证：检查是否存在关联标签
+        tag_count = await AUTOTEST_API_TAG_CRUD.model.filter(tag_project=pid, state__not=1).count()
+        if tag_count > 0:
+            msg = f"应用(name={instance.project_name})下存在{tag_count}个标签, 无法删除，请先解除关联"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
 
         instance.state = 1
         await instance.save()

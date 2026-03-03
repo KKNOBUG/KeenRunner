@@ -130,6 +130,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
 
         try:
             env_dict: Dict[str, Any] = env_in.model_dump(exclude_none=True, exclude_unset=True)
+            # 端口可选：无端口或 0 时存空字符串（直接请求域名场景）
+            env_dict["env_port"] = (
+                str(env_in.env_port) if (env_in.env_port is not None and env_in.env_port > 0) else ""
+            )
             instance = await self.create(obj_in=env_dict)
             return instance
         except IntegrityError as e:
@@ -161,6 +165,11 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
             exclude_unset=True,
             exclude={"env_id", "env_code"}
         )
+        # 端口可选：若传入则规范为字符串，空/0 存空字符串
+        if "env_port" in update_dict:
+            update_dict["env_port"] = (
+                str(update_dict["env_port"]) if (update_dict["env_port"] is not None and update_dict["env_port"] > 0) else ""
+            )
         # 业务层验证：检查应用ID和用例名称是否唯一
         if "env_name" in update_dict or "project_id" in update_dict:
             env_name: str = update_dict.get("env_name", instance.env_name)

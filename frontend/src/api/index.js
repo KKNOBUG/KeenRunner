@@ -42,46 +42,45 @@ export default {
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
 
-  // 应用管理相关
-  getProject: (params = {}) => request.get('/program/project/get', { params }),
-  createProject: (data = {}) => request.post('/program/project/create', data),
-  deleteProject: (params = {}) => request.delete('/program/project/delete', { params }),
-  updateProject: (data = {}) => request.post('/program/project/update', data),
-  getProjectList: (params = {}) => request.get('/program/project/list', { params }),
+  // 应用管理（autotest 应用/环境/标签）
+  getProject: (params = {}) => request.get('/autotest/project/get', { params }),
+  createProject: (data = {}) => request.post('/autotest/project/create', data),
+  deleteProject: (params = {}) => request.post('/autotest/project/delete', {}, { params }),
+  updateProject: (data = {}) => request.post('/autotest/project/update', data),
+  getProjectList: (data = {}) => request.post('/autotest/project/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
-  getModule: (params = {}) => request.get('/program/module/get', { params }),
-  createModule: (data = {}) => request.post('/program/module/create', data),
-  deleteModule: (params = {}) => request.delete('/program/module/delete', { params }),
-  updateModule: (data = {}) => request.post('/program/module/update', data),
-  getModuleList: (params = {}) => request.get('/program/module/list', { params }),
+  getEnv: (params = {}) => request.get('/autotest/env/get', { params }),
+  createEnv: (data = {}) => request.post('/autotest/env/create', data),
+  deleteEnv: (params = {}) => request.delete('/autotest/env/delete', { params }),
+  updateEnv: (data = {}) => request.post('/autotest/env/update', data),
+  getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
-  getEnv: (params = {}) => request.get('/program/env/get', { params }),
-  createEnv: (data = {}) => request.post('/program/env/create', data),
-  deleteEnv: (params = {}) => request.delete('/program/env/delete', { params }),
-  updateEnv: (data = {}) => request.post('/program/env/update', data),
-  getEnvList: (params = {}) => request.get('/program/env/list', { params }),
+  getTag: (params = {}) => request.get('/autotest/tag/get', { params }),
+  createTag: (data = {}) => request.post('/autotest/tag/create', data),
+  updateTag: (data = {}) => request.post('/autotest/tag/update', data),
+  deleteTag: (params = {}) => request.delete('/autotest/tag/delete', { params }),
+  getTagList: (data = {}) => request.post('/autotest/tag/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
 
   // 工具箱相关
   runcodePython: (data = {}) => request.post('/toolbox/runcode/python', data),
   generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
 
-  // 测试用例相关
-  updateOrCreate: (data = {}) => request.post('/testcase/api/updateOrCreate', data),
-  debugging: (data = {}) => request.post('/testcase/api/debugging', data),
-
   // 自动化测试相关
   getApiTestcaseList: (data = {}) => request.post('/autotest/case/search', data),
   createApiTestcaseList: (data = {}) => request.post('/autotest/case/create', data),
   updateApiTestcaseList: (data = {}) => request.post('/autotest/case/update', data),
-  deleteApiTestcaseList: (data = {}) => request.delete(`/autotest/case/delete?case_id=${data.case_id}`, data),
+  deleteApiTestcaseList: (params = {}) => {
+    const q = []
+    if (params.case_id != null) q.push(`case_id=${params.case_id}`)
+    if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
+    return request.delete(`/autotest/case/delete${q.length ? '?' + q.join('&') : ''}`)
+  },
   getAutoTestStepTree: (data = {}) => {
     const params = []
     if (data.case_id) params.push(`case_id=${data.case_id}`)
     if (data.case_code) params.push(`case_code=${data.case_code}`)
-    console.log(data.case_id)
-    console.log(data.case_code)
-    return request.get(`/autotest/step/tree${params.length ? '?' + params.join('&') : ''}`, data)
+    return request.get(`/autotest/step/tree${params.length ? '?' + params.join('&') : ''}`)
   },
   // 项目相关
   getApiProjectList: (data = {}) => request.post('/autotest/project/search', data),

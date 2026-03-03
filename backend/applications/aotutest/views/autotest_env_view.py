@@ -192,7 +192,7 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
             serialize["project_name"] = project_instance["project_name"]
             env_serializes.append(serialize)
         LOGGER.info(f"按条件查询环境成功, 结果数量: {total}")
-        return SuccessResponse(message="查询成功", data=env_serializes, total=1)
+        return SuccessResponse(message="查询成功", data=env_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

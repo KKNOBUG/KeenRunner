@@ -1,21 +1,21 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
-import {NButton, NForm, NFormItem, NInput, NPopconfirm, NTag, NTooltip, NTreeSelect} from 'naive-ui'
+import { h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
+import { NButton, NForm, NFormItem, NInput, NPopconfirm, NTag, NTooltip } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {formatDate, renderIcon} from '@/utils'
-import {useCRUD} from '@/composables'
+import { formatDate, renderIcon } from '@/utils'
+import { useCRUD } from '@/composables'
 import api from '@/api'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
-defineOptions({name: '项目管理'})
+defineOptions({ name: '项目管理' })
 
 const $table = ref(null)
-const queryItems = ref({})
+const queryItems = ref({ project_code: '', project_state: '' })
 const vPermission = resolveDirective('permission')
 
 const {
@@ -30,174 +30,149 @@ const {
   modalForm,
   modalFormRef,
 } = useCRUD({
-  name: '项目',
+  name: '应用',
   initForm: {
-    // 初始化环境信息数组
-    environments: []
+    project_name: '',
+    project_code: '',
+    project_desc: '',
+    project_state: '',
+    project_phase: '',
+    project_dev_owners: '',
+    project_test_owners: '',
   },
-  doCreate: api.createProject,
-  doDelete: api.deleteProject,
-  doUpdate: api.updateProject,
+  doCreate: (form) => {
+    const toList = (v) => (Array.isArray(v) ? v : (v || '').replace(/，/g, ',').split(',').map(s => s.trim()).filter(Boolean))
+    const payload = {
+      project_name: form.project_name,
+      project_desc: form.project_desc || undefined,
+      project_state: form.project_state || undefined,
+      project_phase: form.project_phase || undefined,
+      project_dev_owners: toList(form.project_dev_owners),
+      project_test_owners: toList(form.project_test_owners),
+    }
+    return api.createProject(payload)
+  },
+  doDelete: (params) => api.deleteProject(params),
+  doUpdate: (form) => {
+    const toList = (v) => (Array.isArray(v) ? v : (v || '').replace(/，/g, ',').split(',').map(s => s.trim()).filter(Boolean))
+    const payload = {
+      project_id: form.project_id,
+      project_code: form.project_code || undefined,
+      project_name: form.project_name,
+      project_desc: form.project_desc || undefined,
+      project_state: form.project_state || undefined,
+      project_phase: form.project_phase || undefined,
+      project_dev_owners: toList(form.project_dev_owners),
+      project_test_owners: toList(form.project_test_owners),
+    }
+    return api.updateProject(payload)
+  },
   refresh: () => $table.value?.handleSearch(),
 })
 
-const pattern = ref('')
-const active = ref(false)
-const ownerOption = ref([])
+function customHandleEdit(row) {
+  handleEdit({
+    ...row,
+    project_dev_owners: Array.isArray(row.project_dev_owners) ? row.project_dev_owners.join(', ') : (row.project_dev_owners || ''),
+    project_test_owners: Array.isArray(row.project_test_owners) ? row.project_test_owners.join(', ') : (row.project_test_owners || ''),
+  })
+}
 
 onMounted(() => {
   $table.value?.handleSearch()
-  api.getUserList().then((res) => (ownerOption.value = res.data))
-
 })
 
-// 添加环境
-const addEnv = () => {
-  modalForm.value.environments.push({
-    name: '',
-    host: '',
-    port: '',
-    description: ''
-  })
-}
-// 重置逻辑（在handleAdd中处理）
-const customHandleAdd = () => {
-  handleAdd() // 调用原始的handleAdd
-  modalForm.value.environments = [] // 清空环境配置
-}
-
-// 删除环境
-const removeEnv = (index) => {
-  modalForm.value.environments.splice(index, 1)
-}
-
-
-// 编辑
-const customHandleEdit = (row) => {
-  console.log('原始数据:', row)
-  handleEdit(row)
-  modalForm.value = {
-    ...row,
-    test_owner: row.test_owner?.id,
-    dev_owner: row.dev_owner?.id,
-    state: row.state,
-    environments: row.env_projects?.map(env => ({ // ✨ 关键修改：映射字段
-      ...env,
-      port: env.port.toString() // 确保端口号是字符串类型（如果后端返回数字）
-    })) || []
+function buildSearchBody() {
+  return {
+    page: 1,
+    page_size: 9999,
+    state: 0,
+    project_code: queryItems.value.project_code || undefined,
+    project_state: queryItems.value.project_state || undefined,
   }
-  console.log('处理后的表单数据:', modalForm.value)
 }
 
 const columns = [
   {
-    title: '项目代码',
-    key: 'code',
+    title: '应用代码',
+    key: 'project_code',
+    width: 120,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '应用名称',
+    key: 'project_name',
+    width: 150,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '应用状态',
+    key: 'project_state',
     width: 100,
     align: 'center',
-    ellipsis: {tooltip: true},
+    ellipsis: { tooltip: true },
   },
   {
-    title: '项目名称',
-    key: 'name',
-    width: 150,
+    title: '应用阶段',
+    key: 'project_phase',
+    width: 100,
     align: 'center',
-    ellipsis: {tooltip: true},
+    ellipsis: { tooltip: true },
   },
   {
-    title: '项目状态',
-    key: 'state',
-    width: 150,
+    title: '开发组长',
+    key: 'project_dev_owners',
+    width: 120,
     align: 'center',
-    ellipsis: {tooltip: true},
+    ellipsis: { tooltip: true },
     render(row) {
-      return h(NTag, {type: 'primary'}, {
-            default: () => {
-              if (row.state === 1) {
-                return '开发'
-              } else if (row.state === 2) {
-                return '延期'
-              } else if (row.state === 3) {
-                return '交付'
-              } else if (row.state === 4) {
-                return '完成'
-              }
-            }
-          }
-      )
+      const v = row.project_dev_owners
+      if (!v || !v.length) return '-'
+      return Array.isArray(v) ? v.join(', ') : String(v)
     },
   },
   {
-    title: '项目描述',
-    key: 'description',
-    width: 150,
+    title: '开发人员',
+    key: 'project_developers',
+    width: 120,
     align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '开发负责人',
-    key: 'dev_owner',
-    width: 150,
-    align: 'center',
-    ellipsis: {tooltip: true},
+    ellipsis: { tooltip: true },
     render(row) {
-      return h(
-          NTooltip,
-          {trigger: "hover"},
-          {
-            trigger: () => h(
-                'span',
-                {style: {margin: '2px 3px', cursor: 'pointer'}},
-                row.dev_owner.alias
-            ),
-            default: () => `工号: ${row.dev_owner.username}, 名称: ${row.dev_owner.alias}, 电话: ${row.dev_owner.phone}, 邮箱: ${row.test_owner.email}`
-          },
-      )
+      const v = row.project_developers
+      if (!v || !v.length) return '-'
+      return Array.isArray(v) ? v.join(', ') : String(v)
     },
   },
   {
-    title: '测试负责人',
-    key: 'test_owner',
-    width: 150,
+    title: '测试组长',
+    key: 'project_test_owners',
+    width: 120,
     align: 'center',
-    ellipsis: {tooltip: true},
+    ellipsis: { tooltip: true },
     render(row) {
-      return h(
-          NTooltip,
-          {trigger: "hover"},
-          {
-            trigger: () => h(
-                'span',
-                {style: {margin: '2px 3px', cursor: 'pointer'}},
-                row.test_owner.alias
-            ),
-            default: () => `工号: ${row.test_owner.username}, 名称: ${row.test_owner.alias}, 电话: ${row.test_owner.phone}, 邮箱: ${row.test_owner.email}`
-          },
-      )
+      const v = row.project_test_owners
+      if (!v || !v.length) return '-'
+      return Array.isArray(v) ? v.join(', ') : String(v)
     },
   },
   {
-    title: '创建时间',
-    key: 'created_time',
-    width: 150,
+    title: '测试人员',
+    key: 'project_testers',
+    width: 120,
     align: 'center',
+    ellipsis: { tooltip: true },
     render(row) {
-      return h('span', formatDate(row.created_time))
-    },
-  },
-  {
-    title: '更新时间',
-    key: 'updated_time',
-    width: 150,
-    align: 'center',
-    render(row) {
-      return h('span', formatDate(row.updated_time))
+      const v = row.project_testers
+      if (!v || !v.length) return '-'
+      return Array.isArray(v) ? v.join(', ') : String(v)
     },
   },
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 160,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -209,316 +184,116 @@ const columns = [
                   size: 'small',
                   type: 'primary',
                   style: 'margin-right: 8px;',
-                  onClick: () => {
-                    console.log('Edit button clicked'); // 添加日志
-                    console.log(row)
-                    // handleEdit(row)
-                    customHandleEdit(row)
-                    modalForm.value.test_owner = row.test_owner?.id
-                    modalForm.value.dev_owner = row.dev_owner?.id
-                    modalForm.value.state = row.state
-                    modalForm.value.environments = row.environments || [];
-                  },
+                  onClick: () => customHandleEdit(row),
                 },
-                {
-                  default: () => '编辑',
-                  icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-                }
+                { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
             ),
             [[vPermission, 'post/api/v1/role/update']]
         ),
         h(
             NPopconfirm,
             {
-              onPositiveClick: () => handleDelete({project_id: row.id}, false),
-              onNegativeClick: () => {
-              },
+              onPositiveClick: () => handleDelete({ project_id: row.project_id }, false),
             },
             {
               trigger: () =>
                   withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'small',
-                            type: 'error',
-                            style: 'margin-right: 8px;',
-                          },
-                          {
-                            default: () => '删除',
-                            icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-                          }
-                      ),
+                      h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
+                        default: () => '删除',
+                        icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                      }),
                       [[vPermission, 'delete/api/v1/role/delete']]
                   ),
-              default: () => h('div', {}, '确定删除该项目吗?'),
+              default: () => h('div', {}, '确定删除该应用吗?'),
             }
         ),
       ]
     },
   },
 ]
-
-const stateOptions = [
-  {label: '开发', value: 1},
-  {label: '延期', value: 2},
-  {label: '交付', value: 3},
-  {label: '完成', value: 4},
-]
-
-const renderOptionLabel = (option) => {
-  const innerOption = option.option
-  return `工号: ${innerOption.username}, 名称: ${innerOption.alias}, 电话: ${innerOption.phone}, 邮箱: ${innerOption.email}`
-}
-
 </script>
 
 <template>
-  <CommonPage show-footer title="项目列表">
+  <CommonPage show-footer title="应用列表">
     <template #action>
-      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="customHandleAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
-        新建项目
+      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">
+        <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />
+        新建应用
       </NButton>
     </template>
 
-    <!--  搜索&表格  -->
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
         :is-pagination="false"
         :columns="columns"
-        :get-data="api.getProjectList"
+        :get-data="(params) => api.getProjectList(buildSearchBody())"
         :single-line="true"
+        row-key="project_id"
     >
-
-      <!--  搜索  -->
       <template #queryBar>
-        <QueryBarItem label="项目名称：" :label-width="100">
+        <QueryBarItem label="应用代码：" :label-width="90">
           <NInput
-              v-model:value="queryItems.name"
+              v-model:value="queryItems.project_code"
               clearable
-              type="text"
-              placeholder="请输入项目名称"
+              placeholder="请输入应用代码"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="项目状态：" :label-width="100">
-          <NSelect
-              v-model:value="queryItems.state"
-              :options="stateOptions"
+        <QueryBarItem label="应用状态：" :label-width="90">
+          <NInput
+              v-model:value="queryItems.project_state"
               clearable
-              placeholder="请选择项目状态"
-              style="width: 200px"
-              @update:value="$table?.handleSearch()"
+              placeholder="请输入应用状态"
+              style="width: 160px"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
       </template>
-
     </CrudTable>
 
-    <!--  新建&编辑项目弹窗  -->
-    <CrudModal
-        v-model:visible="modalVisible"
-        :title="modalTitle"
-        :loading="modalLoading"
-        @save="handleSave"
-    >
+    <CrudModal v-model:visible="modalVisible" :title="modalTitle" :loading="modalLoading" @save="handleSave">
       <NForm
           ref="modalFormRef"
           label-placement="left"
           label-align="left"
-          :label-width="100"
+          :label-width="110"
           :model="modalForm"
           :disabled="modalAction === 'view'"
       >
         <NFormItem
-            label="项目代码"
-            path="code"
-            :rule="{
-            required: true,
-            message: '请输入项目代码',
-            trigger: ['input', 'blur'],
-          }"
+            v-if="modalAction === 'edit'"
+            label="应用ID"
+            path="project_id"
         >
-          <NInput v-model:value="modalForm.code" placeholder="请输入项目代码"/>
+          <NInput v-model:value="modalForm.project_id" disabled />
         </NFormItem>
         <NFormItem
-            label="项目名称"
-            path="name"
-            :rule="{
-            required: true,
-            message: '请输入项目名称',
-            trigger: ['input', 'blur'],
-          }"
+            label="应用名称"
+            path="project_name"
+            :rule="{ required: true, message: '请输入应用名称', trigger: ['input', 'blur'] }"
         >
-          <NInput v-model:value="modalForm.name" placeholder="请输入项目名称"/>
+          <NInput v-model:value="modalForm.project_name" placeholder="请输入应用名称" />
         </NFormItem>
-        <NFormItem
-            label="项目状态"
-            path="state"
-            :rule="{
-              required: true,
-              type: 'number',
-              message: '请选择项目状态',
-              trigger: ['change', 'blur'],
-            }"
-        >
-          <NRadioGroup v-model:value="modalForm.state">
-            <NSpace>
-              <NRadio
-                  v-for="option in stateOptions"
-                  :key="option.value"
-                  :value="option.value"
-              >
-                {{ option.label }}
-              </NRadio>
-            </NSpace>
-          </NRadioGroup>
+        <NFormItem v-if="modalAction === 'edit'" label="应用代码" path="project_code">
+          <NInput v-model:value="modalForm.project_code" placeholder="应用代码（只读）" disabled />
         </NFormItem>
-
-        <NFormItem label="项目描述" path="description">
-          <NInput v-model:value="modalForm.description" type="textarea" placeholder="请输入项目描述"/>
+        <NFormItem label="应用状态" path="project_state">
+          <NInput v-model:value="modalForm.project_state" placeholder="如：开发中、已上线" />
         </NFormItem>
-
-        <NFormItem label="环境配置" path="environments">
-          <div class="env-collapse" style="width: 100%">
-            <NCollapse v-if="modalForm.environments.length > 0" arrow-placement="right">
-              <NCollapseItem
-                  v-for="(env, index) in modalForm.environments"
-                  :key="index"
-                  :title="env.name || '待完善'"
-                  :name="index"
-              >
-                <template #header-extra>
-                  <NButton
-                      text
-                      type="error"
-                      size="small"
-                      @click.stop="removeEnv(index)"
-                  >
-                    <TheIcon icon="material-symbols:delete-outline" />
-                  </NButton>
-                </template>
-
-                <div class="env-fields">
-                  <NInput
-                      v-model:value="env.name"
-                      placeholder="请输入环境名称"
-                      class="field"
-                      :rule="{
-                        required: true,
-                        message: '请输入环境名称',
-                        trigger: ['input', 'blur'],
-                      }"
-                  />
-                  <NInput
-                      v-model:value="env.description"
-                      placeholder="请输入环境描述"
-                      class="field"
-                  />
-                  <NInput
-                      v-model:value="env.host"
-                      placeholder="请输入环境地址"
-                      class="field"
-                      :rule="{
-                        required: true,
-                        message: '请输入环境地址',
-                        trigger: ['input', 'blur'],
-                      }"
-                  />
-                  <NInput
-                      v-model:value="env.port"
-                      placeholder="请输入环境端口"
-                      class="field"
-                      :rule="{
-                        required: true,
-                        message: '请输入环境端口',
-                        trigger: ['input', 'blur'],
-                      }"
-                  />
-
-                </div>
-              </NCollapseItem>
-            </NCollapse>
-
-            <NButton
-                block
-                dashed
-                type="primary"
-                @click="addEnv"
-            >
-              <TheIcon icon="material-symbols:add" class="mr-8"/>
-              添加环境
-            </NButton>
-          </div>
+        <NFormItem label="应用阶段" path="project_phase">
+          <NInput v-model:value="modalForm.project_phase" placeholder="如：迭代1" />
         </NFormItem>
-
-        <NFormItem
-            label="开发负责人"
-            path="dev_owner"
-            :rule="{
-              required: true,
-              type: 'number',
-              message: '请输入开发负责人',
-              trigger: ['input', 'blur'],
-            }"
-        >
-          <NTreeSelect
-              v-model:value="modalForm.dev_owner"
-              :options="ownerOption"
-              key-field="id"
-              label-field="alias"
-              value-field="id"
-              :render-label="renderOptionLabel"
-              placeholder="请选择开发负责人"
-              clearable
-              filterable
-          />
+        <NFormItem label="应用描述" path="project_desc">
+          <NInput v-model:value="modalForm.project_desc" type="textarea" placeholder="请输入应用描述" />
         </NFormItem>
-        <NFormItem
-            label="测试负责人"
-            path="test_owner"
-            :rule="{
-            required: true,
-                          type: 'number',
-
-            message: '请输入测试负责人',
-            trigger: ['input', 'blur', 'change'],
-          }"
-        >
-          <NTreeSelect
-              v-model:value="modalForm.test_owner"
-              :options="ownerOption"
-              key-field="id"
-              label-field="alias"
-              value-field="id"
-              :render-label="renderOptionLabel"
-              placeholder="请选择测试负责人"
-              clearable
-              filterable
-          />
+        <NFormItem label="开发负责人" path="project_dev_owners">
+          <NInput v-model:value="modalForm.project_dev_owners" placeholder="多人用英文逗号分隔" />
+        </NFormItem>
+        <NFormItem label="测试负责人" path="project_test_owners">
+          <NInput v-model:value="modalForm.project_test_owners" placeholder="多人用英文逗号分隔" />
         </NFormItem>
       </NForm>
     </CrudModal>
-
   </CommonPage>
 </template>
-
-
-<style scoped>
-.env-fields {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-.field {
-  width: 100%;
-}
-
-:deep(.n-collapse-item__header) {
-  padding: 12px;
-}
-
-</style>
