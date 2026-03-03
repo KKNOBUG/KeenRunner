@@ -158,16 +158,18 @@ async def search_project_info(project_in: AutoTestApiProjectSelect = Body(..., d
         q = Q()
         if project_in.project_id:
             q &= Q(id=project_in.project_id)
-        if project_in.project_code:
-            q &= Q(project_code=project_in.project_code)
+        if project_in.project_name:
+            q &= Q(project_name__contains=project_in.project_name)
         if project_in.project_state:
             q &= Q(project_state__contains=project_in.project_state)
         if project_in.project_phase:
             q &= Q(project_phase__contains=project_in.project_phase)
         if project_in.project_dev_owners:
-            q &= Q(project_dev_owners__contains=project_in.project_dev_owners)
+            for dev_owner in project_in.project_dev_owners:
+                q |= Q(project_dev_owners__contains=[dev_owner])
         if project_in.project_test_owners:
-            q &= Q(project_test_owners__contains=project_in.project_test_owners)
+            for test_owner in project_in.project_test_owners:
+                q |= Q(project_test_owners__contains=[test_owner])
         if project_in.created_user:
             q &= Q(created_user__contains=project_in.created_user)
         if project_in.updated_user:

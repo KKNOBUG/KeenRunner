@@ -15,7 +15,13 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 defineOptions({ name: '项目管理' })
 
 const $table = ref(null)
-const queryItems = ref({ project_code: '', project_state: '' })
+const queryItems = ref({
+  project_name: '',
+  project_code: '',
+  project_state: '',
+  project_dev_owners: '',
+  project_test_owners: '',
+})
 const vPermission = resolveDirective('permission')
 
 const {
@@ -55,13 +61,14 @@ const {
   doDelete: (params) => api.deleteProject(params),
   doUpdate: (form) => {
     const toList = (v) => (Array.isArray(v) ? v : (v || '').replace(/，/g, ',').split(',').map(s => s.trim()).filter(Boolean))
+    // 可清空字段必须传当前值（含 ''），否则后端 exclude_unset 会忽略未传字段，导致无法清空
     const payload = {
       project_id: form.project_id,
-      project_code: form.project_code || undefined,
+      project_code: form.project_code ?? undefined,
       project_name: form.project_name,
-      project_desc: form.project_desc || undefined,
-      project_state: form.project_state || undefined,
-      project_phase: form.project_phase || undefined,
+      project_desc: form.project_desc ?? undefined,
+      project_state: form.project_state === undefined ? undefined : (form.project_state ?? ''),
+      project_phase: form.project_phase === undefined ? undefined : (form.project_phase ?? ''),
       project_dev_owners: toList(form.project_dev_owners),
       project_test_owners: toList(form.project_test_owners),
     }
@@ -83,23 +90,32 @@ function customHandleEdit(row) {
 //   $table.value?.handleSearch()
 // })
 
+/** 将用户输入的字符串转为后端要求的 List[str]，多人可用逗号分隔 */
+function toOwnerList(v) {
+  if (v == null || v === '') return undefined
+  if (Array.isArray(v)) return v.length ? v : undefined
+  const list = String(v)
+      .replace(/，/g, ',')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  return list.length ? list : undefined
+}
+
 function buildSearchBody(overrides = {}) {
+  const q = queryItems.value
   return {
     state: 0,
-    project_code: queryItems.value.project_code || undefined,
-    project_state: queryItems.value.project_state || undefined,
     ...overrides,
+    project_code: (overrides.project_code ?? q.project_code) || undefined,
+    project_state: (overrides.project_state ?? q.project_state) || undefined,
+    // 后端要求 List[str]，将输入字符串转为数组（多人逗号分隔）
+    project_dev_owners: toOwnerList(overrides.project_dev_owners ?? q.project_dev_owners),
+    project_test_owners: toOwnerList(overrides.project_test_owners ?? q.project_test_owners),
   }
 }
 
 const columns = [
-  {
-    title: '应用代码',
-    key: 'project_code',
-    width: 120,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
   {
     title: '应用名称',
     key: 'project_name',
@@ -122,7 +138,7 @@ const columns = [
     ellipsis: { tooltip: true },
   },
   {
-    title: '开发组长',
+    title: '开发负责人',
     key: 'project_dev_owners',
     width: 120,
     align: 'center',
@@ -146,7 +162,7 @@ const columns = [
     },
   },
   {
-    title: '测试组长',
+    title: '测试负责人',
     key: 'project_test_owners',
     width: 120,
     align: 'center',
@@ -234,11 +250,11 @@ const columns = [
         row-key="project_id"
     >
       <template #queryBar>
-        <QueryBarItem label="应用代码：" :label-width="90">
+        <QueryBarItem label="应用名称：" :label-width="90">
           <NInput
-              v-model:value="queryItems.project_code"
+              v-model:value="queryItems.project_name"
               clearable
-              placeholder="请输入应用代码"
+              placeholder="请输入应用名称"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -247,7 +263,22 @@ const columns = [
               v-model:value="queryItems.project_state"
               clearable
               placeholder="请输入应用状态"
-              style="width: 160px"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="开发负责人：" :label-width="90">
+          <NInput
+              v-model:value="queryItems.project_dev_owners"
+              clearable
+              placeholder="多人用逗号分隔"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="测试负责人：" :label-width="90">
+          <NInput
+              v-model:value="queryItems.project_test_owners"
+              clearable
+              placeholder="多人用逗号分隔"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -290,10 +321,10 @@ const columns = [
           <NInput v-model:value="modalForm.project_desc" type="textarea" placeholder="请输入应用描述" />
         </NFormItem>
         <NFormItem label="开发负责人" path="project_dev_owners">
-          <NInput v-model:value="modalForm.project_dev_owners" placeholder="多人用英文逗号分隔" />
+          <NInput v-model:value="modalForm.project_dev_owners" type="textarea" placeholder="请输入负责人名，多人时请用英文逗号分隔" />
         </NFormItem>
         <NFormItem label="测试负责人" path="project_test_owners">
-          <NInput v-model:value="modalForm.project_test_owners" placeholder="多人用英文逗号分隔" />
+          <NInput v-model:value="modalForm.project_test_owners" type="textarea" placeholder="请输入负责人名，多人时请用英文逗号分隔" />
         </NFormItem>
       </NForm>
     </CrudModal>

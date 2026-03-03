@@ -190,7 +190,8 @@ async def search_cases(
         if case_in.case_name:
             q &= Q(case_name__contains=case_in.case_name)
         if case_in.case_tags:
-            q &= Q(case_tags__contains=case_in.case_tags)
+            for tag_id in case_in.case_tags:
+                q |= Q(case_tags__contains=tag_id)
         if case_in.case_type:
             q &= Q(case_type=case_in.case_type.value)
         if case_in.case_steps:

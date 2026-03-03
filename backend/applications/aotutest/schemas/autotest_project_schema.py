@@ -80,18 +80,12 @@ class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiProjectSelect(BaseModel):
+class AutoTestApiProjectSelect(AutoTestApiProjectBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-updated_time"], description="排序字段")
 
     project_id: Optional[int] = Field(None, description="应用ID")
-    project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
-    project_state: Optional[str] = Field(None, max_length=64, description="应用状态")
-    project_phase: Optional[str] = Field(None, max_length=64, description="应用阶段")
-    project_dev_owners: Optional[List[str]] = Field(None, description="应用开发负责人")
-    project_test_owners: Optional[List[str]] = Field(None, description="应用测试负责人")
-
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
