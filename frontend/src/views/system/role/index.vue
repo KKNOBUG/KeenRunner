@@ -152,9 +152,9 @@ const columns = [
             h(
                 NButton,
                 {
-                  size: 'small',
-                  type: 'primary',
-                  style: 'margin-right: 8px;',
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'info',
                   onClick: () => {
                     handleEdit(row)
                   },
@@ -170,9 +170,9 @@ const columns = [
             h(
                 NButton,
                 {
-                  size: 'small',
+                  size: 'tiny',
+                  quaternary: true,
                   type: 'primary',
-                  style: 'margin-right: 8px;',
                   onClick: async () => {
                     try {
                       // 使用 Promise.all 来同时发送所有请求
@@ -218,9 +218,9 @@ const columns = [
                       h(
                           NButton,
                           {
-                            size: 'small',
+                            size: 'tiny',
+                            quaternary: true,
                             type: 'error',
-                            style: 'margin-right: 8px;',
                           },
                           {
                             default: () => '删除',
