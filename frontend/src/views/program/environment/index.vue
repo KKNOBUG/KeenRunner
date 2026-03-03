@@ -64,14 +64,13 @@ const {
   refresh: () => $table.value?.handleSearch(),
 })
 
-function buildSearchBody() {
+function buildSearchBody(overrides = {}) {
   return {
-    page: 1,
-    page_size: 9999,
     state: 0,
     project_id: queryItems.value.project_id || undefined,
     env_name: queryItems.value.env_name || undefined,
     env_host: queryItems.value.env_host || undefined,
+    ...overrides,
   }
 }
 
@@ -80,7 +79,8 @@ onMounted(async () => {
     const res = await api.getProjectList({ page: 1, page_size: 9999, state: 0 })
     projectOptions.value = (res.data || []).map((p) => ({ label: p.project_name || p.project_code, value: p.project_id }))
   } catch (_) {}
-  $table.value?.handleSearch()
+  // 进入页面不自动请求表格数据，由用户点击「搜索」按钮时再请求
+  // $table.value?.handleSearch()
 })
 
 const columns = [
@@ -144,9 +144,11 @@ const columns = [
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        :is-pagination="false"
+        :is-pagination="true"
+        :remote="true"
+        :scroll-x="1200"
         :columns="columns"
-        :get-data="() => api.getEnvList(buildSearchBody())"
+        :get-data="(params) => api.getEnvList(buildSearchBody(params))"
         row-key="env_id"
     >
       <template #queryBar>

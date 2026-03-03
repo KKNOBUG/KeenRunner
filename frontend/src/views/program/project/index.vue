@@ -78,17 +78,17 @@ function customHandleEdit(row) {
   })
 }
 
-onMounted(() => {
-  $table.value?.handleSearch()
-})
+// 进入页面不自动请求表格数据，由用户点击「搜索」按钮时再请求
+// onMounted(() => {
+//   $table.value?.handleSearch()
+// })
 
-function buildSearchBody() {
+function buildSearchBody(overrides = {}) {
   return {
-    page: 1,
-    page_size: 9999,
     state: 0,
     project_code: queryItems.value.project_code || undefined,
     project_state: queryItems.value.project_state || undefined,
+    ...overrides,
   }
 }
 
@@ -225,9 +225,11 @@ const columns = [
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        :is-pagination="false"
+        :is-pagination="true"
+        :remote="true"
+        :scroll-x="1400"
         :columns="columns"
-        :get-data="(params) => api.getProjectList(buildSearchBody())"
+        :get-data="(params) => api.getProjectList(buildSearchBody(params))"
         :single-line="true"
         row-key="project_id"
     >

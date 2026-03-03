@@ -1,17 +1,18 @@
 <template>
   <n-dropdown
-    :show="show"
-    :options="options"
-    :x="x"
-    :y="y"
-    placement="bottom-start"
-    @clickoutside="handleHideDropdown"
-    @select="handleSelect"
+      :show="show"
+      :options="options"
+      :x="x"
+      :y="y"
+      placement="bottom-start"
+      @clickoutside="handleHideDropdown"
+      @select="handleSelect"
   />
 </template>
 
 <script setup>
 import { useTagsStore, useAppStore } from '@/store'
+import { WORKBENCH_TAG_PATH } from '@/store/modules/tags/helpers'
 import { renderIcon } from '@/utils'
 
 const props = defineProps({
@@ -48,7 +49,7 @@ const options = computed(() => [
   {
     label: '关闭',
     key: 'close',
-    disabled: tagsStore.tags.length <= 1,
+    disabled: tagsStore.tags.length <= 1 || props.currentPath === WORKBENCH_TAG_PATH,
     icon: renderIcon('mdi:close', { size: '14px' }),
   },
   {
@@ -60,15 +61,19 @@ const options = computed(() => [
   {
     label: '关闭左侧',
     key: 'close-left',
-    disabled: tagsStore.tags.length <= 1 || props.currentPath === tagsStore.tags[0].path,
+    disabled:
+        tagsStore.tags.length <= 1 ||
+        props.currentPath === tagsStore.tags[0]?.path ||
+        props.currentPath === WORKBENCH_TAG_PATH,
     icon: renderIcon('mdi:arrow-expand-left', { size: '14px' }),
   },
   {
     label: '关闭右侧',
     key: 'close-right',
     disabled:
-      tagsStore.tags.length <= 1 ||
-      props.currentPath === tagsStore.tags[tagsStore.tags.length - 1].path,
+        tagsStore.tags.length <= 1 ||
+        props.currentPath === tagsStore.tags[tagsStore.tags.length - 1]?.path ||
+        props.currentPath === WORKBENCH_TAG_PATH,
     icon: renderIcon('mdi:arrow-expand-right', { size: '14px' }),
   },
 ])
