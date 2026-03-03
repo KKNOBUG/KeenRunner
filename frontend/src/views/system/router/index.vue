@@ -153,49 +153,49 @@ const columns = [
     render(row) {
       return [
         withDirectives(
-          h(
-            NButton,
-            {
-              size: 'small',
-              type: 'primary',
-              style: 'margin-right: 8px;',
-              onClick: () => {
-                handleEdit(row)
-                modalForm.value.roles = row.roles.map((e) => (e = e.id))
-              },
-            },
-            {
-              default: () => '编辑',
-              icon: renderIcon('material-symbols:edit', { size: 16 }),
-            }
-          ),
-          [[vPermission, 'post/api/v1/router/update']]
+            h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'info',
+                  onClick: () => {
+                    handleEdit(row)
+                    modalForm.value.roles = row.roles.map((e) => (e = e.id))
+                  },
+                },
+                {
+                  default: () => '编辑',
+                  icon: renderIcon('material-symbols:edit', { size: 16 }),
+                }
+            ),
+            [[vPermission, 'post/api/v1/router/update']]
         ),
         h(
-          NPopconfirm,
-          {
-            onPositiveClick: () => handleDelete({ api_id: row.id }, false),
-            onNegativeClick: () => {},
-          },
-          {
-            trigger: () =>
-              withDirectives(
-                h(
-                  NButton,
-                  {
-                    size: 'small',
-                    type: 'error',
-                    style: 'margin-right: 8px;',
-                  },
-                  {
-                    default: () => '删除',
-                    icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                  }
-                ),
-                [[vPermission, 'delete/api/v1/router/delete']]
-              ),
-            default: () => h('div', {}, '确定删除该API吗?'),
-          }
+            NPopconfirm,
+            {
+              onPositiveClick: () => handleDelete({ api_id: row.id }, false),
+              onNegativeClick: () => {},
+            },
+            {
+              trigger: () =>
+                  withDirectives(
+                      h(
+                          NButton,
+                          {
+                            size: 'tiny',
+                            quaternary: true,
+                            type: 'error',
+                          },
+                          {
+                            default: () => '删除',
+                            icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                          }
+                      ),
+                      [[vPermission, 'delete/api/v1/router/delete']]
+                  ),
+              default: () => h('div', {}, '确定删除该API吗?'),
+            }
         ),
       ]
     },
@@ -209,18 +209,18 @@ const columns = [
     <template #action>
       <div>
         <NButton
-          v-permission="'post/api/v1/router/create'"
-          class="float-right mr-15"
-          type="primary"
-          @click="handleAdd"
+            v-permission="'post/api/v1/router/create'"
+            class="float-right mr-15"
+            type="primary"
+            @click="handleAdd"
         >
           <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />新建API
         </NButton>
         <NButton
-          v-permission="'post/api/v1/router/refresh'"
-          class="float-right mr-15"
-          type="warning"
-          @click="handleRefreshRouter"
+            v-permission="'post/api/v1/router/refresh'"
+            class="float-right mr-15"
+            type="warning"
+            @click="handleRefreshRouter"
         >
           <TheIcon icon="material-symbols:refresh" :size="18" class="mr-5" />刷新API
         </NButton>
@@ -228,10 +228,10 @@ const columns = [
     </template>
     <!-- 表格 -->
     <CrudTable
-      ref="$table"
-      v-model:query-items="queryItems"
-      :columns="columns"
-      :get-data="api.getRouters"
+        ref="$table"
+        v-model:query-items="queryItems"
+        :columns="columns"
+        :get-data="api.getRouters"
     >
       <template #queryBar>
         <QueryBarItem label="API简介" :label-width="70">
@@ -245,20 +245,20 @@ const columns = [
         </QueryBarItem>
         <QueryBarItem label="API路径" :label-width="70">
           <NInput
-            v-model:value="queryItems.path"
-            clearable
-            type="text"
-            placeholder="请输入API路径"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.path"
+              clearable
+              type="text"
+              placeholder="请输入API路径"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="API标签" :label-width="70">
           <NInput
-            v-model:value="queryItems.tags"
-            clearable
-            type="text"
-            placeholder="请输入API标签"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.tags"
+              clearable
+              type="text"
+              placeholder="请输入API标签"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
       </template>
@@ -266,17 +266,17 @@ const columns = [
 
     <!-- 新增/编辑 弹窗 -->
     <CrudModal
-      v-model:visible="modalVisible"
-      :title="modalTitle"
-      :loading="modalLoading"
-      @save="handleSave">
+        v-model:visible="modalVisible"
+        :title="modalTitle"
+        :loading="modalLoading"
+        @save="handleSave">
       <NForm
-        ref="modalFormRef"
-        label-placement="left"
-        label-align="left"
-        :label-width="80"
-        :model="modalForm"
-        :rules="addAPIRules">
+          ref="modalFormRef"
+          label-placement="left"
+          label-align="left"
+          :label-width="80"
+          :model="modalForm"
+          :rules="addAPIRules">
         <NFormItem label="API简介" path="summary">
           <NInput v-model:value="modalForm.summary" clearable placeholder="请输入API简介" />
         </NFormItem>

@@ -179,9 +179,9 @@ const columns = [
             h(
                 NButton,
                 {
-                  size: 'small',
-                  type: 'primary',
-                  style: 'margin-right: 8px;',
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'info',
                   onClick: () => {
                     handleEdit(row)
                     modalForm.value.dept_id = row.dept?.id
@@ -209,9 +209,9 @@ const columns = [
                       h(
                           NButton,
                           {
-                            size: 'small',
+                            size: 'tiny',
+                            quaternary: true,
                             type: 'error',
-                            style: 'margin-right: 8px;',
                           },
                           {
                             default: () => '删除',
@@ -244,9 +244,9 @@ const columns = [
                       h(
                           NButton,
                           {
-                            size: 'small',
+                            size: 'tiny',
+                            quaternary: true,
                             type: 'warning',
-                            style: 'margin-right: 8px;',
                           },
                           {
                             default: () => '重置',

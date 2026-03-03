@@ -120,54 +120,53 @@ const columns = [
     render(row) {
       return [
         withDirectives(
-          h(
-            NButton,
-            {
-              size: 'small',
-              type: 'primary',
-              style: 'margin-left: 8px;',
-              onClick: () => {
-                console.log('row', row.parent_id)
-                if (row.parent_id === 0) {
-                  isDisabled.value = true
-                } else {
-                  isDisabled.value = false
+            h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'info',
+                  onClick: () => {
+                    if (row.parent_id === 0) {
+                      isDisabled.value = true
+                    } else {
+                      isDisabled.value = false
+                    }
+                    handleEdit(row)
+                  },
+                },
+                {
+                  default: () => '编辑',
+                  icon: renderIcon('material-symbols:edit', { size: 16 }),
                 }
-                handleEdit(row)
-              },
-            },
-            {
-              default: () => '编辑',
-              icon: renderIcon('material-symbols:edit', { size: 16 }),
-            }
-          ),
-          [[vPermission, 'post/api/v1/dept/update']]
+            ),
+            [[vPermission, 'post/api/v1/dept/update']]
         ),
         h(
-          NPopconfirm,
-          {
-            onPositiveClick: () => handleDelete({ department_id: row.id }, false),
-            onNegativeClick: () => {},
-          },
-          {
-            trigger: () =>
-              withDirectives(
-                h(
-                  NButton,
-                  {
-                    size: 'small',
-                    type: 'error',
-                    style: 'margin-left: 8px;',
-                  },
-                  {
-                    default: () => '删除',
-                    icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                  }
-                ),
-                [[vPermission, 'delete/api/v1/dept/delete']]
-              ),
-            default: () => h('div', {}, '确定删除该部门吗?'),
-          }
+            NPopconfirm,
+            {
+              onPositiveClick: () => handleDelete({ department_id: row.id }, false),
+              onNegativeClick: () => {},
+            },
+            {
+              trigger: () =>
+                  withDirectives(
+                      h(
+                          NButton,
+                          {
+                            size: 'tiny',
+                            quaternary: true,
+                            type: 'error',
+                          },
+                          {
+                            default: () => '删除',
+                            icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                          }
+                      ),
+                      [[vPermission, 'delete/api/v1/dept/delete']]
+                  ),
+              default: () => h('div', {}, '确定删除该部门吗?'),
+            }
         ),
       ]
     },
@@ -181,10 +180,10 @@ const columns = [
     <template #action>
       <div>
         <NButton
-          v-permission="'post/api/v1/dept/create'"
-          class="float-right mr-15"
-          type="primary"
-          @click="addDepts"
+            v-permission="'post/api/v1/dept/create'"
+            class="float-right mr-15"
+            type="primary"
+            @click="addDepts"
         >
           <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />新建部门
         </NButton>
@@ -192,10 +191,10 @@ const columns = [
     </template>
     <!-- 表格 -->
     <CrudTable
-      ref="$table"
-      v-model:query-items="queryItems"
-      :columns="columns"
-      :get-data="api.getDepts"
+        ref="$table"
+        v-model:query-items="queryItems"
+        :columns="columns"
+        :get-data="api.getDepts"
     >
       <!--   搜索狂   -->
       <template #queryBar>
@@ -213,28 +212,28 @@ const columns = [
 
     <!-- 新增/编辑 弹窗 -->
     <CrudModal
-      v-model:visible="modalVisible"
-      :title="modalTitle"
-      :loading="modalLoading"
-      @save="handleSave"
+        v-model:visible="modalVisible"
+        :title="modalTitle"
+        :loading="modalLoading"
+        @save="handleSave"
     >
       <NForm
-        ref="modalFormRef"
-        label-placement="left"
-        label-align="left"
-        :label-width="80"
-        :model="modalForm"
-        :rules="deptRules">
+          ref="modalFormRef"
+          label-placement="left"
+          label-align="left"
+          :label-width="80"
+          :model="modalForm"
+          :rules="deptRules">
         <NFormItem label="父级部门" path="parent_id">
           <NTreeSelect
-            v-model:value="modalForm.parent_id"
-            :options="deptOption"
-            key-field="id"
-            label-field="name"
-            placeholder="请选择父级部门"
-            clearable
-            default-expand-all
-            :disabled="isDisabled"/>
+              v-model:value="modalForm.parent_id"
+              :options="deptOption"
+              key-field="id"
+              label-field="name"
+              placeholder="请选择父级部门"
+              clearable
+              default-expand-all
+              :disabled="isDisabled"/>
         </NFormItem>
         <NFormItem label="部门代码" path="code">
           <NInput v-model:value="modalForm.code" clearable placeholder="请输入部门名称" />

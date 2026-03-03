@@ -338,7 +338,7 @@ const columns = computed(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 260,
+    width: 190,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -346,9 +346,9 @@ const columns = computed(() => [
         h(
             NButton,
             {
-              size: 'small',
+              size: 'tiny',
+              quaternary: true,
               type: 'info',
-              style: 'margin-right: 6px;',
               loading: runningCaseId.value === (row.case_id ?? null),
               disabled: runningCaseId.value != null,
               onClick: () => openRunModal(row),
@@ -362,9 +362,9 @@ const columns = computed(() => [
             h(
                 NButton,
                 {
-                  size: 'small',
-                  type: 'primary',
-                  style: 'margin-right: 8px;',
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'info',
                   onClick: () => {
                     // 将完整的用例信息通过query传递（使用JSON字符串）
                     const query = {
@@ -397,9 +397,9 @@ const columns = computed(() => [
                       h(
                           NButton,
                           {
-                            size: 'small',
+                            size: 'tiny',
+                            quaternary: true,
                             type: 'error',
-                            style: 'margin-right: 8px;',
                           },
                           {
                             default: () => '删除',
