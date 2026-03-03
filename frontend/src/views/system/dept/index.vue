@@ -114,7 +114,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 'auto',
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {

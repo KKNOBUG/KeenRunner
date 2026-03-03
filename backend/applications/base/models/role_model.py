@@ -8,10 +8,10 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin
+from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin, MaintainMixin
 
 
-class Role(ScaffoldModel, TimestampMixin):
+class Role(ScaffoldModel, TimestampMixin, MaintainMixin):
     code = fields.CharField(max_length=16, unique=True, description="角色代码")
     name = fields.CharField(max_length=64, unique=True, description="角色名称")
     description = fields.TextField(null=True, description="角色描述")

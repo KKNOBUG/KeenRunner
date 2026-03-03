@@ -21,7 +21,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {formatDate, renderIcon} from '@/utils'
+import {formatDate, formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 import TheIcon from '@/components/icon/TheIcon.vue'
@@ -95,7 +95,6 @@ const columns = [
   {
     title: '角色代码',
     key: 'code',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -105,7 +104,6 @@ const columns = [
   {
     title: '角色名称',
     key: 'name',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -115,7 +113,6 @@ const columns = [
   {
     title: '角色描述',
     key: 'description',
-    width: 200,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -123,21 +120,31 @@ const columns = [
     },
   },
   {
-    title: '创建日期',
+    title: '创建人员',
+    key: 'created_user',
+    align: 'center',
+    ellipsis: {tooltip: true}
+  },
+  {
+    title: '更新人员',
+    key: 'updated_user',
+    align: 'center',
+    ellipsis: {tooltip: true}
+  },
+  {
+    title: '创建时间',
     key: 'created_time',
-    width: 80,
     align: 'center',
     render(row) {
-      return h('span', formatDate(row.created_time))
+      return h('span', formatDateTime(row.created_time))
     },
   },
   {
-    title: '更新日期',
+    title: '更新时间',
     key: 'updated_time',
-    width: 80,
     align: 'center',
     render(row) {
-      return h('span', formatDate(row.updated_time))
+      return h('span', formatDateTime(row.updated_time))
     },
   },
   {

@@ -37,7 +37,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
     async def is_exist(self, name: str) -> bool:
         return await self.model.filter(name=name).exists()
 
-    async def create_role(self, role_in: RoleCreate) -> Role:
+    async def create_role(self, role_in: RoleCreate, created_user: Optional[str] = None) -> Role:
         code = role_in.code
         name = role_in.name
         instances = await self.model.filter(code=code, name=name).all()
@@ -45,6 +45,9 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
             raise DataAlreadyExistsException(message=f"角色(code={code},name={name})信息已存在")
 
         instance = await self.create(role_in)
+        if created_user is not None:
+            instance.created_user = created_user
+            await instance.save(update_fields=["created_user"])
         return instance
 
     @classmethod
