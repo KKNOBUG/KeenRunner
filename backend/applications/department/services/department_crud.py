@@ -31,7 +31,11 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
     async def get_by_name(self, name: str) -> Optional[Department]:
         return await self.model.filter(name=name).first()
 
-    async def create_department(self, department_in: DepartmentCreate) -> Department:
+    async def create_department(
+        self,
+        department_in: DepartmentCreate,
+        created_user: Optional[str] = None,
+    ) -> Department:
         code = department_in.code
         name = department_in.name
         instances = await self.model.filter(code=code, name=name).all()
@@ -39,6 +43,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise DataAlreadyExistsException(message=f"部门(code={code},name={name})信息已存在")
 
         instance = await self.create(department_in)
+        if created_user is not None:
+            instance.created_user = created_user
+            await instance.save(update_fields=["created_user"])
         await self.update_dept_closure(instance)
         return instance
 
@@ -53,7 +60,11 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         await DeptStruct.filter(descendant=department_id).delete()
         return instance
 
-    async def update_department(self, department_in: DepartmentUpdate) -> Department:
+    async def update_department(
+        self,
+        department_in: DepartmentUpdate,
+        updated_user: Optional[str] = None,
+    ) -> Department:
         department_id: int = department_in.id
         try:
             instance = await self.get(id=department_id)
@@ -63,7 +74,10 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
                 await DeptStruct.filter(descendant=instance.id).delete()
                 await self.update_dept_closure(instance)
             # 更新部门信息
-            await instance.update_from_dict(department_in.model_dump(exclude_unset=True))
+            update_dict = department_in.model_dump(exclude_unset=True, exclude={"id"})
+            if updated_user is not None:
+                update_dict["updated_user"] = updated_user
+            await instance.update_from_dict(update_dict)
             await instance.save()
             return instance
         except DoesNotExist as e:

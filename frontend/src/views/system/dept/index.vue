@@ -30,12 +30,21 @@ const {
   handleDelete,
   handleAdd,
 } = useCRUD({
-  name: 'API',
-  initForm: { order: 0 },
+  name: '部门',
+  initForm: {
+    parent_id: 0,
+    code: '',
+    name: '',
+    description: '',
+    order: 0,
+  },
   doCreate: api.createDept,
   doUpdate: api.updateDept,
   doDelete: api.deleteDept,
-  refresh: () => $table.value?.handleSearch(),
+  refresh: () => {
+    $table.value?.handleSearch()
+    api.getDepts().then((res) => (deptOption.value = res.data))
+  },
 })
 
 const deptOption = ref([])
@@ -114,7 +123,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 'auto',
     align: 'center',
     fixed: 'right',
     render(row) {

@@ -6,16 +6,19 @@
 @Module  : department_view.py
 @DateTime: 2025/2/3 18:21
 """
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Depends, Query
 from tortoise.expressions import Q
 
 from backend.applications.department.schemas.department_schema import (
-    DepartmentCreate, DepartmentUpdate, DepartmentSelect
+    DepartmentCreate,
+    DepartmentUpdate,
+    DepartmentSelect,
 )
 from backend.applications.department.services.department_crud import DEPT_CRUD
+from backend.applications.user.models.user_model import User
 from backend.core.exceptions.base_exceptions import (
     DataAlreadyExistsException,
-    NotFoundException
+    NotFoundException,
 )
 from backend.core.responses.http_response import (
     SuccessResponse,
@@ -23,16 +26,21 @@ from backend.core.responses.http_response import (
     DataAlreadyExistsResponse,
     NotFoundResponse,
 )
+from backend.services.dependency import DependAuth
 
 dept = APIRouter()
 
 
 @dept.post("/create", summary="新增部门信息")
 async def create_dept(
-        department_in: DepartmentCreate = Body()
+    department_in: DepartmentCreate = Body(),
+    current_user: User = DependAuth,
 ):
     try:
-        instance = await DEPT_CRUD.create_department(department_in=department_in)
+        instance = await DEPT_CRUD.create_department(
+            department_in=department_in,
+            created_user=current_user.username,
+        )
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except DataAlreadyExistsException as e:
@@ -57,10 +65,14 @@ async def delete_dept(
 
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
 async def update_dept(
-        department_in: DepartmentUpdate = Body(..., description="部门信息")
+    department_in: DepartmentUpdate = Body(..., description="部门信息"),
+    current_user: User = DependAuth,
 ):
     try:
-        instance = await DEPT_CRUD.update_department(department_in)
+        instance = await DEPT_CRUD.update_department(
+            department_in=department_in,
+            updated_user=current_user.username,
+        )
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except NotFoundException as e:
