@@ -83,7 +83,7 @@ onMounted(async () => {
 })
 
 const columns = [
-  { title: '标签ID', key: 'tag_id', align: 'center' },
+  { title: '标签ID', key: 'tag_id', width: 80, align: 'center' },
   { title: '标签代码', key: 'tag_code', align: 'center', ellipsis: { tooltip: true } },
   { title: '标签类型', key: 'tag_type', align: 'center' },
   { title: '所属应用', key: 'tag_project', align: 'center' },

@@ -84,7 +84,7 @@ onMounted(async () => {
 })
 
 const columns = [
-  { title: '环境ID', key: 'env_id', align: 'center' },
+  { title: '环境ID', key: 'env_id', width: 80, align: 'center' },
   { title: '环境代码', key: 'env_code', align: 'center', ellipsis: { tooltip: true } },
   { title: '所属应用', key: 'project_name', align: 'center', ellipsis: { tooltip: true } },
   { title: '环境名称', key: 'env_name', align: 'center', ellipsis: { tooltip: true } },
