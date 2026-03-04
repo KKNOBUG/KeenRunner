@@ -233,7 +233,7 @@ const caseStateOptions = [
 const groupLeadColumn = {
   title: '任务代码/批次代码',
   key: '_taskOrBatch',
-  width: 250,
+  width: 290,
   align: 'left',
   render(row) {
     if (row._isGroup) {
@@ -323,35 +323,30 @@ const columnsBase = [
   {
     title: '用例ID',
     key: 'case_id',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '用例名称',
     key: 'case_name',
-    width: 220,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '成功步骤',
     key: 'step_pass_count',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '失败步骤',
     key: 'step_fail_count',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '成功率',
     key: 'step_pass_ratio',
-    width: 200,
     align: 'center',
     render(row) {
       const ratio = row.step_pass_ratio
@@ -464,14 +459,12 @@ const columnsBase = [
   {
     title: '总步骤数',
     key: 'step_total',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '执行状态',
     key: 'case_state',
-    width: 80,
     align: 'center',
     render(row) {
       if (row.case_state === true || row.case_state === 'true') {
@@ -485,21 +478,18 @@ const columnsBase = [
   {
     title: '执行时间',
     key: 'case_st_time',
-    width: 200,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '消耗时间',
     key: 'case_elapsed',
-    width: 80,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '创建人员',
     key: 'created_user',
-    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -510,15 +500,20 @@ const columnsBase = [
     align: 'center',
     fixed: 'right',
     render(row) {
-      return h(NSpace, {size: 'small'}, [
-        h(NButton, {
-          size: 'small',
-          type: 'primary',
-          onClick: () => handleViewDetails(row)
-        }, {
-          default: () => '查看',
-          icon: renderIcon('material-symbols:visibility-outline', {size: 16})
-        }),
+      return [
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'info',
+              onClick: () => handleViewDetails(row),
+            },
+            {
+              default: () => '查看',
+              icon: renderIcon('material-symbols:visibility-outline', {size: 16}),
+            }
+        ),
         h(
             NPopconfirm,
             {
@@ -532,7 +527,8 @@ const columnsBase = [
                       h(
                           NButton,
                           {
-                            size: 'small',
+                            size: 'tiny',
+                            quaternary: true,
                             type: 'error',
                           },
                           {
@@ -545,7 +541,7 @@ const columnsBase = [
               default: () => h('div', {}, '确定删除该报告吗?'),
             }
         ),
-      ])
+      ]
     },
   },
 ]

@@ -236,6 +236,26 @@ const customHandleAdd = () => {
 // 使用 computed 使 columns 依赖 runLoading，点击运行后表格会重新渲染以显示按钮 loading 状态
 const columns = computed(() => [
   {
+    title: '用例类型',
+    key: 'case_type',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      let mode = "info"
+      let round = true
+      let bordered = true
+      if (row.case_type === '公共脚本') {
+        mode = 'warning'
+      }
+      return h(
+          NTag,
+          {type: mode, round: round, bordered: bordered},
+          {default: () => (row.case_type)}
+      )
+    },
+  },
+  {
     title: '用例名称',
     key: 'case_name',
     width: 300,
@@ -245,28 +265,38 @@ const columns = computed(() => [
   {
     title: '用例属性',
     key: 'case_attr',
-    width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
+    render(row) {
+      let mode = "success"
+      let round = true
+      let bordered = true
+      if (row.case_attr === '反用例') {
+        mode = 'primary'
+      }
+      return h(
+          NTag,
+          {type: mode, round: round, bordered: bordered},
+          {default: () => (row.case_attr)}
+      )
+    },
   },
-  {
-    title: '用例类型',
-    key: 'case_type',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
+
   {
     title: '用例步骤',
     key: 'case_steps',
-    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '用例版本',
+    key: 'case_version',
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '所属应用',
     key: 'case_project',
-    width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -277,7 +307,6 @@ const columns = computed(() => [
   {
     title: '所属标签',
     key: 'case_tags',
-    width: 150,
     align: 'center',
     render(row) {
       // case_tags 现在是对象数组，使用NTag展示，每个标签换行
@@ -297,13 +326,6 @@ const columns = computed(() => [
     },
   },
   {
-    title: '用例版本',
-    key: 'case_version',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
     title: '创建人员',
     key: 'created_user',
     width: 150,
@@ -313,14 +335,12 @@ const columns = computed(() => [
   {
     title: '更新人员',
     key: 'updated_user',
-    width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '创建时间',
     key: 'created_time',
-    width: 200,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.created_time))
@@ -329,7 +349,6 @@ const columns = computed(() => [
   {
     title: '更新时间',
     key: 'updated_time',
-    width: 200,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.updated_time))
@@ -338,7 +357,7 @@ const columns = computed(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
