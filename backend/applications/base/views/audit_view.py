@@ -23,7 +23,8 @@ async def list_audit(
         request_tags: str = Query(default="", description="请求模块"),
         request_summary: str = Query(default="", description="请求接口"),
         request_method: str = Query(default="", description="请求方式"),
-        response_code: int = Query(default=None, description="响应代码"),
+        request_router: str = Query(default="", description="请求路由"),
+        response_code: str = Query(default="", description="响应代码"),
         start_time: str = Query(default="", description="开始时间"),
         end_time: str = Query(default="", description="结束时间"),
 ):
@@ -36,6 +37,8 @@ async def list_audit(
         q &= Q(request_summary__icontains=request_summary)
     if request_method:
         q &= Q(request_method__icontains=request_method)
+    if request_router:
+        q &= Q(request_router__icontains=request_router)
     if response_code:
         q &= Q(response_code__icontains=response_code)
     if start_time and end_time:

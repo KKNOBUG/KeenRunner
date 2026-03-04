@@ -6,21 +6,20 @@
 @Module  : app_middleware.py
 @DateTime: 2025/1/17 22:29
 """
-import ast
 import json
 import time
 from io import BytesIO
 from typing import Dict, Any, Optional
 from urllib.parse import unquote
 
-from fastapi import Request, Response, UploadFile
+from fastapi import Request, Response
 from starlette.datastructures import FormData
-from starlette.types import ASGIApp, Scope, Receive, Send
 
 from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
 from backend.services.dependency import AuthControl
+
 
 def is_upload_request(request: Request) -> bool:
     """判断当前请求是否为文件上传请求（multipart/form-data 或路径含 upload）。
@@ -64,13 +63,13 @@ def is_download_response(response: Response) -> bool:
 
 
 def is_longtext_response(response: Response) -> bool:
-    """判断响应体是否超过 5000 字节（用于决定是否截断审计日志中的响应体）。
+    """判断响应体是否超过 102400 字节（用于决定是否截断审计日志中的响应体）。
 
     :param response: 响应对象。
     :returns: Content-Length 大于 5000 时返回 True。
     """
     content_length: int = response.headers.get("content-length", 0)
-    return int(content_length) > 10240
+    return int(content_length) > 102400
 
 
 async def logging_middleware(request: Request, call_next):
@@ -152,9 +151,9 @@ async def logging_middleware(request: Request, call_next):
         elif is_html:
             response_body: bytes = b"<HTML CONTENT>"
         elif is_image:
-            response_body: bytes = b"IMAGE CONTENT"
+            response_body: bytes = b"<IMAGE CONTENT>"
         elif is_longtext:
-            response_body: bytes = b"LONGTEXT CONTENT"
+            response_body: bytes = b"<LONGTEXT CONTENT>"
         else:
             body_chunks = []
             async for chunk in response.body_iterator:
@@ -193,7 +192,7 @@ async def logging_middleware(request: Request, call_next):
             _response = json.loads(response_body)
             audit_log["response_code"] = _response.get("code", "")
             audit_log["response_message"] = _response.get("message", "")[:512]
-            audit_log["response_body"] = response_body
+            audit_log["response_params"] = response_body
             del _response
 
         request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
@@ -208,7 +207,7 @@ async def logging_middleware(request: Request, call_next):
                                f"响应头部：{audit_log.get('response_header')}\n" \
                                f"响应代码：{audit_log.get('response_code')}\n" \
                                f"响应消息：{audit_log.get('response_message')}\n" \
-                               f"响应参数：{audit_log.get('response_body')}\n" \
+                               f"响应参数：{audit_log.get('response_params')}\n" \
                                f"响应时间：{audit_log.get('response_time')}\n" \
                                f"响应耗时：{audit_log.get('response_elapsed')}\n" \
                                f"< < < < < < < < < < < < < < < < < < < < "
@@ -231,107 +230,3 @@ async def logging_middleware(request: Request, call_next):
         await Audit.create(**audit_log)
 
     return response
-
-
-class ReqResLoggerMiddleware:
-
-    def __init__(self, app: ASGIApp):
-        self.app: ASGIApp = app
-        self.response_body = {}
-        self.response_header = {}
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send, *args, **kwargs):
-        # 仅处理HTTP请求
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        # 接口服务开始时间
-        start_time = time.time()
-        request_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(start_time))
-
-        # 重载 starlette 的 receive 函数，转存消费
-        receive_ = await receive()
-
-        async def receive():
-            return receive_
-
-        # 创建请求对象，消费请求体
-        request_instance = Request(scope, receive)
-
-        # 判断请求方式
-        request_method: str = request_instance.scope.get("method")
-        if request_method in (
-                "OPTIONS",
-        ):
-            await self.app(scope, receive, send)
-            return
-
-        # 判断请求路径
-        request_url: str = str(request_instance.url)
-        request_router: str = request_instance.scope.get("path")
-        if request_router in (
-                PROJECT_CONFIG.APP_DOCS_URL,
-                PROJECT_CONFIG.APP_REDOC_URL,
-                PROJECT_CONFIG.APP_OPENAPI_URL,
-                PROJECT_CONFIG.APP_OPENAPI_JS_URL,
-                PROJECT_CONFIG.APP_OPENAPI_CSS_URL,
-                PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL,
-        ):
-            await self.app(scope, receive, send)
-            return
-
-        request_tags: str = GLOBAL_CONFIG.ROUTER_TAGS.get(request_router or "未定义", "未定义")
-        request_summary: str = GLOBAL_CONFIG.ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
-        request_client: str = request_instance.scope.get("client")[0]
-        request_header: dict = dict(request_instance.headers)
-        request_body: bytes = await request_instance.body()
-
-        # 获取json格式响应数据
-        try:
-            request_json = await request_instance.json()
-        except Exception as e:
-            request_json = None
-        finally:
-            ...
-
-        # 转存请求体
-        request_instance.state.body = request_body
-
-        # 转存响应体
-        original_send = send
-
-        # 响应体处理
-        async def send_process(message):
-            if message["type"] == "http.response.start":
-                self.response_header = {k.decode(): v.decode() for k, v in message.get("headers", {})}
-            elif message["type"] == "http.response.body":
-                body = message.get("body", "")
-                if "image" not in self.response_header["content-type"]:
-                    self.response_body = body.decode(errors='ignore')
-            await original_send(message)
-
-        # 中间件传递
-        await self.app(scope, receive, send_process)
-
-        # 接口服务结束时间
-        end_time = time.time()
-        response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(end_time))
-
-        # 计算耗时
-        response_elapsed = end_time - start_time
-        request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
-                               f"请求时间：{request_time}\n" \
-                               f"请求模块：{request_tags}\n" \
-                               f"请求接口：{request_summary}\n" \
-                               f"请求方式：{request_method}\n" \
-                               f"请求地址：{request_url}\n" \
-                               f"请求来源：{request_client}\n" \
-                               f"请求头部：{request_header}\n" \
-                               f"请求参数：{request_json or request_body}\n" \
-                               f"响应头部：{self.response_header}\n" \
-                               f"响应参数：{self.response_body}\n" \
-                               f"响应时间：{response_time}\n" \
-                               f"响应耗时：{response_elapsed:.4f}s\n" \
-                               f"> > > > > > > > > > > > > > > > > > > >"
-        LOGGER.info(request_message)

@@ -1,18 +1,33 @@
 <script setup>
-import {h, onMounted, ref} from 'vue'
-import {NInput, NSelect, NTag} from 'naive-ui'
+import { h, onMounted, ref } from 'vue'
+import {
+  NButton,
+  NCard,
+  NDatePicker,
+  NDescriptions,
+  NDescriptionsItem,
+  NInput,
+  NModal,
+  NScrollbar,
+  NSelect,
+  NTabPane,
+  NTabs,
+  NTag,
+} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import api from '@/api'
-import {formatDateTime} from "@/utils";
+import { formatDateTime, renderIcon } from '@/utils'
 
 defineOptions({ name: '审计日志' })
 
 const $table = ref(null)
 const queryItems = ref({})
+const detailVisible = ref(false)
+const detailRow = ref(null)
 
 onMounted(() => {
   $table.value?.handleSearch()
@@ -20,30 +35,25 @@ onMounted(() => {
 
 function formatTimestamp(timestamp) {
   const date = new Date(timestamp)
-
   const pad = (num) => num.toString().padStart(2, '0')
-
   const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1) // 月份从0开始，所以需要+1
+  const month = pad(date.getMonth() + 1)
   const day = pad(date.getDate())
   const hours = pad(date.getHours())
   const minutes = pad(date.getMinutes())
   const seconds = pad(date.getSeconds())
-
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
-// 获取当天的开始时间的时间戳
 function getStartOfDayTimestamp() {
   const now = new Date()
-  now.setHours(0, 0, 0, 0) // 将小时、分钟、秒和毫秒都设置为0
+  now.setHours(0, 0, 0, 0)
   return now.getTime()
 }
 
-// 获取当天的结束时间的时间戳
 function getEndOfDayTimestamp() {
   const now = new Date()
-  now.setHours(23, 59, 59, 999) // 将小时设置为23，分钟设置为59，秒设置为59，毫秒设置为999
+  now.setHours(23, 59, 59, 999)
   return now.getTime()
 }
 
@@ -65,249 +75,357 @@ const handleDateRangeChange = (value) => {
 }
 
 const methodOptions = [
-  {
-    label: 'GET',
-    value: 'GET',
-  },
-  {
-    label: 'POST',
-    value: 'POST',
-  },
-  {
-    label: 'PUT',
-    value: 'PUT',
-  },
-  {
-    label: 'DELETE',
-    value: 'DELETE',
-  },
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'DELETE', value: 'DELETE' },
 ]
+
+/** 请求状态：根据响应代码判断成功/失败 */
+function getRequestStatus(row) {
+  const code = String(row.response_code || '')
+  if (code === '000000' || code === '200') return { text: '成功', type: 'success' }
+  return { text: '失败', type: 'error' }
+}
+
+/** 格式化请求/响应参数：支持 JSON、XML、Text */
+function formatParams(value) {
+  if (value == null || value === '') return '-'
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  const str = String(value)
+  const trimmed = str.trim()
+  if (!trimmed) return '-'
+  // 尝试 JSON 格式化
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      return trimmed
+    }
+  }
+  // 尝试 XML 格式化（简单缩进）
+  if (trimmed.startsWith('<?xml') || trimmed.startsWith('<')) {
+    try {
+      return formatXml(trimmed)
+    } catch {
+      return trimmed
+    }
+  }
+  return trimmed
+}
+
+function formatXml(xml) {
+  let formatted = ''
+  let indent = 0
+  const parts = xml.replace(/>\s*</g, '><').split(/(?=<)|(?<=>)/)
+  for (const part of parts) {
+    if (part.startsWith('</')) indent = Math.max(0, indent - 1)
+    formatted += '  '.repeat(indent) + part + (part.endsWith('>') && !part.startsWith('</') ? '\n' : '')
+    if (part.startsWith('<') && !part.startsWith('</') && !part.endsWith('/>')) indent++
+  }
+  return formatted.trim() || xml
+}
+
+/** 渲染对象为 JSON 字符串（如请求头） */
+function formatObject(value) {
+  if (value == null) return ''
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
+}
+
+function openDetail(row) {
+  detailRow.value = row
+  detailVisible.value = true
+}
 
 const columns = [
   {
+    title: '日志ID',
+    key: 'id',
+    width: 80,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
     title: '用户名称',
     key: 'username',
-    width: '100px',
+    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
-      return h(NTag, {type: 'primary'}, {default: () => row.username})
+      return h(NTag, { type: 'primary' }, { default: () => row.username || '-' })
     },
   },
   {
     title: '功能模块',
     key: 'request_tags',
+    width: 120,
     align: 'center',
-    width: '150px',
     ellipsis: { tooltip: true },
     render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.request_tags})
+      return h(NTag, { type: 'info' }, { default: () => row.request_tags || '-' })
     },
   },
   {
     title: '接口概要',
     key: 'request_summary',
+    width: 160,
     align: 'center',
-    width: '200px',
     ellipsis: { tooltip: true },
   },
   {
     title: '请求方法',
     key: 'request_method',
+    width: 90,
     align: 'center',
-    width: '100px',
     ellipsis: { tooltip: true },
     render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.request_method})
+      return h(NTag, { type: 'info' }, { default: () => row.request_method || '-' })
     },
   },
   {
     title: '请求路由',
     key: 'request_router',
+    width: 180,
     align: 'center',
-    width: '200px',
     ellipsis: { tooltip: true },
   },
   {
-    title: '请求时间',
-    key: 'request_time',
+    title: '请求状态',
+    key: 'request_status',
+    width: 90,
     align: 'center',
-    width: '200px',
-    ellipsis: { tooltip: true },
     render(row) {
-      return h('span', formatDateTime(row.request_time))
-    },
-  },
-  {
-    title: '请求来源',
-    key: 'request_client',
-    align: 'center',
-    width: '150px',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '请求头部',
-    key: 'request_header',
-    align: 'center',
-    width: '100px',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', JSON.stringify(row.request_header, null, 2))
-    },
-  },
-  {
-    title: '请求参数',
-    key: 'request_params',
-    align: 'center',
-    width: '100px',
-    ellipsis: { tooltip: true },
-    render(row) {
-      try {
-        if (row.request_params === null) return;
-        const parsed = JSON.parse(row.request_params);
-        return h('span', JSON.stringify(parsed));
-      } catch (error) {
-        return h('span', row.request_params)
-      }
-    },
-  },
-  {
-    title: '响应时间',
-    key: 'response_time',
-    align: 'center',
-    width: '200px',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', formatDateTime(row.response_time))
-    },
-  },
-  {
-    title: '响应头部',
-    key: 'response_header',
-    align: 'center',
-    width: '100px',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', JSON.stringify(row.request_header, null, 2))
+      const { text, type } = getRequestStatus(row)
+      return h(NTag, { type }, { default: () => text })
     },
   },
   {
     title: '响应代码',
     key: 'response_code',
+    width: 90,
     align: 'center',
-    width: '100px',
     ellipsis: { tooltip: true },
     render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.response_code})
+      return h(NTag, { type: 'info' }, { default: () => row.response_code || '-' })
     },
   },
   {
     title: '响应信息',
     key: 'response_message',
+    width: 140,
     align: 'center',
-    width: '100px',
     ellipsis: { tooltip: true },
   },
   {
-    title: '响应参数',
-    key: 'response_params',
+    title: '操作',
+    key: 'actions',
+    width: 100,
     align: 'center',
-    width: '100px',
-    ellipsis: { tooltip: true },
+    fixed: 'right',
     render(row) {
-      return h('span', JSON.stringify(row.request_header, null, 2))
+      return h(
+          NButton,
+          {
+            size: 'tiny',
+            quaternary: true,
+            type: 'info',
+            onClick: () => openDetail(row),
+          },
+          { default: () => '详情', icon: renderIcon('material-symbols:visibility-outline', { size: 16 }) }
+      )
     },
   },
-  {
-    title: '响应耗时',
-    key: 'response_elapsed',
-    align: 'center',
-    width: '100px',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h(NTag, {type: 'primary'}, {default: () => row.response_elapsed})
-    },
-  }
 ]
 </script>
 
 <template>
-  <!-- 业务页面 -->
   <CommonPage>
-    <!-- 表格 -->
     <CrudTable
-      ref="$table"
-      v-model:query-items="queryItems"
-      :columns="columns"
-      :get-data="api.getAuditLogList"
-      :single-line="true"
-      :scroll-x="1800"
+        ref="$table"
+        v-model:query-items="queryItems"
+        :columns="columns"
+        :get-data="api.getAuditLogList"
+        :single-line="true"
+        :scroll-x="1200"
     >
       <template #queryBar>
         <QueryBarItem label="用户名称" :label-width="70">
           <NInput
-            v-model:value="queryItems.username"
-            clearable
-            type="text"
-            placeholder="请输入用户名称"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.username"
+              clearable
+              type="text"
+              placeholder="请输入用户名称"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="功能模块" :label-width="70">
           <NInput
-            v-model:value="queryItems.request_tags"
-            clearable
-            type="text"
-            placeholder="请输入功能模块"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.request_tags"
+              clearable
+              type="text"
+              placeholder="请输入功能模块"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="接口概要" :label-width="70">
           <NInput
-            v-model:value="queryItems.request_summary"
-            clearable
-            type="text"
-            placeholder="请输入接口概要"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.request_summary"
+              clearable
+              type="text"
+              placeholder="请输入接口概要"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="请求方法" :label-width="70">
           <NSelect
-            v-model:value="queryItems.request_method"
-            style="width: 180px"
-            :options="methodOptions"
-            clearable
-            placeholder="请选择请求方法"
+              v-model:value="queryItems.request_method"
+              style="width: 180px"
+              :options="methodOptions"
+              clearable
+              placeholder="请选择请求方法"
           />
         </QueryBarItem>
         <QueryBarItem label="请求路由" :label-width="70">
           <NInput
-            v-model:value="queryItems.request_router"
-            clearable
-            type="text"
-            placeholder="请输入请求路由"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.request_router"
+              clearable
+              type="text"
+              placeholder="请输入请求路由"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="响应代码" :label-width="60">
           <NInput
-            v-model:value="queryItems.response_code"
-            clearable
-            type="text"
-            placeholder="请输入响应代码"
-            @keypress.enter="$table?.handleSearch()"
+              v-model:value="queryItems.response_code"
+              clearable
+              type="text"
+              placeholder="请输入响应代码"
+              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="创建时间" :label-width="70">
           <NDatePicker
-            v-model:value="datetimeRange"
-            type="datetimerange"
-            clearable
-            placeholder="请选择时间范围"
-            @update:value="handleDateRangeChange"
+              v-model:value="datetimeRange"
+              type="datetimerange"
+              clearable
+              placeholder="请选择时间范围"
+              @update:value="handleDateRangeChange"
           />
         </QueryBarItem>
       </template>
     </CrudTable>
+
+    <!-- 详情弹窗：居中，左右各 10% 边距 -->
+    <NModal
+        v-model:show="detailVisible"
+        preset="card"
+        title="详情"
+        class="audit-log-detail-modal"
+        transform-origin="center"
+        :bordered="false"
+        size="medium"
+        :style="{ width: '80%' }"
+    >
+      <template v-if="detailRow">
+        <NTabs type="line" class="audit-detail-tabs">
+          <NTabPane name="request" tab="请求信息">
+            <div class="audit-detail-content">
+              <NDescriptions :column="1" label-placement="left" :label-style="{ width: '90px', fontWeight: 500 }">
+                <NDescriptionsItem label="请求方法">{{ detailRow.request_method || '-' }}</NDescriptionsItem>
+                <NDescriptionsItem label="请求路由">{{ detailRow.request_router || '-' }}</NDescriptionsItem>
+                <NDescriptionsItem label="请求来源">{{ detailRow.request_client || '-' }}</NDescriptionsItem>
+                <NDescriptionsItem label="请求时间">{{ formatDateTime(detailRow.request_time) }}</NDescriptionsItem>
+              </NDescriptions>
+              <div class="audit-params-section">
+                <div>请求头部：</div>
+                <NCard size="small" content-style="padding: 12px;">
+                  <NScrollbar style="max-height: 300px;">
+                    <textarea v-if="formatObject(detailRow.request_header)" class="audit-code" readonly rows="12" :value="formatObject(detailRow.request_header)" />
+                    <span v-else>-</span>
+                  </NScrollbar>
+                </NCard>
+              </div>
+              <div class="audit-params-section">
+                <div>请求参数：</div>
+                <NCard size="small" content-style="padding: 12px;">
+                  <NScrollbar style="max-height: 300px;">
+                    <textarea v-if="formatParams(detailRow.request_params) !== '-'" class="audit-code" readonly rows="12" :value="formatParams(detailRow.request_params)" />
+                    <span v-else>-</span>
+                  </NScrollbar>
+                </NCard>
+              </div>
+            </div>
+          </NTabPane>
+          <NTabPane name="response" tab="响应信息">
+            <div class="audit-detail-content">
+              <NDescriptions :column="1" label-placement="left" :label-style="{ width: '90px', fontWeight: 500 }">
+                <NDescriptionsItem label="响应代码">{{ detailRow.response_code || '-' }}</NDescriptionsItem>
+                <NDescriptionsItem label="响应信息">{{ detailRow.response_message || '-' }}</NDescriptionsItem>
+                <NDescriptionsItem label="响应时间">{{ detailRow.response_time || '-' }}</NDescriptionsItem>
+                <NDescriptionsItem label="响应耗时">{{ detailRow.response_elapsed || '-' }}</NDescriptionsItem>
+              </NDescriptions>
+              <div class="audit-params-section">
+                <div>响应头部：</div>
+                <NCard size="small" content-style="padding: 12px;">
+                  <NScrollbar style="max-height: 300px;">
+                    <textarea v-if="formatObject(detailRow.response_header)" class="audit-code" readonly rows="12" :value="formatObject(detailRow.response_header)" />
+                    <span v-else>-</span>
+                  </NScrollbar>
+                </NCard>
+              </div>
+              <div class="audit-params-section">
+                <div>响应参数：</div>
+                <NCard size="small" content-style="padding: 12px;">
+                  <NScrollbar style="max-height: 300px;">
+                    <textarea v-if="formatParams(detailRow.response_params) !== '-'" class="audit-code" readonly rows="12" :value="formatParams(detailRow.response_params)" />
+                    <span v-else>-</span>
+                  </NScrollbar>
+                </NCard>
+              </div>
+            </div>
+          </NTabPane>
+        </NTabs>
+      </template>
+    </NModal>
   </CommonPage>
 </template>
+
+<style scoped>
+.audit-detail-tabs {
+  margin-top: 8px;
+}
+
+.audit-detail-content {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.audit-params-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 只读 textarea：支持 Ctrl+A 全选、Ctrl+C 复制，仅选中当前块内容；颜色继承主题 */
+.audit-code {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--n-text-color, inherit);
+  cursor: text;
+}
+
+</style>
