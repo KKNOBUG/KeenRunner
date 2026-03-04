@@ -84,16 +84,16 @@ onMounted(async () => {
 })
 
 const columns = [
-  { title: '环境ID', key: 'env_id', width: 80, align: 'center' },
-  { title: '环境代码', key: 'env_code', width: 120, align: 'center', ellipsis: { tooltip: true } },
-  { title: '所属应用', key: 'project_name', width: 120, align: 'center', ellipsis: { tooltip: true } },
-  { title: '环境名称', key: 'env_name', width: 120, align: 'center', ellipsis: { tooltip: true } },
-  { title: '主机地址', key: 'env_host', width: 180, align: 'center', ellipsis: { tooltip: true } },
-  { title: '端口', key: 'env_port', width: 80, align: 'center' },
+  { title: '环境ID', key: 'env_id', align: 'center' },
+  { title: '环境代码', key: 'env_code', align: 'center', ellipsis: { tooltip: true } },
+  { title: '所属应用', key: 'project_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '环境名称', key: 'env_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '主机地址', key: 'env_host', align: 'center', ellipsis: { tooltip: true } },
+  { title: '端口', key: 'env_port', align: 'center' },
   {
     title: '操作',
     key: 'actions',
-    width: 160,
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -152,7 +152,7 @@ const columns = [
         row-key="env_id"
     >
       <template #queryBar>
-        <QueryBarItem label="所属应用：" :label-width="90">
+        <QueryBarItem label="所属应用：">
           <NSelect
               v-model:value="queryItems.project_id"
               :options="projectOptions"
@@ -161,7 +161,7 @@ const columns = [
               style="width: 180px"
           />
         </QueryBarItem>
-        <QueryBarItem label="环境名称：" :label-width="90">
+        <QueryBarItem label="环境名称：">
           <NInput
               v-model:value="queryItems.env_name"
               clearable
@@ -169,7 +169,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="主机地址：" :label-width="90">
+        <QueryBarItem label="主机地址：">
           <NInput
               v-model:value="queryItems.env_host"
               clearable

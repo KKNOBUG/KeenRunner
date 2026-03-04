@@ -215,7 +215,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -245,7 +245,7 @@ const columns = [
         :scroll-x="1200"
     >
       <template #queryBar>
-        <QueryBarItem label="用户名称" :label-width="70">
+        <QueryBarItem label="用户名称：">
           <NInput
               v-model:value="queryItems.username"
               clearable
@@ -254,7 +254,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="功能模块" :label-width="70">
+        <QueryBarItem label="功能模块：">
           <NInput
               v-model:value="queryItems.request_tags"
               clearable
@@ -263,7 +263,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="接口概要" :label-width="70">
+        <QueryBarItem label="接口概要：">
           <NInput
               v-model:value="queryItems.request_summary"
               clearable
@@ -272,7 +272,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="请求方法" :label-width="70">
+        <QueryBarItem label="请求方法：">
           <NSelect
               v-model:value="queryItems.request_method"
               style="width: 180px"
@@ -281,7 +281,7 @@ const columns = [
               placeholder="请选择请求方法"
           />
         </QueryBarItem>
-        <QueryBarItem label="请求路由" :label-width="70">
+        <QueryBarItem label="请求路由：">
           <NInput
               v-model:value="queryItems.request_router"
               clearable
@@ -290,7 +290,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="响应代码" :label-width="60">
+        <QueryBarItem label="响应代码：">
           <NInput
               v-model:value="queryItems.response_code"
               clearable
@@ -299,7 +299,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="创建时间" :label-width="70">
+        <QueryBarItem label="创建时间：">
           <NDatePicker
               v-model:value="datetimeRange"
               type="datetimerange"

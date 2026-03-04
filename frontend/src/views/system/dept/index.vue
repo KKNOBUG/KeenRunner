@@ -123,7 +123,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -207,7 +207,7 @@ const columns = [
     >
       <!--   搜索狂   -->
       <template #queryBar>
-        <QueryBarItem label="部门名称" :label-width="80">
+        <QueryBarItem label="部门名称：">
           <NInput
               v-model:value="queryItems.name"
               clearable

@@ -1,5 +1,5 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
+import {h, ref, resolveDirective, withDirectives} from 'vue'
 import {
   NButton,
   NDrawer,
@@ -87,9 +87,6 @@ function buildApiTree(data) {
   return processedData
 }
 
-onMounted(() => {
-  $table.value?.handleSearch()
-})
 
 const columns = [
   {
@@ -115,9 +112,6 @@ const columns = [
     key: 'description',
     align: 'center',
     ellipsis: {tooltip: true},
-    render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.description})
-    },
   },
   {
     title: '创建人员',
@@ -150,7 +144,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -296,7 +290,7 @@ async function updateRoleAuthorized() {
 
       <!--  搜索  -->
       <template #queryBar>
-        <QueryBarItem label="角色名称：" :label-width="80">
+        <QueryBarItem label="角色名称：">
           <NInput
               v-model:value="queryItems.name"
               clearable

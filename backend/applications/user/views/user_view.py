@@ -102,13 +102,16 @@ async def list_user(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
-        username: str = Query(default=None, description="用户名称，用于搜索"),
+        username: str = Query(default=None, description="用户账号，用于搜索"),
+        alias: str = Query(default=None, description="用户名称，用于搜索"),
         email: str = Query(default=None, description="邮箱地址"),
         dept_id: int = Query(default=None, description="部门ID"),
 ):
     q = Q()
     if username:
         q &= Q(username__contains=username)
+    if alias:
+        q &= Q(alias__contains=alias)
     if email:
         q &= Q(email__contains=email)
     if dept_id is not None:

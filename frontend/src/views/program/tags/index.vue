@@ -83,17 +83,17 @@ onMounted(async () => {
 })
 
 const columns = [
-  { title: '标签ID', key: 'tag_id', width: 80, align: 'center' },
-  { title: '标签代码', key: 'tag_code', width: 120, align: 'center', ellipsis: { tooltip: true } },
-  { title: '标签类型', key: 'tag_type', width: 80, align: 'center' },
-  { title: '所属应用', key: 'tag_project', width: 100, align: 'center' },
-  { title: '标签大类', key: 'tag_mode', width: 100, align: 'center', ellipsis: { tooltip: true } },
-  { title: '标签名称', key: 'tag_name', width: 120, align: 'center', ellipsis: { tooltip: true } },
-  { title: '标签描述', key: 'tag_desc', width: 180, align: 'center', ellipsis: { tooltip: true } },
+  { title: '标签ID', key: 'tag_id', align: 'center' },
+  { title: '标签代码', key: 'tag_code', align: 'center', ellipsis: { tooltip: true } },
+  { title: '标签类型', key: 'tag_type', align: 'center' },
+  { title: '所属应用', key: 'tag_project', align: 'center' },
+  { title: '标签大类', key: 'tag_mode', align: 'center', ellipsis: { tooltip: true } },
+  { title: '标签名称', key: 'tag_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '标签描述', key: 'tag_desc', align: 'center', ellipsis: { tooltip: true } },
   {
     title: '操作',
     key: 'actions',
-    width: 160,
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -152,7 +152,7 @@ const columns = [
         row-key="tag_id"
     >
       <template #queryBar>
-        <QueryBarItem label="所属应用：" :label-width="90">
+        <QueryBarItem label="所属应用：">
           <NSelect
               v-model:value="queryItems.tag_project"
               :options="projectOptions"
@@ -162,7 +162,7 @@ const columns = [
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="标签类型：" :label-width="90">
+        <QueryBarItem label="标签类型：">
           <NSelect
               v-model:value="queryItems.tag_type"
               :options="tagTypeOptions"
@@ -172,7 +172,7 @@ const columns = [
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="标签名称：" :label-width="90">
+        <QueryBarItem label="标签名称：">
           <NInput
               v-model:value="queryItems.tag_name"
               clearable

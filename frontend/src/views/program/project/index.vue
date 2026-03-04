@@ -119,28 +119,24 @@ const columns = [
   {
     title: '应用名称',
     key: 'project_name',
-    width: 150,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '应用状态',
     key: 'project_state',
-    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '应用阶段',
     key: 'project_phase',
-    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '开发负责人',
     key: 'project_dev_owners',
-    width: 120,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -152,7 +148,6 @@ const columns = [
   {
     title: '开发人员',
     key: 'project_developers',
-    width: 120,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -164,7 +159,6 @@ const columns = [
   {
     title: '测试负责人',
     key: 'project_test_owners',
-    width: 120,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -176,7 +170,6 @@ const columns = [
   {
     title: '测试人员',
     key: 'project_testers',
-    width: 120,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -188,7 +181,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 160,
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -250,7 +243,7 @@ const columns = [
         row-key="project_id"
     >
       <template #queryBar>
-        <QueryBarItem label="应用名称：" :label-width="90">
+        <QueryBarItem label="应用名称：">
           <NInput
               v-model:value="queryItems.project_name"
               clearable
@@ -258,7 +251,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="应用状态：" :label-width="90">
+        <QueryBarItem label="应用状态：">
           <NInput
               v-model:value="queryItems.project_state"
               clearable

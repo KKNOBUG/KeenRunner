@@ -147,7 +147,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -234,7 +234,7 @@ const columns = [
         :get-data="api.getRouters"
     >
       <template #queryBar>
-        <QueryBarItem label="API简介" :label-width="70">
+        <QueryBarItem label="API简介：">
           <NInput
               v-model:value="queryItems.summary"
               clearable
@@ -243,7 +243,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="API路径" :label-width="70">
+        <QueryBarItem label="API路径：">
           <NInput
               v-model:value="queryItems.path"
               clearable
@@ -252,7 +252,7 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="API标签" :label-width="70">
+        <QueryBarItem label="API标签：">
           <NInput
               v-model:value="queryItems.tags"
               clearable

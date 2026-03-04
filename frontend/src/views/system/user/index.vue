@@ -59,7 +59,6 @@ const roleOption = ref([])
 const deptOption = ref([])
 
 onMounted(() => {
-  $table.value?.handleSearch()
   api.getRoleList({page: 1, page_size: 9999}).then((res) => (roleOption.value = res.data))
   api.getDepts().then((res) => (deptOption.value = res.data))
 })
@@ -419,16 +418,25 @@ const validateAddUser = {
 
           <!--  搜索行  -->
           <template #queryBar>
-            <QueryBarItem label="名称" :label-width="40">
+            <QueryBarItem label="用户账号：">
               <NInput
                   v-model:value="queryItems.username"
+                  clearable
+                  type="text"
+                  placeholder="请输入用户账号"
+                  @keypress.enter="$table?.handleSearch()"
+              />
+            </QueryBarItem>
+            <QueryBarItem label="用户名称：">
+              <NInput
+                  v-model:value="queryItems.alias"
                   clearable
                   type="text"
                   placeholder="请输入用户名称"
                   @keypress.enter="$table?.handleSearch()"
               />
             </QueryBarItem>
-            <QueryBarItem label="邮箱" :label-width="40">
+            <QueryBarItem label="电子邮箱：">
               <NInput
                   v-model:value="queryItems.email"
                   clearable
