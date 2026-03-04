@@ -398,7 +398,7 @@
       </n-grid>
     </div>
 
-    <!-- 引用公共脚本抽屉：宽度约 60%，内容同测试用例管理，请求时 case_type=公共脚本 -->
+    <!-- 引用公共用例抽屉：宽度约 60%，内容同测试用例管理，请求时 case_type=公共脚本 -->
     <n-drawer
         v-model:show="quotePublicScriptDrawerVisible"
         :width="'61%'"
@@ -499,14 +499,15 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
 import {useUserStore} from '@/store';
 
+// 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致（不含 TCP，前端未实现）
 const stepDefinitions = {
-  loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
-  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
-  if: {label: '分支条件', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
-  wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
-  database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
+  if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
+  wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
+  loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
+  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
+  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
+  database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   quote: {label: '引用公共用例', allowChildren: false, icon: 'material-symbols:link'},
 }
 
@@ -591,7 +592,7 @@ const caseTypeOptions = [
   {label: '公共脚本', value: '公共脚本'}
 ]
 
-// 引用公共脚本抽屉（新增步骤时 parentId 有值；重新选择时 replaceStepId 有值）
+// 引用公共用例抽屉（新增步骤时 parentId 有值；重新选择时 replaceStepId 有值）
 const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
 const quotePublicScriptReplaceStepId = ref(null)
@@ -615,7 +616,7 @@ const getPublicScriptList = (params) => {
 }
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
-  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
+  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共用例' }
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
@@ -875,7 +876,7 @@ watch(() => caseForm.case_tags, (newVal) => {
   }
 }, {immediate: true})
 
-// 当用例类型改为「公共脚本」时，自动移除步骤树中所有「引用公共脚本」步骤；若从「用户脚本」切来则暂存，切回「用户脚本」时可恢复
+// 当用例类型改为「公共脚本」时，自动移除步骤树中所有「引用公共用例」步骤；若从「用户脚本」切来则暂存，切回「用户脚本」时可恢复
 watch(() => caseForm.case_type, (newType, oldType) => {
   if (newType === '公共脚本') {
     const fromUserScript = oldType === '用户脚本'
@@ -884,18 +885,18 @@ watch(() => caseForm.case_type, (newType, oldType) => {
       const removedCount = removeAllQuoteSteps()
       if (removedCount > 0) {
         stashedQuoteStepsWhenPublic.value = toStash
-        window.$message?.warning?.(`切换为公共脚本，已临时移除 ${removedCount} 个「引用公共脚本」步骤（若误操作，可切回用户脚本恢复）`)
+        window.$message?.warning?.(`切换为公共脚本，已临时移除 ${removedCount} 个「引用公共用例」步骤（若误操作，可切回用户脚本恢复）`)
       }
     } else {
       const removedCount = removeAllQuoteSteps()
       if (removedCount > 0) {
-        window.$message?.warning?.(`切换为公共脚本，已自动移除 ${removedCount} 个「引用公共脚本」步骤（公共脚本不可引用其他脚本）`)
+        window.$message?.warning?.(`切换为公共脚本，已自动移除 ${removedCount} 个「引用公共用例」步骤（公共脚本不可引用其他脚本）`)
       }
     }
   } else if (newType === '用户脚本' && stashedQuoteStepsWhenPublic.value.length > 0) {
     const restoredCount = restoreStashedQuoteSteps()
     if (restoredCount > 0) {
-      window.$message?.info?.(`已恢复 ${restoredCount} 个「引用公共脚本」步骤。`)
+      window.$message?.info?.(`已恢复 ${restoredCount} 个「引用公共用例」步骤。`)
     }
   }
 })
@@ -913,8 +914,8 @@ const dragState = ref({
   insertTargetId: null // 插入目标步骤 ID（用于显示指示器）
 })
 
-// 下拉只展示“引用公共脚本”（不展示“引用公共用例”）；quote 仅用于后端步骤类型与展示
-// 当用例类型为“公共脚本”时，“引用公共脚本”置灰，防止循环引用
+// 下拉展示“引用公共用例”；quote 仅用于后端步骤类型与展示
+// 当用例类型为“公共脚本”时，“引用公共用例”置灰，防止循环引用
 const addOptions = computed(() => {
   const isPublicScript = caseForm.case_type === '公共脚本'
   return [
@@ -926,7 +927,7 @@ const addOptions = computed(() => {
           icon: renderIcon(item.icon, {size: 16})
         })),
     {
-      label: '引用公共脚本',
+      label: '引用公共用例',
       key: 'quote_public_script',
       icon: renderIcon('material-symbols:library-books-outline', {size: 16}),
       disabled: isPublicScript
@@ -1173,6 +1174,8 @@ const assistFunctionsList = ref([])
 
 const backendTypeToLocal = (step_type) => {
   switch (step_type) {
+    case '用户变量':
+      return 'user_variables'
     case 'HTTP请求':
       return 'http'
     case '执行代码请求(Python)':
@@ -1183,8 +1186,6 @@ const backendTypeToLocal = (step_type) => {
       return 'wait'
     case '循环结构':
       return 'loop'
-    case '用户变量':
-      return 'user_variables'
     case '引用公共用例':
       return 'quote'
     default:
@@ -1376,12 +1377,12 @@ const hydrateCaseInfo = (data) => {
 // 将前端类型转换为后端类型
 const localTypeToBackend = (localType) => {
   const typeMap = {
+    'user_variables': '用户变量',
     'http': 'HTTP请求',
     'code': '执行代码请求(Python)',
     'if': '条件分支',
-    'wait': '等待控制',
     'loop': '循环结构',
-    'user_variables': '用户变量',
+    'wait': '等待控制',
     'quote': '引用公共用例'
   }
   return typeMap[localType] || '执行代码请求(Python)'
@@ -2197,7 +2198,7 @@ const handleDeleteStep = (id) => {
   }
 }
 
-/** 当用例类型改为「公共脚本」时，移除步骤树中所有「引用公共脚本」步骤，防止循环引用。返回被移除的步骤数量。 */
+/** 当用例类型改为「公共脚本」时，移除步骤树中所有「引用公共用例」步骤，防止循环引用。返回被移除的步骤数量。 */
 const removeAllQuoteSteps = () => {
   const quoteIds = []
   forEachStep(steps.value, (step) => {
@@ -2223,7 +2224,7 @@ const removeAllQuoteSteps = () => {
   return quoteIds.length
 }
 
-/** 收集所有「引用公共脚本」步骤及其位置（用于暂存，切回用户脚本时可恢复） */
+/** 收集所有「引用公共用例」步骤及其位置（用于暂存，切回用户脚本时可恢复） */
 const collectQuoteStepsWithPosition = () => {
   const list = []
   forEachStep(steps.value, (step) => {
@@ -2375,7 +2376,7 @@ const updateStepConfig = (id, config) => {
       }
     } else if (step.type === 'quote' || step.type === 'quote_public_script') {
       if (config.step_name !== undefined && config.step_name !== null) {
-        step.name = String(config.step_name).trim() || '引用公共脚本'
+        step.name = String(config.step_name).trim() || '引用公共用例'
       }
     }
     // 更新显示名称

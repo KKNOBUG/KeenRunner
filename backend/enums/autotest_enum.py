@@ -33,15 +33,15 @@ class AutoTestReportType(StringEnum):
 
 class AutoTestStepType(StringEnum):
     """请求参数类型枚举"""
-    TCP = "TCP请求"
-    HTTP = "HTTP请求"
-    DATABASE = "数据库请求"
-    PYTHON = "执行代码请求(Python)"
+    USER_VARIABLES = "用户变量"
     IF = "条件分支"
     WAIT = "等待控制"
     LOOP = "循环结构"
+    TCP = "TCP请求"
+    HTTP = "HTTP请求"
+    PYTHON = "执行代码请求(Python)"
+    DATABASE = "数据库请求"
     QUOTE = "引用公共用例"
-    USER_VARIABLES = "用户变量"
 
 
 class AutoTestLoopMode(StringEnum):
