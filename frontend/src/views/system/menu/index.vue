@@ -67,16 +67,6 @@ const menuOptions = ref([])
 const columns = [
   {title: 'ID', key: 'id', width: 100, ellipsis: {tooltip: true}, align: 'center'},
   {
-    title: '菜单名称',
-    key: 'name',
-    width: 100,
-    ellipsis: {tooltip: true},
-    align: 'center',
-    render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.name})
-    },
-  },
-  {
     title: '菜单类型',
     key: 'menu_type',
     width: 100,
@@ -109,6 +99,16 @@ const columns = [
     },
   },
   {title: '排序', key: 'order', width: 100, ellipsis: {tooltip: true}, align: 'center'},
+  {
+    title: '菜单名称',
+    key: 'name',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      return h(NTag, {type: 'info'}, {default: () => row.name})
+    },
+  },
   {title: '访问路径', key: 'path', width: 100, ellipsis: {tooltip: true}, align: 'center'},
   {title: '跳转路径', key: 'redirect', width: 100, ellipsis: {tooltip: true}, align: 'center'},
   {title: '组件路径', key: 'component', width: 100, ellipsis: {tooltip: true}, align: 'center'},
@@ -288,10 +288,11 @@ async function getTreeSelect() {
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        :is-pagination="false"
+        :is-pagination="true"
         :columns="columns"
         :get-data="api.getMenus"
         :single-line="true"
+        :scroll-x="1200"
     >
     </CrudTable>
 

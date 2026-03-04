@@ -411,10 +411,11 @@ const validateAddUser = {
         <CrudTable
             ref="$table"
             v-model:query-items="queryItems"
-            :is-pagination="false"
+            :is-pagination="true"
             :columns="columns"
             :get-data="api.getUserList"
-            :single-line="true">
+            :single-line="true"
+            :scroll-x="1200">
 
           <!--  搜索行  -->
           <template #queryBar>
