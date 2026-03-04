@@ -180,9 +180,6 @@ const columns = [
     width: 90,
     align: 'center',
     ellipsis: { tooltip: true },
-    render(row) {
-      return h(NTag, { type: 'info' }, { default: () => row.request_method || '-' })
-    },
   },
   {
     title: '请求路由',
@@ -207,9 +204,6 @@ const columns = [
     width: 90,
     align: 'center',
     ellipsis: { tooltip: true },
-    render(row) {
-      return h(NTag, { type: 'info' }, { default: () => row.response_code || '-' })
-    },
   },
   {
     title: '响应信息',
