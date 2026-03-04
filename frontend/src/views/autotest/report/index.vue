@@ -108,7 +108,10 @@ const flattenedTableData = computed(() => {
     taskCodeMap.get(tk).push(r)
   }
   for (const [taskCode, reports] of taskCodeMap) {
-    const groupExpanded = expandedKeys.value[taskCode] !== false
+    // 展开
+    // const groupExpanded = expandedKeys.value[taskCode] !== false
+    // 折叠
+    const groupExpanded = expandedKeys.value[taskCode] === true
     const passCount = reports.filter(r => r.case_state === true || r.case_state === 'true').length
     const failCount = reports.filter(r => r.case_state === false || r.case_state === 'false').length
     result.push({
@@ -129,7 +132,10 @@ const flattenedTableData = computed(() => {
     }
     for (const [batchCode, batchReports] of batchMap) {
       const batchKey = 'batch' + BATCH_KEY_SEP + taskCode + BATCH_KEY_SEP + batchCode
-      const batchExpanded = expandedKeys.value[batchKey] !== false
+      // 展开
+      // const batchExpanded = expandedKeys.value[batchKey] !== false
+      // 折叠
+      const batchExpanded = expandedKeys.value[batchKey] === true
       result.push({
         _isBatchGroup: true,
         _batchKey: batchKey,
@@ -145,9 +151,12 @@ const flattenedTableData = computed(() => {
   return result
 })
 
-// 切换展开/折叠：computed 中 expanded = (expandedKeys[key] !== false)，故取反为 expandedKeys[key] === false
+// 切换展开/折叠：默认折叠，仅 expandedKeys[key] === true 时展开
 function toggleExpand(groupKey) {
-  expandedKeys.value = { ...expandedKeys.value, [groupKey]: expandedKeys.value[groupKey] === false }
+  // 展开
+  // expandedKeys.value = { ...expandedKeys.value, [groupKey]: expandedKeys.value[groupKey] === false }
+  // 折叠
+  expandedKeys.value = { ...expandedKeys.value, [groupKey]: expandedKeys.value[groupKey] !== true }
 }
 
 async function handleQuery() {
