@@ -1,7 +1,7 @@
 <template>
   <n-card :bordered="false" size="small" style="width: 100%;" class="quote-card">
     <n-form label-placement="left" label-width="100px">
-      <n-form-item label="引用用例">
+      <n-form-item label="引用脚本">
         <n-text>{{ displayName }}</n-text>
         <n-button
             v-if="onReselect"
@@ -36,7 +36,7 @@ const props = defineProps({
 })
 
 const displayName = computed(() => {
-  return props.config?.step_name ?? props.step?.original?.step_name ?? props.step?.name ?? '引用公共用例'
+  return props.config?.step_name ?? props.step?.original?.step_name ?? props.step?.name ?? '引用公共脚本'
 })
 
 const quoteCaseId = computed(() => {

@@ -398,7 +398,7 @@
       </n-grid>
     </div>
 
-    <!-- 引用公共用例抽屉：宽度约 60%，内容同测试用例管理，请求时 case_type=公共脚本 -->
+    <!-- 引用公共脚本 / 复制指定脚本 共用抽屉 -->
     <n-drawer
         v-model:show="quotePublicScriptDrawerVisible"
         :width="'61%'"
@@ -406,16 +406,26 @@
         :trap-focus="false"
         block-scroll
     >
-      <n-drawer-content title="选择公共脚本" closable>
+      <n-drawer-content :title="scriptDrawerMode === 'copy' ? '选择复制脚本' : '选择公共脚本'" closable>
         <CrudTable
             ref="quotePublicScriptTableRef"
             v-model:query-items="quotePublicScriptQueryItems"
             :is-pagination="true"
             :columns="quotePublicScriptColumns"
-            :get-data="getPublicScriptList"
+            :get-data="getScriptListForDrawer"
             :row-key="'case_id'"
         >
           <template #queryBar>
+            <QueryBarItem v-if="scriptDrawerMode === 'copy'" label="用例类型：" :label-width="90">
+              <n-select
+                  v-model:value="quotePublicScriptQueryItems.case_type"
+                  :options="caseTypeOptionsForCopy"
+                  placeholder="全部"
+                  clearable
+                  style="min-width: 120px;"
+                  @update:value="quotePublicScriptTableRef?.handleSearch?.()"
+              />
+            </QueryBarItem>
             <QueryBarItem label="用例名称：" :label-width="90">
               <n-input
                   v-model:value="quotePublicScriptQueryItems.case_name"
@@ -436,6 +446,12 @@
             </QueryBarItem>
           </template>
         </CrudTable>
+        <div v-if="scriptDrawerMode === 'copy'" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--n-border-color);">
+          <span>已选 {{ selectedForCopy.length }} 个脚本</span>
+          <n-button type="primary" :disabled="selectedForCopy.length === 0" @click="confirmCopySteps">
+            确定复制
+          </n-button>
+        </div>
       </n-drawer-content>
     </n-drawer>
 
@@ -508,7 +524,7 @@ const stepDefinitions = {
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
-  quote: {label: '引用公共用例', allowChildren: false, icon: 'material-symbols:link'},
+  quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
 }
 
 const editorMap = {
@@ -561,6 +577,26 @@ const initCaseInfoFromRoute = () => {
   }
 }
 
+/**
+ * 从复制数据（case_info 含 is_copy 和 steps）加载步骤树
+ *
+ * 数据来源说明：
+ * - case 数据：来自 copyCaseStepTree 返回的 case，由后端从原用例的步骤树中提取，
+ *   已置空 case_id/case_code，initCaseInfoFromRoute 会解析 case_info 填充 caseForm
+ * - steps 数据：来自 copyCaseStepTree 返回的 steps，后端对 get_by_case_id 结果做 strip，
+ *   移除 step_id/step_code 等，前端用 mapBackendStep 转为树节点格式（id 由 genId 生成）
+ *
+ * 调用时机：loadSteps 在无 case_id/case_code 时检测到 case_info.is_copy 且 steps 非空则调用
+ */
+const loadStepsFromCopy = (caseInfo) => {
+  if (!caseInfo?.is_copy || !Array.isArray(caseInfo?.steps) || caseInfo.steps.length === 0) return false
+  hydrateCaseInfo(caseInfo.steps)
+  steps.value = caseInfo.steps.map(mapBackendStep).filter(Boolean)
+  selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+  loadQuoteStepsForAllQuoteSteps()
+  return true
+}
+
 const caseForm = reactive({
   case_project: '',
   case_name: '',
@@ -592,7 +628,8 @@ const caseTypeOptions = [
   {label: '公共脚本', value: '公共脚本'}
 ]
 
-// 引用公共用例抽屉（新增步骤时 parentId 有值；重新选择时 replaceStepId 有值）
+// 引用公共脚本 / 复制指定脚本 共用抽屉（mode: 'quote' | 'copy'）
+const scriptDrawerMode = ref('quote') // 'quote': 引用公共脚本（单选）; 'copy': 复制指定脚本（多选）
 const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
 const quotePublicScriptReplaceStepId = ref(null)
@@ -601,22 +638,38 @@ const quotePublicScriptTableRef = ref(null)
 const quoteStepsMap = ref({})
 // 从「用户脚本」切到「公共脚本」时暂存的引用步骤，切回「用户脚本」时可恢复
 const stashedQuoteStepsWhenPublic = ref([])
+// 复制模式：已选待复制的用例列表
+const selectedForCopy = ref([])
 const quotePublicScriptQueryItems = ref({
   case_name: '',
   case_type: '公共脚本',
   created_user: ''
 })
 
-// 请求前规范化入参：仅传用例名称、创建人员及固定 case_type
-const getPublicScriptList = (params) => {
-  const body = {...params, case_type: '公共脚本'}
+// 复制模式用例类型选项（支持全部、公共脚本、用户脚本）
+const caseTypeOptionsForCopy = [
+  { label: '全部', value: '' },
+  { label: '公共脚本', value: '公共脚本' },
+  { label: '用户脚本', value: '用户脚本' }
+]
+
+// 请求前规范化入参：quote 模式仅查公共脚本；copy 模式支持 case_type 由 queryItems 决定，并排除当前用例（不可复制自己）
+const getScriptListForDrawer = (params) => {
+  const body = {...params}
+  if (scriptDrawerMode.value === 'quote') {
+    body.case_type = '公共脚本'
+  }
+  if (scriptDrawerMode.value === 'copy' && caseId.value) {
+    body.exclude_case_id = Number(caseId.value)
+  }
   if (body.case_name === '') delete body.case_name
   if (body.created_user === '') delete body.created_user
+  if (body.case_type === '') delete body.case_type
   return api.getApiTestcaseList(body)
 }
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
-  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共用例' }
+  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
@@ -635,10 +688,74 @@ const onSelectPublicScript = (row) => {
   quotePublicScriptDrawerVisible.value = false
 }
 
+// 复制模式：将用例加入待复制列表
+const addToCopySelection = (row) => {
+  if (selectedForCopy.value.some((r) => r.case_id === row.case_id)) return
+  selectedForCopy.value = [...selectedForCopy.value, row]
+}
+
+// 复制模式：从待复制列表移除
+const removeFromCopySelection = (row) => {
+  selectedForCopy.value = selectedForCopy.value.filter((r) => r.case_id !== row.case_id)
+}
+
+// 复制模式：确认复制，调用 copyCaseStepTree 获取 steps 并插入（仅复制步骤，不复制用例信息）
+const confirmCopySteps = async () => {
+  const rows = selectedForCopy.value
+  if (!rows.length) {
+    window.$message?.warning?.('请至少选择一个脚本')
+    return
+  }
+  const parentId = quotePublicScriptParentId.value
+  let insertedCount = 0
+  let lastInsertedId = null
+  try {
+    for (const row of rows) {
+      const res = await api.copyCaseStepTree({ case_id: row.case_id })
+      const stepsData = res?.data?.steps || res?.steps || []
+      const mapped = stepsData.map(mapBackendStep).filter(Boolean)
+      for (const step of mapped) {
+        insertStepFromMapped(parentId, step)
+        lastInsertedId = step.id
+        insertedCount++
+      }
+    }
+    if (insertedCount > 0) {
+      updateStepDisplayNames()
+      loadQuoteStepsForAllQuoteSteps()
+      if (lastInsertedId) selectedKeys.value = [lastInsertedId]
+      window.$message?.success?.(`已复制 ${insertedCount} 个步骤`)
+    }
+    quotePublicScriptDrawerVisible.value = false
+    selectedForCopy.value = []
+  } catch (error) {
+    console.error('复制步骤失败', error)
+    window.$message?.error?.(error?.message || error?.data?.message || '复制失败')
+  }
+}
+
+// 将 mapBackendStep 后的步骤插入树（含子步骤、展开状态）
+const insertStepFromMapped = (parentId, mappedStep) => {
+  if (stepDefinitions[mappedStep.type]?.allowChildren) {
+    stepExpandStates.value.set(mappedStep.id, true)
+  }
+  if (parentId) {
+    const parent = findStep(parentId)
+    if (parent && stepDefinitions[parent.type]?.allowChildren) {
+      parent.children = parent.children || []
+      parent.children.push(mappedStep)
+    }
+  } else {
+    steps.value.push(mappedStep)
+  }
+}
+
 const handleQuoteReselect = () => {
   if (!currentStep.value?.id) return
+  scriptDrawerMode.value = 'quote'
   quotePublicScriptReplaceStepId.value = currentStep.value.id
   quotePublicScriptParentId.value = null
+  quotePublicScriptQueryItems.value.case_type = '公共脚本'
   quotePublicScriptDrawerVisible.value = true
 }
 
@@ -754,13 +871,23 @@ const quotePublicScriptColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 80,
+    width: 100,
     fixed: 'right',
-    render: (row) => h(NButton, {
-      size: 'small',
-      type: 'primary',
-      onClick: () => onSelectPublicScript(row)
-    }, {default: () => '选择'})
+    render: (row) => {
+      if (scriptDrawerMode.value === 'copy') {
+        const isSelected = selectedForCopy.value.some((r) => r.case_id === row.case_id)
+        return h(NButton, {
+          size: 'small',
+          type: isSelected ? 'default' : 'primary',
+          onClick: () => isSelected ? removeFromCopySelection(row) : addToCopySelection(row)
+        }, {default: () => isSelected ? '移除' : '加入'})
+      }
+      return h(NButton, {
+        size: 'small',
+        type: 'primary',
+        onClick: () => onSelectPublicScript(row)
+      }, {default: () => '选择'})
+    }
   }
 ]
 
@@ -876,7 +1003,7 @@ watch(() => caseForm.case_tags, (newVal) => {
   }
 }, {immediate: true})
 
-// 当用例类型改为「公共脚本」时，自动移除步骤树中所有「引用公共用例」步骤；若从「用户脚本」切来则暂存，切回「用户脚本」时可恢复
+// 当用例类型改为「公共脚本」时，自动移除步骤树中所有「引用公共脚本」步骤；若从「用户脚本」切来则暂存，切回「用户脚本」时可恢复
 watch(() => caseForm.case_type, (newType, oldType) => {
   if (newType === '公共脚本') {
     const fromUserScript = oldType === '用户脚本'
@@ -885,18 +1012,18 @@ watch(() => caseForm.case_type, (newType, oldType) => {
       const removedCount = removeAllQuoteSteps()
       if (removedCount > 0) {
         stashedQuoteStepsWhenPublic.value = toStash
-        window.$message?.warning?.(`切换为公共脚本，已临时移除 ${removedCount} 个「引用公共用例」步骤（若误操作，可切回用户脚本恢复）`)
+        window.$message?.warning?.(`切换为公共脚本，已临时移除 ${removedCount} 个「引用公共脚本」步骤（若误操作，可切回用户脚本恢复）`)
       }
     } else {
       const removedCount = removeAllQuoteSteps()
       if (removedCount > 0) {
-        window.$message?.warning?.(`切换为公共脚本，已自动移除 ${removedCount} 个「引用公共用例」步骤（公共脚本不可引用其他脚本）`)
+        window.$message?.warning?.(`切换为公共脚本，已自动移除 ${removedCount} 个「引用公共脚本」步骤（公共脚本不可引用其他脚本）`)
       }
     }
   } else if (newType === '用户脚本' && stashedQuoteStepsWhenPublic.value.length > 0) {
     const restoredCount = restoreStashedQuoteSteps()
     if (restoredCount > 0) {
-      window.$message?.info?.(`已恢复 ${restoredCount} 个「引用公共用例」步骤。`)
+      window.$message?.info?.(`已恢复 ${restoredCount} 个「引用公共脚本」步骤。`)
     }
   }
 })
@@ -914,8 +1041,8 @@ const dragState = ref({
   insertTargetId: null // 插入目标步骤 ID（用于显示指示器）
 })
 
-// 下拉展示“引用公共用例”；quote 仅用于后端步骤类型与展示
-// 当用例类型为“公共脚本”时，“引用公共用例”置灰，防止循环引用
+// 下拉展示“引用公共脚本”；quote 仅用于后端步骤类型与展示
+// 当用例类型为“公共脚本”时，“引用公共脚本”置灰，防止循环引用
 const addOptions = computed(() => {
   const isPublicScript = caseForm.case_type === '公共脚本'
   return [
@@ -927,10 +1054,15 @@ const addOptions = computed(() => {
           icon: renderIcon(item.icon, {size: 16})
         })),
     {
-      label: '引用公共用例',
+      label: '引用公共脚本',
       key: 'quote_public_script',
       icon: renderIcon('material-symbols:library-books-outline', {size: 16}),
       disabled: isPublicScript
+    },
+    {
+      label: '复制指定脚本',
+      key: 'copy_steps',
+      icon: renderIcon('material-symbols:content-copy-outline', {size: 16})
     }
   ]
 })
@@ -1186,7 +1318,7 @@ const backendTypeToLocal = (step_type) => {
       return 'wait'
     case '循环结构':
       return 'loop'
-    case '引用公共用例':
+    case '引用公共脚本':
       return 'quote'
     default:
       return 'code'
@@ -1234,8 +1366,9 @@ const parseJsonSafely = (val) => {
 const mapBackendStep = (step) => {
   if (!step || !step.step_type) return null
   const localType = backendTypeToLocal(step.step_type)
+  const stepId = step.step_code || (step.step_id != null ? `step-${step.step_id}` : (step.id != null ? `step-${step.id}` : genId()))
   const base = {
-    id: step.step_code || `step-${step.id || genId()}`,
+    id: stepId,
     type: localType,
     name: step.step_name || step.step_type || '步骤',
     config: {},
@@ -1332,7 +1465,7 @@ const mapBackendStep = (step) => {
   } else if (localType === 'quote') {
     base.config = {
       quote_case_id: step.quote_case_id ?? null,
-      step_name: step.step_name || (step.quote_case?.case_name || '引用公共用例')
+      step_name: step.step_name || (step.quote_case?.case_name || '引用公共脚本')
     }
   }
 
@@ -1383,7 +1516,7 @@ const localTypeToBackend = (localType) => {
     'if': '条件分支',
     'loop': '循环结构',
     'wait': '等待控制',
-    'quote': '引用公共用例'
+    'quote': '引用公共脚本'
   }
   return typeMap[localType] || '执行代码请求(Python)'
 }
@@ -1578,7 +1711,7 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     })))
   } else if (step.type === 'quote') {
     backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
-    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共用例')
+    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本')
   }
 
   // 处理子步骤（递归处理）
@@ -2010,6 +2143,14 @@ const loadSteps = async () => {
   stepExpandStates.value = new Map()
   stashedQuoteStepsWhenPublic.value = []
   if (!caseId.value && !caseCode.value) {
+    // 检查是否为复制进入：case_info 含 is_copy 和 steps
+    const caseInfoStr = route.query.case_info
+    if (caseInfoStr) {
+      try {
+        const caseInfo = JSON.parse(caseInfoStr)
+        if (loadStepsFromCopy(caseInfo)) return
+      } catch (_) {}
+    }
     steps.value = []
     selectedKeys.value = []
     hydrateCaseInfo([])
@@ -2091,7 +2232,7 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
           : type === 'user_variables'
               ? {step_name: '用户定义变量'}
               : type === 'quote'
-                  ? {quote_case_id: null, step_name: '引用公共用例'}
+                  ? {quote_case_id: null, step_name: '引用公共脚本'}
                   : {}
   const defaultName = type === 'loop'
       ? '循环结构(次数循环)'
@@ -2152,7 +2293,19 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
 
 const handleAddStep = (type, parentId) => {
   if (type === 'quote_public_script') {
+    scriptDrawerMode.value = 'quote'
     quotePublicScriptParentId.value = parentId
+    quotePublicScriptReplaceStepId.value = null
+    quotePublicScriptQueryItems.value.case_type = '公共脚本'
+    quotePublicScriptDrawerVisible.value = true
+    return
+  }
+  if (type === 'copy_steps') {
+    scriptDrawerMode.value = 'copy'
+    quotePublicScriptParentId.value = parentId
+    quotePublicScriptReplaceStepId.value = null
+    selectedForCopy.value = []
+    quotePublicScriptQueryItems.value.case_type = ''
     quotePublicScriptDrawerVisible.value = true
     return
   }
@@ -2198,7 +2351,7 @@ const handleDeleteStep = (id) => {
   }
 }
 
-/** 当用例类型改为「公共脚本」时，移除步骤树中所有「引用公共用例」步骤，防止循环引用。返回被移除的步骤数量。 */
+/** 当用例类型改为「公共脚本」时，移除步骤树中所有「引用公共脚本」步骤，防止循环引用。返回被移除的步骤数量。 */
 const removeAllQuoteSteps = () => {
   const quoteIds = []
   forEachStep(steps.value, (step) => {
@@ -2224,7 +2377,7 @@ const removeAllQuoteSteps = () => {
   return quoteIds.length
 }
 
-/** 收集所有「引用公共用例」步骤及其位置（用于暂存，切回用户脚本时可恢复） */
+/** 收集所有「引用公共脚本」步骤及其位置（用于暂存，切回用户脚本时可恢复） */
 const collectQuoteStepsWithPosition = () => {
   const list = []
   forEachStep(steps.value, (step) => {
@@ -2376,7 +2529,7 @@ const updateStepConfig = (id, config) => {
       }
     } else if (step.type === 'quote' || step.type === 'quote_public_script') {
       if (config.step_name !== undefined && config.step_name !== null) {
-        step.name = String(config.step_name).trim() || '引用公共用例'
+        step.name = String(config.step_name).trim() || '引用公共脚本'
       }
     }
     // 更新显示名称

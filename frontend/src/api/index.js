@@ -82,6 +82,16 @@ export default {
     if (data.case_code) params.push(`case_code=${data.case_code}`)
     return request.get(`/autotest/step/tree${params.length ? '?' + params.join('&') : ''}`)
   },
+  /**
+   * 复制用例步骤树（返回未保存的副本，不含 step_id/step_code 等更新必填项）
+   * 返回 { case, steps }：case 来自原用例且 case_id/case_code 置空；steps 为 strip 后的步骤树
+   */
+  copyCaseStepTree: (params = {}) => {
+    const q = []
+    if (params.case_id != null) q.push(`case_id=${params.case_id}`)
+    if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
+    return request.get(`/autotest/step/copy_tree${q.length ? '?' + q.join('&') : ''}`)
+  },
   // 项目相关
   getApiProjectList: (data = {}) => request.post('/autotest/project/search', data),
   // 标签相关

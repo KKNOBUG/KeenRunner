@@ -64,6 +64,53 @@ const openRunModal = (row) => {
   loadEnvNames()
 }
 
+/**
+ * 复制用例：获取步骤树副本并进入编辑页（数据未保存）
+ *
+ * 实现原理：
+ * 1. 调用 copyCaseStepTree(case_id) 获取后端返回的 { case, steps }
+ * 2. case 数据来源：后端从 get_by_case_id 的步骤树中提取首步的 case 信息，
+ *    并将 case_id、case_code 置空，表示未持久化
+ * 3. steps 数据来源：后端对 get_by_case_id 的步骤树做 strip，移除 step_id、step_code、
+ *    parent_step_id 等更新标识，保留业务字段与 children 嵌套结构
+ * 4. 前端拼接 case_info：合并 case、steps，追加 is_copy: true，case_name 加「(副本)」
+ * 5. 通过 router.push 将 case_info 以 query 传入编辑页，编辑页据此加载步骤树（不请求 DB）
+ */
+const copyLoading = ref(false)
+const handleCopyCase = async (row) => {
+  if (!row?.case_id) {
+    window.$message?.warning?.('请选择用例')
+    return
+  }
+  copyLoading.value = true
+  try {
+    const res = await api.copyCaseStepTree({ case_id: row.case_id })
+    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
+      const { case: caseData, steps } = res?.data || {}
+      const caseInfo = {
+        ...caseData,
+        case_id: null,
+        case_code: null,
+        case_name: (caseData?.case_name || row.case_name || '') + ' (副本)',
+        steps: steps || [],
+        is_copy: true
+      }
+      router.push({
+        path: '/autotest/api',
+        query: { case_info: JSON.stringify(caseInfo) }
+      })
+      window.$message?.success?.('已复制用例，请编辑后保存')
+    } else {
+      window.$message?.error?.(res?.message || '复制失败')
+    }
+  } catch (error) {
+    console.error('复制用例失败', error)
+    window.$message?.error?.(error?.message || error?.data?.message || '复制失败')
+  } finally {
+    copyLoading.value = false
+  }
+}
+
 const confirmRunCase = async () => {
   const row = runRow.value
   if (!row) return
@@ -357,7 +404,7 @@ const columns = computed(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 80,
+    width: 120,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -367,7 +414,7 @@ const columns = computed(() => [
             {
               size: 'tiny',
               quaternary: true,
-              type: 'info',
+              type: 'primary',
               loading: runningCaseId.value === (row.case_id ?? null),
               disabled: runningCaseId.value != null,
               onClick: () => openRunModal(row),
@@ -402,6 +449,21 @@ const columns = computed(() => [
                 }
             ),
             [[vPermission, 'post/api/v1/role/update']]
+        ),
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'warning',
+              loading: copyLoading.value,
+              disabled: copyLoading.value,
+              onClick: () => handleCopyCase(row),
+            },
+            {
+              default: () => '复制',
+              icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+            }
         ),
         h(
             NPopconfirm,
