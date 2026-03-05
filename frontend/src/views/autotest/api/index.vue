@@ -578,15 +578,14 @@ const initCaseInfoFromRoute = () => {
 }
 
 /**
- * 从复制数据（case_info 含 is_copy 和 steps）加载步骤树
+ * 【用例管理「复制」】从复制数据（case_info 含 is_copy 和 steps）加载步骤树
  *
- * 数据来源说明：
- * - case 数据：来自 copyCaseStepTree 返回的 case，由后端从原用例的步骤树中提取，
- *   已置空 case_id/case_code，initCaseInfoFromRoute 会解析 case_info 填充 caseForm
- * - steps 数据：来自 copyCaseStepTree 返回的 steps，后端对 get_by_case_id 结果做 strip，
- *   移除 step_id/step_code 等，前端用 mapBackendStep 转为树节点格式（id 由 genId 生成）
+ * 数据来源：用例管理页 handleCopyCase 调用 copyCaseStepTree 后，将 { case, steps, is_copy } 通过
+ * router 的 case_info query 传入。本函数在 loadSteps 中检测到 case_info.is_copy 且 steps 非空时调用。
  *
- * 调用时机：loadSteps 在无 case_id/case_code 时检测到 case_info.is_copy 且 steps 非空则调用
+ * 与「复制指定脚本」的区别：
+ *   - 本函数：加载「整用例复制」的步骤树（case_info 来自路由）
+ *   - 复制指定脚本：仅将 steps 插入当前用例的步骤树，不涉及 case_info
  */
 const loadStepsFromCopy = (caseInfo) => {
   if (!caseInfo?.is_copy || !Array.isArray(caseInfo?.steps) || caseInfo.steps.length === 0) return false
@@ -629,7 +628,8 @@ const caseTypeOptions = [
 ]
 
 // 引用公共脚本 / 复制指定脚本 共用抽屉（mode: 'quote' | 'copy'）
-const scriptDrawerMode = ref('quote') // 'quote': 引用公共脚本（单选）; 'copy': 复制指定脚本（多选）
+// quote: 引用公共脚本（单选，插入 quote 步骤）；copy: 复制指定脚本（多选，调用 copyCaseStepTree 获取 steps 并插入）
+const scriptDrawerMode = ref('quote')
 const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
 const quotePublicScriptReplaceStepId = ref(null)
@@ -653,7 +653,7 @@ const caseTypeOptionsForCopy = [
   { label: '用户脚本', value: '用户脚本' }
 ]
 
-// 请求前规范化入参：quote 模式仅查公共脚本；copy 模式支持 case_type 由 queryItems 决定，并排除当前用例（不可复制自己）
+// 请求前规范化入参：quote 模式仅查公共脚本；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
 const getScriptListForDrawer = (params) => {
   const body = {...params}
   if (scriptDrawerMode.value === 'quote') {
@@ -699,7 +699,19 @@ const removeFromCopySelection = (row) => {
   selectedForCopy.value = selectedForCopy.value.filter((r) => r.case_id !== row.case_id)
 }
 
-// 复制模式：确认复制，调用 copyCaseStepTree 获取 steps 并插入（仅复制步骤，不复制用例信息）
+/**
+ * 【步骤明细「复制指定脚本」】确认复制：调用 copyCaseStepTree 获取 steps 并插入当前用例步骤树
+ *
+ * 与用例管理「复制」的区别：
+ *   - 本功能：仅使用 steps，将步骤插入当前正在编辑的用例步骤树中（多选可插入多个脚本的步骤）
+ *   - 用例管理「复制」：使用 case + steps，创建新用例编辑页（路由跳转）
+ *
+ * 实现原理：
+ * 1. 对每个选中的脚本调用 copyCaseStepTree(case_id)（与用例管理「复制」共用同一后端接口）
+ * 2. 仅使用返回的 steps，忽略 case（用例信息来自当前编辑页）
+ * 3. mapBackendStep 将后端步骤转为前端树节点格式
+ * 4. insertStepFromMapped 将步骤插入到 parentId 下或根级
+ */
 const confirmCopySteps = async () => {
   const rows = selectedForCopy.value
   if (!rows.length) {
@@ -734,7 +746,10 @@ const confirmCopySteps = async () => {
   }
 }
 
-// 将 mapBackendStep 后的步骤插入树（含子步骤、展开状态）
+/**
+ * 将 mapBackendStep 后的步骤插入当前用例的步骤树（含子步骤、展开状态）
+ * 用于「复制指定脚本」：将后端 strip 后的步骤转为前端格式后插入
+ */
 const insertStepFromMapped = (parentId, mappedStep) => {
   if (stepDefinitions[mappedStep.type]?.allowChildren) {
     stepExpandStates.value.set(mappedStep.id, true)
@@ -1059,6 +1074,7 @@ const addOptions = computed(() => {
       icon: renderIcon('material-symbols:library-books-outline', {size: 16}),
       disabled: isPublicScript
     },
+    // 【复制指定脚本】多选其他脚本，将步骤插入当前用例（与用例管理「复制」共用 copyCaseStepTree 接口，仅用 steps）
     {
       label: '复制指定脚本',
       key: 'copy_steps',
@@ -2300,6 +2316,7 @@ const handleAddStep = (type, parentId) => {
     quotePublicScriptDrawerVisible.value = true
     return
   }
+  // 【复制指定脚本】打开抽屉：多选脚本，确定复制后调用 copyCaseStepTree 获取 steps 并插入当前步骤树
   if (type === 'copy_steps') {
     scriptDrawerMode.value = 'copy'
     quotePublicScriptParentId.value = parentId

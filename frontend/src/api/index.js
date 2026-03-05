@@ -84,7 +84,15 @@ export default {
   },
   /**
    * 复制用例步骤树（返回未保存的副本，不含 step_id/step_code 等更新必填项）
-   * 返回 { case, steps }：case 来自原用例且 case_id/case_code 置空；steps 为 strip 后的步骤树
+   * 后端接口：GET /autotest/step/copy_tree?case_id=X 或 ?case_code=X
+   *
+   * 返回 { case, steps }：
+   *   - case: 来自原用例，case_id/case_code 已置空，表示未持久化
+   *   - steps: 对 get_by_case_id 结果做 strip 后的步骤树（移除 step_id、step_code、parent_step_id 等）
+   *
+   * 前端使用场景（同一接口，两种用法）：
+   *   1. 用例管理「复制」：使用 case + steps，创建新用例编辑页（路由跳转）
+   *   2. 步骤明细「复制指定脚本」：仅使用 steps，将步骤插入当前用例的步骤树
    */
   copyCaseStepTree: (params = {}) => {
     const q = []

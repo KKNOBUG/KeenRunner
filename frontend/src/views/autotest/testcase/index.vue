@@ -65,16 +65,18 @@ const openRunModal = (row) => {
 }
 
 /**
- * 复制用例：获取步骤树副本并进入编辑页（数据未保存）
+ * 【用例管理「复制」】整用例复制：获取步骤树副本并进入编辑页（数据未保存）
+ *
+ * 与「复制指定脚本」的区别：
+ *   - 本功能：复制用例 + 步骤，创建新用例编辑页，用户保存后生成新用例
+ *   - 复制指定脚本：仅复制步骤，插入当前正在编辑的用例步骤树中
  *
  * 实现原理：
- * 1. 调用 copyCaseStepTree(case_id) 获取后端返回的 { case, steps }
- * 2. case 数据来源：后端从 get_by_case_id 的步骤树中提取首步的 case 信息，
- *    并将 case_id、case_code 置空，表示未持久化
- * 3. steps 数据来源：后端对 get_by_case_id 的步骤树做 strip，移除 step_id、step_code、
- *    parent_step_id 等更新标识，保留业务字段与 children 嵌套结构
- * 4. 前端拼接 case_info：合并 case、steps，追加 is_copy: true，case_name 加「(副本)」
- * 5. 通过 router.push 将 case_info 以 query 传入编辑页，编辑页据此加载步骤树（不请求 DB）
+ * 1. 调用 copyCaseStepTree(case_id) 获取后端返回的 { case, steps }（与复制指定脚本共用同一接口）
+ * 2. 使用 case + steps：case 填充用例表单，steps 作为步骤树
+ * 3. 拼接 case_info：合并 case、steps，追加 is_copy: true，case_name 加「(副本)」
+ * 4. router.push 将 case_info 以 query 传入编辑页，编辑页据此加载（不请求 DB）
+ * 5. 用户编辑后保存时，按「新增」逻辑处理（无 case_id/case_code）
  */
 const copyLoading = ref(false)
 const handleCopyCase = async (row) => {
