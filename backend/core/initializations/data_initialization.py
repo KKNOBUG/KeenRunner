@@ -444,12 +444,12 @@ async def init_database_menu():
             Menu(
                 menu_type=MenuType.MENU,
                 name="步骤编辑",
-                path="api",
+                path="steps",
                 order=3,
                 parent_id=autotest_parent_menu.id,
-                icon="simple-icons:aiohttp",
+                icon="mdi:vector-difference",
                 is_hidden=True,
-                component="/autotest/api",
+                component="/autotest/steps",
                 keepalive=True
             ),
             Menu(
@@ -458,7 +458,7 @@ async def init_database_menu():
                 path="testcase",
                 order=4,
                 parent_id=autotest_parent_menu.id,
-                icon="ph:tree-view-bold",
+                icon="mdi:vector-link",
                 is_hidden=False,
                 component="/autotest/testcase",
                 keepalive=True

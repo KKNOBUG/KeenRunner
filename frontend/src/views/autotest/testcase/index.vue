@@ -11,6 +11,7 @@ import {formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 import TheIcon from '@/components/icon/TheIcon.vue'
+import {useTagsStore} from '@/store'
 
 defineOptions({name: '测试用例'})
 
@@ -31,6 +32,29 @@ const {
 })
 
 const router = useRouter()
+const tagsStore = useTagsStore()
+
+/** 从页签 path 中解析 case_id（用于步骤编辑页签） */
+function getCaseIdFromPath(path) {
+  try {
+    const idx = path.indexOf('?')
+    if (idx === -1) return null
+    return new URLSearchParams(path.slice(idx + 1)).get('case_id')
+  } catch {
+    return null
+  }
+}
+
+/** 从页签 path 中解析 case_code */
+function getCaseCodeFromPath(path) {
+  try {
+    const idx = path.indexOf('?')
+    if (idx === -1) return null
+    return new URLSearchParams(path.slice(idx + 1)).get('case_code')
+  } catch {
+    return null
+  }
+}
 
 // 执行用例：先弹框选择执行环境，再以运行模式调用 execute_or_debugging
 const runningCaseId = ref(null)
@@ -98,7 +122,7 @@ const handleCopyCase = async (row) => {
         is_copy: true
       }
       router.push({
-        path: '/autotest/api',
+        path: '/autotest/steps',
         query: { case_info: JSON.stringify(caseInfo) }
       })
       window.$message?.success?.('已复制用例，请编辑后保存')
@@ -279,7 +303,7 @@ onMounted(() => {
 
 // 重置逻辑（在handleAdd中处理）
 const customHandleAdd = () => {
-  router.push({path: '/autotest/api'})
+  router.push({path: '/autotest/steps'})
 }
 
 // 使用 computed 使 columns 依赖 runLoading，点击运行后表格会重新渲染以显示按钮 loading 状态
@@ -406,7 +430,7 @@ const columns = computed(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 120,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -442,7 +466,28 @@ const columns = computed(() => [
                     if (row.case_code) {
                       query.case_code = row.case_code
                     }
-                    router.push({path: '/autotest/api', query})
+                    // 若已有同用例的步骤编辑页签，则激活该页签；否则新建
+                    const targetPath = (() => {
+                      const match = (row.case_id != null && row.case_id !== '')
+                          ? tagsStore.tags.find((t) => {
+                            if (!t.path.startsWith('/autotest/steps')) return false
+                            const cid = getCaseIdFromPath(t.path)
+                            return cid != null && String(cid) === String(row.case_id)
+                          })
+                          : row.case_code
+                              ? tagsStore.tags.find((t) => {
+                                if (!t.path.startsWith('/autotest/steps')) return false
+                                const code = getCaseCodeFromPath(t.path)
+                                return code != null && String(code) === String(row.case_code)
+                              })
+                              : null
+                      return match ? match.path : null
+                    })()
+                    if (targetPath) {
+                      router.push(targetPath)
+                    } else {
+                      router.push({path: '/autotest/steps', query})
+                    }
                   },
                 },
                 {

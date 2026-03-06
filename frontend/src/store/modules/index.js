@@ -1,4 +1,5 @@
 export * from './app'
+export * from './autotest'
 export * from './permission'
 export * from './tags'
 export * from './user'

@@ -514,7 +514,7 @@ import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import CrudTable from '@/components/table/CrudTable.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
-import {useUserStore} from '@/store';
+import {useUserStore, useAutotestStore} from '@/store';
 
 // 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致（不含 TCP，前端未实现）
 const stepDefinitions = {
@@ -545,6 +545,7 @@ const steps = ref([])
 const selectedKeys = ref([])
 const route = useRoute()
 const router = useRouter()
+const autotestStore = useAutotestStore()
 const caseId = computed(() => route.query.case_id || null)
 const caseCode = computed(() => route.query.case_code || null)
 
@@ -1210,6 +1211,28 @@ const loadQuoteStepsForAllQuoteSteps = () => {
   forEachStep(steps.value, (step) => {
     if (step.type === 'quote') loadQuoteStepsForStep(step)
   })
+}
+
+/**
+ * 从缓存的 rawData 中提取 quote_steps 填充 quoteStepsMap，避免为每个引用步骤重复请求
+ * 用于切换页签使用缓存时，不再调用 loadQuoteStepsForAllQuoteSteps（会触发接口）
+ */
+const fillQuoteStepsMapFromRawData = (rawList, mappedList) => {
+  if (!rawList?.length || !mappedList?.length) return
+  for (let i = 0; i < rawList.length; i++) {
+    const raw = rawList[i]
+    const mapped = mappedList[i]
+    if (!raw || !mapped) continue
+    if (raw.quote_steps?.length) {
+      quoteStepsMap.value = {
+        ...quoteStepsMap.value,
+        [mapped.id]: raw.quote_steps.map(mapBackendStep).filter(Boolean)
+      }
+    }
+    if (raw.children?.length && mapped.children?.length) {
+      fillQuoteStepsMapFromRawData(raw.children, mapped.children)
+    }
+  }
 }
 
 /** 将引用脚本步骤树前序扁平化，得到带层级的列表（用于只读展示，含递归子级） */
@@ -1984,6 +2007,8 @@ const handleSaveAll = async () => {
         }
       }
 
+      // 保存成功后清除缓存，确保下次加载获取最新数据
+      autotestStore.clearStepTreeCache(caseId.value, caseCode.value)
       // 重新加载数据（URL 已更新，loadSteps 会带上 case_id；若无步骤，hydrateCaseInfo 会保留当前 caseForm）
       await loadSteps()
     } else {
@@ -2173,6 +2198,16 @@ const loadSteps = async () => {
     hydrateCaseInfo([])
     return
   }
+  // 缓存：切换页签时使用缓存，不重复请求；从用例管理「编辑」新建页签时需请求
+  const cached = autotestStore.getStepTreeCache(caseId.value, caseCode.value)
+  if (cached) {
+    hydrateCaseInfo(cached.rawData)
+    steps.value = JSON.parse(JSON.stringify(cached.steps)).filter(Boolean)
+    selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+    quoteStepsMap.value = {}
+    fillQuoteStepsMapFromRawData(cached.rawData, steps.value)
+    return
+  }
   try {
     const params = {}
     if (caseId.value) params.case_id = caseId.value
@@ -2180,9 +2215,11 @@ const loadSteps = async () => {
     const res = await api.getAutoTestStepTree(params)
     const data = Array.isArray(res?.data) ? res.data : []
     hydrateCaseInfo(data)
-    steps.value = data.map(mapBackendStep).filter(Boolean)
+    const mappedSteps = data.map(mapBackendStep).filter(Boolean)
+    steps.value = mappedSteps
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
     loadQuoteStepsForAllQuoteSteps()
+    autotestStore.setStepTreeCache(caseId.value, caseCode.value, { rawData: data, steps: mappedSteps })
   } catch (error) {
     console.error('Failed to load step tree', error)
     steps.value = []

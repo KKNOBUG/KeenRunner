@@ -734,7 +734,7 @@ const detailColumns = [
           type: 'warning',
           onClick: () => {
             router.push({
-              path: '/autotest/api',
+              path: '/autotest/steps',
               query: {
                 case_id: row.case_id
               }
