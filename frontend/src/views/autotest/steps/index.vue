@@ -1910,6 +1910,10 @@ const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
 
 const handleSaveAll = async () => {
   if (saveLoading.value) return
+  if (!steps.value?.length) {
+    window.$message?.warning?.('请至少添加一个步骤后再点击保存')
+    return
+  }
   saveLoading.value = true
   try {
     // 用例信息必填项校验
