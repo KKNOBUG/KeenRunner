@@ -277,25 +277,18 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: Optional[int] = None,
             case_code: Optional[str] = None
     ) -> Dict[str, Any]:
-        """获取用例步骤树的副本（用于复制后编辑，数据未保存）。
+        """获取用例步骤树的完整副本（用于复制后编辑，数据未保存）。
 
-        前端两种使用场景（同一接口，不同用法）：
-        1. 用例管理「复制」：使用 case + steps，创建新用例编辑页
-        2. 步骤明细「复制指定脚本」：仅使用 steps，将步骤插入当前用例的步骤树
+        返回目标脚本的完整树结构，不遗漏任何信息：
+        - 根步骤及所有子步骤（children 递归）
+        - 引用脚本步骤（quote_steps 递归，含嵌套引用）
+        - 引用脚本用例信息（quote_case）
+        - 步骤业务字段（step_name、request_url、code、conditions、extract_variables、assert_validators 等）
 
         实现原理：
-        1. 复用 get_by_case_id 获取完整步骤树（含引用脚本展开）
-        2. get_by_case_id 返回格式为 [step1, step2, ..., step_counter]，
-           最后一项为统计字典 {direct_steps, child_steps, quote_steps, total_steps}，非步骤数据
-        3. 将 step_counter 弹出并丢弃，仅保留步骤项，避免被当作步骤处理
-        4. 递归 strip 每步的 step_id、step_code、parent_step_id 等更新标识，
-           使前端保存时按「新增」逻辑处理
-        5. 移除 quote_steps、quote_case 以减小 payload，保留 quote_case_id 供引用
-
-        效率说明：
-        - 主要开销在 get_by_case_id 的递归查询，与 get_step_tree 一致
-        - strip 为内存 O(n) 遍历，n 为步骤数，对常规用例规模可接受
-        - 若需优化可考虑 get_by_case_id 增加 skip_quote_expand 参数，复制场景可不展开引用
+        1. 复用 get_by_case_id 获取完整步骤树（含引用脚本递归展开）
+        2. 递归 strip 每步的 step_id、step_code、parent_step_id 等更新标识，使前端保存时按「新增」逻辑
+        3. 保留 quote_steps、quote_case，并对 quote_steps 内步骤递归 strip，确保引用脚本下的步骤完整返回
 
         :param case_id: 用例主键 ID，与 case_code 二选一。
         :param case_code: 用例标识代码，与 case_id 二选一。
@@ -306,14 +299,17 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         step_counter = tree_data.pop(-1) if tree_data else {}
 
         def strip_step_for_copy(step_dict: Dict[str, Any]) -> Dict[str, Any]:
-            """递归移除 step_id、step_code、parent_step_id 等更新标识，保留结构及业务字段。"""
+            """递归移除 step_id、step_code、parent_step_id、step_no 等更新/序号标识，保留结构及业务字段。
+            移除 step_no 以便插入目标树时由前端按插入位置重新编排，避免与现有步骤序号冲突。
+            保留 quote_steps、quote_case，使复制后的树包含引用脚本下的完整步骤（用于展示/编辑）。
+            quote_steps 内的步骤也需递归 strip，以移除其 step_id/step_code/step_no 等。
+            """
             out = dict(step_dict)
-            out.pop("step_id", None)
-            out.pop("step_code", None)
             out.pop("id", None)
+            out.pop("step_id", None)
+            out.pop("step_no", None)
+            out.pop("step_code", None)
             out.pop("parent_step_id", None)
-            out.pop("quote_steps", None)
-            out.pop("quote_case", None)
             if "case" in out:
                 case_info = dict(out["case"])
                 case_info["case_id"] = None
@@ -321,6 +317,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 out["case"] = case_info
             if "children" in out and out["children"]:
                 out["children"] = [strip_step_for_copy(c) for c in out["children"]]
+            # 保留 quote_steps、quote_case，并递归 strip 引用脚本内的步骤
+            if "quote_steps" in out and out["quote_steps"]:
+                out["quote_steps"] = [strip_step_for_copy(q) for q in out["quote_steps"]]
             return out
 
         steps = []
