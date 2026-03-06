@@ -185,6 +185,8 @@ async def search_cases(
         q = Q()
         if case_in.case_id:
             q &= Q(id=case_in.case_id)
+        if case_in.exclude_case_id:
+            q &= ~Q(id=case_in.exclude_case_id)
         if case_in.case_code:
             q &= Q(case_code=case_in.case_code)
         if case_in.case_name:

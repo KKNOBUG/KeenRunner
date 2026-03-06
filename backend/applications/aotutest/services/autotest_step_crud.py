@@ -129,7 +129,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: Optional[int] = None,
             case_code: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """根据用例 ID 或 case_code 获取该用例的步骤树（含引用用例步骤及统计信息）。
+        """根据用例 ID 或 case_code 获取该用例的步骤树（含引用脚本步骤及统计信息）。
 
         :param case_id: 用例主键 ID，与 case_code 二选一。
         :param case_code: 用例标识代码，与 case_id 二选一。
@@ -155,7 +155,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 步骤计数器：用于统计该用例拥有的步骤总数
         # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id 为 None）
         # child_steps: 所有子步骤数（递归统计, 不包括根步骤, parent_step_id 不为 None）
-        # quote_steps: 引用用例的步骤数
+        # quote_steps: 引用脚本的步骤数
         # total_step: 总步骤数（direct_steps + child_steps + quote_steps）
         step_counter = {
             "direct_steps": 0,
@@ -166,7 +166,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 递归构建步骤树
         async def build_step_tree(step: AutoTestApiStepInfo, is_quote: bool = False) -> Dict[str, Any]:
-            """递归构建单步及其子步骤、引用用例步骤的树形字典。"""
+            """递归构建单步及其子步骤、引用脚本步骤的树形字典。"""
             # 统计步骤数量
             step_counter["total_steps"] += 1
             if is_quote:
@@ -215,27 +215,27 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             else:
                 step_dict["children"] = []
 
-            # 业务层验证：是否引用了公共用例
+            # 业务层验证：是否引用了公共脚本
             if not step.quote_case_id:
                 step_dict["quote_steps"] = []
                 step_dict["quote_case"] = None
                 return step_dict
 
-            # 业务层验证：检查引用的公共用例是否存在
+            # 业务层验证：检查引用的公共脚本是否存在
             quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step.quote_case_id, on_error=False)
             if not quote_case:
                 step_dict["quote_steps"] = []
                 step_dict["quote_case"] = None
                 return step_dict
 
-            # 获取引用的公共用例的所有步骤(包含子步骤, 递归构建)
+            # 获取引用的公共脚本的所有步骤(包含子步骤, 递归构建)
             quote_case_root_steps: List = await self.model.filter(
                 case_id=step.quote_case_id,
                 parent_step_id__isnull=True,
                 state__not=1
             ).order_by("step_no").all()
             LOGGER.info(
-                f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用用例的所有步骤(包含子步骤, 递归构建)开始 =")
+                f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)开始 =")
             step_dict["quote_steps"] = [await build_step_tree(quote, is_quote=True) for quote in quote_case_root_steps]
             step_dict["quote_case"] = await quote_case.to_dict(
                 exclude_fields={
@@ -247,7 +247,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 replace_fields={"id": "case_id"}
             )
             LOGGER.info(
-                "= 获取步骤(step_id={step.id}, step_no={step.step_no})引用用例的所有步骤(包含子步骤, 递归构建)完成 =")
+                "= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)完成 =")
             return step_dict
 
         # 构建所有根步骤的树
@@ -271,6 +271,74 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             })
         result.append(step_counter)
         return result
+
+    async def get_copy_tree(
+            self,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """获取用例步骤树的副本（用于复制后编辑，数据未保存）。
+
+        前端两种使用场景（同一接口，不同用法）：
+        1. 用例管理「复制」：使用 case + steps，创建新用例编辑页
+        2. 步骤明细「复制指定脚本」：仅使用 steps，将步骤插入当前用例的步骤树
+
+        实现原理：
+        1. 复用 get_by_case_id 获取完整步骤树（含引用脚本展开）
+        2. get_by_case_id 返回格式为 [step1, step2, ..., step_counter]，
+           最后一项为统计字典 {direct_steps, child_steps, quote_steps, total_steps}，非步骤数据
+        3. 将 step_counter 弹出并丢弃，仅保留步骤项，避免被当作步骤处理
+        4. 递归 strip 每步的 step_id、step_code、parent_step_id 等更新标识，
+           使前端保存时按「新增」逻辑处理
+        5. 移除 quote_steps、quote_case 以减小 payload，保留 quote_case_id 供引用
+
+        效率说明：
+        - 主要开销在 get_by_case_id 的递归查询，与 get_step_tree 一致
+        - strip 为内存 O(n) 遍历，n 为步骤数，对常规用例规模可接受
+        - 若需优化可考虑 get_by_case_id 增加 skip_quote_expand 参数，复制场景可不展开引用
+
+        :param case_id: 用例主键 ID，与 case_code 二选一。
+        :param case_code: 用例标识代码，与 case_id 二选一。
+        :returns: {"case": {...}, "steps": [...]}，case 中 case_id/case_code 置空。
+        """
+        tree_data = await self.get_by_case_id(case_id=case_id, case_code=case_code)
+        # step_counter：get_by_case_id 返回的最后一页为统计元数据，非步骤，弹出并丢弃
+        step_counter = tree_data.pop(-1) if tree_data else {}
+
+        def strip_step_for_copy(step_dict: Dict[str, Any]) -> Dict[str, Any]:
+            """递归移除 step_id、step_code、parent_step_id 等更新标识，保留结构及业务字段。"""
+            out = dict(step_dict)
+            out.pop("step_id", None)
+            out.pop("step_code", None)
+            out.pop("id", None)
+            out.pop("parent_step_id", None)
+            out.pop("quote_steps", None)
+            out.pop("quote_case", None)
+            if "case" in out:
+                case_info = dict(out["case"])
+                case_info["case_id"] = None
+                case_info["case_code"] = None
+                out["case"] = case_info
+            if "children" in out and out["children"]:
+                out["children"] = [strip_step_for_copy(c) for c in out["children"]]
+            return out
+
+        steps = []
+        case_info = None
+        for item in tree_data:
+            if isinstance(item, dict):
+                if "children" in item:
+                    steps.append(strip_step_for_copy(item))
+                    if case_info is None and item.get("case"):
+                        case_info = dict(item["case"])
+                        case_info["case_id"] = None
+                        case_info["case_code"] = None
+                elif "case" in item and case_info is None:
+                    case_info = dict(item["case"])
+                    case_info["case_id"] = None
+                    case_info["case_code"] = None
+
+        return {"case": case_info or {}, "steps": steps}
 
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestApiStepInfo:
         """创建单条步骤，校验用例存在、父步骤存在且同用例、同用例下 step_no 唯一。
@@ -300,14 +368,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
-        # 业务层验证：如果指定了引用用例，检查引用用例是否存在
+        # 业务层验证：如果指定了引用脚本，检查引用脚本是否存在
         if step_in.quote_case_id:
             quote_case_id: int = step_in.quote_case_id
             quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=False)
             if not quote_case:
                 error_message: str = (
                     f"根据(case_id={quote_case_id})条件检查用例信息失败, "
-                    f"步骤序号(step_no={step_no})引用公共用例(case_id={quote_case_id})不存在"
+                    f"步骤序号(step_no={step_no})引用公共脚本(case_id={quote_case_id})不存在"
                 )
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
@@ -385,12 +453,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 parent_step: AutoTestApiStepInfo = await self.model.filter(
                     id=parent_step_id,
                     state__not=1,
-                    case_type=AutoTestCaseType.PRIVATE_SCRIPT.value,
                     step_type__in=[AutoTestStepType.IF.value, AutoTestStepType.LOOP.value]
                 ).first()
                 if not parent_step:
                     error_message: str = (
-                        f"根据(id={parent_step_id}, case_type=用户脚本, step_type__in=[条件分支, 循环结构])条件检查步骤信息失败, "
+                        f"根据(id={parent_step_id}, step_type__in=[条件分支, 循环结构])条件检查父级步骤信息失败, "
                         f"父级步骤(id={parent_step_id})不存在"
                     )
                     LOGGER.error(error_message)
@@ -425,15 +492,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         break
                     current_parent_id = parent.parent_step_id
 
-        # 业务层验证：如果更新了引用用例ID，检查引用公共用例是否存在
+        # 业务层验证：如果更新了引用脚本ID，检查引用公共脚本是否存在
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
             quote_case_id: int = update_dict["quote_case_id"]
             quote_case = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
                 only_one=True,
-                conditions={"id": quote_case_id, "case_type": AutoTestCaseType.PRIVATE_SCRIPT.value}
+                conditions={"id": quote_case_id, "case_type": AutoTestCaseType.PUBLIC_SCRIPT.value}
             )
             if not quote_case:
-                error_message: str = f"根据(id={quote_case_id}, case_type=用户脚本)条件检查用例信息失败, 引用公共用例信息不存在"
+                error_message: str = f"根据(id={quote_case_id}, case_type=公共脚本)条件检查用例信息失败, 引用公共脚本信息不存在"
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
@@ -469,7 +536,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         children_count = await self.model.filter(parent_step_id=step_id, state__not=1).count()
         if children_count > 0:
             error_message: str = (
-                f"根据(parent_step_id={step_id}, case_type=用户脚本)条件检查步骤信息失败, "
+                f"根据(parent_step_id={step_id})条件检查步骤信息失败, "
                 f"步骤(id={step_id})存在{children_count}个子级步骤, 无法直接删除"
             )
             LOGGER.error(error_message)
@@ -827,7 +894,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     if current_parent_id == step_id:
                         continue
 
-                # 业务层验证：如果更新了引用用例ID，检查引用用例是否存在
+                # 业务层验证：如果更新了引用脚本ID，检查引用脚本是否存在
                 if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
                     quote_case_id: int = update_dict["quote_case_id"]
                     await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=True)

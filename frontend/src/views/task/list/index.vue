@@ -37,7 +37,7 @@ import api from '@/api'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
 dayjs.extend(customParseFormat)
-defineOptions({name: '任务管理'})
+defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
 
 // 与后端 autotest_enum.py 一致
 const TASK_SCHEDULER_OPTIONS = [
@@ -999,7 +999,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => handleStopTask(row),
+                    onClick: () => openEdit(row),
                   },
                   {
                     default: () => '停止',
@@ -1012,7 +1012,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => handleStartTask(row),
+                    onClick: () => openEdit(row),
                   },
                   {
                     default: () => '启动',

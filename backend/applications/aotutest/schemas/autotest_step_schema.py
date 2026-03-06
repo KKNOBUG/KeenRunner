@@ -51,7 +51,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤所属类型")
 
     case_id: Optional[int] = Field(None, description="步骤所属用例")
-    quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
@@ -98,7 +98,7 @@ class AutoTestApiStepSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
-    quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
     created_user: Optional[UpperStr] = Field(None, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
@@ -108,7 +108,7 @@ class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
     quote_steps: Optional[List[Any]] = Field(None, description="引用步骤列表(更新时忽略)")
-    quote_case: Optional[Any] = Field(None, description="引用公共用例信息(更新时忽略)")
+    quote_case: Optional[Any] = Field(None, description="引用公共脚本信息(更新时忽略)")
 
 
 class AutoTestStepTreeUpdateList(BaseModel):

@@ -235,6 +235,31 @@ async def get_step_tree(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
+@autotest_step.get("/copy_tree", summary="API自动化测试-复制用例步骤树（返回未保存的副本）")
+async def copy_step_tree(
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
+):
+    """
+    复制指定用例的步骤树，返回 { case, steps }，不包含 step_id、step_code 等更新必填项。
+
+    前端两种使用场景（同一接口，不同用法）：
+    1. 用例管理「复制」：使用 case + steps，创建新用例编辑页（路由跳转），保存时按新增逻辑
+    2. 步骤明细「复制指定脚本」：仅使用 steps，将步骤插入当前用例的步骤树
+    """
+    try:
+        if not case_id and not case_code:
+            return BadReqResponse(message="必须提供 case_id 或 case_code 参数")
+        copy_data = await AUTOTEST_API_STEP_CRUD.get_copy_tree(case_id=case_id, case_code=case_code)
+        LOGGER.info("复制用例步骤树成功")
+        return SuccessResponse(message="复制成功", data=copy_data)
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"复制用例步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
+
+
 @autotest_step.post("/update_or_create_tree", summary="API自动化测试-更新用例级步骤树")
 async def batch_update_steps_tree(
         data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)")
@@ -324,7 +349,17 @@ async def batch_update_steps_tree(
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
                             await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).update(state=1)
-
+                # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
+                elif success_case_detail and len(success_case_detail) > 0:
+                    successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
+                    if successful_case_id:
+                        deleted_step_count = await AUTOTEST_API_STEP_CRUD.delete_steps_recursive(
+                            case_id=successful_case_id
+                        )
+                        if deleted_step_count > 0:
+                            LOGGER.warning(
+                                f"步骤已全部删除: 用例(case_id={successful_case_id})下 {deleted_step_count} 个步骤已被软删除"
+                            )
                 LOGGER.info(
                     f"步骤处理完成："
                     f"新增步骤: {created_step_count}个, "
@@ -443,16 +478,13 @@ async def debug_http_request(
                     return FailureResponse(
                         message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
                     )
-                execute_env_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
-                execute_env_port: str = env_instance.env_port
-                if not execute_env_host:
+                execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
+                execute_envi_port: int = env_instance.env_port
+                if not execute_envi_host or not execute_envi_port:
                     return FailureResponse(
                         message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不正确"
                     )
-                if not execute_env_port:
-                    request_url = f"{execute_env_host}/{request_url.lstrip('/')}"
-                else:
-                    request_url = f"{execute_env_host}:{execute_env_port}/{request_url.lstrip('/')}"
+                request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
             except Exception as e:
                 LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(f"HTTP请求调试异常, 错误描述: {e}")
@@ -615,14 +647,12 @@ async def debug_http_request(
                     url=request_url,
                     **request_kwargs
                 )
-            except httpx.InvalidURL as e:
-                return FailureResponse(message=f"请求无效, 请求URL地址不符合规范: {e}")
-            except httpx.TimeoutException as e:
-                return FailureResponse(message=f"请求超市, 在规定时间范围内未能从服务器获取到响应数据: {e}")
+            except httpx.TimeoutException:
+                return FailureResponse(message="请求超时，请检查URL是否可访问或网络连接是否正常")
             except httpx.ConnectError as e:
-                return FailureResponse(message=f"请求失败, 无法建立到达目标服务器的连接: {e}")
+                return FailureResponse(message=f"连接失败: {str(e)}")
             except httpx.RequestError as e:
-                return FailureResponse(message=f"请求异常, 目标服务器无法完成该请求处理: {e}")
+                return FailureResponse(message=f"请求失败: {str(e)}")
             except Exception as e:
                 error_message: str = (
                     f"【HTTP请求调试】请求服务器发生未知错误, "

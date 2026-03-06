@@ -18,7 +18,7 @@ NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
 class AutoTestApiDetailBase(BaseModel):
-    quote_case_id: Optional[int] = Field(None, ge=1, description="引用公共用例ID")
+    quote_case_id: Optional[int] = Field(None, ge=1, description="引用公共脚本ID")
 
     step_st_time: Optional[str] = Field(None, max_length=255, description="步骤执行开始时间")
     step_ed_time: Optional[str] = Field(None, max_length=255, description="步骤执行结束时间")
@@ -70,7 +70,7 @@ class AutoTestApiDetailSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
-    quote_case_id: Optional[int] = Field(None, description="引用公共用例ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
 
     step_id: Optional[int] = Field(None, description="步骤ID")

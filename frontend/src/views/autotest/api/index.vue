@@ -481,6 +481,7 @@
 </template>
 
 <script setup>
+defineOptions({ name: '步骤编辑' })
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {

@@ -35,6 +35,7 @@ function buildRoutes(routes = []) {
           icon: e_child.icon,
           order: e_child.order,
           keepAlive: e_child.keepalive,
+          componentName: e_child.name, // KeepAlive include 匹配组件名，需与 defineOptions 一致
         },
       }))
     } else {
@@ -49,6 +50,7 @@ function buildRoutes(routes = []) {
           icon: e.icon,
           order: e.order,
           keepAlive: e.keepalive,
+          componentName: e.name, // KeepAlive include 匹配组件名，需与 defineOptions 一致
         },
       })
     }

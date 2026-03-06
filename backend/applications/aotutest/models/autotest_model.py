@@ -171,8 +171,8 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_id = fields.BigIntField(null=True, index=True, description="步骤所属用例")
     # 父级步骤ID（普通字段，不设外键，避免自关联导致的ORM循环引用问题）
     parent_step_id = fields.BigIntField(null=True, index=True, description="父级步骤ID")
-    # 引用用例信息ID（普通字段，不设外键，业务层验证）
-    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共用例ID")
+    # 引用公共脚本ID（普通字段，不设外键，业务层验证）
+    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
 
     # 请求相关字段
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")
@@ -280,7 +280,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
     report_code = fields.CharField(max_length=64, index=True, description="报告标识代码")
-    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共用例ID")
+    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
 
     # 步骤明细相关(指向步骤树结构中的具体步骤)
     step_id = fields.BigIntField(description="步骤ID")

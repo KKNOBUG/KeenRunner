@@ -95,7 +95,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import { formatDateTime } from '@/utils'
 import api from '@/api'
 
-defineOptions({ name: '任务记录' })
+defineOptions({ name: '执行记录' }) // 与菜单名一致，供 KeepAlive include 匹配
 
 const $table = ref(null)
 const queryItems = ref({})

@@ -15,11 +15,11 @@
             </div>
           </div>
           <div class="statistic-container">
-          <n-space :size="20" :wrap="false">
-            <n-card v-for="item in statisticData" :key="item.id" class="statistic-card">
-              <n-statistic v-bind="item"></n-statistic>
-            </n-card>
-          </n-space>
+            <n-space :size="20" :wrap="false">
+              <n-card v-for="item in statisticData" :key="item.id" class="statistic-card">
+                <n-statistic v-bind="item"></n-statistic>
+              </n-card>
+            </n-space>
           </div>
         </div>
       </n-card>
@@ -51,6 +51,7 @@
 </template>
 
 <script setup>
+defineOptions({ name: 'Workbench' })
 import {useUserStore} from '@/store'
 import {useI18n} from 'vue-i18n'
 import {currentTimePeriod} from "@/utils";

@@ -428,7 +428,7 @@ async def init_database_menu():
                 icon="material-symbols:desktop-windows-outline",
                 is_hidden=False,
                 component="/autotest/ui",
-                keepalive=False
+                keepalive=True
             ),
             Menu(
                 menu_type=MenuType.MENU,
@@ -439,7 +439,7 @@ async def init_database_menu():
                 icon="streamline:phone-mobile-phone-remix",
                 is_hidden=False,
                 component="/autotest/ui",
-                keepalive=False
+                keepalive=True
             ),
             Menu(
                 menu_type=MenuType.MENU,
@@ -461,7 +461,7 @@ async def init_database_menu():
                 icon="ph:tree-view-bold",
                 is_hidden=False,
                 component="/autotest/testcase",
-                keepalive=False
+                keepalive=True
             ),
             Menu(
                 menu_type=MenuType.MENU,
@@ -472,7 +472,7 @@ async def init_database_menu():
                 icon="garden:document-search-stroke-12",
                 is_hidden=False,
                 component="/autotest/report",
-                keepalive=False
+                keepalive=True
             ),
         ]
         await Menu.bulk_create(autotest_children_menu)
@@ -502,7 +502,7 @@ async def init_database_menu():
                 icon="fluent:document-text-clock-24-regular",
                 is_hidden=False,
                 component="/task/list",
-                keepalive=False
+                keepalive=True
             ),
             Menu(
                 menu_type=MenuType.MENU,
@@ -513,7 +513,7 @@ async def init_database_menu():
                 icon="fluent:document-checkmark-24-regular",
                 is_hidden=False,
                 component="/task/record",
-                keepalive=False
+                keepalive=True
             ),
         ]
         await Menu.bulk_create(task_children_menu)

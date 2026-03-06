@@ -1861,13 +1861,13 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
 
 class QuoteCaseStepExecutor(BaseStepExecutor):
-    """引用公共用例执行器：加载引用用例的步骤树，规范化后按 step_no 顺序执行并挂到 result.children。"""
+    """引用公共脚本执行器：加载引用脚本的步骤树，规范化后按 step_no 顺序执行并挂到 result.children。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
             quote_case_id = self.step.get("quote_case_id")
             if not quote_case_id:
-                raise StepExecutionError("【引用公共用例】缺少必要配置: quote_case_id")
+                raise StepExecutionError("【引用公共脚本】缺少必要配置: quote_case_id")
             try:
                 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
                 quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
@@ -1879,9 +1879,9 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     }
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(f"【引用公共用例】用例(id={quote_case_id})不存在, 错误描述: {e.message}") from e
+                raise StepExecutionError(f"【引用公共脚本】用例(id={quote_case_id})不存在, 错误描述: {e.message}") from e
             except Exception as e:
-                raise StepExecutionError(f"【引用公共用例】用例(id={quote_case_id})查询异常, 错误描述: {e}") from e
+                raise StepExecutionError(f"【引用公共脚本】用例(id={quote_case_id})查询异常, 错误描述: {e}") from e
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
@@ -1893,7 +1893,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 quote_steps = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=quote_case_id)
                 if not quote_steps:
                     self.context.log(
-                        f"【引用公共用例】用例(id={quote_case_id})暂无任何可执行步骤数据",
+                        f"【引用公共脚本】用例(id={quote_case_id})暂无任何可执行步骤数据",
                         step_code=self.step_code
                     )
                     return
@@ -1901,11 +1901,11 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 quote_steps.pop(-1)
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共用例】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
+                    f"【引用公共脚本】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
 
             self.context.log(
-                f"【引用公共用例】执行用例(id={quote_case_id}, name={quote_case_name})开始",
+                f"【引用公共脚本】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
             )
             normalized_steps = [AutoTestToolService.normalize_step(step) for step in quote_steps]
@@ -1927,7 +1927,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     step_name: str = quote_step.get("step_name")
                     step_type: str = quote_step.get("step_type")
                     error_message: str = (
-                        f"【引用公共用例】步骤执行失败: "
+                        f"【引用公共脚本】步骤执行失败: "
                         f"用例ID: {case_id}, "
                         f"步骤序号: {step_no}, "
                         f"步骤标识: {step_code}, "
@@ -1950,14 +1950,14 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     )
                     result.append_child(failed_result)
             self.context.log(
-                f"【引用公共用例】执行用例(id={quote_case_id}, name={quote_case_name})结束",
+                f"【引用公共脚本】执行用例(id={quote_case_id}, name={quote_case_name})结束",
                 step_code=self.step_code
             )
         except StepExecutionError:
             raise
         except Exception as e:
             error_message: str = (
-                f"【引用公共用例】步骤执行失败: "
+                f"【引用公共脚本】步骤执行失败: "
                 f"用例ID: {self.case_id}, "
                 f"步骤序号: {self.step_no}, "
                 f"步骤标识: {self.step_code}, "
@@ -2426,9 +2426,9 @@ class HttpStepExecutor(BaseStepExecutor):
                 except re.error as e:
                     raise StepExecutionError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
 
-        elif source.lower() == "response header":
+        elif source.lower() == "response headers":
             if not response_headers:
-                raise StepExecutionError(f"【{operation_type}】响应header为空")
+                raise StepExecutionError(f"【{operation_type}】响应 Headers 为空")
             if range_type.lower() == "all":
                 return response_headers
             else:
