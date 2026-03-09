@@ -255,6 +255,9 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
     task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
+    # 参数化驱动：本次脚本执行对应的数据集名称和数据快照
+    dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次脚本执行对应的数据集名称")
+    dataset_snapshot = fields.JSONField(null=True, description="本次脚本执行对应的数据集快照(步骤:<head/body/assert>)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -398,3 +401,36 @@ class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
     def __str__(self):
         """返回 celery_id 与 task_name 的组合字符串。"""
         return f"{self.celery_id or ''}-{self.task_name or ''}"
+
+
+class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """存储颗粒度：一个文件对应多条记录，按 case_id + step_no + step_code 联合唯一(每条记录存该步骤下所有场景数据)"""
+    case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
+    step_no = fields.BigIntField(ge=1, index=True, description="步骤序号")
+    step_code = fields.CharField(max_length=64, description="步骤标识代码")
+    file_name = fields.CharField(max_length=255, description="数据驱动文件存储名称")
+    file_hash = fields.CharField(max_length=255, description="数据驱动文件哈希代码")
+    file_path = fields.CharField(max_length=1024, description="数据驱动文件存储路径")
+    file_desc = fields.CharField(max_length=2048, null=True, description="数据驱动文件场景描述")
+    file_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
+    # 存储格式：{"step_code": {"场景1": {"head":..., "body":..., "assert":... }, ... }, ... }
+    dataset = fields.JSONField(description="数据驱动文件解析后的数据(该步骤×所有场景)")
+    # 数据集名称列表，如 ["场景1", "场景2", "场景3", ...]，便于前端多选
+    dataset_names = fields.JSONField(default=list, description="数据驱动文件解析后的场景名称列表")
+    # 存储格式：“dataset_{case_id}_{step_no}_{step_code}”
+    cache_key = fields.CharField(max_length=64, description="获取Redis中该步骤数据的缓存键名")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
+
+    class Meta:
+        table = "krun_autotest_data_source"
+        table_description = "自动化测试-数据驱动文件存储表"
+        unique_together = (
+            ("case_id", "step_no", "step_code"),
+        )
+        indexes = (
+            ("case_id", "state"), ("file_code", "state"),
+        )
+        ordering = ["case_id", "step_no", "step_code"]
+
+    def __str__(self):
+        return f"{self.file_code or ''}(case_id={self.case_id},step_no={self.step_no},step_code={self.step_code})"
