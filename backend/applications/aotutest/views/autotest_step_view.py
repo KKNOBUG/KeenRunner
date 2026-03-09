@@ -58,6 +58,32 @@ from backend.enums.autotest_enum import AutoTestReportType, AutoTestReqArgsType
 
 autotest_step = APIRouter()
 
+"""
+三种执行入口
+1.单用例执行（运行模式）
+ - 接口：POST /execute_or_debugging
+ - 请求体：AutoTestStepTreeExecute：case_id 必填，steps 为空，env_name、initial_variables 可选
+ - 流程：
+    + View 判断 is_run_mode（有 case_id 且无 steps）
+    + 调用 AUTOTEST_API_STEP_CRUD.execute_single_case(case_id, env_name, initial_variables, report_type=SYNC_EXEC) 
+    + CRUD 内：查用例 → 查步骤树 → 规范化步骤 → 合并会话变量 → 取根步骤 → 创建引擎并调用 execute_case → 在单事务内创建报告、写入所有步骤明细、更新用例最后执行状态
+    + 返回简化结果（success、total_steps、report_code 等）
+
+2.单用例调试（调试模式）
+ - 接口：同上 POST /execute_or_debugging
+ - 请求体：case_id + steps（前端传入完整步骤树）
+ - 流程：
+    + View 判断 is_debug_mode，将 steps 转为字典列表
+    + 从步骤或 DB 取 case_info，规范化步骤，合并 initial_variables 与步骤树内 session_variables
+    + 取根步骤，创建 AutoTestStepExecutionEngine(save_report=True, defer_save=True)，调用 execute_case
+    + 同样在事务内 create_report + create_detail + update_case，返回详细结果（含 results、logs、session_variables）
+
+3.批量执行
+ - 接口：POST /batch_execute
+ - 请求体：AutoTestBatchExecuteCases：case_ids、env_name、initial_variables
+ - 流程：CRUD 的 batch_execute_cases 生成统一 batch_code，串行对每个 case_id 调用 execute_single_case(..., batch_code=batch_code)，汇总 success/failed 与 results 返回
+"""
+
 
 @autotest_step.post("/create", summary="API自动化测试-新增步骤")
 async def create_step(
@@ -466,7 +492,7 @@ async def debug_http_request(
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
 
-        if not request_url.lower().startswith("http"):
+        if request_url and not request_url.lower().startswith("http"):
             try:
                 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
                 env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
@@ -569,7 +595,6 @@ async def debug_http_request(
             request_body = resolve_placeholders(request_body)
         if request_text is not None:
             request_text = resolve_placeholders(request_text)
-
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         def convert_list_to_dict(data_list):

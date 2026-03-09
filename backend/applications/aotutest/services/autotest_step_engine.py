@@ -1989,7 +1989,7 @@ class HttpStepExecutor(BaseStepExecutor):
             request_url: str = self.step.get("request_url").lstrip("/")
             request_project_id: int = self.step.get("request_project_id")
             request_method: str = self.step.get("request_method", "").upper()
-            if env_name and not request_url.lower().startswith("http"):
+            if request_url and not request_url.lower().startswith("http"):
                 try:
                     from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
                     env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(

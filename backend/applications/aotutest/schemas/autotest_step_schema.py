@@ -12,8 +12,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import AutoTestCaseType, AutoTestStepType, AutoTestLoopMode, AutoTestLoopErrorStrategy, \
-    AutoTestReqArgsType
+from backend.enums.autotest_enum import (
+    AutoTestStepType,
+    AutoTestLoopMode,
+    AutoTestLoopErrorStrategy,
+    AutoTestReqArgsType,
+)
 from backend.enums.http_enum import HTTPMethod
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
