@@ -1986,7 +1986,7 @@ class HttpStepExecutor(BaseStepExecutor):
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
             env_name: str = self.context.env_name
-            request_url: str = self.step.get("request_url")
+            request_url: str = self.step.get("request_url").lstrip("/")
             request_project_id: int = self.step.get("request_project_id")
             request_method: str = self.step.get("request_method", "").upper()
             if env_name and not request_url.lower().startswith("http"):
