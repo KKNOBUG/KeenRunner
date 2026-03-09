@@ -174,20 +174,17 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 
 
 class AutoTestStepTreeExecute(BaseModel):
+    case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
     env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
-    case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
-    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None,
-                                                              description="步骤树数据(调试模式必填, 运行模式不填)")
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
 
     @model_validator(mode='after')
     def validate_mode(self):
-        case_id = self.case_id
-        steps = self.steps
         # case_id 是必填的（运行模式和调试模式都需要）
         # 运行模式：只传递 case_id，不传递 steps
         # 调试模式：传递 case_id 和 steps
-        if case_id is None:
+        if self.case_id is None:
             raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
         return self
 
