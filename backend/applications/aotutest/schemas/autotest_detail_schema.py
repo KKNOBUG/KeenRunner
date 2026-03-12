@@ -27,6 +27,19 @@ class AutoTestApiDetailBase(BaseModel):
     step_exec_except: Optional[str] = Field(None, description="步骤错误描述")
     num_cycles: Optional[int] = Field(None, le=100, description="循环执行次数(第几次)")
 
+    # 实际发出的请求，格式与 http_debugging 入参一致（列表为 key/value/desc），供报告展示与复现
+    request_header: NON_DICT_TYPE = Field(default=None, description="实际发出的请求头")
+    request_params: NON_DICT_TYPE = Field(default=None, description="实际发出的请求参数")
+    request_form_data: NON_DICT_TYPE = Field(default=None, description="实际发出的表单数据")
+    request_form_urlencoded: NON_DICT_TYPE = Field(default=None, description="实际发出的 urlencoded 键值对")
+    request_form_file: NON_DICT_TYPE = Field(default=None, description="实际发出的表单文件项")
+    request_body: NON_DICT_TYPE = Field(default=None, description="实际发出的请求体(JSON)")
+    request_text: Optional[str] = Field(None, description="实际发出的请求体(Raw)")
+
+    # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
+    dataset_name: Optional[str] = Field(None, max_length=255, description="本步骤执行对应的数据集名称(参数化)")
+    dataset_snapshot: Optional[Dict[str, Any]] = Field(None, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
+
     response_cookie: Optional[str] = Field(None, description="响应信息(cookies)")
     response_header: NON_DICT_TYPE = Field(default=None, description="响应信息(headers)")
     response_body: NON_DICT_TYPE = Field(default=None, description="响应信息(body)")

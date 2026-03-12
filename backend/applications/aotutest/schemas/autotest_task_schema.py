@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import AutoTestTaskScheduler
+from backend.enums.autotest_enum import AutoTestTaskScheduler, AutoTestTaskStatus
 
 
 class AutoTestApiTaskCreate(BaseModel):
@@ -38,7 +38,7 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务参数字典")
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
-    last_execute_state: Optional[AutoTestTaskScheduler] = Field(None, description="最后执行状态")
+    last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
     task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务调度状态")
     task_interval_expr: Optional[int] = Field(None, description="任务触发条件1(间隔)")
     task_datetime_expr: Optional[str] = Field(None, max_length=64, description="任务触发条件2(日期时间)")

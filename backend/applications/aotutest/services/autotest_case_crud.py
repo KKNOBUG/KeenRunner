@@ -123,7 +123,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
         case_tags: List[int] = case_in.case_tags
-        case_type: Optional[AutoTestCaseType] = case_in.AutoTestCaseType
+        case_type: Optional[AutoTestCaseType] = case_in.case_type
 
         # 业务层验证: 检查标签是否全部存在
         await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
@@ -375,12 +375,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     case_tags = update_case_dict.get("case_tags", case_instance.case_tags)
                     await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
 
-                # 业务层验证：检查应用ID和用例名称的唯一性
+                # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
-                    existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
-                        only_one=True,
-                        conditions={"case_project": case_project, "case_name": case_name, "case_type": case_type, "id__not": case_id}
-                    )
+                    existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.model.filter(
+                        case_project=case_project, case_name=case_name, state__not=1
+                    ).exclude(id=case_id).first()
                     if existing_case_instance:
                         error_message: str = (
                             f"第({cid})条用例更新失败, "

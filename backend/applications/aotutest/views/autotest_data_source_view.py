@@ -109,7 +109,7 @@ async def upload_data_source(
             "created_time", "updated_time",
             "reserve_1", "reserve_2", "reserve_3"
         },
-        replace_fields={"id": "case_id"}
+        replace_fields={"id": "data_source_id"}
     )
     return SuccessResponse(message="上传成功，已创建数据源并同步缓存", data=data, total=1)
 

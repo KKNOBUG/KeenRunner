@@ -105,7 +105,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
             raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
-            error_message: str = f"查询明细信息失败, 条件{conditions}不存在"
+            error_message: str = f"查询环境信息失败, 条件{conditions}不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instances

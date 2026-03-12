@@ -52,9 +52,9 @@ async def create_tag_info(tag_in: AutoTestApiTagCreate = Body(..., description="
         )
         LOGGER.info(f"新增标签成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except DataBaseStorageResponse as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsResponse as e:
+    except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增标签失败，异常描述: {e}\n{traceback.format_exc()}")

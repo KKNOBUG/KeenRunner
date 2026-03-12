@@ -63,6 +63,7 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
         table_description = "自动化测试-应用信息表"
         indexes = (
             ("project_name", "project_state"),
+            ("state", "updated_time"),
         )
         ordering = ["-updated_time"]
 
@@ -86,6 +87,9 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         table_description = "自动化测试-环境信息表"
         unique_together = (
             ("project_id", "env_name"),
+        )
+        indexes = (
+            ("project_id", "state", "updated_time"),  # 列表：按项目+状态筛选 + 按更新时间排序
         )
         ordering = ["-updated_time"]
 
@@ -113,6 +117,7 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         )
         indexes = (
             ("tag_type", "tag_mode", "tag_name"),
+            ("tag_project", "state", "updated_time"),
         )
         ordering = ["-updated_time"]
 
@@ -146,7 +151,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
             ("case_name", "case_project", "created_user"),
         )
         indexes = (
-            ("case_project", "state"),
+            ("case_project", "state", "created_time"),
             ("case_project", "case_name", "case_type"),
             ("case_project", "case_name", "state"),
             ("case_name", "state"),
@@ -202,8 +207,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     loop_iter_idx = fields.CharField(max_length=64, null=True, description="用于存储enumerate得到的索引值")
     loop_iter_key = fields.CharField(max_length=64, null=True, description="用于存储字典的键")
     loop_iter_val = fields.CharField(max_length=64, null=True, description="用于存储字典的值或列表的项")
-    loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True,
-                                         description="循环执行失败时的处理策略")
+    loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="循环执行失败时的处理策略")
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
     conditions = fields.JSONField(null=True, description="判断条件(循环结构或条件分支)")
 
@@ -255,9 +259,6 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
     task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
-    # 参数化驱动：本次脚本执行对应的数据集名称和数据快照
-    dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次脚本执行对应的数据集名称")
-    dataset_snapshot = fields.JSONField(null=True, description="本次脚本执行对应的数据集快照(步骤:<head/body/assert>)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -265,7 +266,8 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
         table_description = "自动化测试-报告信息表"
         indexes = (
             ("case_id", "case_code"),
-            ("case_id", "state"),
+            ("case_id", "state", "case_st_time"),
+            ("case_id", "state", "updated_time"),
             ("case_id", "case_state"),
             ("case_id", "created_user"),
         )
@@ -298,7 +300,15 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     step_exec_logger = fields.TextField(null=True, description="步骤执行日志")
     step_exec_except = fields.TextField(null=True, description="步骤错误描述")
 
-    # 请求相关
+    # 请求相关（实际发出的请求，格式与 http_debugging 一致，供报告展示与复现）
+    request_header = fields.JSONField(null=True, description="实际发出的请求头(列表 key/value/desc)")
+    request_params = fields.JSONField(null=True, description="实际发出的请求参数(列表 key/value/desc)")
+    request_form_data = fields.JSONField(null=True, description="实际发出的表单数据(列表 key/value/desc)")
+    request_form_urlencoded = fields.JSONField(null=True, description="实际发出的 urlencoded(列表 key/value/desc)")
+    request_form_file = fields.JSONField(null=True, description="实际发出的表单文件项(列表 key/value/desc)")
+    request_body = fields.JSONField(null=True, description="实际发出的请求体(JSON)")
+    request_text = fields.TextField(null=True, description="实际发出的请求体(Raw)")
+    # 响应相关
     response_cookie = fields.TextField(null=True, description="响应信息(cookies)")
     response_header = fields.JSONField(null=True, description="响应信息(headers)")
     response_body = fields.JSONField(null=True, description="响应信息(body)")
@@ -314,6 +324,10 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
 
+    # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照(head/body/assert)，记录在明细更贴合「每步细节」
+    dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称(参数化)")
+    dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
+
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -325,10 +339,8 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
         )
         indexes = (
             ("case_id", "step_id", "step_no"),
-            # 优化查询性能：添加常用查询条件的组合索引
             ("report_code", "case_id", "state"),
-            ("case_id", "report_code", "state"),
-            # 优化排序性能：为排序字段添加索引
+            ("case_id", "report_code", "state", "step_st_time"),
             ("report_code", "step_st_time"),
             ("case_id", "report_code", "step_st_time"),
         )
@@ -364,6 +376,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         table_description = "自动化测试-任务信息表"
         unique_together = (
             ("task_name", "task_project"),
+            ("task_project", "state", "updated_time"),
         )
         ordering = ["-updated_time"]
 
@@ -372,7 +385,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         return self.task_name
 
 
-class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
+class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     """自动化测试任务执行记录模型，对应表 krun_autotest_api_record。"""
 
     task_id = fields.BigIntField(null=True, index=True, description="任务ID(krun_autotest_api_task表主键)")
@@ -395,6 +408,7 @@ class AutoTestApiRecordInfo(ScaffoldModel, TimestampMixin):
         indexes = (
             ("celery_status",),
             ("celery_start_time",),
+            ("celery_status", "celery_start_time"),
         )
         ordering = ["-celery_start_time", "-id"]
 
@@ -413,7 +427,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     file_path = fields.CharField(max_length=1024, description="数据驱动文件存储路径")
     file_desc = fields.CharField(max_length=2048, null=True, description="数据驱动文件场景描述")
     file_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
-    # 存储格式：{"step_code": {"场景1": {"head":..., "body":..., "assert":... }, ... }, ... }
+    # 存储格式：{"场景1": {"head":..., "body":..., "assert":... }, ... }
     dataset = fields.JSONField(description="数据驱动文件解析后的数据(该步骤×所有场景)")
     # 数据集名称列表，如 ["场景1", "场景2", "场景3", ...]，便于前端多选
     dataset_names = fields.JSONField(default=list, description="数据驱动文件解析后的场景名称列表")
@@ -428,7 +442,9 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
             ("case_id", "step_no", "step_code"),
         )
         indexes = (
-            ("case_id", "state"), ("file_code", "state"),
+            ("case_id", "state"),
+            ("case_id", "state", "updated_time"),
+            ("file_code", "state"),
         )
         ordering = ["case_id", "step_no", "step_code"]
 

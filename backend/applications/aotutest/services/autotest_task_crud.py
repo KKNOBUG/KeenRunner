@@ -140,6 +140,8 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             task_dict: Dict[str, Any] = task_in.model_dump(exclude_none=True, exclude_unset=True)
             if "task_scheduler" in task_dict and task_dict["task_scheduler"] is not None:
                 task_dict["task_scheduler"] = task_dict["task_scheduler"].value
+            if "last_execute_state" in task_dict and task_dict["last_execute_state"] is not None:
+                task_dict["last_execute_state"] = task_dict["last_execute_state"].value
             instance = await self.create(task_dict)
             return instance
         except IntegrityError as e:
@@ -171,7 +173,8 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         )
         if "task_scheduler" in update_dict and update_dict["task_scheduler"] is not None:
             update_dict["task_scheduler"] = update_dict["task_scheduler"].value
-
+        if "last_execute_state" in update_dict and update_dict["last_execute_state"] is not None:
+            update_dict["last_execute_state"] = update_dict["last_execute_state"].value
         task_name = update_dict.get("task_name", instance.task_name)
         task_project = update_dict.get("task_project", instance.task_project)
         existing_task = await self.model.filter(

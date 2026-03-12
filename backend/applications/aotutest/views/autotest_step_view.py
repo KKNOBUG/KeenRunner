@@ -6,6 +6,7 @@
 @Module  : autotest_step_view.py
 @DateTime: 2025/4/28
 """
+import datetime
 import json
 import re
 import time
@@ -57,32 +58,6 @@ from backend.core.responses.http_response import (
 from backend.enums.autotest_enum import AutoTestReportType, AutoTestReqArgsType
 
 autotest_step = APIRouter()
-
-"""
-三种执行入口
-1.单用例执行（运行模式）
- - 接口：POST /execute_or_debugging
- - 请求体：AutoTestStepTreeExecute：case_id 必填，steps 为空，env_name、initial_variables 可选
- - 流程：
-    + View 判断 is_run_mode（有 case_id 且无 steps）
-    + 调用 AUTOTEST_API_STEP_CRUD.execute_single_case(case_id, env_name, initial_variables, report_type=SYNC_EXEC) 
-    + CRUD 内：查用例 → 查步骤树 → 规范化步骤 → 合并会话变量 → 取根步骤 → 创建引擎并调用 execute_case → 在单事务内创建报告、写入所有步骤明细、更新用例最后执行状态
-    + 返回简化结果（success、total_steps、report_code 等）
-
-2.单用例调试（调试模式）
- - 接口：同上 POST /execute_or_debugging
- - 请求体：case_id + steps（前端传入完整步骤树）
- - 流程：
-    + View 判断 is_debug_mode，将 steps 转为字典列表
-    + 从步骤或 DB 取 case_info，规范化步骤，合并 initial_variables 与步骤树内 session_variables
-    + 取根步骤，创建 AutoTestStepExecutionEngine(save_report=True, defer_save=True)，调用 execute_case
-    + 同样在事务内 create_report + create_detail + update_case，返回详细结果（含 results、logs、session_variables）
-
-3.批量执行
- - 接口：POST /batch_execute
- - 请求体：AutoTestBatchExecuteCases：case_ids、env_name、initial_variables
- - 流程：CRUD 的 batch_execute_cases 生成统一 batch_code，串行对每个 case_id 调用 execute_single_case(..., batch_code=batch_code)，汇总 success/failed 与 results 返回
-"""
 
 
 @autotest_step.post("/create", summary="API自动化测试-新增步骤")
@@ -205,8 +180,6 @@ async def search_steps(
         if step_in.step_name:
             q &= Q(step_name=step_in.step_name)
         if step_in.step_type:
-            q &= Q(step_type=step_in.step_type.value)
-        if step_in.case_type:
             q &= Q(step_type=step_in.step_type.value)
         if step_in.case_id:
             q &= Q(case_id=step_in.case_id)
@@ -492,7 +465,7 @@ async def debug_http_request(
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
 
-        if request_url and not request_url.lower().startswith("http"):
+        if not request_url.lower().startswith("http"):
             try:
                 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
                 env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
@@ -595,6 +568,7 @@ async def debug_http_request(
             request_body = resolve_placeholders(request_body)
         if request_text is not None:
             request_text = resolve_placeholders(request_text)
+
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         def convert_list_to_dict(data_list):
@@ -1260,7 +1234,53 @@ async def execute_step_tree(
         # ========== 运行模式 ==========
         if is_run_mode:
             try:
-                # 使用公共函数执行单个用例
+                file_code = (request.file_code or "").strip() if getattr(request, "file_code", None) else ""
+                selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
+                # file_code = "1773046667-E85BB7BE911E4E8799EFEF21362FAC42"
+                # selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
+                # 参数化执行：有数据源 file_code + 选中数据集时，按数据集循环执行
+                if file_code and selected_dataset_names:
+                    from backend.applications.aotutest.services.autotest_data_source_cache import get_parsed_data_for_execution
+                    parsed_data, dataset_names = await get_parsed_data_for_execution(file_code=file_code)
+                    if parsed_data is None or dataset_names is None:
+                        return BadReqResponse(message="数据源不存在或未解析，请先上传数据驱动 xlsx")
+                    invalid = [n for n in selected_dataset_names if n not in dataset_names]
+                    if invalid:
+                        return BadReqResponse(message=f"选中的数据集不在数据源中: {invalid}")
+                    import uuid
+                    batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+                    results = []
+                    for dataset_name in selected_dataset_names:
+                        dataset_snapshot_per_step = {
+                            step_id: step_scenarios.get(dataset_name, {})
+                            for step_id, step_scenarios in (parsed_data or {}).items()
+                            if isinstance(step_scenarios, dict) and dataset_name in step_scenarios
+                        }
+                        execution_data_snapshot = dataset_snapshot_per_step
+                        one = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+                            case_id=case_id,
+                            env_name=env_name,
+                            initial_variables=initial_variables or [],
+                            report_type=AutoTestReportType.SYNC_EXEC,
+                            batch_code=batch_code,
+                            dataset_name=dataset_name,
+                            execution_data_snapshot=execution_data_snapshot,
+                            dataset_snapshot_per_step=dataset_snapshot_per_step,
+                        )
+                        results.append(one)
+                    success_count = sum(1 for r in results if r.get("success"))
+                    return SuccessResponse(
+                        message=f"参数化执行完成，共 {len(results)} 次，成功 {success_count} 次",
+                        data={
+                            "parameterized": True,
+                            "total_runs": len(results),
+                            "success_runs": success_count,
+                            "failed_runs": len(results) - success_count,
+                            "results": results,
+                        },
+                        total=len(results),
+                    )
+                # 普通单次执行
                 result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                     case_id=case_id,
                     env_name=env_name,
@@ -1309,10 +1329,29 @@ async def execute_step_tree(
             if not case_info:
                 case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
                 case_info = {
-                    "id": case_instance.id,
+                    "case_id": case_id,
                     "case_code": case_instance.case_code,
                     "case_name": case_instance.case_name,
                 }
+
+            # 调试模式可选：单条数据集选择（前端仅传一条）
+            debug_dataset_name = None
+            debug_dataset_snapshot = None
+            debug_dataset_snapshot_per_step = None
+            file_code = (request.file_code or "").strip() if getattr(request, "file_code", None) else ""
+            selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
+            if file_code and len(selected_dataset_names) == 1:
+                from backend.applications.aotutest.services.autotest_data_source_cache import get_parsed_data_for_execution
+                parsed_data, dataset_names = await get_parsed_data_for_execution(file_code=file_code)
+                if parsed_data is not None and dataset_names is not None and selected_dataset_names[0] in dataset_names:
+                    dataset_name = selected_dataset_names[0]
+                    debug_dataset_snapshot_per_step = {
+                        step_id: step_scenarios.get(dataset_name, {})
+                        for step_id, step_scenarios in (parsed_data or {}).items()
+                        if isinstance(step_scenarios, dict) and dataset_name in step_scenarios
+                    }
+                    debug_dataset_snapshot = debug_dataset_snapshot_per_step
+                    debug_dataset_name = dataset_name
 
             # 3. 规范化步骤数据
             tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
@@ -1343,14 +1382,16 @@ async def execute_step_tree(
             if not root_steps:
                 return BadReqResponse(message="没有可执行的根步骤")
 
-            # 6. 执行
+            # 6. 执行（调试选择单条数据集时传入 dataset_snapshot_per_step）
             engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
                 env_name=env_name,
                 initial_variables=initial_variables,
-                report_type=AutoTestReportType.DEBUG_EXEC
+                report_type=AutoTestReportType.DEBUG_EXEC,
+                dataset_name=debug_dataset_name,
+                dataset_snapshot_per_step=debug_dataset_snapshot_per_step,
             )
             if defer_create_report is not None:
                 try:
