@@ -182,9 +182,8 @@ class AutoTestStepTreeExecute(BaseModel):
     case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
-    # 参数化驱动：数据源文件标识；选中要执行的数据集名称列表
-    file_code: Optional[str] = Field(None, max_length=64, description="数据源文件标识代码(参数化执行时必填)")
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表(参数化执行时必填)")
+    # 参数化驱动：运行模式可传多条数据集名称循环执行；调试模式只能传一条
+    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
 
     @model_validator(mode='after')
     def validate_mode(self):

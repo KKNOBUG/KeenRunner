@@ -71,9 +71,11 @@ class StepExecutionResult:
     message: str = ""
     error: Optional[str] = None
     elapsed: Optional[float] = None
+    dataset_name: Optional[str] = None
     quote_case_id: Optional[int] = None
     request: Optional[Dict[str, Any]] = None
     response: Optional[Dict[str, Any]] = None
+    dataset_snapshot: Optional[Dict[str, Any]] = None
     extract_variables: List[Dict[str, Any]] = field(default_factory=list)
     assert_validators: List[Dict[str, Any]] = field(default_factory=list)
     children: List["StepExecutionResult"] = field(default_factory=list)
@@ -103,9 +105,10 @@ class StepExecutionContext:
             case_code: str,
             *,
             env_name: Optional[str] = None,
-            initial_variables: Optional[List[Dict[str, Any]]] = None,
-            http_client: Optional[HttpClientProtocol] = None,
             report_code: Optional[str] = None,
+            dataset_name: Optional[str] = None,
+            http_client: Optional[HttpClientProtocol] = None,
+            initial_variables: Optional[List[Dict[str, Any]]] = None,
             pending_details: Optional[List[AutoTestApiDetailCreate]] = None,
     ) -> None:
         """
@@ -113,9 +116,10 @@ class StepExecutionContext:
         :param case_id: 用例 ID。
         :param case_code: 用例编码。
         :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
-        :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
-        :param http_client: 可选 HTTP 客户端，不传则在 __aenter__ 中创建。
         :param report_code: 报告编码，用于保存步骤明细。
+        :param dataset_name: 参数化时传入的数据集名称，仅 HttpStepExecutor 内据此 + case_id/step_no/step_code 查表取数。
+        :param http_client: 可选 HTTP 客户端，不传则在 __aenter__ 中创建。
+        :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
         :param pending_details: 延后落库时收集明细的列表，非 None 时 _save_step_detail 只追加不写库。
         """
         self.env_name = env_name
@@ -123,6 +127,7 @@ class StepExecutionContext:
         self.case_code = case_code
         self.report_code = report_code
         self.pending_details = pending_details
+        self.dataset_name = dataset_name
         self.logs: Dict[str, List[str]] = {}
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[str] = None
@@ -130,14 +135,6 @@ class StepExecutionContext:
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[Dict[str, Any]] = []
         self.session_variables: List[Dict[str, Any]] = self.resolve_placeholders(initial_variables or [])
-        # 参数化驱动：当前步骤的数据集作用域（上传文件中该步骤的 head/body/assert 展平），优先级最高
-        self.step_dataset_scope: Optional[Dict[str, Any]] = None
-        # 参数化驱动：本次执行的数据集名称，落库到每条明细
-        self.dataset_name: Optional[str] = None
-        # 参数化驱动：按 step_code 的 dataset 快照，由引擎传入，供每个步骤执行前设置 step_dataset_scope，本步骤快照落库到明细
-        self.dataset_snapshot_per_step: Optional[Dict[str, Dict[str, Any]]] = None
-        # 参数化驱动：当前步骤的结构化数据 { head, body, assert }，key 为 JSONPath，供 HTTP 等执行器做报文替换
-        self.current_step_dataset_structure: Optional[Dict[str, Dict[str, Any]]] = None
         self.timeout: float = 30.0
         self.connect: float = 10.0
 
@@ -202,56 +199,6 @@ class StepExecutionContext:
         """
         self._current_step_code = step_code
 
-    #
-    # @staticmethod
-    # def list_to_dict(variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
-    #     """
-    #     将 key/value/desc 列表转为 name -> value 字典，供 Python 代码命名空间使用
-    #     :param variable_list: 变量列表，每项为含 key、value 的字典。
-    #     :return: 键为变量名、值为变量值的字典。
-    #     """
-    #     result = {}
-    #     if isinstance(variable_list, list):
-    #         for item in variable_list:
-    #             if isinstance(item, dict) and "key" in item and "value" in item:
-    #                 key = item.get("key")
-    #                 value = item.get("value")
-    #                 if key:
-    #                     result[key] = value
-    #     return result
-    #
-    # @staticmethod
-    # def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
-    #     """
-    #     从 key/value/desc 列表中取 key 为 name 的项的 value
-    #     :param variable_list:
-    #     :param name:
-    #     :return:
-    #     """
-    #     if isinstance(variable_list, list):
-    #         for item in variable_list:
-    #             if isinstance(item, dict) and item.get("key") == name:
-    #                 return item.get("value")
-    #     return None
-    #
-    # @staticmethod
-    # def convert_list_to_dict_for_http(data: List[Dict[str, Any]]) -> Dict[str, Any]:
-    #     """
-    #     将 key/value/desc 列表转为 key -> value 字典，供 HTTP 请求头/参数等使用。
-    #     :param data: 每项含 key、value 的列表。
-    #     :return: 键值对字典；非列表入参返回空字典。
-    #     """
-    #     if not isinstance(data, list):
-    #         return {}
-    #     result = {}
-    #     for item in data:
-    #         if isinstance(item, dict) and "key" in item:
-    #             key = item.get("key")
-    #             value = item.get("value")
-    #             if key:
-    #                 result[key] = value
-    #     return result
-
     def clone_state(self) -> Dict[str, Any]:
         """
         返回当前 defined_variables 与 session_variables 的字典形式副本，用作 Python 代码命名空间。
@@ -315,9 +262,6 @@ class StepExecutionContext:
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: 变量名必须是非空字符串, 当前值: {name}")
 
-        # 参数化驱动时优先级：step_dataset_scope（上传文件中对应步骤）> session_variables > defined_variables
-        if self.step_dataset_scope and name in self.step_dataset_scope:
-            return self.step_dataset_scope[name]
         for scope_name, scope_list in [
             ("session_variables", self.session_variables),
             ("defined_variables", self.defined_variables),
@@ -916,21 +860,6 @@ class BaseStepExecutor:
         # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
         step_defined = self.step.get("defined_variables") or []
         self.context.defined_variables = list(step_defined) if isinstance(step_defined, list) else []
-        # 参数化驱动：设置当前步骤的数据集作用域（上传文件中该步骤 head/body/assert 展平）及结构化数据供报文替换
-        if getattr(self.context, "dataset_snapshot_per_step", None) and self.step_code:
-            step_data = self.context.dataset_snapshot_per_step.get(self.step_code, {})
-            if isinstance(step_data, dict):
-                head = step_data.get("head") or {}
-                body = step_data.get("body") or {}
-                assert_ = step_data.get("assert") or {}
-                self.context.step_dataset_scope = {**head, **body, **assert_}
-                self.context.current_step_dataset_structure = {"head": head, "body": body, "assert": assert_}
-            else:
-                self.context.step_dataset_scope = None
-                self.context.current_step_dataset_structure = None
-        else:
-            self.context.step_dataset_scope = None
-            self.context.current_step_dataset_structure = None
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -1019,8 +948,9 @@ class BaseStepExecutor:
             result_extract = getattr(result, "extract_variables", None)
             extract_variables = list(result_extract) if isinstance(result_extract, list) else []
             session_variables = list(self.context.session_variables) if self.context.session_variables else []
-            ds_per_step = getattr(self.context, "dataset_snapshot_per_step", None)
-            has_data_driven = bool(ds_per_step and self.step_code and self.step_code in ds_per_step)
+            ds_snapshot = getattr(result, "dataset_snapshot", None)
+            ds_name = getattr(result, "dataset_name", None)
+            has_data_driven = ds_snapshot is not None
             req = getattr(result, "request", None) or {}
             detail_create = AutoTestApiDetailCreate(
                 case_id=self.context.case_id,
@@ -1045,8 +975,8 @@ class BaseStepExecutor:
                 request_form_file=req.get("request_form_file"),
                 request_body=req.get("request_body"),
                 request_text=req.get("request_text"),
-                dataset_snapshot=ds_per_step[self.step_code] if has_data_driven else None,
-                dataset_name=getattr(self.context, "dataset_name", None) if has_data_driven else None,
+                dataset_snapshot=ds_snapshot if has_data_driven else None,
+                dataset_name=ds_name if has_data_driven else None,
                 response_cookie=response_cookie or None,
                 response_header=response_header or None,
                 response_body=response_body or None,
@@ -1922,10 +1852,28 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
 
 class HttpStepExecutor(BaseStepExecutor):
-    """HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。"""
+    """HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。参数化驱动仅在此执行器内处理：按 dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取数。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
+            # 参数化驱动：仅 HTTP 步骤在此处理。根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集，仅用局部变量做报文替换与断言，并写入 result 供落库
+            step_struct: Optional[Dict[str, Dict[str, Any]]] = None
+            dataset_name = getattr(self.context, "dataset_name", None)
+            if dataset_name and self.step_code:
+                from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
+                step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=dataset_name,
+                )
+                if isinstance(step_data, dict):
+                    head = step_data.get("head") or {}
+                    body = step_data.get("body") or {}
+                    assert_ = step_data.get("assert") or {}
+                    step_struct = {"head": head, "body": body, "assert": assert_}
+                    result.dataset_snapshot = step_data
+                    result.dataset_name = dataset_name
+
             env_name: str = self.context.env_name
             request_url: str = self.step.get("request_url").lstrip("/")
             request_project_id: int = self.step.get("request_project_id")
@@ -1957,8 +1905,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     raise
                 except Exception as e:
                     raise StepExecutionError(f"【HTTP请求】环境配置查询异常, 错误描述: {e}") from e
-
-            if request_url and not request_url.startswith("http"):
+            if request_url and not request_url.lower().startswith("http"):
                 raise StepExecutionError(f"【HTTP请求】请求URL({request_url})不是有效的HTTP/HTTPS地址")
             if not request_url:
                 raise StepExecutionError("【HTTP请求】HTTP请求配置错误: 请求URL(request_url)未配置")
@@ -1994,7 +1941,6 @@ class HttpStepExecutor(BaseStepExecutor):
             request_text = self.step.get("request_text")
 
             # 2）若有数据驱动，先按 JSONPath 做报文替换（找得到就替换，找不到就忽略；JSONPathUtils 原地修改 dict，不依赖返回值）
-            step_struct = getattr(self.context, "current_step_dataset_structure", None)
             has_data_driven = (
                     isinstance(step_struct, dict)
                     and (step_struct.get("head") or step_struct.get("body") or step_struct.get("assert"))
@@ -2154,8 +2100,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     response_headers=result.response.get("response_headers") if result.response else None,
                     response_cookies=result.response.get("response_cookies") if result.response else None,
                 )
-                # 参数化驱动：当前场景的 assert（JSONPath -> 期望值）从响应 JSON 中取值并做等于比较
-                step_struct = getattr(self.context, "current_step_dataset_structure", None)
+                # 参数化驱动：当前场景的 assert（JSONPath -> 期望值）从响应 JSON 中取值并做等于比较（step_struct 为本步骤内查表得到的 head/body/assert）
                 assert_map = isinstance(step_struct, dict) and (step_struct.get("assert") or {}) or {}
                 for jpath, except_val in assert_map.items():
                     if not jpath:
@@ -2652,19 +2597,19 @@ class AutoTestStepExecutionEngine:
             env_name: Optional[str] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             dataset_name: Optional[str] = None,
-            dataset_snapshot_per_step: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Tuple[
         List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]], Optional[AutoTestApiReportCreate],
         Optional[List[AutoTestApiDetailCreate]]]:
         """执行单用例：在上下文中按 step_no 执行根步骤，可选收集报告与明细供调用方落库。
+
+        参数化时仅传入 dataset_name，各 HTTP 步骤执行时按 case_id/step_no/step_code/dataset_name 查 AutoTestApiDataSourceInfo 表获取数据集。
 
         :param case: 用例信息字典，含 case_id、case_code、case_name。
         :param steps: 根步骤可迭代对象（已排序按 step_no）。
         :param report_type: 报告类型枚举。
         :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
         :param initial_variables: 初始会话变量列表，每项含 key、value、desc。
-        :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细。
-        :param dataset_snapshot_per_step: 参数化时按 step_code 的该步骤 head/body/assert 展平，用于设置 step_dataset_scope，并写入对应步骤明细。
+        :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数。
         :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。results 为根步骤执行结果列表；logs 按 step_code 分组；report_code 未保存时为 None；statistics 含 total_steps、success_steps、failed_steps、pass_ratio；session_variables 为执行后变量列表。当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case。
         """
         report_code = None
@@ -2685,9 +2630,8 @@ class AutoTestStepExecutionEngine:
                 http_client=self._http_client,
                 report_code=report_code,
                 pending_details=pending_details_arg,
+                dataset_name=dataset_name,
         ) as context:
-            context.dataset_name = dataset_name
-            context.dataset_snapshot_per_step = dataset_snapshot_per_step
             ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0) or 0)
             results: List[StepExecutionResult] = []
             for step in ordered_root_steps:

@@ -178,6 +178,8 @@ class InterceptHandler(logging.Handler):
         "uvicorn.asgi",
         "uvicorn.middleware.*",
         "python_multipart.*",
+        "faker.factory",
+        "httpcore.*",
     }
 
     def is_excluded(self, name: str) -> bool:

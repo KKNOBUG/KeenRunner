@@ -941,10 +941,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
-            execution_data_snapshot: Optional[Dict[str, Any]] = None,
-            dataset_snapshot_per_step: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """执行单个用例：创建报告、拉取步骤树、调用执行引擎并写明细。
+
+        参数化执行时仅传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取数据。
 
         :param case_id: 用例主键 ID。
         :param report_type: 报告类型枚举。
@@ -952,9 +952,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param env_name: 环境名称，用于解析请求 host。
         :param task_code: 任务标识代码，可选。
         :param batch_code: 批次标识代码，可选。
-        :param dataset_name: 参数化执行时本次数据集名称，写入报告。
-        :param execution_data_snapshot: 参数化执行时本次数据快照，写入报告。
-        :param dataset_snapshot_per_step: 参数化执行时按 step_code 的 head/body/assert，供引擎设置 step_dataset_scope。
+        :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由 HTTP 步骤执行器内查表获取。
         :returns: 包含报告与执行结果的字典（如 report_code、case_state、details 等）。
         :raises NotFoundException: 用例不存在时。
         """
@@ -1017,7 +1015,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             env_name=env_name,
             report_type=report_type,
             dataset_name=dataset_name,
-            dataset_snapshot_per_step=dataset_snapshot_per_step,
         )
         if defer_create_report is not None:
             try:

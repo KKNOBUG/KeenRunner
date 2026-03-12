@@ -418,9 +418,8 @@ class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
 
 
 class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """存储颗粒度：一个文件对应多条记录，按 case_id + step_no + step_code 联合唯一(每条记录存该步骤下所有场景数据)"""
+    """存储颗粒度：一个文件对应多条记录，按 case_id + step_code 联合唯一(每条记录存该步骤下所有场景数据)"""
     case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
-    step_no = fields.BigIntField(ge=1, index=True, description="步骤序号")
     step_code = fields.CharField(max_length=64, description="步骤标识代码")
     file_name = fields.CharField(max_length=255, description="数据驱动文件存储名称")
     file_hash = fields.CharField(max_length=255, description="数据驱动文件哈希代码")
@@ -431,7 +430,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     dataset = fields.JSONField(description="数据驱动文件解析后的数据(该步骤×所有场景)")
     # 数据集名称列表，如 ["场景1", "场景2", "场景3", ...]，便于前端多选
     dataset_names = fields.JSONField(default=list, description="数据驱动文件解析后的场景名称列表")
-    # 存储格式：“dataset_{case_id}_{step_no}_{step_code}”
+    # 存储格式：“dataset_{case_id}_{step_code}”
     cache_key = fields.CharField(max_length=64, description="获取Redis中该步骤数据的缓存键名")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -439,14 +438,14 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
         table = "krun_autotest_data_source"
         table_description = "自动化测试-数据驱动文件存储表"
         unique_together = (
-            ("case_id", "step_no", "step_code"),
+            ("case_id", "step_code"),
         )
         indexes = (
             ("case_id", "state"),
             ("case_id", "state", "updated_time"),
             ("file_code", "state"),
         )
-        ordering = ["case_id", "step_no", "step_code"]
+        ordering = ["case_id", "step_code"]
 
     def __str__(self):
-        return f"{self.file_code or ''}(case_id={self.case_id},step_no={self.step_no},step_code={self.step_code})"
+        return f"{self.file_code or ''}(case_id={self.case_id},step_code={self.step_code})"

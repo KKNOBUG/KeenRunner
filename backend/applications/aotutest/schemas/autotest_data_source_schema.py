@@ -5,8 +5,6 @@
 @Project : Krun
 @Module  : autotest_data_source_schema.py
 @DateTime: 2026/3/6
-参数化驱动：数据源（xlsx 解析结果）的请求/响应 Schema。
-存储颗粒度：一个文件对应多条记录，唯一 (case_id, step_no, step_code)；每条记录存该步骤下所有场景数据。
 """
 from typing import Optional, List, Dict, Any
 
@@ -18,7 +16,6 @@ from backend.applications.base.services.scaffold import UpperStr
 class AutoTestDataSourceCreate(BaseModel):
     """创建数据源单条记录（上传时由服务层按解析结果批量创建多条；file_code 由后端生成）。"""
     case_id: int = Field(..., ge=1, description="用例ID")
-    step_no: int = Field(..., ge=1, description="步骤序号")
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
     file_name: str = Field(None, max_length=255, description="数据驱动文件存储名称")
     file_hash: str = Field(None, max_length=255, description="数据驱动文件哈希代码")
@@ -32,7 +29,6 @@ class AutoTestDataSourceCreate(BaseModel):
 
 class AutoTestDataSourceBase(BaseModel):
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
-    step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     file_name: Optional[str] = Field(None, max_length=255, description="数据驱动文件存储名称")
     file_path: Optional[str] = Field(None, max_length=1024, description="数据驱动文件哈希代码")
@@ -61,7 +57,7 @@ class AutoTestDataSourceListOut(BaseModel):
     file_path: Optional[str] = Field(None, description="上传的数据驱动文件存储路径")
     file_desc: Optional[str] = Field(None, description="上传的数据驱动文件场景描述")
     dataset_names: Optional[List[str]] = Field(None, description="数据集名称列表")
-    steps: Optional[List[Dict[str, Any]]] = Field(None, description="步骤列表 [{step_no, step_code}, ...]")
+    steps: Optional[List[Dict[str, Any]]] = Field(None, description="步骤列表 [{step_code}, ...]")
     created_time: Optional[str] = Field(None, description="创建时间")
     updated_time: Optional[str] = Field(None, description="更新时间")
 

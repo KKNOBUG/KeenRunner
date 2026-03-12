@@ -1234,29 +1234,14 @@ async def execute_step_tree(
         # ========== 运行模式 ==========
         if is_run_mode:
             try:
-                file_code = (request.file_code or "").strip() if getattr(request, "file_code", None) else ""
                 selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
-                file_code = "1773046667-E85BB7BE911E4E8799EFEF21362FAC42"
+                # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
                 selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
-                # 参数化执行：有数据源 file_code + 选中数据集时，按数据集循环执行
-                if file_code and selected_dataset_names:
-                    from backend.applications.aotutest.services.autotest_data_source_cache import get_parsed_data_for_execution
-                    parsed_data, dataset_names = await get_parsed_data_for_execution(file_code=file_code)
-                    if parsed_data is None or dataset_names is None:
-                        return BadReqResponse(message="数据源不存在或未解析，请先上传数据驱动 xlsx")
-                    invalid = [n for n in selected_dataset_names if n not in dataset_names]
-                    if invalid:
-                        return BadReqResponse(message=f"选中的数据集不在数据源中: {invalid}")
+                if selected_dataset_names:
                     import uuid
                     batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                     results = []
                     for dataset_name in selected_dataset_names:
-                        dataset_snapshot_per_step = {
-                            step_id: step_scenarios.get(dataset_name, {})
-                            for step_id, step_scenarios in (parsed_data or {}).items()
-                            if isinstance(step_scenarios, dict) and dataset_name in step_scenarios
-                        }
-                        execution_data_snapshot = dataset_snapshot_per_step
                         one = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                             case_id=case_id,
                             env_name=env_name,
@@ -1264,8 +1249,6 @@ async def execute_step_tree(
                             report_type=AutoTestReportType.SYNC_EXEC,
                             batch_code=batch_code,
                             dataset_name=dataset_name,
-                            execution_data_snapshot=execution_data_snapshot,
-                            dataset_snapshot_per_step=dataset_snapshot_per_step,
                         )
                         results.append(one)
                     success_count = sum(1 for r in results if r.get("success"))
@@ -1280,7 +1263,7 @@ async def execute_step_tree(
                         },
                         total=len(results),
                     )
-                # 普通单次执行
+                # 普通单次执行（无选中数据集）
                 result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                     case_id=case_id,
                     env_name=env_name,
@@ -1334,24 +1317,14 @@ async def execute_step_tree(
                     "case_name": case_instance.case_name,
                 }
 
-            # 调试模式可选：单条数据集选择（前端仅传一条）
-            debug_dataset_name = None
-            debug_dataset_snapshot = None
-            debug_dataset_snapshot_per_step = None
-            file_code = (request.file_code or "").strip() if getattr(request, "file_code", None) else ""
+            # 调试模式：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
             selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
-            if file_code and len(selected_dataset_names) == 1:
-                from backend.applications.aotutest.services.autotest_data_source_cache import get_parsed_data_for_execution
-                parsed_data, dataset_names = await get_parsed_data_for_execution(file_code=file_code)
-                if parsed_data is not None and dataset_names is not None and selected_dataset_names[0] in dataset_names:
-                    dataset_name = selected_dataset_names[0]
-                    debug_dataset_snapshot_per_step = {
-                        step_id: step_scenarios.get(dataset_name, {})
-                        for step_id, step_scenarios in (parsed_data or {}).items()
-                        if isinstance(step_scenarios, dict) and dataset_name in step_scenarios
-                    }
-                    debug_dataset_snapshot = debug_dataset_snapshot_per_step
-                    debug_dataset_name = dataset_name
+            if selected_dataset_names:
+                if len(selected_dataset_names) != 1:
+                    return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
+                debug_dataset_name = selected_dataset_names[0]
+            else:
+                debug_dataset_name = None
 
             # 3. 规范化步骤数据
             tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
@@ -1382,7 +1355,7 @@ async def execute_step_tree(
             if not root_steps:
                 return BadReqResponse(message="没有可执行的根步骤")
 
-            # 6. 执行（调试选择单条数据集时传入 dataset_snapshot_per_step）
+            # 6. 执行（若选择了单条数据集则传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表取数）
             engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
@@ -1391,7 +1364,6 @@ async def execute_step_tree(
                 initial_variables=initial_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC,
                 dataset_name=debug_dataset_name,
-                dataset_snapshot_per_step=debug_dataset_snapshot_per_step,
             )
             if defer_create_report is not None:
                 try:

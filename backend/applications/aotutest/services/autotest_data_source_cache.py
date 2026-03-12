@@ -5,10 +5,6 @@
 @Project : Krun
 @Module  : autotest_data_source_cache.py
 @DateTime: 2026/3/6
-参数化驱动：数据源解析结果 Redis 缓存（按步骤粒度）。
-Key: cache_key，格式 "dataset_{case_id}_{step_no}_{step_code}"
-Value: JSON { "dataset": {...}, "dataset_names": [...] }（该步骤的数据）
-执行时按 file_code 从 DB 拉取多条记录合并，可选按 cache_key 回填/读取 Redis。
 """
 import json
 from typing import Optional, Dict, Any, List, Tuple
