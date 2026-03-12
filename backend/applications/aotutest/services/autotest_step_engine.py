@@ -6,6 +6,8 @@ import json
 import random
 import re
 import time
+import traceback
+import urllib.parse
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -20,6 +22,7 @@ from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from backend.common.jsonpath_utils import JSONPathUtils
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     ParameterException,
@@ -42,6 +45,16 @@ _RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
 _RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
 
 
+def _header_key_from_jsonpath(path: str) -> str:
+    """从 JSONPath 取请求头键名，如 $.Content-Type -> Content-Type。"""
+    if not path or not isinstance(path, str):
+        return ""
+    s = path.strip()
+    if s.startswith("$."):
+        s = s[2:]
+    return s.split(".")[0].strip() if s else ""
+
+
 class StepExecutionError(Exception):
     """步骤执行过程中的业务异常，用于中断执行并携带错误信息。"""
 
@@ -57,9 +70,10 @@ class StepExecutionResult:
     success: bool
     message: str = ""
     error: Optional[str] = None
-    response: Optional[Any] = None
     elapsed: Optional[float] = None
     quote_case_id: Optional[int] = None
+    request: Optional[Dict[str, Any]] = None
+    response: Optional[Dict[str, Any]] = None
     extract_variables: List[Dict[str, Any]] = field(default_factory=list)
     assert_validators: List[Dict[str, Any]] = field(default_factory=list)
     children: List["StepExecutionResult"] = field(default_factory=list)
@@ -111,11 +125,19 @@ class StepExecutionContext:
         self.pending_details = pending_details
         self.logs: Dict[str, List[str]] = {}
         self.step_cycle_index: Dict[str, int] = {}
-        self._current_step_code: Optional[int] = None
+        self._current_step_code: Optional[str] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[Dict[str, Any]] = []
         self.session_variables: List[Dict[str, Any]] = self.resolve_placeholders(initial_variables or [])
+        # 参数化驱动：当前步骤的数据集作用域（上传文件中该步骤的 head/body/assert 展平），优先级最高
+        self.step_dataset_scope: Optional[Dict[str, Any]] = None
+        # 参数化驱动：本次执行的数据集名称，落库到每条明细
+        self.dataset_name: Optional[str] = None
+        # 参数化驱动：按 step_code 的 dataset 快照，由引擎传入，供每个步骤执行前设置 step_dataset_scope，本步骤快照落库到明细
+        self.dataset_snapshot_per_step: Optional[Dict[str, Dict[str, Any]]] = None
+        # 参数化驱动：当前步骤的结构化数据 { head, body, assert }，key 为 JSONPath，供 HTTP 等执行器做报文替换
+        self.current_step_dataset_structure: Optional[Dict[str, Dict[str, Any]]] = None
         self.timeout: float = 30.0
         self.connect: float = 10.0
 
@@ -180,54 +202,55 @@ class StepExecutionContext:
         """
         self._current_step_code = step_code
 
-    @staticmethod
-    def list_to_dict(variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        将 key/value/desc 列表转为 name -> value 字典，供 Python 代码命名空间使用
-        :param variable_list: 变量列表，每项为含 key、value 的字典。
-        :return: 键为变量名、值为变量值的字典。
-        """
-        result = {}
-        if isinstance(variable_list, list):
-            for item in variable_list:
-                if isinstance(item, dict) and "key" in item and "value" in item:
-                    key = item.get("key")
-                    value = item.get("value")
-                    if key:
-                        result[key] = value
-        return result
-
-    @staticmethod
-    def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
-        """
-        从 key/value/desc 列表中取 key 为 name 的项的 value
-        :param variable_list:
-        :param name:
-        :return:
-        """
-        if isinstance(variable_list, list):
-            for item in variable_list:
-                if isinstance(item, dict) and item.get("key") == name:
-                    return item.get("value")
-        return None
-
-    @staticmethod
-    def convert_list_to_dict_for_http(data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        将 key/value/desc 列表转为 key -> value 字典，供 HTTP 请求头/参数等使用。
-        :param data: 每项含 key、value 的列表。
-        :return: 键值对字典；非列表入参返回空字典。
-        """
-        if not isinstance(data, list):
-            return {}
-        result = {}
-        for item in data:
-            if isinstance(item, dict) and "key" in item:
-                key = item.get("key")
-                value = item.get("value")
-                if key:
-                    result[key] = value
-        return result
+    #
+    # @staticmethod
+    # def list_to_dict(variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+    #     """
+    #     将 key/value/desc 列表转为 name -> value 字典，供 Python 代码命名空间使用
+    #     :param variable_list: 变量列表，每项为含 key、value 的字典。
+    #     :return: 键为变量名、值为变量值的字典。
+    #     """
+    #     result = {}
+    #     if isinstance(variable_list, list):
+    #         for item in variable_list:
+    #             if isinstance(item, dict) and "key" in item and "value" in item:
+    #                 key = item.get("key")
+    #                 value = item.get("value")
+    #                 if key:
+    #                     result[key] = value
+    #     return result
+    #
+    # @staticmethod
+    # def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
+    #     """
+    #     从 key/value/desc 列表中取 key 为 name 的项的 value
+    #     :param variable_list:
+    #     :param name:
+    #     :return:
+    #     """
+    #     if isinstance(variable_list, list):
+    #         for item in variable_list:
+    #             if isinstance(item, dict) and item.get("key") == name:
+    #                 return item.get("value")
+    #     return None
+    #
+    # @staticmethod
+    # def convert_list_to_dict_for_http(data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    #     """
+    #     将 key/value/desc 列表转为 key -> value 字典，供 HTTP 请求头/参数等使用。
+    #     :param data: 每项含 key、value 的列表。
+    #     :return: 键值对字典；非列表入参返回空字典。
+    #     """
+    #     if not isinstance(data, list):
+    #         return {}
+    #     result = {}
+    #     for item in data:
+    #         if isinstance(item, dict) and "key" in item:
+    #             key = item.get("key")
+    #             value = item.get("value")
+    #             if key:
+    #                 result[key] = value
+    #     return result
 
     def clone_state(self) -> Dict[str, Any]:
         """
@@ -235,8 +258,8 @@ class StepExecutionContext:
         :return: 含 "defined_variables"、"session_variables" 两个键的字典，值为 name->value。
         """
         return {
-            "defined_variables": self.list_to_dict(self.defined_variables),
-            "session_variables": self.list_to_dict(self.session_variables),
+            "defined_variables": AutoTestToolService.list_to_dict(self.defined_variables),
+            "session_variables": AutoTestToolService.list_to_dict(self.session_variables),
         }
 
     def update_variables(
@@ -292,17 +315,16 @@ class StepExecutionContext:
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: 变量名必须是非空字符串, 当前值: {name}")
 
-        # 按优先级查找：defined_variables > session_variables
+        # 参数化驱动时优先级：step_dataset_scope（上传文件中对应步骤）> session_variables > defined_variables
+        if self.step_dataset_scope and name in self.step_dataset_scope:
+            return self.step_dataset_scope[name]
         for scope_name, scope_list in [
-            ("defined_variables", self.defined_variables),
             ("session_variables", self.session_variables),
+            ("defined_variables", self.defined_variables),
         ]:
-            value = self.get_value_from_list(scope_list, name)
+            value = AutoTestToolService.get_value_from_list(scope_list, name)
             if value is not None:
-                try:
-                    return value
-                except Exception as e:
-                    raise StepExecutionError(f"【获取变量】'{name}'的值时发生错误(作用域: {scope_name}): {e}") from e
+                return value
 
         raise KeyError(f"【获取变量】变量({name})未定义, 请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
 
@@ -336,13 +358,8 @@ class StepExecutionContext:
                     except Exception as e:
                         self.log(f"【获取变量】占位符解析失败, 引用变量({var_name})引发未知异常, 保留原值, 错误描述: {e}")
                         return match.group(0)
-                    try:
-                        self.log("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
-                        return str(resolved)
-                    except Exception as e:
-                        self.log(
-                            f"【获取变量】将变量[{var_name}]的值[{resolved}]转换为字符串时失败, 保留原值, 错误描述: {e}")
-                        return match.group(0)
+                    self.log("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                    return str(resolved)
 
                 return _RE_PLACEHOLDER.sub(replace, value)
             if isinstance(value, dict):
@@ -433,7 +450,7 @@ class StepExecutionContext:
         """
         try:
             client = self.http_client
-            kwargs = {
+            kwargs: Dict[str, Any] = {
                 "headers": headers,
                 "params": params,
                 "data": data,
@@ -442,10 +459,18 @@ class StepExecutionContext:
             }
             if timeout is not None:
                 kwargs["timeout"] = timeout
-            filtered_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+            kwargs: Dict[str, Any] = {key: value for key, value in kwargs.items() if value is not None}
+            raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
+            # 对请求头中的中文进行 UTF-8 百分号编码
+            encoded_headers: Dict[str, Any] = {}
+            for key, value in raw_headers.items():
+                encoded_headers[key] = urllib.parse.quote(value, encoding="utf-8") if isinstance(value, str) else value
+
+            # 把编码后的 headers 放回 kwargs
+            kwargs["headers"] = encoded_headers
             self.log(f"【HTTP请求】请求方式: {method}")
             self.log(f"【HTTP请求】请求地址: {url}")
-            self.log(f"【HTTP请求】请求参数: {filtered_kwargs}")
+            self.log(f"【HTTP请求】请求参数: {kwargs}")
             try:
                 response = await client.request(method, url, **kwargs)
                 self.log(
@@ -885,18 +910,44 @@ class BaseStepExecutor:
             quote_case_id=self.quote_case_id,
             success=True,
         )
-        # 设置当前步骤编号
-        self.context.set_current_step_code(self.step_code)
+        # 设置当前步骤编号（先保存上一级 step_code 以便 finally 中恢复）
         previous_step_code: Optional[int] = self.context.current_step_code
+        self.context.set_current_step_code(self.step_code)
         # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
         step_defined = self.step.get("defined_variables") or []
         self.context.defined_variables = list(step_defined) if isinstance(step_defined, list) else []
+        # 参数化驱动：设置当前步骤的数据集作用域（上传文件中该步骤 head/body/assert 展平）及结构化数据供报文替换
+        if getattr(self.context, "dataset_snapshot_per_step", None) and self.step_code:
+            step_data = self.context.dataset_snapshot_per_step.get(self.step_code, {})
+            if isinstance(step_data, dict):
+                head = step_data.get("head") or {}
+                body = step_data.get("body") or {}
+                assert_ = step_data.get("assert") or {}
+                self.context.step_dataset_scope = {**head, **body, **assert_}
+                self.context.current_step_dataset_structure = {"head": head, "body": body, "assert": assert_}
+            else:
+                self.context.step_dataset_scope = None
+                self.context.current_step_dataset_structure = None
+        else:
+            self.context.step_dataset_scope = None
+            self.context.current_step_dataset_structure = None
         try:
             await self._execute(result)
-        except Exception as e:
+        except Exception as e:  # 会导致重复异常的信息展示在log中
             result.success = False
-            result.error = str(e)
-            self.context.log(str(e), step_code=previous_step_code)
+            # 不再在此处 log：各执行器在 _execute 内已记录完整错误信息，避免重复
+            # self.context.log(str(e), step_code=previous_step_code)
+            if not result.error:
+                result.error = str(e)
+            # -----------------------------------------------------------------------
+            # 本 except Exception 不能删除，约定各个execute()必须返回一个 StepExecutionResult，所以不能把异常继续往上抛。
+            # 各执行器在 _execute 内的行为：捕获异常后设置 result.success=False、result.error=
+            # format_step_error_message(...)，并 self.context.log(result.error)，再 raise。
+            # 返回到此处时：异常已被捕获，result 可能已由执行器填好 error，且错误已记入 context.logs。
+            # 此处仅做：补全 result.success=False、未设置时补全 result.error，且不再 log（避免重复）；
+            # 不 re-raise，让后面的 finally 正常跑完（合并变量、计算 elapsed、保存明细），然后 return result。
+            # 这样，无论本步成功还是失败，调用方拿到的都是同一个 StepExecutionResult，可以统一做 append 和统计。
+            # -----------------------------------------------------------------------
         finally:
             try:
                 # 将本步骤的 extract_variables 合并到 session_variables，供后续步骤引用
@@ -968,6 +1019,9 @@ class BaseStepExecutor:
             result_extract = getattr(result, "extract_variables", None)
             extract_variables = list(result_extract) if isinstance(result_extract, list) else []
             session_variables = list(self.context.session_variables) if self.context.session_variables else []
+            ds_per_step = getattr(self.context, "dataset_snapshot_per_step", None)
+            has_data_driven = bool(ds_per_step and self.step_code and self.step_code in ds_per_step)
+            req = getattr(result, "request", None) or {}
             detail_create = AutoTestApiDetailCreate(
                 case_id=self.context.case_id,
                 case_code=self.context.case_code,
@@ -984,6 +1038,15 @@ class BaseStepExecutor:
                 step_exec_logger=step_exec_logger,
                 step_exec_except=result.error,
                 num_cycles=num_cycles,
+                request_header=req.get("request_header"),
+                request_params=req.get("request_params"),
+                request_form_data=req.get("request_form_data"),
+                request_form_urlencoded=req.get("request_form_urlencoded"),
+                request_form_file=req.get("request_form_file"),
+                request_body=req.get("request_body"),
+                request_text=req.get("request_text"),
+                dataset_snapshot=ds_per_step[self.step_code] if has_data_driven else None,
+                dataset_name=getattr(self.context, "dataset_name", None) if has_data_driven else None,
                 response_cookie=response_cookie or None,
                 response_header=response_header or None,
                 response_body=response_body or None,
@@ -1032,16 +1095,7 @@ class BaseStepExecutor:
                 step_code: str = child.get("step_code")
                 step_name: str = child.get("step_name")
                 step_type: str = child.get("step_type")
-                error_message: str = (
-                    f"子步骤执行失败: "
-                    f"用例ID: {case_id}, "
-                    f"步骤序号: {step_no}, "
-                    f"步骤标识: {step_code}, "
-                    f"步骤名称: {step_name}, "
-                    f"步骤类型: {step_type}, "
-                    f"错误类型: {type(e).__name__}, "
-                    f"错误详情: {e}"
-                )
+                error_message: str = AutoTestToolService.format_step_error_message(step=child, exception=e, is_child_step=True)
                 self.context.log(error_message, step_code=step_code)
                 failed_result = StepExecutionResult(
                     case_id=case_id,
@@ -1098,22 +1152,11 @@ class LoopStepExecutor(BaseStepExecutor):
                     f"【循环结构】循环模式[{loop_mode_str}]无效"
                     f"(仅允许选择: 次数循环, 对象循环, 字典循环, 条件循环)"
                 )
-
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"子步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 
@@ -1540,18 +1583,9 @@ class LoopStepExecutor(BaseStepExecutor):
         :return: 条件是否满足。
         """
         try:
-            normalized_condition = re.sub(r'\bNone\b', 'null', condition)
-            normalized_condition = re.sub(r'\bTrue\b', 'true', normalized_condition)
-            normalized_condition = re.sub(r'\bFalse\b', 'false', normalized_condition)
-            condition_obj = json.loads(normalized_condition)
-        except json.JSONDecodeError as e:
-            raise StepExecutionError(
-                f"【循环结构】条件表达式不是有效的JSON格式, "
-                f"错误位置: 第{e.lineno}行, 第{e.colno}列, "
-                f"错误信息: {e.msg}"
-            ) from e
-        except Exception as e:
-            raise StepExecutionError(f"【循环结构】条件表达式解析异常, 错误详情: {e}") from e
+            condition_obj = AutoTestToolService.parse_condition_json(condition, "循环结构")
+        except ValueError as e:
+            raise StepExecutionError(str(e)) from e
 
         value_expr = condition_obj.get("value")
         operation = condition_obj.get("operation")
@@ -1574,7 +1608,7 @@ class LoopStepExecutor(BaseStepExecutor):
                 raise
             raise StepExecutionError(f"【循环结构】条件表达式中占位符解析异常, 错误描述: {e}") from e
         try:
-            return ConditionStepExecutor.compare(value, operation, except_value)
+            return AutoTestToolService.compare_assertion(value, operation, except_value)
         except Exception as e:
             raise StepExecutionError(f"【循环结构】条件表达式执行异常, 错误描述: {e}") from e
 
@@ -1616,19 +1650,9 @@ class ConditionStepExecutor(BaseStepExecutor):
             if not condition:
                 raise StepExecutionError("【条件分支】缺少必要配置: conditions")
             try:
-                normalized_condition = re.sub(r'\bNone\b', 'null', condition)
-                normalized_condition = re.sub(r'\bTrue\b', 'true', normalized_condition)
-                normalized_condition = re.sub(r'\bFalse\b', 'false', normalized_condition)
-                condition_obj = json.loads(normalized_condition)
-            except json.JSONDecodeError as e:
-                raise StepExecutionError(
-                    f"【条件分支】条件表达式不是有效的JSON格式: "
-                    f"错误位置: 第{e.lineno}行, 第{e.colno}列, "
-                    f"错误类型: {type(e).__name__}"
-                    f"错误信息: {e}"
-                ) from e
-            except Exception as e:
-                raise StepExecutionError(f"【条件分支】条件表达式解析异常, 错误详情: {e}") from e
+                condition_obj = AutoTestToolService.parse_condition_json(condition, "条件分支")
+            except ValueError as e:
+                raise StepExecutionError(str(e)) from e
 
             value_expr = condition_obj.get("value")
             operation = condition_obj.get("operation")
@@ -1661,7 +1685,7 @@ class ConditionStepExecutor(BaseStepExecutor):
                 raise StepExecutionError(f"【条件分支】条件表达式中变量解析异常, 错误描述: {e}") from e
 
             try:
-                if not self.compare(value, operation, except_value):
+                if not AutoTestToolService.compare_assertion(value, operation, except_value):
                     result.success = True
                     result.message = f"【条件分支】条件未满足: {desc}"
                     self.context.log(result.message, step_code=self.step_code)
@@ -1683,33 +1707,9 @@ class ConditionStepExecutor(BaseStepExecutor):
                 result.error = error_message
                 self.context.log(error_message, step_code=self.step_code)
         except Exception as e:
-            error_message: str = (
-                f"【条件分支】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
             self.context.log(result.error, step_code=self.step_code)
-
-    @staticmethod
-    def compare(value: Any, operation: str, except_value: Any) -> bool:
-        """
-        委托 AutoTestToolService.compare_assertion 做条件比较，ValueError 转为 StepExecutionError。
-        :param value: 实际值。
-        :param operation: 操作符名称（如 "等于"、"包含"）。
-        :param except_value: 期望值。
-        :return: 比较是否通过。
-        """
-        try:
-            return AutoTestToolService.compare_assertion(value, operation, except_value)
-        except ValueError as e:
-            raise StepExecutionError(f"【条件分支】条件比较失败: {e}") from e
 
 
 class PythonStepExecutor(BaseStepExecutor):
@@ -1727,17 +1727,7 @@ class PythonStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                error_message: str = (
-                    f"【执行代码请求(Python)】步骤执行失败: "
-                    f"用例ID: {self.case_id}, "
-                    f"步骤序号: {self.step_no}, "
-                    f"步骤标识: {self.step_code}, "
-                    f"步骤名称: {self.step_name}, "
-                    f"步骤类型: {self.step_type}, "
-                    f"错误类型: {type(e).__name__}, "
-                    f"错误详情: {e}"
-                )
-                raise StepExecutionError(error_message) from e
+                raise StepExecutionError(AutoTestToolService.format_step_error_message(self.step, e, is_child_step=False)) from e
 
             if new_vars:
                 try:
@@ -1766,20 +1756,10 @@ class PythonStepExecutor(BaseStepExecutor):
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"【执行代码请求(Python)】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
-            self.context.log(error_message, step_code=self.step_code)
-            raise StepExecutionError(error_message) from e
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
 
 
 class WaitStepExecutor(BaseStepExecutor):
@@ -1808,18 +1788,8 @@ class WaitStepExecutor(BaseStepExecutor):
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"【等待控制】步骤执行异常: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 
@@ -1844,18 +1814,8 @@ class UserVariablesStepExecutor(BaseStepExecutor):
         except (AttributeError, StepExecutionError) as e:
             raise StepExecutionError(f"【用户变量】解析或执行失败: {e}") from e
         except Exception as e:
-            error_message: str = (
-                f"【用户变量】步骤执行异常: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 
@@ -1926,16 +1886,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     step_code: str = quote_step.get("step_code")
                     step_name: str = quote_step.get("step_name")
                     step_type: str = quote_step.get("step_type")
-                    error_message: str = (
-                        f"【引用公共脚本】步骤执行失败: "
-                        f"用例ID: {case_id}, "
-                        f"步骤序号: {step_no}, "
-                        f"步骤标识: {step_code}, "
-                        f"步骤名称: {step_name}, "
-                        f"步骤类型: {step_type}, "
-                        f"错误类型: {type(e).__name__}, "
-                        f"错误详情: {e}"
-                    )
+                    error_message: str = AutoTestToolService.format_step_error_message(step=quote_step, exception=e, is_child_step=True)
                     self.context.log(error_message, step_code=step_code)
                     failed_result = StepExecutionResult(
                         case_id=case_id,
@@ -1956,20 +1907,10 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"【引用公共脚本】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
-            self.context.log(error_message, step_code=self.step_code)
-            raise StepExecutionError(error_message) from e
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
 
 
 class TcpStepExecutor(BaseStepExecutor):
@@ -2022,16 +1963,12 @@ class HttpStepExecutor(BaseStepExecutor):
             if not request_url:
                 raise StepExecutionError("【HTTP请求】HTTP请求配置错误: 请求URL(request_url)未配置")
 
-            # 处理变量占位符
-            # request_header、request_params、request_form_data、request_form_urlencoded 必须是列表格式
-            # 每个元素包含 key、value、desc
+            # 先转成字典，再「先数据驱动替换、再变量占位符替换」，保证最终报文 = 数据驱动覆盖后再占位符替换
             request_header_raw = self.step.get("request_header")
             request_params_raw = self.step.get("request_params")
             request_form_data_raw = self.step.get("request_form_data")
             request_form_urlencoded_raw = self.step.get("request_form_urlencoded")
             request_form_file_raw = self.step.get("request_form_file")
-
-            # 确保是列表格式，如果不是则转换为空列表
             if not isinstance(request_header_raw, list):
                 request_header_raw = []
             if not isinstance(request_params_raw, list):
@@ -2041,21 +1978,63 @@ class HttpStepExecutor(BaseStepExecutor):
             if not isinstance(request_form_urlencoded_raw, list):
                 request_form_urlencoded_raw = []
 
-            # 解析占位符
-            headers_list = self.context.resolve_placeholders(request_header_raw)
-            params_list = self.context.resolve_placeholders(request_params_raw)
-            form_data_list = self.context.resolve_placeholders(request_form_data_raw)
-            urlencoded_list = self.context.resolve_placeholders(request_form_urlencoded_raw)
+            # 1）转成字典（尚未解析占位符）
+            headers = AutoTestToolService.convert_list_to_dict_for_http(request_header_raw)
+            params_payload = AutoTestToolService.convert_list_to_dict_for_http(request_params_raw)
+            form_data = AutoTestToolService.convert_list_to_dict_for_http(request_form_data_raw)
+            urlencoded = AutoTestToolService.convert_list_to_dict_for_http(request_form_urlencoded_raw)
             form_files_list = self.context.resolve_placeholders(request_form_file_raw)
-            request_body = self.context.resolve_placeholders(self.step.get("request_body"))
-            request_text = self.context.resolve_placeholders(self.step.get("request_text"))
+            form_files = AutoTestToolService.convert_list_to_dict_for_http(form_files_list)
+            request_body = self.step.get("request_body")
+            if isinstance(request_body, str):
+                try:
+                    request_body = json.loads(request_body) if request_body.strip() else {}
+                except (TypeError, json.JSONDecodeError):
+                    request_body = request_body
+            request_text = self.step.get("request_text")
 
-            # 转换为字典格式（用于HTTP请求）
-            headers = self.context.convert_list_to_dict_for_http(headers_list)
-            params_payload = self.context.convert_list_to_dict_for_http(params_list)
-            form_data = self.context.convert_list_to_dict_for_http(form_data_list)
-            urlencoded = self.context.convert_list_to_dict_for_http(urlencoded_list)
-            form_files = self.context.convert_list_to_dict_for_http(form_files_list)
+            # 2）若有数据驱动，先按 JSONPath 做报文替换（找得到就替换，找不到就忽略；JSONPathUtils 原地修改 dict，不依赖返回值）
+            step_struct = getattr(self.context, "current_step_dataset_structure", None)
+            has_data_driven = (
+                    isinstance(step_struct, dict)
+                    and (step_struct.get("head") or step_struct.get("body") or step_struct.get("assert"))
+            )
+            if has_data_driven:
+                head_map = step_struct.get("head") or {}
+                body_map = step_struct.get("body") or {}
+                for jpath, val in head_map.items():
+                    if not jpath:
+                        continue
+                    key = _header_key_from_jsonpath(jpath)
+                    if key and headers is not None and key in headers:
+                        headers[key] = val
+                if body_map:
+                    if isinstance(request_body, dict):
+                        for jpath, val in body_map.items():
+                            JSONPathUtils.update(request_body, jpath, val)
+                    elif isinstance(request_body, str):
+                        try:
+                            payload_dict = json.loads(request_body) if request_body.strip() else {}
+                            if isinstance(payload_dict, dict):
+                                for jpath, val in body_map.items():
+                                    JSONPathUtils.update(payload_dict, jpath, val)
+                                request_body = payload_dict
+                        except (TypeError, json.JSONDecodeError):
+                            pass
+                    if isinstance(form_data, dict):
+                        for jpath, val in body_map.items():
+                            JSONPathUtils.update(form_data, jpath, val)
+                    if isinstance(urlencoded, dict):
+                        for jpath, val in body_map.items():
+                            JSONPathUtils.update(urlencoded, jpath, val)
+
+            # 3）再对报文做变量占位符解析
+            headers = self.context.resolve_placeholders(headers)
+            params_payload = self.context.resolve_placeholders(params_payload)
+            form_data = self.context.resolve_placeholders(form_data)
+            urlencoded = self.context.resolve_placeholders(urlencoded)
+            request_body = self.context.resolve_placeholders(request_body)
+            request_text = self.context.resolve_placeholders(request_text)
 
             # 按 request_args_type 选取请求体类型，仅使用一种方式，避免冲突
             request_args_type_raw = self.step.get("request_args_type")
@@ -2090,6 +2069,16 @@ class HttpStepExecutor(BaseStepExecutor):
                 file_payload = form_files if form_files else None
             elif args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
                 data_payload = urlencoded
+            # 先写入实际发往目标服务器的数据，避免后续处理 response 异常时落库拿不到 request
+            result.request = {
+                "request_header": headers,
+                "request_params": params_payload,
+                "request_form_data": form_data,
+                "request_form_urlencoded": urlencoded,
+                "request_form_file": form_files,
+                "request_body": json_payload,
+                "request_text": request_text,
+            }
             try:
                 response = await self.context.send_http_request(
                     request_method,
@@ -2113,7 +2102,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 )
             except Exception as e:
                 raise StepExecutionError(
-                    f"【HTTP请求】请求 {request_method} {request_url} 时发生未预期的异常, 错误详情: {e}"
+                    f"【HTTP请求】请求 {request_method} {request_url} 时发生未预期的异常, 错误详情: {e}\n{traceback.format_exc()}"
                 ) from e
 
             try:
@@ -2165,6 +2154,46 @@ class HttpStepExecutor(BaseStepExecutor):
                     response_headers=result.response.get("response_headers") if result.response else None,
                     response_cookies=result.response.get("response_cookies") if result.response else None,
                 )
+                # 参数化驱动：当前场景的 assert（JSONPath -> 期望值）从响应 JSON 中取值并做等于比较
+                step_struct = getattr(self.context, "current_step_dataset_structure", None)
+                assert_map = isinstance(step_struct, dict) and (step_struct.get("assert") or {}) or {}
+                for jpath, except_val in assert_map.items():
+                    if not jpath:
+                        continue
+                    try:
+                        actual_val = self.extract_from_source(
+                            source="response json",
+                            expr=jpath,
+                            range_type="SOME",
+                            index=None,
+                            response_text=result.response.get("text") if result.response else None,
+                            response_json=response_json,
+                            response_headers=result.response.get("response_headers") if result.response else None,
+                            response_cookies=result.response.get("response_cookies") if result.response else None,
+                            operation_type="断言验证",
+                        )
+                        success = AutoTestToolService.compare_assertion(actual_val, "等于", except_val)
+                        validator_results.append({
+                            "name": jpath,
+                            "expr": jpath,
+                            "source": "response json",
+                            "operation": "equals",
+                            "except_value": except_val,
+                            "actual_value": actual_val,
+                            "success": success,
+                            "error": "" if success else "断言失败",
+                        })
+                    except Exception as e:
+                        validator_results.append({
+                            "name": jpath,
+                            "expr": jpath,
+                            "source": "response json",
+                            "operation": "equals",
+                            "except_value": except_val,
+                            "actual_value": None,
+                            "success": False,
+                            "error": str(e),
+                        })
                 result.assert_validators.extend(validator_results)
                 assert_failed_number: int = 0
                 for valid in validator_results:
@@ -2191,19 +2220,9 @@ class HttpStepExecutor(BaseStepExecutor):
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"【HTTP请求】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
-            self.context.log(error_message, step_code=self.step_code)
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 
     def extract_variables(
@@ -2303,17 +2322,7 @@ class HttpStepExecutor(BaseStepExecutor):
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"【变量提取】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
-            raise StepExecutionError(error_message) from e
+            raise StepExecutionError(AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)) from e
 
     def extract_from_source(
             self,
@@ -2358,7 +2367,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 if isinstance(extracted, list) and index is not None:
                     try:
                         index_int: int = int(index)
-                        if index < len(extracted):
+                        if index_int < len(extracted):
                             return extracted[index_int]
                         else:
                             raise StepExecutionError(
@@ -2426,9 +2435,9 @@ class HttpStepExecutor(BaseStepExecutor):
                 except re.error as e:
                     raise StepExecutionError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
 
-        elif source.lower() == "response headers":
+        elif source.lower() == "response header":
             if not response_headers:
-                raise StepExecutionError(f"【{operation_type}】响应 Headers 为空")
+                raise StepExecutionError(f"【{operation_type}】响应header为空")
             if range_type.lower() == "all":
                 return response_headers
             else:
@@ -2503,7 +2512,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 operation = validator_config.get("operation")
                 except_value = validator_config.get("except_value")
                 source = validator_config.get("source")
-                if not expr or not operation or not except_value:
+                if not expr or not operation:
                     self.context.log(
                         f"【断言验证】表达式子项解析无效(跳过): "
                         f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数",
@@ -2527,9 +2536,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 except Exception as e:
                     raise StepExecutionError(f"【断言验证】提取实际值失败, 错误描述: {e}") from e
                 try:
-                    success = ConditionStepExecutor.compare(actual_value, operation, except_value)
-                except StepExecutionError:
-                    raise
+                    success = AutoTestToolService.compare_assertion(actual_value, operation, except_value)
                 except Exception as e:
                     raise StepExecutionError(f"【断言验证】比较失败: [{validator_config}], 错误描述: {e}") from e
                 valid_results.append({
@@ -2546,17 +2553,7 @@ class HttpStepExecutor(BaseStepExecutor):
         except StepExecutionError:
             raise
         except Exception as e:
-            error_message: str = (
-                f"【断言验证】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
-            raise StepExecutionError(error_message) from e
+            raise StepExecutionError(AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)) from e
 
 
 class DefaultStepExecutor(BaseStepExecutor):
@@ -2570,20 +2567,10 @@ class DefaultStepExecutor(BaseStepExecutor):
                 if not child.success:
                     result.success = False
         except Exception as e:
-            error_message: str = (
-                f"【默认步骤】步骤执行失败: "
-                f"用例ID: {self.case_id}, "
-                f"步骤序号: {self.step_no}, "
-                f"步骤标识: {self.step_code}, "
-                f"步骤名称: {self.step_name}, "
-                f"步骤类型: {self.step_type}, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误详情: {e}"
-            )
             result.success = False
-            result.error = error_message
-            self.context.log(error_message, step_code=self.step_code)
-            raise StepExecutionError(error_message) from e
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
 
 
 class StepExecutorFactory:
@@ -2664,7 +2651,11 @@ class AutoTestStepExecutionEngine:
             *,
             env_name: Optional[str] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
-    ) -> Tuple[List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]], Optional[AutoTestApiReportCreate], Optional[List[AutoTestApiDetailCreate]]]:
+            dataset_name: Optional[str] = None,
+            dataset_snapshot_per_step: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Tuple[
+        List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]], Optional[AutoTestApiReportCreate],
+        Optional[List[AutoTestApiDetailCreate]]]:
         """执行单用例：在上下文中按 step_no 执行根步骤，可选收集报告与明细供调用方落库。
 
         :param case: 用例信息字典，含 case_id、case_code、case_name。
@@ -2672,6 +2663,8 @@ class AutoTestStepExecutionEngine:
         :param report_type: 报告类型枚举。
         :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
         :param initial_variables: 初始会话变量列表，每项含 key、value、desc。
+        :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细。
+        :param dataset_snapshot_per_step: 参数化时按 step_code 的该步骤 head/body/assert 展平，用于设置 step_dataset_scope，并写入对应步骤明细。
         :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。results 为根步骤执行结果列表；logs 按 step_code 分组；report_code 未保存时为 None；statistics 含 total_steps、success_steps、failed_steps、pass_ratio；session_variables 为执行后变量列表。当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case。
         """
         report_code = None
@@ -2693,6 +2686,8 @@ class AutoTestStepExecutionEngine:
                 report_code=report_code,
                 pending_details=pending_details_arg,
         ) as context:
+            context.dataset_name = dataset_name
+            context.dataset_snapshot_per_step = dataset_snapshot_per_step
             ordered_root_steps = sorted(steps, key=lambda item: item.get("step_no", 0) or 0)
             results: List[StepExecutionResult] = []
             for step in ordered_root_steps:

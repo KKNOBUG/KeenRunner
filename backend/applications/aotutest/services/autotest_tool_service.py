@@ -8,9 +8,11 @@
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple, Callable
+import traceback
+from typing import Any, Dict, List, Optional, Tuple
 
 from jsonpath_ng import parse as jsonpath_parse
 
@@ -20,6 +22,119 @@ from backend.common.generate_utils import GenerateUtils
 
 class AutoTestToolService:
     """自动化测试步骤与断言相关的工具类，不依赖实例状态，方法均为类方法或静态方法。"""
+
+    @staticmethod
+    def key_value_list_to_dict(
+            items: List[Dict[str, Any]],
+            *,
+            skip_if_no_value: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        将 key/value 列表转为键值对字典，供变量列表或 HTTP 参数使用。
+
+        :param items: 每项为含 key、value 的字典的列表。
+        :param skip_if_no_value: 为 True 时仅当项中含 "value" 键才加入结果；为 False 时仅要求 "key"，value 可为 None。
+        :return: 键值对字典；非列表入参返回空字典。
+        """
+        if not isinstance(items, list):
+            return {}
+        result = {}
+        for item in items:
+            if not isinstance(item, dict) or "key" not in item:
+                continue
+            if skip_if_no_value and "value" not in item:
+                continue
+            key = item.get("key")
+            if key:
+                result[key] = item.get("value")
+        return result
+
+    @staticmethod
+    def list_to_dict(variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        将 key/value/desc 列表转为 name -> value 字典，供 **Python 代码命名空间** 使用。
+
+        与 convert_list_to_dict_for_http 的区别：本函数仅保留含 "value" 键的项（skip_if_no_value=True），
+        无 value 的项不进入结果，避免在 exec 命名空间中注入 key->None 导致歧义或异常。
+        使用处：StepExecutionContext.clone_state()，将 defined_variables / session_variables 转为字典后
+        作为 run_python_code(..., namespace=...) 的命名空间。
+
+        :param variable_list: 变量列表，每项为含 key、value 的字典。
+        :return: 键为变量名、值为变量值的字典。
+        """
+        return AutoTestToolService.key_value_list_to_dict(
+            variable_list if isinstance(variable_list, list) else [],
+            skip_if_no_value=True,
+        )
+
+    @staticmethod
+    def convert_list_to_dict_for_http(data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        将 key/value/desc 列表转为 key -> value 字典，供 **HTTP 请求头/参数/表单** 使用。
+
+        与 list_to_dict 的区别：本函数不要求项必有 "value"（skip_if_no_value=False），只要有 "key" 即加入结果，
+        value 可为 None，以支持 HTTP 中合法的空值（如空 header、未填表单字段）。
+        使用处：HttpStepExecutor 中将 request_header、request_params、form_data、urlencoded、form_files
+        等列表转为字典后传给 httpx 发请求。
+
+        :param data: 每项含 key、value 的列表。
+        :return: 键值对字典；非列表入参返回空字典。
+        """
+        return AutoTestToolService.key_value_list_to_dict(
+            data if isinstance(data, list) else [],
+            skip_if_no_value=False,
+        )
+
+    @staticmethod
+    def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
+        """
+        从 key/value/desc 列表中取 key 为 name 的项的 value。
+
+        :param variable_list: 变量列表，每项为含 key、value 的字典。
+        :param name: 要查找的 key 名。
+        :return: 对应的 value，未找到返回 None。
+        """
+        if not isinstance(variable_list, list):
+            return None
+        for item in variable_list:
+            if isinstance(item, dict) and item.get("key") == name:
+                return item.get("value")
+        return None
+
+    @classmethod
+    def format_step_error_message(
+            cls,
+            step: Dict[str, Any],
+            exception: Exception,
+            is_child_step: bool = False,
+    ) -> str:
+        """
+        格式化步骤执行失败信息，供步骤引擎中各类执行器统一使用。
+
+        :param step: 步骤数据字典，含 case_id、step_id、step_no、step_code、step_name、step_type 等。
+        :param exception: 异常对象；错误回溯使用 traceback.format_exc()，在 except 块内调用时即为该异常的堆栈。
+        :param is_child_step: 是否为子步骤（True=子步骤，False=根步骤）。
+        :return: 格式化后的错误字符串。
+        """
+        message: str = "【子步骤】" if is_child_step else "【根步骤】"
+        case_id = step.get("case_id")
+        step_id = step.get("step_id")
+        step_no = step.get("step_no")
+        step_code = step.get("step_code")
+        step_name = step.get("step_name")
+        step_type = step.get("step_type")
+        return (
+            f"{message}执行失败: \n"
+            f"用例ID: {case_id}, \n"
+            f"步骤ID: {step_id}, \n"
+            f"步骤序号: {step_no}, \n"
+            f"步骤标识: {step_code}, \n"
+            f"步骤名称: {step_name}, \n"
+            f"步骤类型: {step_type}, \n"
+            f"错误类型: {type(exception).__name__}, \n"
+            f"错误描述: {exception}, \n"
+            f"错误回溯: {traceback.format_exc()}\n"
+        )
 
     @classmethod
     def resolve_json_path(cls, data: Any, expr: str) -> Any:
@@ -130,8 +245,7 @@ class AutoTestToolService:
             "大于等于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x >= y),
             "小于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x < y),
             "小于等于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x <= y),
-            "长度等于": lambda a, b: len(str(a)) == int(cls._normalize_value(b)) if cls._normalize_value(
-                b) is not None else False,
+            "长度等于": lambda a, b: (lambda nb: len(str(a)) == int(nb) if nb is not None else False)(cls._normalize_value(b)),
             "包含": lambda a, b: str(b) in str(a),
             "不包含": lambda a, b: str(b) not in str(a),
             "以...开始": lambda a, b: str(a).startswith(str(b)),
@@ -145,7 +259,31 @@ class AutoTestToolService:
         try:
             return comparator(actual, expected)
         except Exception as e:
-            raise ValueError(f"断言比较失败: {str(e)}")
+            raise ValueError(f"条件比较失败: {str(e)}")
+
+    @classmethod
+    def parse_condition_json(cls, condition: str, error_prefix: str) -> Dict[str, Any]:
+        """
+        将条件字符串中 Python 风格 None/True/False 转为 JSON 后解析为字典，供步骤引擎中「循环结构」「条件分支」等使用。
+
+        :param condition: JSON 格式条件字符串，含 value、operation、except_value 等。
+        :param error_prefix: 错误信息前缀，如 "循环结构"、"条件分支"。
+        :return: 解析后的条件字典。
+        :raises ValueError: 非合法 JSON 或解析异常时，错误信息会包含 error_prefix。
+        """
+        try:
+            normalized = re.sub(r'\bNone\b', 'null', condition)
+            normalized = re.sub(r'\bTrue\b', 'true', normalized)
+            normalized = re.sub(r'\bFalse\b', 'false', normalized)
+            return json.loads(normalized)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"【{error_prefix}】条件表达式不是有效的JSON格式, "
+                f"错误位置: 第{e.lineno}行, 第{e.colno}列, "
+                f"错误信息: {e.msg}"
+            ) from e
+        except Exception as e:
+            raise ValueError(f"【{error_prefix}】条件表达式解析异常, 错误详情: {e}") from e
 
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
@@ -179,21 +317,24 @@ class AutoTestToolService:
             # 检查步骤类型是否允许有子步骤
             if step.children and len(step.children) > 0:
                 if step.step_type not in allowed_children_types:
-                    return False, f"步骤(step_id={step_id}, step_code={step_code or 'N/A'}, step_type={step.step_type})不允许包含子步骤，仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
+                    return False, (
+                        f"步骤(step_id={step_id}, step_code={step_code or 'N/A'}, "
+                        f"step_type={step.step_type})不允许包含子步骤, 仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
+                    )
 
                 # 递归检查子步骤
                 for child in step.children:
-                    is_valid, error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())
-                    if not is_valid:
-                        return False, error_msg
+                    child_is_valid, child_error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())
+                    if not child_is_valid:
+                        return False, child_error_msg
 
             return True, None
 
         # 检查所有根步骤
-        for step in steps_data:
-            is_valid, error_msg = check_step_recursive(step, set(), [])
-            if not is_valid:
-                return False, error_msg
+        for step_data in steps_data:
+            root_is_valid, root_error_msg = check_step_recursive(step_data, set(), [])
+            if not root_is_valid:
+                return False, root_error_msg
 
         return True, None
 
@@ -268,8 +409,20 @@ class AutoTestToolService:
         if func_args.strip():
             _args = func_args.split(",")
             for item in _args:
-                key, value = item.split("=")
-                args_dict[str(key).strip()] = eval(value)
+                # key, value = item.split("=")
+                # args_dict[str(key).strip()] = eval(value)
+                part = item.strip()
+                if "=" not in part:
+                    continue
+                key, _, value_part = part.partition("=")
+                key = str(key).strip()
+                value_part = value_part.strip()
+                try:
+                    args_dict[key] = ast.literal_eval(value_part)
+                except (ValueError, SyntaxError):
+                    raise ValueError(
+                        f"【函数参数解析】仅支持字面量(数字、字符串、布尔、None等), 非法参数: {key}={value_part!r}"
+                    )
         return func_name.strip(), args_dict
 
     @classmethod
@@ -289,7 +442,10 @@ class AutoTestToolService:
             func_string = item.get("value")
             if not key or not isinstance(func_string, str):
                 continue
-            func_name, func_args = cls._parse_funcname_funcargs(func_string)
+            try:
+                func_name, func_args = cls._parse_funcname_funcargs(func_string)
+            except ValueError as e:
+                raise AttributeError(f"占位符函数参数解析失败: {e}") from e
             if not func_name and not func_args:
                 continue
             if not hasattr(GenerateUtils, func_name):
@@ -313,7 +469,10 @@ class AutoTestToolService:
         :return: 函数返回值。
         :raises AttributeError: 非函数形式或函数不存在/执行失败。
         """
-        func_name, func_args = cls._parse_funcname_funcargs(content)
+        try:
+            func_name, func_args = cls._parse_funcname_funcargs(content)
+        except ValueError as e:
+            raise AttributeError(f"占位符函数参数解析失败: {e}") from e
         if not func_name:
             raise AttributeError(f"占位符内容不是有效的函数调用形式: {content}")
         if not hasattr(GenerateUtils, func_name):
@@ -327,43 +486,3 @@ class AutoTestToolService:
             raise AttributeError(f"辅助函数[{func_name}]语法解析失败: {e}") from e
         except Exception as e:
             raise AttributeError(f"辅助函数[{func_name}]执行失败: {e}") from e
-
-    _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
-
-    @classmethod
-    def resolve_value_placeholders(
-            cls,
-            value_str: str,
-            get_variable: Callable[[str], Any],
-    ) -> str:
-        """
-        对字符串中的每个 ${...} 做一次遍历：内容为函数调用则执行并替换，否则按变量名用 get_variable 替换。
-        支持混合形式如 name_${name}、${name}${age}、${name}${generate_uuid()} 等，无需先变量后函数两遍遍历。
-
-        :param value_str: 可能包含 ${var} 或 ${func()} 的字符串。
-        :param get_variable: 按变量名取值的可调用对象，未定义时应抛出 KeyError。
-        :return: 替换后的字符串；变量未定义时保留原占位符。
-        """
-        if not isinstance(value_str, str):
-            return value_str
-
-        def replace(match: re.Match[str]) -> str:
-            content = match.group(1).strip()
-            if not content:
-                return match.group(0)
-            func_name, func_args = cls._parse_funcname_funcargs(content)
-            if func_name and hasattr(GenerateUtils, func_name):
-                try:
-                    result = getattr(GenerateUtils, func_name)(**(func_args or {}))
-                    return str(result)
-                except (TypeError, SyntaxError, Exception) as e:
-                    raise AttributeError(f"辅助函数[{func_name}]执行失败: {e}") from e
-            try:
-                resolved = get_variable(content)
-                return str(resolved) if resolved is not None else ""
-            except KeyError:
-                return match.group(0)
-            except Exception:
-                return match.group(0)
-
-        return cls._RE_PLACEHOLDER.sub(replace, value_str)

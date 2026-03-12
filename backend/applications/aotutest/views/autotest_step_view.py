@@ -1236,8 +1236,8 @@ async def execute_step_tree(
             try:
                 file_code = (request.file_code or "").strip() if getattr(request, "file_code", None) else ""
                 selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
-                # file_code = "1773046667-E85BB7BE911E4E8799EFEF21362FAC42"
-                # selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
+                file_code = "1773046667-E85BB7BE911E4E8799EFEF21362FAC42"
+                selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
                 # 参数化执行：有数据源 file_code + 选中数据集时，按数据集循环执行
                 if file_code and selected_dataset_names:
                     from backend.applications.aotutest.services.autotest_data_source_cache import get_parsed_data_for_execution
