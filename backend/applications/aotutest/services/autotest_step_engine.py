@@ -879,12 +879,12 @@ class BaseStepExecutor:
             # -----------------------------------------------------------------------
         finally:
             try:
-                # 将本步骤的 extract_variables 合并到 session_variables，供后续步骤引用
+                # 将本步骤的 extract_variables 合并到 session_variables，供后续步骤引用（仅合并提取成功的，避免失败项用 None 覆盖）
                 if getattr(result, "extract_variables", None) and isinstance(result.extract_variables, list):
                     extract_list = [
                         {"key": item.get("name"), "value": item.get("extract_value"), "desc": ""}
                         for item in result.extract_variables
-                        if isinstance(item, dict) and item.get("name") is not None
+                        if isinstance(item, dict) and item.get("name") is not None and item.get("success") is True
                     ]
                     if extract_list:
                         self.context.update_variables(extract_list, scope="session_variables")
@@ -2245,9 +2245,7 @@ class HttpStepExecutor(BaseStepExecutor):
                         f"【变量提取】[{name}]: 从[{source}]中提取成功, 数据: {extract_value}",
                         step_code=self.step_code
                     )
-                except StepExecutionError:
-                    raise
-                except Exception as e:
+                except (StepExecutionError, Exception) as e:
                     error_msg = str(e)
                     self.context.log(
                         f"【变量提取】[{name}]: 从[{source}]中提取失败, 原因: {e}",
