@@ -445,24 +445,17 @@ async def debug_http_request(
 
         # 将列表格式的 defined_variables\session_variables 转换为字典格式（用于变量查找）
         merge_all_variables: Dict[str, Any] = {}
-        defined_variables_dict: Dict[str, Any] = {
-            item["key"]: item.get("value")
-            for item in defined_variables if isinstance(item, dict) and "key" in item
-        }
-        session_variables_dict: Dict[str, Any] = {
-            item["key"]: item.get("value")
-            for item in session_variables if isinstance(item, dict) and "key" in item
-        }
-        merge_all_variables.update(defined_variables_dict)
-        merge_all_variables.update(session_variables_dict)
-        for var_name, var_value in list(merge_all_variables.items()):
-            if "(" in var_value and ")" in var_value and not var_name:
-                AutoTestToolService.execute_func_string_single(content=var_value)
+        for item in defined_variables:
+            if isinstance(item, dict) and item.get("key"):
+                merge_all_variables[item["key"]] = item
+        for item in session_variables:
+            if isinstance(item, dict) and item.get("key"):
+                merge_all_variables[item["key"]] = item
+        initial_variables = list(merge_all_variables.values())
 
         # 日志辅助函数：添加时间戳和步骤名称
-        from datetime import datetime
         def format_log(message: str) -> str:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
 
         if not request_url.lower().startswith("http"):
@@ -495,80 +488,17 @@ async def debug_http_request(
             format_log(f"参数替换开始"),
         ]
 
-        def resolve_placeholders(value: Any) -> Any:
-            """支持嵌套结构中的 ${var} 占位符替换。"""
-            try:
-                if isinstance(value, str):
-                    pattern = re.compile(r"\$\{([^}]+)}")
-
-                    def replace(match: re.Match) -> str:
-                        var_name = match.group(1)
-                        if not var_name:
-                            logs.append("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
-                            return match.group(0)
-                        try:
-                            resolved = merge_all_variables[var_name]
-                        except KeyError:
-                            logs.append(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
-                            return match.group(0)
-                        except Exception as e:
-                            logs.append(
-                                f"【获取变量】占位符解析失败, 引用变量({var_name})引发未知异常, 保留原值, 错误描述: {e}")
-                            return match.group(0)
-                        try:
-                            logs.append("【获取变量】占位符解析成功, ${" + var_name + "} <=> " + f"{resolved}")
-                            return str(resolved)
-                        except Exception as e:
-                            logs.append(
-                                f"【获取变量】将变量[{var_name}]的值[{resolved}]转换为字符串时失败, 保留原值, 错误描述: {e}")
-                            return match.group(0)
-
-                    return pattern.sub(replace, value)
-
-                if isinstance(value, dict):
-                    try:
-                        return {k: resolve_placeholders(v) for k, v in value.items()}
-                    except Exception as e:
-                        logs.append(f"【获取变量】解析字典中的占位符时发生错误, 键: {list(value.keys())}, 错误: {e}")
-                        return value
-
-                if isinstance(value, list):
-                    try:
-                        # 处理列表格式的变量（每个元素包含key、value、desc）
-                        result = []
-                        for item in value:
-                            if isinstance(item, dict) and "key" in item and "value" in item:
-                                # 列表格式的变量项，只解析value字段
-                                resolved_item = dict(item)
-                                resolved_item["value"] = resolve_placeholders(item.get("value"))
-                                result.append(resolved_item)
-                            else:
-                                # 普通列表项，递归解析
-                                result.append(resolve_placeholders(item))
-                        return result
-                    except Exception as e:
-                        logs.append(f"【获取变量】解析列表中的占位符时发生错误, 列表长度: {len(value)}, 错误: {e}")
-                        return value
-                return value
-            except Exception as e:
-                logs.append(
-                    f"【获取变量】占位符解析过程中发生未知异常, 保留原值, "
-                    f"错误类型: {type(e).__name__}, "
-                    f"错误描述: {e}"
-                )
-                return value
-
         # 解析请求参数（列表格式）及 request_body、request_text 中的占位符
-        headers_list = resolve_placeholders(request_header)
-        params_list = resolve_placeholders(request_params)
-        form_data_list = resolve_placeholders(request_form_data)
-        urlencoded_list = resolve_placeholders(request_form_urlencoded)
-        form_files_list = resolve_placeholders(request_form_file)
+        finished_variables = AutoTestToolService.resolve_placeholders(initial_variables, logs.append, False, finished_variables={})
+        headers_list = AutoTestToolService.resolve_placeholders(request_header, logs.append, False, finished_variables=finished_variables)
+        params_list = AutoTestToolService.resolve_placeholders(request_params, logs.append, False, finished_variables=finished_variables)
+        form_data_list = AutoTestToolService.resolve_placeholders(request_form_data, logs.append, False, finished_variables=finished_variables)
+        urlencoded_list = AutoTestToolService.resolve_placeholders(request_form_urlencoded, logs.append, False, finished_variables=finished_variables)
+        form_files_list = AutoTestToolService.resolve_placeholders(request_form_file, logs.append, False, finished_variables=finished_variables)
         if request_body is not None:
-            request_body = resolve_placeholders(request_body)
+            request_body = AutoTestToolService.resolve_placeholders(request_body, logs.append, False, finished_variables=finished_variables)
         if request_text is not None:
-            request_text = resolve_placeholders(request_text)
-
+            request_text = AutoTestToolService.resolve_placeholders(request_text, logs.append, False, finished_variables=finished_variables)
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         def convert_list_to_dict(data_list):
