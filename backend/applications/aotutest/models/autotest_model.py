@@ -431,7 +431,8 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     # 数据集名称列表，如 ["场景1", "场景2", "场景3", ...]，便于前端多选
     dataset_names = fields.JSONField(default=list, description="数据驱动文件解析后的场景名称列表")
     # 存储格式：“dataset_{case_id}_{step_code}”
-    cache_key = fields.CharField(max_length=64, description="获取Redis中该步骤数据的缓存键名")
+    cache_key = fields.CharField(max_length=128, description="获取Redis中该步骤数据的缓存键名")
+    dataframe = fields.JSONField(default=list, null=True, description="数据驱动文件解析前的二维矩阵")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
