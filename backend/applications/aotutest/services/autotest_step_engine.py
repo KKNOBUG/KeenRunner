@@ -39,7 +39,7 @@ from backend.services.ctx import CTX_USER_ID
 
 # 1.匹配裸的占位符，如: ${xxx}
 _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
-# 匹配同一引号包裹的占位符，如: "${var}"
+# 2.匹配同一引号包裹的占位符，如: "${var}"
 _RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
 # 3.匹配同一引号内的拼接，如: "prefix_${var}_suffix"
 _RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
@@ -134,7 +134,8 @@ class StepExecutionContext:
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[Dict[str, Any]] = []
-        self.session_variables: List[Dict[str, Any]] = self.resolve_placeholders(initial_variables or [])
+        self.session_variables: List[Dict[str, Any]] = []
+        self.session_variables: List[Dict[str, Any]] = self.resolve_placeholders(initial_variables)
         self.timeout: float = 30.0
         self.connect: float = 10.0
 
@@ -169,6 +170,9 @@ class StepExecutionContext:
         except Exception as e:
             error_message: str = f"异步上下文管理器: 关闭HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
+
+    def resolve_placeholders(self, variables):
+        return AutoTestToolService.resolve_placeholders(variables or [], self.log, True, finished_variables=self)
 
     @property
     def http_client(self) -> HttpClientProtocol:
@@ -271,68 +275,6 @@ class StepExecutionContext:
                 return value
 
         raise KeyError(f"【获取变量】变量({name})未定义, 请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
-
-    def resolve_placeholders(self, value: Any) -> Any:
-        """
-        递归将字符串/字典/列表中的 ${var} 占位符替换为 get_variable(var) 的值；解析失败则保留原串。
-        :param value: 待解析的值，可为 str、dict、list 或其它类型。
-        :return: 替换后的值，结构与原 value 一致；非 str/dict/list 原样返回。
-        """
-        try:
-            if isinstance(value, str):
-                def replace(match: re.Match[str]) -> str:
-                    var_name = match.group(1).strip() if match.group(1) else ""
-                    if not var_name:
-                        self.log("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
-                        return match.group(0)
-                    # 引用函数规则：内容含左右括号则执行 GenerateUtils 并替换
-                    if "(" in var_name and ")" in var_name:
-                        try:
-                            resolved = AutoTestToolService.execute_func_string_single(var_name)
-                            self.log("【获取变量】占位符(函数)解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
-                            return str(resolved)
-                        except (AttributeError, Exception) as e:
-                            self.log(f"【获取变量】占位符解析失败, 引用函数({var_name})引发未知异常, 保留原值, 错误描述: {e}")
-                            return match.group(0)
-                    try:
-                        resolved = self.get_variable(var_name)
-                    except KeyError:
-                        self.log(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
-                        return match.group(0)
-                    except Exception as e:
-                        self.log(f"【获取变量】占位符解析失败, 引用变量({var_name})引发未知异常, 保留原值, 错误描述: {e}")
-                        return match.group(0)
-                    self.log("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
-                    return str(resolved)
-
-                return _RE_PLACEHOLDER.sub(replace, value)
-            if isinstance(value, dict):
-                try:
-                    return {k: self.resolve_placeholders(v) for k, v in value.items()}
-                except Exception as e:
-                    self.log(f"【获取变量】解析字典中的占位符时发生错误, 键: {list(value.keys())}, 错误: {e}")
-                    return value
-            if isinstance(value, list):
-                # 处理列表格式的变量（每个元素包含key、value、desc）
-                result = []
-                for item in value:
-                    if isinstance(item, dict) and "key" in item and "value" in item:
-                        # 列表格式的变量项，只解析value字段
-                        resolved_item = dict(item)
-                        resolved_item["value"] = self.resolve_placeholders(item.get("value"))
-                        result.append(resolved_item)
-                    else:
-                        # 普通列表项，递归解析
-                        result.append(self.resolve_placeholders(item))
-                return result
-            return value
-        except Exception as e:
-            self.log(
-                f"【获取变量】占位符解析过程中发生未知异常, 保留原值, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}"
-            )
-            return value
 
     async def sleep(self, seconds: Optional[float]) -> None:
         """
@@ -858,8 +800,8 @@ class BaseStepExecutor:
         previous_step_code: Optional[int] = self.context.current_step_code
         self.context.set_current_step_code(self.step_code)
         # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
-        step_defined = self.step.get("defined_variables") or []
-        self.context.defined_variables = list(step_defined) if isinstance(step_defined, list) else []
+        step_defined_variables = self.step.get("defined_variables") or []
+        self.context.defined_variables = self.context.resolve_placeholders(step_defined_variables)
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -903,11 +845,21 @@ class BaseStepExecutor:
                     await self._save_step_detail(result, step_st_time_str, num_cycles)
                 except Exception as e:
                     # 保存步骤明细失败不应该影响执行流程
-                    self.context.log(
-                        f"保存步骤明细(case_id={self.case_id}, step_id={self.step_id}, "
-                        f"step_no={self.step_no}, step_code={self.step_code})失败, 错误描述: {e}",
-                        step_code=self.step_code
+                    error_message: str = (
+                        f"保存步骤明细执行失败: \n"
+                        f"用例ID: {self.case_id}, \n"
+                        f"步骤ID: {self.step_id}, \n"
+                        f"步骤序号: {self.step_no}, \n"
+                        f"步骤标识: {self.step_code}, \n"
+                        f"步骤名称: {self.step_name}, \n"
+                        f"步骤类型: {self.step_type}, \n"
+                        f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
+                        f"错误类型: {type(e).__name__}, \n"
+                        f"错误描述: {e}, \n"
+                        f"错误回溯: {traceback.format_exc()}\n"
                     )
+                    print(error_message)
+                    self.context.log(error_message)
         return result
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
@@ -968,13 +920,13 @@ class BaseStepExecutor:
                 step_exec_logger=step_exec_logger,
                 step_exec_except=result.error,
                 num_cycles=num_cycles,
-                request_header=req.get("request_header"),
-                request_params=req.get("request_params"),
-                request_form_data=req.get("request_form_data"),
-                request_form_urlencoded=req.get("request_form_urlencoded"),
-                request_form_file=req.get("request_form_file"),
-                request_body=req.get("request_body"),
-                request_text=req.get("request_text"),
+                request_header=req.get("request_header") or None,
+                request_params=req.get("request_params") or None,
+                request_form_data=req.get("request_form_data") or None,
+                request_form_urlencoded=req.get("request_form_urlencoded") or None,
+                request_form_file=req.get("request_form_file") or None,
+                request_body=req.get("request_body") or None,
+                request_text=req.get("request_text") or None,
                 dataset_snapshot=ds_snapshot if has_data_driven else None,
                 dataset_name=ds_name if has_data_driven else None,
                 response_cookie=response_cookie or None,
@@ -997,6 +949,7 @@ class BaseStepExecutor:
                 f"保存步骤明细(case_id={self.case_id}, step_id={self.step_id}, "
                 f"step_no={self.step_no}, step_code={self.step_code})失败, 错误描述: {e}"
             )
+            print(error_message)
             raise StepExecutionError(error_message)
 
     async def _execute(self, result: StepExecutionResult) -> None:
