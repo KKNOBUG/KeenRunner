@@ -12,7 +12,8 @@ import ast
 import json
 import re
 import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
 from jsonpath_ng import parse as jsonpath_parse
 
@@ -131,6 +132,7 @@ class AutoTestToolService:
             f"步骤标识: {step_code}, \n"
             f"步骤名称: {step_name}, \n"
             f"步骤类型: {step_type}, \n"
+            f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
             f"错误类型: {type(exception).__name__}, \n"
             f"错误描述: {exception}, \n"
             f"错误回溯: {traceback.format_exc()}\n"
@@ -486,3 +488,97 @@ class AutoTestToolService:
             raise AttributeError(f"辅助函数[{func_name}]语法解析失败: {e}") from e
         except Exception as e:
             raise AttributeError(f"辅助函数[{func_name}]执行失败: {e}") from e
+
+    @classmethod
+    def resolve_placeholders(cls, value: Any, logger_object: Callable, is_core_engine: bool = False, finished_variables: Optional[Any] = None) -> Any:
+        """
+        递归将字符串/字典/列表中的 ${var} 占位符替换为 get_variable(var) 的值；解析失败则保留原串。
+        :param value: 待解析的值，可为 str、dict、list 或其它类型。
+        :param logger_object:
+        :param is_core_engine:
+        :param finished_variables:
+        :return: 替换后的值，结构与原 value 一致；非 str/dict/list 原样返回。
+        """
+        try:
+            # 1.匹配裸的占位符，如: ${xxx}
+            _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+            if isinstance(value, str):
+                def replace(match: re.Match[str]) -> str:
+                    var_name = match.group(1).strip() if match.group(1) else ""
+                    if not var_name:
+                        logger_object("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
+                        return match.group(0)
+                    # 引用函数规则：内容含左右括号则执行 GenerateUtils 并替换
+                    if "(" in var_name and ")" in var_name:
+                        try:
+                            resolved = AutoTestToolService.execute_func_string_single(var_name)
+                            logger_object("【获取变量】占位符(函数)解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                            return str(resolved)
+                        except (AttributeError, Exception) as e:
+                            logger_object(f"【获取变量】占位符解析失败, 引用函数({var_name})引发未知异常, 保留原值, 错误描述: {e}")
+                            return match.group(0)
+                    try:
+                        if is_core_engine:
+                            resolved = finished_variables.get_variable(var_name)
+                        else:
+                            resolved = cls.get_value_from_list(finished_variables, var_name)
+                            if resolved is not None:
+                                return resolved
+                            raise KeyError()
+                    except KeyError:
+                        logger_object(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                        return match.group(0)
+                    except Exception as e:
+                        logger_object(f"【获取变量】占位符解析失败, 引用变量({var_name})引发未知异常, 保留原值, 错误描述: {e}")
+                        return match.group(0)
+                    logger_object("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                    return str(resolved)
+
+                return _RE_PLACEHOLDER.sub(replace, value)
+            if isinstance(value, dict):
+                try:
+                    return {
+                        k: cls.resolve_placeholders(
+                            value=v,
+                            logger_object=logger_object,
+                            is_core_engine=is_core_engine,
+                            finished_variables=finished_variables
+                        )
+                        for k, v in value.items()
+                    }
+                except Exception as e:
+                    logger_object(f"【获取变量】解析字典中的占位符时发生错误, 键: {list(value.keys())}, 错误: {e}")
+                    return value
+            if isinstance(value, list):
+                # 处理列表格式的变量（每个元素包含key、value、desc）
+                result = []
+                for item in value:
+                    if isinstance(item, dict) and "key" in item and "value" in item:
+                        # 列表格式的变量项，只解析value字段
+                        resolved_item = dict(item)
+                        resolved_item["value"] = cls.resolve_placeholders(
+                            value=item.get("value"),
+                            logger_object=logger_object,
+                            is_core_engine=is_core_engine,
+                            finished_variables=finished_variables
+                        )
+                        result.append(resolved_item)
+                    else:
+                        # 普通列表项，递归解析
+                        result.append(
+                            cls.resolve_placeholders(
+                                value=item,
+                                logger_object=logger_object,
+                                is_core_engine=is_core_engine,
+                                finished_variables=finished_variables
+                            )
+                        )
+                return result
+            return value
+        except Exception as e:
+            logger_object(
+                f"【获取变量】占位符解析过程中发生未知异常, 保留原值, "
+                f"错误类型: {type(e).__name__}, "
+                f"错误描述: {e}"
+            )
+            return value
