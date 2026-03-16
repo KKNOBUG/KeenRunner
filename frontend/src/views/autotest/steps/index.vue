@@ -2142,7 +2142,10 @@ const doRun = async (env_name) => {
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
       const stats = res.data || {}
-      const msg = `执行完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
+      const msg = res.message
+      console.log(msg)
+      console.log(msg)
+      console.log(msg)
       window.$message?.success?.(msg)
     } else {
       window.$message?.error?.(res?.message || '执行失败')
@@ -2169,7 +2172,7 @@ const doDebug = async (env_name) => {
     })
     if (res?.code === '000000') {
       const stats = res.data || {}
-      const msg = `调试完成，总步骤: ${stats.total_steps}, 成功: ${stats.success_steps}, 失败: ${stats.failed_steps}, 成功率: ${stats.pass_ratio}%`
+      const msg = res.message
       window.$message?.success?.(msg)
       debugResult.value = res.data
     } else {

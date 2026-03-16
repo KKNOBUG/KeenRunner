@@ -2275,7 +2275,7 @@ class AutoTestStepExecutionEngine:
         :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
         :param initial_variables: 初始会话变量列表，每项含 key、value、desc。
         :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数。
-        :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。results 为根步骤执行结果列表；logs 按 step_code 分组；report_code 未保存时为 None；statistics 含 total_steps、success_steps、failed_steps、pass_ratio；session_variables 为执行后变量列表。当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case。
+        :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。results 为根步骤执行结果列表；logs 按 step_code 分组；report_code 未保存时为 None；statistics 含 total_steps、success_steps、failed_steps、passed_ratio；session_variables 为执行后变量列表。当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case。
         """
         report_code = None
         case_start_time = datetime.now()
@@ -2322,7 +2322,7 @@ class AutoTestStepExecutionEngine:
             total_steps = len(unique_states)
             success_steps = sum(1 for v in unique_states.values() if v)
             failed_steps = total_steps - success_steps
-            pass_ratio = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
+            passed_ratio = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
             case_end_time = datetime.now()
             case_ed_time_str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
             case_elapsed = f"{(case_end_time - case_start_time).total_seconds():.3f}"
@@ -2343,7 +2343,7 @@ class AutoTestStepExecutionEngine:
                     step_total=total_steps,
                     step_fail_count=failed_steps,
                     step_pass_count=success_steps,
-                    step_pass_ratio=pass_ratio,
+                    step_pass_ratio=passed_ratio,
                     report_type=final_report_type,
                     created_user=user_name,
                     task_code=self._task_code,
@@ -2355,7 +2355,7 @@ class AutoTestStepExecutionEngine:
                 "total_steps": total_steps,
                 "success_steps": success_steps,
                 "failed_steps": failed_steps,
-                "pass_ratio": round(pass_ratio, 2)
+                "passed_ratio": round(passed_ratio, 2)
             }
             session_variables = context.session_variables if isinstance(context.session_variables, list) else []
             return results, context.logs, report_code, statistics, session_variables, defer_create_report, pending_create_details

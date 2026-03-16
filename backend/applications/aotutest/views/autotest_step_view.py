@@ -815,8 +815,9 @@ async def execute_step_tree(
                     total_steps: int = result_data.get("total_steps")
                     success_steps: int = result_data.get("success_steps")
                     failed_steps: int = result_data.get("failed_steps")
+                    passed_ratio = round((success_steps / total_steps * 100), 2) if total_steps > 0 else 0.0
                     return SuccessResponse(
-                        message=f"执行完成，共{total_steps}步骤，成功{success_steps}步， 失败{failed_steps}步",
+                        message=f"执行完成, 共{total_steps}步骤, 成功{success_steps}步, 失败{failed_steps}步, 成功率: {passed_ratio}%",
                         data=result_data,
                         total=1
                     )
@@ -837,13 +838,15 @@ async def execute_step_tree(
                 execute_count: int = len(parameterized_execute_results)
                 success_count: int = sum(1 for r in parameterized_execute_results if r.get("success"))
                 failed_count: int = execute_count - success_count
+                passed_ratio = round((success_count / execute_count * 100), 2) if execute_count > 0 else 0.0
                 return SuccessResponse(
-                    message=f"参数化执行完成，共{execute_count}次，成功{success_count}次，失败{failed_count}次",
+                    message=f"参数化执行完成, 共{execute_count}次, 成功{success_count}次, 失败{failed_count}次, 成功率: {passed_ratio}%",
                     data={
                         "parameterized": True,
-                        "total_runs": execute_count,
-                        "success_runs": success_count,
-                        "failed_runs": failed_count,
+                        "execute_count": execute_count,
+                        "success_count": success_count,
+                        "failed_count": failed_count,
+                        "passed_ratio": passed_ratio,
                         "details": parameterized_execute_results,
                     },
                     total=execute_count,
@@ -976,18 +979,26 @@ async def execute_step_tree(
             final_session_variables = list(final_session_variables.values())
 
             # 8. 返回调试模式的详细结果
+            total_steps: int = statistics.get("total_steps", 0)
+            success_steps: int = statistics.get("success_steps", 0)
+            failed_steps: int = statistics.get("failed_steps", 0)
+            passed_ratio: int = statistics.get("passed_ratio", 0.0)
             result_data = {
+                "total_steps": total_steps,
+                "failed_steps": failed_steps,
+                "passed_ratio": passed_ratio,
+                "success_steps": success_steps,
                 "success": statistics.get("failed_steps", 0) == 0,
-                "total_steps": statistics.get("total_steps", 0),
-                "success_steps": statistics.get("success_steps", 0),
-                "failed_steps": statistics.get("failed_steps", 0),
-                "pass_ratio": statistics.get("pass_ratio", 0.0),
                 "results": [serialize_result(r) for r in results],
                 "logs": {str(k): v for k, v in logs.items()},
                 "session_variables": final_session_variables,
                 "saved_to_database": True
             }
-            return SuccessResponse(message="调试执行完成", data=result_data)
+            return SuccessResponse(
+                message=f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, 失败{failed_steps}步, 成功率: {passed_ratio}%",
+                data=result_data,
+                total=1
+            )
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

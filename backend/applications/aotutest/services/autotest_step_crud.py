@@ -1039,7 +1039,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 "total_steps": statistics.get("total_steps", 0),
                 "success_steps": statistics.get("success_steps", 0),
                 "failed_steps": statistics.get("failed_steps", 0),
-                "pass_ratio": statistics.get("pass_ratio", 0.0),
+                "passed_ratio": statistics.get("pass_ratio", 0.0),
                 "report_code": report_code,
                 "saved_to_database": True,
                 "case_id": case_id,
