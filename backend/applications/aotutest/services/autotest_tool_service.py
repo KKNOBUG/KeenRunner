@@ -25,11 +25,7 @@ class AutoTestToolService:
     """自动化测试步骤与断言相关的工具类，不依赖实例状态，方法均为类方法或静态方法。"""
 
     @staticmethod
-    def key_value_list_to_dict(
-            items: List[Dict[str, Any]],
-            *,
-            skip_if_no_value: bool = False,
-    ) -> Dict[str, Any]:
+    def key_value_list_to_dict(items: List[Dict[str, Any]], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
         """
         将 key/value 列表转为键值对字典，供变量列表或 HTTP 参数使用。
 
@@ -39,19 +35,19 @@ class AutoTestToolService:
         """
         if not isinstance(items, list):
             return {}
-        result = {}
+        result: Dict[str, Any] = {}
         for item in items:
             if not isinstance(item, dict) or "key" not in item:
                 continue
             if skip_if_no_value and "value" not in item:
                 continue
-            key = item.get("key")
+            key: Optional[str] = item.get("key")
             if key:
                 result[key] = item.get("value")
         return result
 
-    @staticmethod
-    def list_to_dict(variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+    @classmethod
+    def list_to_dict(cls, variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         将 key/value/desc 列表转为 name -> value 字典，供 **Python 代码命名空间** 使用。
 
@@ -63,13 +59,11 @@ class AutoTestToolService:
         :param variable_list: 变量列表，每项为含 key、value 的字典。
         :return: 键为变量名、值为变量值的字典。
         """
-        return AutoTestToolService.key_value_list_to_dict(
-            variable_list if isinstance(variable_list, list) else [],
-            skip_if_no_value=True,
-        )
+        variable_list: List[Dict[str, Any]] = variable_list if isinstance(variable_list, list) else []
+        return cls.key_value_list_to_dict(items=variable_list, skip_if_no_value=True)
 
-    @staticmethod
-    def convert_list_to_dict_for_http(data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    @classmethod
+    def convert_list_to_dict_for_http(cls, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         将 key/value/desc 列表转为 key -> value 字典，供 **HTTP 请求头/参数/表单** 使用。
 
@@ -81,10 +75,7 @@ class AutoTestToolService:
         :param data: 每项含 key、value 的列表。
         :return: 键值对字典；非列表入参返回空字典。
         """
-        return AutoTestToolService.key_value_list_to_dict(
-            data if isinstance(data, list) else [],
-            skip_if_no_value=False,
-        )
+        return cls.key_value_list_to_dict(data if isinstance(data, list) else [], skip_if_no_value=False)
 
     @staticmethod
     def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
@@ -515,7 +506,7 @@ class AutoTestToolService:
                             logger_object("【获取变量】占位符(函数)解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
                             return str(resolved)
                         except (AttributeError, Exception) as e:
-                            logger_object(f"【获取变量】占位符解析失败, 引用函数({var_name})引发未知异常, 保留原值, 错误描述: {e}")
+                            logger_object(f"【获取变量】占位符(函数)解析失败, 引用({var_name})发生未知异常, 保留原值, 错误描述: {e}")
                             return match.group(0)
                     try:
                         if is_core_engine:
@@ -529,7 +520,7 @@ class AutoTestToolService:
                         logger_object(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
                         return match.group(0)
                     except Exception as e:
-                        logger_object(f"【获取变量】占位符解析失败, 引用变量({var_name})引发未知异常, 保留原值, 错误描述: {e}")
+                        logger_object(f"【获取变量】占位符解析失败, 引用({var_name})发生未知异常, 保留原值, 错误描述: {e}")
                         return match.group(0)
                     logger_object("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
                     return str(resolved)

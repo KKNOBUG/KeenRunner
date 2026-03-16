@@ -126,9 +126,9 @@ class StepExecutionContext:
         self.case_id = case_id
         self.case_code = case_code
         self.report_code = report_code
-        self.pending_details = pending_details
         self.dataset_name = dataset_name
         self.logs: Dict[str, List[str]] = {}
+        self.pending_details = pending_details
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[str] = None
         self._http_client = http_client
@@ -172,7 +172,12 @@ class StepExecutionContext:
             self.log(message=error_message)
 
     def resolve_placeholders(self, variables):
-        return AutoTestToolService.resolve_placeholders(variables or [], self.log, True, finished_variables=self)
+        return AutoTestToolService.resolve_placeholders(
+            value=variables or [],
+            logger_object=self.log,
+            is_core_engine=True,
+            finished_variables=self
+        )
 
     @property
     def http_client(self) -> HttpClientProtocol:
@@ -859,7 +864,7 @@ class BaseStepExecutor:
                         f"错误回溯: {traceback.format_exc()}\n"
                     )
                     print(error_message)
-                    self.context.log(error_message)
+                    self.context.log(error_message, step_code=self.step_code)
         return result
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
@@ -1610,7 +1615,7 @@ class PythonStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(AutoTestToolService.format_step_error_message(self.step, e, is_child_step=False)) from e
+                raise StepExecutionError(AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)) from e
 
             if new_vars:
                 try:
@@ -1877,6 +1882,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 request_form_data_raw = []
             if not isinstance(request_form_urlencoded_raw, list):
                 request_form_urlencoded_raw = []
+            if not isinstance(request_form_file_raw, list):
+                request_form_file_raw = []
 
             # 1）转成字典（尚未解析占位符）
             headers = AutoTestToolService.convert_list_to_dict_for_http(request_header_raw)
@@ -2075,7 +2082,7 @@ class HttpStepExecutor(BaseStepExecutor):
                             "name": jpath,
                             "expr": jpath,
                             "source": "response json",
-                            "operation": "equals",
+                            "operation": "等于",
                             "except_value": except_val,
                             "actual_value": actual_val,
                             "success": success,
@@ -2086,7 +2093,7 @@ class HttpStepExecutor(BaseStepExecutor):
                             "name": jpath,
                             "expr": jpath,
                             "source": "response json",
-                            "operation": "equals",
+                            "operation": "等于",
                             "except_value": except_val,
                             "actual_value": None,
                             "success": False,
@@ -2097,7 +2104,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 for valid in validator_results:
                     valid_status: bool = valid.get("success", True)
                     expr_message: str = (
-                        f"实际值: [{valid.get('expr')}], "
+                        f"表达式: [{valid.get('expr')}], "
+                        f"实际值: [{valid.get('actual_value')}], "
                         f"操作符: [{valid.get('operation')}], "
                         f"预期值: [{valid.get('except_value')}]"
                     )
@@ -2549,8 +2557,14 @@ class AutoTestStepExecutionEngine:
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             dataset_name: Optional[str] = None,
     ) -> Tuple[
-        List[StepExecutionResult], Dict[str, List[str]], Optional[str], Dict[str, Any], List[Dict[str, Any]], Optional[AutoTestApiReportCreate],
-        Optional[List[AutoTestApiDetailCreate]]]:
+        List[StepExecutionResult],
+        Dict[str, List[str]],
+        Optional[str],
+        Dict[str, Any],
+        List[Dict[str, Any]],
+        Optional[AutoTestApiReportCreate],
+        Optional[List[AutoTestApiDetailCreate]]
+    ]:
         """执行单用例：在上下文中按 step_no 执行根步骤，可选收集报告与明细供调用方落库。
 
         参数化时仅传入 dataset_name，各 HTTP 步骤执行时按 case_id/step_no/step_code/dataset_name 查 AutoTestApiDataSourceInfo 表获取数据集。

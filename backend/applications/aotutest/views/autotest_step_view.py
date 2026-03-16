@@ -11,6 +11,7 @@ import json
 import re
 import time
 import traceback
+import uuid
 from typing import List, Dict, Any, Optional, Set
 from xml.etree import ElementTree as ET
 
@@ -458,7 +459,7 @@ async def debug_http_request(
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
 
-        if not request_url.lower().startswith("http"):
+        if request_url and not request_url.lower().startswith("http"):
             try:
                 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
                 env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
@@ -501,24 +502,11 @@ async def debug_http_request(
             request_text = AutoTestToolService.resolve_placeholders(request_text, logs.append, False, finished_variables=finished_variables)
 
         # 将列表格式转换为字典格式（用于HTTP请求）
-        def convert_list_to_dict(data_list):
-            """将列表格式（每个元素包含key、value、desc）转换为字典格式"""
-            if not isinstance(data_list, list):
-                return {}
-            result = {}
-            for item in data_list:
-                if isinstance(item, dict) and "key" in item:
-                    key = item.get("key")
-                    value = item.get("value")
-                    if key:
-                        result[key] = str(value)
-            return result
-
-        headers = convert_list_to_dict(headers_list)
-        params = convert_list_to_dict(params_list)
-        form_data = convert_list_to_dict(form_data_list)
-        urlencoded = convert_list_to_dict(urlencoded_list)
-        form_files = convert_list_to_dict(form_files_list)
+        headers = AutoTestToolService.convert_list_to_dict_for_http(headers_list)
+        params = AutoTestToolService.convert_list_to_dict_for_http(params_list)
+        form_data = AutoTestToolService.convert_list_to_dict_for_http(form_data_list)
+        urlencoded = AutoTestToolService.convert_list_to_dict_for_http(urlencoded_list)
+        form_files = AutoTestToolService.convert_list_to_dict_for_http(form_files_list)
 
         # 处理请求体
         data_payload: Optional[Any] = None
@@ -1167,40 +1155,50 @@ async def execute_step_tree(
                 selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
                 # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
                 selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
-                if selected_dataset_names:
-                    import uuid
-                    batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
-                    results = []
-                    for dataset_name in selected_dataset_names:
-                        one = await AUTOTEST_API_STEP_CRUD.execute_single_case(
-                            case_id=case_id,
-                            env_name=env_name,
-                            initial_variables=initial_variables or [],
-                            report_type=AutoTestReportType.SYNC_EXEC,
-                            batch_code=batch_code,
-                            dataset_name=dataset_name,
-                        )
-                        results.append(one)
-                    success_count = sum(1 for r in results if r.get("success"))
-                    return SuccessResponse(
-                        message=f"参数化执行完成，共 {len(results)} 次，成功 {success_count} 次",
-                        data={
-                            "parameterized": True,
-                            "total_runs": len(results),
-                            "success_runs": success_count,
-                            "failed_runs": len(results) - success_count,
-                            "results": results,
-                        },
-                        total=len(results),
+                if not selected_dataset_names:
+                    # 普通单次执行（无选中数据集）
+                    result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+                        case_id=case_id,
+                        env_name=env_name,
+                        initial_variables=initial_variables,
+                        report_type=AutoTestReportType.SYNC_EXEC
                     )
-                # 普通单次执行（无选中数据集）
-                result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
-                    case_id=case_id,
-                    env_name=env_name,
-                    initial_variables=initial_variables,
-                    report_type=AutoTestReportType.SYNC_EXEC
+                    total_steps: int = result_data.get("total_steps")
+                    success_steps: int = result_data.get("success_steps")
+                    failed_steps: int = result_data.get("failed_steps")
+                    return SuccessResponse(
+                        message=f"执行完成，共{total_steps}步骤，成功{success_steps}步， 失败{failed_steps}步",
+                        data=result_data,
+                        total=1
+                    )
+
+                # 参数化驱动执行（选中数据）
+                parameterized_execute_results: List[Dict[str, Any]] = []
+                batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+                for dataset_name in selected_dataset_names:
+                    single_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+                        case_id=case_id,
+                        env_name=env_name,
+                        initial_variables=initial_variables or [],
+                        report_type=AutoTestReportType.SYNC_EXEC,
+                        batch_code=batch_code,
+                        dataset_name=dataset_name,
+                    )
+                    parameterized_execute_results.append(single_data)
+                execute_count: int = len(parameterized_execute_results)
+                success_count: int = sum(1 for r in parameterized_execute_results if r.get("success"))
+                failed_count: int = execute_count - success_count
+                return SuccessResponse(
+                    message=f"参数化执行完成，共{execute_count}次，成功{success_count}次，失败{failed_count}次",
+                    data={
+                        "parameterized": True,
+                        "total_runs": execute_count,
+                        "success_runs": success_count,
+                        "failed_runs": failed_count,
+                        "details": parameterized_execute_results,
+                    },
+                    total=execute_count,
                 )
-                return SuccessResponse(message="执行步骤成功并已保存到数据库", data=result_data)
             except NotFoundException as e:
                 return NotFoundResponse(message=str(e.message))
             except ParameterException as e:
@@ -1247,15 +1245,6 @@ async def execute_step_tree(
                     "case_name": case_instance.case_name,
                 }
 
-            # 调试模式：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
-            selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
-            if selected_dataset_names:
-                if len(selected_dataset_names) != 1:
-                    return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
-                debug_dataset_name = selected_dataset_names[0]
-            else:
-                debug_dataset_name = None
-
             # 3. 规范化步骤数据
             tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
@@ -1286,6 +1275,14 @@ async def execute_step_tree(
                 return BadReqResponse(message="没有可执行的根步骤")
 
             # 6. 执行（若选择了单条数据集则传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表取数）
+            # 调试模式：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
+            selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
+            if selected_dataset_names:
+                if len(selected_dataset_names) != 1:
+                    return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
+                debug_dataset_name = selected_dataset_names[0]
+            else:
+                debug_dataset_name = None
             engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,

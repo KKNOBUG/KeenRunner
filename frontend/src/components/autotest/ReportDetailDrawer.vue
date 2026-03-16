@@ -168,6 +168,31 @@
                       <NTag type="info">{{ currentDetail.step_elapsed ? `${currentDetail.step_elapsed}s` : '-' }}</NTag>
                     </div>
                   </div>
+                  <div class="step-info-row" v-if="currentDetail.response_elapsed != null && currentDetail.response_elapsed !== ''">
+                    <div class="step-info-label">响应耗时：</div>
+                    <div class="step-info-value">
+                      <NTag type="info">{{ currentDetail.response_elapsed }}s</NTag>
+                    </div>
+                  </div>
+                </div>
+              </NCard>
+
+              <NCard v-if="currentDetail.dataset_name" title="参数化驱动" size="small" :bordered="false">
+                <div class="step-info-grid">
+                  <div class="step-info-row">
+                    <div class="step-info-label">数据集名称：</div>
+                    <div class="step-info-value">{{ currentDetail.dataset_name }}</div>
+                  </div>
+                  <div class="step-info-row" v-if="currentDetail.dataset_snapshot && typeof currentDetail.dataset_snapshot === 'object'">
+                    <div class="step-info-label">数据快照：</div>
+                    <div class="step-info-value" style="width: 100%;">
+                      <MonacoEditor
+                          :value="formatJson(currentDetail.dataset_snapshot)"
+                          :options="monacoEditorOptions(true)"
+                          style="min-height: 120px; height: auto;"
+                      />
+                    </div>
+                  </div>
                 </div>
               </NCard>
 
@@ -190,11 +215,14 @@
             </NSpace>
           </NTabPane>
 
-          <!-- 请求信息 -->
+          <!-- 请求信息（优先展示明细中的实际请求，与后端一致） -->
           <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
             <NSpace vertical :size="16">
+              <NAlert v-if="actualRequestFromDetail" type="info" size="small" style="margin-bottom: 8px;">
+                以下为本次执行实际发出的请求（来自报告明细）
+              </NAlert>
               <NCollapse
-                  :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestCode']"
+                  :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestFormFile', 'requestCode']"
                   arrow-placement="right"
               >
                 <NCollapseItem title="Basic" name="requestBasic">
@@ -207,10 +235,10 @@
                     </NDescriptionsItem>
                   </NDescriptions>
                 </NCollapseItem>
-                <NCollapseItem title="Headers" name="requestHeaders" v-if="requestHeaders">
-                  <div v-if="isJsonRequestHeaders">
+                <NCollapseItem title="Headers" name="requestHeaders" v-if="normalizedRequestHeaders != null">
+                  <div v-if="isObjectRequestHeaders">
                     <MonacoEditor
-                        :value="formatJson(requestHeaders)"
+                        :value="formatJson(normalizedRequestHeaders)"
                         :options="monacoEditorOptions(true)"
                         style="min-height: 200px; height: auto;"
                     />
@@ -220,10 +248,10 @@
                       style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
                   >{{ formatRequestHeadersText() }}</pre>
                 </NCollapseItem>
-                <NCollapseItem title="Params" name="requestParams" v-if="requestParams && Object.keys(requestParams).length > 0">
-                  <div v-if="isJsonRequestParams">
+                <NCollapseItem title="Params" name="requestParams" v-if="normalizedRequestParams && Object.keys(normalizedRequestParams).length > 0">
+                  <div v-if="isObjectRequestParams">
                     <MonacoEditor
-                        :value="formatJson(requestParams)"
+                        :value="formatJson(normalizedRequestParams)"
                         :options="monacoEditorOptions(true)"
                         style="min-height: 200px; height: auto;"
                     />
@@ -231,7 +259,7 @@
                   <pre
                       v-else
                       style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
-                  >{{ formatJson(requestParams) }}</pre>
+                  >{{ formatJson(normalizedRequestParams) }}</pre>
                 </NCollapseItem>
                 <NCollapseItem :title="`Body (${requestBodyType})`" name="requestBody" v-if="hasRequestBody">
                   <div v-if="isJsonRequestBody">
@@ -242,7 +270,7 @@
                     />
                   </div>
                   <NDataTable
-                      v-else-if="requestFormData"
+                      v-else-if="requestFormDataTable.length > 0"
                       :columns="[{ title: 'Key', key: 'key' }, { title: 'Value', key: 'value' }]"
                       :data="requestFormDataTable"
                       size="small"
@@ -252,6 +280,14 @@
                       v-else
                       style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
                   >{{ requestBodyText }}</pre>
+                </NCollapseItem>
+                <NCollapseItem title="Form File" name="requestFormFile" v-if="requestFormFileTable.length > 0">
+                  <NDataTable
+                      :columns="[{ title: 'Key', key: 'key' }, { title: 'Value', key: 'value' }]"
+                      :data="requestFormFileTable"
+                      size="small"
+                      :bordered="true"
+                  />
                 </NCollapseItem>
                 <NCollapseItem title="Code (Python)" name="requestCode"
                                v-if="currentDetail.step_type === '执行代码请求(Python)' && stepInfo.code">
@@ -336,6 +372,7 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue'
 import {
+  NAlert,
   NButton,
   NCard,
   NCheckbox,
@@ -552,25 +589,114 @@ const reportValidatorColumns = [
   { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' },
 ]
 
-const requestMethod = computed(() => stepInfo.value.request_method || '-')
-const requestUrl = computed(() => stepInfo.value.request_url || '-')
-const requestHeaders = computed(() => stepInfo.value.request_header)
-const requestParams = computed(() => {
-  const params = stepInfo.value.request_params
-  if (typeof params === 'string') {
+// 后端明细表存「实际发出的请求」；步骤表存配置。报告页优先展示明细（实际请求），与后端一致。
+function normalizeRequestField (val) {
+  if (val == null) return null
+  if (Array.isArray(val)) {
+    const obj = {}
+    for (const item of val) {
+      if (item && typeof item === 'object' && item.key !== undefined) {
+        obj[item.key] = item.value
+      }
+    }
+    return Object.keys(obj).length ? obj : null
+  }
+  if (typeof val === 'string') {
     try {
-      return JSON.parse(params)
+      const parsed = JSON.parse(val)
+      return normalizeRequestField(parsed)
+    } catch {
+      return null
+    }
+  }
+  return typeof val === 'object' ? val : null
+}
+
+const actualRequestFromDetail = computed(() => {
+  const d = currentDetail.value
+  return d && (
+      d.request_header != null || d.request_params != null || d.request_form_data != null ||
+      d.request_form_urlencoded != null || d.request_form_file != null || d.request_body != null || d.request_text != null
+  )
+})
+
+const requestMethod = computed(() => stepInfo.value?.request_method || '-')
+const requestUrl = computed(() => stepInfo.value?.request_url || '-')
+
+const requestHeadersRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_header != null) {
+    return currentDetail.value.request_header
+  }
+  return stepInfo.value?.request_header
+})
+const requestParamsRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_params != null) {
+    return currentDetail.value.request_params
+  }
+  const p = stepInfo.value?.request_params
+  if (typeof p === 'string') {
+    try {
+      return JSON.parse(p)
     } catch {
       return {}
     }
   }
-  return params || {}
+  return p || {}
 })
-const requestBody = computed(() => stepInfo.value.request_body)
-const requestFormData = computed(() => stepInfo.value.request_form_data)
-const requestFormUrlencoded = computed(() => stepInfo.value.request_form_urlencoded)
-const requestText = computed(() => stepInfo.value.request_text)
-const run_code = computed(() => stepInfo.value.code)
+const requestBodyRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_body != null) {
+    return currentDetail.value.request_body
+  }
+  return stepInfo.value?.request_body
+})
+const requestFormDataRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_form_data != null) {
+    return currentDetail.value.request_form_data
+  }
+  return stepInfo.value?.request_form_data
+})
+const requestFormUrlencodedRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_form_urlencoded != null) {
+    return currentDetail.value.request_form_urlencoded
+  }
+  return stepInfo.value?.request_form_urlencoded
+})
+const requestFormFileRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_form_file != null) {
+    return currentDetail.value.request_form_file
+  }
+  return stepInfo.value?.request_form_file
+})
+const requestTextRaw = computed(() => {
+  if (actualRequestFromDetail.value && currentDetail.value?.request_text != null) {
+    return currentDetail.value.request_text
+  }
+  return stepInfo.value?.request_text
+})
+
+const normalizedRequestHeaders = computed(() => normalizeRequestField(requestHeadersRaw.value))
+const normalizedRequestParams = computed(() => {
+  const p = requestParamsRaw.value
+  const normalized = normalizeRequestField(p)
+  return normalized && typeof normalized === 'object' && !Array.isArray(normalized) ? normalized : {}
+})
+const requestBody = computed(() => {
+  const b = requestBodyRaw.value
+  if (b != null && typeof b === 'object') return b
+  if (typeof b === 'string') {
+    try {
+      return JSON.parse(b)
+    } catch {
+      return null
+    }
+  }
+  return b
+})
+const requestFormData = computed(() => normalizeRequestField(requestFormDataRaw.value))
+const requestFormUrlencoded = computed(() => normalizeRequestField(requestFormUrlencodedRaw.value))
+const requestFormFile = computed(() => normalizeRequestField(requestFormFileRaw.value))
+const requestText = computed(() => (requestTextRaw.value != null && requestTextRaw.value !== '') ? requestTextRaw.value : null)
+const run_code = computed(() => stepInfo.value?.code)
 
 const hasResponseInfo = computed(() => {
   const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false
@@ -585,14 +711,16 @@ const hasResponseInfo = computed(() => {
 const hasRequestInfo = computed(() => {
   const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false
   const hasRequestData =
-      !!(requestMethod.value && requestMethod.value !== '-') ||
-      !!(requestUrl.value && requestUrl.value !== '-') ||
-      !!requestHeaders.value ||
-      !!requestBody.value ||
-      !!requestFormData.value ||
-      !!requestFormUrlencoded.value ||
-      !!requestText.value ||
-      !!run_code.value
+      (requestMethod.value && requestMethod.value !== '-') ||
+      (requestUrl.value && requestUrl.value !== '-') ||
+      normalizedRequestHeaders.value != null ||
+      (normalizedRequestParams.value && Object.keys(normalizedRequestParams.value).length > 0) ||
+      requestBody.value != null ||
+      requestFormData.value != null ||
+      requestFormUrlencoded.value != null ||
+      requestFormFile.value != null ||
+      requestText.value != null ||
+      run_code.value != null
   return isRequestStep && hasRequestData
 })
 
@@ -608,40 +736,44 @@ const requestBodyType = computed(() => {
 
 const requestBodyText = computed(() => {
   if (requestText.value) return requestText.value
-  if (requestFormUrlencoded.value) {
-    if (typeof requestFormUrlencoded.value === 'object') {
-      return Object.entries(requestFormUrlencoded.value)
-          .map(([k, v]) => `${k}=${v}`)
-          .join('&')
-    }
-    return String(requestFormUrlencoded.value)
+  if (requestFormUrlencoded.value && typeof requestFormUrlencoded.value === 'object') {
+    return Object.entries(requestFormUrlencoded.value)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('&')
   }
+  if (requestFormUrlencoded.value != null) return String(requestFormUrlencoded.value)
   return ''
 })
 
-const isJsonRequestHeaders = computed(() => requestHeaders.value && typeof requestHeaders.value === 'object')
-const isJsonRequestParams = computed(() => requestParams.value && typeof requestParams.value === 'object' && Object.keys(requestParams.value).length > 0)
-const isJsonRequestBody = computed(() => requestBody.value && typeof requestBody.value === 'object')
+const isObjectRequestHeaders = computed(() => normalizedRequestHeaders.value != null && typeof normalizedRequestHeaders.value === 'object' && !Array.isArray(normalizedRequestHeaders.value))
+const isObjectRequestParams = computed(() => normalizedRequestParams.value && typeof normalizedRequestParams.value === 'object' && Object.keys(normalizedRequestParams.value).length > 0)
+const isJsonRequestBody = computed(() => requestBody.value != null && typeof requestBody.value === 'object')
 
 const requestFormDataTable = computed(() => {
-  if (!requestFormData.value) return []
-  if (typeof requestFormData.value === 'object') {
-    return Object.entries(requestFormData.value).map(([key, value]) => ({
-      key,
-      value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-    }))
-  }
-  return []
+  if (!requestFormData.value || typeof requestFormData.value !== 'object') return []
+  return Object.entries(requestFormData.value).map(([key, value]) => ({
+    key,
+    value: typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''),
+  }))
+})
+
+const requestFormFileTable = computed(() => {
+  if (!requestFormFile.value || typeof requestFormFile.value !== 'object') return []
+  return Object.entries(requestFormFile.value).map(([key, value]) => ({
+    key,
+    value: typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''),
+  }))
 })
 
 const formatRequestHeadersText = () => {
-  if (!requestHeaders.value) return ''
-  if (typeof requestHeaders.value === 'object') {
-    return Object.entries(requestHeaders.value)
+  const h = normalizedRequestHeaders.value
+  if (!h) return ''
+  if (typeof h === 'object' && !Array.isArray(h)) {
+    return Object.entries(h)
         .map(([k, v]) => `${k}: ${v}`)
         .join('\n')
   }
-  return String(requestHeaders.value)
+  return String(h)
 }
 
 const getMethodTagType = (method) => {
