@@ -12,7 +12,6 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Union
-from xml.etree import ElementTree as ET
 
 import httpx
 import requests
@@ -171,7 +170,7 @@ class StepExecutionContext:
             error_message: str = f"异步上下文管理器: 关闭HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
 
-    def resolve_placeholders(self, variables):
+    def resolve_placeholders(self, variables, step_no: Optional[int] = None):
         return AutoTestToolService.resolve_placeholders(
             value=variables or [],
             logger_object=self.log,
@@ -469,11 +468,12 @@ class StepExecutionContext:
             exec(prepared, safe_globals, local_context)
         except SyntaxError as e:
             error_message: str = (
-                f"【执行代码请求(Python)】代码解析失败: "
-                f"请遵循 Python PEP8 编码规范, "
-                f"错误位置: 第{e.lineno}行, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}"
+                f"【执行代码请求(Python)】代码解析失败: \n"
+                f"请遵循 Python PEP8 编码规范, \n"
+                f"错误描述: {e}\n"
+                f"错误位置: 第{e.lineno}行, \n"
+                f"错误类型: {type(e).__name__}, \n"
+                f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             self.log(error_message)
             raise StepExecutionError(error_message) from e
@@ -481,16 +481,18 @@ class StepExecutionContext:
             error_message: str = (
                 f"【执行代码请求(Python)】代码解析失败: "
                 f"请检查代码中是否引用了未定义的变量或函数, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}"
+                f"错误描述: {e}\n"
+                f"错误类型: {type(e).__name__}, \n"
+                f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             self.log(error_message)
             raise StepExecutionError(error_message) from e
         except Exception as e:
             error_message: str = (
                 f"【执行代码请求(Python)】代码解析异常: "
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}"
+                f"错误描述: {e}\n"
+                f"错误类型: {type(e).__name__}, \n"
+                f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             self.log(error_message)
             raise StepExecutionError(error_message) from e
@@ -503,9 +505,10 @@ class StepExecutionContext:
                     result = func()
                 except Exception as e:
                     error_message: str = (
-                        f"【执行代码请求(Python)】代码执行异常: "
-                        f"错误类型: {type(e).__name__}, "
-                        f"错误描述: {e}"
+                        f"【执行代码请求(Python)】代码执行异常: \n"
+                        f"错误描述: {e}\n"
+                        f"错误类型: {type(e).__name__}, \n"
+                        f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     self.log(error_message)
                     raise StepExecutionError(error_message) from e
@@ -633,7 +636,11 @@ class StepExecutionContext:
                 self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
-                var_value = self.get_variable(var_name)
+                # 支持函数占位符: "${generate_phone()}"
+                if "(" in var_name and ")" in var_name:
+                    var_value = AutoTestToolService.execute_func_string_single(var_name)
+                else:
+                    var_value = self.get_variable(var_name)
             except KeyError:
                 self.log(f"【执行代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
                 return match.group(0)
@@ -2038,11 +2045,21 @@ class HttpStepExecutor(BaseStepExecutor):
                 response_json = None
 
             try:
-                extract_variables_dict, extract_results_list = self.extract_variables(
-                    response_json=response_json,
+                extract_variables = self.step.get("extract_variables")
+                if extract_variables and not isinstance(extract_variables, list):
+                    raise StepExecutionError(
+                        f"【变量提取】表达式列表解析失败: "
+                        f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
+                        f"但得到[{type(extract_variables)}]类型"
+                    )
+                extract_variables_dict, extract_results_list = AutoTestToolService.run_extract_variables(
+                    extract_variables=extract_variables or [],
                     response_text=result.response.get("text") if result.response else None,
+                    response_json=response_json,
                     response_headers=result.response.get("response_headers") if result.response else None,
                     response_cookies=result.response.get("response_cookies") if result.response else None,
+                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
                 result.extract_variables = extract_results_list
@@ -2054,47 +2071,58 @@ class HttpStepExecutor(BaseStepExecutor):
                 self.context.log(error_message, step_code=self.step_code)
 
             try:
-                validator_results = self.run_validators(
-                    response_json=response_json,
+                assert_validators = self.step.get("assert_validators")
+                if assert_validators and not isinstance(assert_validators, list):
+                    raise StepExecutionError(
+                        f"【断言验证】表达式列表解析失败: "
+                        f"参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
+                        f"但得到[{type(assert_validators)}]类型"
+                    )
+                validator_results = AutoTestToolService.run_assert_validators(
+                    assert_validators=assert_validators or [],
                     response_text=result.response.get("text") if result.response else None,
+                    response_json=response_json,
                     response_headers=result.response.get("response_headers") if result.response else None,
                     response_cookies=result.response.get("response_cookies") if result.response else None,
+                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 # 参数化驱动：当前场景的 assert（JSONPath -> 期望值）从响应 JSON 中取值并做等于比较（step_struct 为本步骤内查表得到的 head/body/assert）
                 assert_map = isinstance(step_struct, dict) and (step_struct.get("assert") or {}) or {}
-                for jpath, except_val in assert_map.items():
-                    if not jpath:
+                for except_path, except_value in assert_map.items():
+                    if not except_path:
                         continue
                     try:
-                        actual_val = self.extract_from_source(
+                        actual_value = AutoTestToolService.extract_from_source(
                             source="response json",
-                            expr=jpath,
+                            expr=except_path,
                             range_type="SOME",
                             index=None,
                             response_text=result.response.get("text") if result.response else None,
                             response_json=response_json,
                             response_headers=result.response.get("response_headers") if result.response else None,
                             response_cookies=result.response.get("response_cookies") if result.response else None,
+                            session_variables_lookup=lambda expr: self.context.get_variable(expr),
                             operation_type="断言验证",
                         )
-                        success = AutoTestToolService.compare_assertion(actual_val, "等于", except_val)
+                        success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
                         validator_results.append({
-                            "name": jpath,
-                            "expr": jpath,
+                            "name": except_path,
+                            "expr": except_path,
                             "source": "response json",
                             "operation": "等于",
-                            "except_value": except_val,
-                            "actual_value": actual_val,
+                            "except_value": except_value,
+                            "actual_value": actual_value,
                             "success": success,
                             "error": "" if success else "断言失败",
                         })
                     except Exception as e:
                         validator_results.append({
-                            "name": jpath,
-                            "expr": jpath,
+                            "name": except_path,
+                            "expr": except_path,
                             "source": "response json",
                             "operation": "等于",
-                            "except_value": except_val,
+                            "except_value": except_value,
                             "actual_value": None,
                             "success": False,
                             "error": str(e),
@@ -2114,9 +2142,9 @@ class HttpStepExecutor(BaseStepExecutor):
                     else:
                         self.context.log(f"【断言验证】- 失败: {expr_message}", step_code=self.step_code)
                         assert_failed_number += 1
-                    if assert_failed_number > 0:
-                        error_message: str = f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过"
-                        raise StepExecutionError(error_message)
+                if assert_failed_number > 0:
+                    error_message: str = f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过"
+                    raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -2130,334 +2158,6 @@ class HttpStepExecutor(BaseStepExecutor):
             result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
-
-    def extract_variables(
-            self,
-            *,
-            response_text: Optional[str] = None,
-            response_json: Optional[Union[list, dict]] = None,
-            response_headers: Optional[Dict[str, Any]] = None,
-            response_cookies: Optional[Dict[str, Any]] = None,
-
-    ) -> tuple:
-        """
-        从响应中按 extract_variables 配置提取变量，返回 (name->value 字典, 完整结果列表)。
-        :param response_text: 响应正文文本。
-        :param response_json: 响应 JSON 对象（list 或 dict）。
-        :param response_headers: 响应头字典。
-        :param response_cookies: 响应 Cookie 字典。
-        :return: tuple: (Dict[str, Any], List[Dict[str, Any]])，分别为 name->value 与完整结果列表。
-        """
-        try:
-            extract_variables = self.step.get("extract_variables")
-            if not extract_variables or response_json is None:
-                return {}, []
-            if not isinstance(extract_variables, list):
-                raise StepExecutionError(
-                    f"【变量提取】表达式列表解析失败: "
-                    f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
-                    f"但得到[{type(extract_variables)}]类型"
-                )
-            extract_results_dict: Dict[str, Any] = {}
-            extract_results_list: List[Dict[str, Any]] = []
-            for ext_config in extract_variables:
-                if not isinstance(ext_config, dict):
-                    self.context.log(
-                        f"【变量提取】表达式子项解析无效(跳过): "
-                        f"参数[extract_variables]的子项必须是[Dict[str, Any]]类型, "
-                        f"但得到[{type(ext_config)}]类型: {ext_config}"
-                    )
-                    continue
-                name: Optional[str] = ext_config.get("name")
-                expr: Optional[str] = ext_config.get("expr")
-                source: Optional[str] = ext_config.get("source")
-                range_type: Optional[str] = ext_config.get("range")
-                index: Optional[int] = ext_config.get("index")
-                if not name or not expr or not source:
-                    self.context.log(
-                        f"【变量提取】表达式子项解析无效(跳过): "
-                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"
-                    )
-                    continue
-                try:
-                    extract_value = self.extract_from_source(
-                        source=source,
-                        expr=expr,
-                        range_type=range_type,
-                        index=index,
-                        response_text=response_text,
-                        response_json=response_json,
-                        response_headers=response_headers,
-                        response_cookies=response_cookies,
-                        operation_type="变量提取"
-                    )
-                    extract_results_dict[name] = extract_value
-                    extract_results_list.append({
-                        "name": name,
-                        "source": source,
-                        "range": range_type,
-                        "expr": expr,
-                        "index": index,
-                        "extract_value": extract_value,
-                        "success": True,
-                        "error": None
-                    })
-                    self.context.log(
-                        f"【变量提取】[{name}]: 从[{source}]中提取成功, 数据: {extract_value}",
-                        step_code=self.step_code
-                    )
-                except (StepExecutionError, Exception) as e:
-                    error_msg = str(e)
-                    self.context.log(
-                        f"【变量提取】[{name}]: 从[{source}]中提取失败, 原因: {e}",
-                        step_code=self.step_code
-                    )
-                    extract_results_list.append({
-                        "name": name,
-                        "source": source,
-                        "range": range_type,
-                        "expr": expr,
-                        "index": index,
-                        "extract_value": None,
-                        "success": False,
-                        "error": error_msg
-                    })
-            return extract_results_dict, extract_results_list
-        except StepExecutionError:
-            raise
-        except Exception as e:
-            raise StepExecutionError(AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)) from e
-
-    def extract_from_source(
-            self,
-            *,
-            source: str,
-            expr: Optional[str],
-            range_type: str = "SOME",
-            index: Optional[int] = None,
-            response_text: Optional[str] = None,
-            response_json: Optional[Union[list, dict]] = None,
-            response_headers: Optional[Dict[str, Any]] = None,
-            response_cookies: Optional[Dict[str, Any]] = None,
-            operation_type: str = "变量提取"
-    ):
-        """
-        从 source 指定来源中按 expr 与 range 提取单个值。
-        :param source: 来源类型，如 "response json"、"response xml"、"response text"、"response header"、"response cookie"、"session_variables"。
-        :param expr: 提取表达式（JSONPath/XPath/正则/键名等），SOME 模式必填。
-        :param range_type: "ALL" 或 "SOME"。
-        :param index: 提取结果为数组时的下标。
-        :param response_text: 响应正文。
-        :param response_json: 响应 JSON。
-        :param response_headers: 响应头。
-        :param response_cookies: 响应 Cookie。
-        :param operation_type: 用于错误信息的前缀，如 "变量提取"、"断言验证"。
-        :return: 提取得到的值。
-        """
-        if source.lower() == "response json":
-            if not response_json:
-                raise StepExecutionError(f"【{operation_type}】响应内容不是有效的JSON数据")
-            if range_type.lower() == "all":
-                return response_json
-            else:
-                if not expr:
-                    raise StepExecutionError(
-                        f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
-                try:
-                    extracted = AutoTestToolService.resolve_json_path(data=response_json, expr=expr)
-                except Exception as e:
-                    raise StepExecutionError(str(e)) from e
-
-                if isinstance(extracted, list) and index is not None:
-                    try:
-                        index_int: int = int(index)
-                        if index_int < len(extracted):
-                            return extracted[index_int]
-                        else:
-                            raise StepExecutionError(
-                                f"【{operation_type}】数组越界, "
-                                f"给定索引[{index_int}]不可大于数组长度[{len(extracted)}]"
-                            )
-                    except (ValueError, TypeError) as e:
-                        raise StepExecutionError(
-                            f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}"
-                        ) from e
-                return extracted
-
-        elif source.lower() == "response xml":
-            if not response_text:
-                raise StepExecutionError(f"【{operation_type}】响应内容不是有效的XML数据")
-            if range_type.lower() == "all":
-                return response_text
-            else:
-                if not expr:
-                    raise StepExecutionError(
-                        f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
-                try:
-                    response_xml = ET.fromstring(response_text)
-                    elements = response_xml.findall(expr)
-                    if not elements:
-                        raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
-                    if index is not None:
-                        try:
-                            index_int: int = int(index)
-                            if index_int < len(elements):
-                                element = elements[index_int]
-                                return element.text if element.text else ET.tostring(element, encoding='Unicode')
-                            else:
-                                raise StepExecutionError(
-                                    f"【{operation_type}】数组越界, "
-                                    f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
-                                )
-                        except (ValueError, TypeError) as e:
-                            raise StepExecutionError(
-                                f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}"
-                            ) from e
-                    else:
-                        element = elements[-1]
-                        return element.text if element.text else ET.tostring(element, encoding='Unicode')
-                except ET.ParseError as e:
-                    raise StepExecutionError(f"【{operation_type}】响应内容不是XML格式, 错误描述: {e}") from e
-                except Exception as e:
-                    raise StepExecutionError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误描述: {e}") from e
-
-        elif source.lower() == "response text":
-            if not response_text:
-                raise StepExecutionError(f"【{operation_type}】响应内容不是有效的Text数据")
-            if range_type.lower() == "all":
-                return response_text
-            else:
-                if not expr:
-                    raise StepExecutionError(
-                        f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
-                try:
-                    match = re.search(expr, response_text)
-                    if match:
-                        return match.group(0)
-                    else:
-                        raise StepExecutionError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
-                except re.error as e:
-                    raise StepExecutionError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
-
-        elif source.lower() == "response header":
-            if not response_headers:
-                raise StepExecutionError(f"【{operation_type}】响应header为空")
-            if range_type.lower() == "all":
-                return response_headers
-            else:
-                if not expr:
-                    raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名")
-                var = response_headers.get(expr)
-                if not var:
-                    raise StepExecutionError(f"【{operation_type}】响应 Headers 中不存在: {expr}")
-                return var
-
-        elif source.lower() == "response cookie":
-            if not response_cookies:
-                raise StepExecutionError(f"【{operation_type}】响应Cookie为空")
-            if range_type.lower() == "all":
-                return response_cookies
-            else:
-                if not expr:
-                    raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名")
-                var = response_cookies.get(expr)
-                if not var:
-                    raise StepExecutionError(f"【{operation_type}】响应 Cookies 中不存在: {expr}")
-                return var
-
-        elif source.lower() == "session_variables" or source == "变量池":
-            if not expr:
-                raise StepExecutionError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名")
-            try:
-                return self.context.get_variable(expr)
-            except KeyError:
-                raise StepExecutionError(f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量")
-
-        else:
-            raise StepExecutionError(f"【{operation_type}】源类型 {source} 不被支持")
-
-    def run_validators(
-            self,
-            *,
-            response_text: Optional[str] = None,
-            response_json: Optional[Union[list, dict]] = None,
-            response_headers: Optional[Dict[str, Any]] = None,
-            response_cookies: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        按 assert_validators 配置从响应中取实际值并与期望值比较，返回每条断言的结果列表。
-        :param response_text: 响应正文文本。
-        :param response_json: 响应 JSON 对象。
-        :param response_headers: 响应头字典。
-        :param response_cookies: 响应 Cookie 字典。
-        :return: List[Dict[str, Any]]: 每条断言的结果，含 name、expr、source、operation、except_value、actual_value、success、error。
-        """
-        try:
-            assert_validators = self.step.get("assert_validators")
-            if not assert_validators:
-                return []
-            if not isinstance(assert_validators, list):
-                raise StepExecutionError(
-                    f"【断言验证】表达式列表解析失败: "
-                    f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
-                    f"但得到[{type(assert_validators)}]类型"
-                )
-            valid_results: List[Dict[str, Any]] = []
-            for validator_config in assert_validators:
-                if not isinstance(validator_config, dict):
-                    self.context.log(
-                        f"【断言验证】表达式子项解析无效(跳过): "
-                        f"参数[assert_validators]的子项必须是[Dict[str, Any]]类型, "
-                        f"但得到[{type(validator_config)}]类型: {validator_config}"
-                    )
-                    continue
-                name = validator_config.get("name")
-                expr = validator_config.get("expr")
-                operation = validator_config.get("operation")
-                except_value = validator_config.get("except_value")
-                source = validator_config.get("source")
-                if not expr or not operation:
-                    self.context.log(
-                        f"【断言验证】表达式子项解析无效(跳过): "
-                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数",
-                        step_code=self.step_code
-                    )
-                    continue
-                try:
-                    actual_value = self.extract_from_source(
-                        source=source,
-                        expr=expr,
-                        range_type="SOME",
-                        index=None,
-                        response_text=response_text,
-                        response_json=response_json,
-                        response_headers=response_headers,
-                        response_cookies=response_cookies,
-                        operation_type="断言验证"
-                    )
-                except StepExecutionError:
-                    raise
-                except Exception as e:
-                    raise StepExecutionError(f"【断言验证】提取实际值失败, 错误描述: {e}") from e
-                try:
-                    success = AutoTestToolService.compare_assertion(actual_value, operation, except_value)
-                except Exception as e:
-                    raise StepExecutionError(f"【断言验证】比较失败: [{validator_config}], 错误描述: {e}") from e
-                valid_results.append({
-                    "name": name,
-                    "expr": expr,
-                    "source": source,
-                    "operation": operation,
-                    "except_value": except_value,
-                    "actual_value": actual_value,
-                    "success": success,
-                    "error": "" if success else "断言失败",
-                })
-            return valid_results
-        except StepExecutionError:
-            raise
-        except Exception as e:
-            raise StepExecutionError(AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)) from e
 
 
 class DefaultStepExecutor(BaseStepExecutor):

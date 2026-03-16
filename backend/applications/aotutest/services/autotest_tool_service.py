@@ -13,7 +13,8 @@ import json
 import re
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Dict, List, Optional, Tuple, Callable, Union
+from xml.etree import ElementTree as ET
 
 from jsonpath_ng import parse as jsonpath_parse
 
@@ -123,9 +124,9 @@ class AutoTestToolService:
             f"步骤标识: {step_code}, \n"
             f"步骤名称: {step_name}, \n"
             f"步骤类型: {step_type}, \n"
-            f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
-            f"错误类型: {type(exception).__name__}, \n"
             f"错误描述: {exception}, \n"
+            f"错误类型: {type(exception).__name__}, \n"
+            f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
             f"错误回溯: {traceback.format_exc()}\n"
         )
 
@@ -253,6 +254,378 @@ class AutoTestToolService:
             return comparator(actual, expected)
         except Exception as e:
             raise ValueError(f"条件比较失败: {str(e)}")
+
+    # -------------------------------------------------------------------------
+    # 变量提取与断言验证（供 HTTP 调试接口与步骤引擎共用）
+    # -------------------------------------------------------------------------
+
+    @classmethod
+    def extract_from_source(
+            cls,
+            *,
+            source: str,
+            expr: Optional[str],
+            range_type: Optional[str] = "SOME",
+            index: Optional[Any] = None,
+            response_text: Optional[str] = None,
+            response_json: Optional[Union[list, dict]] = None,
+            response_headers: Optional[Dict[str, Any]] = None,
+            response_cookies: Optional[Dict[str, Any]] = None,
+            session_variables_lookup: Optional[Union[Dict[str, Any], Callable[[str], Any]]] = None,
+            operation_type: str = "变量提取",
+    ) -> Any:
+        """
+        从 source 指定来源中按 expr 与 range 提取单个值。供 HTTP 调试与步骤引擎共用。
+
+        :param source: 来源类型，如 "response json"、"response xml"、"response text"、
+                      "response header(s)"、"response cookie(s)"、"session_variables"、"变量池"。
+        :param expr: 提取表达式（JSONPath/XPath/正则/键名等），SOME 模式必填。
+        :param range_type: "ALL" 或 "SOME"，默认 "SOME"。
+        :param index: 提取结果为数组时的下标。
+        :param response_text: 响应正文。
+        :param response_json: 响应 JSON。
+        :param response_headers: 响应头。
+        :param response_cookies: 响应 Cookie。
+        :param session_variables_lookup: 变量池：Dict 则用 key 取值，Callable 则 get_variable(key)。
+        :param operation_type: 错误信息前缀，如 "变量提取"、"断言验证"。
+        :return: 提取得到的值。
+        :raises ValueError: 提取失败时，携带可读错误信息。
+        """
+        range_type = (range_type or "SOME").strip().lower()
+        src = (source or "").strip().lower()
+
+        if src == "response json":
+            if response_json is None:
+                raise ValueError(f"【{operation_type}】响应内容不是有效的JSON数据")
+            if range_type == "all":
+                return response_json
+            if not expr:
+                raise ValueError(
+                    f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式"
+                )
+            try:
+                extract_value = cls.resolve_json_path(data=response_json, expr=expr)
+            except Exception as e:
+                raise ValueError(str(e)) from e
+            if isinstance(extract_value, list) and index is not None:
+                try:
+                    index_int = int(index)
+                    if index_int < len(extract_value):
+                        return extract_value[index_int]
+                    raise ValueError(
+                        f"【{operation_type}】数组越界, "
+                        f"给定索引[{index_int}]不可大于数组长度[{len(extract_value)}]"
+                    )
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}") from e
+            return extract_value
+
+        if src == "response xml":
+            if not response_text:
+                raise ValueError(f"【{operation_type}】响应内容不是有效的XML数据")
+            if range_type == "all":
+                return response_text
+            if not expr:
+                raise ValueError(
+                    f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式"
+                )
+            try:
+                response_xml = ET.fromstring(response_text)
+                elements = response_xml.findall(expr)
+                if not elements:
+                    raise ValueError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
+                if index is not None:
+                    try:
+                        index_int = int(index)
+                        if index_int < len(elements):
+                            element = elements[index_int]
+                            return element.text if element.text else ET.tostring(element, encoding="unicode")
+                        raise ValueError(
+                            f"【{operation_type}】数组越界, "
+                            f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
+                        )
+                    except (ValueError, TypeError) as e:
+                        raise ValueError(f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}") from e
+                element = elements[-1]
+                return element.text if element.text else ET.tostring(element, encoding="unicode")
+            except ET.ParseError as e:
+                raise ValueError(f"【{operation_type}】响应内容不是有效的XML格式, 错误描述: {e}") from e
+            except ValueError:
+                raise
+            except Exception as e:
+                raise ValueError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误: {e}") from e
+
+        if src == "response text":
+            if not response_text:
+                raise ValueError(f"【{operation_type}】响应内容不是有效的Text数据")
+            if range_type == "all":
+                return response_text
+            if not expr:
+                raise ValueError(
+                    f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式"
+                )
+            try:
+                match = re.search(expr, response_text)
+                if match:
+                    return match.group(0)
+                raise ValueError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
+            except re.error as e:
+                raise ValueError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
+
+        if src in ("response header", "response headers"):
+            if not response_headers:
+                raise ValueError(f"【{operation_type}】响应 Headers 为空")
+            if range_type == "all":
+                return response_headers
+            if not expr:
+                raise ValueError(
+                    f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称"
+                )
+            var = response_headers.get(expr)
+            if var is None or var == "":
+                raise ValueError(f"【{operation_type}】响应 Headers 中不存在: {expr}")
+            return var
+
+        if src in ("response cookie", "response cookies"):
+            if not response_cookies:
+                raise ValueError(f"【{operation_type}】响应 Cookies 为空")
+            if range_type == "all":
+                return response_cookies
+            if not expr:
+                raise ValueError(
+                    f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称"
+                )
+            var = response_cookies.get(expr)
+            if var is None or var == "":
+                raise ValueError(f"【{operation_type}】响应 Cookies 中不存在: {expr}")
+            return var
+
+        if src == "session_variables" or src == "变量池":
+            if not expr:
+                raise ValueError(
+                    f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称"
+                )
+            if session_variables_lookup is None:
+                raise ValueError(f"【{operation_type}】变量池未提供")
+            if callable(session_variables_lookup):
+                try:
+                    return session_variables_lookup(expr)
+                except KeyError:
+                    raise ValueError(
+                        f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量"
+                    ) from None
+            val = session_variables_lookup.get(expr)
+            if val is None and expr not in session_variables_lookup:
+                raise ValueError(
+                    f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量"
+                )
+            return val
+
+        raise ValueError(f"【{operation_type}】源类型 {source} 不被支持")
+
+    @classmethod
+    def run_extract_variables(
+            cls,
+            *,
+            extract_variables: List[Dict[str, Any]],
+            response_text: Optional[str] = None,
+            response_json: Optional[Union[list, dict]] = None,
+            response_headers: Optional[Dict[str, Any]] = None,
+            response_cookies: Optional[Dict[str, Any]] = None,
+            session_variables_lookup: Optional[Union[Dict[str, Any], Callable[[str], Any]]] = None,
+            log_callback: Optional[Callable[[str], None]] = None,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        按 extract_variables 配置从响应/变量池中提取变量。供 HTTP 调试与步骤引擎共用。
+
+        :return: (name -> value 字典, 完整结果列表)，列表项含 name/source/range/expr/index/extract_value/error/success。
+        """
+        extract_results_dict: Dict[str, Any] = {}
+        extract_results_list: List[Dict[str, Any]] = []
+        if not extract_variables:
+            return extract_results_dict, extract_results_list
+        if not isinstance(extract_variables, list):
+            if log_callback:
+                log_callback(
+                    f"【变量提取】表达式列表解析失败: "
+                    f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
+                    f"但得到[{type(extract_variables)}]类型"
+                )
+            return extract_results_dict, extract_results_list
+        if log_callback:
+            log_callback("【变量提取】开始")
+        for ext_config in extract_variables:
+            if not isinstance(ext_config, dict):
+                if log_callback:
+                    log_callback(
+                        f"【变量提取】表达式子项解析无效(跳过): "
+                        f"参数[extract_variables]的子项必须是[Dict[str, Any]]类型, "
+                        f"但得到[{type(ext_config)}]类型: {ext_config}"
+                    )
+                continue
+            name = ext_config.get("name")
+            expr = ext_config.get("expr")
+            source = ext_config.get("source")
+            range_type = ext_config.get("range")
+            index = ext_config.get("index")
+            if not name or not expr or not source:
+                if log_callback:
+                    log_callback(
+                        f"【变量提取】表达式子项解析无效(跳过): "
+                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"
+                    )
+                continue
+            error_msg = ""
+            extract_value = None
+            try:
+                extract_value = cls.extract_from_source(
+                    source=source,
+                    expr=expr,
+                    range_type=range_type,
+                    index=index,
+                    response_text=response_text,
+                    response_json=response_json,
+                    response_headers=response_headers,
+                    response_cookies=response_cookies,
+                    session_variables_lookup=session_variables_lookup,
+                    operation_type="变量提取",
+                )
+                if log_callback:
+                    log_callback(f"【变量提取】成功: {name}  <==>  {extract_value}")
+            except Exception as e:
+                error_msg = str(e)
+                if log_callback:
+                    log_callback(f"【变量提取】失败: {name}, {error_msg}")
+            item = {
+                "name": name,
+                "source": source,
+                "range": range_type,
+                "expr": expr,
+                "index": index,
+                "extract_value": extract_value,
+                "error": error_msg,
+                "success": error_msg == "",
+            }
+            extract_results_list.append(item)
+            if error_msg == "":
+                extract_results_dict[name] = extract_value
+        if log_callback:
+            log_callback("【变量提取】结束")
+        return extract_results_dict, extract_results_list
+
+    @classmethod
+    def run_assert_validators(
+            cls,
+            *,
+            assert_validators: List[Dict[str, Any]],
+            response_text: Optional[str] = None,
+            response_json: Optional[Union[list, dict]] = None,
+            response_headers: Optional[Dict[str, Any]] = None,
+            response_cookies: Optional[Dict[str, Any]] = None,
+            session_variables_lookup: Optional[Union[Dict[str, Any], Callable[[str], Any]]] = None,
+            log_callback: Optional[Callable[[str], None]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        按 assert_validators 配置从响应/变量池取实际值并与期望值比较。供 HTTP 调试与步骤引擎共用。
+
+        :return: 每条断言结果列表，含 name/source/expr/operation/except_value/actual_value/success/error。
+        """
+        validator_results: List[Dict[str, Any]] = []
+        if not assert_validators:
+            return validator_results
+        if not isinstance(assert_validators, list):
+            if log_callback:
+                log_callback(
+                    f"【断言验证】表达式列表解析失败: "
+                    f"参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
+                    f"但得到[{type(assert_validators)}]类型"
+                )
+            return validator_results
+        if log_callback:
+            log_callback("【断言验证】开始")
+        for validator_config in assert_validators:
+            if not isinstance(validator_config, dict):
+                if log_callback:
+                    log_callback(
+                        f"【断言验证】表达式子项解析无效(跳过): "
+                        f"参数[assert_validators]的子项必须是[Dict[str, Any]]类型, "
+                        f"但得到[{type(validator_config)}]类型: {validator_config}"
+                    )
+                continue
+            name = validator_config.get("name")
+            expr = validator_config.get("expr")
+            operation = validator_config.get("operation")
+            except_value = validator_config.get("except_value")
+            source = validator_config.get("source")
+            if not name or not expr or not operation or not source:
+                if log_callback:
+                    log_callback(
+                        f"【断言验证】表达式子项解析无效(跳过): "
+                        f"参数[name, expr, operation, source]是必须的, 非空断言时需添加[except_value]参数"
+                    )
+                continue
+            error_msg = ""
+            success = False
+            actual_value = None
+            try:
+                actual_value = cls.extract_from_source(
+                    source=source,
+                    expr=expr,
+                    range_type="SOME",
+                    index=None,
+                    response_text=response_text,
+                    response_json=response_json,
+                    response_headers=response_headers,
+                    response_cookies=response_cookies,
+                    session_variables_lookup=session_variables_lookup,
+                    operation_type="断言验证",
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if log_callback:
+                    log_callback(f"【断言验证】比较失败: {name}, {error_msg}")
+                validator_results.append({
+                    "name": name,
+                    "source": source,
+                    "expr": expr,
+                    "operation": operation,
+                    "except_value": except_value,
+                    "actual_value": actual_value,
+                    "success": False,
+                    "error": error_msg,
+                })
+                continue
+            try:
+                success = cls.compare_assertion(actual=actual_value, operation=operation, expected=except_value)
+                if log_callback:
+                    if success:
+                        log_callback(
+                            f"【断言验证】比较成功: "
+                            f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
+                        )
+                    else:
+                        log_callback(
+                            f"【断言验证】比较失败: "
+                            f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
+                        )
+            except Exception as e:
+                error_msg = str(e)
+                success = False
+                if log_callback:
+                    log_callback(f"【断言验证】比较异常, 错误描述: {e}: {name}, {error_msg}")
+            validator_results.append({
+                "name": name,
+                "source": source,
+                "expr": expr,
+                "operation": operation,
+                "except_value": except_value,
+                "actual_value": actual_value,
+                "success": success,
+                "error": error_msg,
+            })
+        if log_callback:
+            log_callback("【断言验证】结束")
+        return validator_results
 
     @classmethod
     def parse_condition_json(cls, condition: str, error_prefix: str) -> Dict[str, Any]:

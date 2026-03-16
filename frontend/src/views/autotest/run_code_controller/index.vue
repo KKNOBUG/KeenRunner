@@ -204,17 +204,22 @@ const handleDebug = async () => {
     const requestData = {
       step_name: form.step_name || 'Python代码调试',
       code: form.code,
-      defined_variables: {},
-      session_variables: {}
+      // 后端要求为 List[Dict[str, Any]]，此处调试模式先传空数组
+      defined_variables: [],
+      session_variables: []
     }
 
     const response = await api.pythonCodeDebugging(requestData)
+    console.log("response")
+    console.log(response)
+    console.log("response")
     if (response.code === '000000' && response.data) {
       debugResponse.value = response.data
       window.$message?.success?.(response.message || '代码调试成功')
     } else {
-      window.$message?.error?.(response.message || '代码调试失败')
       debugResponse.value = response.data
+      console.log(debugResponse)
+      window.$message?.error?.(response.message || '代码调试失败')
     }
   } catch (error) {
     console.error('调试请求异常:', error)
