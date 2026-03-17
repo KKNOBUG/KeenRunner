@@ -18,38 +18,37 @@ NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
 class AutoTestApiDetailBase(BaseModel):
-    quote_case_id: Optional[int] = Field(None, ge=1, description="引用公共脚本ID")
+    quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本ID")
 
-    step_st_time: Optional[str] = Field(None, max_length=255, description="步骤执行开始时间")
-    step_ed_time: Optional[str] = Field(None, max_length=255, description="步骤执行结束时间")
-    step_elapsed: Optional[str] = Field(None, max_length=16, description="步骤执行消耗时间")
-    step_exec_logger: Optional[str] = Field(None, description="步骤执行日志")
-    step_exec_except: Optional[str] = Field(None, description="步骤错误描述")
-    num_cycles: Optional[int] = Field(None, le=100, description="循环执行次数(第几次)")
+    step_st_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行开始时间")
+    step_ed_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行结束时间")
+    step_elapsed: Optional[str] = Field(default=None, max_length=16, description="步骤执行消耗时间")
+    step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志")
+    step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
+    num_cycles: Optional[int] = Field(default=None, le=100, description="循环执行次数(第几次)")
 
-    # 实际发出的请求，格式与 http_debugging 入参一致（列表为 key/value/desc），供报告展示与复现
     request_header: NON_DICT_TYPE = Field(default=None, description="实际发出的请求头")
     request_params: NON_DICT_TYPE = Field(default=None, description="实际发出的请求参数")
     request_form_data: NON_DICT_TYPE = Field(default=None, description="实际发出的表单数据")
     request_form_urlencoded: NON_DICT_TYPE = Field(default=None, description="实际发出的 urlencoded 键值对")
     request_form_file: NON_DICT_TYPE = Field(default=None, description="实际发出的表单文件项")
     request_body: NON_DICT_TYPE = Field(default=None, description="实际发出的请求体(JSON)")
-    request_text: Optional[str] = Field(None, description="实际发出的请求体(Raw)")
+    request_text: Optional[str] = Field(default=None, description="实际发出的请求体(Raw)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
-    dataset_name: Optional[str] = Field(None, max_length=255, description="本步骤执行对应的数据集名称(参数化)")
-    dataset_snapshot: Optional[Dict[str, Any]] = Field(None, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
+    dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称(参数化)")
+    dataset_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
 
-    response_cookie: Optional[str] = Field(None, description="响应信息(cookies)")
+    response_cookie: Optional[str] = Field(default=None, description="响应信息(cookies)")
     response_header: NON_DICT_TYPE = Field(default=None, description="响应信息(headers)")
     response_body: NON_DICT_TYPE = Field(default=None, description="响应信息(body)")
-    response_text: Optional[str] = Field(None, description="响应信息(text)")
-    response_elapsed: Optional[str] = Field(None, max_length=16, description="响应信息(elapsed)")
+    response_text: Optional[str] = Field(default=None, description="响应信息(text)")
+    response_elapsed: Optional[str] = Field(default=None, max_length=16, description="响应信息(elapsed)")
 
-    session_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(包含提取变量，以及前后code设置的变量)")
-    defined_variables: NON_LIST_DICT_TYPE = Field(None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
-    extract_variables: NON_LIST_DICT_TYPE = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
-    assert_validators: NON_LIST_DICT_TYPE = Field(None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
+    session_variables: NON_LIST_DICT_TYPE = Field(default=None, description="会话变量(包含提取变量，以及前后code设置的变量)")
+    defined_variables: NON_LIST_DICT_TYPE = Field(default=None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
+    extract_variables: NON_LIST_DICT_TYPE = Field(default=None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
 
 
 class AutoTestApiDetailCreate(AutoTestApiDetailBase):

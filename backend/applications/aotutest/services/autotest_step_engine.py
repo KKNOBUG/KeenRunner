@@ -121,8 +121,8 @@ class StepExecutionContext:
         :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
         :param pending_details: 延后落库时收集明细的列表，非 None 时 _save_step_detail 只追加不写库。
         """
-        self.env_name = env_name
         self.case_id = case_id
+        self.env_name = env_name
         self.case_code = case_code
         self.report_code = report_code
         self.dataset_name = dataset_name
@@ -170,7 +170,7 @@ class StepExecutionContext:
             error_message: str = f"异步上下文管理器: 关闭HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
 
-    def resolve_placeholders(self, variables, step_no: Optional[int] = None):
+    def resolve_placeholders(self, variables, step_code: Optional[str] = None) -> Any:
         return AutoTestToolService.resolve_placeholders(
             value=variables or [],
             logger_object=self.log,
@@ -349,19 +349,21 @@ class StepExecutionContext:
             }
             if timeout is not None:
                 kwargs["timeout"] = timeout
-            kwargs: Dict[str, Any] = {key: value for key, value in kwargs.items() if value is not None}
-            raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
-            # 对请求头中的中文进行 UTF-8 百分号编码
+            kwargs: Dict[str, Any] = {
+                key: value for key, value in kwargs.items()
+                if value is not None
+            }
             encoded_headers: Dict[str, Any] = {}
-            for key, value in raw_headers.items():
-                encoded_headers[key] = urllib.parse.quote(value, encoding="utf-8") if isinstance(value, str) else value
-
-            # 把编码后的 headers 放回 kwargs
-            kwargs["headers"] = encoded_headers
-            self.log(f"【HTTP请求】请求方式: {method}")
-            self.log(f"【HTTP请求】请求地址: {url}")
-            self.log(f"【HTTP请求】请求参数: {kwargs}")
+            raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
             try:
+                # 对请求头中的中文进行 UTF-8 百分号编码
+                for key, value in raw_headers.items():
+                    encoded_headers[key] = urllib.parse.quote(value, encoding="utf-8") if isinstance(value, str) else value
+                # 把编码后的 headers 放回 kwargs
+                kwargs["headers"] = encoded_headers
+                self.log(f"【HTTP请求】请求方式: {method}")
+                self.log(f"【HTTP请求】请求地址: {url}")
+                self.log(f"【HTTP请求】请求参数: {kwargs}")
                 response = await client.request(method, url, **kwargs)
                 self.log(
                     f"【HTTP请求】请求成功: "
@@ -479,8 +481,8 @@ class StepExecutionContext:
             raise StepExecutionError(error_message) from e
         except NameError as e:
             error_message: str = (
-                f"【执行代码请求(Python)】代码解析失败: "
-                f"请检查代码中是否引用了未定义的变量或函数, "
+                f"【执行代码请求(Python)】代码解析失败: \n"
+                f"请检查代码中是否引用了未定义的变量或函数, \n"
                 f"错误描述: {e}\n"
                 f"错误类型: {type(e).__name__}, \n"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -489,8 +491,8 @@ class StepExecutionContext:
             raise StepExecutionError(error_message) from e
         except Exception as e:
             error_message: str = (
-                f"【执行代码请求(Python)】代码解析异常: "
-                f"错误描述: {e}\n"
+                f"【执行代码请求(Python)】代码解析异常: \n"
+                f"错误描述: {e}, \n"
                 f"错误类型: {type(e).__name__}, \n"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
@@ -642,10 +644,10 @@ class StepExecutionContext:
                 else:
                     var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                self.log(f"【执行代码请求(Python)】占位符解析失败, 变量或函数({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【执行代码请求(Python)】占位符解析失败, 引用变量或函数({var_name})失败, 保留原值, 错误描述: {e}")
                 return match.group(0)
 
             # 在字符串字面量中，替换为合法的 Python 字面量，避免产生无效代码（如 dic["k"] = 邵刚 导致 NameError）
@@ -866,8 +868,8 @@ class BaseStepExecutor:
                         f"步骤名称: {self.step_name}, \n"
                         f"步骤类型: {self.step_type}, \n"
                         f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
-                        f"错误类型: {type(e).__name__}, \n"
                         f"错误描述: {e}, \n"
+                        f"错误类型: {type(e).__name__}, \n"
                         f"错误回溯: {traceback.format_exc()}\n"
                     )
                     print(error_message)
@@ -912,10 +914,10 @@ class BaseStepExecutor:
             result_extract = getattr(result, "extract_variables", None)
             extract_variables = list(result_extract) if isinstance(result_extract, list) else []
             session_variables = list(self.context.session_variables) if self.context.session_variables else []
-            ds_snapshot = getattr(result, "dataset_snapshot", None)
-            ds_name = getattr(result, "dataset_name", None)
-            has_data_driven = ds_snapshot is not None
-            req = getattr(result, "request", None) or {}
+            dataset_name: Optional[str] = getattr(result, "dataset_name", None)
+            dataset_snapshot: Optional[Dict[str, Any]] = getattr(result, "dataset_snapshot", None)
+            has_data_driven: bool = dataset_snapshot is not None
+            actual_request: Dict[str, Any] = getattr(result, "request", None) or {}
             detail_create = AutoTestApiDetailCreate(
                 case_id=self.context.case_id,
                 case_code=self.context.case_code,
@@ -932,15 +934,15 @@ class BaseStepExecutor:
                 step_exec_logger=step_exec_logger,
                 step_exec_except=result.error,
                 num_cycles=num_cycles,
-                request_header=req.get("request_header") or None,
-                request_params=req.get("request_params") or None,
-                request_form_data=req.get("request_form_data") or None,
-                request_form_urlencoded=req.get("request_form_urlencoded") or None,
-                request_form_file=req.get("request_form_file") or None,
-                request_body=req.get("request_body") or None,
-                request_text=req.get("request_text") or None,
-                dataset_snapshot=ds_snapshot if has_data_driven else None,
-                dataset_name=ds_name if has_data_driven else None,
+                request_header=actual_request.get("request_header") or None,
+                request_params=actual_request.get("request_params") or None,
+                request_form_data=actual_request.get("request_form_data") or None,
+                request_form_urlencoded=actual_request.get("request_form_urlencoded") or None,
+                request_form_file=actual_request.get("request_form_file") or None,
+                request_body=actual_request.get("request_body") or None,
+                request_text=actual_request.get("request_text") or None,
+                dataset_name=dataset_name if has_data_driven else None,
+                dataset_snapshot=dataset_snapshot if has_data_driven else None,
                 response_cookie=response_cookie or None,
                 response_header=response_header or None,
                 response_body=response_body or None,
@@ -1085,9 +1087,7 @@ class LoopStepExecutor(BaseStepExecutor):
                     if not child.success:
                         result.success = False
                         if on_error == AutoTestLoopErrorStrategy.STOP:
-                            raise StepExecutionError(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行), {child.error}"
-                            )
+                            raise StepExecutionError(f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行), {child.error}")
                         elif on_error == AutoTestLoopErrorStrategy.BREAK:
                             self.context.log(
                                 f"【循环结构】子步骤执行失败(错误处理策略: 中断循环), {child.error}",
@@ -1817,7 +1817,10 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
 
 class HttpStepExecutor(BaseStepExecutor):
-    """HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。参数化驱动仅在此执行器内处理：按 dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取数。"""
+    """
+    HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。
+    参数化驱动仅在此执行器内处理：按 dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取数。
+    """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
@@ -1843,7 +1846,7 @@ class HttpStepExecutor(BaseStepExecutor):
             request_url: str = self.step.get("request_url").lstrip("/")
             request_project_id: int = self.step.get("request_project_id")
             request_method: str = self.step.get("request_method", "").upper()
-            if request_url and not request_url.lower().startswith("http"):
+            if env_name and request_url and not request_url.lower().startswith("http"):
                 try:
                     from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
                     env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
@@ -2033,9 +2036,7 @@ class HttpStepExecutor(BaseStepExecutor):
             except AttributeError as e:
                 raise StepExecutionError(f"【HTTP请求】响应对象缺少必要属性, 错误详情: {e}") from e
             except Exception as e:
-                raise StepExecutionError(
-                    f"【HTTP请求】在提取响应状态码、内容、headers、cookies时失败, 错误详情: {e}") from e
-
+                raise StepExecutionError(f"【HTTP请求】在提取响应状态码、内容、headers、cookies时失败, 错误详情: {e}") from e
             try:
                 response_json = response.json()
             except (ValueError, json.JSONDecodeError):
