@@ -982,7 +982,7 @@ async def execute_step_tree(
             total_steps: int = statistics.get("total_steps", 0)
             success_steps: int = statistics.get("success_steps", 0)
             failed_steps: int = statistics.get("failed_steps", 0)
-            passed_ratio: int = statistics.get("passed_ratio", 0.0)
+            passed_ratio: float = statistics.get("passed_ratio", 0.0)
             result_data = {
                 "total_steps": total_steps,
                 "failed_steps": failed_steps,
