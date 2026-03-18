@@ -130,6 +130,7 @@ class StepExecutionContext:
         self.pending_details = pending_details
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[str] = None
+        self.executing_quote_case_id: Optional[int] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[Dict[str, Any]] = []
@@ -349,18 +350,16 @@ class StepExecutionContext:
             }
             if timeout is not None:
                 kwargs["timeout"] = timeout
-            kwargs: Dict[str, Any] = {
-                key: value for key, value in kwargs.items()
-                if value is not None
-            }
-            encoded_headers: Dict[str, Any] = {}
+            kwargs: Dict[str, Any] = {key: value for key, value in kwargs.items() if value}
             raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
             try:
-                # 对请求头中的中文进行 UTF-8 百分号编码
-                for key, value in raw_headers.items():
-                    encoded_headers[key] = urllib.parse.quote(value, encoding="utf-8") if isinstance(value, str) else value
-                # 把编码后的 headers 放回 kwargs
-                kwargs["headers"] = encoded_headers
+                if raw_headers:
+                    # 对请求头中的中文进行 UTF-8 百分号编码
+                    encoded_headers: Dict[str, Any] = {}
+                    for key, value in raw_headers.items():
+                        encoded_headers[key] = urllib.parse.quote(value, encoding="utf-8") if isinstance(value, str) else value
+                    # 把编码后的 headers 放回 kwargs
+                    kwargs["headers"] = encoded_headers
                 self.log(f"【HTTP请求】请求方式: {method}")
                 self.log(f"【HTTP请求】请求地址: {url}")
                 self.log(f"【HTTP请求】请求参数: {kwargs}")
@@ -1719,10 +1718,13 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
     """引用公共脚本执行器：加载引用脚本的步骤树，规范化后按 step_no 顺序执行并挂到 result.children。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
+        previous_quote_case_id = getattr(self.context, "executing_quote_case_id", None)
         try:
             quote_case_id = self.step.get("quote_case_id")
             if not quote_case_id:
                 raise StepExecutionError("【引用公共脚本】缺少必要配置: quote_case_id")
+            # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
+            self.context.executing_quote_case_id = quote_case_id
             try:
                 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
                 quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
@@ -1806,6 +1808,12 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
+        finally:
+            # 恢复上一级引用脚本标识（支持嵌套引用时的正确回退）
+            try:
+                self.context.executing_quote_case_id = previous_quote_case_id
+            except Exception:
+                pass
 
 
 class TcpStepExecutor(BaseStepExecutor):
@@ -1827,7 +1835,8 @@ class HttpStepExecutor(BaseStepExecutor):
             # 参数化驱动：仅 HTTP 步骤在此处理。根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集，仅用局部变量做报文替换与断言，并写入 result 供落库
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None
             dataset_name = getattr(self.context, "dataset_name", None)
-            if dataset_name and self.step_code:
+            executing_quote_case_id = getattr(self.context, "executing_quote_case_id", None)
+            if dataset_name and self.step_code and not executing_quote_case_id:
                 from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
                 step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
                     case_id=self.case_id,
@@ -1999,7 +2008,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 response = await self.context.send_http_request(
                     request_method,
                     request_url,
-                    headers=headers or None,
+                    headers=headers,
                     params=params_payload,
                     data=data_payload,
                     json_data=json_payload,

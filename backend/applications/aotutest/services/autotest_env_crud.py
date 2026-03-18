@@ -111,33 +111,34 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
         return instances
 
     async def create_env(self, env_in: AutoTestApiEnvCreate) -> AutoTestApiEnvInfo:
-        """创建环境，校验同项目下环境名称唯一。
+        """
+        创建环境，校验同项目下环境名称唯一，若存在同 (project_id, env_name) 的记录，则更新数据。
 
         :param env_in: 环境创建 schema。
-        :returns: 创建后的环境实例。
-        :raises DataAlreadyExistsException: 同项目下环境名重复时。
+        :returns: 创建或恢复后的环境实例。。
+        :raises DataAlreadyExistsException: 同项目下已存在启用状态的环境名时。。
         :raises DataBaseStorageException: 违反数据库约束时。
         """
         env_name: str = env_in.env_name
         project_id: int = env_in.project_id
-
-        # 业务层验证：检查应用下是否已经存在目标环境
-        existing_env = await self.model.filter(env_name=env_name, project_id=project_id, state__not=1).first()
-        if existing_env:
-            error_message: str = f"根据(env_name={env_name}, project_id={project_id})条件检查环境信息失败, 相同应用下环境名称不允许重复"
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+        # 业务层验证：同应用下仅可存在一个状态为启用的环境信息
+        env_dict: Dict[str, Any] = env_in.model_dump(exclude_none=True, exclude_unset=True)
+        existing_env: Optional[AutoTestApiEnvInfo] = await self.model.filter(env_name=env_name, project_id=project_id).first()
+        if not existing_env:
+            try:
+                instance: AutoTestApiEnvInfo = await self.create(obj_in=env_dict)
+                return instance
+            except IntegrityError as e:
+                error_message: str = f"新增环境信息异常, 违反约束规则: {e}"
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                raise DataBaseStorageException(message=error_message) from e
 
         try:
-            env_dict: Dict[str, Any] = env_in.model_dump(exclude_none=True, exclude_unset=True)
-            # 端口可选：无端口或 0 时存空字符串（直接请求域名场景）
-            env_dict["env_port"] = (
-                str(env_in.env_port) if (env_in.env_port is not None and env_in.env_port > 0) else ""
-            )
-            instance = await self.create(obj_in=env_dict)
+            env_dict["state"] = 0
+            instance: AutoTestApiEnvInfo = await self.update(id=existing_env.id, obj_in=env_dict)
             return instance
-        except IntegrityError as e:
-            error_message: str = f"新增环境信息异常, 违反约束规则: {e}"
+        except (DoesNotExist, IntegrityError) as e:
+            error_message: str = f"新增(更新)环境信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -165,11 +166,6 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvInfo, AutoTestApiEnvCreate, 
             exclude_unset=True,
             exclude={"env_id", "env_code"}
         )
-        # 端口可选：若传入则规范为字符串，空/0 存空字符串
-        if "env_port" in update_dict:
-            update_dict["env_port"] = (
-                str(update_dict["env_port"]) if (update_dict["env_port"] is not None and update_dict["env_port"] > 0) else ""
-            )
         # 业务层验证：检查应用ID和用例名称是否唯一
         if "env_name" in update_dict or "project_id" in update_dict:
             env_name: str = update_dict.get("env_name", instance.env_name)
