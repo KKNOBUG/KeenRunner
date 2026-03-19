@@ -362,7 +362,8 @@
           </n-card>
         </n-gi>
         <n-gi :span="17" class="right-column">
-          <n-card :title="currentStepTitle" size="small" hoverable class="config-card">
+<!--          <n-card :title="currentStepTitle" size="small" hoverable class="config-card">-->
+          <n-card size="small" hoverable class="config-card">
             <!--
               数据传递说明：
               1. :config="currentStep.config" - 传递步骤的配置数据（从 mapBackendStep 中提取的配置对象）
@@ -2143,9 +2144,6 @@ const doRun = async (env_name) => {
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
       const stats = res.data || {}
       const msg = res.message
-      console.log(msg)
-      console.log(msg)
-      console.log(msg)
       window.$message?.success?.(msg)
     } else {
       window.$message?.error?.(res?.message || '执行失败')
@@ -2276,11 +2274,13 @@ const editorComponent = computed(() => {
   return editorMap[step.type] || null
 })
 
-const currentStepTitle = computed(() => {
-  if (!currentStep.value) return '步骤配置'
-  const label = stepDefinitions[currentStep.value.type]?.label || '步骤配置'
-  return currentStep.value.isQuoteInner ? `${label}（只读）` : label
-})
+// const currentStepTitle = computed(() => {
+//   if (!currentStep.value) return '步骤配置'
+//   const label = stepDefinitions[currentStep.value.type]?.label || '步骤配置'
+//   // HTTP 请求编辑器内部会自行展示更完整的内容，外层标题会显得重复
+//   // if (currentStep.value.type === 'http') return null
+//   return currentStep.value.isQuoteInner ? `${label}（只读）` : label
+// })
 
 const insertStep = (parentId, type, index = null, extraConfig = null) => {
   const def = stepDefinitions[type]

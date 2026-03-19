@@ -1,508 +1,655 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" class="http-card">
-    <n-form
-        :rules="rules"
-        :model="state.form"
-        label-placement="left"
-        label-width="80px"
-        ref="formRef"
-    >
-      <!-- 请求方式、所属应用、请求地址 -->
-      <n-form-item label="请求方式" path="method">
-        <n-select
-            v-model:value="state.form.method"
-            placeholder="请选择请求方式"
-            :options="methodOptions"
-            :render-label="renderMethodLabel"
-            style="width: 100px;"
-            :disabled="props.readonly"
-        />
-        <n-select
-            v-model:value="state.form.request_project_id"
-            placeholder="所属应用"
-            :options="projectOptions"
-            :loading="projectLoading"
-            clearable
-            filterable
-            style="width: 160px;"
-            :disabled="props.readonly"
-        />
-        <n-input
-            v-model:value="state.form.url"
-            placeholder="请输入请求地址"
-            clearable
-            style="flex: 1;"
-            :disabled="props.readonly"
-        />
-        <n-button v-if="!props.readonly" type="primary" @click="debugging" :loading="debugLoading">调试</n-button>
-      </n-form-item>
+  <n-card :bordered="false" style="width: 100%;" :class="['http-card', { 'is-collapsed': requestCardCollapsed }]">
+    <template #header>
+      <div class="card-header-row">
+        <div class="panel-title">Resquest</div>
+        <div class="card-header-actions">
+          <n-button text size="tiny" @click="toggleRequestCardCollapsed" class="collapse-tiny-btn">
+            <template #icon>
+              <TheIcon
+                  :icon="requestCardCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                  :size="18"
+              />
+            </template>
+            {{ requestCardCollapsed ? '展开' : '收起' }}
+          </n-button>
+        </div>
+      </div>
+    </template>
 
-      <!-- 步骤名称 -->
-      <n-form-item label="步骤名称" path="step_name" required>
-        <n-input
-            v-model:value="state.form.step_name"
-            placeholder="请输入步骤名称"
-            clearable
-            style="width: 100%;"
-            :disabled="props.readonly"
-        />
-      </n-form-item>
-
-      <!-- 步骤描述 -->
-      <n-form-item label="步骤描述" path="description">
-        <n-input
-            type="textarea"
-            v-model:value="state.form.description"
-            placeholder="请输入步骤描述"
-            clearable
-            style="width: 100%; min-height: 6rem;"
-            :disabled="props.readonly"
-        />
-      </n-form-item>
-    </n-form>
-
-    <!-- 请求配置 -->
-    <n-tabs type="line" animated style="margin-top: 16px;">
-      <n-tab-pane name="headers" tab="请求头">
-        <template #tab>
-          <n-badge :value="state.form.headers.length" :max="99" show-zero>
-            <span>请求头</span>
-          </n-badge>
-        </template>
-        <KeyValueEditor
-            v-model:items="state.form.headers"
-            :body-type="'none'"
-            :is-for-body="false"
-            :available-variable-list="props.availableVariableList"
-            :assist-functions="props.assistFunctions"
-            :disabled="props.readonly"
-        />
-      </n-tab-pane>
-      <n-tab-pane name="params" tab="请求体">
-        <template #tab>
-          <n-badge :value="getBodyCount" :max="99" show-zero>
-            <span>请求体</span>
-          </n-badge>
-        </template>
-        <n-radio-group v-model:value="state.form.bodyType" name="bodyType" :disabled="props.readonly">
-          <n-space>
-            <n-radio value="none">none</n-radio>
-            <n-radio value="params">params</n-radio>
-            <n-radio value="form-data">form-data</n-radio>
-            <n-radio value="x-www-form-urlencoded">x-www-form-urlencoded</n-radio>
-            <n-radio value="json">json</n-radio>
-            <n-radio value="raw">raw</n-radio>
-          </n-space>
-        </n-radio-group>
-        <div v-if="state.form.bodyType === 'params'">
-          <KeyValueEditor
-              v-model:items="state.form.bodyForm"
-              :body-type="'none'"
-              :is-for-body="true"
-              :available-variable-list="props.availableVariableList"
-              :assist-functions="props.assistFunctions"
+    <n-collapse-transition :show="!requestCardCollapsed">
+      <n-form
+          :rules="rules"
+          :model="state.form"
+          label-placement="left"
+          label-width="80px"
+          ref="formRef"
+      >
+        <!-- 请求方式、所属应用、请求地址 -->
+        <n-form-item label="请求方式" path="method">
+          <n-select
+              v-model:value="state.form.method"
+              placeholder="请选择请求方式"
+              :options="methodOptions"
+              :render-label="renderMethodLabel"
+              style="width: 100px;"
               :disabled="props.readonly"
           />
-        </div>
-        <div v-if="state.form.bodyType === 'form-data'">
-          <KeyValueEditor
-              v-model:items="state.form.bodyParams"
-              :body-type="state.form.bodyType"
-              :enableFile="true"
-              :is-for-body="true"
-              :available-variable-list="props.availableVariableList"
-              :assist-functions="props.assistFunctions"
+          <n-select
+              v-model:value="state.form.request_project_id"
+              placeholder="所属应用"
+              :options="projectOptions"
+              :loading="projectLoading"
+              clearable
+              filterable
+              style="width: 160px;"
               :disabled="props.readonly"
           />
-        </div>
-        <div v-if="state.form.bodyType === 'x-www-form-urlencoded'">
-          <KeyValueEditor
-              v-model:items="state.form.bodyForm"
-              :body-type="state.form.bodyType"
-              :is-for-body="true"
-              :available-variable-list="props.availableVariableList"
-              :assist-functions="props.assistFunctions"
-              :disabled="props.readonly"
-          />
-        </div>
-        <div v-if="state.form.bodyType === 'json'">
-          <monaco-editor
-              v-model:value="state.form.jsonBody"
-              lang="json"
-              :options="monacoEditorOptionsForBody()"
-              class="json-editor"
-              style="min-height: 400px; height: auto; margin-top: 12px;"
-          />
-        </div>
-        <div v-if="state.form.bodyType === 'raw'">
           <n-input
-              v-model:value="state.form.rawBody"
-              type="textarea"
-              placeholder="请输入 raw 请求体文本"
-              :rows="12"
-              style="margin-top: 12px;"
+              v-model:value="state.form.url"
+              placeholder="请输入请求地址"
+              clearable
+              style="flex: 1;"
               :disabled="props.readonly"
           />
-        </div>
+          <n-button v-if="!props.readonly" type="primary" @click="debugging" :loading="debugLoading">调试</n-button>
+        </n-form-item>
 
-      </n-tab-pane>
-      <n-tab-pane name="defined_variables" tab="变量">
-        <template #tab>
-          <n-badge :value="state.form.defined_variables.length" :max="99" show-zero>
-            <span>变量</span>
-          </n-badge>
-        </template>
-        <KeyValueEditor
-            v-model:items="state.form.defined_variables"
-            :body-type="'none'"
-            :is-for-body="false"
-            :available-variable-list="props.availableVariableList"
-            :assist-functions="props.assistFunctions"
-            :disabled="props.readonly"
-        />
-      </n-tab-pane>
-      <n-tab-pane name="extract_variables" tab="提取">
-        <template #tab>
-          <n-badge :value="extractCount" :max="99" show-zero>
-            <span>提取</span>
-          </n-badge>
-        </template>
-        <!-- 提取配置 -->
-        <n-space vertical :size="16">
-          <div v-for="(item, key) in state.form.extract_variables" :key="key" class="extract_variables-item">
-            <n-card size="small" hoverable>
-              <template #header>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>{{ item.name || '未命名提取' }} {{
-                      getExtractObjectLabel(item.object)
-                    }}{{
-                      item.extractScope === '部分提取' && item.jsonpath ? `( ${item.jsonpath} )` : item.extractScope === '全部提取' ? '( 全部提取 )' : ''
-                    }}</span>
-                  <n-space>
-                    <n-button text @click="toggleExtractCollapse(key)" size="small">
-                      <template #icon>
-                        <TheIcon
-                            :icon="extractCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                            :size="18"/>
-                      </template>
-                    </n-button>
-                    <n-button text @click="duplicateExtract(key)" type="info" size="small">
-                      <template #icon>
-                        <TheIcon icon="material-symbols:content-copy" :size="18"/>
-                      </template>
-                    </n-button>
-                    <n-button text @click="removeExtract(key)" type="error" size="small">
-                      <template #icon>
-                        <TheIcon icon="material-symbols:delete-outline" :size="18"/>
-                      </template>
-                    </n-button>
-                  </n-space>
-                </div>
-              </template>
-              <div v-show="!extractCollapseState[key]">
-                <n-form :model="item" label-width="auto" label-placement="left">
-                  <n-form-item label="提取名称">
-                    <n-input v-model:value="item.name" placeholder="请输入提取名称" clearable/>
-                  </n-form-item>
-                  <n-form-item label="提取对象">
-                    <n-select
-                        v-model:value="item.object"
-                        :options="extractObjectOptions"
-                        placeholder="请选择提取对象"
-                    />
-                  </n-form-item>
-                  <n-form-item label="提取范围">
-                    <n-space align="center" :wrap-item="false">
-                      <n-radio-group v-model:value="item.extractScope" name="extractScope">
-                        <n-space>
-                          <n-radio value="部分提取">部分提取</n-radio>
-                          <n-radio value="全部提取">全部提取</n-radio>
-                        </n-space>
-                      </n-radio-group>
-                      <n-tooltip trigger="hover">
-                        <template #trigger>
-                          <TheIcon icon="material-symbols:help-outline" :size="18"
-                                   style="cursor: help; margin-left: 8px;"/>
-                        </template>
-                        选择提取范围：部分提取需要指定JSONPath/XPath等表达式，全部提取将提取整个响应内容
-                      </n-tooltip>
-                    </n-space>
-                  </n-form-item>
-                  <n-form-item v-if="item.extractScope === '部分提取'" label="提取路径">
-                    <n-space align="center" :wrap-item="false" style="width: 100%;">
-                      <n-input
-                          v-model:value="item.jsonpath"
-                          :placeholder="getExtractPlaceholder(item.object)"
-                          clearable
-                          style="flex: 1;"
-                      />
-                      <n-button text type="primary" @click="continueExtract(key)">
-                        继续提取
+        <!-- 步骤名称 -->
+        <n-form-item label="步骤名称" path="step_name" required>
+          <n-input
+              v-model:value="state.form.step_name"
+              placeholder="请输入步骤名称"
+              clearable
+              style="width: 100%;"
+              :disabled="props.readonly"
+          />
+        </n-form-item>
+
+        <!-- 步骤描述 -->
+        <n-form-item label="步骤描述" path="description">
+          <n-input
+              type="textarea"
+              v-model:value="state.form.description"
+              placeholder="请输入步骤描述"
+              clearable
+              style="width: 100%; min-height: 6rem;"
+              :disabled="props.readonly"
+          />
+        </n-form-item>
+      </n-form>
+
+      <!-- 请求配置 -->
+      <n-tabs type="line" animated style="margin-top: 16px;">
+        <n-tab-pane name="headers" tab="请求头">
+          <template #tab>
+            <n-badge :value="state.form.headers.length" :max="99" show-zero>
+              <span>请求头</span>
+            </n-badge>
+          </template>
+          <KeyValueEditor
+              v-model:items="state.form.headers"
+              :body-type="'none'"
+              :is-for-body="false"
+              :available-variable-list="props.availableVariableList"
+              :assist-functions="props.assistFunctions"
+              :disabled="props.readonly"
+          />
+        </n-tab-pane>
+        <n-tab-pane name="params" tab="请求体">
+          <template #tab>
+            <n-badge :value="getBodyCount" :max="99" show-zero>
+              <span>请求体</span>
+            </n-badge>
+          </template>
+          <n-radio-group v-model:value="state.form.bodyType" name="bodyType" :disabled="props.readonly">
+            <n-space>
+              <n-radio value="none">none</n-radio>
+              <n-radio value="params">params</n-radio>
+              <n-radio value="form-data">form-data</n-radio>
+              <n-radio value="x-www-form-urlencoded">x-www-form-urlencoded</n-radio>
+              <n-radio value="json">json</n-radio>
+              <n-radio value="raw">raw</n-radio>
+            </n-space>
+          </n-radio-group>
+          <div v-if="state.form.bodyType === 'params'">
+            <KeyValueEditor
+                v-model:items="state.form.bodyForm"
+                :body-type="'none'"
+                :is-for-body="true"
+                :available-variable-list="props.availableVariableList"
+                :assist-functions="props.assistFunctions"
+                :disabled="props.readonly"
+            />
+          </div>
+          <div v-if="state.form.bodyType === 'form-data'">
+            <KeyValueEditor
+                v-model:items="state.form.bodyParams"
+                :body-type="state.form.bodyType"
+                :enableFile="true"
+                :is-for-body="true"
+                :available-variable-list="props.availableVariableList"
+                :assist-functions="props.assistFunctions"
+                :disabled="props.readonly"
+            />
+          </div>
+          <div v-if="state.form.bodyType === 'x-www-form-urlencoded'">
+            <KeyValueEditor
+                v-model:items="state.form.bodyForm"
+                :body-type="state.form.bodyType"
+                :is-for-body="true"
+                :available-variable-list="props.availableVariableList"
+                :assist-functions="props.assistFunctions"
+                :disabled="props.readonly"
+            />
+          </div>
+          <div v-if="state.form.bodyType === 'json'">
+            <monaco-editor
+                v-model:value="state.form.jsonBody"
+                lang="json"
+                :options="monacoEditorOptionsForBody()"
+                class="json-editor"
+                style="min-height: 400px; height: auto; margin-top: 12px;"
+            />
+          </div>
+          <div v-if="state.form.bodyType === 'raw'">
+            <n-input
+                v-model:value="state.form.rawBody"
+                type="textarea"
+                placeholder="请输入 raw 请求体文本"
+                :rows="12"
+                style="margin-top: 12px;"
+                :disabled="props.readonly"
+            />
+          </div>
+
+        </n-tab-pane>
+        <n-tab-pane name="defined_variables" tab="变量">
+          <template #tab>
+            <n-badge :value="state.form.defined_variables.length" :max="99" show-zero>
+              <span>变量</span>
+            </n-badge>
+          </template>
+          <KeyValueEditor
+              v-model:items="state.form.defined_variables"
+              :body-type="'none'"
+              :is-for-body="false"
+              :available-variable-list="props.availableVariableList"
+              :assist-functions="props.assistFunctions"
+              :disabled="props.readonly"
+          />
+        </n-tab-pane>
+        <n-tab-pane name="extract_variables" tab="提取">
+          <template #tab>
+            <n-badge :value="extractCount" :max="99" show-zero>
+              <span>提取</span>
+            </n-badge>
+          </template>
+          <!-- 提取配置 -->
+          <n-space vertical :size="16">
+            <div v-for="(item, key) in state.form.extract_variables" :key="key" class="extract_variables-item">
+              <n-card size="small" hoverable>
+                <template #header>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ item.name || '未命名提取' }} {{
+                        getExtractObjectLabel(item.object)
+                      }}{{
+                        item.extractScope === '部分提取' && item.jsonpath ? `( ${item.jsonpath} )` : item.extractScope === '全部提取' ? '( 全部提取 )' : ''
+                      }}</span>
+                    <n-space>
+                      <n-button text @click="toggleExtractCollapse(key)" size="small">
                         <template #icon>
-                          <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                          <TheIcon
+                              :icon="extractCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                              :size="18"/>
                         </template>
                       </n-button>
-                      <n-switch v-model:value="item.continueExtract" size="small"/>
-                      <n-input-number v-model:value="item.extractIndex" :min="0" size="small" style="width: 80px;"/>
-                      <n-tooltip trigger="hover">
-                        <template #trigger>
-                          <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;"/>
-                        </template>
-                        0 表示第1项，1表示第2项，-1表示倒数第1项，-2表示倒数第2项，以此类推
-                      </n-tooltip>
-                    </n-space>
-                  </n-form-item>
-                </n-form>
-              </div>
-            </n-card>
-          </div>
-          <n-button type="primary" @click="addExtract" block dashed>添加提取</n-button>
-        </n-space>
-      </n-tab-pane>
-      <n-tab-pane name="assert_validators" tab="断言">
-        <template #tab>
-          <n-badge :value="validatorsCount" :max="99" show-zero>
-            <span>断言</span>
-          </n-badge>
-        </template>
-        <!-- 断言配置 -->
-        <n-space vertical :size="16">
-          <div v-for="(item, key) in state.form.assert_validators" :key="key" class="validator-item">
-            <n-card size="small" hoverable>
-              <template #header>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
-                      item.jsonpath || ''
-                    }} )</span>
-                  <n-space>
-                    <n-button text @click="toggleValidatorCollapse(key)" size="small">
-                      <template #icon>
-                        <TheIcon
-                            :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                            :size="18"/>
-                      </template>
-                    </n-button>
-                    <n-button text @click="duplicateValidator(key)" type="info" size="small">
-                      <template #icon>
-                        <TheIcon icon="material-symbols:content-copy" :size="18"/>
-                      </template>
-                    </n-button>
-                    <n-button text @click="removeValidator(key)" type="error" size="small">
-                      <template #icon>
-                        <TheIcon icon="material-symbols:delete-outline" :size="18"/>
-                      </template>
-                    </n-button>
-                  </n-space>
-                </div>
-              </template>
-              <div v-show="!validatorCollapseState[key]">
-                <n-form :model="item" label-width="auto" label-placement="left">
-                  <n-form-item label="断言名称">
-                    <n-input v-model:value="item.name" placeholder="请输入断言名称" clearable/>
-                  </n-form-item>
-                  <n-form-item label="断言对象">
-                    <n-select
-                        v-model:value="item.object"
-                        :options="validatorObjectOptions"
-                        placeholder="请选择断言对象"
-                    />
-                  </n-form-item>
-                  <n-form-item label="断言表达式">
-                    <n-space align="center" :wrap-item="false" style="width: 100%;">
-                      <n-input
-                          v-model:value="item.jsonpath"
-                          :placeholder="getValidatorPlaceholder(item.object)"
-                          clearable
-                          style="flex: 1;"
-                      />
-                      <n-button text type="primary" @click="continueExtractValidator(key)">
-                        继续提取
+                      <n-button text @click="duplicateExtract(key)" type="info" size="small">
                         <template #icon>
-                          <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                          <TheIcon icon="material-symbols:content-copy" :size="18"/>
                         </template>
                       </n-button>
-                      <n-switch v-model:value="item.continueExtract" size="small"/>
-                      <n-input-number v-model:value="item.extractIndex" :min="0" size="small" style="width: 80px;"/>
-                      <n-tooltip trigger="hover">
-                        <template #trigger>
-                          <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;"/>
+                      <n-button text @click="removeExtract(key)" type="error" size="small">
+                        <template #icon>
+                          <TheIcon icon="material-symbols:delete-outline" :size="18"/>
                         </template>
-                        0 表示第1项，1表示第2项，-1表示倒数第1项，-2表示倒数第2项，以此类推
-                      </n-tooltip>
+                      </n-button>
                     </n-space>
-                  </n-form-item>
-                  <n-form-item label="断言操作符">
-                    <n-select
-                        v-model:value="item.assertion"
-                        :options="assertionOptions"
-                        placeholder="请选择断言方法"
-                    />
-                  </n-form-item>
-                  <n-form-item label="断言预期值">
-                    <n-input v-model:value="item.value" placeholder="请输入预期值" clearable/>
-                  </n-form-item>
-                </n-form>
-              </div>
-            </n-card>
-          </div>
-          <n-button type="primary" @click="addValidator" block dashed>添加断言</n-button>
-        </n-space>
-      </n-tab-pane>
-    </n-tabs>
+                  </div>
+                </template>
+                <div v-show="!extractCollapseState[key]">
+                  <n-form :model="item" label-width="auto" label-placement="left">
+                    <n-form-item label="提取名称">
+                      <n-input v-model:value="item.name" placeholder="请输入提取名称" clearable/>
+                    </n-form-item>
+                    <n-form-item label="提取对象">
+                      <n-select
+                          v-model:value="item.object"
+                          :options="extractObjectOptions"
+                          placeholder="请选择提取对象"
+                      />
+                    </n-form-item>
+                    <n-form-item label="提取范围">
+                      <n-space align="center" :wrap-item="false">
+                        <n-radio-group v-model:value="item.extractScope" name="extractScope">
+                          <n-space>
+                            <n-radio value="部分提取">部分提取</n-radio>
+                            <n-radio value="全部提取">全部提取</n-radio>
+                          </n-space>
+                        </n-radio-group>
+                        <n-tooltip trigger="hover">
+                          <template #trigger>
+                            <TheIcon icon="material-symbols:help-outline" :size="18"
+                                     style="cursor: help; margin-left: 8px;"/>
+                          </template>
+                          选择提取范围：部分提取需要指定JSONPath/XPath等表达式，全部提取将提取整个响应内容
+                        </n-tooltip>
+                      </n-space>
+                    </n-form-item>
+                    <n-form-item v-if="item.extractScope === '部分提取'" label="提取路径">
+                      <n-space align="center" :wrap-item="false" style="width: 100%;">
+                        <n-input
+                            v-model:value="item.jsonpath"
+                            :placeholder="getExtractPlaceholder(item.object)"
+                            clearable
+                            style="flex: 1;"
+                        />
+                        <n-button text type="primary" @click="continueExtract(key)">
+                          继续提取
+                          <template #icon>
+                            <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                          </template>
+                        </n-button>
+                        <n-switch v-model:value="item.continueExtract" size="small"/>
+                        <n-input-number v-model:value="item.extractIndex" :min="0" size="small" style="width: 80px;"/>
+                        <n-tooltip trigger="hover">
+                          <template #trigger>
+                            <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;"/>
+                          </template>
+                          0 表示第1项，1表示第2项，-1表示倒数第1项，-2表示倒数第2项，以此类推
+                        </n-tooltip>
+                      </n-space>
+                    </n-form-item>
+                  </n-form>
+                </div>
+              </n-card>
+            </div>
+            <n-button type="primary" @click="addExtract" block dashed>添加提取</n-button>
+          </n-space>
+        </n-tab-pane>
+        <n-tab-pane name="assert_validators" tab="断言">
+          <template #tab>
+            <n-badge :value="validatorsCount" :max="99" show-zero>
+              <span>断言</span>
+            </n-badge>
+          </template>
+          <!-- 断言配置 -->
+          <n-space vertical :size="16">
+            <div v-for="(item, key) in state.form.assert_validators" :key="key" class="validator-item">
+              <n-card size="small" hoverable>
+                <template #header>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
+                        item.jsonpath || ''
+                      }} )</span>
+                    <n-space>
+                      <n-button text @click="toggleValidatorCollapse(key)" size="small">
+                        <template #icon>
+                          <TheIcon
+                              :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                              :size="18"/>
+                        </template>
+                      </n-button>
+                      <n-button text @click="duplicateValidator(key)" type="info" size="small">
+                        <template #icon>
+                          <TheIcon icon="material-symbols:content-copy" :size="18"/>
+                        </template>
+                      </n-button>
+                      <n-button text @click="removeValidator(key)" type="error" size="small">
+                        <template #icon>
+                          <TheIcon icon="material-symbols:delete-outline" :size="18"/>
+                        </template>
+                      </n-button>
+                    </n-space>
+                  </div>
+                </template>
+                <div v-show="!validatorCollapseState[key]">
+                  <n-form :model="item" label-width="auto" label-placement="left">
+                    <n-form-item label="断言名称">
+                      <n-input v-model:value="item.name" placeholder="请输入断言名称" clearable/>
+                    </n-form-item>
+                    <n-form-item label="断言对象">
+                      <n-select
+                          v-model:value="item.object"
+                          :options="validatorObjectOptions"
+                          placeholder="请选择断言对象"
+                      />
+                    </n-form-item>
+                    <n-form-item label="断言表达式">
+                      <n-space align="center" :wrap-item="false" style="width: 100%;">
+                        <n-input
+                            v-model:value="item.jsonpath"
+                            :placeholder="getValidatorPlaceholder(item.object)"
+                            clearable
+                            style="flex: 1;"
+                        />
+                        <n-button text type="primary" @click="continueExtractValidator(key)">
+                          继续提取
+                          <template #icon>
+                            <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                          </template>
+                        </n-button>
+                        <n-switch v-model:value="item.continueExtract" size="small"/>
+                        <n-input-number v-model:value="item.extractIndex" :min="0" size="small" style="width: 80px;"/>
+                        <n-tooltip trigger="hover">
+                          <template #trigger>
+                            <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;"/>
+                          </template>
+                          0 表示第1项，1表示第2项，-1表示倒数第1项，-2表示倒数第2项，以此类推
+                        </n-tooltip>
+                      </n-space>
+                    </n-form-item>
+                    <n-form-item label="断言操作符">
+                      <n-select
+                          v-model:value="item.assertion"
+                          :options="assertionOptions"
+                          placeholder="请选择断言方法"
+                      />
+                    </n-form-item>
+                    <n-form-item label="断言预期值">
+                      <n-input v-model:value="item.value" placeholder="请输入预期值" clearable/>
+                    </n-form-item>
+                  </n-form>
+                </div>
+              </n-card>
+            </div>
+            <n-button type="primary" @click="addValidator" block dashed>添加断言</n-button>
+          </n-space>
+        </n-tab-pane>
+      </n-tabs>
+    </n-collapse-transition>
   </n-card>
+
+  <!-- DataSource：位于 Request 下方、Response 上方 -->
+  <n-card
+      :bordered="false"
+      style="width: 100%;"
+      :class="['http-card', { 'is-collapsed': dataSourceCollapsed }]"
+  >
+    <template #header>
+      <div class="card-header-row">
+        <div class="panel-title">DataSource</div>
+        <div class="card-header-actions">
+          <n-tooltip v-if="dataSourceCollapsed" trigger="hover">
+            <template #trigger>
+              <n-text class="data-source-tip" depth="3" style="cursor: help;">
+                {{ dataSourceTipText }}
+              </n-text>
+            </template>
+            {{ dataSourceTipText }}
+          </n-tooltip>
+          <n-button text size="tiny" @click="toggleDataSourceCollapsed" class="collapse-tiny-btn">
+            <template #icon>
+              <TheIcon
+                  :icon="dataSourceCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                  :size="18"
+              />
+            </template>
+            {{ dataSourceCollapsed ? '展开' : '收起' }}
+          </n-button>
+        </div>
+      </div>
+    </template>
+
+    <n-collapse-transition :show="!dataSourceCollapsed">
+      <div class="data-source-content">
+        <n-tabs type="line" animated class="data-source-tabs">
+          <n-tab-pane name="preview" tab="数据预览">
+            <n-space vertical :size="12">
+              <n-data-table
+                  :row-key="dataSourcePreviewRowKey"
+                  @update:checked-row-keys="dataSourcePreviewHandleCheck"
+                  :columns="dataSourcePreviewColumns"
+                  :data="dataSource.previewRows"
+                  :bordered="false"
+                  :scroll-x="900"
+                  size="small"
+              />
+            </n-space>
+          </n-tab-pane>
+
+          <n-tab-pane name="generate" tab="数据生成">
+            <n-space vertical :size="12">
+              <div class="data-source-row">
+                <div class="data-source-row-label">接口文档：</div>
+                <n-space>
+                  <n-upload
+                      :default-upload="false"
+                      :show-file-list="false"
+                      accept=".xlsx,.xls,.csv,.json,.yaml,.yml"
+                      @change="onApiDocFileSelected"
+                  >
+                    <n-button size="small" type="primary" tertiary :disabled="props.readonly">上传</n-button>
+                  </n-upload>
+                  <n-button size="small" type="primary" tertiary :disabled="props.readonly"
+                            @click="downloadApiDocTemplate">数据模板
+                  </n-button>
+                </n-space>
+              </div>
+
+              <div class="data-source-subtitle">数据校验点</div>
+              <n-checkbox-group v-model:value="dataSource.validationPoints" :disabled="props.readonly">
+                <n-space>
+                  <n-checkbox value="required">必输性</n-checkbox>
+                  <n-checkbox value="length">字段长度</n-checkbox>
+                  <n-checkbox value="length">类型</n-checkbox>
+                  <n-checkbox value="enum">枚举值</n-checkbox>
+                  <n-checkbox value="decimal">小数点位数</n-checkbox>
+                </n-space>
+              </n-checkbox-group>
+
+              <n-data-table
+                  :row-key="dataSourceGeneratedRowKey"
+                  @update:checked-row-keys="dataSourceGeneratedHandleCheck"
+                  :columns="dataSourceGeneratedColumns"
+                  :data="dataSource.generatedRows"
+                  :bordered="false"
+                  :scroll-x="900"
+                  size="small"
+              />
+            </n-space>
+          </n-tab-pane>
+        </n-tabs>
+      </div>
+    </n-collapse-transition>
+  </n-card>
+
+  <!-- DataSource 行编辑弹窗 -->
+  <n-modal
+      v-model:show="dataSourceEditModalVisible"
+      preset="dialog"
+      title="编辑数据"
+      positive-text="确定"
+      negative-text="取消"
+      @positive-click="confirmDataSourceEdit"
+  >
+    <div style="padding: 8px 0;">
+      <div style="margin-bottom: 8px;">名称：</div>
+      <n-input v-model:value="dataSourceEditForm.name" placeholder="请输入名称" clearable/>
+      <div style="margin: 12px 0 8px;">备注：</div>
+      <n-input v-model:value="dataSourceEditForm.remark" placeholder="请输入备注" clearable/>
+    </div>
+  </n-modal>
 
   <!-- 响应结果卡片：在加载中或有响应数据时展示 -->
   <n-card
       v-if="response || debugLoading"
       :bordered="false"
-      style="width: 100%; margin-top: 16px;"
-      class="http-card"
+      style="width: 100%; margin-top: 8px;"
+      :class="['http-card', { 'is-collapsed': responseCardCollapsed }]"
       ref="debugResultRef"
   >
-    <!-- 在卡片标题右侧添加响应状态信息 -->
-    <template #header-extra>
-      <n-space v-if="response && !debugLoading" align="center">
-        <n-tag :type="responseStatusType" round size="small">Status: {{ response.status }}</n-tag>
-        <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
-        <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
-        <n-tag round>Type: {{ contentType }}</n-tag>
-      </n-space>
-      <n-tag v-if="debugLoading" type="info" round size="small">
-        <template #icon>
-          <n-spin size="small"/>
-        </template>
-        请求中...
-      </n-tag>
+    <template #header>
+      <div class="card-header-row">
+        <div class="panel-title">Response</div>
+        <div class="card-header-actions">
+          <n-space align="center" :wrap="false">
+            <n-space v-if="response && !debugLoading" align="center" :wrap="false">
+              <n-tag :type="responseStatusType" round size="small">Status: {{ response.status }}</n-tag>
+              <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
+              <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
+              <n-tag round>Type: {{ contentType }}</n-tag>
+            </n-space>
+            <n-tag v-if="debugLoading" type="info" round size="small">
+              <template #icon>
+                <n-spin size="small"/>
+              </template>
+              请求中...
+            </n-tag>
+            <n-button text size="tiny" @click="toggleResponseCardCollapsed" class="collapse-tiny-btn">
+              <template #icon>
+                <TheIcon
+                    :icon="responseCardCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                    :size="18"
+                />
+              </template>
+              {{ responseCardCollapsed ? '展开' : '收起' }}
+            </n-button>
+          </n-space>
+        </div>
+      </div>
     </template>
-    <!-- 加载状态 -->
-    <div v-if="debugLoading" class="debug-loading">
-      <n-spin size="large" description="正在发送请求，请稍候..."/>
-    </div>
-    <!-- 响应内容 -->
-    <n-tabs v-else type="line" animated>
-      <!-- 请求信息 -->
-      <n-tab-pane name="requestInfo" tab="请求信息">
-        <n-space vertical :size="16" v-if="response">
-          <n-collapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']">
-            <n-collapse-item title="Basic" name="requestBasic">
-              <n-space vertical :size="12">
-                <n-descriptions bordered :column="2" size="small">
-                  <n-descriptions-item label="方法">
-                    <n-tag :type="methodTagType">{{ requestInfo.method }}</n-tag>
-                  </n-descriptions-item>
-                  <n-descriptions-item label="URL">
-                    <n-text copyable>{{ requestInfo.url }}</n-text>
-                  </n-descriptions-item>
-                </n-descriptions>
-              </n-space>
-            </n-collapse-item>
-            <n-collapse-item title="Headers" name="requestHeaders">
-              <n-space vertical :size="12">
-                    <pre v-if="requestHeadersText"
-                         @click="copyTextContent(requestHeadersText)">{{ requestHeadersText }}</pre>
-              </n-space>
-            </n-collapse-item>
-            <n-collapse-item title="Cookies" name="requestCookies">
-              <n-space vertical :size="12">
-                    <pre v-if="requestCookiesText"
-                         @click="copyTextContent(requestCookiesText)">{{ requestCookiesText }}</pre>
-              </n-space>
-            </n-collapse-item>
-            <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
-              <div v-if="isRawRequest" class="request-raw-body">
-                <pre>{{ requestInfo.rawBody || '(空)' }}</pre>
-              </div>
-              <div v-else-if="isJsonRequest">
-                <monaco-editor
-                    v-model:value="formattedRequestJson"
-                    :options="monacoEditorOptions(true)"
-                    class="json-editor"
-                    style="min-height: 400px; height: auto;"
+    <n-collapse-transition :show="!responseCardCollapsed">
+      <!-- 加载状态 -->
+      <div v-if="debugLoading" class="debug-loading">
+        <n-spin size="large" description="正在发送请求，请稍候..."/>
+      </div>
+      <!-- 响应内容 -->
+      <n-tabs v-else type="line" animated>
+        <!-- 请求信息 -->
+        <n-tab-pane name="requestInfo" tab="请求信息">
+          <n-space vertical :size="16" v-if="response">
+            <n-collapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']">
+              <n-collapse-item title="Basic" name="requestBasic">
+                <n-space vertical :size="12">
+                  <n-descriptions bordered :column="2" size="small">
+                    <n-descriptions-item label="方法">
+                      <n-tag :type="methodTagType">{{ requestInfo.method }}</n-tag>
+                    </n-descriptions-item>
+                    <n-descriptions-item label="URL">
+                      <n-text copyable>{{ requestInfo.url }}</n-text>
+                    </n-descriptions-item>
+                  </n-descriptions>
+                </n-space>
+              </n-collapse-item>
+              <n-collapse-item title="Headers" name="requestHeaders">
+                <n-space vertical :size="12">
+                      <pre v-if="requestHeadersText"
+                           @click="copyTextContent(requestHeadersText)">{{ requestHeadersText }}</pre>
+                </n-space>
+              </n-collapse-item>
+              <n-collapse-item title="Cookies" name="requestCookies">
+                <n-space vertical :size="12">
+                      <pre v-if="requestCookiesText"
+                           @click="copyTextContent(requestCookiesText)">{{ requestCookiesText }}</pre>
+                </n-space>
+              </n-collapse-item>
+              <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
+                <div v-if="isRawRequest" class="request-raw-body">
+                  <pre>{{ requestInfo.rawBody || '(空)' }}</pre>
+                </div>
+                <div v-else-if="isJsonRequest">
+                  <monaco-editor
+                      v-model:value="formattedRequestJson"
+                      :options="monacoEditorOptions(true)"
+                      class="json-editor"
+                      style="min-height: 400px; height: auto;"
+                  />
+                </div>
+                <n-data-table
+                    v-else
+                    :columns="[{title:'Key',key:'key'}, {title:'Value',key:'value'}]"
+                    :data="requestBodyData"
+                    size="small"
                 />
-              </div>
-              <n-data-table
-                  v-else
-                  :columns="[{title:'Key',key:'key'}, {title:'Value',key:'value'}]"
-                  :data="requestBodyData"
-                  size="small"
-              />
-            </n-collapse-item>
-          </n-collapse>
+              </n-collapse-item>
+            </n-collapse>
 
-        </n-space>
+          </n-space>
 
-      </n-tab-pane>
-      <!-- 响应信息 -->
-      <n-tab-pane name="responseInfo" tab="响应信息">
-        <n-space vertical :size="16" v-if="response">
-          <n-collapse :default-expanded-names="['responseHeaders', 'responseCookies', 'responseBody']"
-                      arrow-placement="right">
-            <n-collapse-item title="Headers" name="responseHeaders">
-              <n-space vertical :size="12">
-                    <pre v-if="responseHeadersText"
-                         @click="copyTextContent(responseHeadersText)">{{ responseHeadersText }}</pre>
-              </n-space>
-            </n-collapse-item>
-            <n-collapse-item title="Cookies" name="responseCookies">
-              <n-space vertical :size="12">
-                    <pre v-if="responseCookiesText"
-                         @click="copyTextContent(responseCookiesText)">{{ responseCookiesText }}</pre>
-              </n-space>
-            </n-collapse-item>
-            <n-collapse-item :title="`Body (${contentType})`" name="responseBody">
-              <div v-if="isJsonResponse">
-                <monaco-editor
-                    v-model:value="formattedResponse"
-                    :options="monacoEditorOptions(true)"
-                    class="json-editor"
-                    style="min-height: 400px; height: auto;"
+        </n-tab-pane>
+        <!-- 响应信息 -->
+        <n-tab-pane name="responseInfo" tab="响应信息">
+          <n-space vertical :size="16" v-if="response">
+            <n-collapse :default-expanded-names="['responseHeaders', 'responseCookies', 'responseBody']"
+                        arrow-placement="right">
+              <n-collapse-item title="Headers" name="responseHeaders">
+                <n-space vertical :size="12">
+                      <pre v-if="responseHeadersText"
+                           @click="copyTextContent(responseHeadersText)">{{ responseHeadersText }}</pre>
+                </n-space>
+              </n-collapse-item>
+              <n-collapse-item title="Cookies" name="responseCookies">
+                <n-space vertical :size="12">
+                      <pre v-if="responseCookiesText"
+                           @click="copyTextContent(responseCookiesText)">{{ responseCookiesText }}</pre>
+                </n-space>
+              </n-collapse-item>
+              <n-collapse-item :title="`Body (${contentType})`" name="responseBody">
+                <div v-if="isJsonResponse">
+                  <monaco-editor
+                      v-model:value="formattedResponse"
+                      :options="monacoEditorOptions(true)"
+                      class="json-editor"
+                      style="min-height: 400px; height: auto;"
+                  />
+                </div>
+                <n-code
+                    v-else
+                    :code="typeof response.data === 'object'? JSON.stringify(response.data, null, 2) : response.data || ''"
+                    :language="responseLanguage"
+                    show-line-numbers
+                    class="response-code"
                 />
-              </div>
-              <n-code
-                  v-else
-                  :code="typeof response.data === 'object'? JSON.stringify(response.data, null, 2) : response.data || ''"
-                  :language="responseLanguage"
-                  show-line-numbers
-                  class="response-code"
-              />
-            </n-collapse-item>
-          </n-collapse>
-        </n-space>
-      </n-tab-pane>
-      <!-- 数据提取 -->
-      <n-tab-pane name="extract_variables" tab="数据提取">
-        <n-data-table
-            v-if="response && response.extract_results && response.extract_results.length > 0"
-            :columns="extractColumns"
-            :data="response.extract_results"
-            size="small"
-            :bordered="true"
-        />
-        <n-empty v-else description="暂无数据提取结果"/>
-      </n-tab-pane>
-      <!-- 断言结果 -->
-      <n-tab-pane name="assert" tab="断言结果">
-        <n-data-table
-            v-if="response && response.validator_results && response.validator_results.length > 0"
-            :columns="validatorColumns"
-            :data="response.validator_results"
-            size="small"
-            :bordered="true"
-        />
-        <n-empty v-else description="暂无断言结果"/>
-      </n-tab-pane>
-      <!-- 执行日志 -->
-      <n-tab-pane name="logs" tab="执行日志">
-        <n-space vertical :size="12" v-if="response && response.logs && response.logs.length > 0">
-              <pre
-                  v-for="(log, index) in response.logs"
-                  :key="index"
-                  class="log-item"
-              >{{ log }}</pre>
-        </n-space>
-        <n-empty v-else description="暂无执行日志"/>
-      </n-tab-pane>
-    </n-tabs>
+              </n-collapse-item>
+            </n-collapse>
+          </n-space>
+        </n-tab-pane>
+        <!-- 数据提取 -->
+        <n-tab-pane name="extract_variables" tab="数据提取">
+          <n-data-table
+              v-if="response && response.extract_results && response.extract_results.length > 0"
+              :columns="extractColumns"
+              :data="response.extract_results"
+              size="small"
+              :bordered="true"
+          />
+          <n-empty v-else description="暂无数据提取结果"/>
+        </n-tab-pane>
+        <!-- 断言结果 -->
+        <n-tab-pane name="assert" tab="断言结果">
+          <n-data-table
+              v-if="response && response.validator_results && response.validator_results.length > 0"
+              :columns="validatorColumns"
+              :data="response.validator_results"
+              size="small"
+              :bordered="true"
+          />
+          <n-empty v-else description="暂无断言结果"/>
+        </n-tab-pane>
+        <!-- 执行日志 -->
+        <n-tab-pane name="logs" tab="执行日志">
+          <n-space vertical :size="12" v-if="response && response.logs && response.logs.length > 0">
+                <pre
+                    v-for="(log, index) in response.logs"
+                    :key="index"
+                    class="log-item"
+                >{{ log }}</pre>
+          </n-space>
+          <n-empty v-else description="暂无执行日志"/>
+        </n-tab-pane>
+      </n-tabs>
+    </n-collapse-transition>
   </n-card>
 
   <!-- 调试前选择执行环境 -->
@@ -535,9 +682,12 @@ import {
   NBadge,
   NButton,
   NCard,
+  NCheckbox,
+  NCheckboxGroup,
   NCode,
   NCollapse,
   NCollapseItem,
+  NCollapseTransition,
   NDataTable,
   NDescriptions,
   NDescriptionsItem,
@@ -546,6 +696,7 @@ import {
   NFormItem,
   NInput,
   NInputNumber,
+  NPopover,
   NRadio,
   NRadioGroup,
   NSelect,
@@ -556,7 +707,8 @@ import {
   NTabs,
   NTag,
   NText,
-  NTooltip
+  NTooltip,
+  NUpload,
 } from 'naive-ui'
 import api from "@/api";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
@@ -615,13 +767,347 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  readonly: { type: Boolean, default: false }
+  readonly: {type: Boolean, default: false}
 })
 
 const emit = defineEmits(['update:config'])
 
 const formRef = ref(null);
 const route = useRoute()
+
+const requestCardCollapsed = ref(false)
+const responseCardCollapsed = ref(false)
+const toggleRequestCardCollapsed = () => {
+  requestCardCollapsed.value = !requestCardCollapsed.value
+}
+const toggleResponseCardCollapsed = () => {
+  responseCardCollapsed.value = !responseCardCollapsed.value
+}
+
+const dataSourceCollapsed = ref(true)
+const toggleDataSourceCollapsed = () => {
+  dataSourceCollapsed.value = !dataSourceCollapsed.value
+}
+
+const dataSourceTipText = computed(() => {
+  const name = String(state.form?.step_name || '').trim()
+  const stepName = name || 'HTTP请求(本步骤)'
+  return `${stepName}(本步骤) - 数据驱动文件上传或接口文档分析`
+})
+
+const ts = () => new Date().toISOString().slice(0, 19).replace('T', ' ')
+const dataSource = reactive({
+  docs: [],
+  latestDocName: '',
+  stepDataFileName: '',
+  apiDocFileName: '',
+  validationPoints: [],
+  previewRows: [
+    {id: 'preview-1', name: '预览数据1', remark: '备注1', updatedAt: ts()},
+    {id: 'preview-2', name: '预览数据2', remark: '备注2', updatedAt: ts()},
+    {id: 'preview-3', name: '预览数据3', remark: '备注3', updatedAt: ts()}
+  ],
+  generatedRows: [
+    {id: 'gen-1', name: '生成数据1', remark: '备注1', generatedAt: ts()},
+    {id: 'gen-2', name: '生成数据2', remark: '备注2', generatedAt: ts()},
+    {id: 'gen-3', name: '生成数据3', remark: '备注3', generatedAt: ts()}
+  ]
+})
+
+const dataSourceDocColumns = [
+  {title: '文档名称', key: 'name'},
+  {title: '状态', key: 'status', width: 120},
+  {title: '耗时', key: 'duration', width: 100},
+  {title: '提交时间', key: 'submittedAt', width: 160},
+  {title: '完成时间', key: 'finishedAt', width: 160}
+]
+
+const dataSourceEditModalVisible = ref(false)
+const dataSourceEditForm = reactive({id: null, type: 'preview', name: '', remark: ''})
+
+const openDataSourceEdit = (type, row) => {
+  dataSourceEditForm.id = row?.id ?? null
+  dataSourceEditForm.type = type
+  dataSourceEditForm.name = row?.name ?? ''
+  dataSourceEditForm.remark = row?.remark ?? ''
+  dataSourceEditModalVisible.value = true
+}
+
+const confirmDataSourceEdit = () => {
+  const list = dataSourceEditForm.type === 'generated' ? dataSource.generatedRows : dataSource.previewRows
+  const idx = list.findIndex((x) => x.id === dataSourceEditForm.id)
+  if (idx >= 0) {
+    list[idx] = {...list[idx], name: dataSourceEditForm.name, remark: dataSourceEditForm.remark}
+    $message.success('已更新')
+  }
+  dataSourceEditModalVisible.value = false
+}
+
+const removeDataSourceRow = (type, row) => {
+  const list = type === 'generated' ? dataSource.generatedRows : dataSource.previewRows
+  const idx = list.findIndex((x) => x.id === row?.id)
+  if (idx >= 0) {
+    list.splice(idx, 1)
+    $message.success('已删除')
+  }
+}
+
+const dataSourcePreviewColumns = [
+  {
+    title: () => h(NPopover, {
+      trigger: 'click',
+      placement: 'bottom',
+      showArrow: true
+    }, {
+      default: () => h(NSpace, {vertical: true, size: 6, style: {minWidth: '60px'}}, {
+        default: () => [
+          h(NButton, {
+            size: 'small',
+            type: 'info',
+            block: true,
+            disabled: props.readonly,
+            onClick: dataSourceImport
+          }, {default: () => '导入'}),
+          h(NButton, {
+            size: 'small',
+            type: 'warning',
+            block: true,
+            disabled: props.readonly,
+            onClick: dataSourceExport
+          }, {default: () => '导出'}),
+          h(NButton, {
+            size: 'small',
+            type: 'error',
+            block: true,
+            disabled: props.readonly,
+            onClick: dataSourceDelete
+          }, {default: () => '删除'}),
+          h(NButton, {
+            size: 'small',
+            type: 'success',
+            block: true,
+            disabled: props.readonly,
+            onClick: dataSourceSave
+          }, {default: () => '保存'}),
+          h(NButton, {
+            size: 'small',
+            type: 'primary',
+            block: true,
+            disabled: props.readonly,
+            onClick: downloadStepDataTemplate
+          }, {default: () => '模板'})
+        ]
+      }),
+      trigger: () => h(NButton, {
+        text: true,
+        quaternary: true,
+        size: 'small',
+        title: '更多操作'
+      }, {
+        icon: () => h(TheIcon, {icon: 'material-symbols:keyboard-command-key', size: 18})
+      })
+    }),
+    key: '_toolbarToggle',
+    width: 30,
+    align: 'center'
+  },
+  {
+    type: "selection",
+    fixed: "left",
+    width: 30,
+    align: 'center'
+  },
+  {title: '名称', key: 'name', align: 'center', ellipsis: {tooltip: true}},
+  {title: '备注', key: 'remark', align: 'center', ellipsis: {tooltip: true}},
+  {title: '更新时间', key: 'updatedAt', align: 'center', ellipsis: {tooltip: true}},
+  {
+    title: '操作',
+    key: 'actions',
+    fixed: "right",
+    width: 90,
+    render: (row) => h(NSpace, {size: 8}, {
+      default: () => [
+        h(NButton, {
+          text: true,
+          type: 'error',
+          size: 'small',
+          onClick: () => removeDataSourceRow('preview', row)
+        }, {default: () => '删除'}),
+        h(NButton, {
+          text: true,
+          type: 'info',
+          size: 'small',
+          onClick: () => openDataSourceEdit('preview', row)
+        }, {default: () => '修改'})
+      ]
+    })
+  }
+]
+
+
+const dataSourcePreviewKeysRef = ref([]);
+
+/**
+ * DataSource「数据预览」表格行主键。
+ * @param {object} row
+ * @returns {string}
+ */
+function dataSourcePreviewRowKey(row) {
+  return row.id;
+}
+
+/**
+ * DataSource「数据预览」表格勾选行变更。
+ * @param {string[]} rowKeys
+ */
+function dataSourcePreviewHandleCheck(rowKeys) {
+  dataSourcePreviewKeysRef.value = rowKeys;
+}
+
+
+const dataSourceGeneratedColumns = [
+  {
+    title: () => h(NPopover, {
+      trigger: 'click',
+      placement: 'bottom',
+      showArrow: true
+    }, {
+      default: () => h(NSpace, {vertical: true, size: 6, style: {minWidth: '60px'}}, {
+        default: () => [
+          h(NButton, {
+            size: 'small',
+            type: 'error',
+            block: true,
+            disabled: props.readonly,
+            onClick: dataSourceDelete
+          }, {default: () => '删除'}),
+          h(NButton, {
+            size: 'small',
+            type: 'success',
+            block: true,
+            disabled: props.readonly,
+            onClick: dataSourceSave
+          }, {default: () => '保存'}),
+        ]
+      }),
+      trigger: () => h(NButton, {
+        text: true,
+        quaternary: true,
+        size: 'small',
+        title: '更多操作'
+      }, {
+        icon: () => h(TheIcon, {icon: 'material-symbols:keyboard-command-key', size: 18})
+      })
+    }),
+    key: '_toolbarToggle',
+    width: 30,
+    align: 'center'
+  },
+  {
+    type: 'selection',
+    fixed: 'left',
+    width: 30,
+    align: 'center'
+  },
+  {title: '名称', key: 'name', align: 'center', ellipsis: {tooltip: true}},
+  {title: '备注', key: 'remark', align: 'center', ellipsis: {tooltip: true}},
+  {title: '生成时间', key: 'generatedAt', align: 'center', ellipsis: {tooltip: true}},
+  {
+    title: '操作',
+    key: 'actions',
+    fixed: 'right',
+    width: 90,
+    render: (row) => h(NSpace, {size: 8}, {
+      default: () => [
+        h(NButton, {
+          text: true,
+          type: 'error',
+          size: 'small',
+          onClick: () => removeDataSourceRow('generated', row)
+        }, {default: () => '删除'}),
+        h(NButton, {
+          text: true,
+          type: 'info',
+          size: 'small',
+          onClick: () => openDataSourceEdit('generated', row)
+        }, {default: () => '修改'})
+      ]
+    })
+  }
+]
+
+const dataSourceGeneratedKeysRef = ref([]);
+
+/**
+ * DataSource「数据生成」表格行主键。
+ * @param {object} row
+ * @returns {string}
+ */
+function dataSourceGeneratedRowKey(row) {
+  return row.id;
+}
+
+/**
+ * DataSource「数据生成」表格勾选行变更。
+ * @param {string[]} rowKeys
+ */
+function dataSourceGeneratedHandleCheck(rowKeys) {
+  dataSourceGeneratedKeysRef.value = rowKeys;
+}
+
+/**
+ * 选择接口文档文件（仅前端占位）。
+ * @param {object} options
+ */
+const onApiDocFileSelected = (options) => {
+  const file = options?.file?.file
+  dataSource.apiDocFileName = file?.name || ''
+  if (dataSource.apiDocFileName) {
+    $message.info(`已选择接口文档：${dataSource.apiDocFileName}（后端暂未实现上传）`)
+  }
+}
+
+/** 下载步骤测试数据模板（仅前端占位）。 */
+const downloadStepDataTemplate = () => $message.info('后端暂未实现：下载步骤测试数据模板')
+/** 下载接口文档模板（仅前端占位）。 */
+const downloadApiDocTemplate = () => $message.info('后端暂未实现：下载接口文档模板')
+/** 导入数据（仅前端占位）。 */
+const dataSourceImport = () => $message.info('后端暂未实现：导入数据')
+/** 导出数据（仅前端占位）。 */
+const dataSourceExport = () => $message.info('后端暂未实现：导出数据')
+/** 删除数据（仅前端占位）。 */
+const dataSourceDelete = () => $message.info('后端暂未实现：删除数据')
+/** 保存数据（仅前端占位）。 */
+const dataSourceSave = () => $message.info('后端暂未实现：数据保存')
+
+/** 生成数据（仅前端占位）。 */
+const generateDataSource = () => {
+  // 前端占位：生成两条示例数据
+  const now = new Date()
+  const ts = now.toISOString().slice(0, 19).replace('T', ' ')
+  dataSource.generatedRows = [
+    {id: `g-${Date.now()}-1`, name: '生成数据-1', remark: '示例', generatedAt: ts},
+    {id: `g-${Date.now()}-2`, name: '生成数据-2', remark: '示例', generatedAt: ts}
+  ]
+  $message.info('已生成预览数据（后端暂未实现真实生成）')
+}
+
+/** 保存生成数据到预览数据（仅前端占位）。 */
+const saveGeneratedData = () => {
+  if (dataSource.generatedRows.length === 0) return
+  const now = new Date()
+  const ts = now.toISOString().slice(0, 19).replace('T', ' ')
+  const appended = dataSource.generatedRows.map((x) => ({
+    id: `p-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: x.name,
+    remark: x.remark,
+    updatedAt: ts
+  }))
+  dataSource.previewRows = [...appended, ...dataSource.previewRows]
+  dataSource.generatedRows = []
+  $message.success('已保存并追加到已有数据（前端占位）')
+}
+
 
 // 请求方式下拉框
 const methodOptions = [
@@ -1197,7 +1683,7 @@ const loadEnvNames = async () => {
   try {
     const res = await api.getApiEnvNames()
     const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({ label: name, value: name }))
+    envOptions.value = list.map((name) => ({label: name, value: name}))
     if (envOptions.value.length > 0 && !selectedEnvName.value) {
       selectedEnvName.value = envOptions.value[0].value
     }
@@ -1676,28 +2162,84 @@ const validatorColumns = [
   border-left: 4px solid #F4511E;
 }
 
+.panel-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.card-header-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 24px;
+  padding-right: 220px; /* 预留右侧 actions 空间，避免标题过长被遮挡 */
+}
+
+.card-header-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapse-tiny-btn :deep(.n-button__content) {
+  font-size: 12px;
+}
+
+.http-card.is-collapsed :deep(.n-card__content) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.data-source-content {
+  padding-top: 4px;
+}
+
+.data-source-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.data-source-row-label {
+  min-width: 130px;
+}
+
+.data-source-subtitle {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.data-source-tabs {
+  margin-top: 4px;
+}
+
+.data-source-toolbar {
+  margin-bottom: 4px;
+}
+
+.data-source-tip {
+  display: inline-block;
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .key-value-editor .key-value-row {
   display: grid;
   grid-template-columns: 1fr 1fr 100px;
   gap: 12px;
   margin-bottom: 12px;
-}
-
-.key-value-view .view-row {
-  display: flex;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.key-value-view .key {
-  min-width: 200px;
-  color: #1f2937;
-}
-
-.key-value-view .value {
-  color: #4b5563;
-  word-break: break-all;
 }
 
 .json-editor {
@@ -1721,13 +2263,13 @@ const validatorColumns = [
   overflow: auto; /* 添加滚动条 */
 }
 
-:root {
+:global(:root) {
   --pre-bg-color: #f4f4f4;
   --pre-text-color: #333;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :global(:root) {
     --pre-bg-color: #222;
     --pre-text-color: #eee;
   }
