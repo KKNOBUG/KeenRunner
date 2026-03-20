@@ -222,6 +222,54 @@ class AutoTestToolService:
         return comparator(str(actual), str(expected))
 
     @classmethod
+    def _str_convert_float(cls, value: Union[str, int, float]) -> bool:
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def _var_or_func_calculate(cls, base_number: str, matched: re.Match[str], logger_object: Callable) -> str:
+        if not cls._str_convert_float(base_number):
+            logger_object(f"【变量运算】引用的变量或函数结果不是数字格式: {base_number}")
+            return base_number
+
+        calc_symbol = matched.group(2)
+        calc_number = matched.group(3)
+        if calc_symbol not in ("+", "-", "*", "/"):
+            return base_number
+        if not calc_symbol or not calc_number:
+            logger_object(f"【变量运算】运算符: [{calc_symbol}] 或 运算数: [{calc_symbol}] 不允许为None值")
+            return base_number
+        if not cls._str_convert_float(calc_number):
+            logger_object(f"【变量运算】运算数: [{calc_symbol}] 必须是数字格式")
+            return base_number
+
+        orig_number: float = float(base_number)
+        calc_number: float = float(calc_number)
+        if calc_symbol == "+":
+            calc_result: float = orig_number + calc_number
+        elif calc_symbol == "-":
+            calc_result: float = orig_number - calc_number
+        elif calc_symbol == "*":
+            calc_result: float = orig_number * calc_number
+        elif calc_symbol == "/":
+            if calc_number == 0:
+                logger_object(f"【变量运算】运算数: [{calc_symbol}] 必须要是大于0的数字")
+                return base_number
+            calc_result: float = orig_number / calc_number
+        else:
+            logger_object(f"【变量运算】运算符: [{calc_symbol}] 必须是'+ - * /'之一")
+            return base_number
+
+        if calc_result.is_integer():
+            calc_result = int(calc_result)
+
+        logger_object(f"【变量运算】: 引用的变量或函数结果: [{base_number}], 运算符: [{calc_symbol}], 运算数: [{calc_number}], 结果: [{calc_result}]")
+        return str(calc_result)
+
+    @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """
         根据操作符对实际值与期望值做断言比较，支持等于、不等于、大于、小于、包含、非空等。
@@ -864,8 +912,10 @@ class AutoTestToolService:
         :return: 替换后的值，结构与原 value 一致；非 str/dict/list 原样返回。
         """
         try:
-            # 1.匹配裸的占位符，如: ${xxx}
-            _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+            # 1.匹配裸的占位符，如: ${variable} 或 ${function()}
+            # _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+            # 1.匹配裸的占位符，如: ${variable} 或 ${function()} 及 ${variable} - 1 或 ${function()} + 10
+            _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)\}\s*([\+\-\*\/])?\s*(\d+(\.\d+)?)?")
             if isinstance(value, str):
                 def replace(match: re.Match[str]) -> str:
                     var_name = match.group(1).strip() if match.group(1) else ""
@@ -886,17 +936,17 @@ class AutoTestToolService:
                             resolved = finished_variables.get_variable(var_name)
                         else:
                             resolved = cls.get_value_from_list(finished_variables, var_name)
-                            if resolved is not None:
-                                return resolved
-                            raise KeyError()
+                            if resolved is None:
+                                raise KeyError()
+                        logger_object("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                        resolved = cls._var_or_func_calculate(base_number=resolved, matched=match, logger_object=logger_object)
+                        return str(resolved)
                     except KeyError:
                         logger_object(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
                         return match.group(0)
                     except Exception as e:
                         logger_object(f"【获取变量】占位符解析失败, 引用({var_name})发生未知异常, 保留原值, 错误描述: {e}")
                         return match.group(0)
-                    logger_object("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
-                    return str(resolved)
 
                 return _RE_PLACEHOLDER.sub(replace, value)
             if isinstance(value, dict):

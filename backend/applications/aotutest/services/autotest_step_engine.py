@@ -1834,8 +1834,8 @@ class HttpStepExecutor(BaseStepExecutor):
         try:
             # 参数化驱动：仅 HTTP 步骤在此处理。根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集，仅用局部变量做报文替换与断言，并写入 result 供落库
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None
-            dataset_name = getattr(self.context, "dataset_name", None)
-            executing_quote_case_id = getattr(self.context, "executing_quote_case_id", None)
+            dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
+            executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
             if dataset_name and self.step_code and not executing_quote_case_id:
                 from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
                 step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
