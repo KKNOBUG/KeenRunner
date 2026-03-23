@@ -403,6 +403,47 @@ async def init_database_menu():
         ]
         await Menu.bulk_create(program_children_menu)
 
+        # 接口管理（FastAPI 内置 Swagger / ReDoc，由前端 iframe 嵌入展示）
+        interface_parent_menu = await MENU_CRUD.create_menu(
+            MenuCreate(
+                menu_type=MenuType.CATALOG,
+                name="接口管理",
+                path="/interface",
+                order=3,
+                parent_id=0,
+                icon="gravity-ui:abbr-api",
+                is_hidden=False,
+                component="Layout",
+                keepalive=False,
+                redirect="/interface/swagger"
+            )
+        )
+        interface_children_menu = [
+            Menu(
+                menu_type=MenuType.MENU,
+                name="Swagger文档",
+                path="swagger",
+                order=1,
+                parent_id=interface_parent_menu.id,
+                icon="devicon:swagger",
+                is_hidden=False,
+                component="/interface/swagger",
+                keepalive=False
+            ),
+            Menu(
+                menu_type=MenuType.MENU,
+                name="ReDoc文档",
+                path="redoc",
+                order=2,
+                parent_id=interface_parent_menu.id,
+                icon="mdi:file-document-outline",
+                is_hidden=False,
+                component="/interface/redoc",
+                keepalive=False
+            ),
+        ]
+        await Menu.bulk_create(interface_children_menu)
+
         # 自动化测试菜单配置
         autotest_parent_menu = await MENU_CRUD.create_menu(
             MenuCreate(

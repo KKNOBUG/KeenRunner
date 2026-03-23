@@ -3,7 +3,7 @@ import {defineConfig, loadEnv} from 'vite'
 import {convertEnv, getRootPath, getSrcPath} from './build/utils'
 import {viteDefine} from './build/config'
 import {createVitePlugins} from './build/plugin'
-import {OUTPUT_DIR, PROXY_CONFIG} from './build/constant'
+import {OUTPUT_DIR, PROXY_CONFIG, EXTRA_DEV_PROXY} from './build/constant'
 import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 export default defineConfig(({command, mode}) => {
@@ -38,6 +38,7 @@ export default defineConfig(({command, mode}) => {
             proxy: VITE_USE_PROXY
                 ? {
                     [VITE_BASE_API]: PROXY_CONFIG[VITE_BASE_API],
+                    ...EXTRA_DEV_PROXY,
                 }
                 : undefined,
             // 明确配置静态资源目录
