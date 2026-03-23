@@ -125,7 +125,7 @@ const handleCopyCase = async (row) => {
         path: '/autotest/steps',
         query: { case_info: JSON.stringify(caseInfo) }
       })
-      window.$message?.success?.('已复制用例，请编辑后保存')
+      window.$message?.success?.('已成功复制用例，请在编辑后保存')
     } else {
       window.$message?.error?.(res?.message || '复制失败')
     }

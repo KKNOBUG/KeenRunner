@@ -74,6 +74,7 @@ class CeleryConfig(BaseSettings):
         "task_routes": {
             "backend.celery_scheduler.tasks.task_autotest_case.execute_batch_cases_task": {"queue": "autotest_queue"},
             "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {"queue": "autotest_queue"},
+            "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {"queue": "autotest_queue"},
         },
         "task_default_queue": "default",
         "task_default_exchange": "default",
