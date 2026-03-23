@@ -77,7 +77,7 @@ async def update_user(
 async def get_user(
         user_id: int = Query(..., description="用户ID"),
 ):
-    instance = await USER_CRUD.select(id=user_id)
+    instance = await USER_CRUD.get_by_id(user_id=user_id)
     if not instance:
         return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
 
