@@ -19,7 +19,7 @@ import aiofiles
 from fastapi import UploadFile
 
 from backend import LOGGER, PROJECT_CONFIG, GLOBAL_CONFIG
-from backend.core.exceptions.base_exceptions import UploadFileException, FileExtensionException, FileTooManyException
+from backend.core.exceptions.base_exceptions import UploadFileException, FileExtensionException, FileTooManyException, NoPermissionException
 
 
 class FileTransfer:
@@ -62,6 +62,8 @@ class FileTransfer:
             check_filename: bool = True,
             check_filetype: bool = True,
             check_filesize: bool = True,
+            add_left_identifier: str = None,
+            add_right_identifier: str = None,
             chunk_size: int = 1024 * 1024 * 10,
             upload_file_size: Literal["tiny", "micro", "small", "medium", "large", "huge"] = 'tiny',
     ) -> Tuple[bool, str]:
@@ -73,6 +75,8 @@ class FileTransfer:
         :param check_filename: 是否检查文件名称是否符合规范
         :param check_filetype: 是否检查文件后缀是否符合规范
         :param check_filesize: 是否检查文件体积是否符合规范
+        :param add_left_identifier: 是否为上传的文件添加标识符(左边)
+        :param add_right_identifier: 是否为上传的文件添加标识符(左边)
         :param chunk_size: 异步分块的大小
         :param upload_file_size: 文件的体积限制
         :return:
@@ -98,7 +102,7 @@ class FileTransfer:
         if check_filename:
             name, ext = os.path.splitext(filename)
             # 只对文件名部分进行清理，保留扩展名
-            cleaned_name = re.sub(r'[\\/*?:\'"<>|!@#$%^&]', '', name)
+            cleaned_name = re.sub(r'["·`‘—_!！@#$￥%^&*()（）<>《》【】[]？?|\\/:：,，.。、；;', '', name)
             if not cleaned_name:
                 raise UploadFileException(message="文件名称不被允许")
             filename = cleaned_name + ext
@@ -124,9 +128,18 @@ class FileTransfer:
             datetime_stamp: str = datetime.now().strftime(GLOBAL_CONFIG.DATETIME_FORMAT1)
             filename = f"{datetime_stamp}_{filename}"
 
+        # 如果需要，为文件名添加标识符
+        if add_left_identifier:
+            filename = f"{add_left_identifier}_{filename}"
+        if add_right_identifier:
+            file_name, file_suffix = os.path.splitext(filename)
+            filename = f"{file_name}_{add_right_identifier}.{file_suffix}"
+
         try:
             # 以异步方式打开目标文件进行二进制写入
-            destination_path: str = os.path.join(destination_dir, filename)
+            destination_path: str = os.path.normpath(os.path.join(destination_dir, filename))
+            if not destination_path.startswith(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR):
+                raise UploadFileException(message="上传路径不被允许")
             async with aiofiles.open(file=destination_path, mode="wb") as in_file:
                 try:
                     # 循环读取上传文件的内容并写入目标文件
@@ -142,17 +155,36 @@ class FileTransfer:
             return False, error_msg
 
     @staticmethod
-    async def iter_download_file_chunks(download_file: str, chunk_size: int = 1024 * 1024) -> Iterable[bytes]:
+    async def iter_download_file_chunks(download_file: str, chunk_size: int = 1024 * 1024, add_bom: bool = False) -> Iterable[bytes]:
         """
         用于以分块的方式读取指定文件的内容，并通过生成器逐块返回，适用于流式下载文件
         :param download_file: 下载的文件对象
         :param chunk_size: 块的大小
+        :param add_bom: Windows 系统中记事本对于编码支持较差，UTF-8无BOM会导致内容乱码，加上BOM可解决因为 Windows 记事本不兼容问题，但二进制文件，如xlsx、zip、mp3等文件不可添加，否则会导致文件损坏
         :return:
         """
-        # 以异步方式打开文件进行二进制读取
-        async with aiofiles.open(download_file, "rb") as out_file:
-            # 循环读取文件内容并逐块返回
-            while chunk := await out_file.read(chunk_size):
-                yield chunk
+        download_file: str = os.path.normpath(download_file)
+        if not download_file.startswith(PROJECT_CONFIG.OUTPUT_DIR):
+            raise NoPermissionException(message="请求路径不被允许")
 
+        # 检查文件是否为UTF-8编码
+        UTF8_BOM = b"\xef\xbb\xbf"
+        async with aiofiles.open(file=download_file, mode="rb") as pre_read:
+            start = await pre_read.read(3)
+        not_exist_bom: bool = start != UTF8_BOM
 
+        first_chunk = True
+        # 使用 aiofiles 异步打开文件，以二进制读取模式
+        try:
+            async with aiofiles.open(file=download_file, mode="rb") as out_file:
+                if not download_file.startswith(PROJECT_CONFIG.OUTPUT_DIR):
+                    raise NoPermissionException(message="请求路径不被允许")
+                # 循环读取文件块，直到文件结束
+                while chunk := await out_file.read(chunk_size):
+                    if add_bom and first_chunk and not_exist_bom:
+                        chunk = UTF8_BOM + chunk
+                        first_chunk = False
+                    # 生成当前块的数据
+                    yield chunk
+        except Exception as e:
+            raise NoPermissionException(message="请求路径不被允许")

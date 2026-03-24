@@ -1473,6 +1473,8 @@ const mapBackendStep = (step) => {
       url: step.request_url || '',
       request_args_type: step.request_args_type || 'none',
       request_project_id: step.request_project_id ?? null,
+      data_source_name: step.data_source_name || '',
+      data_source_desc: step.data_source_desc || '',
       params: Array.isArray(step.request_params) ? step.request_params : [],
       data: step.request_body || {},
       headers: Array.isArray(step.request_header) ? step.request_header : [],
@@ -1655,6 +1657,12 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
     backendStep.request_form_urlencoded = filterKeyValueList(Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : []))
     backendStep.request_body = config.data || original.request_body || {}
+    backendStep.data_source_name = config.data_source_name !== undefined
+        ? (config.data_source_name || null)
+        : (original.data_source_name || null)
+    backendStep.data_source_desc = config.data_source_desc !== undefined
+        ? (config.data_source_desc || null)
+        : (original.data_source_desc || null)
 
     // extract_variables 和 assert_validators 应该是列表格式（List[Dict[str, Any]]）
     if (config.extract_variables !== undefined) {

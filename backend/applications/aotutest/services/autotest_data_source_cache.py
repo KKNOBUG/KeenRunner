@@ -95,16 +95,19 @@ def delete_by_cache_key(cache_key: str) -> bool:
 
 
 async def get_parsed_data_for_execution(
-    file_code: str,
+    data_source_code: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[List[str]]]:
     """
-    执行时取数：按 file_code 从 DB 查询该文件下所有步骤记录，合并为完整 parsed_data。
+    执行时取数：按 data_source_code 从 DB 查询该文件下所有步骤记录，合并为完整 parsed_data。
     :return: (parsed_data, dataset_names)，parsed_data 格式 { "step_code": { "场景1": {...}, ... }, ... }；
              若不存在则 (None, None)。
     """
     from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
 
-    records = await AUTOTEST_DATA_SOURCE_CRUD.get_list_by_file_code(file_code=file_code, state=0)
+    records = await AUTOTEST_DATA_SOURCE_CRUD.get_list_by_data_source_code(
+        data_source_code=data_source_code,
+        state=0,
+    )
     if not records:
         return None, None
 

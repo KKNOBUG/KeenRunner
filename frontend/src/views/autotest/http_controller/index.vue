@@ -790,8 +790,12 @@ const toggleDataSourceCollapsed = () => {
 }
 
 const dataSourceTipText = computed(() => {
+  const dsName = String(state.form?.data_source_name || '').trim()
+  const dsDesc = String(state.form?.data_source_desc || '').trim()
   const name = String(state.form?.step_name || '').trim()
   const stepName = name || 'HTTP请求(本步骤)'
+  if (dsName && dsDesc) return `${stepName}(本步骤) - ${dsName} (${dsDesc})`
+  if (dsName) return `${stepName}(本步骤) - ${dsName}`
   return `${stepName}(本步骤) - 数据驱动文件上传或接口文档分析`
 })
 
@@ -1163,6 +1167,8 @@ const state = reactive({
     step_name: '',
     description: '',
     request_project_id: null, // 请求项目ID（与 request_args_type 等一致，从 form 读写；无 UI 时由 init 从 config/original 带入）
+    data_source_name: '',
+    data_source_desc: '',
     defined_variables: [],
     extract_variables: {},
     assert_validators: {},
@@ -1216,6 +1222,8 @@ const initFromConfig = () => {
   state.form.headers = Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : [])
   state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
+  state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
+  state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
 
   // 请求体类型（与后端 request_args_type 枚举一致：none, params, form-data, x-www-form-urlencoded, json, raw）
   // 请求体类型：统一用 request_args_type（与后端枚举一致），form 内用 bodyType 仅作 UI 绑定
@@ -1427,6 +1435,8 @@ const buildConfigFromState = () => {
     params: normalizeList(paramsList),
     request_args_type: state.form.bodyType,
     request_project_id: state.form.request_project_id ?? null,
+    data_source_name: state.form.data_source_name || '',
+    data_source_desc: state.form.data_source_desc || '',
     data,
     jsonBodyText,
     form_data,
@@ -1446,6 +1456,7 @@ watch(
       state.form.url, state.form.headers, state.form.params,
       state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
       state.form.jsonBody, state.form.rawBody, state.form.request_project_id,
+      state.form.data_source_name, state.form.data_source_desc,
       state.form.defined_variables, state.form.extract_variables, state.form.assert_validators
     ],
     () => {

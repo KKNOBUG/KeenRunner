@@ -219,6 +219,8 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 expr、name、range、operation、except_value 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
+    data_source_name = fields.CharField(max_length=2048, null=True, description="数据源名称")
+    data_source_desc = fields.CharField(max_length=2048, null=True, description="数据源描述")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -420,12 +422,13 @@ class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
 class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     """存储颗粒度：一个文件对应多条记录，按 case_id + step_code 联合唯一(每条记录存该步骤下所有场景数据)"""
     case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
+    case_code = fields.CharField(max_length=64, description="用例标识代码")
+    step_id = fields.BigIntField(ge=1, index=True, description="步骤ID")
     step_code = fields.CharField(max_length=64, description="步骤标识代码")
     file_name = fields.CharField(max_length=255, description="数据驱动文件存储名称")
     file_hash = fields.CharField(max_length=255, description="数据驱动文件哈希代码")
     file_path = fields.CharField(max_length=1024, description="数据驱动文件存储路径")
     file_desc = fields.CharField(max_length=2048, null=True, description="数据驱动文件场景描述")
-    file_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
     # 存储格式：{"场景1": {"head":..., "body":..., "assert":... }, ... }
     dataset = fields.JSONField(description="数据驱动文件解析后的数据(该步骤×所有场景)")
     # 数据集名称列表，如 ["场景1", "场景2", "场景3", ...]，便于前端多选
@@ -433,6 +436,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     # 存储格式：“dataset_{case_id}_{step_code}”
     cache_key = fields.CharField(max_length=128, description="获取Redis中该步骤数据的缓存键名")
     dataframe = fields.JSONField(default=list, null=True, description="数据驱动文件解析前的二维矩阵")
+    data_source_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -444,9 +448,10 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
         indexes = (
             ("case_id", "state"),
             ("case_id", "state", "updated_time"),
-            ("file_code", "state"),
+            ("data_source_code", "state"),
+            ("case_id", "step_id"),
         )
         ordering = ["case_id", "step_code"]
 
     def __str__(self):
-        return f"{self.file_code or ''}(case_id={self.case_id},step_code={self.step_code})"
+        return f"{self.data_source_code or ''}(case_id={self.case_id},step_code={self.step_code})"

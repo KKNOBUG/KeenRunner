@@ -68,8 +68,9 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     loop_iter_key: Optional[str] = Field(None, max_length=64, description="用于存储字典的键")
     loop_iter_val: Optional[str] = Field(None, max_length=64, description="用于存储字典的值或列表的项")
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
-    loop_timeout: Optional[float] = Field(None, ge=0, le=3000,
-                                          description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
+    loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
+    data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
+    data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
     conditions: NON_LIST_DICT_TYPE = Field(None, description="判断条件(循环结构或条件分支)")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
