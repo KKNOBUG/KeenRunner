@@ -13,7 +13,7 @@ import asyncio
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Union
 
 import pandas as pd
 
@@ -114,6 +114,14 @@ async def _parse_sheet_async(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     return await loop.run_in_executor(_executor, _parse_sheet_fast, df)
 
 
+def _dataframe_to_matrix(df: pd.DataFrame) -> Union[List[Any], object]:
+    """将 DataFrame 转为二维矩阵（NaN/NaT 置为 None），用于原始数据预览与编辑。"""
+    if df is None or df.empty:
+        return []
+    safe_df = df.where(pd.notna(df), None)
+    return safe_df.values.tolist()
+
+
 async def _excel_to_json_async(file_path: str) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """读 xlsx 全部 sheet(header=None)，异步解析每个 sheet，返回 { sheet_name: { 场景名: { head, body, assert } } }。"""
     sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
@@ -127,14 +135,15 @@ async def _excel_to_json_async(file_path: str) -> Dict[str, Dict[str, Dict[str, 
     return dict(zip(sheet_names, results))
 
 
-async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
+async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]]]:
     """
     仅解析 xlsx 的第一个 sheet 页（单步骤数据集上传用）。
 
     :param file_path: xlsx 文件路径。
-    :return: (step_data, dataset_names)。step_data 为单 sheet 解析结果：
+    :return: (step_data, dataset_names, dataframe)。step_data 为单 sheet 解析结果：
              { "场景1": { "head": {...}, "body": {...}, "assert": {...} }, ... }
-             dataset_names 为该 sheet 中的场景名称列表（已排序）。
+             dataset_names 为该 sheet 中的场景名称列表（已排序）；
+             dataframe 为该 sheet 原始二维矩阵（NaN 已转为 None）。
     :raises FileNotFoundError: 文件不存在。
     :raises ValueError: 解析失败。
     """
@@ -143,11 +152,12 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
     # 只读第一个 sheet
     df = pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
     if df.empty:
-        return {}, []
+        return {}, [], []
     step_data = await _parse_sheet_async(df)
     dataset_names = sorted(step_data.keys()) if step_data else []
+    dataframe = _dataframe_to_matrix(df)
     LOGGER.info(f"解析 xlsx 首 sheet 完成: {file_path}, dataset_names={dataset_names}")
-    return step_data, dataset_names
+    return step_data, dataset_names, dataframe
 
 
 async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any], List[str]]:

@@ -148,4 +148,9 @@ export default {
   getAssistFuncList: (params = {}) => request.get('/autotest/tool/get', { params }),
   // 环境相关：查询环境名称列表(去重)，用于执行/调试时选择执行环境
   getApiEnvNames: () => request.get('/autotest/env/get_names'),
+
+  // 数据源（HTTP 步骤）
+  getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
+  uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
+
 }

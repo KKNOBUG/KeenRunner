@@ -357,7 +357,7 @@ async def single_step_dataset_upload(
         LOGGER.warning(f"计算文件哈希失败: {e}")
 
     try:
-        step_data, dataset_names = await parse_xlsx_first_sheet_async(file_path)
+        step_data, dataset_names, dataframe = await parse_xlsx_first_sheet_async(file_path)
     except FileNotFoundError as e:
         return FailureResponse(message=str(e))
     except ValueError as e:
@@ -381,6 +381,7 @@ async def single_step_dataset_upload(
             file_desc=(file_desc or "")[:2048].strip() or None,
             parsed_data=step_data,
             dataset_names=dataset_names,
+            dataframe=dataframe,
             created_user=created_user,
         )
     except (NotFoundException, ParameterException) as e:
@@ -449,8 +450,8 @@ async def batch_step_dataset_upload(
     file_path = path_or_error
     file_name = (getattr(file, "filename", None) or "").strip()[:255]
 
+    file_hash = ""
     try:
-        file_hash = ""
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
         file_hash = (file_hash or "")[:255]
@@ -476,12 +477,22 @@ async def batch_step_dataset_upload(
         if not isinstance(step_data, dict):
             continue
         dataset_names = sorted(step_data.keys()) if step_data else []
+        dataframe = []
         if i < len(root_steps):
             step_id = root_steps[i].get("step_id")
             step_code = (root_steps[i].get("step_code") or "").strip()
         else:
             step_id = None
             step_code = str(sheet_name).strip()[:64] if sheet_name else f"sheet_{i}"
+
+            try:
+                # 取该 sheet 的原始二维矩阵（header=None，与解析一致）
+                import pandas as pd
+                df = pd.read_excel(file_path, sheet_name=i, header=None, engine="openpyxl")
+                if not df.empty:
+                    dataframe = df.where(pd.notna(df), None).values.tolist()
+            except Exception as e:
+                LOGGER.warning(f"读取 sheet 原始二维矩阵失败(sheet_index={i}, step_code={step_code}): {e}")
 
         try:
             if not step_id:
@@ -498,6 +509,7 @@ async def batch_step_dataset_upload(
                 file_desc=(file_desc or "")[:2048].strip() or None,
                 parsed_data=step_data,
                 dataset_names=dataset_names,
+                dataframe=dataframe,
                 created_user=created_user,
             )
             created.append(await _serialize_data_source(instance))

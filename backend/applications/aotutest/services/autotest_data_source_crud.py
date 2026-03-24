@@ -393,6 +393,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             file_desc: Optional[str] = None,
             parsed_data: Optional[Dict[str, Any]] = None,
             dataset_names: Optional[List[str]] = None,
+            dataframe: Optional[List[Any]] = None,
             created_user: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
@@ -409,6 +410,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param file_desc: 描述。
         :param parsed_data: 解析后的 dataset 字典。
         :param dataset_names: 场景名称列表。
+        dataframe: Optional[List[Any]] = None,
         :param created_user: 创建人（更新路径会映射为 updated_user）。
         :returns: 数据源实例。
         :raises ParameterException: parsed_data 为空时。
@@ -438,6 +440,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                     cache_key=cache_key,
                     dataset=parsed_data,
                     dataset_names=dataset_names if dataset_names is not None else (existing.dataset_names or []),
+                    dataframe=dataframe if dataframe is not None else (existing.dataframe or []),
                     updated_user=created_user,
                 ),
             )
@@ -455,6 +458,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 cache_key=cache_key,
                 dataset=parsed_data,
                 dataset_names=dataset_names or [],
+                dataframe=dataframe or [],
                 created_user=created_user,
             )
         )
