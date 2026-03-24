@@ -306,46 +306,6 @@ async def get_dataset_scenario_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/list", summary="API自动化测试-按用例查询数据源(按 data_source_code 聚合)")
-async def list_data_sources_aggregated(
-        case_id: int = Query(..., description="用例ID"),
-        state: Optional[int] = Query(0, description="状态(0:启用, 1:禁用)"),
-):
-    """按 data_source_code 聚合，含 dataset_names 与 steps，不含 dataset（供前端选择数据源）。"""
-    if not case_id:
-        return ParameterResponse(message="case_id 不能为空")
-    try:
-        items = await AUTOTEST_DATA_SOURCE_CRUD.list_by_case(case_id=case_id, state=state)
-        by_file: Dict[str, Dict[str, Any]] = {}
-        for x in items:
-            fc = x.data_source_code or ""
-            if fc not in by_file:
-                by_file[fc] = {
-                    "data_source_code": fc,
-                    "case_id": x.case_id,
-                    "case_code": x.case_code,
-                    "file_name": x.file_name,
-                    "file_path": x.file_path,
-                    "file_desc": x.file_desc,
-                    "dataset_names": x.dataset_names or [],
-                    "steps": [],
-                    "created_time": x.created_time.isoformat()
-                    if getattr(x.created_time, "isoformat", None)
-                    else str(x.created_time),
-                    "updated_time": x.updated_time.isoformat()
-                    if getattr(x.updated_time, "isoformat", None)
-                    else str(x.updated_time),
-                }
-            by_file[fc]["steps"].append({"step_id": x.step_id, "step_code": x.step_code})
-        for v in by_file.values():
-            v["steps"].sort(key=lambda s: ((s.get("step_id") or 0), (s.get("step_code") or "")))
-        data = list(by_file.values())
-        return SuccessResponse(message="查询成功", data=data, total=len(data))
-    except Exception as e:
-        LOGGER.error(f"查询数据源聚合列表失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=str(e))
-
-
 @autotest_data_source.post("/single_step_dataset_upload", summary="参数化驱动-单步骤数据集上传")
 async def single_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
@@ -375,7 +335,7 @@ async def single_step_dataset_upload(
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
         upload_file=file,
         destination=destination,
-        add_timestamp=True,
+        add_timestamp=False,
         check_filename=True,
         check_filetype=True,
         check_filesize=True,
@@ -388,8 +348,8 @@ async def single_step_dataset_upload(
     file_path = path_or_error
     file_name = (getattr(file, "filename", None) or "").strip()[:255]
 
+    file_hash = ""
     try:
-        file_hash = ""
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
         file_hash = (file_hash or "")[:255]
