@@ -1,4 +1,6 @@
 import { request } from '@/utils'
+import axios from 'axios'
+import { getToken } from '@/utils'
 
 
 
@@ -152,5 +154,14 @@ export default {
   // 数据源（HTTP 步骤）
   getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
   uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
-
+  exportDataSourceXlsx: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/autotest/data_source/export_xlsx`,
+      {
+        params,
+        responseType: 'blob',
+        headers: {
+          token: getToken() || '',
+        },
+      },
+  ),
 }

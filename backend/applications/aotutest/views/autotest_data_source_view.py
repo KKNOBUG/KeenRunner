@@ -7,11 +7,16 @@
 @DateTime: 2026/3/6
 """
 import hashlib
+import io
 import os.path
 import traceback
+from datetime import datetime
 from typing import Optional, List, Dict, Any
+from urllib.parse import quote
 
+import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Form, Body, Query
+from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
 from backend import LOGGER, PROJECT_CONFIG
@@ -284,6 +289,49 @@ async def get_data_source_by_case_step(
     except Exception as e:
         LOGGER.error(f"按 case_step 查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_data_source.get("/export_xlsx", summary="API自动化测试-按用例步骤导出数据源xlsx")
+async def export_data_source_xlsx(
+        case_id: int = Query(..., description="用例ID"),
+        step_id: int = Query(..., description="步骤ID"),
+        step_code: str = Query(..., description="步骤标识代码"),
+):
+    """从数据库 dataframe 字段导出 xlsx（不依赖前端当前表格状态）。"""
+    try:
+        instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_step(
+            case_id=case_id,
+            step_id=step_id,
+            step_code=step_code,
+            on_error=True,
+        )
+        if isinstance(instance, list) or not instance:
+            return ParameterResponse(message="导出失败，未定位到唯一数据源记录")
+
+        matrix = instance.dataframe if isinstance(instance.dataframe, list) else []
+        df = pd.DataFrame(matrix if matrix else [[]])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, header=False, sheet_name="Sheet1")
+        output.seek(0)
+
+        safe_base = (instance.file_name or f"dataset_{case_id}_{step_code}").strip()
+        safe_base = safe_base[:-5] if safe_base.lower().endswith(".xlsx") else safe_base
+        file_name = f"{safe_base}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        quoted_name = quote(file_name)
+        headers = {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"
+        }
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"导出失败, 异常描述: {e}")
 
 
 @autotest_data_source.get("/dataset_scenario", summary="API自动化测试-查询某步骤下单个数据集场景")

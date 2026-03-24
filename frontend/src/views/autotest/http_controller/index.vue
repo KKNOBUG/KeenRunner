@@ -406,13 +406,17 @@
         <n-tabs type="line" animated class="data-source-tabs">
           <n-tab-pane name="preview" tab="数据预览">
             <n-space vertical :size="12">
-              <n-space>
-                <n-button size="small" type="info" :disabled="props.readonly" @click="dataSourceImport">导入</n-button>
-                <n-button size="small" type="warning" :disabled="props.readonly" @click="dataSourceExport">导出</n-button>
-                <n-button size="small" type="error" :disabled="props.readonly" @click="dataSourceDelete">删除</n-button>
-                <n-button size="small" type="success" :disabled="props.readonly" @click="dataSourceSave">保存</n-button>
-                <n-button size="small" type="primary" :disabled="props.readonly" @click="downloadStepDataTemplate">模板</n-button>
-              </n-space>
+              <div class="data-source-toolbar-row">
+                <n-space>
+                  <n-button size="small" type="primary" :disabled="props.readonly" @click="downloadStepDataTemplate">导入模板下载</n-button>
+                </n-space>
+                <n-space>
+                  <n-button size="small" type="warning" :disabled="props.readonly" @click="dataSourceImport">导入</n-button>
+                  <n-button size="small" type="info" :disabled="props.readonly" :loading="dataSourceExportLoading" @click="dataSourceExport">导出</n-button>
+                  <n-button size="small" type="error" :disabled="props.readonly" @click="dataSourceDelete">删除</n-button>
+                  <n-button size="small" type="success" :disabled="props.readonly" @click="dataSourceSave">保存</n-button>
+                </n-space>
+              </div>
               <n-data-table
                   :row-key="dataSourcePreviewRowKey"
                   :checked-row-keys="dataSourcePreviewKeysRef"
@@ -1227,8 +1231,46 @@ const downloadStepDataTemplate = () => $message.info('后端暂未实现：下�
 const downloadApiDocTemplate = () => $message.info('后端暂未实现：下载接口文档模板')
 /** 导入数据（仅前端占位）。 */
 const dataSourceImport = () => $message.info('后端暂未实现：导入数据')
-/** 导出数据（仅前端占位）。 */
-const dataSourceExport = () => $message.info('后端暂未实现：导出数据')
+/** 导出数据：基于后端 dataframe 导出 xlsx（不依赖当前前端表格编辑态）。 */
+const dataSourceExportLoading = ref(false)
+const dataSourceExport = async () => {
+  if (dataSourceExportLoading.value) return
+  try {
+    dataSourceExportLoading.value = true
+    const caseId = route.query.case_id ? Number(route.query.case_id) : null
+    const original = props.step?.original || {}
+    const stepId = original.id ? Number(original.id) : null
+    const stepCode = String(original.step_code || '').trim()
+    if (!caseId || !stepId || !stepCode) {
+      $message.warning('缺少步骤上下文，无法导出')
+      return
+    }
+    const res = await api.exportDataSourceXlsx({
+      case_id: caseId,
+      step_id: stepId,
+      step_code: stepCode,
+    })
+    const blob = new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const m = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+    const fileName = m?.[1] ? decodeURIComponent(m[1]) : `dataset_${caseId}_${stepCode}.xlsx`
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    $message.success('导出成功')
+  } catch (e) {
+    $message.error(`导出失败：${e?.message || e}`)
+  } finally {
+    dataSourceExportLoading.value = false
+  }
+}
 /** 删除数据：优先删除数据预览勾选行。 */
 const dataSourceDelete = () => {
   if (props.readonly) return
@@ -2428,6 +2470,13 @@ const validatorColumns = [
 
 .data-source-tabs {
   margin-top: 4px;
+}
+
+.data-source-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .data-source-toolbar {
