@@ -135,6 +135,25 @@ async def _excel_to_json_async(file_path: str) -> Dict[str, Dict[str, Dict[str, 
     return dict(zip(sheet_names, results))
 
 
+async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]]]:
+    """
+    将二维矩阵（与单步骤 xlsx 首 sheet、header=None 结构一致）解析为 dataset / dataset_names / 规范化 matrix。
+
+    供「数据预览」表格保存时与服务端上传解析结果对齐。
+    """
+    if not isinstance(matrix, list):
+        raise ValueError("dataframe 须为二维列表")
+    if not matrix:
+        return {}, [], []
+    df = pd.DataFrame(matrix)
+    if df.empty:
+        return {}, [], []
+    step_data = await _parse_sheet_async(df)
+    dataset_names = sorted(step_data.keys()) if step_data else []
+    norm_matrix = _dataframe_to_matrix(df)
+    return step_data, dataset_names, norm_matrix
+
+
 async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]]]:
     """
     仅解析 xlsx 的第一个 sheet 页（单步骤数据集上传用）。

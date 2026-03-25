@@ -153,11 +153,22 @@ export default {
 
   // 数据源（HTTP 步骤）
   getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
+  updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),
   uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
   exportDataSourceXlsx: (params = {}) => axios.get(
       `${import.meta.env.VITE_BASE_API}/autotest/data_source/export_xlsx`,
       {
         params,
+        responseType: 'blob',
+        headers: {
+          token: getToken() || '',
+        },
+      },
+  ),
+
+  downloadHttpStepDatasetImportTemplate: () => axios.get(
+      `${import.meta.env.VITE_BASE_API}/autotest/data_source/import_template_xlsx`,
+      {
         responseType: 'blob',
         headers: {
           token: getToken() || '',

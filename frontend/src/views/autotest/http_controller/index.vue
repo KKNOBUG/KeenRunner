@@ -408,13 +408,38 @@
             <n-space vertical :size="12">
               <div class="data-source-toolbar-row">
                 <n-space>
-                  <n-button size="small" type="primary" :disabled="props.readonly" @click="downloadStepDataTemplate">导入模板下载</n-button>
+                  <n-button
+                      size="small"
+                      type="primary"
+                      :disabled="props.readonly"
+                      :loading="downloadStepDataTemplateLoading"
+                      @click="downloadStepDataTemplate"
+                  >导入模板下载</n-button>
                 </n-space>
                 <n-space>
-                  <n-button size="small" type="warning" :disabled="props.readonly" @click="dataSourceImport">导入</n-button>
+                  <n-button
+                      size="small"
+                      type="warning"
+                      :disabled="props.readonly"
+                      :loading="dataSourceImportLoading"
+                      @click="dataSourceImport"
+                  >导入
+                    <input
+                        ref="dataSourceImportFileInputRef"
+                        type="file"
+                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        style="display: none"
+                        @change="onDataSourceImportFileChange"
+                    /></n-button>
                   <n-button size="small" type="info" :disabled="props.readonly" :loading="dataSourceExportLoading" @click="dataSourceExport">导出</n-button>
                   <n-button size="small" type="error" :disabled="props.readonly" @click="dataSourceDelete">删除</n-button>
-                  <n-button size="small" type="success" :disabled="props.readonly" @click="dataSourceSave">保存</n-button>
+                  <n-button
+                      size="small"
+                      type="success"
+                      :disabled="props.readonly"
+                      :loading="dataSourceSaveLoading"
+                      @click="dataSourceSave"
+                  >保存</n-button>
                 </n-space>
               </div>
               <n-data-table
@@ -919,6 +944,31 @@ const renumberPreviewRows = () => {
   }))
 }
 
+/** 将数据预览表格行转为后端 dataframe 二维矩阵（c_1..c_n → 每行数组，空单元为 null）。 */
+const previewRowsToDataframeMatrix = (rows) => {
+  const list = Array.isArray(rows) ? rows : []
+  let maxCol = 0
+  list.forEach((row) => {
+    Object.keys(row || {}).forEach((k) => {
+      if (k.startsWith('c_')) {
+        const n = Number(k.slice(2))
+        if (Number.isFinite(n) && n > maxCol) maxCol = n
+      }
+    })
+  })
+  if (maxCol === 0) return []
+  return list.map((row) => {
+    const line = []
+    for (let j = 1; j <= maxCol; j++) {
+      const key = `c_${j}`
+      const v = row[key]
+      if (v === '' || v === undefined) line.push(null)
+      else line.push(v)
+    }
+    return line
+  })
+}
+
 const buildPreviewColumnsByRows = (rows) => {
   const colSet = new Set()
   ;(rows || []).forEach((row) => {
@@ -1225,12 +1275,103 @@ const onApiDocFileSelected = (options) => {
   }
 }
 
-/** 下载步骤测试数据模板（仅前端占位）。 */
-const downloadStepDataTemplate = () => $message.info('后端暂未实现：下载步骤测试数据模板')
+/** 下载步骤测试数据导入模板（output/template 内置 xlsx）。 */
+const downloadStepDataTemplateLoading = ref(false)
+const downloadStepDataTemplate = async () => {
+  if (downloadStepDataTemplateLoading.value) return
+  try {
+    downloadStepDataTemplateLoading.value = true
+    const res = await api.downloadHttpStepDatasetImportTemplate()
+    const blob = new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const m = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+    const fileName = m?.[1]
+        ? decodeURIComponent(m[1])
+        : '测试用例HTTP请求步骤数据源模板.xlsx'
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    $message.success('下载成功')
+  } catch (e) {
+    $message.error(`下载失败：${e?.message || e}`)
+  } finally {
+    downloadStepDataTemplateLoading.value = false
+  }
+}
 /** 下载接口文档模板（仅前端占位）。 */
 const downloadApiDocTemplate = () => $message.info('后端暂未实现：下载接口文档模板')
-/** 导入数据（仅前端占位）。 */
-const dataSourceImport = () => $message.info('后端暂未实现：导入数据')
+
+const dataSourceImportFileInputRef = ref(null)
+const dataSourceImportLoading = ref(false)
+
+/** 单步骤数据集导入：需步骤已入库；确认后选择 xlsx，上传成功将覆盖服务端该步骤数据源。 */
+const dataSourceImport = () => {
+  if (props.readonly) return
+  const caseId = route.query.case_id ? Number(route.query.case_id) : null
+  const original = props.step?.original || {}
+  const stepId = original.id ? Number(original.id) : null
+  const stepCode = String(original.step_code || '').trim()
+  if (!caseId || !stepId || !stepCode) {
+    $message.warning('当前步骤尚未保存入库，请先保存步骤树后再进行数据导入')
+    return
+  }
+  $dialog.confirm({
+    title: '导入确认',
+    type: 'warning',
+    content:
+        '上传成功后将覆盖本步骤在服务器端已保存的数据源及缓存，数据预览将以导入文件为准。是否继续？',
+    confirm() {
+      nextTick(() => {
+        dataSourceImportFileInputRef.value?.click()
+      })
+    },
+  })
+}
+
+const onDataSourceImportFileChange = async (ev) => {
+  const input = ev.target
+  const file = input?.files?.[0]
+  if (input) input.value = ''
+  if (!file) return
+  if (!String(file.name || '').toLowerCase().endsWith('.xlsx')) {
+    $message.warning('仅支持 .xlsx 格式的数据驱动文件')
+    return
+  }
+  const caseId = route.query.case_id ? Number(route.query.case_id) : null
+  const original = props.step?.original || {}
+  const stepId = original.id ? Number(original.id) : null
+  const stepCode = String(original.step_code || '').trim()
+  if (!caseId || !stepId || !stepCode) {
+    $message.warning('缺少步骤上下文，请先保存步骤树后再试')
+    return
+  }
+  if (dataSourceImportLoading.value) return
+  try {
+    dataSourceImportLoading.value = true
+    const formData = new FormData()
+    formData.append('case_id', String(caseId))
+    formData.append('step_id', String(stepId))
+    formData.append('step_code', stepCode)
+    formData.append('file', file)
+    const res = await api.uploadSingleStepDataset(formData)
+    const info = res?.data || {}
+    if (info.file_name != null) state.form.data_source_name = String(info.file_name)
+    if (info.file_desc != null) state.form.data_source_desc = String(info.file_desc || '')
+    await loadStepDataframePreview()
+    $message.success(res?.message || '导入成功')
+  } catch (_) {
+    /* 错误信息由 http 拦截器统一提示 */
+  } finally {
+    dataSourceImportLoading.value = false
+  }
+}
 /** 导出数据：基于后端 dataframe 导出 xlsx（不依赖当前前端表格编辑态）。 */
 const dataSourceExportLoading = ref(false)
 const dataSourceExport = async () => {
@@ -1308,8 +1449,40 @@ const dataSourceDelete = () => {
     }
   })
 }
-/** 保存数据（仅前端占位）。 */
-const dataSourceSave = () => $message.info('后端暂未实现：数据保存')
+const dataSourceSaveLoading = ref(false)
+
+/** 将当前数据预览表格提交后端，按 case_id + step_id + step_code 更新数据源（含解析后的 dataset）。 */
+const dataSourceSave = async () => {
+  if (props.readonly) return
+  const caseId = route.query.case_id ? Number(route.query.case_id) : null
+  const original = props.step?.original || {}
+  const stepId = original.id ? Number(original.id) : null
+  const stepCode = String(original.step_code || '').trim()
+  if (!caseId || !stepId || !stepCode) {
+    $message.warning('当前步骤尚未保存入库，请先保存步骤树后再保存数据')
+    return
+  }
+  if (dataSourceSaveLoading.value) return
+  try {
+    dataSourceSaveLoading.value = true
+    const dataframe = previewRowsToDataframeMatrix(dataSource.previewRows || [])
+    const res = await api.updateDataSource({
+      case_id: caseId,
+      step_id: stepId,
+      step_code: stepCode,
+      dataframe,
+    })
+    const info = res?.data || {}
+    if (info.file_name != null) state.form.data_source_name = String(info.file_name)
+    if (info.file_desc != null) state.form.data_source_desc = String(info.file_desc || '')
+    await loadStepDataframePreview()
+    $message.success(res?.message || '保存成功')
+  } catch (_) {
+    /* 错误信息由 http 拦截器统一提示 */
+  } finally {
+    dataSourceSaveLoading.value = false
+  }
+}
 
 /** 生成数据（仅前端占位）。 */
 const generateDataSource = () => {

@@ -29,6 +29,7 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
 from backend.applications.aotutest.services.autotest_data_source_parser import (
+    parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
     parse_xlsx_to_parsed_data_async,
 )
@@ -161,7 +162,23 @@ async def update_data_source_info(
         data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
 ):
     try:
-        instance = await AUTOTEST_DATA_SOURCE_CRUD.update_data_source(data_source_in=data_in)
+        effective = data_in
+        if data_in.dataframe is not None:
+            try:
+                step_data, dataset_names, norm_matrix = await parse_dataframe_matrix_async(data_in.dataframe)
+            except ValueError as e:
+                return BadReqResponse(message=f"解析表格数据失败: {e}")
+            user_id = CTX_USER_ID.get(0)
+            updated_user = str(user_id) if user_id else None
+            effective = data_in.model_copy(
+                update={
+                    "dataset": step_data,
+                    "dataset_names": dataset_names,
+                    "dataframe": norm_matrix,
+                    "updated_user": updated_user,
+                }
+            )
+        instance = await AUTOTEST_DATA_SOURCE_CRUD.update_data_source(data_source_in=effective)
         data = await _serialize_data_source(instance)
         LOGGER.info(f"更新数据源成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
@@ -352,6 +369,24 @@ async def get_dataset_scenario_info(
     except Exception as e:
         LOGGER.error(f"查询数据集场景失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_data_source.get("/import_template_xlsx", summary="API自动化测试-下载HTTP步骤数据集导入模板xlsx")
+async def download_http_step_dataset_import_template():
+    """分发仓库内置于 output/template 的 xlsx；流式读取，不加 UTF-8 BOM，避免损坏二进制格式。"""
+    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
+    if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
+        return NotFoundResponse(message="导入模板文件不存在，请确认已部署 output/template 下模板文件")
+    file_name = os.path.basename(filepath)
+    quoted_name = quote(file_name)
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"
+    }
+    return StreamingResponse(
+        FileTransfer.iter_download_file_chunks(download_file=filepath, add_bom=False),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
 @autotest_data_source.post("/single_step_dataset_upload", summary="参数化驱动-单步骤数据集上传")
