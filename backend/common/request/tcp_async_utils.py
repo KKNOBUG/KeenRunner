@@ -34,9 +34,10 @@ class AsyncTcpUtils:
         self.buffer_size = buffer_size
         self.auto_reconnect = auto_reconnect
         self.timeout = timeout
+        self.kwargs = kwargs
         self.reader = None
         self.writer = None
-        self.connected = None
+        self.connected = False
 
     async def __aenter__(self):
         await self._connection()

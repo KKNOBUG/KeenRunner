@@ -34,6 +34,8 @@ from backend.core.exceptions.http_exceptions import (
 )
 # from backend.core.middleware.app_middleware import ReqResLoggerMiddleware
 from backend.core.middlewares.app_middleware import logging_middleware
+from backend.core.middlewares.auth_middleware import auth_middleware
+from backend.services.dependency import DependPermission
 
 
 def register_logging() -> logger:
@@ -156,6 +158,8 @@ def register_middlewares(app: FastAPI):
     )
     # app.add_middleware(ReqResLoggerMiddleware)    # 文件上传下载偶现阻塞
     # 注册 HTTP 请求中间件
+    # 先做认证拦截，再做审计日志记录
+    app.middleware('http')(auth_middleware)
     app.middleware('http')(logging_middleware)
 
 
@@ -163,21 +167,49 @@ def register_routers(app: FastAPI) -> None:
     # 挂载静态文件
     app.mount("/static", StaticFiles(directory="static"), name="static")
     app.openapi_version = PROJECT_CONFIG.APP_OPENAPI_VERSION
-    static_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
-    static_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL
-    static_modules["swagger_css_url"] = PROJECT_CONFIG.APP_OPENAPI_CSS_URL
-    static_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
+    swagger_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
+    swagger_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL
+    swagger_modules["swagger_css_url"] = PROJECT_CONFIG.APP_OPENAPI_CSS_URL
+    swagger_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
+    redoc_modules = sys.modules["fastapi.openapi.docs"].get_redoc_html.__kwdefaults__
+    redoc_modules["redoc_js_url"] = "/static/redoc/bundles/redoc.standalone.js"
+    redoc_modules["redoc_favicon_url"] = "/static/redoc/favicon.png"
 
     # 导入路由蓝图
-    from backend.applications.base.views import base
+    from backend.applications.base.views import base_public, base_secure
     from backend.applications.department.views.department_view import dept
     from backend.applications.user.views.user_view import user
     from backend.applications.toolbox.views import toolbox
     from backend.applications.aotutest.views import autotest
 
     # 挂在路由蓝图
-    app.include_router(router=base, prefix="/base", tags=["基础服务"])
-    app.include_router(router=user, prefix="/user", tags=["用户服务"])
-    app.include_router(router=dept, prefix="/dept", tags=["部门服务"])
-    app.include_router(router=toolbox, prefix="/toolbox", tags=["工具箱服务"])
-    app.include_router(router=autotest, prefix="/autotest")
+    app.include_router(router=base_public, prefix="/base", tags=["基础服务"])
+    app.include_router(
+        router=base_secure,
+        prefix="/base",
+        tags=["基础服务"],
+        dependencies=[DependPermission],
+    )
+    app.include_router(
+        router=user,
+        prefix="/user",
+        tags=["用户服务"],
+        dependencies=[DependPermission],
+    )
+    app.include_router(
+        router=dept,
+        prefix="/dept",
+        tags=["部门服务"],
+        dependencies=[DependPermission],
+    )
+    app.include_router(
+        router=toolbox,
+        prefix="/toolbox",
+        tags=["工具箱服务"],
+        dependencies=[DependPermission],
+    )
+    app.include_router(
+        router=autotest,
+        prefix="/autotest",
+        dependencies=[DependPermission],
+    )

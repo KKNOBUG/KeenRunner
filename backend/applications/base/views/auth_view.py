@@ -24,10 +24,11 @@ from backend.services.ctx import CTX_USER_ID
 from backend.services.dependency import DependAuth
 from backend.services.password import create_access_token
 
-auth = APIRouter()
+auth_public = APIRouter()
+auth_secure = APIRouter()
 
 
-@auth.post("/access_token", summary="用户鉴权", description="验证用户密码和状态并生成令牌")
+@auth_public.post("/access_token", summary="用户鉴权", description="验证用户密码和状态并生成令牌")
 async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)
@@ -61,7 +62,7 @@ async def get_login_access_token(credentials: CredentialsSchema):
     return SuccessResponse(data=data.model_dump())
 
 
-@auth.post("/usermenu", summary="查看用户菜单", dependencies=[DependAuth])
+@auth_secure.post("/usermenu", summary="查看用户菜单", dependencies=[DependAuth])
 async def get_user_menu():
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
@@ -89,7 +90,7 @@ async def get_user_menu():
     return SuccessResponse(data=res)
 
 
-@auth.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
+@auth_secure.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
 async def get_userinfo():
     user_id = CTX_USER_ID.get()
     user_obj = await USER_CRUD.get(id=user_id)
@@ -99,7 +100,7 @@ async def get_userinfo():
     return SuccessResponse(data=data)
 
 
-@auth.post("/getUserRouters", summary="查看用户路由", dependencies=[DependAuth])
+@auth_secure.post("/getUserRouters", summary="查看用户路由", dependencies=[DependAuth])
 async def get_user_router():
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()

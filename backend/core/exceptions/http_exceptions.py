@@ -17,6 +17,7 @@ from backend.core.responses.base_response import BaseResponse
 from backend.core.responses.http_response import (
     ParameterResponse,
     ForbiddenResponse,
+    UnauthorizedResponse,
     NotFoundResponse,
     MethodNotAllowedResponse,
     RequestTimeoutResponse,
@@ -48,8 +49,14 @@ async def response_validation_exception_handler(request: Request, exc: ResponseV
 
 # 当发生 HTTP 相关的异常时，如 403 禁止访问、404 未找到等，会触发 HTTPException 异常
 async def http_exception_handler(request: Request, exc: HTTPException) -> BaseResponse:
+    if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        return UnauthorizedResponse(message=str(exc.detail) if hasattr(exc, "detail") else str(exc))
+
     if exc.status_code == status.HTTP_403_FORBIDDEN:
-        return ForbiddenResponse(message=f"请求服务 {request.method} 未被授权")
+        detail = str(exc.detail) if hasattr(exc, "detail") and exc.detail else None
+        return ForbiddenResponse(
+            message=detail or f"请求服务 {request.method} 未被授权"
+        )
 
     elif exc.status_code == status.HTTP_404_NOT_FOUND:
         return NotFoundResponse(message=f"请求资源 {request.url.path} 不可访达")

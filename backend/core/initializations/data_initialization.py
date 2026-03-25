@@ -58,7 +58,9 @@ async def init_database_role():
         await normal_role.menus.add(*all_menus)
 
         # 为普通用户分配基本路由
-        basic_routers = await Router.filter(Q(method__in=["GET"]) | Q(tags="基础模块"))
+        # Router.tags 来自 FastAPI include_router 的 tags（如“基础服务”“用户服务”），
+        # 因此这里使用模糊匹配“基础”，避免精确字符串不一致导致普通用户无法访问。
+        basic_routers = await Router.filter(Q(method__in=["GET"]) | Q(tags__icontains="基础"))
         await normal_role.routers.add(*basic_routers)
 
 
