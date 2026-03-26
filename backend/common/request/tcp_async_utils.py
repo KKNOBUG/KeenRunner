@@ -34,7 +34,7 @@ from backend.core.exceptions.base_exceptions import ReqInvalidException, ResInva
 
 class TcpFrameMode(str, Enum):
     """
-    TCP 收发帧格式(短连接 `AioTcpClient._exchange` / 长连接 `AsyncTcpConnection` 均可能用到子集)。
+    TCP 收发帧格式(短连接 `AioTcpClient.exchange` / 长连接 `AsyncTcpConnection` 均可能用到子集)。
 
     - LENGTH_PREFIX_JSON: 长度前缀 + 正文(正文通常为 JSON 或文本)。
     - RAW: 无长度前缀, 仅用于短连接 RAW 模式下的原始收发。
@@ -93,7 +93,7 @@ class AsyncTcpUtils:
         :raises ReqInvalidException: 当连接、发送、接收或协议解析发生异常时抛出。
         """
         try:
-            return await self.client._exchange(
+            return await self.client.exchange(
                 host=self.host,
                 port=self.port,
                 data=self.data,
@@ -317,7 +317,7 @@ class AioTcpClient:
             chunks.append(chunk)
         return b"".join(chunks)
 
-    async def _exchange(
+    async def exchange(
             self,
             *,
             host: str,
