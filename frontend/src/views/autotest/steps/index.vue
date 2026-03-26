@@ -526,7 +526,7 @@ const stepDefinitions = {
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
   tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
-  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
+  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'logos:python'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
 }
@@ -3625,7 +3625,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-code) {
-  color: #ff8936;
+  color: #ff7500;
 }
 
 :deep(.step-icon.icon-tcp) {
