@@ -10,7 +10,7 @@ import traceback
 import urllib.parse
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Union
 
 import httpx
@@ -1817,7 +1817,360 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
 
 
 class TcpStepExecutor(BaseStepExecutor):
-    pass
+    """
+    TCP 步骤执行器：复用 HTTP 步骤的「数据驱动替换 → 占位符解析 → 请求发送 → 变量提取 → 断言」链路。
+
+    约定字段（沿用步骤基础字段，避免新增 schema 破坏兼容）：
+    - request_url: TCP host（如 127.0.0.1 或域名），也允许写成 host:port（此时 request_port 可为空）
+    - request_port: TCP port（字符串或数字，范围 1~65535）
+    - request_args_type:
+        - RAW: 发送 request_text（str/bytes）
+        - JSON: 发送 request_body（dict 或 JSON 字符串）
+        - 其它/未配置：优先 request_text，否则 request_body
+    - 额外可选字段（不在 schema 中也可透传到 step dict）：
+        - tcp_frame_mode: "length_prefix_json" | "raw"（对应 TcpFrameMode，默认 length_prefix_json）
+        - tcp_length_field_size: 长度前缀宽度（默认 8）
+        - tcp_encoding: 文本编码（默认 utf-8）
+        - tcp_connect_timeout: 连接超时秒数（float）
+        - tcp_read_timeout: 读写超时秒数（float）
+        - tcp_max_response_bytes: 最大响应体限制（默认 10MB）
+        - tcp_response_type: "json" | "xml" | "text" | "bytes"（默认 text；json/xml 失败会降级为 text）
+    """
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        try:
+            # 参数化驱动：与 HTTP 步骤一致（当存在 dataset_name 且不是引用公共脚本时）
+            step_struct: Optional[Dict[str, Dict[str, Any]]] = None
+            dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
+            executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
+            if dataset_name and self.step_code and not executing_quote_case_id:
+                from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
+                step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=dataset_name,
+                )
+                if isinstance(step_data, dict):
+                    head = step_data.get("head") or {}
+                    body = step_data.get("body") or {}
+                    assert_ = step_data.get("assert") or {}
+                    step_struct = {"head": head, "body": body, "assert": assert_}
+                    result.dataset_snapshot = step_data
+                    result.dataset_name = dataset_name
+
+            # ----------------------------
+            # 1) 解析目标地址（host/port）
+            # ----------------------------
+            env_name: Optional[str] = getattr(self.context, "env_name", None)
+            request_project_id: Optional[int] = self.step.get("request_project_id")
+            host_raw = (self.step.get("request_url") or "").strip()
+            port_raw = self.step.get("request_port")
+
+            # allow host:port in request_url
+            host = host_raw
+            port: Optional[int] = None
+            if ":" in host_raw and not host_raw.lower().startswith("http"):
+                # 仅处理形如 127.0.0.1:9000 的写法，避免误伤 IPv6（暂不支持）
+                parts = host_raw.split(":")
+                if len(parts) == 2 and parts[1].isdigit():
+                    host = parts[0].strip()
+                    port = int(parts[1])
+
+            # 若未手动提供 host/port，则允许通过“请求应用 + 执行环境”解析出 host/port（与 HTTP 步骤一致）
+            if (not host_raw or host_raw == "") and (port_raw is None or str(port_raw).strip() == ""):
+                if env_name and request_project_id:
+                    try:
+                        from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+                        env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                            only_one=True,
+                            on_error=False,
+                            conditions={"project_id": request_project_id, "env_name": env_name},
+                        )
+                        if not env_instance:
+                            raise StepExecutionError(
+                                f"【TCP请求】环境(project_id={request_project_id}, env_name={env_name})配置不存在"
+                            )
+                        host = (env_instance.env_host or "").strip().rstrip("/").rstrip(":")
+                        port = int(env_instance.env_port) if env_instance.env_port is not None else None
+                    except StepExecutionError:
+                        raise
+                    except Exception as e:
+                        raise StepExecutionError(f"【TCP请求】环境配置查询异常, 错误描述: {e}") from e
+
+            if port is None:
+                try:
+                    if port_raw is None or str(port_raw).strip() == "":
+                        raise ValueError("端口未配置")
+                    port = int(str(port_raw).strip())
+                except Exception as e:
+                    raise StepExecutionError(f"【TCP请求】端口(request_port)解析失败: {e}") from e
+
+            if not host:
+                raise StepExecutionError("【TCP请求】TCP请求配置错误: 主机(request_url)为空（也未能从环境配置解析到host）")
+            if not (1 <= int(port) <= 65535):
+                raise StepExecutionError(f"【TCP请求】端口(request_port)不合法: {port}")
+
+            # ----------------------------
+            # 2) 构造报文（先数据驱动，再占位符）
+            # ----------------------------
+            request_body = self.step.get("request_body")
+            if isinstance(request_body, str):
+                try:
+                    request_body = json.loads(request_body) if request_body.strip() else {}
+                except (TypeError, json.JSONDecodeError):
+                    request_body = request_body
+            request_text = self.step.get("request_text")
+
+            has_data_driven = (
+                isinstance(step_struct, dict)
+                and (step_struct.get("head") or step_struct.get("body") or step_struct.get("assert"))
+            )
+            if has_data_driven:
+                body_map = step_struct.get("body") or {}
+                if body_map:
+                    if isinstance(request_body, dict):
+                        for jpath, val in body_map.items():
+                            JSONPathUtils.update(request_body, jpath, val)
+                    elif isinstance(request_body, str):
+                        try:
+                            payload_dict = json.loads(request_body) if request_body.strip() else {}
+                            if isinstance(payload_dict, dict):
+                                for jpath, val in body_map.items():
+                                    JSONPathUtils.update(payload_dict, jpath, val)
+                                request_body = payload_dict
+                        except (TypeError, json.JSONDecodeError):
+                            pass
+
+            # 占位符解析（与 HTTP 一致）
+            request_body = self.context.resolve_placeholders(request_body)
+            request_text = self.context.resolve_placeholders(request_text)
+
+            # 按 request_args_type 选择发送内容
+            request_args_type_raw = self.step.get("request_args_type")
+            try:
+                args_type = AutoTestReqArgsType(request_args_type_raw) if request_args_type_raw is not None else None
+            except (ValueError, TypeError):
+                args_type = None
+
+            payload: Any = None
+            if args_type is None:
+                payload = request_text if request_text not in (None, "") else request_body
+            elif args_type == AutoTestReqArgsType.RAW:
+                payload = request_text
+            elif args_type == AutoTestReqArgsType.JSON:
+                payload = request_body
+            else:
+                payload = request_text if request_text not in (None, "") else request_body
+
+            # 写入 result.request，便于落库与排障
+            result.request = {
+                "tcp_host": host,
+                "tcp_port": port,
+                "tcp_frame_mode": self.step.get("tcp_frame_mode") or "length_prefix_json",
+                "tcp_length_field_size": self.step.get("tcp_length_field_size") or 8,
+                "tcp_encoding": self.step.get("tcp_encoding") or "utf-8",
+                "tcp_connect_timeout": self.step.get("tcp_connect_timeout"),
+                "tcp_read_timeout": self.step.get("tcp_read_timeout"),
+                "tcp_response_type": self.step.get("tcp_response_type") or "text",
+                "request_body": request_body,
+                "request_text": request_text,
+                "payload": payload,
+            }
+
+            # ----------------------------
+            # 3) 发送 TCP 请求
+            # ----------------------------
+            from backend.common.request.tcp_async_utils import AioTcpClient, TcpFrameMode
+
+            frame_mode_raw = (self.step.get("tcp_frame_mode") or "length_prefix_json").strip().lower()
+            frame_mode = TcpFrameMode.RAW if frame_mode_raw == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON
+
+            length_field_size = self.step.get("tcp_length_field_size") or 8
+            encoding = self.step.get("tcp_encoding") or "utf-8"
+            connect_timeout = self.step.get("tcp_connect_timeout")
+            read_timeout = self.step.get("tcp_read_timeout")
+            max_response_bytes = self.step.get("tcp_max_response_bytes") or (10 * 1024 * 1024)
+            response_type = (self.step.get("tcp_response_type") or "text").strip().lower()
+
+            def _to_timedelta(v: Any) -> Optional["timedelta"]:
+                if v is None or v == "":
+                    return None
+                try:
+                    return timedelta(seconds=float(v))
+                except Exception:
+                    return None
+
+            connect_td = _to_timedelta(connect_timeout)
+            read_td = _to_timedelta(read_timeout)
+
+            start = time.perf_counter()
+            async with AioTcpClient(
+                timeout=read_td or timedelta(seconds=30),
+                connect_timeout=connect_td,
+                length_field_size=int(length_field_size),
+                max_response_bytes=int(max_response_bytes),
+            ) as client:
+                utils = await client.tcp(
+                    host,
+                    int(port),
+                    payload,
+                    frame_mode=frame_mode,
+                    encoding=encoding,
+                    connect_timeout=connect_td,
+                    read_timeout=read_td,
+                )
+                try:
+                    if response_type == "json":
+                        body_any = await utils.json_resp()
+                        resp_text = json.dumps(body_any, ensure_ascii=False)
+                        response_json = body_any if isinstance(body_any, (dict, list)) else None
+                        resp_bytes = resp_text.encode(encoding, errors="ignore")
+                    elif response_type == "xml":
+                        resp_text = await utils.xml_resp() or ""
+                        resp_bytes = resp_text.encode(encoding, errors="ignore")
+                        response_json = None
+                    elif response_type == "bytes":
+                        resp_bytes = await utils.bytes_resp()
+                        try:
+                            resp_text = resp_bytes.decode(encoding, errors="ignore")
+                        except Exception:
+                            resp_text = ""
+                        response_json = None
+                    else:  # text
+                        resp_text = await utils.text_resp()
+                        resp_bytes = resp_text.encode(encoding, errors="ignore")
+                        try:
+                            response_json = json.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
+                        except Exception:
+                            response_json = None
+                except Exception:
+                    # 若指定 json/xml 解析失败，降级为 text，便于排障
+                    resp_bytes = await utils.bytes_resp()
+                    resp_text = resp_bytes.decode(encoding, errors="ignore")
+                    try:
+                        response_json = json.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
+                    except Exception:
+                        response_json = None
+
+            elapsed = round(time.perf_counter() - start, 6)
+            result.response = {
+                "status_code": None,
+                "headers": None,
+                "text": resp_text,
+                "cookies": None,
+                "elapsed": str(elapsed),
+                "bytes_len": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
+            }
+
+            # ----------------------------
+            # 4) 变量提取 / 断言（复用 HTTP 逻辑）
+            # ----------------------------
+            try:
+                extract_variables = self.step.get("extract_variables")
+                if extract_variables and not isinstance(extract_variables, list):
+                    raise StepExecutionError(
+                        f"【变量提取】表达式列表解析失败: 参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
+                        f"但得到[{type(extract_variables)}]类型"
+                    )
+                _, extract_results_list = AutoTestToolService.run_extract_variables(
+                    extract_variables=extract_variables or [],
+                    response_text=result.response.get("text") if result.response else None,
+                    response_json=response_json,
+                    response_headers=None,
+                    response_cookies=None,
+                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                )
+                result.extract_variables = extract_results_list
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                self.context.log(f"【TCP请求】变量提取失败: {e}", step_code=self.step_code)
+
+            try:
+                assert_validators = self.step.get("assert_validators")
+                if assert_validators and not isinstance(assert_validators, list):
+                    raise StepExecutionError(
+                        f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
+                        f"但得到[{type(assert_validators)}]类型"
+                    )
+                validator_results = AutoTestToolService.run_assert_validators(
+                    assert_validators=assert_validators or [],
+                    response_text=result.response.get("text") if result.response else None,
+                    response_json=response_json,
+                    response_headers=None,
+                    response_cookies=None,
+                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                )
+                # 参数化驱动 assert（仅当响应 JSON 可用时才执行 JSONPath 断言）
+                assert_map = isinstance(step_struct, dict) and (step_struct.get("assert") or {}) or {}
+                for except_path, except_value in assert_map.items():
+                    if not except_path:
+                        continue
+                    if response_json is None:
+                        validator_results.append({
+                            "name": except_path,
+                            "expr": except_path,
+                            "source": "response json",
+                            "operation": "等于",
+                            "except_value": except_value,
+                            "actual_value": None,
+                            "success": False,
+                            "error": "响应不是JSON，无法进行JSONPath断言",
+                        })
+                        continue
+                    try:
+                        actual_value = AutoTestToolService.extract_from_source(
+                            source="response json",
+                            expr=except_path,
+                            range_type="SOME",
+                            index=None,
+                            response_text=result.response.get("text") if result.response else None,
+                            response_json=response_json,
+                            response_headers=None,
+                            response_cookies=None,
+                            session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                            operation_type="断言验证",
+                        )
+                        success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                        validator_results.append({
+                            "name": except_path,
+                            "expr": except_path,
+                            "source": "response json",
+                            "operation": "等于",
+                            "except_value": except_value,
+                            "actual_value": actual_value,
+                            "success": success,
+                            "error": "" if success else "断言失败",
+                        })
+                    except Exception as e:
+                        validator_results.append({
+                            "name": except_path,
+                            "expr": except_path,
+                            "source": "response json",
+                            "operation": "等于",
+                            "except_value": except_value,
+                            "actual_value": None,
+                            "success": False,
+                            "error": str(e),
+                        })
+
+                result.assert_validators = validator_results
+                if any(item.get("success") is False for item in validator_results if isinstance(item, dict)):
+                    raise StepExecutionError("【TCP请求】断言失败")
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                raise StepExecutionError(f"【TCP请求】断言验证失败: {e}") from e
+
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
 
 
 class DataBaseStepExecutor(BaseStepExecutor):

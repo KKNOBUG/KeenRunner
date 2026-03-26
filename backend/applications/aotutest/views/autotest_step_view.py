@@ -30,6 +30,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     AutoTestStepTreeUpdateList,
     AutoTestHttpDebugRequest,
+    AutoTestTcpDebugRequest,
     AutoTestStepTreeExecute,
     AutoTestPythonCodeDebugRequest,
 )
@@ -56,6 +57,7 @@ from backend.core.responses.http_response import (
     DataAlreadyExistsResponse,
 )
 from backend.enums.autotest_enum import AutoTestReportType, AutoTestReqArgsType
+from backend.common.request.tcp_async_utils import AioTcpClient, TcpFrameMode
 
 autotest_step = APIRouter()
 
@@ -672,6 +674,173 @@ async def debug_http_request(
     except Exception as e:
         LOGGER.error(f"HTTP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
+
+
+@autotest_step.post("/tcp_debugging", summary="API自动化测试-TCP请求调试")
+async def debug_tcp_request(
+        step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据")
+):
+    try:
+        env_name = step_data.env_name
+        step_name = step_data.step_name
+        target = (step_data.request_url or "").strip()
+        request_port = step_data.request_port
+        request_body = step_data.request_body
+        request_text = step_data.request_text
+        request_project_id = step_data.request_project_id
+        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
+        session_variables: List[Dict[str, Any]] = step_data.session_variables or []
+        defined_variables: List[Dict[str, Any]] = step_data.defined_variables or []
+        extract_variables: List[Dict[str, Any]] = step_data.extract_variables or []
+        assert_validators: List[Dict[str, Any]] = step_data.assert_validators or []
+
+        if not isinstance(session_variables, list):
+            session_variables = []
+        if not isinstance(defined_variables, list):
+            defined_variables = []
+        if not isinstance(extract_variables, list):
+            extract_variables = []
+        if not isinstance(assert_validators, list):
+            assert_validators = []
+
+        # 合并变量池（同 HTTP 调试）
+        merge_all_variables: Dict[str, Any] = {}
+        for item in defined_variables:
+            if isinstance(item, dict) and item.get("key"):
+                merge_all_variables[item["key"]] = item
+        for item in session_variables:
+            if isinstance(item, dict) and item.get("key"):
+                merge_all_variables[item["key"]] = item
+        initial_variables = list(merge_all_variables.values())
+
+        # 日志辅助函数
+        def format_log(message: str) -> str:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return f"[{timestamp}] [{step_name}] {message}"
+
+        logs = [format_log("TCP请求调试开始"), format_log("参数替换开始")]
+
+        finished_variables = AutoTestToolService.resolve_placeholders(
+            initial_variables, logs.append, False, finished_variables={}
+        )
+        if request_body is not None:
+            request_body = AutoTestToolService.resolve_placeholders(
+                request_body, logs.append, False, finished_variables=finished_variables
+            )
+        if request_text is not None:
+            request_text = AutoTestToolService.resolve_placeholders(
+                request_text, logs.append, False, finished_variables=finished_variables
+            )
+
+        # 解析 host/port（支持 host:port；若仅选应用则走环境配置）
+        host = ""
+        port: Optional[int] = None
+        if target and ":" in target:
+            parts = target.split(":")
+            if len(parts) == 2 and parts[1].isdigit():
+                host = parts[0].strip()
+                port = int(parts[1])
+        if not host:
+            host = target
+        if port is None and request_port not in (None, ""):
+            try:
+                port = int(str(request_port).strip())
+            except Exception:
+                port = None
+
+        if (not host) and env_name and request_project_id:
+            try:
+                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+                env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                    only_one=True,
+                    on_error=False,
+                    conditions={"project_id": request_project_id, "env_name": env_name},
+                )
+                if not env_instance:
+                    return FailureResponse(
+                        message=f"TCP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
+                    )
+                host = (env_instance.env_host or "").strip().rstrip("/").rstrip(":")
+                port = int(env_instance.env_port) if env_instance.env_port is not None else None
+            except Exception as e:
+                LOGGER.error(f"TCP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
+                return FailureResponse(message=f"TCP请求调试异常, 错误描述: {e}")
+
+        if not host:
+            return FailureResponse(message="TCP请求调试失败, 目标服务器未配置（可选择应用+环境或手动输入host:port）")
+        if port is None:
+            return FailureResponse(message="TCP请求调试失败, 端口未配置（可输入host:port或填写request_port）")
+
+        # 选择 payload
+        payload = request_text if request_text not in (None, "") else request_body
+        if request_args_type == AutoTestReqArgsType.RAW:
+            payload = request_text
+        elif request_args_type == AutoTestReqArgsType.JSON:
+            payload = request_body
+
+        logs.append(format_log("参数替换结束"))
+
+        start_time = time.time()
+        async with AioTcpClient(timeout=timedelta(seconds=30), connect_timeout=timedelta(seconds=10)) as client:
+            utils = await client.tcp(host, int(port), payload, frame_mode=TcpFrameMode.LENGTH_PREFIX_JSON, encoding="utf-8")
+            raw_bytes = await utils.bytes_resp()
+        duration = int((time.time() - start_time) * 1000)
+
+        # 解析响应：优先 JSON，否则当作 text
+        response_text = raw_bytes.decode("utf-8", errors="ignore")
+        response_json = None
+        response_data: Any = response_text
+        try:
+            response_json = json.loads(response_text)
+            response_data = response_json
+        except Exception:
+            response_json = None
+
+        # 变量提取 / 断言（同 HTTP 调试）
+        _, extract_results = AutoTestToolService.run_extract_variables(
+            extract_variables=extract_variables or [],
+            response_text=response_text,
+            response_json=response_json,
+            response_headers=None,
+            response_cookies=None,
+            session_variables_lookup=merge_all_variables,
+            log_callback=lambda msg: logs.append(format_log(msg)),
+        )
+        validator_results = AutoTestToolService.run_assert_validators(
+            assert_validators=assert_validators or [],
+            response_text=response_text,
+            response_json=response_json,
+            response_headers=None,
+            response_cookies=None,
+            session_variables_lookup=merge_all_variables,
+            log_callback=lambda msg: logs.append(format_log(msg)),
+        )
+
+        size = len(raw_bytes)
+        size_str = f"{size/1024:.2f}KB" if size > 1024 else f"{size}B"
+        result_data = {
+            "status": 200,
+            "headers": {},
+            "cookies": {},
+            "data": response_data,
+            "duration": duration,
+            "size": size_str,
+            "extract_results": extract_results,
+            "validator_results": validator_results,
+            "logs": logs,
+            "request_info": {
+                "url": f"{host}:{port}",
+                "method": "TCP",
+                "headers": {},
+                "params": {},
+                "body_type": (request_args_type.value if request_args_type else "raw"),
+                "body": payload,
+            }
+        }
+        return SuccessResponse(message="TCP调试请求成功", data=result_data)
+    except Exception as e:
+        LOGGER.error(f"TCP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
 
 
 @autotest_step.post("/python_code_debugging", summary="API自动化测试-Python代码调试")

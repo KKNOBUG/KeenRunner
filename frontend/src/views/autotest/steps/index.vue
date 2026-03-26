@@ -362,7 +362,7 @@
           </n-card>
         </n-gi>
         <n-gi :span="17" class="right-column">
-<!--          <n-card :title="currentStepTitle" size="small" hoverable class="config-card">-->
+          <!--          <n-card :title="currentStepTitle" size="small" hoverable class="config-card">-->
           <n-card size="small" hoverable class="config-card">
             <!--
               数据传递说明：
@@ -385,8 +385,8 @@
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
-                :project-options="currentStep?.type === 'http' ? projectOptions : []"
-                :project-loading="currentStep?.type === 'http' ? projectLoading : false"
+                :project-options="(currentStep?.type === 'http' || currentStep?.type === 'tcp') ? projectOptions : []"
+                :project-loading="(currentStep?.type === 'http' || currentStep?.type === 'tcp') ? projectLoading : false"
                 :available-variable-list="availableVariableList"
                 :assist-functions="assistFunctionsList"
                 :on-reselect="currentStep?.isQuoteInner ? undefined : handleQuoteReselect"
@@ -508,6 +508,7 @@ import AppPage from "@/components/page/AppPage.vue";
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
 import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
+import ApiTcpEditor from "@/views/autotest/tcp_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
@@ -517,12 +518,13 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
 import {useUserStore, useAutotestStore} from '@/store';
 
-// 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致（不含 TCP，前端未实现）
+// 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致
 const stepDefinitions = {
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
   if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
@@ -532,6 +534,7 @@ const stepDefinitions = {
 const editorMap = {
   loop: ApiLoopEditor,
   code: ApiCodeEditor,
+  tcp: ApiTcpEditor,
   http: ApiHttpEditor,
   if: ApiIfEditor,
   wait: ApiWaitEditor,
@@ -1349,6 +1352,8 @@ const backendTypeToLocal = (step_type) => {
   switch (step_type) {
     case '用户变量':
       return 'user_variables'
+    case 'TCP请求':
+      return 'tcp'
     case 'HTTP请求':
       return 'http'
     case '执行代码请求(Python)':
@@ -1467,6 +1472,21 @@ const mapBackendStep = (step) => {
       step_name: step.step_name || '',
       script: step.code || ''
     }
+  } else if (localType === 'tcp') {
+    // TCP 步骤配置：target = host:port（或仅 host），payload 自动识别 JSON/raw
+    const argsType = (step.request_args_type || '').toString().toLowerCase()
+    base.config = {
+      step_name: step.step_name || '',
+      step_desc: step.step_desc || '',
+      request_project_id: step.request_project_id ?? null,
+      target: step.request_url && step.request_port ? `${step.request_url}:${step.request_port}` : (step.request_url || ''),
+      request_args_type: argsType === 'json' ? 'json' : 'raw',
+      request_payload: argsType === 'json' ? JSON.stringify(step.request_body || {}, null, 2) : (step.request_text || ''),
+      request_text: step.request_text || null,
+      data: step.request_body || {},
+      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
+      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
+    }
   } else if (localType === 'http') {
     base.config = {
       method: step.request_method || 'POST',
@@ -1554,6 +1574,7 @@ const hydrateCaseInfo = (data) => {
 const localTypeToBackend = (localType) => {
   const typeMap = {
     'user_variables': '用户变量',
+    'tcp': 'TCP请求',
     'http': 'HTTP请求',
     'code': '执行代码请求(Python)',
     'if': '条件分支',
@@ -1646,6 +1667,34 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   // 新增时不设置 step_id 和 step_code，让它们为 undefined，后端会自动排除
 
   // 根据类型设置特定字段
+  if (step.type === 'tcp') {
+    // TCP：支持两种目标来源
+    // 1) 手动输入：config.target = "host:port"（后端会自行解析）
+    // 2) 选择请求应用：request_project_id + env_name 由后端解析 host/port（request_url 可留空）
+    backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
+    backendStep.request_url = config.target ?? original.request_url ?? ''
+    // 若 target 已包含端口，后端会解析；此处仅保底带出 original 的端口字段
+    backendStep.request_port = original.request_port ?? null
+    backendStep.request_args_type = (config.request_args_type ?? original.request_args_type ?? 'raw')
+    backendStep.request_text = config.request_text ?? original.request_text ?? null
+    backendStep.request_body = config.data ?? original.request_body ?? {}
+
+    if (config.extract_variables !== undefined) {
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
+    } else if (original.extract_variables) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : (original.extract_variables ? [original.extract_variables] : null)
+    } else {
+      backendStep.extract_variables = null
+    }
+
+    if (config.assert_validators !== undefined) {
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : (config.assert_validators ? [config.assert_validators] : null)
+    } else if (original.assert_validators) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : (original.assert_validators ? [original.assert_validators] : null)
+    } else {
+      backendStep.assert_validators = null
+    }
+  }
   if (step.type === 'http') {
     backendStep.request_method = config.method || original.request_method || 'POST'
     backendStep.request_url = config.url || original.request_url || ''
@@ -2615,6 +2664,7 @@ const getStepIconClass = (type) => {
   const classMap = {
     loop: 'icon-loop',
     code: 'icon-code',
+    tcp: 'icon-tcp',
     http: 'icon-http',
     if: 'icon-if',
     wait: 'icon-wait',
@@ -3575,6 +3625,10 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-code) {
+  color: #ff8936;
+}
+
+:deep(.step-icon.icon-tcp) {
   color: #3363e0;
 }
 

@@ -128,6 +128,21 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     request_method: HTTPMethod = Field(..., description="请求方法")
     request_project_id: int = Field(..., description="请求应用ID")
 
+
+class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
+    """
+    TCP 请求调试入参：
+
+    - env_name + request_project_id 可用于根据环境配置解析 host/port（与 HTTP 调试一致）
+    - request_url 支持两种形式：
+        1) host:port（如 127.0.0.1:8080）
+        2) host（如 127.0.0.1），此时可配 request_port
+    - request_args_type: raw/json（沿用 AutoTestReqArgsType）
+    """
+    env_name: str = Field(..., max_length=64, description="环境名称")
+    step_name: str = Field(..., max_length=255, description="步骤名称")
+    request_project_id: Optional[int] = Field(None, description="请求应用ID（可选）")
+
     @field_validator('extract_variables', mode='before')
     @classmethod
     def normalize_extract_variables(cls, v):
