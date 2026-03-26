@@ -38,6 +38,14 @@ class TcpFrameMode(str, Enum):
 
     - LENGTH_PREFIX_JSON: 长度前缀 + 正文(正文通常为 JSON 或文本)。
     - RAW: 无长度前缀, 仅用于短连接 RAW 模式下的原始收发。
+    LENGTH_PREFIX_JSON（默认）
+    发送：先写 固定宽度 的十进制长度字符串（例如 8 位："00000123"），再写 正文（通常是 JSON/文本的字节）。
+    接收：先读 同样宽度 的长度字段，解析出整数 N，再读 恰好 N 字节 作为正文。
+    适用：你们需要“先知道后面有多少字节”的协议；也是你们长连接 AsyncTcpConnection.send/receive 默认采用的那套。
+    RAW
+    发送：只发正文，不加长度前缀。
+    接收：从流里 一直读到对端关闭连接（或读超时），拼成完整响应。
+    适用：对端协议是“发完数据就关连接”，或者响应长度无法从协议里预先得知、只能靠 EOF 结束；不适合“连接保持、连续多帧”的场景（因为读 EOF 会阻塞到对端关闭）。
     """
 
     LENGTH_PREFIX_JSON = "length_prefix_json"
