@@ -1,8 +1,8 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['tcp-card', { 'is-collapsed': requestCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['http-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
-        <div class="panel-title">TCP Request</div>
+        <div class="panel-title">Request</div>
         <div class="card-header-actions">
           <n-button text size="tiny" @click="toggleRequestCardCollapsed" class="collapse-tiny-btn">
             <template #icon>
@@ -21,36 +21,48 @@
       <n-form
           :model="state.form"
           label-placement="left"
-          label-width="90px"
+          label-width="80px"
           ref="formRef"
       >
-        <n-form-item label="请求地址" path="request_project_id">
-          <n-select
-              v-model:value="state.form.request_project_id"
-              placeholder="请求应用"
-              :options="props.projectOptions"
-              :loading="props.projectLoading"
-              clearable
-              filterable
-              style="width: 180px;"
-              :disabled="props.readonly"
-          />
-          <n-input
-              v-model:value="state.form.target"
-              placeholder="目标服务器(可选)：host:port，如 127.0.0.1:8080；不填则使用应用+环境配置"
-              clearable
-              style="flex: 1; margin-left: 8px;"
-              :disabled="props.readonly"
-          />
-          <n-button
-              v-if="!props.readonly"
-              type="primary"
-              @click="debugging"
-              :loading="debugLoading"
-              style="margin-left: 8px;"
-          >
-            调试
-          </n-button>
+        <!-- 左侧「请求应用」与「步骤名称」等同列对齐；右侧一行排地址、端口、调试 -->
+        <n-form-item label="请求应用" path="request_project_id">
+          <div class="tcp-request-one-line">
+            <n-select
+                v-model:value="state.form.request_project_id"
+                placeholder="所属应用"
+                :options="props.projectOptions"
+                :loading="props.projectLoading"
+                clearable
+                filterable
+                class="tcp-select-app"
+                :disabled="props.readonly"
+            />
+            <span class="tcp-inline-label">请求地址</span>
+            <n-input
+                v-model:value="state.form.host"
+                placeholder="请输入请求地址"
+                clearable
+                class="tcp-input-host"
+                :disabled="props.readonly"
+            />
+            <span class="tcp-inline-label">请求端口</span>
+            <n-input
+                v-model:value="state.form.port"
+                placeholder="端口"
+                clearable
+                class="tcp-input-port"
+                :disabled="props.readonly"
+            />
+            <n-button
+                v-if="!props.readonly"
+                type="primary"
+                class="tcp-debug-btn"
+                @click="debugging"
+                :loading="debugLoading"
+            >
+              调试
+            </n-button>
+          </div>
         </n-form-item>
 
         <n-form-item label="步骤名称" path="step_name" required>
@@ -71,20 +83,37 @@
               :disabled="props.readonly"
           />
         </n-form-item>
-
-        <n-form-item label="请求内容" path="request_payload">
-          <n-input
-              type="textarea"
-              v-model:value="state.form.request_payload"
-              placeholder="输入 JSON 或文本（支持 ${var} 占位符）。若为合法 JSON 将按 JSON 发送，否则按 raw 文本发送。"
-              clearable
-              :disabled="props.readonly"
-              :autosize="{ minRows: 6, maxRows: 14 }"
-          />
-        </n-form-item>
       </n-form>
 
       <n-tabs type="line" animated style="margin-top: 16px;">
+        <n-tab-pane name="body" tab="请求体">
+          <!-- 与 HTTP「请求体」json 区布局一致；编辑模式仅影响 Monaco 语法高亮，不做自动排版美化 -->
+          <div class="tcp-body-mode-row">
+            <span class="tcp-body-mode-label">编辑模式</span>
+            <n-radio-group
+                v-model:value="state.form.body_format_mode"
+                name="tcpBodyFormat"
+                :disabled="props.readonly"
+            >
+              <n-space>
+                <n-radio value="xml">XML</n-radio>
+                <n-radio value="json">JSON</n-radio>
+                <n-radio value="text">文本</n-radio>
+              </n-space>
+            </n-radio-group>
+          </div>
+          <monaco-editor
+              v-model:value="state.form.request_payload"
+              :lang="monacoBodyLang"
+              :options="monacoEditorOptionsForBody()"
+              class="json-editor"
+              style="min-height: 400px; height: auto; margin-top: 12px;"
+              :readOnly="props.readonly"
+          />
+          <div class="hint" style="margin-top: 8px;">
+            编辑模式仅切换语法高亮。TCP 保存与调试按原始字符串发送（raw），暂不实现 JSON/XML 一键排版。
+          </div>
+        </n-tab-pane>
         <n-tab-pane name="extract" tab="变量提取">
           <KeyValueEditor
               v-model:items="state.form.extract_variables"
@@ -174,7 +203,7 @@
 <script setup>
 defineOptions({ name: 'TCP请求控制器' })
 
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
@@ -183,7 +212,10 @@ import {
   NFormItem,
   NInput,
   NModal,
+  NRadio,
+  NRadioGroup,
   NSelect,
+  NSpace,
   NTabPane,
   NTabs
 } from 'naive-ui'
@@ -216,31 +248,60 @@ const state = reactive({
     step_name: '',
     step_desc: '',
     request_project_id: null,
-    target: '',
+    host: '',
+    port: '',
     request_payload: '',
+    /** xml | json | text：Monaco 语法高亮，默认 XML */
+    body_format_mode: 'xml',
     extract_variables: [],
     assert_validators: []
   }
 })
 
-const parseJsonSafely = (val) => {
-  if (!val) return null
-  if (typeof val === 'object') return val
-  try { return JSON.parse(val) } catch { return null }
+const monacoBodyLang = computed(() => {
+  const k = state.form.body_format_mode
+  if (k === 'xml') return 'xml'
+  if (k === 'text') return 'plaintext'
+  return 'json'
+})
+
+/** 与 http_controller 请求体 JSON 编辑器 options 一致 */
+const monacoEditorOptions = (readOnly) => {
+  const options = {
+    theme: 'vs-dark',
+    language: 'json',
+    fontSize: 14,
+    tabSize: 4,
+    automaticLayout: true,
+    minimap: { enabled: true },
+    lineNumbers: 'on',
+    renderLineHighlight: 'line',
+    wordWrap: 'on',
+    scrollBeyondLastLine: false,
+    folding: true,
+    foldingStrategy: 'auto',
+    roundedSelection: false,
+    cursorStyle: 'line'
+  }
+  if (readOnly) options.readOnly = true
+  return options
 }
+
+const monacoEditorOptionsForBody = () => ({ ...monacoEditorOptions(false) })
 
 const buildConfigFromState = () => {
   const payloadText = String(state.form.request_payload ?? '')
-  const parsed = parseJsonSafely(payloadText)
-  const request_args_type = parsed != null ? 'json' : 'raw'
   const cfg = {
     step_name: state.form.step_name,
     step_desc: state.form.step_desc,
     request_project_id: state.form.request_project_id,
-    target: state.form.target,
-    request_args_type,
-    request_text: parsed == null ? payloadText : null,
-    data: parsed != null ? parsed : {},
+    host: (state.form.host || '').trim(),
+    port: String(state.form.port ?? '').trim(),
+    body_format_mode: state.form.body_format_mode || 'xml',
+    // TCP 步骤：始终按原始文本发送，不区分 JSON/XML 提交类型
+    request_args_type: 'raw',
+    request_text: payloadText,
+    data: {},
     request_payload: payloadText,
     extract_variables: Array.isArray(state.form.extract_variables) ? state.form.extract_variables : [],
     assert_validators: Array.isArray(state.form.assert_validators) ? state.form.assert_validators : [],
@@ -254,11 +315,25 @@ const initFromProps = () => {
   state.form.step_name = cfg.step_name ?? original.step_name ?? props.step?.name ?? ''
   state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
-  state.form.target = cfg.target ?? (
-      original.request_url && original.request_port
-          ? `${original.request_url}:${original.request_port}`
-          : (original.request_url || '')
-  )
+  if (cfg.host !== undefined || cfg.port !== undefined) {
+    state.form.host = cfg.host ?? ''
+    state.form.port = cfg.port != null && cfg.port !== '' ? String(cfg.port) : ''
+  } else if (cfg.target) {
+    const t = String(cfg.target).trim()
+    const m = t.match(/^(.+):(\d{1,5})$/)
+    if (m) {
+      state.form.host = m[1].trim()
+      state.form.port = m[2]
+    } else {
+      state.form.host = t
+      state.form.port = ''
+    }
+  } else {
+    state.form.host = original.request_url ?? ''
+    state.form.port = original.request_port != null && original.request_port !== ''
+        ? String(original.request_port)
+        : ''
+  }
   const argsType = String(cfg.request_args_type ?? original.request_args_type ?? '').toLowerCase()
   if (argsType === 'json') {
     const bodyObj = cfg.data ?? original.request_body ?? {}
@@ -267,6 +342,21 @@ const initFromProps = () => {
         : JSON.stringify(bodyObj || {}, null, 2)
   } else {
     state.form.request_payload = cfg.request_payload ?? cfg.request_text ?? original.request_text ?? ''
+  }
+
+  const rawAfterLoad = String(state.form.request_payload || '')
+  if (cfg.body_format_mode && ['xml', 'json', 'text'].includes(cfg.body_format_mode)) {
+    state.form.body_format_mode = cfg.body_format_mode
+  } else if (cfg.body_editor_kind && ['json', 'xml', 'text'].includes(cfg.body_editor_kind)) {
+    state.form.body_format_mode = cfg.body_editor_kind
+  } else if (!rawAfterLoad.trim()) {
+    state.form.body_format_mode = 'xml'
+  } else if (argsType === 'json') {
+    state.form.body_format_mode = 'json'
+  } else if (/^\s*</.test(rawAfterLoad)) {
+    state.form.body_format_mode = 'xml'
+  } else {
+    state.form.body_format_mode = 'text'
   }
 
   state.form.extract_variables = cfg.extract_variables ?? original.extract_variables ?? []
@@ -357,12 +447,14 @@ const doDebugRequest = async (env_name) => {
       case_id: caseId,
       step_type: original.step_type || 'TCP请求',
       step_name: state.form.step_name || original.step_name || 'TCP 调试',
-      request_url: cfg.target || '',
-      request_port: null,
+      request_url: (state.form.host || '').trim(),
+      request_port: String(state.form.port || '').trim()
+          ? Number(String(state.form.port).trim())
+          : null,
       request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
-      request_args_type: cfg.request_args_type ?? original.request_args_type ?? 'raw',
-      request_text: cfg.request_text ?? null,
-      request_body: cfg.data ?? null,
+      request_args_type: 'raw',
+      request_text: cfg.request_text ?? cfg.request_payload ?? null,
+      request_body: {},
       defined_variables: Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null,
       session_variables: Array.isArray(cfg.session_variables) && cfg.session_variables.length > 0 ? cfg.session_variables : null,
       extract_variables: cfg.extract_variables ?? null,
@@ -387,21 +479,118 @@ const doDebugRequest = async (env_name) => {
 </script>
 
 <style scoped>
-.card-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* 与 HTTP 请求步骤「Request」卡片一致 */
+.http-card {
+  margin: 8px 0;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(204, 204, 204, 0.99);
+  border-left: 4px solid #F4511E;
 }
+
 .panel-title {
   font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.2px;
 }
+
+.card-header-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 24px;
+  padding-right: 220px;
+}
+
+.card-header-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapse-tiny-btn :deep(.n-button__content) {
+  font-size: 12px;
+}
+
+.http-card.is-collapsed :deep(.n-card__content) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
 .hint {
   margin-top: 8px;
   color: var(--n-text-color-3);
   font-size: 12px;
 }
-.tcp-card :deep(.n-card-header) {
-  padding-bottom: 10px;
+
+/* 与 http_controller 一致：不对主卡片 header 单独加 padding，避免「Request」与内容区间距与 HTTP 页不一致 */
+
+/* 请求应用 / 地址 / 端口 / 调试 同一行 */
+.tcp-request-one-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.tcp-inline-label {
+  flex-shrink: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.tcp-select-app {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.tcp-input-host {
+  flex: 1;
+  min-width: 120px;
+}
+
+.tcp-input-port {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.tcp-debug-btn {
+  flex-shrink: 0;
+}
+
+.tcp-body-mode-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 4px;
+}
+
+.tcp-body-mode-label {
+  font-size: 14px;
+  color: var(--n-text-color-2);
+  min-width: 56px;
+}
+
+/* 与 http_controller「请求体」json 编辑器一致 */
+.json-editor {
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+
+.json-editor :deep(.monaco-editor) {
+  min-height: 90px;
+  height: auto !important;
 }
 </style>
 

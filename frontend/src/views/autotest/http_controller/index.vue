@@ -2,7 +2,7 @@
   <n-card :bordered="false" style="width: 100%;" :class="['http-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
-        <div class="panel-title">Resquest</div>
+        <div class="panel-title">Request</div>
         <div class="card-header-actions">
           <n-button text size="tiny" @click="toggleRequestCardCollapsed" class="collapse-tiny-btn">
             <template #icon>
@@ -1528,8 +1528,8 @@ watch(
 // 请求方式下拉框
 const methodOptions = [
   {label: 'GET', value: 'GET', color: '#49CC90'},
-  {label: 'POST', value: 'POST', color: '#61AFFE'},
-  {label: 'PUT', value: 'PUT', color: '#FFA500'},
+  {label: 'POST', value: 'POST', color: '#FFA500'},
+  {label: 'PUT', value: 'PUT', color: '#61AFFE'},
   {label: 'DELETE', value: 'DELETE', color: '#F4511E'}
 ]
 const renderMethodLabel = (option) => {
@@ -2043,8 +2043,8 @@ const methodTagType = computed(() => {
   const method = requestInfo.value.method?.toUpperCase()
   return {
     GET: 'success',
-    POST: 'info',
-    PUT: 'warning',
+    POST: 'warning',
+    PUT: 'info',
     DELETE: 'error'
   }[method] || 'default'
 })

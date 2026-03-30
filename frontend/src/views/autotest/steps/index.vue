@@ -524,9 +524,9 @@ const stepDefinitions = {
   if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:network-4'},
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
-  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'logos:python'},
+  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
 }
@@ -1473,17 +1473,27 @@ const mapBackendStep = (step) => {
       script: step.code || ''
     }
   } else if (localType === 'tcp') {
-    // TCP 步骤配置：target = host:port（或仅 host），payload 自动识别 JSON/raw
+    // TCP：请求体仅编辑器格式化；落库为 raw + request_text；兼容历史 json 步骤
     const argsType = (step.request_args_type || '').toString().toLowerCase()
+    const payloadStr = argsType === 'json'
+        ? JSON.stringify(step.request_body || {}, null, 2)
+        : (step.request_text || '')
+    let body_format_mode = 'xml'
+    if (!String(payloadStr).trim()) body_format_mode = 'xml'
+    else if (argsType === 'json') body_format_mode = 'json'
+    else if (/^\s*</.test(String(payloadStr))) body_format_mode = 'xml'
+    else body_format_mode = 'text'
     base.config = {
       step_name: step.step_name || '',
       step_desc: step.step_desc || '',
       request_project_id: step.request_project_id ?? null,
-      target: step.request_url && step.request_port ? `${step.request_url}:${step.request_port}` : (step.request_url || ''),
-      request_args_type: argsType === 'json' ? 'json' : 'raw',
-      request_payload: argsType === 'json' ? JSON.stringify(step.request_body || {}, null, 2) : (step.request_text || ''),
+      host: step.request_url || '',
+      port: step.request_port != null && step.request_port !== '' ? String(step.request_port) : '',
+      body_format_mode,
+      request_args_type: 'raw',
+      request_payload: payloadStr,
       request_text: step.request_text || null,
-      data: step.request_body || {},
+      data: {},
       extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
     }
@@ -1668,16 +1678,20 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
 
   // 根据类型设置特定字段
   if (step.type === 'tcp') {
-    // TCP：支持两种目标来源
-    // 1) 手动输入：config.target = "host:port"（后端会自行解析）
-    // 2) 选择请求应用：request_project_id + env_name 由后端解析 host/port（request_url 可留空）
+    // TCP：请求应用 + 请求地址 + 请求端口；亦可仅选应用由执行环境解析 host/port
     backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
-    backendStep.request_url = config.target ?? original.request_url ?? ''
-    // 若 target 已包含端口，后端会解析；此处仅保底带出 original 的端口字段
-    backendStep.request_port = original.request_port ?? null
-    backendStep.request_args_type = (config.request_args_type ?? original.request_args_type ?? 'raw')
-    backendStep.request_text = config.request_text ?? original.request_text ?? null
-    backendStep.request_body = config.data ?? original.request_body ?? {}
+    backendStep.request_url = config.host ?? original.request_url ?? ''
+    const p = config.port
+    backendStep.request_port =
+        p !== undefined && p !== null && String(p).trim() !== ''
+            ? p
+            : (original.request_port ?? null)
+    backendStep.request_args_type = 'raw'
+    backendStep.request_text =
+        config.request_text != null && config.request_text !== ''
+            ? config.request_text
+            : (config.request_payload ?? original.request_text ?? null)
+    backendStep.request_body = {}
 
     if (config.extract_variables !== undefined) {
       backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
@@ -2664,7 +2678,6 @@ const getStepIconClass = (type) => {
   const classMap = {
     loop: 'icon-loop',
     code: 'icon-code',
-    tcp: 'icon-tcp',
     http: 'icon-http',
     if: 'icon-if',
     wait: 'icon-wait',
@@ -3625,10 +3638,6 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-code) {
-  color: #ff7500;
-}
-
-:deep(.step-icon.icon-tcp) {
   color: #3363e0;
 }
 
