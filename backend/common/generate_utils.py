@@ -152,8 +152,8 @@ class GenerateUtils:
         return getattr(eval("self.faker_" + funclocale), funcname)(**funcargs or {})
 
     @classmethod
-    def generate_random_number(cls, min: int, max: int) -> int:
-        return random.randint(min, max)
+    def generate_random_number(cls, min_: int, max_: int) -> int:
+        return random.randint(min_, max_)
 
     @staticmethod
     def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
