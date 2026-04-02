@@ -11,7 +11,7 @@ import json
 import time
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Set
 
 import httpx
@@ -468,13 +468,17 @@ async def debug_http_request(
                     return FailureResponse(
                         message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
                     )
-                execute_envi_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
-                execute_envi_port: int = env_instance.env_port
-                if not execute_envi_host or not execute_envi_port:
+                execute_env_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
+                execute_env_port: int = env_instance.env_port
+                if not execute_env_host or not execute_env_port:
                     return FailureResponse(
                         message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不正确"
                     )
-                request_url = f"{execute_envi_host}:{execute_envi_port}/{request_url.lstrip('/')}"
+                if not execute_env_port:
+                    request_url = f"{execute_env_host}/{request_url}"
+                else:
+                    request_url = f"{execute_env_host}:{execute_env_port}/{request_url}"
+
             except Exception as e:
                 LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(f"HTTP请求调试异常, 错误描述: {e}")
@@ -544,10 +548,10 @@ async def debug_http_request(
             "params": params if params else None,
         }
 
-        if data_payload is not None:
-            request_kwargs["json"] = data_payload
-        elif json_payload is not None:
-            request_kwargs["data"] = json_payload
+        if json_payload is not None:
+            request_kwargs["json"] = json_payload
+        elif data_payload is not None:
+            request_kwargs["data"] = data_payload
         if file_payload is not None:
             request_kwargs["files"] = file_payload
 
@@ -646,8 +650,8 @@ async def debug_http_request(
                 actual_body_type = "form-data" if (form_data or form_files) else "x-www-form-urlencoded"
             actual_body = data_payload
         if file_payload is not None:
-            actual_body = actual_body = {}
-            actual_body = {**actual_body, "__files": json_payload}
+            actual_body = actual_body or {}
+            actual_body = {**actual_body, "__files": file_payload}
         result_data = {
             "status": response.status_code,
             "headers": dict(response.headers),

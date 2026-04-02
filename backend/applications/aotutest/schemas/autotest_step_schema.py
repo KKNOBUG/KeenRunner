@@ -126,7 +126,7 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
-    request_project_id: int = Field(..., description="请求应用ID")
+    request_project_id: int = Field(..., ge=1, description="请求应用ID")
 
 
 class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):

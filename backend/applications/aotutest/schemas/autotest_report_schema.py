@@ -30,7 +30,7 @@ class AutoTestApiReportBase(BaseModel):
 
 
 class AutoTestApiReportCreate(AutoTestApiReportBase):
-    case_id: int = Field(..., description="用例ID")
+    case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     case_state: bool = Field(default=False, description="用例执行状态(True:成功, False:失败)")
 

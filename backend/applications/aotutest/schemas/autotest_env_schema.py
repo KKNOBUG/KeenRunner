@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiEnvCreate(BaseModel):
-    project_id: int = Field(..., description="环境所属项目")
+    project_id: int = Field(..., ge=1, description="环境所属项目")
     env_name: UpperStr = Field(..., max_length=64, description="环境名称")
     env_port: Optional[str] = Field(None, description="环境端口(8000)，可选，直接请求域名时可省略")
     env_host: str = Field(..., max_length=128, description="环境主机(http|https://127.0.0.1)")

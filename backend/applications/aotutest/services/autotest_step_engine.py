@@ -355,11 +355,13 @@ class StepExecutionContext:
             try:
                 if raw_headers:
                     # 对请求头中的中文进行 UTF-8 百分号编码
-                    encoded_headers: Dict[str, Any] = {}
-                    for key, value in raw_headers.items():
-                        encoded_headers[key] = urllib.parse.quote(value, encoding="utf-8") if isinstance(value, str) else value
-                    # 把编码后的 headers 放回 kwargs
-                    kwargs["headers"] = encoded_headers
+                    encoded_headers: Dict[str, Any] = {
+                        key: urllib.parse.quote(value, encoding="utf-8")
+                        if isinstance(value, str) else value for key, value in raw_headers.items()
+                    }
+                    if encoded_headers:
+                        # 把编码后的 headers 放回 kwargs
+                        kwargs["headers"] = encoded_headers
                 self.log(f"【HTTP请求】请求方式: {method}")
                 self.log(f"【HTTP请求】请求地址: {url}")
                 self.log(f"【HTTP请求】请求参数: {kwargs}")
@@ -638,7 +640,7 @@ class StepExecutionContext:
                 return match.group(0)
             try:
                 # 支持函数占位符: "${generate_phone()}"
-                if "(" in var_name and ")" in var_name:
+                if "(" in var_name and var_name.strip().endswith(")"):
                     var_value = AutoTestToolService.execute_func_string_single(var_name)
                 else:
                     var_value = self.get_variable(var_name)
@@ -1718,7 +1720,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
     """引用公共脚本执行器：加载引用脚本的步骤树，规范化后按 step_no 顺序执行并挂到 result.children。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
-        previous_quote_case_id = getattr(self.context, "executing_quote_case_id", None)
+        previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         try:
             quote_case_id = self.step.get("quote_case_id")
             if not quote_case_id:
@@ -2228,9 +2230,9 @@ class HttpStepExecutor(BaseStepExecutor):
                             f"host={execute_env_host}, host={execute_env_port})配置异常"
                         )
                     if not execute_env_port:
-                        request_url = f"{execute_env_host}/{request_url.lstrip('/')}"
+                        request_url = f"{execute_env_host}/{request_url}"
                     else:
-                        request_url = f"{execute_env_host}:{execute_env_port}/{request_url.lstrip('/')}"
+                        request_url = f"{execute_env_host}:{execute_env_port}/{request_url}"
                 except StepExecutionError:
                     raise
                 except Exception as e:
@@ -2335,7 +2337,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     data_payload = urlencoded
                 if request_body and not data_payload:
                     json_payload = request_body
-            elif args_type == AutoTestReqArgsType.NONE or args_type == AutoTestReqArgsType.PARAMS:
+            elif args_type in (AutoTestReqArgsType.NONE, AutoTestReqArgsType.PARAMS):
                 # 无请求体或仅查询参数
                 pass
             elif args_type == AutoTestReqArgsType.RAW:
@@ -2649,7 +2651,7 @@ class AutoTestStepExecutionEngine:
             report_code = unique_identify()
             self._report_code = report_code
             self._pending_details = []
-        pending_details_arg: Optional[List[AutoTestApiDetailCreate]] = self._pending_details if self._save_report else None
+        pending_details_arg: Optional[List[AutoTestApiDetailCreate]] = self._pending_details if (self._save_report and self._defer_save) else None
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,

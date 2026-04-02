@@ -52,11 +52,11 @@ class AutoTestApiDetailBase(BaseModel):
 
 
 class AutoTestApiDetailCreate(AutoTestApiDetailBase):
-    case_id: int = Field(..., description="用例ID")
+    case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     report_code: str = Field(..., max_length=64, description="报告标识代码")
-    step_id: int = Field(..., description="步骤ID")
-    step_no: int = Field(..., description="步骤序号")
+    step_id: int = Field(..., ge=1, description="步骤ID")
+    step_no: int = Field(..., ge=1, description="步骤序号")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
     step_type: AutoTestStepType = Field(..., description="步骤类型")
@@ -65,7 +65,7 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
 
 
 class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
-    case_id: int = Field(..., description="用例ID")
+    case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     report_code: str = Field(..., max_length=64, description="报告标识代码")
     detail_id: Optional[int] = Field(None, description="明细ID")
