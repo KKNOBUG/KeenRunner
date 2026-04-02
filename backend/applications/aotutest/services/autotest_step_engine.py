@@ -54,6 +54,103 @@ def _header_key_from_jsonpath(path: str) -> str:
     return s.split(".")[0].strip() if s else ""
 
 
+def _apply_jsonpath_value_map_to_body_payloads(
+        path_map: Dict[str, Any],
+        *,
+        request_body: Any,
+        form_data: Optional[Dict[str, Any]],
+        urlencoded: Optional[Dict[str, Any]],
+) -> Any:
+    """
+    将 JSONPath -> 值的映射写入 request_body（dict 或可解析为 dict 的 JSON 字符串）、
+    form-data、urlencoded；原地修改 dict，找不到路径则忽略（与 JSONPathUtils 行为一致）。
+    """
+    if not path_map:
+        return request_body
+    rb = request_body
+    if isinstance(rb, dict):
+        for jpath, val in path_map.items():
+            if not jpath:
+                continue
+            JSONPathUtils.update(rb, jpath, val)
+    elif isinstance(rb, str):
+        try:
+            payload_dict = json.loads(rb) if rb.strip() else {}
+            if isinstance(payload_dict, dict):
+                for jpath, val in path_map.items():
+                    if not jpath:
+                        continue
+                    JSONPathUtils.update(payload_dict, jpath, val)
+                rb = payload_dict
+        except (TypeError, json.JSONDecodeError):
+            pass
+    if isinstance(form_data, dict):
+        for jpath, val in path_map.items():
+            if not jpath:
+                continue
+            JSONPathUtils.update(form_data, jpath, val)
+    if isinstance(urlencoded, dict):
+        for jpath, val in path_map.items():
+            if not jpath:
+                continue
+            JSONPathUtils.update(urlencoded, jpath, val)
+    return rb
+
+
+def replace_json_datagram(
+        *,
+        head_map: Optional[Dict[str, Any]] = None,
+        body_map: Optional[Dict[str, Any]] = None,
+        request_body: Any = None,
+        request_headers: Optional[Dict[str, Any]] = None,
+        form_data: Optional[Dict[str, Any]] = None,
+        urlencoded: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    数据驱动报文替换：先按 head_map 更新请求头键值，再依次将 head_map、body_map
+    按 JSONPath 应用到 request_body / form_data / urlencoded（与仅 body_map 时的规则一致；
+    request_body 中也可能出现 head 侧 JSONPath）。
+
+    :returns: 含 request_body、headers、form_data、urlencoded 的字典（多为原地修改后的引用）。
+    """
+    head_map: Dict[str, Any] = head_map or {}
+    body_map: Dict[str, Any] = body_map or {}
+    if request_headers is not None:
+        for json_path, json_value in head_map.items():
+            if not json_path:
+                continue
+            key = _header_key_from_jsonpath(json_path)
+            if key and key in request_headers:
+                request_headers[key] = json_value
+    rb = request_body
+    rb = _apply_jsonpath_value_map_to_body_payloads(
+        head_map, request_body=rb, form_data=form_data, urlencoded=urlencoded
+    )
+    rb = _apply_jsonpath_value_map_to_body_payloads(
+        body_map, request_body=rb, form_data=form_data, urlencoded=urlencoded
+    )
+    return {
+        "headers": request_headers,
+        "request_body": rb,
+        "form_data": form_data,
+        "urlencoded": urlencoded,
+    }
+
+
+def _step_struct_from_dataset_row(step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """将数据源单行解析为步骤内使用的 head/body/assert_head/assert_body"""
+    head = step_data.get("head") or {}
+    body = step_data.get("body") or {}
+    assert_head = step_data.get("assert-head") or {}
+    assert_body = step_data.get("assert-body") or {}
+    return {
+        "head": head,
+        "body": body,
+        "assert_head": assert_head,
+        "assert_body": assert_body,
+    }
+
+
 class StepExecutionError(Exception):
     """步骤执行过程中的业务异常，用于中断执行并携带错误信息。"""
 
@@ -1853,10 +1950,7 @@ class TcpStepExecutor(BaseStepExecutor):
                     dataset_name=dataset_name,
                 )
                 if isinstance(step_data, dict):
-                    head = step_data.get("head") or {}
-                    body = step_data.get("body") or {}
-                    assert_ = step_data.get("assert") or {}
-                    step_struct = {"head": head, "body": body, "assert": assert_}
+                    step_struct = _step_struct_from_dataset_row(step_data)
                     result.dataset_snapshot = step_data
                     result.dataset_name = dataset_name
 
@@ -1924,24 +2018,24 @@ class TcpStepExecutor(BaseStepExecutor):
             request_text = self.step.get("request_text")
 
             has_data_driven = (
-                isinstance(step_struct, dict)
-                and (step_struct.get("head") or step_struct.get("body") or step_struct.get("assert"))
+                    isinstance(step_struct, dict)
+                    and (
+                            step_struct.get("head")
+                            or step_struct.get("body")
+                            or step_struct.get("assert_head")
+                            or step_struct.get("assert_body")
+                    )
             )
             if has_data_driven:
-                body_map = step_struct.get("body") or {}
-                if body_map:
-                    if isinstance(request_body, dict):
-                        for jpath, val in body_map.items():
-                            JSONPathUtils.update(request_body, jpath, val)
-                    elif isinstance(request_body, str):
-                        try:
-                            payload_dict = json.loads(request_body) if request_body.strip() else {}
-                            if isinstance(payload_dict, dict):
-                                for jpath, val in body_map.items():
-                                    JSONPathUtils.update(payload_dict, jpath, val)
-                                request_body = payload_dict
-                        except (TypeError, json.JSONDecodeError):
-                            pass
+                out = replace_json_datagram(
+                    head_map=step_struct.get("head") or {},
+                    body_map=step_struct.get("body") or {},
+                    request_headers=None,
+                    request_body=request_body,
+                    form_data=None,
+                    urlencoded=None,
+                )
+                request_body = out["request_body"]
 
             # 占位符解析（与 HTTP 一致）
             request_body = self.context.resolve_placeholders(request_body)
@@ -2105,58 +2199,99 @@ class TcpStepExecutor(BaseStepExecutor):
                     session_variables_lookup=lambda expr: self.context.get_variable(expr),
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
-                # 参数化驱动 assert（仅当响应 JSON 可用时才执行 JSONPath 断言）
-                assert_map = isinstance(step_struct, dict) and (step_struct.get("assert") or {}) or {}
-                for except_path, except_value in assert_map.items():
-                    if not except_path:
-                        continue
-                    if response_json is None:
-                        validator_results.append({
-                            "name": except_path,
-                            "expr": except_path,
-                            "source": "response json",
-                            "operation": "等于",
-                            "except_value": except_value,
-                            "actual_value": None,
-                            "success": False,
-                            "error": "响应不是JSON，无法进行JSONPath断言",
-                        })
-                        continue
-                    try:
-                        actual_value = AutoTestToolService.extract_from_source(
-                            source="response json",
-                            expr=except_path,
-                            range_type="SOME",
-                            index=None,
-                            response_text=result.response.get("text") if result.response else None,
-                            response_json=response_json,
-                            response_headers=None,
-                            response_cookies=None,
-                            session_variables_lookup=lambda expr: self.context.get_variable(expr),
-                            operation_type="断言验证",
-                        )
-                        success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
-                        validator_results.append({
-                            "name": except_path,
-                            "expr": except_path,
-                            "source": "response json",
-                            "operation": "等于",
-                            "except_value": except_value,
-                            "actual_value": actual_value,
-                            "success": success,
-                            "error": "" if success else "断言失败",
-                        })
-                    except Exception as e:
-                        validator_results.append({
-                            "name": except_path,
-                            "expr": except_path,
-                            "source": "response json",
-                            "operation": "等于",
-                            "except_value": except_value,
-                            "actual_value": None,
-                            "success": False,
-                            "error": str(e),
-                        })
+                # 参数化驱动：assert_head（响应头键）、assert_body（响应 JSONPath）
+                if isinstance(step_struct, dict):
+                    assert_head_map = step_struct.get("assert_head") or {}
+                    for except_path, except_value in assert_head_map.items():
+                        if not except_path:
+                            continue
+                        header_key = _header_key_from_jsonpath(except_path) or str(except_path).strip()
+                        try:
+                            actual_value = AutoTestToolService.extract_from_source(
+                                source="response headers",
+                                expr=header_key,
+                                range_type="SOME",
+                                index=None,
+                                response_text=result.response.get("text") if result.response else None,
+                                response_json=response_json,
+                                response_headers=result.response.get("headers") if result.response else None,
+                                response_cookies=None,
+                                session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                                operation_type="断言验证",
+                            )
+                            success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response headers",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": actual_value,
+                                "success": success,
+                                "error": "" if success else "断言失败",
+                            })
+                        except Exception as e:
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response headers",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": None,
+                                "success": False,
+                                "error": str(e),
+                            })
+                    assert_body_map = step_struct.get("assert_body") or {}
+                    for except_path, except_value in assert_body_map.items():
+                        if not except_path:
+                            continue
+                        if response_json is None:
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response json",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": None,
+                                "success": False,
+                                "error": "响应不是JSON，无法进行JSONPath断言",
+                            })
+                            continue
+                        try:
+                            actual_value = AutoTestToolService.extract_from_source(
+                                source="response json",
+                                expr=except_path,
+                                range_type="SOME",
+                                index=None,
+                                response_text=result.response.get("text") if result.response else None,
+                                response_json=response_json,
+                                response_headers=result.response.get("headers") if result.response else None,
+                                response_cookies=None,
+                                session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                                operation_type="断言验证",
+                            )
+                            success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response json",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": actual_value,
+                                "success": success,
+                                "error": "" if success else "断言失败",
+                            })
+                        except Exception as e:
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response json",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": None,
+                                "success": False,
+                                "error": str(e),
+                            })
 
                 result.assert_validators = validator_results
                 if any(item.get("success") is False for item in validator_results if isinstance(item, dict)):
@@ -2193,16 +2328,13 @@ class HttpStepExecutor(BaseStepExecutor):
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
             if dataset_name and self.step_code and not executing_quote_case_id:
                 from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
-                step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
+                step_data: Optional[Dict[str, Any]] = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
                     case_id=self.case_id,
                     step_code=self.step_code,
                     dataset_name=dataset_name,
                 )
                 if isinstance(step_data, dict):
-                    head = step_data.get("head") or {}
-                    body = step_data.get("body") or {}
-                    assert_ = step_data.get("assert") or {}
-                    step_struct = {"head": head, "body": body, "assert": assert_}
+                    step_struct = _step_struct_from_dataset_row(step_data)
                     result.dataset_snapshot = step_data
                     result.dataset_name = dataset_name
 
@@ -2275,38 +2407,27 @@ class HttpStepExecutor(BaseStepExecutor):
             request_text = self.step.get("request_text")
 
             # 2）若有数据驱动，先按 JSONPath 做报文替换（找得到就替换，找不到就忽略；JSONPathUtils 原地修改 dict，不依赖返回值）
+            # 2）若有数据驱动，先按 JSONPath 做报文替换（head：先写请求头，再与 body 一并写入 body/form/urlencoded）
             has_data_driven = (
                     isinstance(step_struct, dict)
-                    and (step_struct.get("head") or step_struct.get("body") or step_struct.get("assert"))
+                    and (
+                            step_struct.get("head")
+                            or step_struct.get("body")
+                            or step_struct.get("assert_head")
+                            or step_struct.get("assert_body")
+                    )
             )
             if has_data_driven:
-                head_map = step_struct.get("head") or {}
-                body_map = step_struct.get("body") or {}
-                for jpath, val in head_map.items():
-                    if not jpath:
-                        continue
-                    key = _header_key_from_jsonpath(jpath)
-                    if key and headers is not None and key in headers:
-                        headers[key] = val
-                if body_map:
-                    if isinstance(request_body, dict):
-                        for jpath, val in body_map.items():
-                            JSONPathUtils.update(request_body, jpath, val)
-                    elif isinstance(request_body, str):
-                        try:
-                            payload_dict = json.loads(request_body) if request_body.strip() else {}
-                            if isinstance(payload_dict, dict):
-                                for jpath, val in body_map.items():
-                                    JSONPathUtils.update(payload_dict, jpath, val)
-                                request_body = payload_dict
-                        except (TypeError, json.JSONDecodeError):
-                            pass
-                    if isinstance(form_data, dict):
-                        for jpath, val in body_map.items():
-                            JSONPathUtils.update(form_data, jpath, val)
-                    if isinstance(urlencoded, dict):
-                        for jpath, val in body_map.items():
-                            JSONPathUtils.update(urlencoded, jpath, val)
+                out = replace_json_datagram(
+                    head_map=step_struct.get("head") or {},
+                    body_map=step_struct.get("body") or {},
+                    request_headers=headers,
+                    request_body=request_body,
+                    form_data=form_data,
+                    urlencoded=urlencoded,
+                )
+                headers = out["headers"]
+                request_body = out["request_body"]
 
             # 3）再对报文做变量占位符解析
             headers = self.context.resolve_placeholders(headers)
@@ -2421,8 +2542,8 @@ class HttpStepExecutor(BaseStepExecutor):
                     extract_variables=extract_variables or [],
                     response_text=result.response.get("text") if result.response else None,
                     response_json=response_json,
-                    response_headers=result.response.get("response_headers") if result.response else None,
-                    response_cookies=result.response.get("response_cookies") if result.response else None,
+                    response_headers=result.response.get("headers") if result.response else None,
+                    response_cookies=result.response.get("cookies") if result.response else None,
                     session_variables_lookup=lambda expr: self.context.get_variable(expr),
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
@@ -2447,60 +2568,102 @@ class HttpStepExecutor(BaseStepExecutor):
                     assert_validators=assert_validators or [],
                     response_text=result.response.get("text") if result.response else None,
                     response_json=response_json,
-                    response_headers=result.response.get("response_headers") if result.response else None,
-                    response_cookies=result.response.get("response_cookies") if result.response else None,
+                    response_headers=result.response.get("headers") if result.response else None,
+                    response_cookies=result.response.get("cookies") if result.response else None,
                     session_variables_lookup=lambda expr: self.context.get_variable(expr),
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
-                # 参数化驱动：当前场景的 assert（JSONPath -> 期望值）从响应 JSON 中取值并做等于比较（step_struct 为本步骤内查表得到的 head/body/assert）
-                assert_map = isinstance(step_struct, dict) and (step_struct.get("assert") or {}) or {}
-                for except_path, except_value in assert_map.items():
-                    if not except_path:
-                        continue
-                    try:
-                        actual_value = AutoTestToolService.extract_from_source(
-                            source="response json",
-                            expr=except_path,
-                            range_type="SOME",
-                            index=None,
-                            response_text=result.response.get("text") if result.response else None,
-                            response_json=response_json,
-                            response_headers=result.response.get("response_headers") if result.response else None,
-                            response_cookies=result.response.get("response_cookies") if result.response else None,
-                            session_variables_lookup=lambda expr: self.context.get_variable(expr),
-                            operation_type="断言验证",
-                        )
-                        success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
-                        validator_results.append({
-                            "name": except_path,
-                            "expr": except_path,
-                            "source": "response json",
-                            "operation": "等于",
-                            "except_value": except_value,
-                            "actual_value": actual_value,
-                            "success": success,
-                            "error": "" if success else "断言失败",
-                        })
-                    except Exception as e:
-                        validator_results.append({
-                            "name": except_path,
-                            "expr": except_path,
-                            "source": "response json",
-                            "operation": "等于",
-                            "except_value": except_value,
-                            "actual_value": None,
-                            "success": False,
-                            "error": str(e),
-                        })
+                # 参数化驱动：assert_head（响应头键名）、assert_body（响应 JSONPath）
+                if isinstance(step_struct, dict):
+                    assert_head_map = step_struct.get("assert_head") or {}
+                    for except_path, except_value in assert_head_map.items():
+                        if not except_path:
+                            continue
+                        header_key = _header_key_from_jsonpath(except_path) or str(except_path).strip()
+                        try:
+                            actual_value = AutoTestToolService.extract_from_source(
+                                source="response headers",
+                                expr=header_key,
+                                range_type="SOME",
+                                index=None,
+                                response_text=result.response.get("text") if result.response else None,
+                                response_json=response_json,
+                                response_headers=result.response.get("headers") if result.response else None,
+                                response_cookies=result.response.get("response_cookies") if result.response else None,
+                                session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                                operation_type="断言验证",
+                            )
+                            success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response headers",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": actual_value,
+                                "success": success,
+                                "error": "" if success else "实际值与期待值不满足指定操作符比较",
+                            })
+                        except Exception as e:
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response headers",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": None,
+                                "success": False,
+                                "error": str(e),
+                            })
+                    assert_body_map = step_struct.get("assert_body") or {}
+                    for except_path, except_value in assert_body_map.items():
+                        if not except_path:
+                            continue
+                        try:
+                            actual_value = AutoTestToolService.extract_from_source(
+                                source="response json",
+                                expr=except_path,
+                                range_type="SOME",
+                                index=None,
+                                response_text=result.response.get("text") if result.response else None,
+                                response_json=response_json,
+                                response_headers=result.response.get("headers") if result.response else None,
+                                response_cookies=result.response.get("cookies") if result.response else None,
+                                session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                                operation_type="断言验证",
+                            )
+                            success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response json",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": actual_value,
+                                "success": success,
+                                "error": "" if success else "实际值与期待值不满足指定操作符比较",
+                            })
+                        except Exception as e:
+                            validator_results.append({
+                                "name": except_path,
+                                "expr": except_path,
+                                "source": "response json",
+                                "operation": "等于",
+                                "except_value": except_value,
+                                "actual_value": None,
+                                "success": False,
+                                "error": str(e),
+                            })
                 result.assert_validators.extend(validator_results)
                 assert_failed_number: int = 0
                 for valid in validator_results:
                     valid_status: bool = valid.get("success", True)
                     expr_message: str = (
-                        f"表达式: [{valid.get('expr')}], "
-                        f"实际值: [{valid.get('actual_value')}], "
-                        f"操作符: [{valid.get('operation')}], "
-                        f"预期值: [{valid.get('except_value')}]"
+                        f"\t数据源: [{valid.get('source')}], \n"
+                        f"\t表达式: [{valid.get('expr')}], \n"
+                        f"\t实际值: [{valid.get('actual_value')}], \n"
+                        f"\t操作符: [{valid.get('operation')}], \n"
+                        f"\t预期值: [{valid.get('except_value')}]\n\n"
                     )
                     if valid_status:
                         self.context.log(f"【断言验证】- 成功: {expr_message}", step_code=self.step_code)
@@ -2508,7 +2671,7 @@ class HttpStepExecutor(BaseStepExecutor):
                         self.context.log(f"【断言验证】- 失败: {expr_message}", step_code=self.step_code)
                         assert_failed_number += 1
                 if assert_failed_number > 0:
-                    error_message: str = f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过"
+                    error_message: str = f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过, 详情见报告明细"
                     raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise

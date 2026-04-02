@@ -368,7 +368,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_id: 用例主键。
         :param step_code: 步骤标识代码。
         :param dataset_name: 场景/数据集名称。
-        :returns: 形如 {"head": ..., "body": ..., "assert": ...} 的字典；无数据时返回 None。
+        :returns: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典（亦可能含旧字段 assert）；无数据时返回 None。
         """
         if not (dataset_name or "").strip():
             return None
