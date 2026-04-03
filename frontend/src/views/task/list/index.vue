@@ -999,7 +999,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => openEdit(row),
+                    onClick: () => handleStopTask(row),
                   },
                   {
                     default: () => '停止',
