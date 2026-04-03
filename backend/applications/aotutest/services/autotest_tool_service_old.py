@@ -222,6 +222,54 @@ class AutoTestToolService:
         return comparator(str(actual), str(expected))
 
     @classmethod
+    def _str_convert_float(cls, value: Union[str, int, float]) -> bool:
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def _var_or_func_calculate(cls, base_number: str, matched: re.Match[str], logger_object: Callable) -> str:
+        if not cls._str_convert_float(base_number):
+            logger_object(f"【变量运算】引用的变量或函数结果不是数字格式: {base_number}")
+            return base_number
+
+        calc_symbol = matched.group(2)
+        calc_number = matched.group(3)
+        if calc_symbol not in ("+", "-", "*", "/"):
+            return base_number
+        if not calc_symbol or not calc_number:
+            logger_object(f"【变量运算】运算符: [{calc_symbol}] 或 运算数: [{calc_symbol}] 不允许为None值")
+            return base_number
+        if not cls._str_convert_float(calc_number):
+            logger_object(f"【变量运算】运算数: [{calc_symbol}] 必须是数字格式")
+            return base_number
+
+        orig_number: float = float(base_number)
+        calc_number: float = float(calc_number)
+        if calc_symbol == "+":
+            calc_result: float = orig_number + calc_number
+        elif calc_symbol == "-":
+            calc_result: float = orig_number - calc_number
+        elif calc_symbol == "*":
+            calc_result: float = orig_number * calc_number
+        elif calc_symbol == "/":
+            if calc_number == 0:
+                logger_object(f"【变量运算】运算数: [{calc_symbol}] 必须要是大于0的数字")
+                return base_number
+            calc_result: float = orig_number / calc_number
+        else:
+            logger_object(f"【变量运算】运算符: [{calc_symbol}] 必须是'+ - * /'之一")
+            return base_number
+
+        if calc_result.is_integer():
+            calc_result = int(calc_result)
+
+        logger_object(f"【变量运算】: 引用的变量或函数结果: [{base_number}], 运算符: [{calc_symbol}], 运算数: [{calc_number}], 结果: [{calc_result}]")
+        return str(calc_result)
+
+    @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """
         根据操作符对实际值与期望值做断言比较，支持等于、不等于、大于、小于、包含、非空等。
@@ -438,15 +486,7 @@ class AutoTestToolService:
         """
         按 extract_variables 配置从响应/变量池中提取变量。供 HTTP 调试与步骤引擎共用。
 
-        :param extract_variables: 变量提取配置列表，每项通常包含 name/source/expr，且可选 range/index。
-        :param response_text: HTTP 响应文本（用于 response text / response xml）。
-        :param response_json: HTTP 响应 JSON（用于 response json）。
-        :param response_headers: HTTP 响应头（用于 response headers）。
-        :param response_cookies: HTTP 响应 cookies（用于 response cookies）。
-        :param session_variables_lookup: 变量池（source=session_variables/变量池 时使用），可为 Dict 或 Callable。
-        :param log_callback: 可选日志回调。
-        :returns: (name->value 字典, 结果列表)。
-                  结果列表每项含 name/source/range/expr/index/extract_value/error/success。
+        :return: (name -> value 字典, 完整结果列表)，列表项含 name/source/range/expr/index/extract_value/error/success。
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
@@ -536,14 +576,7 @@ class AutoTestToolService:
         """
         按 assert_validators 配置从响应/变量池取实际值并与期望值比较。供 HTTP 调试与步骤引擎共用。
 
-        :param assert_validators: 断言配置列表，每项通常包含 name/source/expr/operation/except_value。
-        :param response_text: HTTP 响应文本（用于 response text / response xml）。
-        :param response_json: HTTP 响应 JSON（用于 response json）。
-        :param response_headers: HTTP 响应头（用于 response headers）。
-        :param response_cookies: HTTP 响应 cookies（用于 response cookies）。
-        :param session_variables_lookup: 变量池（source=session_variables/变量池 时使用），可为 Dict 或 Callable。
-        :param log_callback: 可选日志回调。
-        :returns: 每条断言结果列表，含 name/source/expr/operation/except_value/actual_value/success/error。
+        :return: 每条断言结果列表，含 name/source/expr/operation/except_value/actual_value/success/error。
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
@@ -680,16 +713,6 @@ class AutoTestToolService:
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
 
         def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: set, path: list) -> tuple:
-            """
-            递归校验单个步骤节点及其 children：
-            - 检查 step_id / step_code 自循环
-            - 检查非允许类型是否包含 children
-
-            :param step: 当前步骤节点。
-            :param visited_ids: 已访问 step_id 集合（用于检测自循环）。
-            :param path: 访问路径 step_code 列表（用于检测自循环）。
-            :returns: (True, None) 表示通过；(False, str) 表示失败及错误信息。
-            """
             step_id = step.step_id
             step_code = step.step_code
 
@@ -787,12 +810,8 @@ class AutoTestToolService:
         """
         从形如 "func_name(key1=val1, key2=val2)" 的字符串中解析出函数名与参数字典。
 
-        注意：当前实现 **仅支持关键字参数**（即 `key=value` 形式），并使用 `ast.literal_eval` 解析字面量。
-        不包含 `=` 的片段会被忽略（即位置参数不会被解析/传递）。
-
         :param func_string: 函数调用形式的字符串。
         :return: (函数名, 参数字典)，无法解析时返回 (None, None)。
-        :raises ValueError: 参数值不是合法字面量或解析失败时。
         """
         if not isinstance(func_string, str):
             return None, None
@@ -844,15 +863,15 @@ class AutoTestToolService:
             if not func_name and not func_args:
                 continue
             if not hasattr(GenerateUtils, func_name):
-                raise AttributeError(f"辅助函数[{func_name}]调用失败, 未定义或不被允许调用")
+                raise AttributeError(f"辅助函数[{func_name}]不存在, 无法替换其值")
             try:
                 item["value"] = getattr(GenerateUtils(), func_name)(**func_args or {})
             except TypeError as e:
-                raise AttributeError(f"辅助函数[{func_name}]调用失败, 参数签名或类型不匹配: {e}")
+                raise AttributeError(f"辅助函数[{func_name}]参数数量或类型不匹配: {e}")
             except SyntaxError as e:
-                raise AttributeError(f"辅助函数[{func_name}]调用失败, 语法解析失败或未定义: {e}")
+                raise AttributeError(f"辅助函数[{func_name}]语法解析失败或未定义: {e}")
             except Exception as e:
-                raise AttributeError(f"辅助函数[{func_name}]调用失败, 在动态注入时引发异常: {e}")
+                raise AttributeError(f"辅助函数[{func_name}]执行失败, 错误描述: {e}")
 
     @classmethod
     def execute_func_string_single(cls, content: str) -> Any:
@@ -871,353 +890,65 @@ class AutoTestToolService:
         if not func_name:
             raise AttributeError(f"占位符内容不是有效的函数调用形式: {content}")
         if not hasattr(GenerateUtils, func_name):
-            raise AttributeError(f"辅助函数[{func_name}]调用失败, 未定义或不被允许调用")
+            raise AttributeError(f"辅助函数[{func_name}]不存在, 无法替换其值")
         try:
             execute_result = getattr(GenerateUtils(), func_name)(**(func_args or {}))
             return execute_result
         except TypeError as e:
-            raise AttributeError(f"辅助函数[{func_name}]调用失败, 参数签名或类型不匹配: {e}")
+            raise AttributeError(f"辅助函数[{func_name}]参数数量或类型不匹配: {e}") from e
         except SyntaxError as e:
-            raise AttributeError(f"辅助函数[{func_name}]调用失败, 语法解析失败或未定义: {e}")
+            raise AttributeError(f"辅助函数[{func_name}]语法解析失败: {e}") from e
         except Exception as e:
-            raise AttributeError(f"辅助函数[{func_name}]调用失败, 在动态注入时引发异常: {e}")
-
-    # -------------------------------------------------------------------------
-    # 占位符 ${...}：单变量/函数、多占位符拼接、全为数值时整式四则（AST 白名单，无 eval）。
-    # 限制：花括号内不可含 `}`；整式仅数字与 + - * / ( )；bool 不参与算术；超长表达式跳过求值。
-    # -------------------------------------------------------------------------
-
-    _RE_PLACEHOLDER_SIMPLE = re.compile(r"\$\{([^}]+)\}")
-    _RE_ARITHMETIC_ONLY = re.compile(r"^[\d+\-*/().\s]+$")
-    # 合并后的算术串超过此长度则不做 ast.parse，避免异常输入消耗 CPU/内存（生产防护）。
-    _MAX_ARITH_EXPR_CHARS = 8192
-
-    @classmethod
-    def _resolve_placeholder_inner_to_value(
-        cls,
-        inner: str,
-        is_core_engine: bool,
-        finished_variables: Optional[Any],
-    ) -> Any:
-        """
-        解析单个 ${...} 花括号内的文本：含括号视为 GenerateUtils 函数，否则按变量名解析。
-
-        :param inner: 占位符花括号内文本（如 \"a\" 或 \"generate_uuid()\"）。会进行 strip。
-        :param is_core_engine: True 时 finished_variables 需提供 get_variable(name)。
-        :param finished_variables: 核心引擎上下文或变量列表（List[Dict]，每项含 key/value）。
-        :returns: 解析到的变量值或函数执行结果。
-        :raises KeyError: 变量未定义（非核心引擎列表路径）。
-        :raises AttributeError: 函数不存在或执行失败。
-        :raises ValueError: inner 为空白时。
-        """
-        inner = inner.strip()
-        if not inner:
-            raise ValueError("占位符内容为空")
-        if "(" in inner and ")" in inner:
-            return cls.execute_func_string_single(inner)
-        if is_core_engine:
-            return finished_variables.get_variable(inner)
-        resolved = cls.get_value_from_list(finished_variables, inner)
-        if resolved is None:
-            raise KeyError(inner)
-        return resolved
-
-    @classmethod
-    def _to_float_for_expression(cls, val: Any) -> Optional[float]:
-        """
-        判断解析结果是否可作为「整段算术表达式」中的一个操作数。
-
-        返回 float 表示可参与 merged 后的 _safe_eval_arithmetic；
-        返回 None 表示该占位符对应值应走「字符串拼接」语义（整串不会对合并结果做算术）。
-
-        注意：bool 返回 None，避免 True/False 被当成 1.0/0.0 参与运算（与显式需求不符）。
-        """
-        if val is None:
-            return None
-        if isinstance(val, bool):
-            return None
-        if isinstance(val, (int, float)):
-            return float(val)
-        if isinstance(val, str):
-            s = val.strip()
-            if not s:
-                return None
-            try:
-                return float(s)
-            except ValueError:
-                return None
-        return None
-
-    @classmethod
-    def _float_to_expr_str(cls, f: float) -> str:
-        """
-        将 float 写成可嵌入算术表达式的数字字面量片段。
-
-        整数结果不带 `.0`，避免 merged 中出现多余小数点影响阅读；非整数用 str(f) 保留精度。
-        """
-        if f.is_integer():
-            return str(int(f))
-        return str(f)
-
-    @classmethod
-    def _format_resolved_for_concat(cls, val: Any) -> str:
-        """
-        非「纯算术整式求值」路径下，将解析后的 Python 值转为字符串片段。
-
-        dict/list 使用 JSON（便于日志与下游展示）；None 转为空串。
-        """
-        if val is None:
-            return ""
-        if isinstance(val, (dict, list)):
-            return json.dumps(val, ensure_ascii=False)
-        return str(val)
-
-    @staticmethod
-    def _format_arithmetic_result_str(result: Union[int, float]) -> str:
-        """
-        将 `_safe_eval_arithmetic` 的返回值格式化为对外字符串。
-
-        :param result: 算术求值结果（int/float）。
-        :returns: 字符串形式；若为形如 7.0 的 float，会输出 \"7\"。
-        """
-        if isinstance(result, float) and result.is_integer():
-            return str(int(result))
-        return str(result)
-
-    @classmethod
-    def _splice_placeholders(
-        cls,
-        template: str,
-        slots: List[Tuple[re.Match[str], Optional[Any], Optional[str]]],
-        value_to_str: Callable[[Any], str],
-    ) -> str:
-        """
-        按占位符顺序拼接 template。slots 每项为 (match, value, fail_literal)：
-        - fail_literal 非 None：解析失败，插入该原文（一般为 m.group(0)）；
-        - fail_literal 为 None：解析成功，插入 value_to_str(value)（value 可为 None，如变量值为空）。
-
-        :param template: 原始模板字符串。
-        :param slots: 占位符匹配与解析结果列表。
-        :param value_to_str: 将解析值格式化为字符串的函数。
-        :returns: 拼接后的字符串。
-        """
-        pos = 0
-        parts: List[str] = []
-        for m, val, fail_literal in slots:
-            parts.append(template[pos : m.start()])
-            parts.append(fail_literal if fail_literal is not None else value_to_str(val))
-            pos = m.end()
-        parts.append(template[pos:])
-        return "".join(parts)
-
-    @classmethod
-    def _build_numeric_merged_expression(
-        cls,
-        template: str,
-        matches: List[re.Match[str]],
-        numeric_operands: List[float],
-    ) -> str:
-        """
-        将全部解析成功的占位符替换为数字字面量，保留两侧运算符与括号，生成可被 AST 解析的表达式字符串。
-
-        :param template: 原始模板字符串。
-        :param matches: 与 numeric_operands 一一对应的占位符 match 列表。
-        :param numeric_operands: 每个占位符对应的数值（float）。
-        :returns: 占位符替换为数字后的表达式字符串。
-        """
-        pos = 0
-        parts: List[str] = []
-        for m, nf in zip(matches, numeric_operands):
-            parts.append(template[pos : m.start()])
-            parts.append(cls._float_to_expr_str(nf))
-            pos = m.end()
-        parts.append(template[pos:])
-        return "".join(parts)
-
-    @classmethod
-    def _safe_eval_arithmetic(cls, expr: str) -> Union[int, float]:
-        """
-        安全地计算“纯算术表达式”字符串的结果（四则运算 + 括号 + 一元正负号）。
-
-        ## 设计目的
-        `resolve_placeholders` 支持复杂表达式，例如：
-
-        - `(${a} + 10) * ${fn()} / (${b} - 2)`
-
-        当且仅当所有占位符都解析为数值，并且替换后的整串只包含允许的字符时，
-        才会进入本函数进行求值。
-
-        ## 安全模型（关键）
-        绝不使用 Python 内置 `eval/exec`。本函数使用 `ast.parse(expr, mode="eval")`
-        生成表达式语法树，并且 **只允许白名单节点**：
-
-        - 数值字面量：`ast.Constant`（以及 Python 3.7 的 `ast.Num`）
-        - 一元运算：`+x` / `-x` -> `ast.UnaryOp` + (`ast.UAdd` / `ast.USub`)
-        - 二元运算：`x+y` `x-y` `x*y` `x/y` -> `ast.BinOp` + (`ast.Add/Sub/Mult/Div`)
-        - 括号：在 AST 中体现为子树结构，不需要单独节点
-
-        所有其它语法（名称 Name、属性 Attribute、调用 Call、下标 Subscript、幂运算 Pow 等）
-        都会被 `unsupported syntax` 拒绝，从根源阻断代码注入。
-
-        ## 行为约定
-        - 输入为空串：抛 `ValueError`
-        - 表达式过长（> `_MAX_ARITH_EXPR_CHARS`）：抛 `ValueError`（生产防护）
-        - 除数为 0：抛 `ZeroDivisionError("除数不能为 0")`
-        - 返回值：默认为 `float`；若结果是整数（如 `7.0`）则返回 `int(7)`
-
-        :param expr: 形如 `"1 + 2*(3-4)"` 的算术表达式字符串（通常已通过 `_RE_ARITHMETIC_ONLY` 校验）。
-        :return: 计算结果（`int` 或 `float`）。
-        """
-        expr = expr.strip()
-        if not expr:
-            raise ValueError("算术表达式内容为空")
-        if len(expr) > cls._MAX_ARITH_EXPR_CHARS:
-            raise ValueError("算术表达式过长, 拒绝运算")
-
-        def eval_node(node: ast.expr) -> float:
-            """
-            递归求值 AST 子树。
-
-            之所以把入参类型标为 `ast.expr` 而不是 `ast.AST`：
-            - `tree.body`、`UnaryOp.operand`、`BinOp.left/right` 在 typeshed 中均为 `ast.expr`
-            - 这样 IDE/类型检查器不会提示 “期望 AST 但实际为 expr” 的告警
-
-            :param node: AST 表达式节点。
-            :returns: 子表达式求值结果（float）。
-            :raises ValueError: 节点类型或运算符不在白名单时。
-            :raises ZeroDivisionError: 除数为 0 时。
-            """
-            if isinstance(node, ast.Constant):
-                if isinstance(node.value, (int, float)):
-                    return float(node.value)
-                raise ValueError("算术表达式中包含非法常量, 拒绝运算")
-            if isinstance(node, ast.Num):  # Python 3.7 及更早
-                return float(node.n)
-            if isinstance(node, ast.UnaryOp):
-                if isinstance(node.op, ast.USub):
-                    return -eval_node(node.operand)
-                if isinstance(node.op, ast.UAdd):
-                    return +eval_node(node.operand)
-                raise ValueError("算术表达式中包含不被支持的一元运算符, 拒绝运算")
-            if isinstance(node, ast.BinOp):
-                left = eval_node(node.left)
-                right = eval_node(node.right)
-                if isinstance(node.op, ast.Add):
-                    return left + right
-                if isinstance(node.op, ast.Sub):
-                    return left - right
-                if isinstance(node.op, ast.Mult):
-                    return left * right
-                if isinstance(node.op, ast.Div):
-                    if right == 0:
-                        raise ZeroDivisionError("除数不能为 0")
-                    return left / right
-                raise ValueError("算术表达式中包含不支持的二元运算符")
-            raise ValueError("算术表达式包含不支持的语法结构")
-
-        tree = ast.parse(expr, mode="eval")
-        if not isinstance(tree, ast.Expression):
-            raise ValueError("文本不是有效的算术表达式")
-        raw = eval_node(tree.body)
-        if isinstance(raw, float) and raw.is_integer():
-            return int(raw)
-        return raw
-
-    @classmethod
-    def _resolve_string_placeholders(
-        cls,
-        s: str,
-        logger_object: Callable,
-        is_core_engine: bool,
-        finished_variables: Optional[Any],
-    ) -> str:
-        """
-        解析 str 内所有 ${...}：先占位符求值；失败则保留原 ${...}；全成功则视情况整式算术或拼接。
-        """
-        if "${" not in s:
-            return s
-        matches = list(cls._RE_PLACEHOLDER_SIMPLE.finditer(s))
-        if not matches:
-            return s
-
-        # 第三元 fail_literal：非 None 表示该占位符解析失败，应保留原文；None 表示成功（值可为 Python None）。
-        slots: List[Tuple[re.Match[str], Optional[Any], Optional[str]]] = []
-        for m in matches:
-            inner = m.group(1).strip()
-            if not inner:
-                logger_object("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
-                slots.append((m, None, m.group(0)))
-                continue
-            try:
-                val = cls._resolve_placeholder_inner_to_value(inner, is_core_engine, finished_variables)
-                logger_object("【获取变量】占位符解析成功, ${" + inner + "}  <=>  " + str(val))
-                slots.append((m, val, None))
-            except KeyError:
-                logger_object(f"【获取变量】占位符解析失败, 变量({inner})未定义, 保留原值")
-                slots.append((m, None, m.group(0)))
-            except Exception as e:
-                logger_object(
-                    f"【获取变量】占位符解析失败, 引用({inner})发生未知异常, 保留原值, 错误描述: {e}"
-                )
-                slots.append((m, None, m.group(0)))
-
-        if any(fail is not None for _, _, fail in slots):
-            return cls._splice_placeholders(s, slots, cls._format_resolved_for_concat)
-
-        resolved_values = [v for _, v, f in slots]
-        nums = [cls._to_float_for_expression(v) for v in resolved_values]
-
-        if not all(n is not None for n in nums):
-            return cls._splice_placeholders(s, slots, cls._format_resolved_for_concat)
-
-        num_floats: List[float] = [float(n) for n in nums if n is not None]
-        match_list = [m for m, _, _ in slots]
-        merged = cls._build_numeric_merged_expression(s, match_list, num_floats)
-        ms = merged.strip()
-        if (
-            ms
-            and len(ms) <= cls._MAX_ARITH_EXPR_CHARS
-            and cls._RE_ARITHMETIC_ONLY.fullmatch(ms)
-        ):
-            try:
-                result = cls._safe_eval_arithmetic(ms)
-                out = cls._format_arithmetic_result_str(result)
-                logger_object(f"【变量运算】表达式求值: {ms} => {out}")
-                return out
-            except Exception as e:
-                logger_object(f"【变量运算】表达式求值失败: {e}, 改为按字符串拼接")
-
-        return cls._splice_placeholders(s, slots, cls._format_resolved_for_concat)
+            raise AttributeError(f"辅助函数[{func_name}]执行失败: {e}") from e
 
     @classmethod
     def resolve_placeholders(cls, value: Any, logger_object: Callable, is_core_engine: bool = False, finished_variables: Optional[Any] = None) -> Any:
         """
-        递归解析 str / dict / list 中的 ${...} 占位符。
-
-        【字符串】
-        - 单占位符：变量或 GenerateUtils 函数（花括号内同时含括号时按函数处理）。
-        - 多占位符：见类注释「实现步骤」；支持如 (${a}+10)*${b}/${c} 等（全部占位符解析成功且
-          值均可视为数字时，对合并后的表达式安全求值）。
-
-        【字典】递归每个 value（key 不替换，与历史行为一致）。
-
-        【列表】若元素为含 key/value 的变量项 dict，只解析 value 字段；否则递归元素。
-
-        【其它类型】原样返回。
-
-        解析失败：对应占位符保留原文；外层异常时记录日志并返回原 value。
-
-        :param value: 待解析对象。
-        :param logger_object: 日志回调，签名为 (str) -> None。
-        :param is_core_engine: True 时 finished_variables 提供 get_variable。
-        :param finished_variables: 核心引擎上下文或变量列表，含义同 _resolve_placeholder_inner_to_value。
-        :return: 结构不变，占位符按规则替换后的深拷贝式结果（dict/list 新建容器）。
+        递归将字符串/字典/列表中的 ${var} 占位符替换为 get_variable(var) 的值；解析失败则保留原串。
+        :param value: 待解析的值，可为 str、dict、list 或其它类型。
+        :param logger_object:
+        :param is_core_engine:
+        :param finished_variables:
+        :return: 替换后的值，结构与原 value 一致；非 str/dict/list 原样返回。
         """
         try:
+            # 1.匹配裸的占位符，如: ${variable} 或 ${function()}
+            # _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
+            # 1.匹配裸的占位符，如: ${variable} 或 ${function()} 及 ${variable} - 1 或 ${function()} + 10
+            _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)\}\s*([\+\-\*\/])?\s*(\d+(\.\d+)?)?")
             if isinstance(value, str):
-                return cls._resolve_string_placeholders(
-                    value, logger_object, is_core_engine, finished_variables
-                )
+                def replace(match: re.Match[str]) -> str:
+                    var_name = match.group(1).strip() if match.group(1) else ""
+                    if not var_name:
+                        logger_object("【获取变量】占位符解析失败, 不允许引用空白符, 保留原值")
+                        return match.group(0)
+                    # 引用函数规则：内容含左右括号则执行 GenerateUtils 并替换
+                    if "(" in var_name and ")" in var_name:
+                        try:
+                            resolved = AutoTestToolService.execute_func_string_single(var_name)
+                            logger_object("【获取变量】占位符(函数)解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                            return str(resolved)
+                        except (AttributeError, Exception) as e:
+                            logger_object(f"【获取变量】占位符(函数)解析失败, 引用({var_name})发生未知异常, 保留原值, 错误描述: {e}")
+                            return match.group(0)
+                    try:
+                        if is_core_engine:
+                            resolved = finished_variables.get_variable(var_name)
+                        else:
+                            resolved = cls.get_value_from_list(finished_variables, var_name)
+                            if resolved is None:
+                                raise KeyError()
+                        logger_object("【获取变量】占位符解析成功, ${" + var_name + "}  <=>  " + f"{resolved}")
+                        resolved = cls._var_or_func_calculate(base_number=resolved, matched=match, logger_object=logger_object)
+                        return str(resolved)
+                    except KeyError:
+                        logger_object(f"【获取变量】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                        return match.group(0)
+                    except Exception as e:
+                        logger_object(f"【获取变量】占位符解析失败, 引用({var_name})发生未知异常, 保留原值, 错误描述: {e}")
+                        return match.group(0)
+
+                return _RE_PLACEHOLDER.sub(replace, value)
             if isinstance(value, dict):
                 try:
                     return {

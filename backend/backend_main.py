@@ -89,3 +89,6 @@ if __name__ == '__main__':
     # Redis启动：终端执行 /usr/local/bin/redis-server
     # redis配置文件：/usr/local/etc/redis-6.2.9/redis.conf
     # redis持久文件：/usr/local/etc/redis-6.2.9/dump
+    # echo "alias redis-server='/usr/local/bin/redis-server /usr/local/etc/redis-6.2.9/redis.conf'" >> ~/.zshrc
+    # source ~/.zshrc
+    # redis-server

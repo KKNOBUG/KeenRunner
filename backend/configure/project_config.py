@@ -203,6 +203,7 @@ class ProjectConfig(BaseSettings):
     # DATABASE_HOST: str = "43.156.105.196"
     DATABASE_PORT: str = "3306"
     DATABASE_NAME: str = "krun"
+    DATABASE_AUTO_MIGRATION: bool = False
     DATABASE_URL: str = f"mysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}?charset=utf8mb4&time_zone=+08:00"
     DATABASE_CONNECTIONS: Dict[str, Any] = {
         "default": {
@@ -222,6 +223,17 @@ class ProjectConfig(BaseSettings):
             }
         }
     }
+
+    # Aerich：是否在应用启动时执行 init_db / migrate / upgrade 指令
+    # - 生产(Linux 且 SERVER_DEBUG=False)：始终执行迁移（不提供关闭选项）
+    # - 开发(SERVER_DEBUG=True)：默认不迁移；需要时由开发者手动把 DATABASE_AUTO_MIGRATION 改为 True
+    @property
+    def aerich_should_run_on_startup(self) -> bool:
+        if (not self.SERVER_DEBUG) and (self.SERVER_SYSTEM == "Linux"):
+            return True
+        if self.SERVER_DEBUG and self.DATABASE_AUTO_MIGRATION:
+            return True
+        return False
 
     # Redis 配置（仅 requirepass 时用户名留空；密码含 @/: 等会做 URL 编码）
     REDIS_USERNAME: str = ""

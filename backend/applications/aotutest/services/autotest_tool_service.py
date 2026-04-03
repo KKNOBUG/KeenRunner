@@ -20,6 +20,7 @@ from jsonpath_ng import parse as jsonpath_parse
 
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 from backend.common.generate_utils import GenerateUtils
+from backend.common.jsonpath_utils import JSONPathUtils
 
 
 class AutoTestToolService:
@@ -71,6 +72,219 @@ class AutoTestToolService:
             if isinstance(item, dict) and item.get("key") == name:
                 return item.get("value")
         return None
+
+    @staticmethod
+    def replace_json_datagram(
+            *,
+            head_map: Optional[Dict[str, Any]] = None,
+            body_map: Optional[Dict[str, Any]] = None,
+            request_body: Any = None,
+            request_headers: Optional[Dict[str, Any]] = None,
+            form_data: Optional[Dict[str, Any]] = None,
+            urlencoded: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        数据驱动报文替换：先按 head_map 更新请求头键值，再依次将 head_map、body_map
+        按 JSONPath 应用到 request_body / form_data / urlencoded（与仅 body_map 时的规则一致；
+        request_body 中也可能出现 head 侧 JSONPath）。
+        :returns: 含 request_body、headers、form_data、urlencoded 的字典（多为原地修改后的引用）。
+        """
+        head_map = head_map or {}
+        body_map = body_map or {}
+        if request_headers is not None:
+            for json_path, json_value in head_map.items():
+                if not json_path:
+                    continue
+                key = AutoTestToolServiceImpl.by_jsonpath_modify_request_header(json_path)
+                if key and key in request_headers:
+                    request_headers[key] = json_value
+
+        rb = request_body
+        rb = AutoTestToolServiceImpl.by_jsonpath_modify_request_params(
+            head_map, request_body=rb, form_data=form_data, urlencoded=urlencoded
+        )
+        rb = AutoTestToolServiceImpl.by_jsonpath_modify_request_params(
+            body_map, request_body=rb, form_data=form_data, urlencoded=urlencoded
+        )
+        return {
+            "headers": request_headers,
+            "request_body": rb,
+            "form_data": form_data,
+            "urlencoded": urlencoded,
+        }
+
+    @staticmethod
+    def acquire_dataset_payload(step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """将数据源单行解析为步骤内使用的 head/body/assert_head/assert_body"""
+        head = step_data.get("head") or {}
+        body = step_data.get("body") or {}
+        assert_head = step_data.get("assert-head") or {}
+        assert_body = step_data.get("assert-body") or {}
+        return {
+            "head": head,
+            "body": body,
+            "assert_head": assert_head,
+            "assert_body": assert_body,
+        }
+
+    @staticmethod
+    def try_serialize_request_body(raw: Any) -> Any:
+        """步骤里的 request_body：若为 JSON 字符串则尽量解析为 dict，否则保持原样。"""
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw) if raw.strip() else {}
+            except (TypeError, json.JSONDecodeError):
+                return raw
+        return raw
+
+    @staticmethod
+    def try_acquire_step_dataset(step_struct: Optional[Dict[str, Any]]) -> bool:
+        """是否存在数据驱动所需的 head/body/断言配置。"""
+        if not isinstance(step_struct, dict):
+            return False
+        return bool(
+            step_struct.get("head")
+            or step_struct.get("body")
+            or step_struct.get("assert_head")
+            or step_struct.get("assert_body")
+        )
+
+    @staticmethod
+    async def load_dataset_for_request_step(
+            *,
+            case_id: int,
+            step_code: Optional[str],
+            dataset_name: Optional[str],
+            executing_quote_case_id: Optional[int],
+    ) -> Tuple[Optional[Dict[str, Dict[str, Any]]], Optional[Dict[str, Any]]]:
+        """
+        按 dataset_name + case_id/step_code 加载数据源场景；引用公共脚本执行时不加载。
+        :returns: (step_struct, 原始场景 dict 供 dataset_snapshot)；无数据时 (None, None)。
+        """
+        if not (dataset_name and step_code and not executing_quote_case_id):
+            return None, None
+        from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
+
+        step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
+            case_id=case_id,
+            step_code=step_code,
+            dataset_name=dataset_name,
+        )
+        if not isinstance(step_data, dict):
+            return None, None
+        return AutoTestToolService.acquire_dataset_payload(step_data), step_data
+
+    @staticmethod
+    def append_assert_to_validators(
+            *,
+            step_struct: Optional[Dict[str, Dict[str, Any]]],
+            validator_results: List[Dict[str, Any]],
+            response_text: Optional[str],
+            response_json: Any,
+            response_headers: Optional[Dict[str, Any]],
+            response_cookies: Optional[Dict[str, Any]],
+            session_variables_lookup: Callable[[str], Any],
+            compare_fail_message: str = "实际值与期待值不满足指定操作符比较",
+    ) -> None:
+        """
+        将数据驱动场景的 assert_head / assert_body 追加到 validator_results（原地修改）。
+        assert_body 在 response_json 为 None 时逐条记失败，与 TCP 步骤原行为一致。
+        """
+        if not isinstance(step_struct, dict):
+            return
+
+        assert_head_map = step_struct.get("assert_head") or {}
+        for except_path, except_value in assert_head_map.items():
+            if not except_path:
+                continue
+            header_key = AutoTestToolServiceImpl.by_jsonpath_modify_request_header(except_path) or str(except_path).strip()
+            try:
+                actual_value = AutoTestToolService.extract_from_source(
+                    source="response headers",
+                    expr=header_key,
+                    range_type="SOME",
+                    index=None,
+                    response_text=response_text,
+                    response_json=response_json,
+                    response_headers=response_headers,
+                    response_cookies=response_cookies,
+                    session_variables_lookup=session_variables_lookup,
+                    operation_type="断言验证",
+                )
+                success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                validator_results.append({
+                    "name": except_path,
+                    "expr": except_path,
+                    "source": "response headers",
+                    "operation": "等于",
+                    "except_value": except_value,
+                    "actual_value": actual_value,
+                    "success": success,
+                    "error": "" if success else compare_fail_message,
+                })
+            except Exception as e:
+                validator_results.append({
+                    "name": except_path,
+                    "expr": except_path,
+                    "source": "response headers",
+                    "operation": "等于",
+                    "except_value": except_value,
+                    "actual_value": None,
+                    "success": False,
+                    "error": str(e),
+                })
+
+        assert_body_map = step_struct.get("assert_body") or {}
+        for except_path, except_value in assert_body_map.items():
+            if not except_path:
+                continue
+            if response_json is None:
+                validator_results.append({
+                    "name": except_path,
+                    "expr": except_path,
+                    "source": "response json",
+                    "operation": "等于",
+                    "except_value": except_value,
+                    "actual_value": None,
+                    "success": False,
+                    "error": "响应不是JSON，无法进行JSONPath断言",
+                })
+                continue
+            try:
+                actual_value = AutoTestToolService.extract_from_source(
+                    source="response json",
+                    expr=except_path,
+                    range_type="SOME",
+                    index=None,
+                    response_text=response_text,
+                    response_json=response_json,
+                    response_headers=response_headers,
+                    response_cookies=response_cookies,
+                    session_variables_lookup=session_variables_lookup,
+                    operation_type="断言验证",
+                )
+                success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                validator_results.append({
+                    "name": except_path,
+                    "expr": except_path,
+                    "source": "response json",
+                    "operation": "等于",
+                    "except_value": except_value,
+                    "actual_value": actual_value,
+                    "success": success,
+                    "error": "" if success else compare_fail_message,
+                })
+            except Exception as e:
+                validator_results.append({
+                    "name": except_path,
+                    "expr": except_path,
+                    "source": "response json",
+                    "operation": "等于",
+                    "except_value": except_value,
+                    "actual_value": None,
+                    "success": False,
+                    "error": str(e),
+                })
 
     @classmethod
     def format_step_error_message(
@@ -296,8 +510,6 @@ class AutoTestToolService:
                     f"但得到[{type(extract_variables)}]类型"
                 )
             return extract_results_dict, extract_results_list
-        if log_callback:
-            log_callback("【变量提取】开始")
         for ext_config in extract_variables:
             if not isinstance(ext_config, dict):
                 if log_callback:
@@ -353,8 +565,6 @@ class AutoTestToolService:
             extract_results_list.append(item)
             if error_msg == "":
                 extract_results_dict[name] = extract_value
-        if log_callback:
-            log_callback("【变量提取】结束")
         return extract_results_dict, extract_results_list
 
     @classmethod
@@ -392,8 +602,6 @@ class AutoTestToolService:
                     f"但得到[{type(assert_validators)}]类型"
                 )
             return validator_results
-        if log_callback:
-            log_callback("【断言验证】开始")
         for validator_config in assert_validators:
             if not isinstance(validator_config, dict):
                 if log_callback:
@@ -449,16 +657,17 @@ class AutoTestToolService:
             try:
                 success = cls.compare_assertion(actual=actual_value, operation=operation, expected=except_value)
                 if log_callback:
+                    expr_message: str = (
+                        f"\n\t数据源: [{source}], \n"
+                        f"\t表达式: [{expr}], \n"
+                        f"\t实际值: [{actual_value}], \n"
+                        f"\t操作符: [{operation}], \n"
+                        f"\t预期值: [{except_value}]\n\n"
+                    )
                     if success:
-                        log_callback(
-                            f"【断言验证】比较成功: "
-                            f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
-                        )
+                        log_callback(f"【断言验证】比较成功: {expr_message}")
                     else:
-                        log_callback(
-                            f"【断言验证】比较失败: "
-                            f"{name}, {expr} {operation} {except_value}, 实际值={actual_value}"
-                        )
+                        log_callback(f"【断言验证】比较失败: {expr_message}")
             except Exception as e:
                 error_msg = str(e)
                 success = False
@@ -474,8 +683,6 @@ class AutoTestToolService:
                 "success": success,
                 "error": error_msg,
             })
-        if log_callback:
-            log_callback("【断言验证】结束")
         return validator_results
 
     @classmethod
@@ -916,6 +1123,120 @@ class AutoTestToolServiceImpl:
     # 合并后的算术串超过此长度则不做 ast.parse, 避免异常输入消耗 CPU/内存(生产防护)
     _MAX_ARITH_EXPR_CHARS = 8192
 
+    @staticmethod
+    def by_jsonpath_modify_inner_content(datagram: Dict[str, Any], json_path: str, json_value: Any, split_symbol: str = "@JSON@") -> None:
+        """
+        支持两段 JSONPath，用于类似：
+          $.escape_field@JSON@$.name
+
+        约定：
+        - 第一段 JSONPath 定位到一个“字符串 JSON”或“dict”字段
+        - 第二段 JSONPath 在该字段值所代表的 JSON 内部继续定位并更新
+        - 最后把更新结果回写到第一段 JSONPath 对应的字段
+        """
+        if not json_path or not isinstance(json_path, str):
+            return
+        if not split_symbol or split_symbol not in json_path:
+            JSONPathUtils.update(datagram, json_path, json_value)
+            return
+
+        json_parts: List[str] = json_path.split(split_symbol)
+        if len(json_parts) != 2:
+            # 兜底：无法识别链路，按原逻辑尝试普通更新
+            JSONPathUtils.update(datagram, json_path, json_value)
+            return
+
+        outer_path, inner_path = json_parts[0].strip(), json_parts[1].strip()
+        if not outer_path or not inner_path:
+            return
+
+        outer_value: Union[str, list] = JSONPathUtils.query(datagram, outer_path)
+        if outer_value == [] or outer_value is None:
+            return
+
+        # JSONPath 可能返回多个命中；这里按“单命中”处理（符合你描述的两段链路）
+        if isinstance(outer_value, list):
+            if len(outer_value) != 1:
+                return
+            outer_value = outer_value[0]
+
+        if isinstance(outer_value, str):
+            try:
+                inner_obj = json.loads(outer_value) if outer_value.strip() else {}
+            except (TypeError, json.JSONDecodeError):
+                return
+            updated_inner_json = JSONPathUtils.update(inner_obj, inner_path, json_value)
+            # 回写时保持 outer 类型仍为字符串 JSON
+            JSONPathUtils.update(datagram, outer_path, updated_inner_json)
+            return
+
+        if isinstance(outer_value, dict):
+            updated_inner_json = JSONPathUtils.update(outer_value, inner_path, json_value)
+            try:
+                updated_inner_obj = json.loads(updated_inner_json)
+            except (TypeError, json.JSONDecodeError):
+                updated_inner_obj = outer_value
+            # 回写时保持 outer 类型仍为 dict
+            JSONPathUtils.update(datagram, outer_path, updated_inner_obj)
+            return
+
+        # 其他类型暂不处理（例如 int/float/bool）
+        return
+
+    @staticmethod
+    def by_jsonpath_modify_request_header(json_path: str) -> str:
+        """从 JSONPath 取请求头键名，如 $.Content-Type -> Content-Type。"""
+        if not json_path or not isinstance(json_path, str):
+            return ""
+        s = json_path.strip()
+        if s.startswith("$."):
+            s = s[2:]
+        return s.split(".")[0].strip() if s else ""
+
+    @staticmethod
+    def by_jsonpath_modify_request_params(
+            path_map: Dict[str, Any],
+            *,
+            request_body: Any,
+            form_data: Optional[Dict[str, Any]],
+            urlencoded: Optional[Dict[str, Any]],
+    ) -> Any:
+        """
+        将 JSONPath -> 值的映射写入 request_body（dict 或可解析为 dict 的 JSON 字符串）、
+        form-data、urlencoded；原地修改 dict，找不到路径则忽略（与 JSONPathUtils 行为一致）。
+        """
+        if not path_map:
+            return request_body
+
+        rb = request_body
+        if isinstance(rb, dict):
+            for json_path, json_value in path_map.items():
+                if not json_path:
+                    continue
+                AutoTestToolServiceImpl.by_jsonpath_modify_inner_content(rb, json_path, json_value)
+        elif isinstance(rb, str):
+            try:
+                payload_dict = json.loads(rb) if rb.strip() else {}
+                if isinstance(payload_dict, dict):
+                    for json_path, json_value in path_map.items():
+                        if not json_path:
+                            continue
+                        AutoTestToolServiceImpl.by_jsonpath_modify_inner_content(payload_dict, json_path, json_value)
+                    rb = payload_dict
+            except (TypeError, json.JSONDecodeError):
+                pass
+        if isinstance(form_data, dict):
+            for json_path, json_value in path_map.items():
+                if not json_path:
+                    continue
+                AutoTestToolServiceImpl.by_jsonpath_modify_inner_content(form_data, json_path, json_value)
+        if isinstance(urlencoded, dict):
+            for json_path, json_value in path_map.items():
+                if not json_path:
+                    continue
+                AutoTestToolServiceImpl.by_jsonpath_modify_inner_content(urlencoded, json_path, json_value)
+        return rb
+
     @classmethod
     def _resolve_placeholder_inner(cls, inner: str, is_core_engine: bool, finished_variables: Optional[Any]) -> Any:
         """
@@ -936,7 +1257,7 @@ class AutoTestToolServiceImpl:
             return finished_variables.get_variable(inner)
         resolved = AutoTestToolService.get_value_from_list(finished_variables, inner)
         if resolved is None:
-            raise KeyError(f"【占位符解析】获取失败, 必须是已经存在且有值的变量: {inner!r}")
+            raise KeyError(f"【占位填充】获取数据失败, 必须是已经存在且有值的变量: {inner!r}")
         return resolved
 
     @classmethod
@@ -1141,18 +1462,18 @@ class AutoTestToolServiceImpl:
         for match in regularly_matched:
             inner: str = match.group(1).strip()
             if not inner:
-                logger_object(f"【占位符解析】获取失败, 不允许使用空字符串, 保留原值")
+                logger_object(f"【占位填充】获取数据失败, 不允许使用空字符串, 保留原值")
                 regularly_slots.append((match, None, match.group(0)))
                 continue
             try:
                 value = cls._resolve_placeholder_inner(inner, is_core_engine, finished_variables)
-                logger_object("【占位符解析】获取成功, ${" + inner + "}  >>>  " + str(value))
+                logger_object("【占位填充】获取数据成功, ${" + inner + "}  >>>  " + str(value))
                 regularly_slots.append((match, value, None))
             except KeyError as e:
                 logger_object(str(e))
                 regularly_slots.append((match, None, match.group(0)))
             except Exception as e:
-                logger_object(f"【占位符解析】获取失败, 引用[{inner!r}]发生异常, 保留原值, {e}")
+                logger_object(f"【占位填充】获取数据失败, 引用[{inner!r}]发生异常, 保留原值, {e}")
                 regularly_slots.append((match, None, match.group(0)))
 
         if any(failed_content is not None for match, value, failed_content in regularly_slots):
@@ -1182,10 +1503,10 @@ class AutoTestToolServiceImpl:
             try:
                 calculated_result: Union[int, float] = cls._safe_calculation_expr(merged)
                 formatted_result: str = cls._formatter_calculated_result(calculated_result)
-                logger_object(f"【变量运算】表达式求值成功: [{content!r}] >>> [{merged}] >>> {formatted_result}")
+                logger_object(f"【变量运算】算式求值成功: [{content!r}] >>> [{merged}] >>> {formatted_result}")
                 return formatted_result
             except Exception as e:
-                logger_object(f"【变量运算】表达式求值失败: [{content!r}] >>> [{merged}] >>> {e}, 改为按字符串拼接")
+                logger_object(f"【变量运算】算式求值失败: [{content!r}] >>> [{merged}] >>> {e}, 改为按字符串拼接")
 
         return cls._split_placeholders(
             content=content,
@@ -1239,7 +1560,7 @@ class AutoTestToolServiceImpl:
                     }
                 except Exception as e:
                     logger_object(
-                        f"【占位符解析】填充字典中的占位符时发生异常, 键: {list(value.keys())}, "
+                        f"【占位填充】解析字典中的占位符时发生异常, 键: {list(value.keys())}, "
                         f"错误描述: {e}, \n"
                         f"错误类型: {type(e).__name__}, \n"
                         f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
@@ -1275,7 +1596,7 @@ class AutoTestToolServiceImpl:
             return value
         except Exception as e:
             logger_object(
-                f"【占位符解析】填充列表中的占位符时发生异常, 保留原值, "
+                f"【占位填充】解析列表中的占位符时发生异常, 保留原值, "
                 f"错误描述: {e}, \n"
                 f"错误类型: {type(e).__name__}, \n"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
