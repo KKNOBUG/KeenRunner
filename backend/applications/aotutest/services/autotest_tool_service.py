@@ -156,13 +156,13 @@ class AutoTestToolService:
             step_code: Optional[str],
             dataset_name: Optional[str],
             executing_quote_case_id: Optional[int],
-    ) -> Tuple[Optional[Dict[str, Dict[str, Any]]], Optional[Dict[str, Any]]]:
+    ) -> Optional[Dict[str, Dict[str, Any]]]:
         """
         按 dataset_name + case_id/step_code 加载数据源场景；引用公共脚本执行时不加载。
         :returns: (step_struct, 原始场景 dict 供 dataset_snapshot)；无数据时 (None, None)。
         """
         if not (dataset_name and step_code and not executing_quote_case_id):
-            return None, None
+            return None
         from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
 
         step_data = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
@@ -171,8 +171,8 @@ class AutoTestToolService:
             dataset_name=dataset_name,
         )
         if not isinstance(step_data, dict):
-            return None, None
-        return AutoTestToolService.acquire_dataset_payload(step_data), step_data
+            return None
+        return AutoTestToolService.acquire_dataset_payload(step_data)
 
     @staticmethod
     def append_assert_to_validators(

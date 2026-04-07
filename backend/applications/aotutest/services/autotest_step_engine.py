@@ -1833,15 +1833,14 @@ class TcpStepExecutor(BaseStepExecutor):
             # 参数化驱动：与 HTTP 步骤一致（当存在 dataset_name 且不是引用公共脚本时）
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct, dataset_row = await AutoTestToolService.load_dataset_for_request_step(
+            step_struct = await AutoTestToolService.load_dataset_for_request_step(
                 case_id=self.case_id,
                 step_code=self.step_code,
                 dataset_name=dataset_name,
                 executing_quote_case_id=executing_quote_case_id,
             )
-            if dataset_row is not None:
-                result.dataset_snapshot = dataset_row
-                result.dataset_name = dataset_name
+            result.dataset_snapshot = step_struct
+            result.dataset_name = dataset_name
 
             # ----------------------------
             # 1) 解析目标地址（host/port）
@@ -2116,15 +2115,14 @@ class HttpStepExecutor(BaseStepExecutor):
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct, dataset_row = await AutoTestToolService.load_dataset_for_request_step(
+            step_struct = await AutoTestToolService.load_dataset_for_request_step(
                 case_id=self.case_id,
                 step_code=self.step_code,
                 dataset_name=dataset_name,
                 executing_quote_case_id=executing_quote_case_id,
             )
-            if dataset_row is not None:
-                result.dataset_snapshot = dataset_row
-                result.dataset_name = dataset_name
+            result.dataset_snapshot = step_struct
+            result.dataset_name = dataset_name
 
             # 处理请求URL
             env_name: str = self.context.env_name
