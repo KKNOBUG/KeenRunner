@@ -12,7 +12,7 @@ import time
 import traceback
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Union
 
 import httpx
 from fastapi import APIRouter, Body, Query
@@ -40,12 +40,13 @@ from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from backend.common.request.tcp_async_utils import AioTcpClient, TcpFrameMode, AsyncTcpUtils
 from backend.core.exceptions.base_exceptions import (
     NotFoundException,
     ParameterException,
     TypeRejectException,
     DataBaseStorageException,
-    DataAlreadyExistsException,
+    DataAlreadyExistsException, ReqInvalidException,
 )
 from backend.core.responses.http_response import (
     BadReqResponse,
@@ -57,7 +58,6 @@ from backend.core.responses.http_response import (
     DataAlreadyExistsResponse,
 )
 from backend.enums.autotest_enum import AutoTestReportType, AutoTestReqArgsType
-from backend.common.request.tcp_async_utils import AioTcpClient, TcpFrameMode
 
 autotest_step = APIRouter()
 
@@ -685,13 +685,13 @@ async def debug_tcp_request(
         step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据")
 ):
     try:
-        env_name = step_data.env_name
-        step_name = step_data.step_name
-        target = (step_data.request_url or "").strip()
-        request_port = step_data.request_port
-        request_body = step_data.request_body
-        request_text = step_data.request_text
-        request_project_id = step_data.request_project_id
+        env_name: str = step_data.env_name
+        step_name: str = step_data.step_name
+        request_url: str = (step_data.request_url or "").strip()
+        request_port: str = step_data.request_port
+        request_text: str = step_data.request_text
+        request_project_id: int = step_data.request_project_id
+        # TCP 调试场景下，报文统一以字符串形式存储在 request_text 中，request_args_type 固定为 RAW
         request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
         session_variables: List[Dict[str, Any]] = step_data.session_variables or []
         defined_variables: List[Dict[str, Any]] = step_data.defined_variables or []
@@ -722,36 +722,32 @@ async def debug_tcp_request(
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return f"[{timestamp}] [{step_name}] {message}"
 
-        logs = [format_log("TCP请求调试开始"), format_log("参数替换开始")]
-
+        logs = [format_log("TCP请求调试开始:"), format_log("参数替换开始:")]
         finished_variables = AutoTestToolService.resolve_placeholders(
             initial_variables, logs.append, False, finished_variables={}
         )
-        if request_body is not None:
-            request_body = AutoTestToolService.resolve_placeholders(
-                request_body, logs.append, False, finished_variables=finished_variables
-            )
         if request_text is not None:
             request_text = AutoTestToolService.resolve_placeholders(
                 request_text, logs.append, False, finished_variables=finished_variables
             )
+        logs.append(format_log("参数替换结束"))
 
         # 解析 host/port（支持 host:port；若仅选应用则走环境配置）
-        host = ""
+        host: str = ""
         port: Optional[int] = None
-        if target and ":" in target:
-            parts = target.split(":")
-            if len(parts) == 2 and parts[1].isdigit():
-                host = parts[0].strip()
-                port = int(parts[1])
+        if request_url and ":" in request_url:
+            request_parts = request_url.split(":")
+            if len(request_parts) == 2 and request_parts[1].isdigit():
+                host = request_parts[0].strip()
+                port = int(request_parts[1])
+                logs.append(format_log(f"解析请求信息(host={host}, port={port})成功"))
         if not host:
-            host = target
+            host = request_url
         if port is None and request_port not in (None, ""):
             try:
                 port = int(str(request_port).strip())
             except Exception:
-                port = None
-
+                logs.append(format_log(f"解析请求信息(host={host}, port={port})失败"))
         if (not host) and env_name and request_project_id:
             try:
                 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
@@ -766,38 +762,51 @@ async def debug_tcp_request(
                     )
                 host = (env_instance.env_host or "").strip().rstrip("/").rstrip(":")
                 port = int(env_instance.env_port) if env_instance.env_port is not None else None
+                logs.append(format_log(f"解析请求信息(host={host}, port={port})成功"))
             except Exception as e:
-                LOGGER.error(f"TCP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
-                return FailureResponse(message=f"TCP请求调试异常, 错误描述: {e}")
+                error_message: str = f"解析请求信息(host={host}, port={port})失败, 终止调试: {e}"
+                logs.append(format_log(error_message))
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                return FailureResponse(message=error_message)
 
-        if not host:
-            return FailureResponse(message="TCP请求调试失败, 目标服务器未配置（可选择应用+环境或手动输入host:port）")
-        if port is None:
-            return FailureResponse(message="TCP请求调试失败, 端口未配置（可输入host:port或填写request_port）")
+        if not host or not port:
+            return FailureResponse(message="TCP请求调试失败, 目标服务器地址或端口未配置(可选择应用+环境或手动输入host:port)")
 
-        # 选择 payload
-        payload = request_text if request_text not in (None, "") else request_body
-        if request_args_type == AutoTestReqArgsType.RAW:
-            payload = request_text
-        elif request_args_type == AutoTestReqArgsType.JSON:
-            payload = request_body
-
-        logs.append(format_log("参数替换结束"))
-
+        # 发送TCP请求
+        payload = request_text
         start_time = time.time()
         async with AioTcpClient(timeout=timedelta(seconds=30), connect_timeout=timedelta(seconds=10)) as client:
-            utils = await client.tcp(host, int(port), payload, frame_mode=TcpFrameMode.LENGTH_PREFIX_JSON, encoding="utf-8")
-            raw_bytes = await utils.bytes_resp()
-        duration = int((time.time() - start_time) * 1000)
+            try:
+                utils: AsyncTcpUtils = await client.tcp(
+                    host=host,
+                    port=int(port),
+                    data=payload, frame_mode=TcpFrameMode.LENGTH_PREFIX_JSON,
+                    encoding="utf-8"
+                )
+                raw_bytes = await utils.bytes_resp()
+            except ReqInvalidException as e:
+                LOGGER.error(f"{e.message}\n{traceback.format_exc()}")
+                return FailureResponse(message="TCP请求调试异常", data=str(e.message))
+            except Exception as e:
+                error_message: str = (
+                    f"【TCP请求调试】请求目标服务器发生未知错误,"
+                    f"错误类型: {type(e).__name__},"
+                    f"错误描述: {e}"
+                )
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                return FailureResponse(message="TCP请求调试异常", data=error_message)
 
         # 解析响应：优先 JSON，否则当作 text
-        response_text = raw_bytes.decode("utf-8", errors="ignore")
-        response_json = None
-        response_data: Any = response_text
+        response_json: Optional[Dict[str, Any]] = None
+        duration = int((time.time() - start_time) * 1000)
+        logs.append(format_log(f"TCP请求调试完成: 耗时: {duration}ms"))
+        response_text: str = raw_bytes.decode("utf-8", errors="ignore")
+        response_data: Optional[Union[str, Dict[str, Any]]] = response_text
         try:
             response_json = json.loads(response_text)
             response_data = response_json
         except Exception:
+            LOGGER.warning(f"响应体转换JSON格式失败, 保留原样")
             response_json = None
 
         # 变量提取 / 断言（同 HTTP 调试）
@@ -821,9 +830,9 @@ async def debug_tcp_request(
         )
 
         size = len(raw_bytes)
-        size_str = f"{size/1024:.2f}KB" if size > 1024 else f"{size}B"
+        size_str = f"{size / 1024:.2f}KB" if size > 1024 else f"{size}B"
         result_data = {
-            "status": 200,
+            "status": None,
             "headers": {},
             "cookies": {},
             "data": response_data,
@@ -837,10 +846,11 @@ async def debug_tcp_request(
                 "method": "TCP",
                 "headers": {},
                 "params": {},
-                "body_type": (request_args_type.value if request_args_type else "raw"),
+                "body_type": request_args_type,
                 "body": payload,
             }
         }
+        LOGGER.info(f"TCP请求调试完成: 耗时: {duration}ms")
         return SuccessResponse(message="TCP调试请求成功", data=result_data)
     except Exception as e:
         LOGGER.error(f"TCP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")

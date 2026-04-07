@@ -1150,6 +1150,7 @@ class AutoTestToolServiceImpl:
         if not outer_path or not inner_path:
             return
 
+        inner_path = "$." + inner_path
         outer_value: Union[str, list] = JSONPathUtils.query(datagram, outer_path)
         if outer_value == [] or outer_value is None:
             return
@@ -1470,7 +1471,7 @@ class AutoTestToolServiceImpl:
                 logger_object("【占位填充】获取数据成功, ${" + inner + "}  >>>  " + str(value))
                 regularly_slots.append((match, value, None))
             except KeyError as e:
-                logger_object(str(e))
+                logger_object(e.args[0])
                 regularly_slots.append((match, None, match.group(0)))
             except Exception as e:
                 logger_object(f"【占位填充】获取数据失败, 引用[{inner!r}]发生异常, 保留原值, {e}")
