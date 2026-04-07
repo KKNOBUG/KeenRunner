@@ -67,16 +67,6 @@ async def register_database(app: FastAPI) -> None:
         add_exception_handlers=PROJECT_CONFIG.SERVER_DEBUG,
     )
 
-    if PROJECT_CONFIG.aerich_should_run_on_startup:
-        register_logging().warning(
-            "跳过 Aerich 数据迁移指令: \n"
-            f"操作系统: {PROJECT_CONFIG.SERVER_SYSTEM}, \n"
-            f"调试开关: {PROJECT_CONFIG.SERVER_DEBUG}, \n"
-            f"迁移开关: {PROJECT_CONFIG.DATABASE_AUTO_MIGRATION}, \n"
-            f"生产环境(Linux操作系统)始终执行迁移指令, 不提供关闭选项; "
-            f"开发环境(Windows操作系统)仅当显示打开[DATABASE_AUTO_MIGRATION]时执行迁移指令。"
-        )
-
     # 确保迁移目录存在
     if not os.path.exists(PROJECT_CONFIG.MIGRATION_DIR):
         os.makedirs(PROJECT_CONFIG.MIGRATION_DIR)
@@ -97,6 +87,17 @@ async def register_database(app: FastAPI) -> None:
         pass
 
     await command.init()
+
+    if not PROJECT_CONFIG.aerich_should_run_on_startup:
+        register_logging().warning(
+            "跳过 Aerich 数据迁移指令: \n"
+            f"操作系统: {PROJECT_CONFIG.SERVER_SYSTEM}, \n"
+            f"调试开关: {PROJECT_CONFIG.SERVER_DEBUG}, \n"
+            f"迁移开关: {PROJECT_CONFIG.DATABASE_AUTO_MIGRATION}, \n"
+            f"生产环境(Linux操作系统)始终执行迁移指令, 不提供关闭选项; "
+            f"开发环境(Windows操作系统)仅当显示打开[DATABASE_AUTO_MIGRATION]时执行迁移指令。"
+        )
+        return
 
     # 生成迁移文件
     try:
