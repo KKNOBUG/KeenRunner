@@ -217,6 +217,7 @@ class ProjectConfig(BaseSettings):
                 "database": DATABASE_NAME,  # 数据库名称
                 "minsize": 10,  # 连接池最小连接数
                 "maxsize": 40,  # 连接池最大连接数
+                "pool_recycle": 3600,  # 定期回收连接, 避免 MySQL wait_timeout 端口后仍占用无效连接
                 "charset": "utf8mb4",  # 数据库字符编码
                 "echo": False,  # 数据库是否开启SQL语句回响
                 "autocommit": True  # 数据库是否开启SQL语句自动提交
