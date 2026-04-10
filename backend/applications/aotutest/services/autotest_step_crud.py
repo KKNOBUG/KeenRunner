@@ -49,11 +49,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """初始化 CRUD，绑定模型 AutoTestApiStepInfo。"""
         super().__init__(model=AutoTestApiStepInfo)
 
-    async def get_by_id(self, step_id: int, on_error: bool = False) -> Optional[AutoTestApiStepInfo]:
+    async def get_by_id(self, step_id: int, on_error: bool = False, is_enable: bool = True) -> Optional[AutoTestApiStepInfo]:
         """根据步骤主键 ID 查询单条步骤（排除已删除）。
 
         :param step_id: 步骤主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :param is_enable: 为 True 时字段添加state__not条件。
         :returns: 步骤实例或 None。
         :raises ParameterException: 当 step_id 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
@@ -62,19 +63,22 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             error_message: str = "查询步骤信息失败, 参数(step_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(id=step_id, state__not=1).first()
+        kwargs: Dict[str, Any] = {"id": step_id}
+        if is_enable:
+            kwargs["state__not"] = 1
+        instance = await self.model.filter(**kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询步骤信息失败, 步骤(id={step_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, step_code: str, on_error: bool = False) -> Optional[AutoTestApiStepInfo]:
+    async def get_by_code(self, step_code: str, on_error: bool = False, is_enable: bool = True) -> Optional[AutoTestApiStepInfo]:
         """根据步骤标识代码查询单条步骤（排除已删除）。
 
         :param step_code: 步骤标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :param is_enable: 为 True 时字段添加state__not条件。
         :returns: 步骤实例或 None。
         :raises ParameterException: 当 step_code 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
@@ -84,7 +88,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(step_code=step_code, state__not=1).first()
+        kwargs: Dict[str, Any] = {"step_code": step_code}
+        if is_enable:
+            kwargs["state__not"] = 1
+        instance = await self.model.filter(**kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询步骤信息失败, 步骤(code={step_code})不存在"
             LOGGER.error(error_message)
@@ -95,19 +102,23 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             self,
             conditions: Dict[str, Any],
             only_one: bool = True,
-            on_error: bool = False
+            on_error: bool = False,
+            is_enable: bool = True
     ) -> Optional[AutoTestApiStepInfo]:
         """根据条件查询步骤（排除已删除）。
 
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :param is_enable: 为 True 时字段添加state__not条件。
         :returns: 单条步骤、步骤列表或 None。
         :raises ParameterException: 条件非法或查询异常时。
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
         """
         try:
-            stmt: QuerySet = self.model.filter(**conditions, state__not=1)
+            if is_enable:
+                conditions["state__not"] = 1
+            stmt: QuerySet = self.model.filter(**conditions)
             instances = await (stmt.first() if only_one else stmt.all())
         except FieldError as e:
             error_message: str = f"查询步骤信息异常, 错误描述: {e}"
@@ -380,20 +391,23 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 raise NotFoundException(message=error_message)
 
         # 业务层验证：检查同一用例下步骤序号是否已存在
-        existing_step = await self.model.filter(case_id=case_id, step_no=step_no, state__not=1).first()
-        if existing_step:
-            error_message: str = (
-                f"根据(case_id={case_id}, step_no={step_no})条件检查步骤信息失败, 同一用例下步骤序号不允许重复"
-            )
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+        step_dict = step_in.model_dump(exclude_none=True, exclude_unset=True)
+        existing_step = await self.model.filter(case_id=case_id, step_no=step_no).first()
+        if not existing_step:
+            try:
+                instance: AutoTestApiStepInfo = await self.create(step_dict)
+                return instance
+            except IntegrityError as e:
+                error_message: str = f"新增步骤信息失败, 违反约束规则: {e}"
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                raise DataBaseStorageException(message=error_message) from e
 
         try:
-            step_dict = step_in.model_dump(exclude_none=True, exclude_unset=True)
-            instance = await self.create(step_dict)
+            step_dict["state"] = 0
+            instance: AutoTestApiStepInfo = await self.update(id=existing_step.id, obj_in=step_dict)
             return instance
-        except IntegrityError as e:
-            error_message: str = f"新增步骤信息失败, 违反约束规则: {e}"
+        except (DoesNotExist, IntegrityError) as e:
+            error_message: str = f"新增(更新)步骤信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 

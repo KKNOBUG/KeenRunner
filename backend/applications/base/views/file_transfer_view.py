@@ -14,7 +14,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, UploadFile, File, Form
 from starlette.responses import StreamingResponse
 
-from backend.applications.base.services.file_transfer import FileTransfer
+from backend.services.file_transfer import FileTransfer
 from backend.common import FileUtils
 from backend.configure import PROJECT_CONFIG
 from backend.core.responses import (

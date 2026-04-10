@@ -18,6 +18,7 @@ from .autotest_tag_view import autotest_tag
 from .autotest_task_view import autotest_task
 from .autotest_tool_view import autotest_tool
 from .autotest_data_source_view import autotest_data_source
+from .autotest_data_source2_view import autotest_data_source2
 
 autotest = APIRouter()
 
@@ -31,3 +32,4 @@ autotest.include_router(autotest_tag, prefix="/tag", tags=["标签相关"])
 autotest.include_router(autotest_task, prefix="/task", tags=["任务相关"])
 autotest.include_router(autotest_tool, prefix="/tool", tags=["辅助工具相关"])
 autotest.include_router(autotest_data_source, prefix="/data_source", tags=["数据源相关"])
+autotest.include_router(autotest_data_source2, prefix="/data_source2", tags=["数据源相关2"])

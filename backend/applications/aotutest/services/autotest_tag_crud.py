@@ -153,25 +153,24 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         # 业务层验证：检查应用是否存在
         from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
         await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=tag_project, on_error=True)
-
-        # 业务层验证: 检查标签类型是否存在
-        existing_tag = await self.model.filter(
-            tag_type=tag_type,
-            tag_mode=tag_mode,
-            tag_name=tag_name,
-            state__not=1
-        ).first()
-        if existing_tag:
-            error_message: str = f"标签(tag_type={tag_type}, tag_mode={tag_mode}, tag_name={tag_name})已存在"
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+        # 业务层验证：同应用下相同类型、大类及名称仅可存在一个状态为启用的标签信息
+        tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
+        existing_tag = await self.model.filter(tag_type=tag_type, tag_mode=tag_mode, tag_name=tag_name).first()
+        if not existing_tag:
+            try:
+                instance: AutoTestApiTagInfo = await self.create(obj_in=tag_dict)
+                return instance
+            except IntegrityError as e:
+                error_message: str = f"新增标签信息失败, 违反约束规则: {e}"
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                raise DataBaseStorageException(message=error_message) from e
 
         try:
-            tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
-            instance = await self.create(tag_dict)
+            tag_dict["state"] = 0
+            instance: AutoTestApiTagInfo = await self.update(id=existing_tag.id, obj_in=tag_dict)
             return instance
-        except IntegrityError as e:
-            error_message: str = f"新增标签信息失败, 违反约束规则: {e}"
+        except (DoesNotExist, IntegrityError) as e:
+            error_message: str = f"新增(更新)标签信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 

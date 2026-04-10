@@ -455,3 +455,33 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
 
     def __str__(self):
         return f"{self.data_source_code or ''}(case_id={self.case_id},step_code={self.step_code})"
+
+
+class AutoTestApiDataCreateInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
+    case_code = fields.CharField(max_length=64, description="用例标识代码")
+    create_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="接口文件标识代码")
+    create_status = fields.SmallIntField(default=0, index=True, description="创建状态（0：提交，1：生成中，2：失败，3：成功）")
+    step_code = fields.CharField(max_length=64, description="步骤标识代码")
+    file_name = fields.CharField(max_length=255, description="接口文件存储名称")
+    file_hash = fields.CharField(max_length=255, description="接口文件哈希代码")
+    file_path = fields.CharField(max_length=1024, description="接口文件存储路径")
+    file_desc = fields.CharField(max_length=2048, null=True, description="接口文件场景描述")
+    dataset = fields.JSONField(description="接口文件解析后的数据集")
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
+
+    class Meta:
+        table = "tbx_autotest_api_data_create"
+        table_description = "自动化测试-接口文件生成记录表"
+        unique_together = (
+            ("case_id", "step_code", "create_code"),
+        )
+        indexes = (
+            ("case_id", "state"),
+            ("case_code", "state"),
+            ("create_code", "state"),
+        )
+        ordering = ["case_id", "step_code"]
+
+    def __str__(self):
+        return self.create_code

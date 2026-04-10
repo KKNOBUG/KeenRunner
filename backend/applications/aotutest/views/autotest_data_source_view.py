@@ -33,7 +33,7 @@ from backend.applications.aotutest.services.autotest_data_source_parser import (
     parse_xlsx_to_parsed_data_async,
 )
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-from backend.applications.base.services.file_transfer import FileTransfer
+from backend.services.file_transfer import FileTransfer
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import (
     NotFoundException,

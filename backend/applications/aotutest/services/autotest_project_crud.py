@@ -9,7 +9,7 @@
 import traceback
 from typing import Optional, Dict, Any, Union, List
 
-from tortoise.exceptions import IntegrityError, FieldError
+from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
@@ -144,27 +144,32 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """
         project_name: str = project_in.project_name
 
-        # 业务层验证：检查应用名称是否重复
-        project_instance = await self.get_by_name(project_name=project_name, on_error=False)
-        if project_instance:
-            error_message: str = f"根据(project_name={project_name})条件检查应用信息失败, 应用名称不允许重复"
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+        # 业务层验证：检查应用名称是否存在
+        existing_project: Optional[AutoTestApiProjectInfo] = await self.model.filter(project_name=project_name).first()
+        project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
+        if project_in.project_dev_owners is not None:
+            project_in.project_dev_owners = sorted(project_in.project_dev_owners, key=str.lower)
+        if project_in.project_developers is not None:
+            project_in.project_developers = sorted(project_in.project_developers, key=str.lower)
+        if project_in.project_test_owners is not None:
+            project_in.project_test_owners = sorted(project_in.project_test_owners, key=str.lower)
+        if project_in.project_testers is not None:
+            project_in.project_testers = sorted(project_in.project_testers, key=str.lower)
+        if not existing_project:
+            try:
+                instance: AutoTestApiProjectInfo = await self.create(obj_in=project_dict)
+                return instance
+            except IntegrityError as e:
+                error_message: str = f"新增应用信息异常, 违反约束规则: {e}"
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                raise DataBaseStorageException(message=error_message) from e
 
         try:
-            if project_in.project_dev_owners is not None:
-                project_in.project_dev_owners = sorted(project_in.project_dev_owners, key=str.lower)
-            if project_in.project_developers is not None:
-                project_in.project_developers = sorted(project_in.project_developers, key=str.lower)
-            if project_in.project_test_owners is not None:
-                project_in.project_test_owners = sorted(project_in.project_test_owners, key=str.lower)
-            if project_in.project_testers is not None:
-                project_in.project_testers = sorted(project_in.project_testers, key=str.lower)
-            project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
-            instance = await self.create(obj_in=project_dict)
+            project_dict["state"] = 0
+            instance: AutoTestApiProjectInfo = await self.update(id=existing_project.id, obj_in=project_dict)
             return instance
-        except IntegrityError as e:
-            error_message: str = f"新增应用信息异常, 违反约束规则: {e}"
+        except (DoesNotExist, IntegrityError) as e:
+            error_message: str = f"新增(更新)应用信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
