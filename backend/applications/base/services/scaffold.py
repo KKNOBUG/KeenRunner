@@ -17,23 +17,24 @@ from tortoise import fields, models
 from tortoise.expressions import Q
 from tortoise.models import Model
 
-from backend import GLOBAL_CONFIG
+from backend.configure import GLOBAL_CONFIG
 
 
 class ScaffoldModel(models.Model):
     id = fields.BigIntField(pk=True, description="主键")
 
-    async def to_dict(self,
-                      include_fields: Optional[Union[List[str], Set[str]]] = None,
-                      exclude_fields: Optional[Union[List[str], Set[str]]] = None,
-                      replace_fields: Optional[Dict[str, str]] = None,
-                      m2m: bool = False,
-                      m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
-                      m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
-                      fk: bool = False,
-                      fk_include_fields: Optional[Union[List[str], Set[str]]] = None,
-                      fk_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
-                      ):
+    async def to_dict(
+            self,
+            include_fields: Optional[Union[List[str], Set[str]]] = None,
+            exclude_fields: Optional[Union[List[str], Set[str]]] = None,
+            replace_fields: Optional[Dict[str, str]] = None,
+            m2m: bool = False,
+            m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
+            m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
+            fk: bool = False,
+            fk_include_fields: Optional[Union[List[str], Set[str]]] = None,
+            fk_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
+    ):
         """
         将模型实例转换为字典形式，支持灵活配置要包含或排除的字段，以及是否处理多对多关系和外键关系。
         :param include_fields: 需要引入的本表字段列表，默认为 None

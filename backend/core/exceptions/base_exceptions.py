@@ -9,7 +9,7 @@
 import json
 from typing import Union, Optional
 
-from backend.enums.base_error_enum import BaseErrorEnum
+from backend.enums import BaseErrorEnum
 
 
 class BaseExceptions(Exception):

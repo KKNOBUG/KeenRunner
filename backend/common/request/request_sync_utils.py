@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any, Union, List, Literal
 
 from requests import exceptions
 
-from backend.enums.http_enum import HTTPMethod
+from backend.enums import HTTPMethod
 
 
 class RequestSyncUtils:

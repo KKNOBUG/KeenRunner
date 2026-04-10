@@ -11,7 +11,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import AutoTestReportType
+from backend.enums import AutoTestReportType
 
 
 class AutoTestApiReportBase(BaseModel):

@@ -12,9 +12,9 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
-from backend import LOGGER
 from backend.common.generate_utils import GenerateUtils
-from backend.core.responses.http_response import (
+from backend.configure import LOGGER
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
 )

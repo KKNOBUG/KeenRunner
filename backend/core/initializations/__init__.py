@@ -6,11 +6,18 @@
 @Module  : __init__.py.py
 @DateTime: 2025/1/12 19:46
 """
+from .app_initialization import (
+    register_database,
+    register_exceptions,
+    register_middlewares,
+    register_routers,
+)
+from .data_initialization import init_database_table
 
-
-def print_hi(name):
-    print(f'Hi, {name}')
-
-
-if __name__ == '__main__':
-    print_hi('Python')
+__all__ = (
+    register_database,
+    register_exceptions,
+    register_middlewares,
+    register_routers,
+    init_database_table
+)

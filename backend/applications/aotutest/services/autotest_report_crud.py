@@ -14,7 +14,6 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import AutoTestApiReportInfo
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
@@ -22,7 +21,8 @@ from backend.applications.aotutest.schemas.autotest_report_schema import (
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     ParameterException,
     NotFoundException,
     DataBaseStorageException,

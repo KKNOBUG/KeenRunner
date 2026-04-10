@@ -14,7 +14,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 from backend.common.database.database_sync_pool import DatabaseSyncPool
-from backend.core.decorators.block import synchronized
+from backend.core.decorators import synchronized
 
 filterwarnings("ignore", category=pymysql.Warning)
 
@@ -369,8 +369,8 @@ if __name__ == '__main__':
     mysql_operation = DatabaseSyncOperator()
 
     # 验证execute_sql函数
-    # execute_sql = "select * from student"
-    execute_sql = "select * from student  where sno >= 110"
+    # execute_sql = "select * from students"
+    execute_sql = "select * from students  where sno >= 110"
     # execute_sql = "update student set sname = '忠诚的矮人谢尔涅' where sno >= 116"
     result = mysql_operation.execute_sql(execute_sql, is_query_one=True)
     print('查询数量：', result)

@@ -9,7 +9,7 @@
 import json
 from typing import Optional, Dict, Any, List, Tuple
 
-from backend import LOGGER
+from backend.configure import LOGGER
 
 REDIS_KEY_PREFIX = "autotest:data_source"
 
@@ -17,7 +17,7 @@ REDIS_KEY_PREFIX = "autotest:data_source"
 def _redis_client():
     """获取 Redis 客户端（decode_responses=True）。未配置或不可用时返回 None。"""
     try:
-        from backend import PROJECT_CONFIG
+        from backend.configure import PROJECT_CONFIG
         import redis
         return redis.Redis.from_url(
             PROJECT_CONFIG.REDIS_URL,
@@ -54,9 +54,9 @@ def get_by_cache_key(cache_key: str) -> Optional[Tuple[Dict[str, Any], List[str]
 
 
 def set_parsed_data_by_cache_key(
-    cache_key: str,
-    dataset: Dict[str, Any],
-    dataset_names: List[str],
+        cache_key: str,
+        dataset: Dict[str, Any],
+        dataset_names: List[str],
 ) -> bool:
     """按 cache_key 写入/覆盖 Redis（该步骤的数据）。"""
     client = _redis_client()
@@ -95,7 +95,7 @@ def delete_by_cache_key(cache_key: str) -> bool:
 
 
 async def get_parsed_data_for_execution(
-    data_source_code: str,
+        data_source_code: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[List[str]]]:
     """
     执行时取数：按 data_source_code 从 DB 查询该文件下所有步骤记录，合并为完整 parsed_data。

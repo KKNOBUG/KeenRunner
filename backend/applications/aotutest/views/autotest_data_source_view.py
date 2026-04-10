@@ -19,7 +19,6 @@ from fastapi import APIRouter, UploadFile, File, Form, Body, Query
 from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
-from backend import LOGGER, PROJECT_CONFIG
 from backend.applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
 from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceCreate,
@@ -35,22 +34,24 @@ from backend.applications.aotutest.services.autotest_data_source_parser import (
 )
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.base.services.file_transfer import FileTransfer
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER, PROJECT_CONFIG
+from backend.core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     BadReqResponse,
     ParameterResponse,
     FileExtensionResponse,
-    DataBaseStorageResponse, NotFoundResponse,
+    DataBaseStorageResponse,
+    NotFoundResponse,
 )
-from backend.enums.autotest_enum import AutoTestStepType
-from backend.services.ctx import CTX_USER_ID
+from backend.enums import AutoTestStepType
+from backend.services import CTX_USER_ID
 
 autotest_data_source = APIRouter()
 

@@ -13,12 +13,12 @@ from tortoise.exceptions import DoesNotExist
 
 from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.base.services.role_crud import ROLE_CRUD
+from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate
-from backend.core.exceptions.base_exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException
-from backend.core.responses.http_response import ForbiddenResponse
-from backend.services.password import verify_password, get_password_hash
-from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.core.exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException
+from backend.core.responses import ForbiddenResponse
+from backend.services import verify_password, get_password_hash
 
 
 class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):

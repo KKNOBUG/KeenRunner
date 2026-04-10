@@ -13,7 +13,6 @@ from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import AutoTestApiDetailInfo
 from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
@@ -22,7 +21,8 @@ from backend.applications.aotutest.schemas.autotest_detail_schema import (
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,

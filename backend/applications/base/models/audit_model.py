@@ -9,7 +9,7 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin
-from backend.enums.http_enum import HTTPMethod
+from backend.enums import HTTPMethod
 
 
 class Audit(ScaffoldModel, TimestampMixin):

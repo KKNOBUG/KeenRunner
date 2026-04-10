@@ -17,7 +17,7 @@ from typing import Dict, Any, List, Tuple, Union
 
 import pandas as pd
 
-from backend import LOGGER
+from backend.configure import LOGGER
 
 _executor = ThreadPoolExecutor(max_workers=4)
 

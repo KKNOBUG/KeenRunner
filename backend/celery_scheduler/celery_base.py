@@ -20,7 +20,7 @@ from tortoise import Tortoise, connections
 from tortoise.exceptions import DBConnectionError
 from tortoise.expressions import Q
 
-from backend import PROJECT_CONFIG, LOGGER
+from backend.configure import PROJECT_CONFIG, LOGGER
 
 # 全局变量，标记数据库是否已初始化
 _tortoise_orm_initialized = False
@@ -45,7 +45,7 @@ def run_async(func: Union[Coroutine, Awaitable]) -> Any:
     与池的 loop 一致；禁止在任务里 asyncio.run()/run_until_complete() 新建并关闭 loop，
     否则 Tortoise 连接池会绑到已关闭的 loop，出现 "Event loop is closed" 等。
     """
-    from backend.common.async_or_sync_convert import AsyncEventLoopContextIOPool
+    from backend.common import AsyncEventLoopContextIOPool
     return AsyncEventLoopContextIOPool.run_in_pool(func)
 
 
@@ -125,7 +125,7 @@ def ensure_tortoise_orm_initialized():
     跑前 Tortoise 已可用）。非扫描任务的「init + 写记录」由 _ensure_tortoise_then_create_task_record
     在一次 run() 内完成，不依赖本函数做 init。
     """
-    from backend.common.async_or_sync_convert import AsyncEventLoopContextIOPool
+    from backend.common import AsyncEventLoopContextIOPool
 
     try:
         # 使用 AsyncIOPool 执行异步初始化
@@ -153,12 +153,12 @@ def get_task_model():
 
 
 def get_task_status_enum():
-    from backend.enums.autotest_enum import AutoTestTaskStatus
+    from backend.enums import AutoTestTaskStatus
     return AutoTestTaskStatus
 
 
 def get_report_type_enum():
-    from backend.enums.autotest_enum import AutoTestReportType
+    from backend.enums import AutoTestReportType
     return AutoTestReportType
 
 

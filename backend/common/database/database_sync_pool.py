@@ -10,7 +10,7 @@ import dbutils
 import pymysql
 from dbutils.pooled_db import PooledDB
 
-from backend.core.decorators.block import singleton
+from backend.core.decorators import singleton
 
 
 class DatabaseSyncPool(object):

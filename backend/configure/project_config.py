@@ -14,8 +14,7 @@ from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings
 
-from backend.common.file_utils import FileUtils
-from backend.common.shell_utils import ShellUtils
+from backend.common import FileUtils, ShellUtils
 
 
 class ProjectConfig(BaseSettings):

@@ -6,23 +6,23 @@
 @Module  : role_view.py
 @DateTime: 2025/2/19 23:11
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.params import Query, Form
 from tortoise.expressions import Q
 
 from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate, RoleUpdateMenusRouters
 from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.user.models.user_model import User
-from backend.core.responses.http_response import SuccessResponse, DataAlreadyExistsResponse
-from backend.services.dependency import DependAuth
+from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse
+from backend.services import DependAuth
 
 role = APIRouter()
 
 
 @role.post("/create", summary="创建角色")
 async def create_role(
-    role_in: RoleCreate,
-    current_user: User = DependAuth,
+        role_in: RoleCreate,
+        current_user: User = DependAuth,
 ):
     if await ROLE_CRUD.is_exist(name=role_in.name):
         return DataAlreadyExistsResponse(message="角色名称已经存在")
@@ -43,8 +43,8 @@ async def delete_role(
 
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(
-    role_in: RoleUpdate,
-    current_user: User = DependAuth,
+        role_in: RoleUpdate,
+        current_user: User = DependAuth,
 ):
     update_dict = role_in.model_dump(exclude_unset=True, exclude={"id"})
     update_dict["updated_user"] = current_user.username

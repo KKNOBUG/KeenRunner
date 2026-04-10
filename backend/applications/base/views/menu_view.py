@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
 from backend.applications.base.services.menu_crud import MENU_CRUD
-from backend.core.responses.http_response import NotFoundResponse, SuccessResponse, FailureResponse
+from backend.core.responses import NotFoundResponse, SuccessResponse, FailureResponse
 
 menu = APIRouter()
 
@@ -70,5 +70,3 @@ async def delete_menu(
     instance = await MENU_CRUD.remove(id=id)
     data = await instance.to_dict()
     return SuccessResponse(data=data)
-
-

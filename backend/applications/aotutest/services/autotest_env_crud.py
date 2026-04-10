@@ -13,14 +13,14 @@ from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,

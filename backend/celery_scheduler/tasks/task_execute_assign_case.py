@@ -15,20 +15,20 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from backend import LOGGER
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
-from backend.enums.autotest_enum import AutoTestReportType
+from backend.configure import LOGGER
+from backend.enums import AutoTestReportType
 
 
 async def _execute_step_tree_impl(
-    case_id: int,
-    env_name: Optional[str] = None,
-    initial_variables: Optional[List[Dict[str, Any]]] = None,
-    report_type: Optional[AutoTestReportType] = None,
-    batch_code: Optional[str] = None,
-    selected_dataset_names: Optional[List[str]] = None,
+        case_id: int,
+        env_name: Optional[str] = None,
+        initial_variables: Optional[List[Dict[str, Any]]] = None,
+        report_type: Optional[AutoTestReportType] = None,
+        batch_code: Optional[str] = None,
+        selected_dataset_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     if initial_variables is None or not isinstance(initial_variables, list):
         initial_variables = []
@@ -96,12 +96,12 @@ async def _execute_step_tree_impl(
 
 @celery.task(name="backend.celery_scheduler.tasks.task_autotest_step_tree.execute_step_tree_task")
 def execute_step_tree_task(
-    case_id: int,
-    env_name: Optional[str] = None,
-    initial_variables: Optional[List[Dict[str, Any]]] = None,
-    report_type: Optional[str] = None,
-    batch_code: Optional[str] = None,
-    selected_dataset_names: Optional[List[str]] = None,
+        case_id: int,
+        env_name: Optional[str] = None,
+        initial_variables: Optional[List[Dict[str, Any]]] = None,
+        report_type: Optional[str] = None,
+        batch_code: Optional[str] = None,
+        selected_dataset_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Celery task：参数化执行单用例步骤树。
@@ -130,4 +130,3 @@ def execute_step_tree_task(
     except Exception as e:
         LOGGER.error(f"Celery 执行步骤树失败, case_id={case_id}, err={e}")
         raise
-

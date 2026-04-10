@@ -13,11 +13,11 @@ from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import AutoTestApiTagInfo
 from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate, AutoTestApiTagUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,

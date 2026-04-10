@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from lxml import etree
 
-from backend.core.exceptions.base_exceptions import ReqInvalidException, ResInvalidException
+from backend.core.exceptions import ReqInvalidException, ResInvalidException
 
 
 class TcpFrameMode(str, Enum):

@@ -8,7 +8,7 @@
 """
 from tortoise import fields
 
-from backend.enums.http_enum import HTTPMethod
+from backend.enums import HTTPMethod
 from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
 
 

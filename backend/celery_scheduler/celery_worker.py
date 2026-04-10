@@ -68,9 +68,8 @@ from celery._state import _task_stack
 from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
-from backend import LOGGER
-from backend.common.async_or_sync_convert import AsyncEventLoopContextIOPool
-from backend.configure.celery_config import CELERY_CONFIG
+from backend.common import AsyncEventLoopContextIOPool
+from backend.configure import LOGGER, CELERY_CONFIG
 from backend.configure.logging_config import InterceptHandler
 from .celery_base import (
     ensure_tortoise_orm_initialized,
@@ -152,7 +151,7 @@ async def _create_task_record(
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
     from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
-    from backend.enums.autotest_enum import AutoTestTaskStatus, AutoTestTaskScheduler
+    from backend.enums import AutoTestTaskStatus, AutoTestTaskScheduler
     task_name: Optional[str] = None
     task_kwargs: Dict[str, Any] = {}
     celery_scheduler: Optional[str] = None
@@ -197,7 +196,7 @@ async def _update_task_record_on_end(
     if not celery_id:
         return
     from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
-    from backend.enums.autotest_enum import AutoTestTaskStatus
+    from backend.enums import AutoTestTaskStatus
 
     now = datetime.now()
     status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE

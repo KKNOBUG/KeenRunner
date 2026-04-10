@@ -15,7 +15,7 @@ from tortoise.exceptions import DoesNotExist
 from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
+from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
 
 
 class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):

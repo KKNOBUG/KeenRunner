@@ -21,11 +21,11 @@ from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.core.exceptions.base_exceptions import (
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
 )
-from backend.enums.autotest_enum import (
+from backend.enums import (
     AutoTestStepType,
     AutoTestReportType,
     AutoTestLoopMode,
@@ -33,7 +33,7 @@ from backend.enums.autotest_enum import (
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType
 )
-from backend.services.ctx import CTX_USER_ID
+from backend.services import CTX_USER_ID
 
 # 1.匹配裸的占位符，如: ${xxx}
 _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
@@ -345,7 +345,7 @@ class StepExecutionContext:
                 if raw_headers:
                     # 对请求头中的中文进行 UTF-8 百分号编码
                     encoded_headers: Dict[str, Any] = {
-                        key: quote(value, encoding="utf-8")
+                        key: quote(value, encoding="utf-8", safe=':/?#[]@!$&\'()*+,;=-._~%')
                         if isinstance(value, str) else value for key, value in raw_headers.items()
                     }
                     if encoded_headers:
@@ -1949,7 +1949,7 @@ class TcpStepExecutor(BaseStepExecutor):
             # ----------------------------
             # 3) 发送 TCP 请求
             # ----------------------------
-            from backend.common.request.tcp_async_utils import AioTcpClient, TcpFrameMode
+            from backend.common import AioTcpClient, TcpFrameMode
 
             frame_mode_raw = (self.step.get("tcp_frame_mode") or "length_prefix_json").strip().lower()
             frame_mode = TcpFrameMode.RAW if frame_mode_raw == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON

@@ -8,17 +8,15 @@
 """
 from typing import Optional, List
 
-from backend.applications.base.models.router_model import Router
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
+from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.role_schema import (
-    BaseRole,
     RoleCreate,
-    RoleUpdate,
-    RoleUpdateMenusRouters
+    RoleUpdate
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException
+from backend.core.exceptions import DataAlreadyExistsException
 
 
 class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):

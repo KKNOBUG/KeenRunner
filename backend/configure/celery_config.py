@@ -12,7 +12,7 @@ from typing import Dict, Any
 
 from pydantic_settings import BaseSettings
 
-from backend.common.file_utils import FileUtils
+from backend.common import FileUtils
 from backend.configure.project_config import PROJECT_CONFIG
 
 

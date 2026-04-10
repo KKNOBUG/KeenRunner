@@ -11,10 +11,10 @@ from typing import Optional, List
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
 
-from backend import PROJECT_CONFIG
 from backend.applications.base.models.role_model import Role
 from backend.applications.user.models.user_model import User
-from backend.services.ctx import CTX_USER_ID
+from backend.configure import PROJECT_CONFIG
+from backend.services import CTX_USER_ID
 
 
 class AuthControl:

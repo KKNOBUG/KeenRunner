@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import AutoTestTagType
+from backend.enums import AutoTestTagType
 
 
 class AutoTestApiTagCreate(BaseModel):

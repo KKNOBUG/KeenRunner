@@ -10,7 +10,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from backend.enums.http_enum import HTTPMethod
+from backend.enums import HTTPMethod
 
 
 class RouterCreate(BaseModel):

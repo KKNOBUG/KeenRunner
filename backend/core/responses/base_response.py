@@ -12,7 +12,7 @@ from typing import Optional, Union, List, Any, Dict
 from fastapi.encoders import jsonable_encoder
 from starlette.responses import JSONResponse
 
-from backend.enums.app_enum import Code, Status, Message
+from backend.enums import Code, Status, Message
 
 
 class BaseResponse(JSONResponse):

@@ -13,7 +13,7 @@ from tortoise.exceptions import DoesNotExist
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
+from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
 
 
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):

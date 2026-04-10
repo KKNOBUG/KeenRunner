@@ -14,11 +14,11 @@ from pydantic import BaseModel
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import AutoTestApiRecordInfo
 from backend.applications.aotutest.schemas.autotest_record_schema import AutoTestApiRecordSelect
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import ParameterException
+from backend.configure import LOGGER
+from backend.core.exceptions import ParameterException
 
 
 class _RecordCreatePlaceholder(BaseModel):

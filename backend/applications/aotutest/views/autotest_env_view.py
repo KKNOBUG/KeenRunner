@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
@@ -20,12 +19,14 @@ from backend.applications.aotutest.schemas.autotest_env_schema import (
 )
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
-    ParameterException, DataBaseStorageException,
+    ParameterException,
+    DataBaseStorageException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,

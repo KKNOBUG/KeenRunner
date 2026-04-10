@@ -13,20 +13,19 @@ from fastapi.routing import APIRoute
 from tortoise import Tortoise
 from tortoise.exceptions import DBConnectionError
 
-from backend.core.initializations.app_initialization import (
+from backend.core.initializations import (
     register_database,
-    register_logging,
     register_exceptions,
     register_middlewares,
     register_routers,
+    init_database_table,
 )
-from backend.core.initializations.data_initialization import init_database_table
-from backend.core.responses.http_response import SuccessResponse
+from backend.core.responses import SuccessResponse
 
 try:
-    from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
+    from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG
 except ImportError as e:
-    from backend.core.exceptions.base_exceptions import NotImplementedException
+    from backend.core.exceptions import NotImplementedException
 
     raise NotImplementedException(message="导入依赖配置失败,请检查 configure.project_config.py 文件")
 
@@ -60,7 +59,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-logger = register_logging()
 register_exceptions(app)
 register_middlewares(app)
 register_routers(app)

@@ -18,7 +18,7 @@ from backend.applications.base.services.scaffold import (
     StateModel,
     ReserveFields
 )
-from backend.enums.autotest_enum import (
+from backend.enums import (
     AutoTestCaseType,
     AutoTestTagType,
     AutoTestStepType,

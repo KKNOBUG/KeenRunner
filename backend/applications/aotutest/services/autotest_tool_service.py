@@ -20,7 +20,7 @@ from jsonpath_ng import parse as jsonpath_parse
 
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 from backend.common.generate_utils import GenerateUtils
-from backend.common.jsonpath_utils import JSONPathUtils
+from backend.common import JSONPathUtils
 
 
 class AutoTestToolService:
@@ -717,7 +717,7 @@ class AutoTestToolService:
         :param steps_data: 根步骤列表(每项可为带 children 的树节点)
         :return: (True, None) 表示通过；(False, str) 表示失败及错误信息
         """
-        from backend.enums.autotest_enum import AutoTestStepType
+        from backend.enums import AutoTestStepType
 
         # 允许有子步骤的步骤类型
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
@@ -1287,6 +1287,31 @@ class AutoTestToolServiceImpl:
         return None
 
     @classmethod
+    def _is_calculate_placeholder_expr(
+            cls,
+            content: str,
+            regularly_slots: List[Tuple[re.Match[str], Optional[Any], Optional[str]]],
+    ) -> bool:
+        """
+        判断当前占位符模板是否应进入「纯算术表达式」计算路径
+        - 模板中占位符之外的文本只能包含算术字符, 否则按普通字符串拼接
+        - 单占位符场景下, 若结果是字符串, 直接按字符串返回, 避免如 "00123" 被数值化后丢失前导 0
+        """
+        if len(regularly_slots) == 1:
+            _, value, _ = regularly_slots[0]
+            if isinstance(value, str):
+                return False
+
+        skeleton_parts: List[str] = []
+        pos: int = 0
+        for match, value, failed_content in regularly_slots:
+            skeleton_parts.append(content[pos: match.start()])
+            pos = match.end()
+        skeleton_parts.append(content[pos:])
+        skeleton: str = "".join(skeleton_parts).strip()
+        return bool(skeleton) and bool(cls._RE_ARITHMETIC_ONLY.fullmatch(skeleton))
+
+    @classmethod
     def _normalize_float(cls, f: float) -> str:
         """
         将浮点数转换为可以安全嵌入算术表达式的数字字面量字符串
@@ -1478,6 +1503,13 @@ class AutoTestToolServiceImpl:
                 regularly_slots.append((match, None, match.group(0)))
 
         if any(failed_content is not None for match, value, failed_content in regularly_slots):
+            return cls._split_placeholders(
+                content=content,
+                regularly_slots=regularly_slots,
+                to_string=cls._formatter_resolved_placeholders
+            )
+
+        if not cls._is_calculate_placeholder_expr(content=content, regularly_slots=regularly_slots):
             return cls._split_placeholders(
                 content=content,
                 regularly_slots=regularly_slots,

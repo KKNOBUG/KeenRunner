@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_case_schema import (
     AutoTestApiCaseCreate,
     AutoTestApiCaseSelect,
@@ -21,13 +20,14 @@ from backend.applications.aotutest.schemas.autotest_case_schema import (
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataAlreadyExistsException,
     DataBaseStorageException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,

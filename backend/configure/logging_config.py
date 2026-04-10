@@ -6,17 +6,19 @@
 @Module  : logging_config.py
 @DateTime: 2025/1/16 15:33
 """
-import os
-import sys
 import logging
 import logging.config
+import os
+import sys
 from datetime import datetime
 from typing import Dict, Any
 
 from loguru import logger
-from concurrent_log_handler import ConcurrentRotatingFileHandler
 
-from backend import PROJECT_CONFIG
+from backend.configure.project_config import PROJECT_CONFIG
+
+
+# from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 
 def get_log_filename(log_type: str) -> str:
@@ -94,6 +96,55 @@ class RequireDebugTrue(logging.Filter):
         return getattr(PROJECT_CONFIG, 'SERVER_DEBUG', False)
 
 
+class InterceptHandler(logging.Handler):
+    """
+    日志拦截处理器：将所有 Python 标准日志重定向到 Loguru
+
+    工作原理：
+    1. 继承自 logging.Handler
+    2. 重写 emit 方法处理日志记录
+    3. 将标准库日志转换为 Loguru 格式
+    """
+    # 排除logger name
+    EXCLUDED_LOGGERS: set = {
+        "aiomysql",
+        "asyncio",
+        "tortoise",
+        "tortoise.db_client",
+        "uvicorn.asgi",
+        "uvicorn.middleware.*",
+        "python_multipart.*",
+        "faker.factory",
+        "httpcore.*",
+        "passlib.*",
+    }
+
+    def is_excluded(self, name: str) -> bool:
+        for excluded in self.EXCLUDED_LOGGERS:
+            if excluded.endswith(".*"):
+                if name.startswith(excluded[:-1]):
+                    return True
+            elif name == excluded:
+                return True
+        return False
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self.is_excluded(record.name):
+            return
+
+        # 获取发出日志的调用者
+        frame, depth = logging.currentframe(), 2
+        while frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        # 使用 Loguru 记录日志
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            "INFO",
+            record.getMessage()
+        )
+
+
 def loguru_logging() -> logger:
     # 移除默认配置
     logger.remove()
@@ -160,49 +211,4 @@ def loguru_logging() -> logger:
     return logger
 
 
-class InterceptHandler(logging.Handler):
-    """
-    日志拦截处理器：将所有 Python 标准日志重定向到 Loguru
-
-    工作原理：
-    1. 继承自 logging.Handler
-    2. 重写 emit 方法处理日志记录
-    3. 将标准库日志转换为 Loguru 格式
-    """
-    # 排除logger name
-    EXCLUDED_LOGGERS: set = {
-        "aiomysql",
-        "asyncio",
-        "tortoise",
-        "tortoise.db_client",
-        "uvicorn.asgi",
-        "uvicorn.middleware.*",
-        "python_multipart.*",
-        "faker.factory",
-        "httpcore.*",
-    }
-
-    def is_excluded(self, name: str) -> bool:
-        for excluded in self.EXCLUDED_LOGGERS:
-            if excluded.endswith(".*"):
-                if name.startswith(excluded[:-1]):
-                    return True
-            elif name == excluded:
-                return True
-        return False
-
-    def emit(self, record: logging.LogRecord) -> None:
-        if self.is_excluded(record.name):
-            return
-
-        # 获取发出日志的调用者
-        frame, depth = logging.currentframe(), 2
-        while frame.f_code.co_filename == logging.__file__:
-            frame = frame.f_back
-            depth += 1
-
-        # 使用 Loguru 记录日志
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            "INFO",
-            record.getMessage()
-        )
+LOGGER = loguru_logging()

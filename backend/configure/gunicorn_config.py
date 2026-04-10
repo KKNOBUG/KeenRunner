@@ -6,7 +6,7 @@
 @Module  : gunicorn_config.py
 @DateTime: 2025/1/12 19:41
 """
-from backend import PROJECT_CONFIG
+from . import PROJECT_CONFIG
 
 # 工作进程数量
 workers = 4

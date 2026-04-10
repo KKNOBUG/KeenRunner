@@ -12,13 +12,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import (
+from backend.enums import (
     AutoTestStepType,
     AutoTestLoopMode,
     AutoTestReqArgsType,
     AutoTestLoopErrorStrategy,
 )
-from backend.enums.http_enum import HTTPMethod
+from backend.enums import HTTPMethod
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
@@ -199,7 +199,8 @@ class AutoTestStepTreeExecute(BaseModel):
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
     # 参数化驱动：运行模式可传多条数据集名称循环执行；调试模式只能传一条
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
+    selected_dataset_names: Optional[List[str]] = Field(None,
+                                                        description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
 
     @model_validator(mode='after')
     def validate_mode(self):

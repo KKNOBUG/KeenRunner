@@ -16,7 +16,6 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import (
     AutoTestApiStepInfo,
     AutoTestApiCaseInfo,
@@ -28,18 +27,19 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
+from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums.autotest_enum import AutoTestCaseType, AutoTestStepType, AutoTestReportType
+from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType
 
 
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):

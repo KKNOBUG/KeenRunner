@@ -15,10 +15,10 @@ from urllib.parse import unquote
 from fastapi import Request, Response
 from starlette.datastructures import FormData
 
-from backend import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
-from backend.services.dependency import AuthControl
+from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
+from backend.services import AuthControl
 
 
 def is_upload_request(request: Request) -> bool:

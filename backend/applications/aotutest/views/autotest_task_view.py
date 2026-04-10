@@ -12,7 +12,6 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_record_schema import AutoTestApiRecordSelect
 from backend.applications.aotutest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
@@ -21,13 +20,14 @@ from backend.applications.aotutest.schemas.autotest_task_schema import (
 )
 from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
 from backend.applications.aotutest.services.autotest_task_crud import AUTOTEST_API_TASK_CRUD
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
@@ -192,7 +192,7 @@ async def run_task_info(task_in: dict = Body(..., description="任务ID")):
             return ParameterResponse(message="参数 task_id 不能为空")
         await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
-        from backend.enums.autotest_enum import AutoTestReportType
+        from backend.enums import AutoTestReportType
         # __task_id 会随消息传到 Worker，task_prerun 从 request.properties 取出；
         # 只有传了 __task_id，Worker 端 _create_task_record 才会查任务表并写入 record 的 task_id/task_name。
         run_autotest_task.apply_async(

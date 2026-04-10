@@ -12,10 +12,10 @@ from typing import Optional, List
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
+from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.department.models.dept_model import Department, DeptStruct
 from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
-from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
 
 
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
@@ -32,9 +32,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return await self.model.filter(name=name).first()
 
     async def create_department(
-        self,
-        department_in: DepartmentCreate,
-        created_user: Optional[str] = None,
+            self,
+            department_in: DepartmentCreate,
+            created_user: Optional[str] = None,
     ) -> Department:
         code = department_in.code
         name = department_in.name
@@ -61,9 +61,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def update_department(
-        self,
-        department_in: DepartmentUpdate,
-        updated_user: Optional[str] = None,
+            self,
+            department_in: DepartmentUpdate,
+            updated_user: Optional[str] = None,
     ) -> Department:
         department_id: int = department_in.id
         try:

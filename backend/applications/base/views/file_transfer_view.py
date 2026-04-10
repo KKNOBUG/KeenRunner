@@ -14,15 +14,15 @@ from urllib.parse import quote
 from fastapi import APIRouter, UploadFile, File, Form
 from starlette.responses import StreamingResponse
 
-from backend import PROJECT_CONFIG
 from backend.applications.base.services.file_transfer import FileTransfer
-from backend.common.file_utils import FileUtils
-from backend.core.responses.http_response import (
+from backend.common import FileUtils
+from backend.configure import PROJECT_CONFIG
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     NotFoundResponse
 )
-from backend.enums.file_size_enum import FileSizeEum
+from backend.enums import FileSizeEum
 
 file_transfer = APIRouter()
 

@@ -12,19 +12,17 @@ from tortoise.expressions import Q
 from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserSelect, UpdatePassword
 from backend.applications.user.services.user_crud import USER_CRUD
-from backend.core.exceptions.base_exceptions import (
+from backend.core.exceptions import (
     DataAlreadyExistsException,
-    NotFoundException
+    NotFoundException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
 )
-from backend.services.ctx import CTX_USER_ID
-from backend.services.dependency import DependAuth
-from backend.services.password import verify_password, get_password_hash
+from backend.services import CTX_USER_ID, DependAuth, verify_password, get_password_hash
 
 user = APIRouter()
 

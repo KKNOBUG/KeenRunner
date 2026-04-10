@@ -18,8 +18,8 @@ from typing import Tuple, Union, Literal, Iterable
 import aiofiles
 from fastapi import UploadFile
 
-from backend import LOGGER, PROJECT_CONFIG, GLOBAL_CONFIG
-from backend.core.exceptions.base_exceptions import UploadFileException, FileExtensionException, FileTooManyException, NoPermissionException
+from backend.configure import LOGGER, PROJECT_CONFIG, GLOBAL_CONFIG
+from backend.core.exceptions import UploadFileException, FileExtensionException, FileTooManyException, NoPermissionException
 
 
 class FileTransfer:

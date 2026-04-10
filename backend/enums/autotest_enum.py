@@ -6,7 +6,7 @@
 @Module  : autotest_enum
 @DateTime: 2026/1/3 10:42
 """
-from backend.enums.base_error_enum import StringEnum
+from backend.enums.base_enum_cls import StringEnum
 
 
 class AutoTestCaseAttr(StringEnum):

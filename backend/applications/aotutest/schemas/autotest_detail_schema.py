@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any, Type
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums.autotest_enum import AutoTestStepType
+from backend.enums import AutoTestStepType
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]

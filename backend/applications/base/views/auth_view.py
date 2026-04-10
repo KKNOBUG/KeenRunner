@@ -11,18 +11,17 @@ from typing import List
 
 from fastapi import APIRouter
 
-from backend import PROJECT_CONFIG
-from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
-from backend.applications.user.services.user_crud import USER_CRUD
-from backend.applications.base.models.router_model import Router
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
+from backend.applications.base.models.router_model import Router
+from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
 from backend.applications.user.models.user_model import User
-from backend.core.exceptions.base_exceptions import NotFoundException
-from backend.core.responses.http_response import SuccessResponse, NotFoundResponse
-from backend.services.ctx import CTX_USER_ID
-from backend.services.dependency import DependAuth
-from backend.services.password import create_access_token
+from backend.applications.user.services.user_crud import USER_CRUD
+from backend.configure import PROJECT_CONFIG
+from backend.core.exceptions import NotFoundException
+from backend.core.responses import SuccessResponse, NotFoundResponse
+from backend.services import CTX_USER_ID
+from backend.services import DependAuth, create_access_token
 
 auth_public = APIRouter()
 auth_secure = APIRouter()

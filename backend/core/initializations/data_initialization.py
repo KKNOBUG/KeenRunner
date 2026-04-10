@@ -21,7 +21,7 @@ from backend.applications.department.schemas.department_schema import Department
 from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import USER_CRUD
-from backend.enums.menu_enum import MenuType
+from backend.enums import MenuType
 
 
 async def init_database_router(app: FastAPI):

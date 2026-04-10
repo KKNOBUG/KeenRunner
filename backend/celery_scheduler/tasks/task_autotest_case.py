@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : task_base
+@Module  : task_autotest_case
 @DateTime: 2026/2/1 16:10
 """
 from __future__ import annotations
@@ -12,7 +12,6 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from backend import LOGGER
 from backend.celery_scheduler.celery_base import (
     run_async,
     get_trace_id,
@@ -25,7 +24,8 @@ from backend.celery_scheduler.celery_base import (
     check_task_expired,
 )
 from backend.celery_scheduler.celery_worker import celery
-from backend.enums.autotest_enum import AutoTestReportType
+from backend.configure import LOGGER
+from backend.enums import AutoTestReportType
 
 
 async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None) -> Dict[str, Any]:

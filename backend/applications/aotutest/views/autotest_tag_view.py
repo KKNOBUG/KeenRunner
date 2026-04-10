@@ -12,20 +12,20 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend import LOGGER
 from backend.applications.aotutest.schemas.autotest_tag_schema import (
     AutoTestApiTagCreate,
     AutoTestApiTagSelect,
     AutoTestApiTagUpdate
 )
 from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
-from backend.core.exceptions.base_exceptions import (
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,

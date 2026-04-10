@@ -7,45 +7,33 @@
 @DateTime: 2025/1/17 21:55
 """
 import os
-import sys
 import shutil
-from datetime import datetime
+import sys
+import traceback
 from typing import Dict, Any
 
 import tortoise.exceptions
-from loguru import logger
 from aerich import Command
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
+from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
-from starlette.exceptions import HTTPException
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
-from backend import PROJECT_CONFIG
-from backend.configure.logging_config import loguru_logging
+from backend.configure import PROJECT_CONFIG, LOGGER
+from backend.core.middlewares.app_middleware import logging_middleware
+from backend.core.middlewares.auth_middleware import auth_middleware
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
     null_point_exception_handler,
-    app_exception_handler
+    app_exception_handler,
 )
-from backend.core.middlewares.app_middleware import logging_middleware
-from backend.core.middlewares.auth_middleware import auth_middleware
-from backend.services.dependency import DependPermission
 
-
-def register_logging() -> logger:
-    # logging属于同步存在阻塞问题
-    # import logging
-    # from backend.configure.logging_config import DEFAULT_LOGGING_CONFIG
-    # logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
-
-    loguru_logging()
-
-    return logger
+from backend.services import DependPermission
 
 
 async def register_database(app: FastAPI) -> None:
@@ -89,7 +77,7 @@ async def register_database(app: FastAPI) -> None:
     await command.init()
 
     if not PROJECT_CONFIG.aerich_should_run_on_startup:
-        register_logging().warning(
+        LOGGER.warning(
             "跳过 Aerich 数据迁移指令: \n"
             f"操作系统: {PROJECT_CONFIG.SERVER_SYSTEM}, \n"
             f"调试开关: {PROJECT_CONFIG.SERVER_DEBUG}, \n"
@@ -103,9 +91,12 @@ async def register_database(app: FastAPI) -> None:
     try:
         await command.migrate(name="auto_migrate")
     except AttributeError as e:
-        print("无法从数据库中检索模型历史记录，模型历史记录将从头创建")
-        shutil.rmtree(PROJECT_CONFIG.MIGRATION_DIR)
-        await command.init_db(safe=True)
+        LOGGER.error(f"无法从数据库中检索模型历史记录, 请检查[migration]与[aerich]表记录是否一致: {e}\n错误回溯: {traceback.format_exc()}")
+        if PROJECT_CONFIG.aerich_should_run_on_startup:
+            shutil.rmtree(PROJECT_CONFIG.MIGRATION_DIR)
+            await command.init_db(safe=True)
+        else:
+            raise RuntimeError("数据库迁移元数据与本地[migration]不一致, 无法进行迁移, 请手工修复或从备份恢复后再启动应用")
 
     # 应用迁移
     await command.upgrade(run_in_transaction=True)

@@ -6,12 +6,9 @@
 @Module  : user_schema.py
 @DateTime: 2025/1/18 11:58
 """
-import os.path
 from typing import Optional, List
 
-from pydantic import BaseModel, EmailStr, Field, FilePath
-
-from backend import PROJECT_CONFIG
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):

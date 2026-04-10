@@ -19,7 +19,6 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend import LOGGER
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
@@ -40,15 +39,17 @@ from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.common.request.tcp_async_utils import AioTcpClient, TcpFrameMode, AsyncTcpUtils
-from backend.core.exceptions.base_exceptions import (
+from backend.common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
+from backend.configure import LOGGER
+from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     TypeRejectException,
     DataBaseStorageException,
-    DataAlreadyExistsException, ReqInvalidException,
+    DataAlreadyExistsException,
+    ReqInvalidException,
 )
-from backend.core.responses.http_response import (
+from backend.core.responses import (
     BadReqResponse,
     SuccessResponse,
     FailureResponse,
@@ -57,7 +58,7 @@ from backend.core.responses.http_response import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
-from backend.enums.autotest_enum import AutoTestReportType, AutoTestReqArgsType
+from backend.enums import AutoTestReportType, AutoTestReqArgsType
 
 autotest_step = APIRouter()
 

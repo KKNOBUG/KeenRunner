@@ -12,8 +12,8 @@ from tortoise.expressions import Q
 
 from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate, RouterSelect
 from backend.applications.base.services.router_crud import ROUTER_CRUD
-from backend.core.exceptions.base_exceptions import DataAlreadyExistsException, NotFoundException
-from backend.core.responses.http_response import (
+from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
+from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,

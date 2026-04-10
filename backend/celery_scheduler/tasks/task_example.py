@@ -11,8 +11,8 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from backend import GLOBAL_CONFIG
 from backend.celery_scheduler.celery_worker import celery
+from backend.configure import GLOBAL_CONFIG
 
 
 @celery.task
