@@ -290,7 +290,7 @@
                   />
                 </NCollapseItem>
                 <NCollapseItem title="Code (Python)" name="requestCode"
-                               v-if="currentDetail.step_type === '执行代码请求(Python)' && stepInfo.code">
+                               v-if="currentDetail.step_type === '代码请求(Python)' && stepInfo.code">
                   <MonacoEditor
                       :value="stepInfo.code"
                       :options="monacoEditorOptions(true, 'python')"

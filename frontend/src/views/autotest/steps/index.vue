@@ -526,7 +526,7 @@ const stepDefinitions = {
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
   tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:network-4'},
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
-  code: {label: '执行代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
+  code: {label: '代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
 }
@@ -1356,7 +1356,7 @@ const backendTypeToLocal = (step_type) => {
       return 'tcp'
     case 'HTTP请求':
       return 'http'
-    case '执行代码请求(Python)':
+    case '代码请求(Python)':
       return 'code'
     case '条件分支':
       return 'if'
@@ -1587,13 +1587,13 @@ const localTypeToBackend = (localType) => {
     'user_variables': '用户变量',
     'tcp': 'TCP请求',
     'http': 'HTTP请求',
-    'code': '执行代码请求(Python)',
+    'code': '代码请求(Python)',
     'if': '条件分支',
     'loop': '循环结构',
     'wait': '等待控制',
     'quote': '引用公共脚本'
   }
-  return typeMap[localType] || '执行代码请求(Python)'
+  return typeMap[localType] || '代码请求(Python)'
 }
 
 // 按照树的前序遍历顺序分配 step_no（确保唯一且按顺序递增）
@@ -2670,7 +2670,7 @@ const updateStepConfig = (id, config) => {
     } else if (step.type === 'code') {
       // 如果提供了 step_name，使用用户输入的步骤名称
       if (config.step_name !== undefined) {
-        step.name = String(config.step_name).trim() || '执行代码请求(Python)'
+        step.name = String(config.step_name).trim() || '代码请求(Python)'
       }
     } else if (step.type === 'quote' || step.type === 'quote_public_script') {
       if (config.step_name !== undefined && config.step_name !== null) {

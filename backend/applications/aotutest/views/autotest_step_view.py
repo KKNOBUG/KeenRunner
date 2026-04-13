@@ -879,7 +879,7 @@ async def debug_python_code(
     try:
         # 提取请求参数
         code = step_data.code
-        step_name = step_data.step_name or "执行代码请求(Python)调试"
+        step_name = step_data.step_name or "代码请求(Python)调试"
         # defined_variables、session_variables 必须是列表格式
         defined_variables = step_data.defined_variables or []
         session_variables = step_data.session_variables or []
@@ -926,7 +926,7 @@ async def debug_python_code(
                         src = (vc.get("source") or "").strip().lower()
                         if src and src not in ("session_variables", "变量池"):
                             raise StepExecutionError(
-                                "【执行代码请求(Python)】断言数据源仅允许「变量池」: "
+                                "【代码请求(Python)】断言数据源仅允许「变量池」: "
                                 "source 须为 session_variables/变量池"
                             )
 

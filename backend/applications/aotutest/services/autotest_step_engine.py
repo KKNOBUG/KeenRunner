@@ -495,7 +495,7 @@ class StepExecutionContext:
             exec(prepared, safe_globals, local_context)
         except SyntaxError as e:
             error_message: str = (
-                f"【执行代码请求(Python)】代码解析失败: \n"
+                f"【代码请求(Python)】代码解析失败: \n"
                 f"请遵循 Python PEP8 编码规范, \n"
                 f"错误描述: {e}\n"
                 f"错误位置: 第{e.lineno}行, \n"
@@ -506,7 +506,7 @@ class StepExecutionContext:
             raise StepExecutionError(error_message) from e
         except NameError as e:
             error_message: str = (
-                f"【执行代码请求(Python)】代码解析失败: \n"
+                f"【代码请求(Python)】代码解析失败: \n"
                 f"请检查代码中是否引用了未定义的变量或函数, \n"
                 f"错误描述: {e}\n"
                 f"错误类型: {type(e).__name__}, \n"
@@ -516,7 +516,7 @@ class StepExecutionContext:
             raise StepExecutionError(error_message) from e
         except Exception as e:
             error_message: str = (
-                f"【执行代码请求(Python)】代码解析异常: \n"
+                f"【代码请求(Python)】代码解析异常: \n"
                 f"错误描述: {e}, \n"
                 f"错误类型: {type(e).__name__}, \n"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -536,7 +536,7 @@ class StepExecutionContext:
                     result = func()
                 except Exception as e:
                     error_message: str = (
-                        f"【执行代码请求(Python)】代码执行异常: \n"
+                        f"【代码请求(Python)】代码执行异常: \n"
                         f"错误描述: {e}\n"
                         f"错误类型: {type(e).__name__}, \n"
                         f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -546,7 +546,7 @@ class StepExecutionContext:
             else:
                 func_names = ", ".join(functions.keys())
                 error_message: str = (
-                    f"【执行代码请求(Python)】代码执行失败: "
+                    f"【代码请求(Python)】代码执行失败: "
                     f"仅支持定义一个函数作为入口, 当前存在多个函数: {func_names}"
                 )
                 self.log(error_message)
@@ -557,11 +557,11 @@ class StepExecutionContext:
             result = None
 
         if result is None:
-            self.log("【执行代码请求(Python)】代码执行完成, 但无结果")
+            self.log("【代码请求(Python)】代码执行完成, 但无结果")
             return {}
         if not isinstance(result, dict):
             error_message: str = (
-                f"【执行代码请求(Python)】代码执行失败: "
+                f"【代码请求(Python)】代码执行失败: "
                 f"返回值类型不被接受, "
                 f"期望返回类型: Dict[str, Any], "
                 f"实际返回类型: {type(result).__name__}, "
@@ -569,7 +569,7 @@ class StepExecutionContext:
             )
             self.log(error_message)
             raise StepExecutionError(error_message)
-        self.log(f"【执行代码请求(Python)】代码执行完成, 返回结果: {result}")
+        self.log(f"【代码请求(Python)】代码执行完成, 返回结果: {result}")
         return result
 
     @staticmethod
@@ -588,7 +588,7 @@ class StepExecutionContext:
                     root = alias.name.split(".", 1)[0]
                     if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
                         error_message = (
-                            "【执行代码请求(Python)】安全限制: "
+                            "【代码请求(Python)】安全限制: "
                             f"仅允许导入标准库模块: {allowed_cn}；"
                             f"不允许: {alias.name}"
                         )
@@ -596,18 +596,18 @@ class StepExecutionContext:
             elif isinstance(node, ast.ImportFrom):
                 if node.level != 0:
                     error_message = (
-                        "【执行代码请求(Python)】安全限制: 不允许相对导入 (from . / from ..)"
+                        "【代码请求(Python)】安全限制: 不允许相对导入 (from . / from ..)"
                     )
                     raise StepExecutionError(error_message)
                 if not node.module:
                     error_message = (
-                        "【执行代码请求(Python)】安全限制: 不允许此类 from 导入"
+                        "【代码请求(Python)】安全限制: 不允许此类 from 导入"
                     )
                     raise StepExecutionError(error_message)
                 root = node.module.split(".", 1)[0]
                 if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
                     error_message = (
-                        "【执行代码请求(Python)】安全限制: "
+                        "【代码请求(Python)】安全限制: "
                         f"仅允许从以下模块 from 导入: {allowed_cn}；"
                         f"不允许: {node.module}"
                     )
@@ -705,7 +705,7 @@ class StepExecutionContext:
             quote_char = match.group(1)
             var_name = match.group(2)
             if not var_name:
-                self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
+                self.log("【代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
                 # 支持函数占位符: "${generate_phone()}"
@@ -714,10 +714,10 @@ class StepExecutionContext:
                 else:
                     var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 变量或函数({var_name})未定义, 保留原值")
+                self.log(f"【代码请求(Python)】占位符解析失败, 变量或函数({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 引用变量或函数({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【代码请求(Python)】占位符解析失败, 引用变量或函数({var_name})失败, 保留原值, 错误描述: {e}")
                 return match.group(0)
 
             # 在字符串字面量中，替换为合法的 Python 字面量，避免产生无效代码（如 dic["k"] = 邵刚 导致 NameError）
@@ -742,15 +742,15 @@ class StepExecutionContext:
             var_name = match.group(3)
             suffix = match.group(4)
             if not var_name:
-                self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
+                self.log("【代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                self.log(f"【代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
                 return match.group(0)
 
             # 字符串拼接，保持字符串格式
@@ -769,15 +769,15 @@ class StepExecutionContext:
         def replace_code_placeholder(match: re.Match[str]) -> str:
             var_name = match.group(1)
             if not var_name:
-                self.log("【执行代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
+                self.log("【代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                self.log(f"【代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【执行代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
                 return match.group(0)
 
             # 在代码逻辑中，返回值的Python表示
@@ -796,7 +796,7 @@ class StepExecutionContext:
             return resolved_code
         except Exception as e:
             error_message: str = (
-                f"【执行代码请求(Python)】占位符解析异常, 保留原值, "
+                f"【代码请求(Python)】占位符解析异常, 保留原值, "
                 f"错误类型: {type(e).__name__}, "
                 f"错误描述: {e}"
             )
@@ -1684,7 +1684,7 @@ class PythonStepExecutor(BaseStepExecutor):
         try:
             code = self.step.get("code")
             if not code:
-                raise StepExecutionError("【执行代码请求(Python)】缺少必要配置: code")
+                raise StepExecutionError("【代码请求(Python)】缺少必要配置: code")
             try:
                 run_code_st = datetime.now()
                 new_vars = self.context.run_python_code(code, namespace=self.context.clone_state())
@@ -1736,7 +1736,7 @@ class PythonStepExecutor(BaseStepExecutor):
                     if src not in {"session_variables", "变量池"}:
                         allowed = "、".join(sorted({"session_variables", "变量池"}))
                         raise StepExecutionError(
-                            f"【执行代码请求(Python)】断言数据源仅允许「变量池」: source 须为 {allowed}；"
+                            f"【代码请求(Python)】断言数据源仅允许「变量池」: source 须为 {allowed}；"
                             f"当前为 {vc.get('source')!r}"
                         )
 

@@ -20,7 +20,7 @@
         </div>
         <n-input
             v-model:value="form.step_name"
-            placeholder="执行代码请求(Python)"
+            placeholder="代码请求(Python)"
             class="step-name-input"
             :disabled="props.readonly"
         />

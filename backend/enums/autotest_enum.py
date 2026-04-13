@@ -39,7 +39,7 @@ class AutoTestStepType(StringEnum):
     LOOP = "循环结构"
     TCP = "TCP请求"
     HTTP = "HTTP请求"
-    PYTHON = "执行代码请求(Python)"
+    PYTHON = "代码请求(Python)"
     DATABASE = "数据库请求"
     QUOTE = "引用公共脚本"
 
