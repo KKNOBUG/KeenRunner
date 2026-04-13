@@ -29,25 +29,102 @@
         </n-button>
       </div>
 
-      <!-- 使用说明 -->
-      <div class="hint-box">
-        <div class="hint-title">使用说明</div>
-        <div class="hint-content">
-          <p>• 仅可定义单个函数作为入口，系统将<code>自动调用</code>该函数；</p>
-          <p>• 支持函数内部使用 <code>${变量名}</code> 占位符引用上下文变量；</p>
-          <p>• 支持代码调试查看执行结果，如遇异常也会<code>反馈错误消息</code>；</p>
-          <p>• 函数返回的执行结果类型必须是 <code>Dict[str, Any]</code>类型;</p>
-          <p>• 系统会自动的获取该函数执行结果，并添加到<code>会话变量池;</code></p>
-        </div>
-      </div>
-
-      <!-- 代码编辑器 -->
-      <monaco-editor
-          v-model:value="form.code"
-          :options="codeEditorOptions"
-          class="code-editor"
-          style="min-height: 400px; height: auto;"
-      />
+      <n-tabs type="line" animated class="code-tabs">
+        <n-tab-pane name="code" tab="代码">
+          <!-- 使用说明（仅 Code 页） -->
+          <div class="hint-box">
+            <div class="hint-title">使用说明</div>
+            <div class="hint-content">
+              <p>• 仅可定义单个函数作为入口，系统将<code>自动调用</code>该函数；</p>
+              <p>• 支持函数内部使用 <code>${变量名}</code> 占位符引用上下文变量；</p>
+              <p>• 支持代码调试查看执行结果，如遇异常也会<code>反馈错误消息</code>；</p>
+              <p>• 函数返回的执行结果类型必须是 <code>Dict[str, Any]</code>类型;</p>
+              <p>• 系统会自动的获取该函数执行结果，并添加到<code>会话变量池;</code></p>
+              <p>• 「断言」页仅支持从<code>变量池</code>取实际值（变量名为表达式），与 HTTP 步骤中断言列表布局一致。</p>
+            </div>
+          </div>
+          <monaco-editor
+              v-model:value="form.code"
+              :options="codeEditorOptions"
+              class="code-editor"
+              style="min-height: 400px; height: auto;"
+          />
+        </n-tab-pane>
+        <n-tab-pane name="assert_validators" tab="断言">
+          <template #tab>
+            <n-badge :value="validatorsCount" :max="99" show-zero>
+              <span>断言</span>
+            </n-badge>
+          </template>
+          <n-space vertical :size="16">
+            <div v-for="(item, key) in form.assert_validators" :key="key" class="validator-item">
+              <n-card size="small" hoverable>
+                <template #header>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
+                        item.jsonpath || ''
+                      }} )</span>
+                    <n-space>
+                      <n-button text @click="toggleValidatorCollapse(key)" size="small">
+                        <template #icon>
+                          <TheIcon
+                              :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                              :size="18"/>
+                        </template>
+                      </n-button>
+                      <n-button text @click="duplicateValidator(key)" type="info" size="small">
+                        <template #icon>
+                          <TheIcon icon="material-symbols:content-copy" :size="18"/>
+                        </template>
+                      </n-button>
+                      <n-button text @click="removeValidator(key)" type="error" size="small">
+                        <template #icon>
+                          <TheIcon icon="material-symbols:delete-outline" :size="18"/>
+                        </template>
+                      </n-button>
+                    </n-space>
+                  </div>
+                </template>
+                <div v-show="!validatorCollapseState[key]">
+                  <n-form :model="item" label-width="auto" label-placement="left">
+                    <n-form-item label="断言名称">
+                      <n-input v-model:value="item.name" placeholder="请输入断言名称" clearable/>
+                    </n-form-item>
+                    <n-form-item label="断言对象">
+                      <n-select
+                          v-model:value="item.object"
+                          :options="validatorObjectOptions"
+                          placeholder="请选择断言对象"
+                      />
+                    </n-form-item>
+                    <n-form-item label="断言表达式">
+                      <n-space align="center" :wrap-item="false" style="width: 100%;">
+                        <n-input
+                            v-model:value="item.jsonpath"
+                            :placeholder="getValidatorPlaceholder(item.object)"
+                            clearable
+                            style="flex: 1;"
+                        />
+                      </n-space>
+                    </n-form-item>
+                    <n-form-item label="断言操作符">
+                      <n-select
+                          v-model:value="item.assertion"
+                          :options="assertionOptions"
+                          placeholder="请选择断言方法"
+                      />
+                    </n-form-item>
+                    <n-form-item label="断言预期值">
+                      <n-input v-model:value="item.value" placeholder="请输入预期值" clearable/>
+                    </n-form-item>
+                  </n-form>
+                </div>
+              </n-card>
+            </div>
+            <n-button type="primary" @click="addValidator" block dashed>添加断言</n-button>
+          </n-space>
+        </n-tab-pane>
+      </n-tabs>
     </n-card>
 
     <!-- 调试响应结果 Card -->
@@ -56,23 +133,56 @@
         :bordered="true"
         style="width: 100%; margin-top: 16px;"
         class="response-card"
-        :title="`代码调试结果`"
     >
-      <monaco-editor
-          :value="debugResponseText"
-          :options="responseEditorOptions"
-          class="response-editor"
-          style="min-height: 300px; height: auto;"
-          :read-only="true"
-      />
+      <n-tabs type="line" animated class="debug-tabs">
+        <n-tab-pane name="result" tab="结果">
+          <monaco-editor
+              :value="debugResultText"
+              :options="responseEditorOptions"
+              class="response-editor"
+              style="min-height: 300px; height: auto;"
+              :read-only="true"
+          />
+        </n-tab-pane>
+        <n-tab-pane name="assert" tab="断言">
+          <template #tab>
+            <n-badge :value="debugAssertCount" :max="99" show-zero>
+              <span>断言</span>
+            </n-badge>
+          </template>
+          <n-data-table
+              v-if="debugAssertCount > 0"
+              :columns="debugValidatorColumns"
+              :data="debugAssertRows"
+              :bordered="false"
+              size="small"
+          />
+          <n-empty v-else description="暂无断言结果"/>
+        </n-tab-pane>
+      </n-tabs>
     </n-card>
   </div>
 </template>
 
 <script setup>
-import { reactive, watch, nextTick, ref, computed } from 'vue'
-import { NCard, NInput, NButton } from 'naive-ui'
+import { reactive, watch, nextTick, ref, computed, h } from 'vue'
+import {
+  NBadge,
+  NButton,
+  NCard,
+  NDataTable,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NInput,
+  NSelect,
+  NSpace,
+  NTabPane,
+  NTag,
+  NTabs,
+} from 'naive-ui'
 import MonacoEditor from "@/components/monaco/index.vue"
+import TheIcon from "@/components/icon/TheIcon.vue"
 import api from '@/api'
 
 const props = defineProps({
@@ -91,17 +201,51 @@ const emit = defineEmits(['update:config'])
 
 const defaults = {
   step_name: '',
-  code: ''
+  code: '',
+  assert_validators: {}
+}
+
+/** 后端 assert_validators 列表 -> 表单中的字典结构（与 HTTP 控制器一致字段：jsonpath/expr、assertion/operation、value/except_value） */
+function initValidatorsFromBackend(list) {
+  const obj = {}
+  if (!Array.isArray(list) || !list.length) return obj
+  list.forEach((item, i) => {
+    const key = String(i + 1)
+    obj[key] = {
+      name: item.name || '',
+      object: '变量池',
+      jsonpath: item.expr || '',
+      assertion: item.operation || '等于',
+      value: item.except_value != null ? String(item.except_value) : '',
+    }
+  })
+  return obj
+}
+
+/** 表单断言 -> 后端列表（含未填完的草稿，避免 emit 空数组后父组件回写把本地行清空） */
+function buildValidatorsForBackend() {
+  return Object.values(form.assert_validators || {}).map((item) => ({
+    expr: item.jsonpath || '',
+    name: item.name || '',
+    source: '变量池',
+    operation: item.assertion || '等于',
+    except_value: item.value != null ? String(item.value) : '',
+  }))
 }
 
 // 合并config和原始数据
 const mergeConfigAndOriginal = (config, original, stepName) => {
+  const validatorsRaw = config.assert_validators ?? original?.assert_validators
   return {
-    // 优先使用 config.step_name，然后是 step.name，最后是 original.step_name
     step_name: config.step_name !== undefined
         ? config.step_name
         : (stepName || original?.step_name || ''),
-    code: config.code !== undefined ? config.code : (original?.code || '')
+    code: config.code !== undefined
+        ? config.code
+        : (config.script !== undefined ? config.script : (original?.code || '')),
+    assert_validators: initValidatorsFromBackend(
+        Array.isArray(validatorsRaw) ? validatorsRaw : []
+    ),
   }
 }
 
@@ -109,6 +253,82 @@ const form = reactive({
   ...defaults,
   ...mergeConfigAndOriginal(props.config, props.step?.original, props.step?.name)
 })
+
+const validatorCollapseState = reactive({})
+
+const validatorsCount = computed(() => Object.keys(form.assert_validators || {}).length)
+
+// Python 步骤断言仅允许变量池（与后端一致）；选项保留一项避免误选 Response*
+const validatorObjectOptions = [{ label: '变量池', value: '变量池' }]
+
+function getExtractObjectLabel(value) {
+  const opt = validatorObjectOptions.find((o) => o.value === value)
+  return opt ? opt.label : value || '变量池'
+}
+
+function getValidatorPlaceholder(object) {
+  if (object === '变量池') return '请输入变量池中的变量名，如：token'
+  return '请输入变量名'
+}
+
+const assertionOptions = [
+  { label: '等于', value: '等于' },
+  { label: '不等于', value: '不等于' },
+  { label: '大于', value: '大于' },
+  { label: '大于等于', value: '大于等于' },
+  { label: '小于', value: '小于' },
+  { label: '小于等于', value: '小于等于' },
+  { label: '长度等于', value: '长度等于' },
+  { label: '包含', value: '包含' },
+  { label: '不包含', value: '不包含' },
+  { label: '以...开始', value: '以...开始' },
+  { label: '以...结束', value: '以...结束' },
+  { label: '非空', value: '非空' },
+  { label: '为空', value: '为空' },
+]
+
+function getNextValidatorKey() {
+  const keys = Object.keys(form.assert_validators || {})
+      .map((k) => parseInt(k, 10))
+      .filter((k) => !Number.isNaN(k))
+  if (keys.length === 0) return '1'
+  return String(Math.max(...keys) + 1)
+}
+
+// 添加断言
+const addValidator = () => {
+  const key = getNextValidatorKey()
+  form.assert_validators[key] = {
+    name: '',
+    object: '变量池',
+    jsonpath: '',
+    assertion: '等于',
+    value: '',
+  }
+  validatorCollapseState[key] = false
+}
+
+// 删除断言
+const removeValidator = (key) => {
+  delete form.assert_validators[key]
+  delete validatorCollapseState[key]
+}
+
+// 复制断言
+const duplicateValidator = (key) => {
+  const item = form.assert_validators[key]
+  if (item) {
+    const newKey = getNextValidatorKey()
+    form.assert_validators[newKey] = {
+      ...JSON.parse(JSON.stringify(item)),
+      name: item.name ? `${item.name}_副本` : ''
+    }
+    validatorCollapseState[newKey] = validatorCollapseState[key] ?? false
+  }
+}
+function toggleValidatorCollapse(key) {
+  validatorCollapseState[key] = !validatorCollapseState[key]
+}
 
 const monacoEditorOptions = {
   theme: 'vs-dark',
@@ -118,7 +338,6 @@ const monacoEditorOptions = {
   automaticLayout: true,
   minimap: {enabled: true},
   lineNumbers: 'on',
-  wordWrap: 'off',
   scrollBeyondLastLine: false,
   folding: true,
 }
@@ -156,6 +375,72 @@ const debugResponseText = computed(() => {
   }
 })
 
+// 后端调试接口：data = { result: Dict, assert_validators: List }；兼容旧版本直接返回 Dict
+const debugResultData = computed(() => {
+  const d = debugResponse.value
+  if (!d) return {}
+  if (typeof d === 'object' && d.result !== undefined) return d.result || {}
+  return d
+})
+
+const debugAssertRows = computed(() => {
+  const d = debugResponse.value
+  if (!d) return []
+  const list = (typeof d === 'object' && Array.isArray(d.assert_validators)) ? d.assert_validators : []
+  return list
+})
+
+const debugAssertCount = computed(() => debugAssertRows.value.length)
+
+const debugResultText = computed(() => {
+  try {
+    return JSON.stringify(debugResultData.value, null, 2)
+  } catch (e) {
+    return String(debugResultData.value)
+  }
+})
+
+// 断言结果列（复用 HTTP 请求页面断言结果结构）
+const debugValidatorColumns = [
+  { title: '断言名称', key: 'name', width: 120, ellipsis: { tooltip: true } },
+  {
+    title: '断言对象',
+    key: 'source',
+    width: 120,
+    render: (row) => {
+      const sourceMap = { '变量池': '变量池', 'session_variables': '变量池' }
+      return sourceMap[row.source] || row.source
+    }
+  },
+  { title: '断言路径', key: 'expr', width: 130, ellipsis: { tooltip: true } },
+  {
+    title: '结果值',
+    key: 'actual_value',
+    width: 150,
+    ellipsis: { tooltip: true },
+    render: (row) => (row.actual_value === null || row.actual_value === undefined) ? '-' : String(row.actual_value)
+  },
+  { title: '断言方式', key: 'operation', width: 100 },
+  {
+    title: '期望值',
+    key: 'except_value',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => (row.except_value === null || row.except_value === undefined) ? '-' : String(row.except_value)
+  },
+  {
+    title: '断言结果',
+    key: 'success',
+    width: 100,
+    render: (row) => h(NTag, {
+      type: row.success ? 'success' : 'error',
+      round: true,
+      size: 'small'
+    }, { default: () => row.success ? 'pass' : 'fail' })
+  },
+  { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' }
+]
+
 // 标记是否正在从外部更新，避免循环触发
 let isExternalUpdate = false
 
@@ -167,6 +452,7 @@ watch(
       isExternalUpdate = true
       const merged = mergeConfigAndOriginal(config || {}, original, stepName)
       Object.assign(form, defaults, merged)
+      Object.keys(validatorCollapseState).forEach((k) => delete validatorCollapseState[k])
       // 使用 nextTick 确保在下一个 tick 重置标志
       nextTick(() => {
         isExternalUpdate = false
@@ -177,14 +463,15 @@ watch(
 
 // 监听表单变化，发送更新
 watch(
-    () => [form.step_name, form.code],
+    () => [form.step_name, form.code, form.assert_validators],
     () => {
       // 如果正在从外部更新，不触发 emit
       if (isExternalUpdate) return
 
       emit('update:config', {
         step_name: form.step_name || '',
-        code: form.code || ''
+        code: form.code || '',
+        assert_validators: buildValidatorsForBackend(),
       })
     },
     { deep: true }
@@ -206,7 +493,8 @@ const handleDebug = async () => {
       code: form.code,
       // 后端要求为 List[Dict[str, Any]]，此处调试模式先传空数组
       defined_variables: [],
-      session_variables: []
+      session_variables: [],
+      assert_validators: buildValidatorsForBackend(),
     }
 
     const response = await api.pythonCodeDebugging(requestData)
@@ -294,6 +582,38 @@ const handleDebug = async () => {
   font-family: 'Fira Code', monospace;
   font-size: 14px;
   color: #F4511E;
+}
+
+.code-tabs {
+  margin-top: 4px;
+}
+
+.code-tabs :deep(.n-tab-pane) {
+  padding-top: 12px;
+}
+
+.debug-tabs :deep(.n-tab-pane) {
+  padding-top: 12px;
+}
+
+.validator-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.validator-item {
+  margin-bottom: 1px;
+}
+
+.validator-item :deep(.n-card) {
+  border: 1px solid #e0e0e0;
+}
+
+.validator-item :deep(.n-card-header) {
+  padding: 12px 16px;
+  background-color: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .code-editor {

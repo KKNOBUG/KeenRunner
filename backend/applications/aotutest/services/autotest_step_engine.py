@@ -1678,7 +1678,7 @@ class ConditionStepExecutor(BaseStepExecutor):
 
 
 class PythonStepExecutor(BaseStepExecutor):
-    """Python 代码步骤执行器：执行 code，将返回的 dict 写入 extract_variables 与 response。"""
+    """Python 代码步骤执行器：执行 code，将返回的 dict 写入 extract_variables 与 response；可选仅变量池断言。"""
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
@@ -1718,6 +1718,65 @@ class PythonStepExecutor(BaseStepExecutor):
                     }
                 except Exception as e:
                     raise StepExecutionError(f"【执行代码(Python)】写入提取结果失败: {e}") from e
+
+            assert_validators = self.step.get("assert_validators")
+            if assert_validators:
+                if not isinstance(assert_validators, list):
+                    raise StepExecutionError(
+                        f"【断言验证】表达式列表解析失败: "
+                        f"参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
+                        f"但得到[{type(assert_validators)}]类型"
+                    )
+                for vc in assert_validators:
+                    if not isinstance(vc, dict):
+                        continue
+                    if vc.get("source") is None:
+                        continue
+                    src = str(vc.get("source")).strip().lower()
+                    if src not in {"session_variables", "变量池"}:
+                        allowed = "、".join(sorted({"session_variables", "变量池"}))
+                        raise StepExecutionError(
+                            f"【执行代码请求(Python)】断言数据源仅允许「变量池」: source 须为 {allowed}；"
+                            f"当前为 {vc.get('source')!r}"
+                        )
+
+                def _python_variable_pool_lookup(expr: str) -> Any:
+                    """仅会话变量池 + 本步 Python 返回值（尚未合并入 session 前也可被断言）。"""
+                    if new_vars and expr in new_vars:
+                        return new_vars[expr]
+                    for item in self.context.session_variables:
+                        if isinstance(item, dict) and item.get("key") == expr:
+                            return item.get("value")
+                    raise KeyError(
+                        f"【获取变量】变量({expr})未定义, 请检查变量名是否正确, "
+                        f"或确认变量是否已在变量池或本步骤代码返回值中"
+                    )
+
+                try:
+                    validator_results = AutoTestToolService.run_assert_validators(
+                        assert_validators=assert_validators,
+                        response_text=None,
+                        response_json=None,
+                        response_headers=None,
+                        response_cookies=None,
+                        session_variables_lookup=_python_variable_pool_lookup,
+                        log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                    )
+                    result.assert_validators.extend(validator_results)
+                    assert_failed_number: int = sum(
+                        1 for valid in validator_results if not valid.get("success", True)
+                    )
+                    if assert_failed_number > 0:
+                        error_message: str = (
+                            f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过, 详情见报告明细"
+                        )
+                        raise StepExecutionError(error_message)
+                except StepExecutionError:
+                    raise
+                except Exception as e:
+                    error_message: str = f"【断言验证】在运行断言检查时发生异常, 错误详情: {e}"
+                    self.context.log(error_message, step_code=self.step_code)
+                    raise StepExecutionError(error_message) from e
         except StepExecutionError:
             raise
         except Exception as e:

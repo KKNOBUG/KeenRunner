@@ -883,10 +883,13 @@ async def debug_python_code(
         # defined_variables、session_variables 必须是列表格式
         defined_variables = step_data.defined_variables or []
         session_variables = step_data.session_variables or []
+        assert_validators = step_data.assert_validators or []
         if not isinstance(defined_variables, list):
             defined_variables = []
         if not isinstance(session_variables, list):
             session_variables = []
+        if assert_validators and not isinstance(assert_validators, list):
+            assert_validators = []
 
         # 合并变量到执行上下文（列表格式）
         # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）
@@ -913,9 +916,53 @@ async def debug_python_code(
         ) as context:
             try:
                 # 执行Python代码
-                new_vars = context.run_python_code(code, namespace=context.clone_state())
+                debugging_result: Dict[str, Any] = {}
+                validator_result: List[Dict[str, Any]] = []
+                executive_result: Dict[str, Any] = context.run_python_code(code, namespace=context.clone_state())
+                if assert_validators:
+                    for vc in assert_validators:
+                        if not isinstance(vc, dict):
+                            continue
+                        src = (vc.get("source") or "").strip().lower()
+                        if src and src not in ("session_variables", "变量池"):
+                            raise StepExecutionError(
+                                "【执行代码请求(Python)】断言数据源仅允许「变量池」: "
+                                "source 须为 session_variables/变量池"
+                            )
+
+                    def _python_debug_variable_pool_lookup(expr: str):
+                        if executive_result and expr in executive_result:
+                            return executive_result[expr]
+                        for item in context.session_variables:
+                            if isinstance(item, dict) and item.get("key") == expr:
+                                return item.get("value")
+                        raise KeyError(f"【获取变量】变量({expr})未定义")
+
+                    validator_result = AutoTestToolService.run_assert_validators(
+                        assert_validators=assert_validators,
+                        response_text=None,
+                        response_json=None,
+                        response_headers=None,
+                        response_cookies=None,
+                        session_variables_lookup=_python_debug_variable_pool_lookup,
+                        log_callback=lambda msg: context.log(msg),
+                    )
+                    assert_failed_number: int = sum(
+                        1 for valid in validator_result if not valid.get("success", True)
+                    )
+                    if assert_failed_number > 0:
+                        debugging_result = {
+                            "result": executive_result,
+                            "assert_validators": validator_result,
+                            "error": f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过, 详情见报告明细",
+                        }
+                        LOGGER.info(f"Python代码调试失败(断言未通过): {step_name}")
+                        return SuccessResponse(message="Python代码调试失败", data=debugging_result, total=1)
+
+                debugging_result["result"] = executive_result
+                debugging_result["assert_validators"] = validator_result
                 LOGGER.info(f"Python代码调试成功: {step_name}")
-                return SuccessResponse(message="Python代码调试成功", data=new_vars, total=1)
+                return SuccessResponse(message="Python代码调试成功", data=debugging_result, total=1)
             except StepExecutionError as e:
                 # 构建失败响应
                 response_data = {"error": str(e)}

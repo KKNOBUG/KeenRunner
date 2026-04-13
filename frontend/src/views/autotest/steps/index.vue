@@ -1470,7 +1470,8 @@ const mapBackendStep = (step) => {
   } else if (localType === 'code') {
     base.config = {
       step_name: step.step_name || '',
-      script: step.code || ''
+      code: step.code || '',
+      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : []
     }
   } else if (localType === 'tcp') {
     // TCP：请求体仅编辑器格式化；落库为 raw + request_text；兼容历史 json 步骤
@@ -1748,6 +1749,17 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
   } else if (step.type === 'code') {
     backendStep.code = config.code !== undefined ? config.code : (original.code || '')
+    if (config.assert_validators !== undefined) {
+      backendStep.assert_validators = Array.isArray(config.assert_validators)
+          ? config.assert_validators
+          : (config.assert_validators ? [config.assert_validators] : null)
+    } else if (original.assert_validators) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators)
+          ? original.assert_validators
+          : (original.assert_validators ? [original.assert_validators] : null)
+    } else {
+      backendStep.assert_validators = null
+    }
   } else if (step.type === 'loop') {
     // 循环模式必填（与 loop_controller 默认一致）
     backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'

@@ -333,20 +333,6 @@
                             clearable
                             style="flex: 1;"
                         />
-                        <n-button text type="primary" @click="continueExtractValidator(key)">
-                          继续提取
-                          <template #icon>
-                            <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
-                          </template>
-                        </n-button>
-                        <n-switch v-model:value="item.continueExtract" size="small"/>
-                        <n-input-number v-model:value="item.extractIndex" :min="0" size="small" style="width: 80px;"/>
-                        <n-tooltip trigger="hover">
-                          <template #trigger>
-                            <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;"/>
-                          </template>
-                          0 表示第1项，1表示第2项，-1表示倒数第1项，-2表示倒数第2项，以此类推
-                        </n-tooltip>
                       </n-space>
                     </n-form-item>
                     <n-form-item label="断言操作符">
