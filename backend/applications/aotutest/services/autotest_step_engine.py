@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import ast
 import asyncio
+import builtins as _builtins_module
 import copy
 import json
 import random
 import re
 import time
 import traceback
+import types
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -14,7 +17,6 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 from urllib.parse import quote, unquote
 
 import httpx
-import requests
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo, AutoTestApiCaseInfo
 from backend.applications.aotutest.models.autotest_model import unique_identify
@@ -41,6 +43,34 @@ _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
 _RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
 # 3.匹配同一引号内的拼接，如: "prefix_${var}_suffix"
 _RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
+
+# 用户 Python 步骤：允许的 import 根名 → 预注入 builtins（单一配置；扩展时只改此处）
+# 注：datetime 预绑定为 datetime 类（兼容直接写 datetime.now()）；import datetime 仍得到标准库模块
+_USER_CODE_EXTRA_BUILTINS: Dict[str, Any] = {
+    "random": random,
+    "time": time,
+    "datetime": datetime,
+}
+_USER_CODE_ALLOWED_IMPORT_ROOTS = frozenset(_USER_CODE_EXTRA_BUILTINS.keys())
+_builtin_import = _builtins_module.__import__
+
+
+def _safe_user_code_import(
+        name: str,
+        globals: Optional[Dict[str, Any]] = None,
+        locals: Optional[Dict[str, Any]] = None,
+        fromlist: Tuple[Any, ...] = (),
+        level: int = 0,
+) -> Any:
+    """供 exec 使用的 __import__：仅加载白名单根模块，禁止相对导入。"""
+    if level != 0:
+        raise ImportError("不允许在用户代码中使用相对导入")
+    root = name.partition(".")[0]
+
+    if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
+        allowed = "、".join(sorted(_USER_CODE_ALLOWED_IMPORT_ROOTS))
+        raise ImportError(f"不允许导入模块 {name!r}，仅允许: {allowed}")
+    return _builtin_import(name, globals, locals, fromlist, level)
 
 
 class StepExecutionError(Exception):
@@ -420,16 +450,23 @@ class StepExecutionContext:
     def run_python_code(self, code: str, *, namespace: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         在受限内置与 namespace 下执行 code，支持单函数定义或 result 变量。
+        import/from 仅允许 _USER_CODE_EXTRA_BUILTINS 中的根名；其余模块不可导入；另可使用 safe_globals 中其它内置名及 namespace 变量。
         :param code: Python 代码字符串，可为单行或多行。
-        :param namespace: 执行时的局部命名空间（如变量字典），可选。
+        :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过 __builtins__ 注入。
         :return: 代码中定义的 result 或单函数返回的 dict；无结果时返回空字典。
         """
-        if not code: return {}
+        if not code:
+            return {}
         resolved_code = self.resolve_code_placeholders(code)
         prepared = self.normalize_python_code(resolved_code)
+        try:
+            self._validate_user_python_restricted(prepared)
+        except StepExecutionError as e:
+            self.log(str(e))
+            raise
         safe_globals = {
             "__builtins__": {
-                "__import__": __import__,
+                "__import__": _safe_user_code_import,
                 "len": len,
                 "range": range,
                 "min": min,
@@ -446,14 +483,12 @@ class StepExecutionContext:
                 "tuple": tuple,
                 "set": set,
                 "print": print,
-                "random": random,
-                "time": time,
-                "datetime": datetime,
-                "requests": requests,
+                **_USER_CODE_EXTRA_BUILTINS,
             }
         }
         local_context: Dict[str, Any] = {}
         if namespace:
+            namespace.pop("__builtins__", None)
             local_context.update(namespace)
 
         try:
@@ -489,7 +524,11 @@ class StepExecutionContext:
             self.log(error_message)
             raise StepExecutionError(error_message) from e
 
-        functions = {name: obj for name, obj in local_context.items() if callable(obj)}
+        functions = {
+            name: obj
+            for name, obj in local_context.items()
+            if isinstance(obj, types.FunctionType)
+        }
         if functions:
             if len(functions) == 1:
                 try:
@@ -532,6 +571,47 @@ class StepExecutionContext:
             raise StepExecutionError(error_message)
         self.log(f"【执行代码请求(Python)】代码执行完成, 返回结果: {result}")
         return result
+
+    @staticmethod
+    def _validate_user_python_restricted(source: str) -> None:
+        """
+        import/from 仅允许 _USER_CODE_EXTRA_BUILTINS 中的根名（与 _safe_user_code_import 一致）；语法错误留给 exec。
+        """
+        allowed_cn = "、".join(sorted(_USER_CODE_ALLOWED_IMPORT_ROOTS))
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".", 1)[0]
+                    if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
+                        error_message = (
+                            "【执行代码请求(Python)】安全限制: "
+                            f"仅允许导入标准库模块: {allowed_cn}；"
+                            f"不允许: {alias.name}"
+                        )
+                        raise StepExecutionError(error_message)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level != 0:
+                    error_message = (
+                        "【执行代码请求(Python)】安全限制: 不允许相对导入 (from . / from ..)"
+                    )
+                    raise StepExecutionError(error_message)
+                if not node.module:
+                    error_message = (
+                        "【执行代码请求(Python)】安全限制: 不允许此类 from 导入"
+                    )
+                    raise StepExecutionError(error_message)
+                root = node.module.split(".", 1)[0]
+                if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
+                    error_message = (
+                        "【执行代码请求(Python)】安全限制: "
+                        f"仅允许从以下模块 from 导入: {allowed_cn}；"
+                        f"不允许: {node.module}"
+                    )
+                    raise StepExecutionError(error_message)
 
     @staticmethod
     def normalize_python_code(code: str) -> str:
