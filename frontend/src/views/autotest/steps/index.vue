@@ -344,7 +344,9 @@
                             <span class="step-number">#{{ idx + 1 }}</span>
                           </span>
                         </div>
-                        <div v-if="!getQuoteStepsFlattened(quoteStepsMap[step.id] || []).length" class="quote-inner-empty">暂无步骤</div>
+                        <div v-if="!getQuoteStepsFlattened(quoteStepsMap[step.id] || []).length"
+                             class="quote-inner-empty">暂无步骤
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -447,7 +449,8 @@
             </QueryBarItem>
           </template>
         </CrudTable>
-        <div v-if="scriptDrawerMode === 'copy'" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--n-border-color);">
+        <div v-if="scriptDrawerMode === 'copy'"
+             style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--n-border-color);">
           <span>已选 {{ selectedForCopy.length }} 个脚本</span>
           <n-button type="primary" :disabled="selectedForCopy.length === 0" @click="confirmCopySteps">
             确定复制
@@ -482,7 +485,7 @@
 </template>
 
 <script setup>
-defineOptions({ name: '步骤编辑' })
+defineOptions({name: '步骤编辑'})
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
@@ -516,16 +519,16 @@ import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import CrudTable from '@/components/table/CrudTable.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
-import {useUserStore, useAutotestStore} from '@/store';
+import {useAutotestStore, useUserStore} from '@/store';
 
 // 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致
 const stepDefinitions = {
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
-  if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
+  if: {label: '条件分支', allowChildren: true, icon: 'tabler:brand-stackshare'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:network-4'},
-  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-plump:web'},
+  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-plump:web'},
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
@@ -654,9 +657,9 @@ const quotePublicScriptQueryItems = ref({
 
 // 复制模式用例类型选项（支持全部、公共脚本、用户脚本）
 const caseTypeOptionsForCopy = [
-  { label: '全部', value: '' },
-  { label: '公共脚本', value: '公共脚本' },
-  { label: '用户脚本', value: '用户脚本' }
+  {label: '全部', value: ''},
+  {label: '公共脚本', value: '公共脚本'},
+  {label: '用户脚本', value: '用户脚本'}
 ]
 
 // 请求前规范化入参：quote 模式仅查公共脚本；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
@@ -675,7 +678,7 @@ const getScriptListForDrawer = (params) => {
 }
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
-  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
+  const config = {quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本'}
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
@@ -729,7 +732,7 @@ const confirmCopySteps = async () => {
   let lastInsertedId = null
   try {
     for (const row of rows) {
-      const res = await api.copyCaseStepTree({ case_id: row.case_id })
+      const res = await api.copyCaseStepTree({case_id: row.case_id})
       const stepsData = res?.data?.steps || res?.steps || []
       const mapped = stepsData.map(mapBackendStep).filter(Boolean)
       for (const step of mapped) {
@@ -1197,16 +1200,16 @@ const forEachStep = (list, fn) => {
 /** 加载单个引用步骤对应的公共脚本步骤树（仅用于展示，不写入当前用例） */
 const loadQuoteStepsForStep = async (step) => {
   if (step.type !== 'quote' || !step.config?.quote_case_id) {
-    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
+    quoteStepsMap.value = {...quoteStepsMap.value, [step.id]: []}
     return
   }
   try {
-    const res = await api.getAutoTestStepTree({ case_id: step.config.quote_case_id })
+    const res = await api.getAutoTestStepTree({case_id: step.config.quote_case_id})
     const data = Array.isArray(res?.data) ? res.data : []
-    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: data.map(mapBackendStep).filter(Boolean) }
+    quoteStepsMap.value = {...quoteStepsMap.value, [step.id]: data.map(mapBackendStep).filter(Boolean)}
   } catch (e) {
     console.error('加载引用脚本步骤失败', e)
-    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
+    quoteStepsMap.value = {...quoteStepsMap.value, [step.id]: []}
   }
 }
 
@@ -1243,7 +1246,7 @@ const fillQuoteStepsMapFromRawData = (rawList, mappedList) => {
 const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
   if (!list || !Array.isArray(list)) return out
   for (const step of list) {
-    out.push({ step, depth })
+    out.push({step, depth})
     if (step.children && step.children.length) {
       getQuoteStepsFlattened(step.children, depth + 1, out)
     }
@@ -1261,7 +1264,7 @@ const parseQuoteInnerKey = (key) => {
   const quoteStepId = rest.slice(0, colon)
   const flatIndex = parseInt(rest.slice(colon + 1), 10)
   if (Number.isNaN(flatIndex)) return null
-  return { quoteStepId, flatIndex }
+  return {quoteStepId, flatIndex}
 }
 
 /** 根据 quote-inner key 解析出对应的步骤对象（用于右侧只读展示） */
@@ -1272,7 +1275,7 @@ const getQuoteInnerStep = (key) => {
   const flat = getQuoteStepsFlattened(list)
   const item = flat[parsed.flatIndex]
   if (!item) return null
-  return { ...item.step, isQuoteInner: true }
+  return {...item.step, isQuoteInner: true}
 }
 
 /** 前序遍历步骤树，得到扁平列表（用于计算当前步骤之前的可用变量） */
@@ -2187,7 +2190,7 @@ const loadEnvNames = async () => {
   try {
     const res = await api.getApiEnvNames()
     const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({ label: name, value: name }))
+    envOptions.value = list.map((name) => ({label: name, value: name}))
     if (envOptions.value.length > 0 && !selectedEnvName.value) {
       selectedEnvName.value = envOptions.value[0].value
     }
@@ -2279,7 +2282,8 @@ const loadSteps = async () => {
       try {
         const caseInfo = JSON.parse(caseInfoStr)
         if (loadStepsFromCopy(caseInfo)) return
-      } catch (_) {}
+      } catch (_) {
+      }
     }
     steps.value = []
     selectedKeys.value = []
@@ -2307,7 +2311,7 @@ const loadSteps = async () => {
     steps.value = mappedSteps
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
     loadQuoteStepsForAllQuoteSteps()
-    autotestStore.setStepTreeCache(caseId.value, caseCode.value, { rawData: data, steps: mappedSteps })
+    autotestStore.setStepTreeCache(caseId.value, caseCode.value, {rawData: data, steps: mappedSteps})
   } catch (error) {
     console.error('Failed to load step tree', error)
     steps.value = []
@@ -2513,7 +2517,7 @@ const removeAllQuoteSteps = () => {
     }
   })
   quoteIds.forEach((id) => {
-    quoteStepsMap.value = { ...quoteStepsMap.value, [id]: [] }
+    quoteStepsMap.value = {...quoteStepsMap.value, [id]: []}
   })
   if (quoteIds.includes(selectedKeys.value?.[0])) {
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
@@ -2551,7 +2555,7 @@ const restoreStashedQuoteSteps = () => {
     if (pa !== pb) return String(pa).localeCompare(String(pb))
     return a.index - b.index
   })
-  for (const { step, parentId, index } of sorted) {
+  for (const {step, parentId, index} of sorted) {
     const list = parentId === null ? steps.value : (findStep(parentId)?.children || null)
     if (!list) continue
     const safeIndex = Math.min(index, list.length)
@@ -2691,6 +2695,7 @@ const getStepIconClass = (type) => {
     loop: 'icon-loop',
     code: 'icon-code',
     http: 'icon-http',
+    tcp: 'icon-tcp',
     if: 'icon-if',
     wait: 'icon-wait',
     user_variables: 'icon-user_variables',
@@ -3657,16 +3662,20 @@ const RecursiveStepChildren = defineComponent({
   color: #3363e0;
 }
 
+:deep(.step-icon.icon-tcp) {
+  color: #3363e0;
+}
+
 :deep(.step-icon.icon-if) {
   color: #F4511E;
 }
 
 :deep(.step-icon.icon-wait) {
-  color: #48d024;
+  color: #FF9933;
 }
 
 :deep(.step-icon.icon-user_variables) {
-  color: #FF69B4;
+  color: #F4511E;
 }
 
 :deep(.step-icon.icon-quote) {
@@ -3695,9 +3704,11 @@ const RecursiveStepChildren = defineComponent({
   border-left: 2px solid #18a058;
   padding-left: 8px;
 }
+
 :deep(.quote-inner-list) {
   margin-top: 6px;
 }
+
 :deep(.quote-inner-item) {
   padding: 4px 8px;
   margin-bottom: 2px;
@@ -3706,17 +3717,21 @@ const RecursiveStepChildren = defineComponent({
   cursor: pointer;
   border: none;
 }
+
 :deep(.quote-inner-item:hover) {
   background: rgba(24, 160, 88, 0.12);
 }
+
 :deep(.quote-inner-item .step-name) {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 :deep(.quote-inner-item .step-number) {
   margin-left: auto;
 }
+
 :deep(.quote-inner-empty) {
   font-size: 12px;
   color: #999;
