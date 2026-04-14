@@ -903,17 +903,8 @@ async def debug_python_code(
         initial_variables = list(merged_variables.values())
 
         # 创建执行上下文（使用虚拟的case_id和case_code）
-        from backend.applications.aotutest.services.autotest_step_engine import (
-            StepExecutionContext,
-            StepExecutionError
-        )
-
-        # 创建执行上下文
-        async with StepExecutionContext(
-                case_id=0,  # 调试模式使用虚拟ID
-                case_code="DEBUG",
-                initial_variables=initial_variables,
-        ) as context:
+        from backend.applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError
+        async with StepExecutionContext(case_id=0, case_code="DEBUG", initial_variables=initial_variables) as context:
             try:
                 # 执行Python代码
                 debugging_result: Dict[str, Any] = {}
@@ -965,9 +956,9 @@ async def debug_python_code(
                 return SuccessResponse(message="Python代码调试成功", data=debugging_result, total=1)
             except StepExecutionError as e:
                 # 构建失败响应
-                response_data = {"error": str(e)}
+                debugging_result["error"] = str(e)
                 LOGGER.error(f"【Python代码调试】失败, 错误回溯: {traceback.format_exc()}")
-                return SuccessResponse(message="Python代码调试失败", data=response_data, total=1)
+                return SuccessResponse(message="Python代码调试失败", data=debugging_result, total=1)
 
     except Exception as e:
         response_data = {

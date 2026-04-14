@@ -27,6 +27,11 @@ class AutoTestApiDetailBase(BaseModel):
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
     num_cycles: Optional[int] = Field(default=None, le=100, description="循环执行次数(第几次)")
 
+    request_url: Optional[str] = Field(default=None, max_length=2048, description="本次执行使用的请求地址(快照)")
+    request_port: Optional[str] = Field(default=None, max_length=16, description="本次执行使用的请求端口(快照)")
+    request_method: Optional[str] = Field(default=None, max_length=16, description="本次执行使用的请求方法(快照)")
+    request_args_type: Optional[Any] = Field(default=None, description="本次执行使用的请求参数类型(快照)")
+    request_project_id: Optional[int] = Field(default=None, ge=1, description="本次执行使用的请求应用ID(快照)")
     request_header: NON_DICT_TYPE = Field(default=None, description="实际发出的请求头")
     request_params: NON_DICT_TYPE = Field(default=None, description="实际发出的请求参数")
     request_form_data: NON_DICT_TYPE = Field(default=None, description="实际发出的表单数据")
@@ -34,6 +39,19 @@ class AutoTestApiDetailBase(BaseModel):
     request_form_file: NON_DICT_TYPE = Field(default=None, description="实际发出的表单文件项")
     request_body: NON_DICT_TYPE = Field(default=None, description="实际发出的请求体(JSON)")
     request_text: Optional[str] = Field(default=None, description="实际发出的请求体(Raw)")
+
+    code: Optional[str] = Field(default=None, description="本次执行使用的代码(Python)(快照)")
+    wait: Optional[float] = Field(default=None, ge=0, description="本次执行等待时间(快照)")
+    loop_mode: Optional[Any] = Field(default=None, description="本次执行循环模式(快照)")
+    loop_maximums: Optional[int] = Field(default=None, ge=1, description="本次执行最大循环次数(快照)")
+    loop_interval: Optional[float] = Field(default=None, ge=0, description="本次执行循环间隔(快照)")
+    loop_iterable: Optional[str] = Field(default=None, max_length=512, description="本次执行循环对象来源(快照)")
+    loop_iter_idx: Optional[str] = Field(default=None, max_length=64, description="本次执行循环索引变量名(快照)")
+    loop_iter_key: Optional[str] = Field(default=None, max_length=64, description="本次执行循环字典键变量名(快照)")
+    loop_iter_val: Optional[str] = Field(default=None, max_length=64, description="本次执行循环值变量名(快照)")
+    loop_on_error: Optional[Any] = Field(default=None, description="本次执行循环错误策略(快照)")
+    loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时(快照)")
+    conditions: NON_DICT_TYPE = Field(default=None, description="本次执行条件/循环判断条件(快照)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
     dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称(参数化)")

@@ -471,7 +471,7 @@ class AutoTestToolService:
                 raise ValueError(f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量")
             return val
 
-        raise ValueError(f"【{operation_type}】源类型 {source} 不被支持")
+        raise ValueError(f"【{operation_type}】数据源源类型 {source} 不被支持")
 
     @classmethod
     def run_extract_variables(
@@ -597,8 +597,7 @@ class AutoTestToolService:
         if not isinstance(assert_validators, list):
             if log_callback:
                 log_callback(
-                    f"【断言验证】表达式列表解析失败: "
-                    f"参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
+                    f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
                     f"但得到[{type(assert_validators)}]类型"
                 )
             return validator_results

@@ -302,7 +302,12 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     step_exec_logger = fields.TextField(null=True, description="步骤执行日志")
     step_exec_except = fields.TextField(null=True, description="步骤错误描述")
 
-    # 请求相关（实际发出的请求，格式与 http_debugging 一致，供报告展示与复现）
+    # 请求相关（实际发出的请求）
+    request_url = fields.CharField(max_length=2048, null=True, description="实际发出的请求地址")
+    request_port = fields.CharField(max_length=16, null=True, description="实际发出的请求端口")
+    request_method = fields.CharField(max_length=16, null=True, description="实际发出的请求方法")
+    request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="实际发出的请求参数类型")
+    request_project_id = fields.BigIntField(null=True, description="实际发出的请求应用ID")
     request_header = fields.JSONField(null=True, description="实际发出的请求头(列表 key/value/desc)")
     request_params = fields.JSONField(null=True, description="实际发出的请求参数(列表 key/value/desc)")
     request_form_data = fields.JSONField(null=True, description="实际发出的表单数据(列表 key/value/desc)")
@@ -316,7 +321,19 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     response_body = fields.JSONField(null=True, description="响应信息(body)")
     response_text = fields.TextField(null=True, description="响应信息(text)")
     response_elapsed = fields.CharField(max_length=16, null=True, description="响应信息(elapsed)")
-
+    # 逻辑相关
+    code = fields.TextField(null=True, description="本次执行使用的代码(Python)(快照)")
+    wait = fields.FloatField(ge=0, null=True, description="本次执行等待时间(快照)")
+    loop_mode = fields.CharEnumField(AutoTestLoopMode, default=None, null=True, description="本次执行循环模式(快照)")
+    loop_maximums = fields.IntField(ge=1, null=True, description="本次执行最大循环次数(快照)")
+    loop_interval = fields.FloatField(ge=0, null=True, description="本次执行循环间隔(快照)")
+    loop_iterable = fields.CharField(max_length=512, null=True, description="本次执行循环对象来源(快照)")
+    loop_iter_idx = fields.CharField(max_length=64, null=True, description="本次执行循环索引变量名(快照)")
+    loop_iter_key = fields.CharField(max_length=64, null=True, description="本次执行循环字典键变量名(快照)")
+    loop_iter_val = fields.CharField(max_length=64, null=True, description="本次执行循环值变量名(快照)")
+    loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="本次执行循环错误策略(快照)")
+    loop_timeout = fields.FloatField(ge=0, null=True, description="本次执行条件循环超时(快照)")
+    conditions = fields.JSONField(null=True, description="本次执行条件/循环判断条件(快照)")
     # 变量相关
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
