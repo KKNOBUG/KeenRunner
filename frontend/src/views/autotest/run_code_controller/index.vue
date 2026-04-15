@@ -489,8 +489,9 @@ const handleDebug = async () => {
 
   try {
     const requestData = {
-      step_name: form.step_name || 'Python代码调试',
+      step_name: form.step_name || '代码请求(Python)',
       code: form.code,
+      request_args_type: 'raw',
       // 后端要求为 List[Dict[str, Any]]，此处调试模式先传空数组
       defined_variables: [],
       session_variables: [],

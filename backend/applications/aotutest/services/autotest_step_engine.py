@@ -450,13 +450,15 @@ class StepExecutionContext:
             self.log(str(e))
             raise StepExecutionError(str(e)) from e
 
-    def run_python_code(self, code: str, *, namespace: Optional[Dict[str, Any]] = None, step_result: StepExecutionResult = None) -> Dict[str, Any]:
+    def run_python_code(
+            self, code: str, *, namespace: Optional[Dict[str, Any]] = None, step_result: Optional[StepExecutionResult] = None
+    ) -> Dict[str, Any]:
         """
         在受限内置与 namespace 下执行 code，支持单函数定义或 result 变量。
         import/from 仅允许 _USER_CODE_EXTRA_BUILTINS 中的根名；其余模块不可导入；另可使用 safe_globals 中其它内置名及 namespace 变量。
         :param code: Python 代码字符串，可为单行或多行。
         :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过 __builtins__ 注入。
-        :param step_result: 可选；传入时写入其 request，记录实际执行的代码与命名空间（与 HTTP/TCP 落库一致）。
+        :param step_result: 可选；传入时写入其 request，记录实际执行代码快照（当前以规范化后的 code 为主）。
         :return: 代码中定义的 result 或单函数返回的 dict；无结果时返回空字典。
         """
         if not code:
@@ -475,22 +477,53 @@ class StepExecutionContext:
         safe_globals = {
             "__builtins__": {
                 "__import__": _safe_user_code_import,
-                "len": len,
-                "range": range,
-                "min": min,
-                "max": max,
-                "sum": sum,
-                "abs": abs,
-                "round": round,
-                "int": int,
-                "float": float,
-                "str": str,
+                # 基础类型
                 "bool": bool,
-                "list": list,
+                "bytes": bytes,
+                "bytearray": bytearray,
                 "dict": dict,
-                "tuple": tuple,
+                "float": float,
+                "frozenset": frozenset,
+                "int": int,
+                "list": list,
                 "set": set,
+                "str": str,
+                "tuple": tuple,
+                # 数学运算
+                "abs": abs,
+                "divmod": divmod,
+                "max": max,
+                "min": min,
+                "pow": pow,
+                "round": round,
+                "sum": sum,
+                # 进制/编码转换
+                "bin": bin,
+                "chr": chr,
+                "hex": hex,
+                "oct": oct,
+                "ord": ord,
+                # 迭代/序列操作
+                "all": all,
+                "any": any,
+                "enumerate": enumerate,
+                "filter": filter,
+                "len": len,
+                "map": map,
+                "range": range,
+                "reversed": reversed,
+                "sorted": sorted,
+                "zip": zip,
+                # 类型判断
+                "callable": callable,
+                "hash": hash,
+                "id": id,
+                "isinstance": isinstance,
+                "issubclass": issubclass,
+                "type": type,
+                # 输出/调试
                 "print": print,
+                "repr": repr,
                 **_USER_CODE_EXTRA_BUILTINS,
             }
         }
@@ -1768,15 +1801,10 @@ class PythonStepExecutor(BaseStepExecutor):
                     if source not in {"session_variables", "变量池"}:
                         raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
 
-                def _python_variable_pool_lookup(expr: str) -> Any:
-                    """仅会话变量池 + 本步 Python 返回值（尚未合并入 session 前也可被断言）。"""
-                    if executive_result and expr in executive_result:
-                        return executive_result[expr]
-                    for item in self.context.session_variables:
-                        if isinstance(item, dict) and item.get("key") == expr:
-                            return item.get("value")
-                    raise KeyError(f"【获取变量】变量({expr})未定义, 请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
-
+                # 变量池快照：defined -> session -> 本步执行结果（后者优先级最高），支持 session/source 的 JSONPath 断言
+                python_session_lookup: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
+                python_session_lookup.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+                python_session_lookup.update(executive_result or {})
                 try:
                     validator_results = AutoTestToolService.run_assert_validators(
                         assert_validators=assert_validators,
@@ -1784,7 +1812,7 @@ class PythonStepExecutor(BaseStepExecutor):
                         response_json=None,
                         response_headers=None,
                         response_cookies=None,
-                        session_variables_lookup=_python_variable_pool_lookup,
+                        session_variables_lookup=python_session_lookup,
                         log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                     )
                     result.assert_validators.extend(validator_results)
@@ -2199,6 +2227,8 @@ class TcpStepExecutor(BaseStepExecutor):
             # ----------------------------
             # 4) 变量提取 / 断言（复用 HTTP 逻辑）
             # ----------------------------
+            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
+            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
             try:
                 extract_variables = self.step.get("extract_variables")
                 if extract_variables and not isinstance(extract_variables, list):
@@ -2208,11 +2238,11 @@ class TcpStepExecutor(BaseStepExecutor):
                     )
                 _, extract_results_list = AutoTestToolService.run_extract_variables(
                     extract_variables=extract_variables or [],
-                    response_text=result.response.get("text") if result.response else None,
+                    response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
                     response_headers=None,
                     response_cookies=None,
-                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 result.extract_variables = extract_results_list
@@ -2230,22 +2260,22 @@ class TcpStepExecutor(BaseStepExecutor):
                     )
                 validator_results = AutoTestToolService.run_assert_validators(
                     assert_validators=assert_validators or [],
-                    response_text=result.response.get("text") if result.response else None,
+                    response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
                     response_headers=None,
                     response_cookies=None,
-                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 # 参数化驱动：assert_head（响应头键）、assert_body（响应 JSONPath）
                 AutoTestToolService.append_assert_to_validators(
                     step_struct=step_struct,
                     validator_results=validator_results,
-                    response_text=result.response.get("text") if result.response else None,
+                    response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
-                    response_headers=result.response.get("headers") if result.response else None,
+                    response_headers=result.response.get("response_header") if result.response else None,
                     response_cookies=None,
-                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    session_variables_lookup=session_lookup_map,
                     compare_fail_message="断言失败",
                 )
                 result.assert_validators = validator_results
@@ -2450,6 +2480,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 self.context.log(f"【HTTP请求】响应JSON解析失败: {e}, 将使用文本响应", step_code=self.step_code)
                 response_json = None
 
+            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
+            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
             try:
                 extract_variables = self.step.get("extract_variables")
                 if extract_variables and not isinstance(extract_variables, list):
@@ -2460,11 +2492,11 @@ class HttpStepExecutor(BaseStepExecutor):
                     )
                 extract_variables_dict, extract_results_list = AutoTestToolService.run_extract_variables(
                     extract_variables=extract_variables or [],
-                    response_text=result.response.get("text") if result.response else None,
+                    response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
-                    response_headers=result.response.get("headers") if result.response else None,
-                    response_cookies=result.response.get("cookies") if result.response else None,
-                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    response_headers=result.response.get("response_header") if result.response else None,
+                    response_cookies=result.response.get("response_cookie") if result.response else None,
+                    session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
@@ -2485,22 +2517,22 @@ class HttpStepExecutor(BaseStepExecutor):
                     )
                 validator_results = AutoTestToolService.run_assert_validators(
                     assert_validators=assert_validators or [],
-                    response_text=result.response.get("text") if result.response else None,
+                    response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
-                    response_headers=result.response.get("headers") if result.response else None,
-                    response_cookies=result.response.get("cookies") if result.response else None,
-                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    response_headers=result.response.get("response_header") if result.response else None,
+                    response_cookies=result.response.get("response_cookie") if result.response else None,
+                    session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 # 参数化驱动：assert_head（响应头键名）、assert_body（响应 JSONPath）
                 AutoTestToolService.append_assert_to_validators(
                     step_struct=step_struct,
                     validator_results=validator_results,
-                    response_text=result.response.get("text") if result.response else None,
+                    response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
-                    response_headers=result.response.get("headers") if result.response else None,
-                    response_cookies=result.response.get("cookies") if result.response else None,
-                    session_variables_lookup=lambda expr: self.context.get_variable(expr),
+                    response_headers=result.response.get("response_header") if result.response else None,
+                    response_cookies=result.response.get("response_cookie") if result.response else None,
+                    session_variables_lookup=session_lookup_map,
                 )
                 result.assert_validators.extend(validator_results)
                 assert_failed_number: int = sum(1 for valid in validator_results if not valid.get("success", True))

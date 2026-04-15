@@ -183,7 +183,7 @@ class AutoTestToolService:
             response_json: Any,
             response_headers: Optional[Dict[str, Any]],
             response_cookies: Optional[Dict[str, Any]],
-            session_variables_lookup: Callable[[str], Any],
+            session_variables_lookup: Optional[Dict[str, Any]],
             compare_fail_message: str = "实际值与期待值不满足指定操作符比较",
     ) -> None:
         """
@@ -338,21 +338,21 @@ class AutoTestToolService:
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
-            session_variables_lookup: Optional[Union[Dict[str, Any], Callable[[str], Any]]] = None,
+            session_variables_lookup: Optional[Dict[str, Any]] = None,
             operation_type: str = "变量提取",
     ) -> Any:
         """
         从 source 指定来源中按 expr 与 range 提取单个值供 HTTP 调试与步骤引擎共用
 
         :param source: 来源类型, 如: response json、response xml、response text、response headers、response cookies、session_variables、变量池
-        :param expr: 提取表达式(JSONPath/XPath/正则/键名等), SOME 模式必填
+        :param expr: 提取表达式(JSONPath/XPath/正则), SOME 模式必填
         :param range_type: "ALL" 或 "SOME", 默认 "SOME"
         :param index: 提取结果为数组时的下标
         :param response_text: 响应正文
         :param response_json: 响应 JSON
         :param response_headers: 响应头
         :param response_cookies: 响应 Cookie
-        :param session_variables_lookup: 变量池：Dict 则用 key 取值, Callable 则 get_variable(key)
+        :param session_variables_lookup: 变量池字典（Dict[str, Any]），按 JSONPath 取值
         :param operation_type: 错误信息前缀, 如 "变量提取"、"断言验证"
         :return: 提取得到的值
         :raises ValueError: 提取失败时, 携带可读错误信息
@@ -438,11 +438,11 @@ class AutoTestToolService:
             if range_type == "all":
                 return response_headers
             if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称")
-            var = response_headers.get(expr)
-            if var is None or var == "":
-                raise ValueError(f"【{operation_type}】响应 Headers 中不存在: {expr}")
-            return var
+                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
+            try:
+                return AutoTestToolServiceImpl.resolve_json_path(data=response_headers, expr=expr)
+            except Exception as e:
+                raise ValueError(str(e) or f"【{operation_type}】响应 Headers JSONPath匹配失败: {expr}") from e
 
         if src in ("response cookie", "response cookies"):
             if not response_cookies:
@@ -450,26 +450,26 @@ class AutoTestToolService:
             if range_type == "all":
                 return response_cookies
             if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称")
-            var = response_cookies.get(expr)
-            if var is None or var == "":
-                raise ValueError(f"【{operation_type}】响应 Cookies 中不存在: {expr}")
-            return var
+                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
+            try:
+                return AutoTestToolServiceImpl.resolve_json_path(data=response_cookies, expr=expr)
+            except Exception as e:
+                raise ValueError(str(e) or f"【{operation_type}】响应 Cookies JSONPath匹配失败: {expr}") from e
 
         if src == "session_variables" or src == "变量池":
             if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是存在的键名称")
+                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
             if session_variables_lookup is None:
                 raise ValueError(f"【{operation_type}】变量池未提供")
-            if callable(session_variables_lookup):
-                try:
-                    return session_variables_lookup(expr)
-                except KeyError as e:
-                    raise ValueError(f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量") from e
-            val = session_variables_lookup.get(expr)
-            if val is None and expr not in session_variables_lookup:
-                raise ValueError(f"【{operation_type}】在变量池[Session Variables Pool]中未找到[{expr}]变量")
-            return val
+            if not isinstance(session_variables_lookup, dict):
+                raise ValueError(
+                    f"【{operation_type}】变量池类型不被支持: {type(session_variables_lookup)}; "
+                    f"仅支持 Dict[str, Any] 并使用 JSONPath 取值"
+                )
+            try:
+                return AutoTestToolServiceImpl.resolve_json_path(data=session_variables_lookup, expr=expr)
+            except Exception as e:
+                raise ValueError(str(e) or f"【{operation_type}】变量池 JSONPath匹配失败: {expr}") from e
 
         raise ValueError(f"【{operation_type}】数据源源类型 {source} 不被支持")
 
@@ -482,7 +482,7 @@ class AutoTestToolService:
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
-            session_variables_lookup: Optional[Union[Dict[str, Any], Callable[[str], Any]]] = None,
+            session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
@@ -493,7 +493,7 @@ class AutoTestToolService:
         :param response_json: HTTP 响应 JSON(用于 response json)
         :param response_headers: HTTP 响应头(用于 response headers)
         :param response_cookies: HTTP 响应 cookies(用于 response cookies)
-        :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), 可为 Dict 或 Callable
+        :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), Dict[str, Any]
         :param log_callback: 可选日志回调
         :returns: (name->value 字典, 结果列表)
                   结果列表每项含 name/source/range/expr/index/extract_value/error/success
@@ -576,7 +576,7 @@ class AutoTestToolService:
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
-            session_variables_lookup: Optional[Union[Dict[str, Any], Callable[[str], Any]]] = None,
+            session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> List[Dict[str, Any]]:
         """
@@ -587,7 +587,7 @@ class AutoTestToolService:
         :param response_json: HTTP 响应 JSON(用于 response json)
         :param response_headers: HTTP 响应头(用于 response headers)
         :param response_cookies: HTTP 响应 cookies(用于 response cookies)
-        :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), 可为 Dict 或 Callable
+        :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), Dict[str, Any]
         :param log_callback: 可选日志回调
         :returns: 每条断言结果列表, 含 name/source/expr/operation/except_value/actual_value/success/error
         """

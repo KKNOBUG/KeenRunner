@@ -58,7 +58,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
-from backend.enums import AutoTestReportType, AutoTestReqArgsType
+from backend.enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType
 
 autotest_step = APIRouter()
 
@@ -868,13 +868,20 @@ async def debug_python_code(
     功能说明：
     1. 接收前端发送的Python代码和变量配置数据
     2. 使用StepExecutionContext执行Python代码（不保存到数据库）
-    3. 返回执行结果，包括提取变量、执行日志等信息
+    3. 返回执行结果与断言结果（若配置），并包含 request 快照用于排障
 
     请求参数格式：
     - step_name: 步骤名称
     - code: Python代码
     - defined_variables: 定义的变量（列表格式，每个元素包含key、value、desc，用于变量替换和代码执行上下文）
     - session_variables: 会话变量（列表格式，每个元素包含key、value、desc，用于变量替换和代码执行上下文）
+    - assert_validators: 断言规则（source=变量池/session_variables 时，expr 按 JSONPath 解析）
+
+    返回 data 结构：
+    - request: 本次执行的代码快照（request.code）
+    - result: 代码返回的 Dict 结果
+    - assert_validators: 断言结果列表
+    - error: 失败时返回错误描述
     """
     try:
         # 提取请求参数
@@ -903,39 +910,43 @@ async def debug_python_code(
         initial_variables = list(merged_variables.values())
 
         # 创建执行上下文（使用虚拟的case_id和case_code）
-        from backend.applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError
+        from backend.applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError, StepExecutionResult
         async with StepExecutionContext(case_id=0, case_code="DEBUG", initial_variables=initial_variables) as context:
             try:
                 # 执行Python代码
-                debugging_result: Dict[str, Any] = {}
+                debugging_return: Dict[str, Any] = {}
                 validator_result: List[Dict[str, Any]] = []
-                executive_result: Dict[str, Any] = context.run_python_code(code, namespace=context.clone_state())
+                debugging_result = StepExecutionResult(
+                    case_id=0,
+                    step_code="DEBUG",
+                    step_id=None,
+                    step_no=None,
+                    step_name=step_name,
+                    step_type=AutoTestStepType.PYTHON,
+                    success=True
+                )
+                executive_namespace: Dict[str, Any] = context.clone_state()
+                executive_result: Dict[str, Any] = context.run_python_code(code, namespace=executive_namespace, step_result=debugging_result)
+                debugging_return["request"] = debugging_result.request
                 if assert_validators:
                     for vc in assert_validators:
                         if not isinstance(vc, dict):
                             continue
-                        src = (vc.get("source") or "").strip().lower()
-                        if src and src not in ("session_variables", "变量池"):
-                            raise StepExecutionError(
-                                "【代码请求(Python)】断言数据源仅允许「变量池」: "
-                                "source 须为 session_variables/变量池"
-                            )
+                        source: str = (vc.get("source") or "").strip().lower()
+                        if source and source not in ("session_variables", "变量池"):
+                            raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
 
-                    def _python_debug_variable_pool_lookup(expr: str):
-                        if executive_result and expr in executive_result:
-                            return executive_result[expr]
-                        for item in context.session_variables:
-                            if isinstance(item, dict) and item.get("key") == expr:
-                                return item.get("value")
-                        raise KeyError(f"【获取变量】变量({expr})未定义")
-
+                    session_lookup_map: Dict[str, Any] = {}
+                    session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))
+                    session_lookup_map.update(AutoTestToolService.list_to_dict(session_variables))
+                    session_lookup_map.update(executive_result or {})
                     validator_result = AutoTestToolService.run_assert_validators(
                         assert_validators=assert_validators,
                         response_text=None,
                         response_json=None,
                         response_headers=None,
                         response_cookies=None,
-                        session_variables_lookup=_python_debug_variable_pool_lookup,
+                        session_variables_lookup=session_lookup_map,
                         log_callback=lambda msg: context.log(msg),
                     )
                     assert_failed_number: int = sum(
@@ -950,13 +961,13 @@ async def debug_python_code(
                         LOGGER.info(f"Python代码调试失败(断言未通过): {step_name}")
                         return SuccessResponse(message="Python代码调试失败", data=debugging_result, total=1)
 
-                debugging_result["result"] = executive_result
-                debugging_result["assert_validators"] = validator_result
+                debugging_return["result"] = executive_result
+                debugging_return["assert_validators"] = validator_result
                 LOGGER.info(f"Python代码调试成功: {step_name}")
-                return SuccessResponse(message="Python代码调试成功", data=debugging_result, total=1)
+                return SuccessResponse(message="Python代码调试成功", data=debugging_return, total=1)
             except StepExecutionError as e:
                 # 构建失败响应
-                debugging_result["error"] = str(e)
+                debugging_return["error"] = str(e)
                 LOGGER.error(f"【Python代码调试】失败, 错误回溯: {traceback.format_exc()}")
                 return SuccessResponse(message="Python代码调试失败", data=debugging_result, total=1)
 
