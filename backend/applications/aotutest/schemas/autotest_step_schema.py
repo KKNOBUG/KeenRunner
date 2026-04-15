@@ -35,7 +35,7 @@ class AutoTestApiStepReqBase(BaseModel):
     request_form_data: NON_LIST_DICT_TYPE = Field(None, description="请求表单数据")
     request_form_urlencoded: NON_LIST_DICT_TYPE = Field(None, description="请求键值对数据")
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
-    request_project_id: Optional[int] = Field(None, description="请求应用ID")
+    request_project_id: Optional[int] = Field(None, ge=1, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="AutoTestReqArgsType")
 
 
@@ -44,6 +44,50 @@ class AutoTestApiStepVarBase(BaseModel):
     defined_variables: NON_LIST_DICT_TYPE = Field(None, description="定义变量(用户自定义、引用函数的结果)")
     extract_variables: NON_LIST_DICT_TYPE = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     assert_validators: NON_LIST_DICT_TYPE = Field(None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
+
+    @field_validator('session_variables', mode='before')
+    @classmethod
+    def normalize_session_variables(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+    @field_validator('defined_variables', mode='before')
+    @classmethod
+    def normalize_defined_variables(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+    @field_validator('extract_variables', mode='before')
+    @classmethod
+    def normalize_extract_variables(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+    @field_validator('assert_validators', mode='before')
+    @classmethod
+    def normalize_assert_validators(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
 
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
@@ -143,54 +187,10 @@ class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_project_id: Optional[int] = Field(None, description="请求应用ID（可选）")
 
-    @field_validator('extract_variables', mode='before')
-    @classmethod
-    def normalize_extract_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('assert_validators', mode='before')
-    @classmethod
-    def normalize_assert_validators(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
 
 class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     code: str = Field(..., description="执行代码(Python)")
-
-    @field_validator('extract_variables', mode='before')
-    @classmethod
-    def normalize_extract_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('assert_validators', mode='before')
-    @classmethod
-    def normalize_assert_validators(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
 
 
 class AutoTestStepTreeExecute(BaseModel):
@@ -199,8 +199,7 @@ class AutoTestStepTreeExecute(BaseModel):
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
     # 参数化驱动：运行模式可传多条数据集名称循环执行；调试模式只能传一条
-    selected_dataset_names: Optional[List[str]] = Field(None,
-                                                        description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
+    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
 
     @model_validator(mode='after')
     def validate_mode(self):
