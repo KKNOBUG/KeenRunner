@@ -114,7 +114,14 @@ function buildSearchBody(overrides = {}) {
     project_test_owners: toOwnerList(overrides.project_test_owners ?? q.project_test_owners),
   }
 }
-
+/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「更多」） */
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
 const columns = [
   {
     title: '应用名称',
@@ -224,17 +231,18 @@ const columns = [
 
 <template>
   <CommonPage show-footer title="项目管理">
-    <template #action>
-      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />
-        新建应用
-      </NButton>
-    </template>
+<!--    <template #action>-->
+<!--      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">-->
+<!--        <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />-->
+<!--        新建应用-->
+<!--      </NButton>-->
+<!--    </template>-->
 
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
         :is-pagination="true"
+        :query-bar-props="queryBarProps"
         :remote="true"
         :scroll-x="1400"
         :columns="columns"

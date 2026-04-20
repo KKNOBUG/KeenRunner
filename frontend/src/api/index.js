@@ -53,7 +53,10 @@ export default {
 
   getEnv: (params = {}) => request.get('/autotest/env/get', { params }),
   createEnv: (data = {}) => request.post('/autotest/env/create', data),
+  /** 单笔删除：Query env_id 或 env_code */
   deleteEnv: (params = {}) => request.delete('/autotest/env/delete', { params }),
+  /** 批量删除：Body { env_ids?: number[] } 或 { env_codes?: string[] } */
+  deleteEnvBatch: (data = {}) => request.post('/autotest/env/delete', data),
   updateEnv: (data = {}) => request.post('/autotest/env/update', data),
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
@@ -61,7 +64,10 @@ export default {
   getEnvConfig: (params = {}) => request.get('/autotest/config/get', { params }),
   createEnvConfig: (data = {}) => request.post('/autotest/config/create', data),
   updateEnvConfig: (data = {}) => request.post('/autotest/config/update', data),
+  /** 单笔删除：Query config_id 或 config_code */
   deleteEnvConfig: (params = {}) => request.delete('/autotest/config/delete', { params }),
+  /** 批量删除：Body { config_ids?: number[] } 或 { config_codes?: string[] } */
+  deleteEnvConfigBatch: (data = {}) => request.post('/autotest/config/delete', data),
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
 
 

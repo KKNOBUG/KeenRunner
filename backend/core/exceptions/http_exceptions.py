@@ -93,4 +93,6 @@ async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> B
 async def app_exception_handler(request: Request, exc: Exception) -> BaseResponse:
     error_traceback = traceback.format_exc()
     error_message = f"服务器发生未知错误，请稍后重试，或点击右上角二维码加入答疑群"
+    print(error_message)
+    print(error_traceback)
     return FailureResponse(message=error_message, data=f"{error_traceback}")

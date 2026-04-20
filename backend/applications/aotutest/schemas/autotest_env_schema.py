@@ -63,6 +63,11 @@ class AutoTestApiEnvUpdate(AutoTestApiEnvBase):
     pass
 
 
+class AutoTestApiEnvDelete(BaseModel):
+    env_ids: Optional[List[int]] = Field(None, description="环境ID列表")
+    env_codes: Optional[List[str]] = Field(None, description="环境标识代码列表")
+
+
 class AutoTestApiEnvSelect(AutoTestApiEnvBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")

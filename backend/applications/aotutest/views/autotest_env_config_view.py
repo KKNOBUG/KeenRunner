@@ -8,7 +8,7 @@
 """
 import asyncio
 import traceback
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
@@ -16,7 +16,8 @@ from tortoise.expressions import Q
 from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
-    AutoTestApiConfigSelect
+    AutoTestApiConfigSelect,
+    AutoTestApiConfigDelete
 )
 from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
@@ -84,6 +85,19 @@ async def delete_env_config(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按id或code删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+
+
+@autotest_env_config.post("/delete", summary="API自动化测试-按id或code列表删除环境")
+async def delete_env_config(
+        config_in: AutoTestApiConfigDelete = Body(..., description="环境配置信息"),
+):
+    try:
+        count = await AUTOTEST_API_ENV_CONFIG_CRUD.delete_configs(config_in=config_in)
+        LOGGER.info(f"按id或code列表删除环境配置成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"按id或code列表删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 

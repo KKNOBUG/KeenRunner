@@ -15,10 +15,10 @@ from tortoise.expressions import Q
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
-    AutoTestApiEnvSelect
+    AutoTestApiEnvSelect,
+    AutoTestApiEnvDelete
 )
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -82,6 +82,19 @@ async def delete_env_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按id或code删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+
+
+@autotest_env.post("/delete", summary="API自动化测试-按id或code列表删除环境")
+async def delete_env_info(
+        env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
+):
+    try:
+        count = await AUTOTEST_API_ENV_ENUM_CRUD.delete_envs(env_in=env_in)
+        LOGGER.info(f"按id或code列表删除环境成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"按id或code列表删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 

@@ -48,6 +48,11 @@ class AutoTestApiConfigUpdate(AutoTestApiConfigBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
+class AutoTestApiConfigDelete(BaseModel):
+    config_ids: Optional[List[int]] = Field(None, description="环境ID列表")
+    config_codes: Optional[List[str]] = Field(None, description="配置标识代码列表")
+
+
 class AutoTestApiConfigSelect(AutoTestApiConfigBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")

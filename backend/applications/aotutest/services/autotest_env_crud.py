@@ -16,7 +16,8 @@ from tortoise.queryset import QuerySet
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
-    AutoTestApiEnvUpdate
+    AutoTestApiEnvUpdate,
+    AutoTestApiEnvDelete
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
@@ -24,7 +25,6 @@ from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
-    DataAlreadyExistsException,
 )
 
 
@@ -176,6 +176,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         # 业务层验证：检查环境信息是否存在
         if env_id:
             instance = await self.get_by_id(env_id=env_id, on_error=True)
+            env_code: str = instance.env_code
         else:
             instance = await self.get_by_code(env_code=env_code, on_error=True)
             env_id: int = instance.id
@@ -185,15 +186,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             exclude_unset=True,
             exclude={"env_id", "env_code"}
         )
-        # 业务层验证：检查环境名称是否唯一
-        if "env_name" in update_dict:
-            env_name: str = update_dict.get("env_name", instance.env_name)
-            existing_env: Optional[AutoTestApiEnvEnumInfo] = await self.get_by_name(env_name=env_name)
-            if existing_env:
-                error_message: str = f"根据(env_name={env_name})条件检查环境枚举信息失败, 环境枚举名称不允许重复"
-                LOGGER.error(error_message)
-                raise DataAlreadyExistsException(message=error_message)
-
         try:
             instance = await self.update(id=env_id, obj_in=update_dict)
             return instance
@@ -223,6 +215,22 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         instance.state = 1
         await instance.save()
         return instance
+
+    async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
+        """
+        删除环境枚举信息
+        :param env_in: 环境枚举删除 schema 定义
+        :returns: 删除的数量
+        """
+        env_ids: Optional[List[int]] = env_in.env_ids
+        env_codes: Optional[List[str]] = env_in.env_codes
+        if env_ids:
+            count = await self.model.filter(id__in=env_ids).update(state=1)
+        elif env_codes:
+            count = await self.model.filter(env_code__in=env_codes).update(state=1)
+        else:
+            count = 0
+        return count
 
     async def select_envs(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """

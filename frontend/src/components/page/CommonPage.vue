@@ -1,16 +1,21 @@
 <template>
   <AppPage :show-footer="showFooter">
-    <header v-if="showHeader" mb-15 min-h-45 flex items-center justify-between px-15>
+    <header
+        v-if="showHeader && ($slots.header || $slots.action)"
+        mb-15
+        min-h-45
+        flex
+        items-center
+        px-15
+        :class="$slots.header ? 'justify-between' : 'justify-end'"
+    >
       <slot v-if="$slots.header" name="header" />
-      <template v-else>
-        <h2 text-22 font-normal text-hex-333 dark:text-hex-ccc>{{ title || route.meta?.title }}</h2>
-        <slot name="action" />
-      </template>
+      <slot v-else name="action" />
     </header>
 
-    <n-card flex-1 rounded-10>
+    <div flex-1 min-h-0 min-w-0 flex flex-col>
       <slot />
-    </n-card>
+    </div>
   </AppPage>
 </template>
 
@@ -20,14 +25,18 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  /**
+   * 是否预留顶部栏区域；仅在有 #header 或 #action 时渲染。
+   * 为 false 时即使有 #action 也不显示（如个人中心整页自定义布局）。
+   */
   showHeader: {
     type: Boolean,
     default: true,
   },
+  /** 保留 props 以兼容旧代码，不再渲染子页标题 */
   title: {
     type: String,
     default: undefined,
   },
 })
-const route = useRoute()
 </script>

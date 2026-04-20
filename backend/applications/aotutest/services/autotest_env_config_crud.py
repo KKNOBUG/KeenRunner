@@ -14,7 +14,11 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
-from backend.applications.aotutest.schemas.autotest_env_config_schema import AutoTestApiConfigCreate, AutoTestApiConfigUpdate
+from backend.applications.aotutest.schemas.autotest_env_config_schema import (
+    AutoTestApiConfigCreate,
+    AutoTestApiConfigUpdate,
+    AutoTestApiConfigDelete
+)
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -32,6 +36,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     def __init__(self):
         super().__init__(model=AutoTestApiEnvConfigInfo)
+        self.required_fields = ["config_host", "config_port", "config_username", "config_password"]
 
     async def get_by_id(self, config_id: int, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiEnvConfigInfo]:
         """
@@ -157,16 +162,13 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 if not config_in.config_host:
                     raise ParameterException(message=f"配置信息类型为API时参数[config_host]不允许为空")
             elif config_type == AutoTestConfigNodeType.DB.value:
-                required_fields = ["config_host", "config_port", "config_username", "config_password"]
-                missing_fields = [field for field in required_fields if not getattr(config_in, field, None)]
+                missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
                 if missing_fields:
                     raise ParameterException(message=f"配置信息类型为DB时参数[{', '.join(missing_fields)}]不允许为空")
             elif config_type == AutoTestConfigNodeType.FILE.value:
-                required_fields = [
-                    "config_host", "config_port",
-                    "config_username", "config_password", "is_authorization"
-                ]
-                missing_fields = [field for field in required_fields if not getattr(config_in, field, None)]
+                missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
+                if getattr(config_in, "is_authorization", None) is None:
+                    missing_fields.append("is_authorization")
                 if missing_fields:
                     raise ParameterException(message=f"配置信息类型为FILE时参数[{', '.join(missing_fields)}]不允许为空")
 
@@ -218,16 +220,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_id = update_dict.get("env_id", instance.env_id)
             project_id = update_dict.get("project_id", instance.project_id)
             config_name = update_dict.get("config_name", instance.config_name)
-            existing_config = await self.get_by_conditions(
-                only_one=True,
-                on_error=False,
-                is_active=True,
-                conditions={
-                    "env_id": env_id,
-                    "project_id": project_id,
-                    "config_name": config_name
-                },
-            )
+            existing_config = await self.model.filter(
+                env_id=env_id,
+                project_id=project_id,
+                config_name=config_name,
+                state__not=1
+            ).exclude(id=config_id).first()
             if existing_config:
                 LOGGER.error(
                     f"同[应用&环境]下配置名称不允许重复: "
@@ -241,14 +239,16 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         if config_type == AutoTestConfigNodeType.API.value:
             if not config_in.config_host:
                 raise ParameterException(message=f"配置信息类型为API时参数[config_host]不允许为空")
-        if config_type == AutoTestConfigNodeType.DB.value:
-            if not config_in.config_host or not config_in.config_port or not config_in.config_username or not config_in.config_password:
-                raise ParameterException(message=f"配置信息类型为DB时参数[config_host、config_port、config_username、config_password]不允许为空")
-        if config_type == AutoTestConfigNodeType.FILE.value:
-            if not config_in.config_host or not config_in.config_port or not config_in.config_username or not config_in.config_password or not config_in.is_authorization:
-                raise ParameterException(
-                    message=f"配置信息类型为FILE时参数[config_host、config_port、config_username、config_password、is_authorization]不允许为空")
-
+        elif config_type == AutoTestConfigNodeType.DB.value:
+            missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
+            if missing_fields:
+                raise ParameterException(message=f"配置信息类型为DB时参数[{', '.join(missing_fields)}]不允许为空")
+        elif config_type == AutoTestConfigNodeType.FILE.value:
+            missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
+            if getattr(config_in, "is_authorization", None) is None:
+                missing_fields.append("is_authorization")
+            if missing_fields:
+                raise ParameterException(message=f"配置信息类型为FILE时参数[{', '.join(missing_fields)}]不允许为空")
         try:
             instance = await self.update(id=config_id, obj_in=update_dict)
             return instance
@@ -278,6 +278,22 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         instance.state = 1
         await instance.save()
         return instance
+
+    async def delete_configs(self, config_in: AutoTestApiConfigDelete) -> int:
+        """
+        删除环境配置信息
+        :param config_in: 环境配置删除 schema 定义
+        :returns: 删除的数量
+        """
+        config_ids: Optional[List[int]] = config_in.config_ids
+        config_codes: Optional[List[str]] = config_in.config_codes
+        if config_ids:
+            count = await self.model.filter(id__in=config_ids).update(state=1)
+        elif config_codes:
+            count = await self.model.filter(config_code__in=config_codes).update(state=1)
+        else:
+            count = 0
+        return count
 
     async def select_config(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """

@@ -16,15 +16,21 @@
       </NCard>
       <div class="tabs-wrap">
         <NTabs v-model:value="activeTab" type="line" animated>
-          <NTabPane name="app" tab="应用配置">
+          <NTabPane name="app" tab="应用配置" display-directive="show">
             <CrudTable
                 ref="appTableRef"
                 v-model:query-items="tabQuery.app"
+                v-model:checked-row-keys="checkedKeysApp"
+                :query-bar-props="envDrawerQueryBarProps"
                 :is-pagination="true"
                 :columns="appColumns"
                 :get-data="getAppConfigData"
                 :single-line="true"
-                :scroll-x="1200"
+                :scroll-x="1248"
+                row-key="config_id"
+                @query-bar-create="openCreateAppConfig"
+                @query-bar-delete="() => handleDrawerBatchDelete('app')"
+                @pagination-meta="(m) => onDrawerPaginationMeta('app', m)"
             >
               <template #queryBar>
                 <QueryBarItem label="应用名称：" :label-width="90">
@@ -44,21 +50,24 @@
                   />
                 </QueryBarItem>
               </template>
-              <template #action>
-                <NButton type="primary" @click="openCreateAppConfig">新增</NButton>
-              </template>
             </CrudTable>
           </NTabPane>
 
-          <NTabPane name="database" tab="数据库配置">
+          <NTabPane name="database" tab="数据库配置" display-directive="show">
             <CrudTable
                 ref="databaseTableRef"
                 v-model:query-items="tabQuery.database"
+                v-model:checked-row-keys="checkedKeysDatabase"
+                :query-bar-props="envDrawerQueryBarProps"
                 :is-pagination="true"
-                :columns="infraColumns"
+                :columns="databaseInfraColumns"
                 :get-data="getDatabaseConfigData"
                 :single-line="true"
-                :scroll-x="1200"
+                :scroll-x="1248"
+                row-key="config_id"
+                @query-bar-create="openCreateDatabaseConfig"
+                @query-bar-delete="() => handleDrawerBatchDelete('database')"
+                @pagination-meta="(m) => onDrawerPaginationMeta('database', m)"
             >
               <template #queryBar>
                 <QueryBarItem label="应用名称：" :label-width="90">
@@ -85,21 +94,24 @@
                   />
                 </QueryBarItem>
               </template>
-              <template #action>
-                <NButton type="primary" @click="openCreateDatabaseConfig">新增</NButton>
-              </template>
             </CrudTable>
           </NTabPane>
 
-          <NTabPane name="file" tab="文件服务器配置">
+          <NTabPane name="file" tab="文件服务器配置" display-directive="show">
             <CrudTable
                 ref="fileTableRef"
                 v-model:query-items="tabQuery.file"
+                v-model:checked-row-keys="checkedKeysFile"
+                :query-bar-props="envDrawerQueryBarProps"
                 :is-pagination="true"
-                :columns="infraColumns"
+                :columns="fileInfraColumns"
                 :get-data="getFileConfigData"
                 :single-line="true"
-                :scroll-x="1200"
+                :scroll-x="1248"
+                row-key="config_id"
+                @query-bar-create="openCreateFileConfig"
+                @query-bar-delete="() => handleDrawerBatchDelete('file')"
+                @pagination-meta="(m) => onDrawerPaginationMeta('file', m)"
             >
               <template #queryBar>
                 <QueryBarItem label="应用名称：" :label-width="90">
@@ -127,9 +139,6 @@
                       style="width: 160px"
                   />
                 </QueryBarItem>
-              </template>
-              <template #action>
-                <NButton type="primary" @click="openCreateFileConfig">新增</NButton>
               </template>
             </CrudTable>
           </NTabPane>
@@ -215,8 +224,21 @@
                    :rule="{ required: isInfraDatabase, message: '数据库配置必须输入主机密码', trigger: ['input', 'blur'] }">
           <NInput v-model:value="infraForm.config_password" type="password" show-password-on="click"/>
         </NFormItem>
-        <NFormItem v-if="isInfraDatabase" label="分组编号" path="config_group"
+        <NFormItem v-if="isInfraDatabase" path="config_group"
                    :rule="{ required: infraForm.database_type === 'tdsql', message: '数据库类型为 tdsql 时必须输入分组编号', trigger: ['input', 'blur', 'change'] }">
+          <template #label>
+            <span flex items-center gap-4>
+              分组编号
+              <NTooltip placement="top">
+                <template #trigger>
+                  <span inline-flex cursor-help op-70>
+                    <TheIcon icon="material-symbols:help-outline" :size="16" />
+                  </span>
+                </template>
+                数据库类型为tdsql时请为该数据库设置一个分组编号
+              </NTooltip>
+            </span>
+          </template>
           <NInput v-model:value="infraForm.config_group"/>
         </NFormItem>
         <NFormItem v-if="!isInfraDatabase" label="是否免密" path="is_authorization">
@@ -253,12 +275,14 @@ import {
   NSpace,
   NTabPane,
   NTabs,
+  NTooltip,
 } from 'naive-ui'
 import api from '@/api'
 import {renderIcon} from '@/utils'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from "@/components/table/CrudTable.vue"
+import TheIcon from '@/components/icon/TheIcon.vue'
 
 defineOptions({name: '环境明细编辑'})
 
@@ -271,7 +295,14 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:show', 'saved'])
 
-const TAB_TYPE_MAP = {app: 'api', database: 'database', file: 'file'}
+/** 子表 QueryBar：下拉「操作」+ 重置/搜索/新增/删除（配合勾选列批量删） */
+const envDrawerQueryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
 
 const activeTab = ref('app')
 const drawerTitle = computed(() => (currentEnvId.value ? '环境明细编辑' : '新建环境'))
@@ -293,6 +324,31 @@ const projectSelectOptions = ref([])
 const appTableRef = ref(null)
 const databaseTableRef = ref(null)
 const fileTableRef = ref(null)
+
+const checkedKeysApp = ref([])
+const checkedKeysDatabase = ref([])
+const checkedKeysFile = ref([])
+
+async function handleDrawerBatchDelete(tabKey) {
+  const map = { app: checkedKeysApp, database: checkedKeysDatabase, file: checkedKeysFile }
+  const refMap = { app: appTableRef, database: databaseTableRef, file: fileTableRef }
+  const keys = map[tabKey]?.value || []
+  if (!keys.length) {
+    window.$message?.warning?.('请先勾选要删除的配置')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${keys.length} 条配置吗？`,
+    async confirm() {
+      await api.deleteEnvConfigBatch({ config_ids: keys })
+      window.$message?.success?.('删除成功')
+      map[tabKey].value = []
+      refMap[tabKey].value?.handleSearch?.()
+    },
+  })
+}
 
 // 查询参数
 const tabQuery = reactive({
@@ -368,7 +424,7 @@ async function getFileConfigData(params) {
 // 删除配置
 async function deleteConfig(row) {
   try {
-    await api.deleteEnvConfig({config_id: row.config_id})
+    await api.deleteEnvConfig({ config_id: row.config_id })
     window.$message?.success?.('删除成功')
     // 刷新当前表格
     const tableRef = getCurrentTableRef()
@@ -387,84 +443,148 @@ function getCurrentTableRef() {
   return tabMap[activeTab.value]?.value
 }
 
-// 应用配置列定义
-const appColumns = [
-  {title: '应用名称', key: 'project_name', align: 'center', ellipsis: {tooltip: true}},
-  {title: '配置名称', key: 'config_name', align: 'center', ellipsis: {tooltip: true}},
-  {title: '应用主机', key: 'config_host', align: 'center', ellipsis: {tooltip: true}},
-  {title: '应用端口', key: 'config_port', align: 'center', width: 100},
-  {title: '创建人员', key: 'created_user', align: 'center', width: 100},
-  {title: '更新时间', key: 'updated_time', align: 'center', width: 180, ellipsis: {tooltip: true}},
-  {
-    title: '操作',
-    key: 'actions',
-    align: 'center',
-    width: 90,
-    fixed: 'right',
-    render(row) {
-      return [
-        h(NButton, {
-          size: 'small',
-          quaternary: true,
-          circle: true,
-          type: 'primary',
-          style: 'margin-right: 4px;',
-          title: '编辑',
-          onClick: () => openEditAppConfig(row)
-        }, {icon: renderIcon('material-symbols:edit-outline', {size: 16})}),
-        h(NPopconfirm, {onPositiveClick: () => deleteConfig(row)}, {
-          trigger: () => h(NButton, {
-            size: 'small',
-            quaternary: true,
-            circle: true,
-            type: 'error',
-            title: '删除'
-          }, {icon: renderIcon('material-symbols:delete-outline', {size: 16})}),
-          default: () => h('div', {}, '确定删除该配置吗?'),
-        }),
-      ]
-    },
-  },
+const drawerPagination = reactive({
+  app: { page: 1, page_size: 10 },
+  database: { page: 1, page_size: 10 },
+  file: { page: 1, page_size: 10 },
+})
+
+function onDrawerPaginationMeta(tabKey, meta) {
+  const slot = drawerPagination[tabKey]
+  if (slot) {
+    slot.page = meta.page
+    slot.page_size = meta.page_size
+  }
+}
+
+const APP_BODY_COLUMNS = [
+  { title: '应用名称', key: 'project_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '配置名称', key: 'config_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '应用主机', key: 'config_host', align: 'center', ellipsis: { tooltip: true } },
+  { title: '应用端口', key: 'config_port', align: 'center', width: 100 },
+  { title: '创建人员', key: 'created_user', align: 'center', width: 100 },
+  { title: '更新时间', key: 'updated_time', align: 'center', width: 180, ellipsis: { tooltip: true } },
 ]
 
-const infraColumns = [
-  {title: '应用名称', key: 'project_name', align: 'center', ellipsis: {tooltip: true}},
-  {title: '配置名称', key: 'config_name', align: 'center', ellipsis: {tooltip: true}},
-  {title: '主机地址', key: 'config_host', align: 'center', ellipsis: {tooltip: true}},
-  {title: '主机端口', key: 'config_port', align: 'center', width: 100},
-  {title: '分组编号', key: 'config_group', align: 'center', ellipsis: {tooltip: true}},
-  {title: '更新时间', key: 'updated_time', align: 'center', width: 180, ellipsis: {tooltip: true}},
-  {
-    title: '操作',
-    key: 'actions',
-    align: 'center',
-    width: 90,
-    fixed: 'right',
-    render(row) {
-      return [
-        h(NButton, {
-          size: 'small',
-          quaternary: true,
-          circle: true,
-          type: 'primary',
-          style: 'margin-right: 4px;',
-          title: '编辑',
-          onClick: () => openEditInfraConfig(row)
-        }, {icon: renderIcon('material-symbols:edit-outline', {size: 16})}),
-        h(NPopconfirm, {onPositiveClick: () => deleteConfig(row)}, {
-          trigger: () => h(NButton, {
+const INFRA_BODY_COLUMNS = [
+  { title: '应用名称', key: 'project_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '配置名称', key: 'config_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '主机地址', key: 'config_host', align: 'center', ellipsis: { tooltip: true } },
+  { title: '主机端口', key: 'config_port', align: 'center', width: 100 },
+  { title: '分组编号', key: 'config_group', align: 'center', ellipsis: { tooltip: true } },
+  { title: '更新时间', key: 'updated_time', align: 'center', width: 180, ellipsis: { tooltip: true } },
+]
+
+const appColumns = computed(() => {
+  const { page, page_size } = drawerPagination.app
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq_app',
+      width: 60,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
+    },
+    ...APP_BODY_COLUMNS,
+    {
+      title: '操作',
+      key: 'actions',
+      align: 'center',
+      width: 90,
+      fixed: 'right',
+      render(row) {
+        return [
+          h(NButton, {
             size: 'small',
             quaternary: true,
             circle: true,
-            type: 'error',
-            title: '删除'
-          }, {icon: renderIcon('material-symbols:delete-outline', {size: 16})}),
-          default: () => h('div', {}, '确定删除该配置吗?'),
-        }),
-      ]
+            type: 'primary',
+            style: 'margin-right: 4px;',
+            title: '编辑',
+            onClick: () => openEditAppConfig(row),
+          }, { icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }),
+          h(NPopconfirm, { onPositiveClick: () => deleteConfig(row) }, {
+            trigger: () =>
+                h(
+                    NButton,
+                    {
+                      size: 'small',
+                      quaternary: true,
+                      circle: true,
+                      type: 'error',
+                      title: '删除',
+                    },
+                    { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+                ),
+            default: () => h('div', {}, '确定删除该配置吗?'),
+          }),
+        ]
+      },
     },
-  },
-]
+  ]
+})
+
+function buildInfraColumnsComputed(metaKey) {
+  return computed(() => {
+    const { page, page_size } = drawerPagination[metaKey]
+    const seqBase = (page - 1) * page_size
+    return [
+      { type: 'selection', fixed: 'left', width: 48 },
+      {
+        title: '序号',
+        key: `__seq_${metaKey}`,
+        width: 60,
+        align: 'center',
+        render(_row, rowIndex) {
+          return seqBase + rowIndex + 1
+        },
+      },
+      ...INFRA_BODY_COLUMNS,
+      {
+        title: '操作',
+        key: 'actions',
+        align: 'center',
+        width: 90,
+        fixed: 'right',
+        render(row) {
+          return [
+            h(NButton, {
+              size: 'small',
+              quaternary: true,
+              circle: true,
+              type: 'primary',
+              style: 'margin-right: 4px;',
+              title: '编辑',
+              onClick: () => openEditInfraConfig(row),
+            }, { icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }),
+            h(NPopconfirm, { onPositiveClick: () => deleteConfig(row) }, {
+              trigger: () =>
+                  h(
+                      NButton,
+                      {
+                        size: 'small',
+                        quaternary: true,
+                        circle: true,
+                        type: 'error',
+                        title: '删除',
+                      },
+                      { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+                  ),
+              default: () => h('div', {}, '确定删除该配置吗?'),
+            }),
+          ]
+        },
+      },
+    ]
+  })
+}
+
+const databaseInfraColumns = buildInfraColumnsComputed('database')
+const fileInfraColumns = buildInfraColumnsComputed('file')
 
 function closeDrawer() {
   appModalShow.value = false
@@ -745,7 +865,7 @@ async function submitInfraConfig() {
       config_password: infraForm.config_password || undefined,
       database_name: isInfraDatabase.value ? (infraForm.database_name || undefined) : undefined,
       database_type: isInfraDatabase.value ? (infraForm.database_type || undefined) : undefined,
-      is_authorization: isInfraDatabase.value ? undefined : (infraForm.is_authorization || undefined),
+      is_authorization: isInfraDatabase.value ? undefined : Boolean(infraForm.is_authorization),
     }
     if (infraModalMode.value === 'edit') {
       await api.updateEnvConfig({
@@ -770,13 +890,19 @@ watch(() => props.show, async (v) => {
   if (!v) {
     appModalShow.value = false
     infraModalShow.value = false
+    checkedKeysApp.value = []
+    checkedKeysDatabase.value = []
+    checkedKeysFile.value = []
     return
   }
   resetByRow()
   await loadProjectOptions()
   activeTab.value = 'app'
   await nextTick()
+  // 各 NTabPane 使用 display-directive=show，子表不卸载；此处各拉一次，切换 Tab 不应重复请求
   appTableRef.value?.handleSearch()
+  databaseTableRef.value?.handleSearch()
+  fileTableRef.value?.handleSearch()
 })
 </script>
 
@@ -815,8 +941,7 @@ watch(() => props.show, async (v) => {
 /* 但表单组件可能需要明确设置 */
 .env-drawer-content :deep(.n-input),
 .env-drawer-content :deep(.n-select),
-.env-drawer-content :deep(.n-form-item-label),
-.env-drawer-content :deep(.query-bar-item-label) {
+.env-drawer-content :deep(.n-form-item-label) {
   font-size: 14px;
 }
 
