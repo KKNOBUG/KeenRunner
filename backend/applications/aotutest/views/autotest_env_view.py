@@ -86,7 +86,7 @@ async def delete_env_info(
 
 
 @autotest_env.post("/delete", summary="API自动化测试-按id或code列表删除环境")
-async def delete_env_info(
+async def delete_env_batch(
         env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
 ):
     try:

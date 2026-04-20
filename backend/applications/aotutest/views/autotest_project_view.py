@@ -15,7 +15,8 @@ from tortoise.expressions import Q
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
-    AutoTestApiProjectSelect
+    AutoTestApiProjectSelect,
+    AutoTestApiProjectDelete,
 )
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.configure import LOGGER
@@ -59,7 +60,7 @@ async def create_project_info(project_in: AutoTestApiProjectCreate = Body(..., d
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
-@autotest_project.post("/delete", summary="API自动化测试-按id或code删除应用")
+@autotest_project.delete("/delete", summary="API自动化测试-按id或code删除应用")
 async def delete_project_info(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
@@ -83,6 +84,19 @@ async def delete_project_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按id或code删除应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+
+
+@autotest_project.post("/delete", summary="API自动化测试-按id或code列表删除项目")
+async def delete_projects_batch(
+        project_in: AutoTestApiProjectDelete = Body(..., description="项目信息"),
+):
+    try:
+        count = await AUTOTEST_API_PROJECT_CRUD.delete_projects(project_in=project_in)
+        LOGGER.info(f"按id或code列表删除项目成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"按id或code列表删除项目失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 

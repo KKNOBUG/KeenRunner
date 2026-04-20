@@ -1,5 +1,5 @@
 <script setup>
-import { h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
+import { computed, h, ref, resolveDirective, withDirectives } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NPopconfirm, NTag, NTooltip } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -10,11 +10,17 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import { formatDate, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
 
 defineOptions({ name: '项目管理' })
 
 const $table = ref(null)
+/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+const checkedRowKeys = ref([])
 const queryItems = ref({
   project_name: '',
   project_code: '',
@@ -102,6 +108,34 @@ function toOwnerList(v) {
   return list.length ? list : undefined
 }
 
+/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「操作」） */
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const ids = checkedRowKeys.value || []
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选要删除的应用')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 条应用吗？`,
+    async confirm() {
+      await api.deleteProjectBatch({ project_ids: ids })
+      window.$message?.success?.('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
+
 function buildSearchBody(overrides = {}) {
   const q = queryItems.value
   return {
@@ -114,141 +148,145 @@ function buildSearchBody(overrides = {}) {
     project_test_owners: toOwnerList(overrides.project_test_owners ?? q.project_test_owners),
   }
 }
-/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「更多」） */
-const queryBarProps = {
-  addReset: true,
-  addSearch: true,
-  addCreate: true,
-  addDelete: true,
-  actionMode: 'dropdown',
-}
-const columns = [
-  {
-    title: '应用名称',
-    key: 'project_name',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '应用状态',
-    key: 'project_state',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '应用阶段',
-    key: 'project_phase',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '开发负责人',
-    key: 'project_dev_owners',
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      const v = row.project_dev_owners
-      if (!v || !v.length) return '-'
-      return Array.isArray(v) ? v.join(', ') : String(v)
+
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
     },
-  },
-  {
-    title: '开发人员',
-    key: 'project_developers',
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      const v = row.project_developers
-      if (!v || !v.length) return '-'
-      return Array.isArray(v) ? v.join(', ') : String(v)
+    {
+      title: '应用名称',
+      key: 'project_name',
+      align: 'center',
+      ellipsis: { tooltip: true },
     },
-  },
-  {
-    title: '测试负责人',
-    key: 'project_test_owners',
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      const v = row.project_test_owners
-      if (!v || !v.length) return '-'
-      return Array.isArray(v) ? v.join(', ') : String(v)
+    {
+      title: '应用状态',
+      key: 'project_state',
+      align: 'center',
+      ellipsis: { tooltip: true },
     },
-  },
-  {
-    title: '测试人员',
-    key: 'project_testers',
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      const v = row.project_testers
-      if (!v || !v.length) return '-'
-      return Array.isArray(v) ? v.join(', ') : String(v)
+    {
+      title: '应用阶段',
+      key: 'project_phase',
+      align: 'center',
+      ellipsis: { tooltip: true },
     },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 100,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return [
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'small',
-                  type: 'primary',
-                  style: 'margin-right: 8px;',
-                  onClick: () => customHandleEdit(row),
-                },
-                { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
-            ),
-            [[vPermission, 'post/api/v1/role/update']]
-        ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({ project_id: row.project_id }, false),
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
-                        default: () => '删除',
-                        icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                      }),
-                      [[vPermission, 'delete/api/v1/role/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该应用吗?'),
-            }
-        ),
-      ]
+    {
+      title: '开发负责人',
+      key: 'project_dev_owners',
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const v = row.project_dev_owners
+        if (!v || !v.length) return '-'
+        return Array.isArray(v) ? v.join(', ') : String(v)
+      },
     },
-  },
-]
+    {
+      title: '开发人员',
+      key: 'project_developers',
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const v = row.project_developers
+        if (!v || !v.length) return '-'
+        return Array.isArray(v) ? v.join(', ') : String(v)
+      },
+    },
+    {
+      title: '测试负责人',
+      key: 'project_test_owners',
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const v = row.project_test_owners
+        if (!v || !v.length) return '-'
+        return Array.isArray(v) ? v.join(', ') : String(v)
+      },
+    },
+    {
+      title: '测试人员',
+      key: 'project_testers',
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const v = row.project_testers
+        if (!v || !v.length) return '-'
+        return Array.isArray(v) ? v.join(', ') : String(v)
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 100,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return [
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'primary',
+                    style: 'margin-right: 8px;',
+                    onClick: () => customHandleEdit(row),
+                  },
+                  { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
+              ),
+              [[vPermission, 'post/api/v1/role/update']]
+          ),
+          h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete({ project_id: row.project_id }, false),
+              },
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
+                          default: () => '删除',
+                          icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                        }),
+                        [[vPermission, 'delete/api/v1/role/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该应用吗?'),
+              }
+          ),
+        ]
+      },
+    },
+  ]
+})
 </script>
 
 <template>
-  <CommonPage show-footer title="项目管理">
-<!--    <template #action>-->
-<!--      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">-->
-<!--        <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />-->
-<!--        新建应用-->
-<!--      </NButton>-->
-<!--    </template>-->
-
+  <CommonPage show-footer title="应用列表">
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        :is-pagination="true"
+        v-model:checked-row-keys="checkedRowKeys"
         :query-bar-props="queryBarProps"
+        :is-pagination="true"
         :remote="true"
-        :scroll-x="1400"
+        :scroll-x="1520"
         :columns="columns"
         :get-data="(params) => api.getProjectList(buildSearchBody(params))"
         :single-line="true"
         row-key="project_id"
+        @query-bar-create="handleAdd"
+        @query-bar-delete="handleBatchDelete"
+        @pagination-meta="onListPaginationMeta"
     >
       <template #queryBar>
         <QueryBarItem label="应用名称：">

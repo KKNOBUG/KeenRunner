@@ -16,7 +16,8 @@ from tortoise.queryset import QuerySet
 from backend.applications.aotutest.models.autotest_model import AutoTestApiProjectInfo
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
-    AutoTestApiProjectUpdate
+    AutoTestApiProjectUpdate,
+    AutoTestApiProjectDelete,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
@@ -267,6 +268,22 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         instance.state = 1
         await instance.save()
         return instance
+
+    async def delete_projects(self, project_in: AutoTestApiProjectDelete) -> int:
+        """
+        删除应用信息
+        :param project_in: 项目删除 schema 定义
+        :returns: 删除的数量
+        """
+        project_ids: Optional[List[int]] = project_in.project_ids
+        project_codes: Optional[List[str]] = project_in.project_codes
+        if project_ids:
+            count = await self.model.filter(id__in=project_ids).update(state=1)
+        elif project_codes:
+            count = await self.model.filter(project_code__in=project_codes).update(state=1)
+        else:
+            count = 0
+        return count
 
     async def select_projects(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """分页查询项目列表。

@@ -80,6 +80,11 @@ class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
+class AutoTestApiProjectDelete(BaseModel):
+    project_ids: Optional[List[int]] = Field(None, description="应用ID列表")
+    project_codes: Optional[List[str]] = Field(None, description="应用标识代码列表")
+
+
 class AutoTestApiProjectSelect(AutoTestApiProjectBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")

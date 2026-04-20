@@ -15,7 +15,8 @@ from tortoise.expressions import Q
 from backend.applications.aotutest.schemas.autotest_tag_schema import (
     AutoTestApiTagCreate,
     AutoTestApiTagSelect,
-    AutoTestApiTagUpdate
+    AutoTestApiTagUpdate,
+    AutoTestApiTagDelete,
 )
 from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.configure import LOGGER
@@ -86,6 +87,19 @@ async def delete_tag_info(
     except Exception as e:
         LOGGER.error(f"按id或code删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
+
+
+@autotest_tag.post("/delete", summary="API自动化测试-按id或code列表删除标签")
+async def delete_tag_batch(
+        tag_in: AutoTestApiTagDelete = Body(..., description="标签信息"),
+):
+    try:
+        count = await AUTOTEST_API_TAG_CRUD.delete_tags(tag_in=tag_in)
+        LOGGER.info(f"按id或code列表删除标签成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"按id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
 @autotest_tag.post("/update", summary="API自动化测试-按id或code更新标签")

@@ -14,7 +14,11 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiTagInfo
-from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate, AutoTestApiTagUpdate
+from backend.applications.aotutest.schemas.autotest_tag_schema import (
+    AutoTestApiTagCreate,
+    AutoTestApiTagUpdate,
+    AutoTestApiTagDelete,
+)
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -250,6 +254,22 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         instance.state = 1
         await instance.save()
         return instance
+
+    async def delete_tags(self, tag_in: AutoTestApiTagDelete) -> int:
+        """
+        删除标签信息
+        :param tag_in: 标签删除 schema 定义
+        :returns: 删除的数量
+        """
+        tag_ids: Optional[List[int]] = tag_in.tag_ids
+        tag_codes: Optional[List[str]] = tag_in.tag_codes
+        if tag_ids:
+            count = await self.model.filter(id__in=tag_ids).update(state=1)
+        elif tag_codes:
+            count = await self.model.filter(tag_code__in=tag_codes).update(state=1)
+        else:
+            count = 0
+        return count
 
     async def select_tags(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """分页查询标签列表。

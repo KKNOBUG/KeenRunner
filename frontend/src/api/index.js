@@ -47,7 +47,10 @@ export default {
   // 应用管理（autotest 应用/环境/标签）
   getProject: (params = {}) => request.get('/autotest/project/get', { params }),
   createProject: (data = {}) => request.post('/autotest/project/create', data),
-  deleteProject: (params = {}) => request.post('/autotest/project/delete', {}, { params }),
+  /** 单笔删除：Query project_id 或 project_code */
+  deleteProject: (params = {}) => request.delete('/autotest/project/delete', { params }),
+  /** 批量删除：Body { project_ids?: number[] } 或 { project_codes?: string[] } */
+  deleteProjectBatch: (data = {}) => request.post('/autotest/project/delete', data),
   updateProject: (data = {}) => request.post('/autotest/project/update', data),
   getProjectList: (data = {}) => request.post('/autotest/project/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
@@ -75,6 +78,8 @@ export default {
   createTag: (data = {}) => request.post('/autotest/tag/create', data),
   updateTag: (data = {}) => request.post('/autotest/tag/update', data),
   deleteTag: (params = {}) => request.delete('/autotest/tag/delete', { params }),
+  /** 批量删除：Body { tag_ids?: number[] } 或 { tag_codes?: string[] } */
+  deleteTagBatch: (data = {}) => request.post('/autotest/tag/delete', data),
   getTagList: (data = {}) => request.post('/autotest/tag/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
 

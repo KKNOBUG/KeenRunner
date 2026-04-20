@@ -7,7 +7,7 @@
 @DateTime: 2026/1/16 16:47
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -31,6 +31,11 @@ class AutoTestApiTagUpdate(BaseModel):
     tag_mode: Optional[str] = Field(None, max_length=64, description="标签大类")
     tag_name: Optional[str] = Field(None, max_length=64, description="标签名称")
     tag_desc: Optional[str] = Field(None, max_length=2048, description="标签描述")
+
+
+class AutoTestApiTagDelete(BaseModel):
+    tag_ids: Optional[List[int]] = Field(None, description="标签ID列表")
+    tag_codes: Optional[List[str]] = Field(None, description="标签标识代码列表")
 
 
 class AutoTestApiTagSelect(AutoTestApiTagUpdate):

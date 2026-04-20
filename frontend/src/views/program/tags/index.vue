@@ -1,5 +1,5 @@
 <script setup>
-import { h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
+import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NPopconfirm, NSelect } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -10,11 +10,17 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import { renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
 
 defineOptions({ name: '标签管理' })
 
 const $table = ref(null)
+/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+const checkedRowKeys = ref([])
 const queryItems = ref({ tag_project: null, tag_name: '', tag_type: null })
 const projectOptions = ref([])
 const tagTypeOptions = [
@@ -63,6 +69,34 @@ const {
   refresh: () => $table.value?.handleSearch(),
 })
 
+/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「操作」） */
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const ids = checkedRowKeys.value || []
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选要删除的标签')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 条标签吗？`,
+    async confirm() {
+      await api.deleteTagBatch({ tag_ids: ids })
+      window.$message?.success?.('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
+
 function buildSearchBody(overrides = {}) {
   return {
     state: 0,
@@ -82,74 +116,86 @@ onMounted(async () => {
   // $table.value?.handleSearch()
 })
 
-const columns = [
-  { title: '标签ID', key: 'tag_id', width: 80, align: 'center' },
-  { title: '标签代码', key: 'tag_code', align: 'center', ellipsis: { tooltip: true } },
-  { title: '标签类型', key: 'tag_type', align: 'center' },
-  { title: '所属应用', key: 'tag_project', align: 'center' },
-  { title: '标签大类', key: 'tag_mode', align: 'center', ellipsis: { tooltip: true } },
-  { title: '标签名称', key: 'tag_name', align: 'center', ellipsis: { tooltip: true } },
-  { title: '标签描述', key: 'tag_desc', align: 'center', ellipsis: { tooltip: true } },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 100,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return [
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'small',
-                  type: 'primary',
-                  style: 'margin-right: 8px;',
-                  onClick: () => handleEdit(row),
-                },
-                { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
-            ),
-            [[vPermission, 'post/api/v1/role/update']]
-        ),
-        h(
-            NPopconfirm,
-            { onPositiveClick: () => handleDelete({ tag_id: row.tag_id }, false) },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
-                        default: () => '删除',
-                        icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                      }),
-                      [[vPermission, 'delete/api/v1/role/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该标签吗?'),
-            }
-        ),
-      ]
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
     },
-  },
-]
+    { title: '标签ID', key: 'tag_id', width: 80, align: 'center' },
+    { title: '标签代码', key: 'tag_code', align: 'center', ellipsis: { tooltip: true } },
+    { title: '标签类型', key: 'tag_type', align: 'center' },
+    { title: '所属应用', key: 'tag_project', align: 'center' },
+    { title: '标签大类', key: 'tag_mode', align: 'center', ellipsis: { tooltip: true } },
+    { title: '标签名称', key: 'tag_name', align: 'center', ellipsis: { tooltip: true } },
+    { title: '标签描述', key: 'tag_desc', align: 'center', ellipsis: { tooltip: true } },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 100,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return [
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'primary',
+                    style: 'margin-right: 8px;',
+                    onClick: () => handleEdit(row),
+                  },
+                  { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
+              ),
+              [[vPermission, 'post/api/v1/role/update']]
+          ),
+          h(
+              NPopconfirm,
+              { onPositiveClick: () => handleDelete({ tag_id: row.tag_id }, false) },
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
+                          default: () => '删除',
+                          icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                        }),
+                        [[vPermission, 'delete/api/v1/role/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该标签吗?'),
+              }
+          ),
+        ]
+      },
+    },
+  ]
+})
 </script>
 
 <template>
   <CommonPage show-footer title="标签列表">
-    <template #action>
-      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />
-        新建标签
-      </NButton>
-    </template>
-
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
         :is-pagination="true"
         :remote="true"
-        :scroll-x="1200"
+        :scroll-x="1320"
         :columns="columns"
         :get-data="(params) => api.getTagList(buildSearchBody(params))"
         row-key="tag_id"
+        @query-bar-create="handleAdd"
+        @query-bar-delete="handleBatchDelete"
+        @pagination-meta="onListPaginationMeta"
     >
       <template #queryBar>
         <QueryBarItem label="所属应用：">
