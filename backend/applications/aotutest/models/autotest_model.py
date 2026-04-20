@@ -28,7 +28,9 @@ from backend.enums import (
     AutoTestLoopErrorStrategy,
     AutoTestTaskStatus,
     AutoTestTaskScheduler,
-    AutoTestReqArgsType
+    AutoTestReqArgsType,
+    AutoTestDataBaseType,
+    AutoTestConfigNodeType,
 )
 
 
@@ -72,30 +74,58 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
         return self.project_name
 
 
-class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试环境信息模型，对应表 krun_autotest_api_env。"""
-
-    project_id = fields.BigIntField(index=True, description="环境所属项目")
+class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     env_name = fields.CharField(max_length=64, index=True, description="环境名称")
-    env_host = fields.CharField(max_length=128, description="环境主机(http|https://127.0.0.1)")
-    env_port = fields.CharField(max_length=8, null=True, description="环境端口(8000)")
+    env_desc = fields.CharField(max_length=2048, null=True, description="环境描述")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "krun_autotest_api_env"
         table_description = "自动化测试-环境信息表"
-        unique_together = (
-            ("project_id", "env_name"),
-        )
-        indexes = (
-            ("project_id", "state", "updated_time"),  # 列表：按项目+状态筛选 + 按更新时间排序
-        )
         ordering = ["-updated_time"]
 
     def __str__(self):
         """返回环境名称。"""
         return self.env_name
+
+
+class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
+    project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
+
+    config_name = fields.CharField(max_length=64, description="配置名称")
+    config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
+    config_type = fields.CharEnumField(AutoTestConfigNodeType, description="配置类型")
+    config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
+
+    config_host = fields.CharField(max_length=128, description="数据库/服务器主机地址")
+    config_port = fields.CharField(max_length=8, null=True, description="数据库/服务器端口")
+    database_name = fields.CharField(max_length=128, null=True, description="数据库名称")
+    database_type = fields.CharEnumField(AutoTestDataBaseType, default=None, null=True, description="数据库类型")
+    config_username = fields.CharField(max_length=128, null=True, description="数据库/服务器用户名")
+    config_password = fields.CharField(max_length=128, null=True, description="数据库/服务器密码")
+    config_group = fields.CharField(max_length=128, null=True, description="数据库/服务器分组")
+    config_params = fields.JSONField(default=None, null=True, description="数据库/服务器参数")
+    config_kwargs = fields.JSONField(default=None, null=True, description="通用环境变量配置")
+    config_header = fields.JSONField(default=None, null=True, description="通用请求头配置")
+    is_authorization = fields.BooleanField(default=None, null=True, description="是否免密")
+
+    class Meta:
+        table = "tbx_autotest_api_config"
+        table_description = "自动化测试-环境配置表"
+        unique_together = (
+            ("env_id", "project_id", "config_name"),
+        )
+        indexes = (
+            ("env_id", "state"),
+            ("project_id", "state"),
+            ("config_code", "state"),
+        )
+        ordering = ["-updated_time"]
+
+    def __str__(self):
+        return self.config_name
 
 
 class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):

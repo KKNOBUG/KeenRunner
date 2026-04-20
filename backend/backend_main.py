@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     try:
         await register_database(app)
     except DBConnectionError as e:
-        raise RuntimeError("数据库连接失败, 请检查主机地址是否可达")
+        raise RuntimeError(f"数据库连接失败, 请检查主机地址是否可达: {e}")
     await init_database_table(app)
 
     for route in app.routes:
