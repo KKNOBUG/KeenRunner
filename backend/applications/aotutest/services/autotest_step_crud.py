@@ -9,7 +9,7 @@
 import datetime
 import traceback
 import uuid
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Union
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -49,12 +49,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """初始化 CRUD，绑定模型 AutoTestApiStepInfo。"""
         super().__init__(model=AutoTestApiStepInfo)
 
-    async def get_by_id(self, step_id: int, on_error: bool = False, is_enable: bool = True) -> Optional[AutoTestApiStepInfo]:
-        """根据步骤主键 ID 查询单条步骤（排除已删除）。
+    async def get_by_id(self, step_id: int, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiStepInfo]:
+        """
+        根据步骤主键 ID 查询单条步骤
 
         :param step_id: 步骤主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param is_enable: 为 True 时字段添加state__not条件。
+        :param is_active: 为 True 时自动添加state__not过滤条件。
         :returns: 步骤实例或 None。
         :raises ParameterException: 当 step_id 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
@@ -64,7 +65,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         kwargs: Dict[str, Any] = {"id": step_id}
-        if is_enable:
+        if is_active:
             kwargs["state__not"] = 1
         instance = await self.model.filter(**kwargs).first()
         if not instance and on_error:
@@ -73,12 +74,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, step_code: str, on_error: bool = False, is_enable: bool = True) -> Optional[AutoTestApiStepInfo]:
-        """根据步骤标识代码查询单条步骤（排除已删除）。
+    async def get_by_code(self, step_code: str, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiStepInfo]:
+        """
+        根据步骤标识代码查询单条步骤
 
         :param step_code: 步骤标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param is_enable: 为 True 时字段添加state__not条件。
+        :param is_active: 为 True 时自动添加state__not过滤条件。
         :returns: 步骤实例或 None。
         :raises ParameterException: 当 step_code 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
@@ -89,7 +91,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise ParameterException(message=error_message)
 
         kwargs: Dict[str, Any] = {"step_code": step_code}
-        if is_enable:
+        if is_active:
             kwargs["state__not"] = 1
         instance = await self.model.filter(**kwargs).first()
         if not instance and on_error:
@@ -103,20 +105,21 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             conditions: Dict[str, Any],
             only_one: bool = True,
             on_error: bool = False,
-            is_enable: bool = True
-    ) -> Optional[AutoTestApiStepInfo]:
-        """根据条件查询步骤（排除已删除）。
+            is_active: bool = True
+    ) -> Optional[Union[AutoTestApiStepInfo, List[AutoTestApiStepInfo]]]:
+        """
+        根据条件查询步骤
 
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param is_enable: 为 True 时字段添加state__not条件。
+        :param is_active: 为 True 时自动添加state__not过滤条件。
         :returns: 单条步骤、步骤列表或 None。
         :raises ParameterException: 条件非法或查询异常时。
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
         """
         try:
-            if is_enable:
+            if is_active and "state__not" not in conditions:
                 conditions["state__not"] = 1
             stmt: QuerySet = self.model.filter(**conditions)
             instances = await (stmt.first() if only_one else stmt.all())
@@ -140,7 +143,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: Optional[int] = None,
             case_code: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """根据用例 ID 或 case_code 获取该用例的步骤树（含引用脚本步骤及统计信息）。
+        """
+        根据用例 ID 或 case_code 获取该用例的步骤树（含引用脚本步骤及统计信息）。
 
         :param case_id: 用例主键 ID，与 case_code 二选一。
         :param case_code: 用例标识代码，与 case_id 二选一。

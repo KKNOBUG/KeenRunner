@@ -36,7 +36,8 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         super().__init__(model=AutoTestApiCaseInfo)
 
     async def get_by_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
-        """根据用例主键 ID 查询单条用例（排除已删除）。
+        """
+        根据用例主键 ID 查询单条用例
 
         :param case_id: 用例主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -57,7 +58,8 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         return instance
 
     async def get_by_code(self, case_code: str, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
-        """根据用例标识代码查询单条用例（排除已删除）。
+        """
+        根据用例标识代码查询单条用例
 
         :param case_code: 用例标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -83,7 +85,8 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[Union[AutoTestApiCaseInfo, List[AutoTestApiCaseInfo]]]:
-        """根据条件查询用例（排除已删除）。
+        """
+        根据条件查询用例
 
         :param conditions: 查询条件字典，键为模型字段名。
         :param only_one: 为 True 时返回单条记录，否则返回列表。

@@ -38,7 +38,8 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         super().__init__(model=AutoTestApiDetailInfo)
 
     async def get_by_id(self, detail_id: int, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
-        """根据明细主键 ID 查询单条明细（排除已删除）。
+        """
+        根据明细主键 ID 查询单条明细
 
         :param detail_id: 明细主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -59,7 +60,8 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         return instance
 
     async def get_by_code(self, detail_code: str, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
-        """根据明细标识（report_code）查询单条明细（排除已删除）。
+        """
+        根据明细标识（report_code）查询单条明细
 
         :param detail_code: 报告标识代码 report_code，此处参数名为 detail_code。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -85,7 +87,8 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[Union[AutoTestApiDetailInfo, List[AutoTestApiDetailInfo]]]:
-        """根据条件查询明细（排除已删除）。
+        """
+        根据条件查询明细
 
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。

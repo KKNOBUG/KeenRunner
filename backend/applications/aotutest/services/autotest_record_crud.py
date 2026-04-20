@@ -37,7 +37,8 @@ class AutoTestApiTaskRecordCrud(
         super().__init__(model=AutoTestApiRecordInfo)
 
     async def get_by_celery_id(self, celery_id: str) -> Optional[AutoTestApiRecordInfo]:
-        """根据 Celery 调度 ID 查询单条执行记录。
+        """
+        根据 Celery 调度 ID 查询单条执行记录。
 
         :param celery_id: Celery 任务/调度 ID。
         :returns: 记录实例或 None（celery_id 为空或未找到时）。
@@ -60,7 +61,8 @@ class AutoTestApiTaskRecordCrud(
             celery_id: str,
             data: Dict[str, Any],
     ) -> Optional[AutoTestApiRecordInfo]:
-        """根据 Celery 调度 ID 更新记录，通常由 Worker on_success/on_failure 调用。
+        """
+        根据 Celery 调度 ID 更新记录，通常由 Worker on_success/on_failure 调用。
 
         :param celery_id: Celery 任务/调度 ID。
         :param data: 要更新的字段字典；task_summary、task_error 允许为 None。

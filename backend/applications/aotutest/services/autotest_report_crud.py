@@ -37,7 +37,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         super().__init__(model=AutoTestApiReportInfo)
 
     async def get_by_id(self, report_id: int, on_error: bool = False) -> Optional[AutoTestApiReportInfo]:
-        """根据报告主键 ID 查询单条报告（排除已删除）。
+        """
+        根据报告主键 ID 查询单条报告
 
         :param report_id: 报告主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -58,7 +59,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         return instance
 
     async def get_by_code(self, report_code: str, on_error: bool = False) -> Optional[AutoTestApiReportInfo]:
-        """根据报告标识代码查询单条报告（排除已删除）。
+        """
+        根据报告标识代码查询单条报告
 
         :param report_code: 报告标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -84,7 +86,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[AutoTestApiReportInfo]:
-        """根据条件查询报告（排除已删除）。
+        """
+        根据条件查询报告
 
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。

@@ -57,6 +57,14 @@ export default {
   updateEnv: (data = {}) => request.post('/autotest/env/update', data),
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
+  // 环境配置（HTTP/通用/数据库 等）
+  getEnvConfig: (params = {}) => request.get('/autotest/config/get', { params }),
+  createEnvConfig: (data = {}) => request.post('/autotest/config/create', data),
+  updateEnvConfig: (data = {}) => request.post('/autotest/config/update', data),
+  deleteEnvConfig: (params = {}) => request.delete('/autotest/config/delete', { params }),
+  searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
+
+
   getTag: (params = {}) => request.get('/autotest/tag/get', { params }),
   createTag: (data = {}) => request.post('/autotest/tag/create', data),
   updateTag: (data = {}) => request.post('/autotest/tag/update', data),

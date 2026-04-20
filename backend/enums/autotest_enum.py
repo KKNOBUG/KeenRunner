@@ -81,3 +81,15 @@ class AutoTestReqArgsType(StringEnum):
     PARAMS = "params"
     FORM_DATA = "form-data"
     X_WWW_FORM_URLENCODED = "x-www-form-urlencoded"
+
+
+class AutoTestDataBaseType(StringEnum):
+    MYSQL = "mysql"
+    ORACLE = "oracle"
+    TDSQL = "tdsql"
+
+
+class AutoTestConfigNodeType(StringEnum):
+    API = "api"
+    DB = "database"
+    FILE = "file"

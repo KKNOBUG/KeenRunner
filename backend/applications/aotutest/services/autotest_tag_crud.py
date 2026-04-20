@@ -33,7 +33,8 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         super().__init__(model=AutoTestApiTagInfo)
 
     async def get_by_id(self, tag_id: int, on_error: bool = False) -> Optional[AutoTestApiTagInfo]:
-        """根据标签主键 ID 查询单条标签（排除已删除）。
+        """
+        根据标签主键 ID 查询单条标签
 
         :param tag_id: 标签主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -83,7 +84,8 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         return True
 
     async def get_by_code(self, tag_code: str, on_error: bool = False) -> Optional[AutoTestApiTagInfo]:
-        """根据标签标识代码查询单条标签（排除已删除）。
+        """
+        根据标签标识代码查询单条标签
 
         :param tag_code: 标签标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -109,7 +111,8 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[Union[AutoTestApiTagInfo, List[AutoTestApiTagInfo]]]:
-        """根据条件查询标签（排除已删除）。
+        """
+        根据条件查询标签
 
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。

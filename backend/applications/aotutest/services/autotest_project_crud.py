@@ -19,7 +19,7 @@ from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectUpdate
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
+from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
 from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
@@ -39,7 +39,8 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         super().__init__(model=AutoTestApiProjectInfo)
 
     async def get_by_id(self, project_id: int, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
-        """根据项目主键 ID 查询单条项目（排除已删除）。
+        """
+        根据项目主键 ID 查询单条项目
 
         :param project_id: 项目主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -60,7 +61,8 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instance
 
     async def get_by_code(self, project_code: str, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
-        """根据项目标识代码查询单条项目（排除已删除）。
+        """
+        根据项目标识代码查询单条项目
 
         :param project_code: 项目标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -81,7 +83,8 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instance
 
     async def get_by_name(self, project_name: str, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
-        """根据项目名称查询单条项目（排除已删除）。
+        """
+        根据项目名称查询单条项目
 
         :param project_name: 项目名称。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -107,7 +110,8 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             only_one: bool = True,
             on_error: bool = False
     ) -> Optional[Union[AutoTestApiProjectInfo, List[AutoTestApiProjectInfo]]]:
-        """根据条件查询项目（排除已删除）。
+        """
+        根据条件查询项目
 
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。
@@ -248,7 +252,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
         # 业务层验证：检查是否存在关联环境
-        env_count = await AUTOTEST_API_ENV_CRUD.model.filter(project_id=pid, state__not=1).count()
+        env_count = await AUTOTEST_API_ENV_ENUM_CRUD.model.filter(project_id=pid, state__not=1).count()
         if env_count > 0:
             msg = f"应用(name={instance.project_name})下存在{env_count}个环境, 无法删除，请先解除关联"
             LOGGER.error(msg)

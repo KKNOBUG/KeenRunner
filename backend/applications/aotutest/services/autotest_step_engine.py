@@ -19,7 +19,7 @@ from urllib.parse import quote, unquote
 
 import httpx
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo, AutoTestApiCaseInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo, AutoTestApiCaseInfo
 from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
@@ -294,8 +294,8 @@ class StepExecutionContext:
             raise StepExecutionError(f"【获取变量】变量名无效: 变量名必须是非空字符串, 当前值: {name}")
 
         for scope_name, scope_list in [
-            ("session_variables", self.session_variables),
             ("defined_variables", self.defined_variables),
+            ("session_variables", self.session_variables),
         ]:
             value = AutoTestToolService.get_value_from_list(scope_list, name)
             if value is not None:
@@ -1020,10 +1020,9 @@ class BaseStepExecutor:
                 if response_cookie:
                     response_cookie = json.dumps(response_cookie, ensure_ascii=False)
 
-            raw_variables = self.step.get("defined_variables")
-            defined_variables = list(raw_variables) if isinstance(raw_variables, list) else []
             result_extract = getattr(result, "extract_variables", None)
             extract_variables = list(result_extract) if isinstance(result_extract, list) else []
+            defined_variables = list(self.context.defined_variables) if self.context.defined_variables else []
             session_variables = list(self.context.session_variables) if self.context.session_variables else []
             dataset_name: Optional[str] = getattr(result, "dataset_name", None)
             dataset_snapshot: Optional[Dict[str, Any]] = getattr(result, "dataset_snapshot", None)
@@ -2056,8 +2055,8 @@ class TcpStepExecutor(BaseStepExecutor):
             if (not host_raw or host_raw == "") and (port_raw is None or str(port_raw).strip() == ""):
                 if env_name and request_project_id:
                     try:
-                        from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
-                        env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                        from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
+                        env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
                             only_one=True,
                             on_error=False,
                             conditions={"project_id": request_project_id, "env_name": env_name},
@@ -2325,8 +2324,8 @@ class HttpStepExecutor(BaseStepExecutor):
             request_project_id: int = self.step.get("request_project_id")
             request_method: str = self.step.get("request_method", "").upper()
             if env_name and request_url and not request_url.lower().startswith("http"):
-                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
-                env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
+                env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
                     only_one=True,
                     on_error=True,
                     conditions={"project_id": request_project_id, "env_name": env_name},
@@ -2572,7 +2571,8 @@ class DefaultStepExecutor(BaseStepExecutor):
 
 
 class StepExecutorFactory:
-    """根据步骤类型创建对应执行器实例，未知类型使用 DefaultStepExecutor。"""
+    """
+        根据步骤类型创建对应执行器实例，未知类型使用 DefaultStepExecutor。"""
 
     EXECUTOR_MAP: Dict[AutoTestStepType, Callable[[Dict[str, Any], StepExecutionContext], BaseStepExecutor]] = {
         AutoTestStepType.TCP: TcpStepExecutor,

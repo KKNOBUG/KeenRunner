@@ -19,7 +19,7 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -350,7 +350,7 @@ async def batch_update_steps_tree(
                                 f"删除更新后多余步骤: "
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
-                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).update(state=1)
+                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).delete(state=1)
                 # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
@@ -459,8 +459,8 @@ async def debug_http_request(
         # 处理请求主机域名
         if request_url and not request_url.lower().startswith("http"):
             try:
-                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
-                env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
+                env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     conditions={"project_id": request_project_id, "env_name": env_name},
@@ -751,8 +751,8 @@ async def debug_tcp_request(
                 logs.append(format_log(f"解析请求信息(host={host}, port={port})失败"))
         if (not host) and env_name and request_project_id:
             try:
-                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_CRUD
-                env_instance: AutoTestApiEnvInfo = await AUTOTEST_API_ENV_CRUD.get_by_conditions(
+                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
+                env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     conditions={"project_id": request_project_id, "env_name": env_name},

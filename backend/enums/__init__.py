@@ -18,6 +18,8 @@ from .autotest_enum import (
     AutoTestTaskScheduler,
     AutoTestTaskStatus,
     AutoTestReqArgsType,
+    AutoTestDataBaseType,
+    AutoTestConfigNodeType,
 )
 from .base_error_enum import BaseErrorEnum
 from .file_size_enum import FileSizeEum
@@ -44,5 +46,6 @@ __all__ = (
     FileSizeEum,
     HTTPMethod,
     TestCasePriorityEnum,
-    TestCasePriorityEnum,
+    AutoTestDataBaseType,
+    AutoTestConfigNodeType,
 )

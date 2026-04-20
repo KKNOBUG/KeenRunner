@@ -202,7 +202,7 @@ class ProjectConfig(BaseSettings):
     # DATABASE_HOST: str = "43.156.105.196"
     DATABASE_PORT: str = "3306"
     DATABASE_NAME: str = "krun"
-    DATABASE_AUTO_MIGRATION: bool = False
+    DATABASE_AUTO_MIGRATION: bool = True
     DATABASE_URL: str = f"mysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}?charset=utf8mb4&time_zone=+08:00"
     DATABASE_CONNECTIONS: Dict[str, Any] = {
         "default": {

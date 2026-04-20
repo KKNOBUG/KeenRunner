@@ -223,7 +223,7 @@ const columns = [
 </script>
 
 <template>
-  <CommonPage show-footer title="应用列表">
+  <CommonPage show-footer title="项目管理">
     <template #action>
       <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="handleAdd">
         <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />
