@@ -44,6 +44,8 @@
             </n-button>
           </n-dropdown>
         </div>
+        <!-- 与「操作」同排：如路由页的「刷新API」 -->
+        <slot name="afterActions" />
       </n-space>
     </n-config-provider>
   </div>

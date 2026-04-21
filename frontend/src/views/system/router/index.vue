@@ -1,5 +1,5 @@
 <script setup>
-import { h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
+import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
 import {NButton, NForm, NFormItem, NInput, NPopconfirm, NTag} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -18,6 +18,40 @@ defineOptions({ name: 'API管理' })
 const $table = ref(null)
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
+
+const checkedRowKeys = ref([])
+/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    $message.warning('请先勾选要删除的 API')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 条 API 吗？`,
+    async confirm() {
+      await Promise.all(ids.map((router_id) => api.deleteRouter({ router_id })))
+      $message.success('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
 
 const {
   modalVisible,
@@ -40,8 +74,7 @@ const {
 })
 
 onMounted(() => {
-  // 仅加载父级下拉树数据；表格列表等用户点击「搜索」后再请求
-  // $table.value?.handleSearch()
+  $table.value?.handleSearch()
 })
 
 async function handleRefreshRouter() {
@@ -95,144 +128,148 @@ const addAPIRules = {
   ],
 }
 
-const columns = [
-  {
-    title: '路由所属模块',
-    key: 'tags',
-    width: 'auto',
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h(
-          NTag,
-          {type: 'info', style: {margin: '2px 3px'}},
-          {default: () => row.tags}
-      )
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
     },
-  },
-  {
-    title: '路由作用简介',
-    key: 'summary',
-    width: 'auto',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '路由请求路径',
-    key: 'path',
-    width: 'auto',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '路由请求方式',
-    key: 'method',
-    align: 'center',
-    width: 'auto',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h(
-          NTag,
-          {type: 'info', style: {margin: '2px 3px'}},
-          {default: () => row.method}
-      )
+    {
+      title: '路由所属模块',
+      key: 'tags',
+      width: 'auto',
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return h(
+            NTag,
+            {type: 'info', style: {margin: '2px 3px'}},
+            {default: () => row.tags}
+        )
+      },
     },
-  },
-  {
-    title: '路由功能描述',
-    key: 'description',
-    width: 'auto',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 80,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return [
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'info',
-                  onClick: () => {
-                    handleEdit(row)
-                    modalForm.value.roles = row.roles.map((e) => (e = e.id))
+    {
+      title: '路由作用简介',
+      key: 'summary',
+      width: 'auto',
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '路由请求路径',
+      key: 'path',
+      width: 'auto',
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '路由请求方式',
+      key: 'method',
+      align: 'center',
+      width: 'auto',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return h(
+            NTag,
+            {type: 'info', style: {margin: '2px 3px'}},
+            {default: () => row.method}
+        )
+      },
+    },
+    {
+      title: '路由功能描述',
+      key: 'description',
+      width: 'auto',
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 80,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return [
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
+                    onClick: () => {
+                      handleEdit(row)
+                      modalForm.value.roles = (row.roles || []).map((e) => (typeof e === 'object' && e != null ? e.id : e))
+                    },
                   },
-                },
-                {
-                  default: () => '编辑',
-                  icon: renderIcon('material-symbols:edit', { size: 16 }),
-                }
-            ),
-            [[vPermission, 'post/api/v1/router/update']]
-        ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({ api_id: row.id }, false),
-              onNegativeClick: () => {},
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'tiny',
-                            quaternary: true,
-                            type: 'error',
-                          },
-                          {
-                            default: () => '删除',
-                            icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                          }
-                      ),
-                      [[vPermission, 'delete/api/v1/router/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该API吗?'),
-            }
-        ),
-      ]
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit', { size: 16 }),
+                  }
+              ),
+              [[vPermission, 'post/api/v1/router/update']]
+          ),
+          h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete({ router_id: row.id }),
+                onNegativeClick: () => {},
+              },
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                            }
+                        ),
+                        [[vPermission, 'delete/api/v1/router/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该API吗?'),
+              }
+          ),
+        ]
+      },
     },
-  },
-]
+  ]
+})
 </script>
 
 <template>
   <!-- 业务页面 -->
   <CommonPage show-footer title="API列表">
-    <template #action>
-      <div>
-        <NButton
-            v-permission="'post/api/v1/router/create'"
-            class="float-right mr-15"
-            type="primary"
-            @click="handleAdd"
-        >
-          <TheIcon icon="material-symbols:add" :size="18" class="mr-5" />新建API
-        </NButton>
-        <NButton
-            v-permission="'post/api/v1/router/refresh'"
-            class="float-right mr-15"
-            type="warning"
-            @click="handleRefreshRouter"
-        >
-          <TheIcon icon="material-symbols:refresh" :size="18" class="mr-5" />刷新API
-        </NButton>
-      </div>
-    </template>
     <!-- 表格 -->
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
+        :is-pagination="true"
+        :remote="true"
+        :single-line="true"
+        :scroll-x="1620"
         :columns="columns"
         :get-data="api.getRouters"
+        row-key="id"
+        @query-bar-create="handleAdd"
+        @query-bar-delete="handleBatchDelete"
+        @pagination-meta="onListPaginationMeta"
     >
       <template #queryBar>
         <QueryBarItem label="API简介：">
@@ -262,6 +299,18 @@ const columns = [
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
+      </template>
+      <!-- 与 QueryBar「操作」下拉同一行，紧跟其后 -->
+      <template #queryBarAfterActions>
+        <NButton
+            v-permission="'post/api/v1/router/refresh'"
+            size="small"
+            type="warning"
+            secondary
+            @click="handleRefreshRouter"
+        >
+          <TheIcon icon="material-symbols:refresh" :size="16" class="mr-5" />刷新API
+        </NButton>
       </template>
     </CrudTable>
 

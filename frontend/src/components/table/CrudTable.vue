@@ -10,6 +10,9 @@
         @delete="emit('queryBarDelete')"
     >
       <slot name="queryBar" />
+      <template #afterActions>
+        <slot name="queryBarAfterActions" />
+      </template>
     </QueryBar>
 
     <n-data-table
