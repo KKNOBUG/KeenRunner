@@ -1,5 +1,5 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
+import { h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
 import {
   NButton,
   NForm,
@@ -9,26 +9,51 @@ import {
   NPopconfirm,
   NRadio,
   NRadioGroup,
+  NSelect,
   NSwitch,
   NTag,
   NTreeSelect,
 } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
+import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 import IconPicker from '@/components/icon/IconPicker.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
-import {formatDate, formatDateTime, renderIcon} from '@/utils'
+import { formatDateTime, renderIcon } from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 
 defineOptions({name: '菜单管理'})
 
 const $table = ref(null)
-const queryItems = ref({})
+const queryItems = ref({ menu_type: null, name: '' })
 const vPermission = resolveDirective('permission')
+
+/** QueryBar：平铺「重置、搜索、新增」，无删除 */
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: false,
+  actionMode: 'inline',
+}
+
+const menuTypeFilterOptions = [
+  { label: '目录', value: 'catalog' },
+  { label: '菜单', value: 'menu' },
+]
+
+function fetchMenuList(params) {
+  const p = { ...params }
+  const nm = p.name != null ? String(p.name).trim() : ''
+  if (nm) p.name = nm
+  else delete p.name
+  if (p.menu_type == null || p.menu_type === '') delete p.menu_type
+  return api.getMenus(p)
+}
 
 // 表单初始化内容
 const initForm = {
@@ -56,7 +81,6 @@ const {
 })
 
 onMounted(() => {
-  $table.value?.handleSearch()
   getTreeSelect()
 })
 
@@ -267,9 +291,9 @@ function handleClickAdd() {
 }
 
 async function getTreeSelect() {
-  const {data} = await api.getMenus()
-  const menu = {id: 0, name: '根目录', children: []}
-  menu.children = data
+  const { data } = await api.getMenus({ page: 1, page_size: 9999 })
+  const menu = { id: 0, name: '根目录', children: [] }
+  menu.children = data || []
   menuOptions.value = [menu]
 }
 </script>
@@ -277,23 +301,38 @@ async function getTreeSelect() {
 <template>
   <!-- 业务页面 -->
   <CommonPage show-footer title="菜单列表">
-    <template #action>
-      <NButton v-permission="'post/api/v1/menu/create'" type="primary" @click="handleClickAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
-        新建根菜单
-      </NButton>
-    </template>
-
     <!-- 表格 -->
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        :query-bar-props="queryBarProps"
         :is-pagination="true"
+        :remote="true"
         :columns="columns"
-        :get-data="api.getMenus"
+        :get-data="fetchMenuList"
         :single-line="true"
         :scroll-x="1200"
+        @query-bar-create="handleClickAdd"
     >
+      <template #queryBar>
+        <QueryBarItem label="菜单类型：">
+          <NSelect
+              v-model:value="queryItems.menu_type"
+              :options="menuTypeFilterOptions"
+              clearable
+              placeholder="全部"
+              style="width: 140px"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="菜单名称：">
+          <NInput
+              v-model:value="queryItems.name"
+              clearable
+              placeholder="请输入菜单名称"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+      </template>
     </CrudTable>
 
     <!-- 新增/编辑/查看 弹窗 -->

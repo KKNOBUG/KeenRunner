@@ -16,6 +16,8 @@ export default {
   createUser: (data = {}) => request.post('/user/create', data),
   updateUser: (data = {}) => request.post('/user/update', data),
   deleteUser: (params = {}) => request.delete(`/user/delete`, { params }),
+  /** 批量删除：Body { user_ids?: number[] } */
+  deleteUserBatch: (data = {}) => request.post('/user/delete', data),
   resetPassword: (data = {}) => request.post(`/user/reset_password`, data),
   updatePassword: (data = {}) => request.post('/user/update_password', data),
   // 角色相关
@@ -23,10 +25,13 @@ export default {
   createRole: (data = {}) => request.post('/base/role/create', data),
   updateRole: (data = {}) => request.post('/base/role/update', data),
   deleteRole: (params = {}) => request.delete('/base/role/delete', { params }),
+  /** 批量删除：Body { role_ids?: number[] } 或 { role_codes?: string[] } */
+  deleteRoleBatch: (data = {}) => request.post('/base/role/delete', data),
   updateRoleAuthorized: (data = {}) => request.post('/base/role/authorized', data),
   getRoleAuthorized: (params = {}) => request.get('/base/role/authorized', { params }),
   // 菜单相关
-  getMenus: (params = {}) => request.post('/base/menu/list', { params }),
+  /** Query 走 URL params（与后端 list_menu 的 Query 一致） */
+  getMenus: (params = {}) => request.post('/base/menu/list', {}, { params }),
   createMenu: (data = {}) => request.post('/base/menu/create', data),
   updateMenu: (data = {}) => request.post('/base/menu/update', data),
   deleteMenu: (params = {}) => request.delete('/base/menu/delete', { params }),
@@ -38,11 +43,17 @@ export default {
   refreshRouter: (data = {}) => request.post('/base/router/refresh', data),
   // 部门相关
   getDepts: (params = {}) => request.get('/dept/list', { params }),
+  /** 部门分页列表（平面数据），Body 同后端 DepartmentSelect */
+  searchDeptList: (data = {}) => request.post('/dept/search', { page: 1, page_size: 10, order: ['id'], ...data }),
   createDept: (data = {}) => request.post('/dept/create', data),
   updateDept: (data = {}) => request.post('/dept/update', data),
   deleteDept: (params = {}) => request.delete('/dept/delete', { params }),
+  /** 批量删除：Body { department_ids?: number[] } */
+  deleteDeptBatch: (data = {}) => request.post('/dept/delete', data),
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
+  /** 批量删除：Body { audit_ids?: number[] } */
+  deleteAuditLogBatch: (data = {}) => request.post('/base/audit/delete', data),
 
   // 应用管理（autotest 应用/环境/标签）
   getProject: (params = {}) => request.get('/autotest/project/get', { params }),

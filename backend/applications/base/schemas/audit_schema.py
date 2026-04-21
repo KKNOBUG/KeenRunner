@@ -31,3 +31,7 @@ class AuditCreate(BaseModel):
     response_message: Optional[str]
     response_params: Optional[str]
     response_elapsed: str
+
+
+class AuditBatchDelete(BaseModel):
+    audit_ids: Optional[List[int]] = Field(None, description="审计日志ID列表")

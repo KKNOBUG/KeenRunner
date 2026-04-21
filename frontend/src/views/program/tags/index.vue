@@ -203,7 +203,7 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_project"
               :options="projectOptions"
               clearable
-              placeholder="请选择应用"
+              placeholder="请选择所属应用"
               style="width: 180px"
               @update:value="$table?.handleSearch()"
           />
@@ -213,8 +213,8 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_type"
               :options="tagTypeOptions"
               clearable
-              placeholder="请选择类型"
-              style="width: 120px"
+              placeholder="请选择标签类型"
+              style="width: 180px"
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -223,6 +223,7 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_name"
               clearable
               placeholder="请输入标签名称"
+              style="width: 180px"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -256,7 +257,7 @@ const columns = computed(() => {
           <NSelect
               v-model:value="modalForm.tag_project"
               :options="projectOptions"
-              placeholder="请选择应用"
+              placeholder="请选择所属应用"
               :disabled="modalAction === 'edit'"
           />
         </NFormItem>

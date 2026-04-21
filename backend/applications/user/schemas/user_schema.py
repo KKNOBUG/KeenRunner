@@ -46,6 +46,10 @@ class UserUpdate(BaseModel):
     updated_user: Optional[str] = None
 
 
+class UserBatchDelete(BaseModel):
+    user_ids: Optional[List[int]] = Field(None, description="用户ID列表")
+
+
 class UserSelect(BaseModel):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")

@@ -40,7 +40,8 @@ const {
 })
 
 onMounted(() => {
-  $table.value?.handleSearch()
+  // 仅加载父级下拉树数据；表格列表等用户点击「搜索」后再请求
+  // $table.value?.handleSearch()
 })
 
 async function handleRefreshRouter() {

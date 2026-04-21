@@ -6,11 +6,16 @@
 @Module  : audit_view.py
 @DateTime: 2025/2/22 12:31
 """
-from fastapi import APIRouter, Query
+import traceback
+
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from backend.applications.base.models.audit_model import Audit
-from backend.core.responses import SuccessResponse
+from backend.applications.base.schemas.audit_schema import AuditBatchDelete
+from backend.applications.base.services.audit_crud import AUDIT_CRUD
+from backend.configure import LOGGER
+from backend.core.responses import FailureResponse, SuccessResponse
 
 audit = APIRouter()
 
@@ -52,3 +57,16 @@ async def list_audit(
     total = await Audit.filter(q).count()
     data = [await audit_log.to_dict() for audit_log in audit_log_objs]
     return SuccessResponse(data=data, total=total)
+
+
+@audit.post("/delete", summary="批量删除审计日志")
+async def delete_audits_batch(
+        body_in: AuditBatchDelete = Body(..., description="批量删除参数"),
+):
+    try:
+        count = await AUDIT_CRUD.delete_by_ids(body_in.audit_ids)
+        LOGGER.info(f"批量删除审计日志成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"批量删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")

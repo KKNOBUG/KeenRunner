@@ -1,5 +1,5 @@
 <script setup>
-import {h, ref, resolveDirective, withDirectives} from 'vue'
+import {computed, h, ref, resolveDirective, withDirectives} from 'vue'
 import {
   NButton,
   NDrawer,
@@ -24,13 +24,46 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import {formatDate, formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
 
 defineOptions({name: '角色管理'})
 
 const $table = ref(null)
-const queryItems = ref({})
+/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+const checkedRowKeys = ref([])
+const queryItems = ref({ name: '' })
 const vPermission = resolveDirective('permission')
+
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const ids = checkedRowKeys.value || []
+  if (!ids.length) {
+    $message.warning('请先勾选要删除的角色')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 个角色吗？`,
+    async confirm() {
+      await api.deleteRoleBatch({ role_ids: ids })
+      $message.success('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
 
 const {
   modalVisible,
@@ -59,17 +92,18 @@ const menu_ids = ref([])
 const role_id = ref(0)
 const apiOption = ref([])
 const api_ids = ref([])
-const apiTree = ref([])
+/** 接口权限 NTree 实例，用于 getCheckedData */
+const apiTreeRef = ref(null)
 
 function buildApiTree(data) {
   const processedData = []
   const groupedData = {}
 
   data.forEach((item) => {
-    const tags = item['tags']
-    const pathParts = item['path'].split('/')
+    const tags = item['tags'] || ''
+    const pathParts = (item['path'] || '').split('/')
     const path = pathParts.slice(0, -1).join('/')
-    const summary = tags.charAt(0).toUpperCase() + tags.slice(1)
+    const summary = tags ? tags.charAt(0).toUpperCase() + tags.slice(1) : (item['path'] || 'API')
     const unique_id = item['method'].toLowerCase() + item['path']
     if (!(path in groupedData)) {
       groupedData[path] = {unique_id: path, path: path, summary: summary, children: []}
@@ -88,204 +122,228 @@ function buildApiTree(data) {
 }
 
 
-const columns = [
-  {
-    title: '角色代码',
-    key: 'code',
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.code})
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
     },
-  },
-  {
-    title: '角色名称',
-    key: 'name',
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      return h(NTag, {type: 'info'}, {default: () => row.name})
+    {
+      title: '角色代码',
+      key: 'code',
+      align: 'center',
+      ellipsis: {tooltip: true},
+      render(row) {
+        return h(NTag, {type: 'info'}, {default: () => row.code})
+      },
     },
-  },
-  {
-    title: '角色描述',
-    key: 'description',
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '创建人员',
-    key: 'created_user',
-    align: 'center',
-    ellipsis: {tooltip: true}
-  },
-  {
-    title: '更新人员',
-    key: 'updated_user',
-    align: 'center',
-    ellipsis: {tooltip: true}
-  },
-  {
-    title: '创建时间',
-    key: 'created_time',
-    align: 'center',
-    render(row) {
-      return h('span', formatDateTime(row.created_time))
+    {
+      title: '角色名称',
+      key: 'name',
+      align: 'center',
+      ellipsis: {tooltip: true},
+      render(row) {
+        return h(NTag, {type: 'info'}, {default: () => row.name})
+      },
     },
-  },
-  {
-    title: '更新时间',
-    key: 'updated_time',
-    align: 'center',
-    render(row) {
-      return h('span', formatDateTime(row.updated_time))
+    {
+      title: '角色描述',
+      key: 'description',
+      align: 'center',
+      ellipsis: {tooltip: true},
     },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 80,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return [
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'info',
-                  onClick: () => {
-                    handleEdit(row)
+    {
+      title: '创建人员',
+      key: 'created_user',
+      align: 'center',
+      ellipsis: {tooltip: true}
+    },
+    {
+      title: '更新人员',
+      key: 'updated_user',
+      align: 'center',
+      ellipsis: {tooltip: true}
+    },
+    {
+      title: '创建时间',
+      key: 'created_time',
+      align: 'center',
+      render(row) {
+        return h('span', formatDateTime(row.created_time))
+      },
+    },
+    {
+      title: '更新时间',
+      key: 'updated_time',
+      align: 'center',
+      render(row) {
+        return h('span', formatDateTime(row.updated_time))
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 200,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return [
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
+                    onClick: () => {
+                      handleEdit(row)
+                    },
                   },
-                },
-                {
-                  default: () => '编辑',
-                  icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-                }
-            ),
-            [[vPermission, 'post/api/v1/role/update']]
-        ),
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'primary',
-                  onClick: async () => {
-                    try {
-                      // 使用 Promise.all 来同时发送所有请求
-                      const [menusResponse, apisResponse, roleAuthorizedResponse] = await Promise.all([
-                        api.getMenus({page: 1, page_size: 9999}),
-                        api.getRouters({page: 1, page_size: 9999}),
-                        api.getRoleAuthorized({id: row.id}),
-                      ])
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+                  }
+              ),
+              [[vPermission, 'post/api/v1/role/update']]
+          ),
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'primary',
+                    onClick: async () => {
+                      try {
+                        // 使用 Promise.all 来同时发送所有请求
+                        const [menusResponse, apisResponse, roleAuthorizedResponse] = await Promise.all([
+                          api.getMenus({ page: 1, page_size: 9999 }),
+                          api.getRouters({ page: 1, page_size: 9999 }),
+                          api.getRoleAuthorized({ id: row.id }),
+                        ])
 
-                      // 处理每个请求的响应
-                      menuOption.value = menusResponse.data
-                      apiOption.value = buildApiTree(apisResponse.data)
-                      menu_ids.value = roleAuthorizedResponse.data.menus.map((v) => v.id)
-                      api_ids.value = roleAuthorizedResponse.data.apis.map(
-                          (v) => v.method.toLowerCase() + v.path
-                      )
+                        const authPayload = roleAuthorizedResponse.data || {}
+                        // 后端 to_dict(m2m=True) 字段名为 menus / routers，不是 apis
+                        menuOption.value = menusResponse.data || []
+                        apiOption.value = buildApiTree(apisResponse.data || [])
+                        menu_ids.value = (authPayload.menus || []).map((v) => v.id)
+                        api_ids.value = (authPayload.routers || []).map((v) => {
+                          const m = String(v.method ?? '').toLowerCase()
+                          const p = v.path ?? ''
+                          return m + p
+                        })
 
-                      active.value = true
-                      role_id.value = row.id
-                    } catch (error) {
-                      // 错误处理
-                      console.error('Error loading data:', error)
-                    }
+                        active.value = true
+                        role_id.value = row.id
+                      } catch (error) {
+                        console.error('Error loading data:', error)
+                        $message?.error?.(error?.message || '加载权限数据失败')
+                      }
+                    },
                   },
+                  {
+                    default: () => '权限',
+                    icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+                  }
+              ),
+              [[vPermission, 'get/api/v1/role/authorized']]
+          ),
+          h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete({role_id: row.id}, false),
+                onNegativeClick: () => {
                 },
-                {
-                  default: () => '权限',
-                  icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-                }
-            ),
-            [[vPermission, 'get/api/v1/role/authorized']]
-        ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({role_id: row.id}, false),
-              onNegativeClick: () => {
               },
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'tiny',
-                            quaternary: true,
-                            type: 'error',
-                          },
-                          {
-                            default: () => '删除',
-                            icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-                          }
-                      ),
-                      [[vPermission, 'delete/api/v1/role/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该角色吗?'),
-            }
-        ),
-      ]
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                            }
+                        ),
+                        [[vPermission, 'delete/api/v1/role/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该角色吗?'),
+              }
+          ),
+        ]
+      },
     },
-  },
-]
+  ]
+})
 
 async function updateRoleAuthorized() {
-  const checkData = apiTree.value.getCheckedData()
-  const apiInfos = []
-  checkData &&
-  checkData.options.forEach((item) => {
+  const treeInst = apiTreeRef.value
+  if (!treeInst?.getCheckedData) {
+    $message?.warning?.('接口树未就绪，请稍后再试')
+    return
+  }
+  const checkData = treeInst.getCheckedData()
+  const router_infos = []
+  checkData?.options?.forEach((item) => {
     if (!item.children) {
-      apiInfos.push({
+      router_infos.push({
         path: item.path,
         method: item.method,
       })
     }
   })
-  const {code, msg} = await api.updateRoleAuthorized({
-    id: role_id.value,
-    menu_ids: menu_ids.value,
-    api_infos: apiInfos,
-  })
-  if (code === 200) {
-    $message?.success('设置成功')
-  } else {
-    $message?.error(msg)
+  try {
+    await api.updateRoleAuthorized({
+      id: role_id.value,
+      menu_ids: menu_ids.value,
+      router_infos,
+    })
+    $message?.success?.('设置成功')
+    const result = await api.getRoleAuthorized({ id: role_id.value })
+    const payload = result.data || {}
+    menu_ids.value = (payload.menus || []).map((v) => v.id)
+    api_ids.value = (payload.routers || []).map((v) => {
+      const m = String(v.method ?? '').toLowerCase()
+      const p = v.path ?? ''
+      return m + p
+    })
+  } catch (e) {
+    $message?.error?.(e?.message || '保存失败')
   }
-
-  const result = await api.getRoleAuthorized({id: role_id.value})
-  menu_ids.value = result.data.menus.map((v) => {
-    return v.id
-  })
 }
 </script>
 
 <template>
   <CommonPage show-footer title="角色列表">
-    <template #action>
-      <NButton v-permission="'post/api/v1/role/create'" type="primary" @click="handleAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
-        新建角色
-      </NButton>
-    </template>
-
     <!--  搜索&表格  -->
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
         :is-pagination="true"
+        :remote="true"
         :columns="columns"
         :get-data="api.getRoleList"
         :single-line="true"
-        :scroll-x="1200"
+        :scroll-x="1320"
+        row-key="id"
+        @query-bar-create="handleAdd"
+        @query-bar-delete="handleBatchDelete"
+        @pagination-meta="onListPaginationMeta"
     >
 
       <!--  搜索  -->
@@ -384,7 +442,7 @@ async function updateRoleAuthorized() {
           </NTabPane>
           <NTabPane name="resource" tab="接口权限" display-directive="show">
             <NTree
-                ref="apiTree"
+                ref="apiTreeRef"
                 :data="apiOption"
                 :checked-keys="api_ids"
                 :pattern="pattern"

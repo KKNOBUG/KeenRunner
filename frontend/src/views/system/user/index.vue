@@ -1,5 +1,5 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
+import {computed, h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
 import {
   NButton,
   NCheckbox,
@@ -14,6 +14,7 @@ import {
   NSpace,
   NSwitch,
   NTag,
+  NTree,
   NTreeSelect,
 } from 'naive-ui'
 
@@ -26,14 +27,55 @@ import {formatDate, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
 import {useUserStore} from '@/store'
 
 defineOptions({name: '用户管理'})
 
 const $table = ref(null)
-const queryItems = ref({})
+/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+const checkedRowKeys = ref([])
+const queryItems = ref({ username: '', alias: '', email: '' })
 const vPermission = resolveDirective('permission')
+
+/** QueryBar：操作合并为下拉 */
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  let ids = [...(checkedRowKeys.value || [])]
+  const userStore = useUserStore()
+  const myId = userStore.userId
+  const originalLen = ids.length
+  ids = ids.filter((id) => id !== myId)
+  if (!ids.length) {
+    $message.warning('请先勾选要删除的用户，且不能仅包含当前登录账号')
+    return
+  }
+  if (ids.length < originalLen) {
+    $message.info('已自动排除当前登录用户')
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 个用户吗？`,
+    async confirm() {
+      await api.deleteUserBatch({ user_ids: ids })
+      $message.success('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
 
 const {
   modalVisible,
@@ -63,204 +105,218 @@ onMounted(() => {
   api.getDepts().then((res) => (deptOption.value = res.data))
 })
 
-const columns = [
-  {
-    title: '用户账号',
-    key: 'username',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用户名称',
-    key: 'alias',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '电子邮箱',
-    key: 'email',
-    width: 200,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用户角色',
-    key: 'role',
-    width: 100,
-    align: 'center',
-    render(row) {
-      const roles = row.roles ?? []
-      const group = []
-      for (let i = 0; i < roles.length; i++)
-        group.push(
-            h(NTag, {type: 'info', style: {margin: '2px 3px'}}, {default: () => roles[i].name})
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
+    },
+    {
+      title: '用户账号',
+      key: 'username',
+      width: 100,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '用户名称',
+      key: 'alias',
+      width: 100,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '电子邮箱',
+      key: 'email',
+      width: 200,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '用户角色',
+      key: 'role',
+      width: 100,
+      align: 'center',
+      render(row) {
+        const roles = row.roles ?? []
+        const group = []
+        for (let i = 0; i < roles.length; i++)
+          group.push(
+              h(NTag, {type: 'info', style: {margin: '2px 3px'}}, {default: () => roles[i].name})
+          )
+        return h('span', group)
+      },
+    },
+    {
+      title: '所属部门',
+      key: 'dept.name',
+      align: 'center',
+      width: 100,
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '超级用户',
+      key: 'is_superuser',
+      align: 'center',
+      width: 100,
+      render(row) {
+        return h(
+            NTag,
+            {type: 'info', style: {margin: '2px 3px'}},
+            {default: () => (row.is_superuser ? '是' : '否')}
         )
-      return h('span', group)
+      },
     },
-  },
-  {
-    title: '所属部门',
-    key: 'dept.name',
-    align: 'center',
-    width: 100,
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '超级用户',
-    key: 'is_superuser',
-    align: 'center',
-    width: 100,
-    render(row) {
-      return h(
-          NTag,
-          {type: 'info', style: {margin: '2px 3px'}},
-          {default: () => (row.is_superuser ? '是' : '否')}
-      )
+    {
+      title: '用户状态',
+      key: 'state',
+      align: 'center',
+      width: 100,
+      render(row) {
+        return h(
+            NTag,
+            {type: 'info', style: {margin: '2px 3px'}},
+            {default: () => row.state})
+      },
     },
-  },
-  {
-    title: '用户状态',
-    key: 'state',
-    align: 'center',
-    width: 100,
-    render(row) {
-      return h(
-          NTag,
-          {type: 'info', style: {margin: '2px 3px'}},
-          {default: () => row.state})
+    {
+      title: '是否禁用',
+      key: 'is_active',
+      width: 100,
+      align: 'center',
+      render(row) {
+        return h(NSwitch, {
+          size: 'small',
+          rubberBand: false,
+          value: row.is_active,
+          loading: !!row.publishing,
+          checkedValue: false,
+          uncheckedValue: true,
+          onUpdateValue: () => handleUpdateDisable(row),
+        })
+      },
     },
-  },
-  {
-    title: '是否禁用',
-    key: 'is_active',
-    width: 100,
-    align: 'center',
-    render(row) {
-      return h(NSwitch, {
-        size: 'small',
-        rubberBand: false,
-        value: row.is_active,
-        loading: !!row.publishing,
-        checkedValue: false,
-        uncheckedValue: true,
-        onUpdateValue: () => handleUpdateDisable(row),
-      })
+    {
+      title: '上次登录时间',
+      key: 'last_login',
+      align: 'center',
+      width: 200,
+      ellipsis: {tooltip: true},
+      render(row) {
+        return h(
+            NButton,
+            {size: 'small', type: 'text', ghost: true},
+            {
+              default: () => (row.last_login !== null ? formatDate(row.last_login) : null),
+              icon: renderIcon('mdi:update', {size: 16}),
+            }
+        )
+      },
     },
-  },
-  {
-    title: '上次登录时间',
-    key: 'last_login',
-    align: 'center',
-    width: 200,
-    ellipsis: {tooltip: true},
-    render(row) {
-      return h(
-          NButton,
-          {size: 'small', type: 'text', ghost: true},
-          {
-            default: () => (row.last_login !== null ? formatDate(row.last_login) : null),
-            icon: renderIcon('mdi:update', {size: 16}),
-          }
-      )
-    },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 80,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return [
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'info',
-                  onClick: () => {
-                    handleEdit(row)
-                    modalForm.value.dept_id = row.dept?.id
-                    modalForm.value.role_ids = row.roles.map((e) => (e = e.id))
-                    delete modalForm.value.dept
+    {
+      title: '操作',
+      key: 'actions',
+      width: 200,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return [
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
+                    onClick: () => {
+                      handleEdit(row)
+                      modalForm.value.dept_id = row.dept?.id
+                      modalForm.value.role_ids = row.roles.map((e) => (e = e.id))
+                      delete modalForm.value.dept
+                    },
                   },
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit', {size: 16}),
+                  }
+              ),
+              [[vPermission, 'post/api/v1/user/update']]
+          ),
+          h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete({user_id: row.id}, false),
+                onNegativeClick: () => {
                 },
-                {
-                  default: () => '编辑',
-                  icon: renderIcon('material-symbols:edit', {size: 16}),
-                }
-            ),
-            [[vPermission, 'post/api/v1/user/update']]
-        ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({user_id: row.id}, false),
-              onNegativeClick: () => {
               },
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'tiny',
-                            quaternary: true,
-                            type: 'error',
-                          },
-                          {
-                            default: () => '删除',
-                            icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-                          }
-                      ),
-                      [[vPermission, 'delete/api/v1/user/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该用户吗?'),
-            }
-        ),
-        !row.is_superuser && h(
-            NPopconfirm,
-            {
-              onPositiveClick: async () => {
-                try {
-                  await api.resetPassword({user_id: row.id});
-                  $message.success('密码已成功重置为123456');
-                  await $table.value?.handleSearch();
-                } catch (error) {
-                  $message.error('重置密码失败: ' + error.message);
-                }
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                            }
+                        ),
+                        [[vPermission, 'delete/api/v1/user/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该用户吗?'),
+              }
+          ),
+          !row.is_superuser && h(
+              NPopconfirm,
+              {
+                onPositiveClick: async () => {
+                  try {
+                    await api.resetPassword({user_id: row.id});
+                    $message.success('密码已成功重置为123456');
+                    await $table.value?.handleSearch();
+                  } catch (error) {
+                    $message.error('重置密码失败: ' + error.message);
+                  }
+                },
+                onNegativeClick: () => {
+                },
               },
-              onNegativeClick: () => {
-              },
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'tiny',
-                            quaternary: true,
-                            type: 'warning',
-                          },
-                          {
-                            default: () => '重置',
-                            icon: renderIcon('material-symbols:lock-reset', {size: 16}),
-                          }
-                      ),
-                      [[vPermission, 'post/api/v1/user/reset_password']]
-                  ),
-              default: () => h('div', {}, '确定重置用户密码为123456吗?'),
-            }
-        ),
-      ]
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'warning',
+                            },
+                            {
+                              default: () => '重置',
+                              icon: renderIcon('material-symbols:lock-reset', {size: 16}),
+                            }
+                        ),
+                        [[vPermission, 'post/api/v1/user/reset_password']]
+                    ),
+                default: () => h('div', {}, '确定重置用户密码为123456吗?'),
+              }
+          ),
+        ]
+      },
     },
-  },
-]
+  ]
+})
 
 // 修改用户禁用状态
 async function handleUpdateDisable(row) {
@@ -398,23 +454,23 @@ const validateAddUser = {
     <NLayoutContent>
       <CommonPage show-footer title="用户列表">
 
-        <!--  新建用户按钮  -->
-        <template #action>
-          <NButton v-permission="'post/api/v1/user/create'" type="primary" @click="handleAdd">
-            <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
-            新建用户
-          </NButton>
-        </template>
-
         <!-- 表格 -->
         <CrudTable
             ref="$table"
             v-model:query-items="queryItems"
+            v-model:checked-row-keys="checkedRowKeys"
+            :query-bar-props="queryBarProps"
             :is-pagination="true"
+            :remote="true"
             :columns="columns"
             :get-data="api.getUserList"
             :single-line="true"
-            :scroll-x="1200">
+            :scroll-x="1500"
+            row-key="id"
+            @query-bar-create="handleAdd"
+            @query-bar-delete="handleBatchDelete"
+            @pagination-meta="onListPaginationMeta"
+        >
 
           <!--  搜索行  -->
           <template #queryBar>

@@ -6,14 +6,22 @@
 @Module  : role_view.py
 @DateTime: 2025/2/19 23:11
 """
-from fastapi import APIRouter
+import traceback
+
+from fastapi import APIRouter, Body
 from fastapi.params import Query, Form
 from tortoise.expressions import Q
 
-from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate, RoleUpdateMenusRouters
+from backend.applications.base.schemas.role_schema import (
+    RoleCreate,
+    RoleUpdate,
+    RoleUpdateMenusRouters,
+    RoleBatchDelete,
+)
 from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.user.models.user_model import User
-from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse
+from backend.configure import LOGGER
+from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse
 from backend.services import DependAuth
 
 role = APIRouter()
@@ -33,12 +41,28 @@ async def create_role(
 
 
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
-async def delete_role(
+async def delete_role_one(
         role_id: int = Query(..., description="角色ID"),
 ):
     instance = await ROLE_CRUD.remove(id=role_id)
     data: dict = await instance.to_dict()
     return SuccessResponse(data=data)
+
+
+@role.post("/delete", summary="批量删除角色", description="根据角色ID或代码列表删除")
+async def delete_roles_batch(
+        body_in: RoleBatchDelete = Body(..., description="批量删除参数"),
+):
+    try:
+        count = await ROLE_CRUD.delete_roles(
+            role_ids=body_in.role_ids,
+            role_codes=body_in.role_codes,
+        )
+        LOGGER.info(f"批量删除角色成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"批量删除角色失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")

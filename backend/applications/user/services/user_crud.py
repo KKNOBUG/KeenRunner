@@ -7,7 +7,7 @@
 @DateTime: 2025/1/18 11:36
 """
 from datetime import datetime
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 
 from tortoise.exceptions import DoesNotExist
 
@@ -15,8 +15,9 @@ from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.user.models.user_model import User
-from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate
-from backend.core.exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException
+from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
+from backend.configure import LOGGER
+from backend.core.exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException, ParameterException, NoPermissionException
 from backend.core.responses import ForbiddenResponse
 from backend.services import verify_password, get_password_hash
 
@@ -25,14 +26,50 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     def __init__(self):
         super().__init__(model=User)
 
-    async def get_by_id(self, user_id: int) -> Optional[User]:
-        return await self.model.filter(id=user_id).first()
+    async def get_by_id(self, user_id: int, on_error: bool = False, is_active: bool = True) -> Optional[User]:
+        if not user_id:
+            error_message: str = "查询用户信息失败, 参数(user_id)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        kwargs: Dict[str, Any] = {"id": user_id}
+        if is_active:
+            kwargs["state__not"] = 1
+        instance = await self.model.filter(**kwargs).first()
+        if not instance and on_error:
+            error_message: str = f"查询用户信息失败, 用户(id={user_id})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_username(self, username: str) -> Optional[User]:
-        return await self.model.filter(username=username).first()
+    async def get_by_username(self, username: str, on_error: bool = False, is_active: bool = True) -> Optional[User]:
+        if not username:
+            error_message: str = "查询用户信息失败, 参数(username)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        kwargs: Dict[str, Any] = {"username": username}
+        if is_active:
+            kwargs["state__not"] = 1
+        instance = await self.model.filter(**kwargs).first()
+        if not instance and on_error:
+            error_message: str = f"查询用户信息失败, 用户(username={username})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_alias(self, username: str) -> Optional[List[User]]:
-        return await self.model.filter(username=username).all()
+    async def get_by_alias(self, alias: str, on_error: bool = False, is_active: bool = True) -> Optional[List[User]]:
+        if not alias:
+            error_message: str = "查询用户信息失败, 参数(alias)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        kwargs: Dict[str, Any] = {"alias": alias}
+        if is_active:
+            kwargs["state__not"] = 1
+        instance = await self.model.filter(**kwargs).all()
+        if not instance and on_error:
+            error_message: str = f"查询用户信息失败, 用户(alias={alias})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
     async def authenticate(self, credentials: CredentialsSchema) -> Optional[Union[BaseExceptions, User]]:
         user = await self.model.filter(username=credentials.username).first()
@@ -41,8 +78,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         verified = verify_password(credentials.password, user.password)
         if not verified:
             raise NotFoundException(message="用户名或密码错误")
-        if user.state in (0, 4):
-            raise NotFoundException(message="用户待岗或已离职")
+        if user.state == 1:
+            raise NoPermissionException(message="用户待岗或已离职")
         return user
 
     async def update_last_login(self, id: int) -> None:
@@ -67,10 +104,18 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if not instance:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 
-        instance.state = 0
+        instance.state = 1
         instance.is_active = 0
         await instance.save()
         return instance
+
+    async def delete_users(self, user_in: UserBatchDelete) -> int:
+        user_ids: Optional[List[int]] = user_in.user_ids
+        if user_ids:
+            count = await self.model.filter(id__in=user_ids).update(state=1)
+        else:
+            count = 0
+        return count
 
     async def update_user(self, user_in: UserUpdate) -> User:
         user_id: int = user_in.id

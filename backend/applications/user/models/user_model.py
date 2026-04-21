@@ -16,7 +16,7 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
-    username = fields.CharField(max_length=32, unique=True, description="用户账号", index=True)
+    username = fields.CharField(max_length=32, unique=True, description="用户账号")
     password = fields.CharField(max_length=255, null=True, description="用户密码")
     alias = fields.CharField(max_length=64, index=True, description="用户姓名")
     email = fields.CharField(max_length=64, unique=True, description="用户邮箱")

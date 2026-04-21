@@ -6,12 +6,21 @@
 @Module  : user_model.py
 @DateTime: 2025/1/18 10:28
 """
+import traceback
+
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from backend.applications.department.services.department_crud import DEPT_CRUD
-from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserSelect, UpdatePassword
+from backend.applications.user.schemas.user_schema import (
+    UserCreate,
+    UserUpdate,
+    UserSelect,
+    UpdatePassword,
+    UserBatchDelete
+)
 from backend.applications.user.services.user_crud import USER_CRUD
+from backend.configure import LOGGER
 from backend.core.exceptions import (
     DataAlreadyExistsException,
     NotFoundException,
@@ -22,7 +31,12 @@ from backend.core.responses import (
     FailureResponse,
     DataAlreadyExistsResponse,
 )
-from backend.services import CTX_USER_ID, DependAuth, verify_password, get_password_hash
+from backend.services import (
+    CTX_USER_ID,
+    DependAuth,
+    verify_password,
+    get_password_hash
+)
 
 user = APIRouter()
 
@@ -53,6 +67,19 @@ async def delete_user(
         return NotFoundResponse(message=e.__str__())
     except Exception as e:
         return FailureResponse(message=f"删除失败，异常描述:{e}")
+
+
+@user.post("/delete", summary="API自动化测试-按id或code列表删除用户")
+async def delete_user_batch(
+        user_in: UserBatchDelete = Body(..., description="用户信息"),
+):
+    try:
+        count = await USER_CRUD.delete_users(user_in=user_in)
+        LOGGER.info(f"按id或code列表删除用户成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"按id或code列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
 @user.post("/update", summary="更新用户", description="根据id更新用户信息")
@@ -114,6 +141,7 @@ async def list_user(
         q &= Q(email__contains=email)
     if dept_id is not None:
         q &= Q(dept_id=dept_id)
+    q &= Q(state=0)
     total, user_objs = await USER_CRUD.list(
         page=page, page_size=page_size, order=order, search=q
     )

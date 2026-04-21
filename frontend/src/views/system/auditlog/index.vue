@@ -1,5 +1,5 @@
 <script setup>
-import { h, onMounted, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import {
   NButton,
   NCard,
@@ -25,13 +25,43 @@ import { formatDateTime, renderIcon } from '@/utils'
 defineOptions({ name: '审计日志' })
 
 const $table = ref(null)
-const queryItems = ref({})
+/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+const checkedRowKeys = ref([])
+
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: false,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const ids = checkedRowKeys.value || []
+  if (!ids.length) {
+    $message.warning('请先勾选要删除的日志')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 条审计日志吗？删除后不可恢复。`,
+    async confirm() {
+      await api.deleteAuditLogBatch({ audit_ids: ids })
+      $message.success('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
+
 const detailVisible = ref(false)
 const detailRow = ref(null)
-
-onMounted(() => {
-  $table.value?.handleSearch()
-})
 
 function formatTimestamp(timestamp) {
   const date = new Date(timestamp)
@@ -57,22 +87,44 @@ function getEndOfDayTimestamp() {
   return now.getTime()
 }
 
-const startOfDayTimestamp = getStartOfDayTimestamp()
-const endOfDayTimestamp = getEndOfDayTimestamp()
-
-queryItems.value.start_time = formatTimestamp(startOfDayTimestamp)
-queryItems.value.end_time = formatTimestamp(endOfDayTimestamp)
-
-const datetimeRange = ref([startOfDayTimestamp, endOfDayTimestamp])
-const handleDateRangeChange = (value) => {
-  if (value == null) {
-    queryItems.value.start_time = null
-    queryItems.value.end_time = null
-  } else {
-    queryItems.value.start_time = formatTimestamp(value[0])
-    queryItems.value.end_time = formatTimestamp(value[1])
+function makeDefaultQuery() {
+  const s = getStartOfDayTimestamp()
+  const e = getEndOfDayTimestamp()
+  return {
+    username: '',
+    request_tags: '',
+    request_summary: '',
+    request_method: undefined,
+    request_router: '',
+    response_code: '',
+    start_time: formatTimestamp(s),
+    end_time: formatTimestamp(e),
   }
 }
+
+const queryItems = ref(makeDefaultQuery())
+
+/** 与 queryItems 同步，重置 QueryBar 时日期控件一致 */
+const datetimeRangeModel = computed({
+  get() {
+    const st = queryItems.value.start_time
+    const et = queryItems.value.end_time
+    if (!st || !et) return null
+    const t0 = new Date(String(st).replace(' ', 'T')).getTime()
+    const t1 = new Date(String(et).replace(' ', 'T')).getTime()
+    if (Number.isNaN(t0) || Number.isNaN(t1)) return null
+    return [t0, t1]
+  },
+  set(value) {
+    if (value == null) {
+      queryItems.value.start_time = null
+      queryItems.value.end_time = null
+    } else {
+      queryItems.value.start_time = formatTimestamp(value[0])
+      queryItems.value.end_time = formatTimestamp(value[1])
+    }
+  },
+})
 
 const methodOptions = [
   { label: 'GET', value: 'GET' },
@@ -139,99 +191,113 @@ function openDetail(row) {
   detailVisible.value = true
 }
 
-const columns = [
-  {
-    title: '日志ID',
-    key: 'id',
-    width: 80,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '用户名称',
-    key: 'username',
-    width: 100,
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h(NTag, { type: 'primary' }, { default: () => row.username || '-' })
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
     },
-  },
-  {
-    title: '功能模块',
-    key: 'request_tags',
-    width: 120,
-    align: 'center',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h(NTag, { type: 'info' }, { default: () => row.request_tags || '-' })
+    {
+      title: '日志ID',
+      key: 'id',
+      width: 80,
+      align: 'center',
+      ellipsis: { tooltip: true },
     },
-  },
-  {
-    title: '接口概要',
-    key: 'request_summary',
-    width: 160,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '请求方法',
-    key: 'request_method',
-    width: 90,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '请求路由',
-    key: 'request_router',
-    width: 180,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '请求状态',
-    key: 'request_status',
-    width: 90,
-    align: 'center',
-    render(row) {
-      const { text, type } = getRequestStatus(row)
-      return h(NTag, { type }, { default: () => text })
+    {
+      title: '用户名称',
+      key: 'username',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return h(NTag, { type: 'primary' }, { default: () => row.username || '-' })
+      },
     },
-  },
-  {
-    title: '响应代码',
-    key: 'response_code',
-    width: 90,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '响应信息',
-    key: 'response_message',
-    width: 140,
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 80,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return h(
-          NButton,
-          {
-            size: 'tiny',
-            quaternary: true,
-            type: 'info',
-            onClick: () => openDetail(row),
-          },
-          { default: () => '详情', icon: renderIcon('material-symbols:visibility-outline', { size: 16 }) }
-      )
+    {
+      title: '功能模块',
+      key: 'request_tags',
+      width: 120,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return h(NTag, { type: 'info' }, { default: () => row.request_tags || '-' })
+      },
     },
-  },
-]
+    {
+      title: '接口概要',
+      key: 'request_summary',
+      width: 160,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '请求方法',
+      key: 'request_method',
+      width: 90,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '请求路由',
+      key: 'request_router',
+      width: 180,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '请求状态',
+      key: 'request_status',
+      width: 90,
+      align: 'center',
+      render(row) {
+        const { text, type } = getRequestStatus(row)
+        return h(NTag, { type }, { default: () => text })
+      },
+    },
+    {
+      title: '响应代码',
+      key: 'response_code',
+      width: 90,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '响应信息',
+      key: 'response_message',
+      width: 140,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 80,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'info',
+              onClick: () => openDetail(row),
+            },
+            { default: () => '详情', icon: renderIcon('material-symbols:visibility-outline', { size: 16 }) }
+        )
+      },
+    },
+  ]
+})
 </script>
 
 <template>
@@ -239,10 +305,17 @@ const columns = [
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
+        :is-pagination="true"
+        :remote="true"
         :columns="columns"
         :get-data="api.getAuditLogList"
         :single-line="true"
-        :scroll-x="1200"
+        :scroll-x="1320"
+        row-key="id"
+        @query-bar-delete="handleBatchDelete"
+        @pagination-meta="onListPaginationMeta"
     >
       <template #queryBar>
         <QueryBarItem label="用户名称：">
@@ -301,11 +374,10 @@ const columns = [
         </QueryBarItem>
         <QueryBarItem label="创建时间：">
           <NDatePicker
-              v-model:value="datetimeRange"
+              v-model:value="datetimeRangeModel"
               type="datetimerange"
               clearable
               placeholder="请选择时间范围"
-              @update:value="handleDateRangeChange"
           />
         </QueryBarItem>
       </template>

@@ -18,7 +18,7 @@ from backend.applications.base.schemas.token_schema import CredentialsSchema, JW
 from backend.applications.user.models.user_model import User
 from backend.applications.user.services.user_crud import USER_CRUD
 from backend.configure import PROJECT_CONFIG
-from backend.core.exceptions import NotFoundException
+from backend.core.exceptions import NotFoundException, NoPermissionException
 from backend.core.responses import SuccessResponse, NotFoundResponse
 from backend.services import CTX_USER_ID
 from backend.services import DependAuth, create_access_token
@@ -31,7 +31,7 @@ auth_secure = APIRouter()
 async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)
-    except NotFoundException as e:
+    except (NotFoundException, NoPermissionException) as e:
         return NotFoundResponse(message=str(e.message), data=credentials.dict())
 
     await USER_CRUD.update_last_login(user.id)

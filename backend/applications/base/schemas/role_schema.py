@@ -7,7 +7,7 @@
 @DateTime: 2025/2/19 23:05
 """
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,3 +40,8 @@ class RoleUpdateMenusRouters(BaseModel):
     id: int
     menu_ids: List[int] = []
     router_infos: List[dict] = []
+
+
+class RoleBatchDelete(BaseModel):
+    role_ids: Optional[List[int]] = Field(None, description="角色ID列表")
+    role_codes: Optional[List[str]] = Field(None, description="角色代码列表")

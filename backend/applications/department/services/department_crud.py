@@ -128,5 +128,18 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         # 创建关系
         await DeptStruct.bulk_create(dept_struct_objs)
 
+    async def delete_departments(self, department_ids: Optional[List[int]]) -> int:
+        """按 ID 列表软删除部门（与单笔 delete_department 行为一致）。"""
+        if not department_ids:
+            return 0
+        n = 0
+        for did in department_ids:
+            try:
+                await self.delete_department(int(did))
+                n += 1
+            except NotFoundException:
+                continue
+        return n
+
 
 DEPT_CRUD = DepartmentCrud()

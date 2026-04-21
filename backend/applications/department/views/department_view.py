@@ -6,6 +6,8 @@
 @Module  : department_view.py
 @DateTime: 2025/2/3 18:21
 """
+import traceback
+
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
@@ -13,6 +15,7 @@ from backend.applications.department.schemas.department_schema import (
     DepartmentCreate,
     DepartmentUpdate,
     DepartmentSelect,
+    DepartmentBatchDelete,
 )
 from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.models.user_model import User
@@ -26,6 +29,7 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     NotFoundResponse,
 )
+from backend.configure import LOGGER
 from backend.services import DependAuth
 
 dept = APIRouter()
@@ -50,7 +54,7 @@ async def create_dept(
 
 
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
-async def delete_dept(
+async def delete_dept_one(
         department_id: int = Query(..., description="部门ID")
 ):
     try:
@@ -60,6 +64,19 @@ async def delete_dept(
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
     except Exception as e:
+        return FailureResponse(message=f"删除失败，异常描述:{e}")
+
+
+@dept.post("/delete", summary="批量删除部门", description="根据部门ID列表批量删除")
+async def delete_depts_batch(
+        body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
+):
+    try:
+        count = await DEPT_CRUD.delete_departments(body_in.department_ids)
+        LOGGER.info(f"批量删除部门成功, 数量: {count}")
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except Exception as e:
+        LOGGER.error(f"批量删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
@@ -121,6 +138,8 @@ async def search_dept(
         q &= Q(name__contains=name)
     if is_deleted is not None:
         q &= Q(is_deleted=is_deleted)
+    else:
+        q &= Q(is_deleted=False)
     if created_user:
         q &= Q(created_user__contains=created_user)
     if updated_user:
@@ -132,4 +151,4 @@ async def search_dept(
     data = [
         await obj.to_dict() for obj in instances
     ]
-    return SuccessResponse(data=data)
+    return SuccessResponse(data=data, total=total)
