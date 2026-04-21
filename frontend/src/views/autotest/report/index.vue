@@ -27,6 +27,42 @@ defineOptions({name: '测试报告'})
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
 
+/** 表格勾选（仅报告行有 report_id，与分组行区分） */
+const reportCheckedRowKeys = ref([])
+
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: false,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const keys = reportCheckedRowKeys.value || []
+  const reportIds = keys.filter((k) => {
+    if (k == null || k === '') return false
+    const s = String(k)
+    if (s.startsWith('group-') || s.startsWith('batch')) return false
+    return true
+  })
+  if (!reportIds.length) {
+    window.$message?.warning?.('请先勾选要删除的报告（不支持分组行）')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${reportIds.length} 条报告吗？`,
+    async confirm() {
+      await Promise.all(reportIds.map((report_id) => api.deleteApiReport({ report_id })))
+      window.$message?.success?.('删除成功')
+      reportCheckedRowKeys.value = []
+      await handleQuery()
+    },
+  })
+}
+
 // 执行日期范围（用于查询条件，按 case_st_time 筛选）：默认最近三天（当天减去两天 ～ 当天）
 const getTodayRange = () => {
   const end = new Date()
@@ -175,7 +211,8 @@ async function handleQuery() {
     const res = await api.getApiReportList(queryParams)
     const data = res?.data || []
     const total = res?.total ?? 0
-    rawReportList.value = data
+    // 与当前页内顺序一致，供虚拟序号跨页：seq = (page-1)*page_size + _pageRowIndex + 1
+    rawReportList.value = data.map((row, i) => ({ ...row, _pageRowIndex: i }))
     pagination.itemCount = total
   } catch (e) {
     rawReportList.value = []
@@ -197,6 +234,7 @@ function handleReset() {
   dateRange.value = null
   handleDateRangeChange(null)
   pagination.page = 1
+  reportCheckedRowKeys.value = []
   handleQuery()
 }
 
@@ -555,113 +593,146 @@ const columnsBase = [
   },
 ]
 
-// 带分组支持的列：首列任务/批次 + 其余列对组行显示 '-'
-const columns = [groupLeadColumn, ...columnsBase.map(wrapColumnForGroup)]
+const selectionColumn = {
+  type: 'selection',
+  fixed: 'left',
+  width: 48,
+  disabled: (row) => !!(row._isGroup || row._isBatchGroup),
+}
 
-// 表格行 key：组行用 groupKey，报告行用 report_code
+/** 虚拟序号：与后端分页一致，分组/批次头行显示 '-' */
+const seqColumn = {
+  title: '序号',
+  key: '__seq',
+  width: 64,
+  align: 'center',
+  fixed: 'left',
+  render(row) {
+    if (row._isGroup || row._isBatchGroup) return h('span', '-')
+    const pi = row._pageRowIndex
+    if (pi == null || pi === '') return h('span', '-')
+    const seqBase = (pagination.page - 1) * pagination.pageSize
+    return h('span', String(seqBase + Number(pi) + 1))
+  },
+}
+
+// 带分组支持的列：多选 + 序号 + 任务/批次 + 其余列对组行显示 '-'
+const columns = [selectionColumn, seqColumn, groupLeadColumn, ...columnsBase.map(wrapColumnForGroup)]
+
+// 表格行 key：组行 / 批次行；数据行用 report_id 便于勾选与批量删除一致
 const rowKey = (row) => {
   if (row._isGroup) return `group-${row._groupKey}`
   if (row._isBatchGroup) return row._batchKey
-  return row.report_code ?? row.report_id ?? row.id
+  if (row.report_id != null && row.report_id !== '') return row.report_id
+  return row.report_code ?? row.id ?? `flat-${row.case_id}-${String(row.case_st_time ?? '')}`
 }
 
 </script>
 
 <template>
   <CommonPage show-footer title="测试报告">
-    <!--  搜索栏  -->
-    <QueryBar mb-30 @search="handleSearch" @reset="handleReset">
-      <QueryBarItem label="用例ID：">
-        <NInput
-            v-model:value="queryItems.case_id"
-            clearable
-            type="text"
-            placeholder="请输入用例ID"
-            class="query-input"
-            @keypress.enter="handleSearch"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="报告类型：">
-        <NSelect
-            v-model:value="queryItems.report_type"
-            :options="reportTypeOptions"
-            clearable
-            placeholder="请选择报告类型"
-            class="query-input"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="执行状态：">
-        <NSelect
-            v-model:value="queryItems.case_state"
-            :options="caseStateOptions"
-            clearable
-            placeholder="请选择执行状态"
-            class="query-input"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="成功率：">
-        <NInput
-            v-model:value="queryItems.step_pass_ratio"
-            clearable
-            type="text"
-            placeholder="请输入成功率"
-            class="query-input"
-            @keypress.enter="handleSearch"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="任务标识：">
-        <NInput
-            v-model:value="queryItems.task_code"
-            clearable
-            type="text"
-            placeholder="请输入任务标识"
-            class="query-input"
-            @keypress.enter="handleSearch"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="批次标识：">
-        <NInput
-            v-model:value="queryItems.batch_code"
-            clearable
-            type="text"
-            placeholder="请输入批次标识"
-            class="query-input"
-            @keypress.enter="handleSearch"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="执行日期：">
-        <NDatePicker
-            v-model:value="dateRange"
-            type="daterange"
-            clearable
-            class="query-input"
-            placeholder="请选择执行日期范围"
-            @update:value="handleDateRangeChange"
-        />
-      </QueryBarItem>
-      <QueryBarItem label="创建人员：">
-        <NInput
-            v-model:value="queryItems.created_user"
-            clearable
-            type="text"
-            placeholder="请输入创建人员"
-            class="query-input"
-            @keypress.enter="handleSearch"
-        />
-      </QueryBarItem>
-    </QueryBar>
+    <!-- 与 CrudTable 一致：用 flex gap 固定 QueryBar 与表格间距，避免仅依赖组件外边距时在 flex 布局下不稳定 -->
+    <div flex flex-col gap-30>
+      <!--  搜索栏  -->
+      <QueryBar
+          v-bind="queryBarProps"
+          @search="handleSearch"
+          @reset="handleReset"
+          @delete="handleBatchDelete"
+      >
+        <QueryBarItem label="用例ID：">
+          <NInput
+              v-model:value="queryItems.case_id"
+              clearable
+              type="text"
+              placeholder="请输入用例ID"
+              class="query-input"
+              @keypress.enter="handleSearch"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="报告类型：">
+          <NSelect
+              v-model:value="queryItems.report_type"
+              :options="reportTypeOptions"
+              clearable
+              placeholder="请选择报告类型"
+              class="query-input"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="执行状态：">
+          <NSelect
+              v-model:value="queryItems.case_state"
+              :options="caseStateOptions"
+              clearable
+              placeholder="请选择执行状态"
+              class="query-input"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="成功率：">
+          <NInput
+              v-model:value="queryItems.step_pass_ratio"
+              clearable
+              type="text"
+              placeholder="请输入成功率"
+              class="query-input"
+              @keypress.enter="handleSearch"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="任务标识：">
+          <NInput
+              v-model:value="queryItems.task_code"
+              clearable
+              type="text"
+              placeholder="请输入任务标识"
+              class="query-input"
+              @keypress.enter="handleSearch"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="批次标识：">
+          <NInput
+              v-model:value="queryItems.batch_code"
+              clearable
+              type="text"
+              placeholder="请输入批次标识"
+              class="query-input"
+              @keypress.enter="handleSearch"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="执行日期：">
+          <NDatePicker
+              v-model:value="dateRange"
+              type="daterange"
+              clearable
+              class="query-input"
+              placeholder="请选择执行日期范围"
+              @update:value="handleDateRangeChange"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="创建人员：">
+          <NInput
+              v-model:value="queryItems.created_user"
+              clearable
+              type="text"
+              placeholder="请输入创建人员"
+              class="query-input"
+              @keypress.enter="handleSearch"
+          />
+        </QueryBarItem>
+      </QueryBar>
 
-    <!--  按任务分组 + 可折叠 表格  -->
-    <div>
-      <NDataTable
-          :loading="tableLoading"
-          :columns="columns"
-          :data="flattenedTableData"
-          :row-key="rowKey"
-          :row-class-name="(row) => row._isGroup ? 'report-group-row' : row._isBatchGroup ? 'report-batch-row' : ''"
-          :scroll-x="2000"
-          :single-line="true"
-      />
+      <!--  按任务分组 + 可折叠 表格  -->
+      <div min-w-0>
+        <NDataTable
+            v-model:checked-row-keys="reportCheckedRowKeys"
+            :loading="tableLoading"
+            :columns="columns"
+            :data="flattenedTableData"
+            :row-key="rowKey"
+            :row-class-name="(row) => row._isGroup ? 'report-group-row' : row._isBatchGroup ? 'report-batch-row' : ''"
+            :scroll-x="2114"
+            :single-line="true"
+        />
+      </div>
     </div>
     <div v-if="pagination.itemCount > 0" class="report-pagination mt-4 flex justify-end">
       <NPagination

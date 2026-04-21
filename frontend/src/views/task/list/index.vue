@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, onMounted, reactive, ref, resolveDirective, watch } from 'vue'
+import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton,
   NDataTable,
@@ -34,7 +34,6 @@ import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import { useCRUD } from '@/composables'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
 
 dayjs.extend(customParseFormat)
 defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
@@ -54,7 +53,36 @@ const TASK_STATUS_MAP = {
 
 const $table = ref(null)
 const queryItems = ref({})
-const vPermission = resolveDirective('permission')
+
+/** 任务表多选（与弹窗内用例勾选的 checkedRowKeys 区分） */
+const taskTableCheckedRowKeys = ref([])
+
+const queryBarProps = {
+  addReset: true,
+  addSearch: true,
+  addCreate: true,
+  addDelete: true,
+  actionMode: 'dropdown',
+}
+
+async function handleBatchDelete() {
+  const ids = taskTableCheckedRowKeys.value || []
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选要删除的任务')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 个任务吗？`,
+    async confirm() {
+      await Promise.all(ids.map((task_id) => api.deleteApiTaskList({ task_id })))
+      window.$message?.success?.('删除成功')
+      taskTableCheckedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
 
 const {
   handleDelete,
@@ -833,6 +861,7 @@ const secondsToInterval = (totalSeconds) => {
 }
 
 const columns = [
+  { type: 'selection', fixed: 'left', width: 48 },
   {
     title: '任务ID',
     key: 'task_id',
@@ -999,7 +1028,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => handleStopTask(row),
+                    onClick: () => openEdit(row),
                   },
                   {
                     default: () => '停止',
@@ -1012,7 +1041,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => handleStartTask(row),
+                    onClick: () => openEdit(row),
                   },
                   {
                     default: () => '启动',
@@ -1049,23 +1078,20 @@ onMounted(() => {
 
 <template>
   <CommonPage show-footer title="任务管理">
-    <template #action>
-      <NButton type="primary" @click="openAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
-        新增任务
-      </NButton>
-    </template>
-
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="taskTableCheckedRowKeys"
+        :query-bar-props="queryBarProps"
         :remote="true"
         :is-pagination="true"
         :columns="columns"
         :get-data="api.getApiTaskList"
-        :row-key="'task_id'"
-        :scroll-x="2000"
+        row-key="task_id"
+        :scroll-x="2050"
         :single-line="true"
+        @query-bar-create="openAdd"
+        @query-bar-delete="handleBatchDelete"
     >
       <template #queryBar>
         <QueryBarItem label="任务名称：">

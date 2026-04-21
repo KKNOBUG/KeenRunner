@@ -10,8 +10,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import {formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
-import TheIcon from '@/components/icon/TheIcon.vue'
-import {useTagsStore} from '@/store'
+import {usePermissionStore, useTagsStore, useUserStore} from '@/store'
 
 defineOptions({name: '测试用例'})
 
@@ -20,6 +19,48 @@ const queryItems = ref({
   case_tags: [] // 初始化为空数组
 })
 const vPermission = resolveDirective('permission')
+
+const userStore = useUserStore()
+const permissionStore = usePermissionStore()
+/** 与原头部「新增测试用例」按钮一致：无权限则不展示 QueryBar 中的「新增」 */
+const CASE_CREATE_PERM = 'post/api/v1/project/create'
+const canCreateCase = computed(
+    () => userStore.isSuperUser || permissionStore.apis.includes(CASE_CREATE_PERM)
+)
+const queryBarProps = computed(() => ({
+  addReset: true,
+  addSearch: true,
+  addCreate: canCreateCase.value,
+  addDelete: true,
+  actionMode: 'dropdown',
+}))
+
+const checkedRowKeys = ref([])
+
+/** 与 CrudTable 远程分页同步，用于「序号」列跨页连续编号 */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+function onListPaginationMeta(meta) {
+  listPaginationMeta.value = meta
+}
+
+async function handleBatchDelete() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选要删除的用例')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${ids.length} 条用例吗？`,
+    async confirm() {
+      await Promise.all(ids.map((case_id) => api.deleteApiTestcaseList({ case_id })))
+      window.$message?.success?.('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
 
 const {
   handleDelete,
@@ -306,266 +347,280 @@ const customHandleAdd = () => {
   router.push({path: '/autotest/steps'})
 }
 
-// 使用 computed 使 columns 依赖 runLoading，点击运行后表格会重新渲染以显示按钮 loading 状态
-const columns = computed(() => [
-  {
-    title: '用例类型',
-    key: 'case_type',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      let mode = "info"
-      let round = true
-      let bordered = true
-      if (row.case_type === '公共脚本') {
-        mode = 'warning'
-      }
-      return h(
-          NTag,
-          {type: mode, round: round, bordered: bordered},
-          {default: () => (row.case_type)}
-      )
+// 使用 computed 使 columns 依赖 runLoading / 分页元数据，点击运行或翻页后表格会重新渲染
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
+    { type: 'selection', fixed: 'left', width: 48 },
+    {
+      title: '序号',
+      key: '__seq',
+      width: 64,
+      align: 'center',
+      fixed: 'left',
+      render(_row, rowIndex) {
+        return seqBase + rowIndex + 1
+      },
     },
-  },
-  {
-    title: '用例名称',
-    key: 'case_name',
-    width: 300,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例属性',
-    key: 'case_attr',
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      let mode = "success"
-      let round = true
-      let bordered = true
-      if (row.case_attr === '反用例') {
-        mode = 'primary'
-      }
-      return h(
-          NTag,
-          {type: mode, round: round, bordered: bordered},
-          {default: () => (row.case_attr)}
-      )
-    },
-  },
-
-  {
-    title: '用例步骤',
-    key: 'case_steps',
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '用例版本',
-    key: 'case_version',
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '所属应用',
-    key: 'case_project',
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      // case_project 现在是对象，显示 project_name
-      return h('span', row.case_project?.project_name || '')
-    },
-  },
-  {
-    title: '所属标签',
-    key: 'case_tags',
-    align: 'center',
-    render(row) {
-      // case_tags 现在是对象数组，使用NTag展示，每个标签换行
-      if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
-        return h('div', { class: 'tag-container' },
-            row.case_tags
-                .filter(tag => tag.tag_name)
-                .map(tag =>
-                    h(NTag, {
-                      type: 'info',
-                      style: 'margin: 2px 4px 2px 0;'
-                    }, { default: () => tag.tag_name })
-                )
+    {
+      title: '用例类型',
+      key: 'case_type',
+      width: 100,
+      align: 'center',
+      ellipsis: {tooltip: true},
+      render(row) {
+        let mode = "info"
+        let round = true
+        let bordered = true
+        if (row.case_type === '公共脚本') {
+          mode = 'warning'
+        }
+        return h(
+            NTag,
+            {type: mode, round: round, bordered: bordered},
+            {default: () => (row.case_type)}
         )
-      }
-      return h('span', '')
+      },
     },
-  },
-  {
-    title: '创建人员',
-    key: 'created_user',
-    width: 150,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '更新人员',
-    key: 'updated_user',
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
-    title: '创建时间',
-    key: 'created_time',
-    align: 'center',
-    render(row) {
-      return h('span', formatDateTime(row.created_time))
+    {
+      title: '用例名称',
+      key: 'case_name',
+      width: 300,
+      align: 'center',
+      ellipsis: {tooltip: true},
     },
-  },
-  {
-    title: '更新时间',
-    key: 'updated_time',
-    align: 'center',
-    render(row) {
-      return h('span', formatDateTime(row.updated_time))
+    {
+      title: '用例属性',
+      key: 'case_attr',
+      align: 'center',
+      ellipsis: {tooltip: true},
+      render(row) {
+        let mode = "success"
+        let round = true
+        let bordered = true
+        if (row.case_attr === '反用例') {
+          mode = 'primary'
+        }
+        return h(
+            NTag,
+            {type: mode, round: round, bordered: bordered},
+            {default: () => (row.case_attr)}
+        )
+      },
     },
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 120,
-    align: 'center',
-    fixed: 'right',
-    render(row) {
-      return [
-        h(
-            NButton,
-            {
-              size: 'tiny',
-              quaternary: true,
-              type: 'primary',
-              loading: runningCaseId.value === (row.case_id ?? null),
-              disabled: runningCaseId.value != null,
-              onClick: () => openRunModal(row),
-            },
-            {
-              default: () => '执行',
-              icon: renderIcon('material-symbols:play-arrow', {size: 16}),
-            }
-        ),
-        withDirectives(
-            h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'info',
-                  onClick: () => {
-                    // 将完整的用例信息通过query传递（使用JSON字符串）
-                    const query = {
-                      case_id: row.case_id,
-                      case_info: JSON.stringify(row) // 将整条用例信息对象转换为JSON字符串
-                    }
-                    if (row.case_code) {
-                      query.case_code = row.case_code
-                    }
-                    // 若已有同用例的步骤编辑页签，则激活该页签；否则新建
-                    const targetPath = (() => {
-                      const match = (row.case_id != null && row.case_id !== '')
-                          ? tagsStore.tags.find((t) => {
-                            if (!t.path.startsWith('/autotest/steps')) return false
-                            const cid = getCaseIdFromPath(t.path)
-                            return cid != null && String(cid) === String(row.case_id)
-                          })
-                          : row.case_code
-                              ? tagsStore.tags.find((t) => {
-                                if (!t.path.startsWith('/autotest/steps')) return false
-                                const code = getCaseCodeFromPath(t.path)
-                                return code != null && String(code) === String(row.case_code)
-                              })
-                              : null
-                      return match ? match.path : null
-                    })()
-                    if (targetPath) {
-                      router.push(targetPath)
-                    } else {
-                      router.push({path: '/autotest/steps', query})
-                    }
-                  },
-                },
-                {
-                  default: () => '编辑',
-                  icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-                }
-            ),
-            [[vPermission, 'post/api/v1/role/update']]
-        ),
-        h(
-            NButton,
-            {
-              size: 'tiny',
-              quaternary: true,
-              type: 'warning',
-              loading: copyLoading.value,
-              disabled: copyLoading.value,
-              onClick: () => handleCopyCase(row),
-            },
-            {
-              default: () => '复制',
-              icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
-            }
-        ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({case_id: row.case_id}, false),
-              onNegativeClick: () => {
+
+    {
+      title: '用例步骤',
+      key: 'case_steps',
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '用例版本',
+      key: 'case_version',
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '所属应用',
+      key: 'case_project',
+      align: 'center',
+      ellipsis: {tooltip: true},
+      render(row) {
+        // case_project 现在是对象，显示 project_name
+        return h('span', row.case_project?.project_name || '')
+      },
+    },
+    {
+      title: '所属标签',
+      key: 'case_tags',
+      align: 'center',
+      render(row) {
+        // case_tags 现在是对象数组，使用NTag展示，每个标签换行
+        if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
+          return h('div', { class: 'tag-container' },
+              row.case_tags
+                  .filter(tag => tag.tag_name)
+                  .map(tag =>
+                      h(NTag, {
+                        type: 'info',
+                        style: 'margin: 2px 4px 2px 0;'
+                      }, { default: () => tag.tag_name })
+                  )
+          )
+        }
+        return h('span', '')
+      },
+    },
+    {
+      title: '创建人员',
+      key: 'created_user',
+      width: 150,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '更新人员',
+      key: 'updated_user',
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '创建时间',
+      key: 'created_time',
+      align: 'center',
+      render(row) {
+        return h('span', formatDateTime(row.created_time))
+      },
+    },
+    {
+      title: '更新时间',
+      key: 'updated_time',
+      align: 'center',
+      render(row) {
+        return h('span', formatDateTime(row.updated_time))
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 120,
+      align: 'center',
+      fixed: 'right',
+      render(row) {
+        return [
+          h(
+              NButton,
+              {
+                size: 'tiny',
+                quaternary: true,
+                type: 'primary',
+                loading: runningCaseId.value === (row.case_id ?? null),
+                disabled: runningCaseId.value != null,
+                onClick: () => openRunModal(row),
               },
-            },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'tiny',
-                            quaternary: true,
-                            type: 'error',
-                          },
-                          {
-                            default: () => '删除',
-                            icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-                          }
-                      ),
-                      [[vPermission, 'delete/api/v1/role/delete']]
-                  ),
-              default: () => h('div', {}, '确定删除该用例吗?'),
-            }
-        ),
-      ]
+              {
+                default: () => '执行',
+                icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+              }
+          ),
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
+                    onClick: () => {
+                      // 将完整的用例信息通过query传递（使用JSON字符串）
+                      const query = {
+                        case_id: row.case_id,
+                        case_info: JSON.stringify(row) // 将整条用例信息对象转换为JSON字符串
+                      }
+                      if (row.case_code) {
+                        query.case_code = row.case_code
+                      }
+                      // 若已有同用例的步骤编辑页签，则激活该页签；否则新建
+                      const targetPath = (() => {
+                        const match = (row.case_id != null && row.case_id !== '')
+                            ? tagsStore.tags.find((t) => {
+                              if (!t.path.startsWith('/autotest/steps')) return false
+                              const cid = getCaseIdFromPath(t.path)
+                              return cid != null && String(cid) === String(row.case_id)
+                            })
+                            : row.case_code
+                                ? tagsStore.tags.find((t) => {
+                                  if (!t.path.startsWith('/autotest/steps')) return false
+                                  const code = getCaseCodeFromPath(t.path)
+                                  return code != null && String(code) === String(row.case_code)
+                                })
+                                : null
+                        return match ? match.path : null
+                      })()
+                      if (targetPath) {
+                        router.push(targetPath)
+                      } else {
+                        router.push({path: '/autotest/steps', query})
+                      }
+                    },
+                  },
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+                  }
+              ),
+              [[vPermission, 'post/api/v1/role/update']]
+          ),
+          h(
+              NButton,
+              {
+                size: 'tiny',
+                quaternary: true,
+                type: 'warning',
+                loading: copyLoading.value,
+                disabled: copyLoading.value,
+                onClick: () => handleCopyCase(row),
+              },
+              {
+                default: () => '复制',
+                icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+              }
+          ),
+          h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete({case_id: row.case_id}, false),
+                onNegativeClick: () => {
+                },
+              },
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                            }
+                        ),
+                        [[vPermission, 'delete/api/v1/role/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该用例吗?'),
+              }
+          ),
+        ]
+      },
     },
-  },
-])
+  ]
+})
 
 
 </script>
 
 <template>
   <CommonPage show-footer title="测试用例">
-    <template #action>
-      <NButton v-permission="'post/api/v1/project/create'" type="primary" @click="customHandleAdd">
-        <TheIcon icon="material-symbols:add" :size="18" class="mr-5"/>
-        新增测试用例
-      </NButton>
-    </template>
 
     <!--  搜索&表格  -->
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
         :is-pagination="true"
         :columns="columns"
         :get-data="api.getApiTestcaseList"
         :row-key="'case_id'"
-        :scroll-x="2000"
+        :scroll-x="2112"
         :single-line="true"
+        @pagination-meta="onListPaginationMeta"
+        @query-bar-create="customHandleAdd"
+        @query-bar-delete="handleBatchDelete"
     >
 
       <!--  搜索  -->

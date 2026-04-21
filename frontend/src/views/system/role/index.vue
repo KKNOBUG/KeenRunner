@@ -434,6 +434,7 @@ async function updateRoleAuthorized() {
                 key-field="id"
                 label-field="name"
                 checkable
+                cascade
                 :default-expand-all="true"
                 :block-line="true"
                 :selectable="false"

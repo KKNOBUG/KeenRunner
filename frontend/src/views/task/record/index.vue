@@ -59,7 +59,7 @@
               class="query-input"
           />
         </QueryBarItem>
-        <QueryBarItem label="开始时间起：">
+        <QueryBarItem label="结束时间：">
           <NInput
               v-model:value="queryItems.celery_start_time_begin"
               clearable
@@ -69,7 +69,7 @@
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="开始时间止：">
+        <QueryBarItem label="结束时间：">
           <NInput
               v-model:value="queryItems.celery_start_time_end"
               clearable
