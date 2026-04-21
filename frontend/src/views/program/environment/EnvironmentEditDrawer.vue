@@ -260,7 +260,7 @@
 </template>
 
 <script setup>
-import {computed, h, nextTick, reactive, ref, watch} from 'vue'
+import {computed, h, nextTick, reactive, ref, resolveDirective, watch, withDirectives} from 'vue'
 import {
   NButton,
   NCheckbox,
@@ -285,6 +285,8 @@ import CrudTable from "@/components/table/CrudTable.vue"
 import TheIcon from '@/components/icon/TheIcon.vue'
 
 defineOptions({name: '环境明细编辑'})
+
+const vPermission = resolveDirective('permission')
 
 const props = defineProps({
   show: {type: Boolean, default: false},
@@ -494,34 +496,52 @@ const appColumns = computed(() => {
       title: '操作',
       key: 'actions',
       align: 'center',
-      width: 90,
+      width: 80,
       fixed: 'right',
       render(row) {
         return [
-          h(NButton, {
-            size: 'small',
-            quaternary: true,
-            circle: true,
-            type: 'primary',
-            style: 'margin-right: 4px;',
-            title: '编辑',
-            onClick: () => openEditAppConfig(row),
-          }, { icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }),
-          h(NPopconfirm, { onPositiveClick: () => deleteConfig(row) }, {
-            trigger: () =>
-                h(
-                    NButton,
-                    {
-                      size: 'small',
-                      quaternary: true,
-                      circle: true,
-                      type: 'error',
-                      title: '删除',
-                    },
-                    { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
-                ),
-            default: () => h('div', {}, '确定删除该配置吗?'),
-          }),
+          withDirectives(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
+                    onClick: () => openEditAppConfig(row),
+                  },
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
+                  }
+              ),
+              [[vPermission, 'post/api/v1/role/update']]
+          ),
+          h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => deleteConfig(row),
+                onNegativeClick: () => {},
+              },
+              {
+                trigger: () =>
+                    withDirectives(
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                            }
+                        ),
+                        [[vPermission, 'delete/api/v1/role/delete']]
+                    ),
+                default: () => h('div', {}, '确定删除该配置吗?'),
+              }
+          ),
         ]
       },
     },
@@ -548,34 +568,52 @@ function buildInfraColumnsComputed(metaKey) {
         title: '操作',
         key: 'actions',
         align: 'center',
-        width: 90,
+        width: 80,
         fixed: 'right',
         render(row) {
           return [
-            h(NButton, {
-              size: 'small',
-              quaternary: true,
-              circle: true,
-              type: 'primary',
-              style: 'margin-right: 4px;',
-              title: '编辑',
-              onClick: () => openEditInfraConfig(row),
-            }, { icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }),
-            h(NPopconfirm, { onPositiveClick: () => deleteConfig(row) }, {
-              trigger: () =>
-                  h(
-                      NButton,
-                      {
-                        size: 'small',
-                        quaternary: true,
-                        circle: true,
-                        type: 'error',
-                        title: '删除',
-                      },
-                      { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
-                  ),
-              default: () => h('div', {}, '确定删除该配置吗?'),
-            }),
+            withDirectives(
+                h(
+                    NButton,
+                    {
+                      size: 'tiny',
+                      quaternary: true,
+                      type: 'info',
+                      onClick: () => openEditInfraConfig(row),
+                    },
+                    {
+                      default: () => '编辑',
+                      icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
+                    }
+                ),
+                [[vPermission, 'post/api/v1/role/update']]
+            ),
+            h(
+                NPopconfirm,
+                {
+                  onPositiveClick: () => deleteConfig(row),
+                  onNegativeClick: () => {},
+                },
+                {
+                  trigger: () =>
+                      withDirectives(
+                          h(
+                              NButton,
+                              {
+                                size: 'tiny',
+                                quaternary: true,
+                                type: 'error',
+                              },
+                              {
+                                default: () => '删除',
+                                icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                              }
+                          ),
+                          [[vPermission, 'delete/api/v1/role/delete']]
+                      ),
+                  default: () => h('div', {}, '确定删除该配置吗?'),
+                }
+            ),
           ]
         },
       },

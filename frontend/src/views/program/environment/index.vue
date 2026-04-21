@@ -105,7 +105,7 @@ const columns = computed(() => {
     {
       title: '操作',
       key: 'actions',
-      width: 100,
+      width: 80,
       align: 'center',
       fixed: 'right',
       render(row) {
@@ -114,25 +114,39 @@ const columns = computed(() => {
               h(
                   NButton,
                   {
-                    size: 'small',
-                    type: 'primary',
-                    style: 'margin-right: 8px;',
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
                     onClick: () => openEdit(row),
                   },
-                  { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
+                  }
               ),
               [[vPermission, 'post/api/v1/role/update']]
           ),
           h(
               NPopconfirm,
-              { onPositiveClick: () => handleDelete({ env_id: row.env_id }) },
+              {
+                onPositiveClick: () => handleDelete({ env_id: row.env_id }),
+                onNegativeClick: () => {},
+              },
               {
                 trigger: () =>
                     withDirectives(
-                        h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
-                          default: () => '删除',
-                          icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                        }),
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                            }
+                        ),
                         [[vPermission, 'delete/api/v1/role/delete']]
                     ),
                 default: () => h('div', {}, '确定删除该环境吗?'),

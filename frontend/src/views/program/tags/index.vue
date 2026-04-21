@@ -140,7 +140,7 @@ const columns = computed(() => {
     {
       title: '操作',
       key: 'actions',
-      width: 100,
+      width: 80,
       align: 'center',
       fixed: 'right',
       render(row) {
@@ -149,25 +149,39 @@ const columns = computed(() => {
               h(
                   NButton,
                   {
-                    size: 'small',
-                    type: 'primary',
-                    style: 'margin-right: 8px;',
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'info',
                     onClick: () => handleEdit(row),
                   },
-                  { default: () => '编辑', icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
+                  {
+                    default: () => '编辑',
+                    icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
+                  }
               ),
               [[vPermission, 'post/api/v1/role/update']]
           ),
           h(
               NPopconfirm,
-              { onPositiveClick: () => handleDelete({ tag_id: row.tag_id }, false) },
+              {
+                onPositiveClick: () => handleDelete({ tag_id: row.tag_id }, false),
+                onNegativeClick: () => {},
+              },
               {
                 trigger: () =>
                     withDirectives(
-                        h(NButton, { size: 'small', type: 'error', style: 'margin-right: 8px;' }, {
-                          default: () => '删除',
-                          icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                        }),
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                            }
+                        ),
                         [[vPermission, 'delete/api/v1/role/delete']]
                     ),
                 default: () => h('div', {}, '确定删除该标签吗?'),
@@ -203,7 +217,7 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_project"
               :options="projectOptions"
               clearable
-              placeholder="请选择所属应用"
+              placeholder="请选择应用"
               style="width: 180px"
               @update:value="$table?.handleSearch()"
           />
@@ -213,8 +227,8 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_type"
               :options="tagTypeOptions"
               clearable
-              placeholder="请选择标签类型"
-              style="width: 180px"
+              placeholder="请选择类型"
+              style="width: 120px"
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -223,7 +237,6 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_name"
               clearable
               placeholder="请输入标签名称"
-              style="width: 180px"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -257,7 +270,7 @@ const columns = computed(() => {
           <NSelect
               v-model:value="modalForm.tag_project"
               :options="projectOptions"
-              placeholder="请选择所属应用"
+              placeholder="请选择应用"
               :disabled="modalAction === 'edit'"
           />
         </NFormItem>
