@@ -95,7 +95,7 @@ const isDisabled = ref(false)
 
 onMounted(() => {
   // 仅加载父级下拉树数据；表格列表等用户点击「搜索」后再请求
-  // $table.value?.handleSearch()
+  $table.value?.handleSearch()
   api.getDepts().then((res) => (deptOption.value = res.data))
 })
 

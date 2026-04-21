@@ -13,7 +13,8 @@ import { useCRUD } from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
 
-defineOptions({ name: 'API管理' })
+// 必须与后台菜单「名称」一致（buildRoutes 里 meta.componentName = e_child.name），否则 KeepAlive include 匹配不上，每次切 tab 都会重新挂载并触发 onMounted 请求
+defineOptions({ name: '路由管理' })
 
 const $table = ref(null)
 const queryItems = ref({})
@@ -306,7 +307,6 @@ const columns = computed(() => {
             v-permission="'post/api/v1/router/refresh'"
             size="small"
             type="warning"
-            secondary
             @click="handleRefreshRouter"
         >
           <TheIcon icon="material-symbols:refresh" :size="16" class="mr-5" />刷新API
