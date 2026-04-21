@@ -14,6 +14,7 @@ from fastapi import Depends, Header, HTTPException, Request
 from backend.applications.base.models.role_model import Role
 from backend.applications.user.models.user_model import User
 from backend.configure import PROJECT_CONFIG
+from backend.enums import HTTPMethod
 from backend.services import CTX_USER_ID
 
 
@@ -45,7 +46,7 @@ class PermissionControl:
     async def has_permission(cls, request: Request, current_user: User = Depends(AuthControl.is_authed)) -> None:
         if current_user.is_superuser:
             return
-        method = request.method
+        method = str(HTTPMethod(request.method))
         # 对结尾‘/’符号进行统一化，使白名单/路径匹配稳定。
         path = request.url.path
         if path != "/" and path.endswith("/"):

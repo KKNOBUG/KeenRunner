@@ -22,7 +22,7 @@ class UserCreate(BaseModel):
         default="/static/avatar/default/20250101010101.png",
         description="用户头像路径"
     )
-    state: int = Field(example=1, default=1, description="用户状态(0:离职,1:正常,2:休假,3:出差,4:待岗)")
+    state: int = Field(example=1, default=1, description="用户状态(0:正常,1:离职)")
     is_active: bool = Field(example=True, default=True, description="是否激活")
     is_superuser: bool = Field(example=False, default=False, description="是否为超级管理员")
     role_ids: Optional[List[int]] = Field(example=[], default=[], description="角色ID")
