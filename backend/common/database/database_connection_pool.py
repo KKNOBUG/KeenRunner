@@ -18,7 +18,7 @@ import cx_Oracle
 from loguru import logger
 
 
-class APPDatabasePool:
+class DBConnPoolFromConfig:
     # 应用数据库连接池管理器，基于环境配置子表
     __private_instance = None
     __private_initialized = False
@@ -306,16 +306,16 @@ class APPDatabasePool:
                         if cursor.description:
                             # 查询数据，返回列表
                             result = await cursor.fetchall()
-                            date = json.loads(
+                            sql_data = json.loads(
                                 json.dumps([dict(row) for row in result], default=self.serializer)
                             )
                         else:
                             await conn.commit()
-                            date = {"count": rowcount}
+                            sql_data = {"count": rowcount}
 
                         return {
-                            "date": date,
-                            "rowcount": rowcount
+                            "sql_data": sql_data,
+                            "sql_count": rowcount,
                         }
                 except Exception as e:
                     await conn.rollback()
@@ -358,8 +358,8 @@ class APPDatabasePool:
                     conn.close()
 
             try:
-                data, rowcount = await loop.run_in_executor(None, _oracle_execute)
-                return {"data": data, "rowcount": rowcount}
+                sql_data, sql_count = await loop.run_in_executor(None, _oracle_execute)
+                return {"sql_data": sql_data, "sql_count": sql_count}
             except Exception as e:
                 err_msg = f"执行sql失败，{str(e)}"
                 self.logger.error(err_msg + f"\n{traceback.format_exc()}")
@@ -450,10 +450,10 @@ class APPDatabasePool:
             return None
 
 
-def get_app_database_pool() -> "APPDatabasePool":
+def get_app_database_pool() -> "DBConnPoolFromConfig":
     """
     返回绑定自动化环境配置表的单例连接池管理器（首次调用时注入 Tortoise 模型）。
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
 
-    return APPDatabasePool(config_model=AutoTestApiEnvConfigInfo)
+    return DBConnPoolFromConfig(config_model=AutoTestApiEnvConfigInfo)
