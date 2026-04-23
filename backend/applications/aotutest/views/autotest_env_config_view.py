@@ -198,7 +198,7 @@ async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., descrip
         if unique_env_ids:
             env_name_map = dict(
                 await AUTOTEST_API_ENV_ENUM_CRUD.model.filter(
-                    id__in=unique_project_ids,
+                    id__in=unique_env_ids,
                     state__not=1
                 ).values_list("id", "env_name")
             )

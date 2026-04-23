@@ -24,6 +24,17 @@ NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
+class DataBaseOperates(BaseModel):
+    name: str = Field(..., max_length=128, description="数据库操作名称")
+    expr: str = Field(..., max_length=4096, description="数据库操作SQL语句")
+    project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
+    project_name: str = Field(..., max_length=128, description="所属应用名称")
+    variable_name: str = Field(..., max_length=128, description="存储变量名称")
+    config_name: str = Field(..., max_length=128, description="所属环境配置名称")
+    database_name: str = Field(..., max_length=128, description="所属数据库名称")
+    desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
+
+
 class AutoTestApiStepReqBase(BaseModel):
     request_url: Optional[str] = Field(None, max_length=2048, description="请求地址")
     request_port: Optional[str] = Field(None, max_length=16, description="请求端口")
@@ -37,6 +48,22 @@ class AutoTestApiStepReqBase(BaseModel):
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
     request_project_id: Optional[int] = Field(None, ge=1, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="AutoTestReqArgsType")
+
+
+class AutoTestApiStepDbBase(BaseModel):
+    database_operates: Optional[List[DataBaseOperates]] = Field(None, description="数据库请求操作列表")
+    database_searched: Optional[bool] = Field(None, description="数据库请求查到即止开关")
+
+    @field_validator("database_operates", mode="before")
+    @classmethod
+    def normalize_database_operates(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
 
 
 class AutoTestApiStepVarBase(BaseModel):
@@ -90,7 +117,7 @@ class AutoTestApiStepVarBase(BaseModel):
         return v
 
 
-class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
+class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepVarBase):
     step_id: Optional[int] = Field(None, description="步骤ID(更新必填, 新增不填)")
     step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码(更新必填, 新增不填)")
@@ -116,6 +143,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepVarBase):
     data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
     data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
     conditions: NON_LIST_DICT_TYPE = Field(None, description="判断条件(循环结构或条件分支)")
+
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
 
@@ -199,7 +227,8 @@ class AutoTestStepTreeExecute(BaseModel):
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
     # 参数化驱动：运行模式可传多条数据集名称循环执行；调试模式只能传一条
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
+    selected_dataset_names: Optional[List[str]] = Field(None,
+                                                        description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
 
     @model_validator(mode='after')
     def validate_mode(self):

@@ -7,13 +7,13 @@
 @DateTime: 2026/1/2 17:42
 """
 import traceback
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any, Union, List, Tuple
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo, AutoTestApiEnvConfigInfo
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
@@ -26,6 +26,45 @@ from backend.core.exceptions import (
     ParameterException,
     DataBaseStorageException,
 )
+from backend.enums import AutoTestConfigNodeType
+
+
+async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tuple[str, Optional[str]]:
+    """
+    按「全局环境枚举名 + 应用」解析 HTTP 网关 host/port：
+    先查 AutoTestApiEnvEnumInfo（仅 env_name），再查 AutoTestApiEnvConfigInfo（project_id + env_id，config_type=api）。
+    """
+    pid = int(project_id)
+    name = (env_name or "").strip()
+    if not name:
+        raise ParameterException(message="执行环境名称(env_name)不允许为空")
+
+    env_row = await AutoTestApiEnvEnumInfo.filter(env_name__iexact=name, state__not=1).first()
+    if not env_row:
+        raise NotFoundException(message=f"环境枚举不存在: env_name={name!r}")
+
+    cfg = (
+        await AutoTestApiEnvConfigInfo.filter(
+            project_id=pid,
+            env_id=env_row.id,
+            config_type=AutoTestConfigNodeType.API.value,
+            state__not=1,
+        )
+        .order_by("id")
+        .first()
+    )
+    if not cfg or not str(cfg.config_host or "").strip():
+        raise NotFoundException(
+            message=(
+                f"未找到可用的 API 环境配置(config_type={AutoTestConfigNodeType.API.value!r} 且 config_host 非空): "
+                f"project_id={pid}, env_id={env_row.id}"
+            )
+        )
+    host = str(cfg.config_host).strip().rstrip("/").rstrip(":")
+    port_raw = getattr(cfg, "config_port", None)
+    if port_raw is None or str(port_raw).strip() == "":
+        return host, None
+    return host, str(port_raw).strip()
 
 
 class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnvCreate, AutoTestApiEnvUpdate]):

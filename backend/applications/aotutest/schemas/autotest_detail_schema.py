@@ -7,7 +7,7 @@
 @DateTime: 2025/11/27 10:42
 """
 import json
-from typing import Optional, List, Dict, Any, Type
+from typing import Optional, List, Dict, Any, Type, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -16,6 +16,17 @@ from backend.enums import AutoTestStepType, HTTPMethod, AutoTestReqArgsType
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
+
+
+class DataBaseOperates(BaseModel):
+    name: str = Field(..., max_length=128, description="数据库操作名称")
+    expr: str = Field(..., max_length=4096, description="数据库操作SQL语句")
+    project_id: int = Field(..., ge=1, description="所属应用ID")
+    project_name: str = Field(..., max_length=128, description="所属应用名称")
+    variable_name: List[str] = Field(..., description="存储变量名称")
+    config_name: str = Field(..., max_length=128, description="所属环境配置名称")
+    database_name: str = Field(..., max_length=128, description="所属数据库名称")
+    desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
 
 
 class AutoTestApiDetailReqBase(BaseModel):
@@ -34,9 +45,9 @@ class AutoTestApiDetailReqBase(BaseModel):
 
 
 class AutoTestApiDetailResBase(BaseModel):
-    response_cookie: Optional[str] = Field(default=None, description="响应信息(cookies)")
+    response_cookie: NON_DICT_TYPE = Field(default=None, description="响应信息(cookies)")
     response_header: NON_DICT_TYPE = Field(default=None, description="响应信息(headers)")
-    response_body: NON_DICT_TYPE = Field(default=None, description="响应信息(body)")
+    response_body: Union[NON_DICT_TYPE, NON_LIST_DICT_TYPE] = Field(default=None, description="响应信息(body)")
     response_text: Optional[str] = Field(default=None, description="响应信息(text)")
     response_elapsed: Optional[str] = Field(default=None, max_length=16, description="响应信息(elapsed)")
 
@@ -46,6 +57,7 @@ class AutoTestApiDetailVarBase(BaseModel):
     defined_variables: NON_LIST_DICT_TYPE = Field(default=None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
     extract_variables: NON_LIST_DICT_TYPE = Field(default=None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
+    database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="本次执行数据库操作明细快照(解析后的数据库请求操作列表)")
     step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
@@ -93,6 +105,17 @@ class AutoTestApiDetailVarBase(BaseModel):
             return v
         return v
 
+    @field_validator('database_operates', mode='before')
+    @classmethod
+    def normalize_database_operates(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
     @model_validator(mode='before')
     @classmethod
     def normalize_json_fields(cls, v):
@@ -129,6 +152,14 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["assert_validators"] = None
                 executive_logger.append(f"字段[assert_validators]标准化失败, 已置空, 错误描述: {e}")
 
+        database_operates_value: Optional[List[Dict[str, Any]]] = v.get("database_operates")
+        if database_operates_value:
+            try:
+                v["database_operates"] = json.loads(json.dumps(database_operates_value, ensure_ascii=False))
+            except Exception as e:
+                v["database_operates"] = None
+                executive_logger.append(f"字段[database_operates]标准化失败, 已置空, 错误描述: {e}")
+
         if executive_logger:
             step_exec_logger_est: Optional[str] = v.get("step_exec_logger")
             step_exec_logger_str: str = str(step_exec_logger_est) if step_exec_logger_est else ""
@@ -157,6 +188,7 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_on_error: Optional[Any] = Field(default=None, description="本次执行循环错误策略")
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
     conditions: NON_DICT_TYPE = Field(default=None, description="本次执行条件/循环判断条件")
+    database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中

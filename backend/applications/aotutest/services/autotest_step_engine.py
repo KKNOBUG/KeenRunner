@@ -18,12 +18,15 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 from urllib.parse import quote, unquote
 
 import httpx
+from aiomysql import Pool
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo, AutoTestApiCaseInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
 from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
+from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
 from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
@@ -949,7 +952,7 @@ class BaseStepExecutor:
                 # 将本步骤的 extract_variables 合并到 session_variables，供后续步骤引用（仅合并提取成功的，避免失败项用 None 覆盖）
                 if getattr(result, "extract_variables", None) and isinstance(result.extract_variables, list):
                     extract_list = [
-                        {"key": item.get("name"), "value": item.get("extract_value"), "desc": ""}
+                        {"key": item.get("name"), "value": item.get("extract_value"), "desc": item.get("desc", "") or ""}
                         for item in result.extract_variables
                         if isinstance(item, dict) and item.get("name") is not None and item.get("success") is True
                     ]
@@ -1009,10 +1012,11 @@ class BaseStepExecutor:
             response_elapsed = None
             if result.response:
                 response_text = result.response.get("response_text")
+                response_body = result.response.get("response_body")
                 response_header = result.response.get("response_header")
                 response_cookie = result.response.get("response_cookie")
                 response_elapsed = result.response.get("response_elapsed")
-                if response_text:
+                if response_text and not response_body:
                     try:
                         response_body = json.loads(response_text)
                     except (ValueError, TypeError):
@@ -1070,6 +1074,12 @@ class BaseStepExecutor:
                 loop_on_error=self.step.get("loop_on_error") or None,
                 loop_timeout=self.step.get("loop_timeout") or None,
                 conditions=self.step.get("conditions") or None,
+                database_operates=actual_request.get("database_operates") or None,
+                database_searched=(
+                    actual_request["database_searched"]
+                    if "database_searched" in actual_request and actual_request["database_searched"] is not None
+                    else None
+                ),
                 # 数据源相关
                 dataset_name=dataset_name if has_data_driven else None,
                 dataset_snapshot=dataset_snapshot if has_data_driven else None,
@@ -1787,10 +1797,7 @@ class PythonStepExecutor(BaseStepExecutor):
             assert_validators: Optional[List[Dict[str, Any]]] = self.step.get("assert_validators")
             if assert_validators:
                 if not isinstance(assert_validators, list):
-                    raise StepExecutionError(
-                        f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
-                        f"但得到[{type(assert_validators)}]类型"
-                    )
+                    raise StepExecutionError(f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
                 for valid in assert_validators:
                     if not isinstance(valid, dict):
                         continue
@@ -2051,24 +2058,22 @@ class TcpStepExecutor(BaseStepExecutor):
                     host = parts[0].strip()
                     port = int(parts[1])
 
-            # 若未手动提供 host/port，则允许通过“请求应用 + 执行环境”解析出 host/port（与 HTTP 步骤一致）
+            # 若未手动提供 host/port，则通过「应用 + 执行环境」从 AutoTestApiEnvConfigInfo（config_type=api）解析
             if (not host_raw or host_raw == "") and (port_raw is None or str(port_raw).strip() == ""):
                 if env_name and request_project_id:
                     try:
-                        from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-                        env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
-                            only_one=True,
-                            on_error=False,
-                            conditions={"project_id": request_project_id, "env_name": env_name},
-                        )
-                        if not env_instance:
-                            raise StepExecutionError(
-                                f"【TCP请求】环境(project_id={request_project_id}, env_name={env_name})配置不存在"
-                            )
-                        host = (env_instance.env_host or "").strip().rstrip("/").rstrip(":")
-                        port = int(env_instance.env_port) if env_instance.env_port is not None else None
+                        from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
+
+                        rh, ps = await resolve_env_api_base_host_port(int(request_project_id), str(env_name))
+                        host = (rh or "").strip().rstrip("/").rstrip(":")
+                        if ps and str(ps).strip().isdigit():
+                            port = int(str(ps).strip())
                     except StepExecutionError:
                         raise
+                    except (NotFoundException, ParameterException) as e:
+                        raise StepExecutionError(
+                            f"【TCP请求】环境 API 配置不可用: {getattr(e, 'message', str(e))}"
+                        ) from e
                     except Exception as e:
                         raise StepExecutionError(f"【TCP请求】环境配置查询异常, 错误描述: {e}") from e
 
@@ -2231,12 +2236,9 @@ class TcpStepExecutor(BaseStepExecutor):
             try:
                 extract_variables = self.step.get("extract_variables")
                 if extract_variables and not isinstance(extract_variables, list):
-                    raise StepExecutionError(
-                        f"【变量提取】表达式列表解析失败: 参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
-                        f"但得到[{type(extract_variables)}]类型"
-                    )
+                    raise StepExecutionError(f"【变量提取】表达式列表解析失败: 参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
                 _, extract_results_list = AutoTestToolService.run_extract_variables(
-                    extract_variables=extract_variables or [],
+                    extract_variables=extract_variables,
                     response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
                     response_headers=None,
@@ -2253,12 +2255,9 @@ class TcpStepExecutor(BaseStepExecutor):
             try:
                 assert_validators = self.step.get("assert_validators")
                 if assert_validators and not isinstance(assert_validators, list):
-                    raise StepExecutionError(
-                        f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
-                        f"但得到[{type(assert_validators)}]类型"
-                    )
+                    raise StepExecutionError(f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
                 validator_results = AutoTestToolService.run_assert_validators(
-                    assert_validators=assert_validators or [],
+                    assert_validators=assert_validators,
                     response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
                     response_headers=None,
@@ -2295,7 +2294,241 @@ class TcpStepExecutor(BaseStepExecutor):
 
 
 class DataBaseStepExecutor(BaseStepExecutor):
-    pass
+    """数据库请求步骤：按环境配置连接池执行多条 SQL，解析 ${var}，结果写入变量池；支持查到即止。"""
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        try:
+            env_name: Optional[str] = self.context.env_name
+            if not env_name or not str(env_name).strip():
+                raise StepExecutionError("【数据库请求】缺少执行环境(env_name)无法匹配环境配置")
+            database_operates: List[Dict[str, Any]] = self.step.get("database_operates")
+            if not isinstance(database_operates, list):
+                raise StepExecutionError("【数据库请求】参数[database_operates]必须是必须是[List[Dict[str, Any]]]类型")
+            if not database_operates:
+                raise StepExecutionError("【数据库请求】参数[database_operates]至少有一条数据库操作配置")
+
+            mark_extract_variables: List[Dict[str, Any]] = []
+            database_operates_request: List[Dict[str, Any]] = []
+            database_operates_response: List[Dict[str, Any]] = []
+            pool_manager: DBConnPoolFromConfig = get_app_database_pool()
+            database_searched: bool = bool(self.step.get("database_searched"))
+            # 步骤响应：列表，每项对应一条 database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
+            for db_idx, db_operate in enumerate(database_operates, start=1):
+                if not isinstance(db_operate, dict):
+                    continue
+                operate_no: str = f"第{db_idx}条数据库配置"
+                operate_name: str = db_operate.get("name")
+                operate_desc: Optional[str] = db_operate.get("desc")
+                operate_variable_name: str = db_operate.get("variable_name")
+                count_operate_variable_name: str = f"{operate_variable_name}_count"
+                operate_project_id: int = db_operate.get("project_id")
+                operate_sql_expr: str = db_operate.get("expr")
+                operate_config_name: str = db_operate.get("config_name")
+                operate_project_name: str = db_operate.get("project_name")
+                operate_database_name: str = db_operate.get("database_name")
+                try:
+                    operate_sql_expr: str = self.context.resolve_placeholders(operate_sql_expr)
+                    operate_config_name: str = self.context.resolve_placeholders(operate_config_name)
+                    operate_project_name: str = self.context.resolve_placeholders(operate_project_name)
+                    operate_database_name: str = self.context.resolve_placeholders(operate_database_name)
+
+                    if not operate_project_id and operate_project_name.strip():
+                        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(operate_project_name.strip(), on_error=False)
+                        if not project_instance:
+                            raise StepExecutionError(f"【数据库请求】{operate_no}：应用(project_name={operate_project_name!r})不存在")
+                        operate_project_id = project_instance.id
+                    if not operate_project_id:
+                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[project_id]不能为空")
+                    if not operate_config_name:
+                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[config_name]不能为空")
+                    if not operate_database_name:
+                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[database_name]不能为空")
+                    if not operate_sql_expr:
+                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[expr]不能为空")
+                    if not operate_variable_name:
+                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[variable_name]不能为空")
+
+                    database_pool: Pool = await pool_manager.get_or_create_pool(
+                        app_id=str(operate_project_id),
+                        env=str(env_name).strip(),
+                        config_name=operate_config_name,
+                        db_name=operate_database_name
+                    )
+                    expr_executive_result: Dict[str, Any] = await pool_manager.execute_sql(
+                        pool=database_pool,
+                        sql=operate_sql_expr,
+                        is_dict=True
+                    )
+                    sql_count: Optional[int] = None
+                    sql_data: Optional[List[Dict[str, Any]]] = None
+                    if isinstance(expr_executive_result, dict):
+                        sql_data: List[Dict[str, Any]] = expr_executive_result.get("sql_data")
+                        sql_count: int = expr_executive_result.get("sql_count")
+                    mark_extract_variables.append({
+                        "index": db_idx,
+                        "name": operate_variable_name,
+                        "source": "数据库请求",
+                        "range": "ALL",
+                        "expr": "SQL语句",
+                        "extract_value": sql_data,
+                        "success": True,
+                        "error": "",
+                    })
+                    mark_extract_variables.append({
+                        "index": db_idx,
+                        "name": count_operate_variable_name,
+                        "source": "数据库请求",
+                        "range": "ALL",
+                        "expr": "SQL语句",
+                        "extract_value": sql_count,
+                        "success": True,
+                        "error": "",
+                    })
+                    database_operates_response.append({
+                        "index": db_idx,
+                        "name": operate_name,
+                        "desc": operate_desc,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "expr": operate_sql_expr,
+                        "variable_name": [operate_variable_name, count_operate_variable_name],
+                        "sql_data": sql_data,
+                        "sql_count": sql_count,
+                    })
+                    database_operates_request.append({
+                        "index": db_idx,
+                        "name": operate_name,
+                        "desc": operate_desc,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "expr": operate_sql_expr,
+                        "variable_name": [operate_variable_name, count_operate_variable_name],
+                    })
+                    if database_searched and isinstance(sql_data, list) and len(sql_data) > 0:
+                        self.context.log(
+                            f"【数据库请求】查到即止：{operate_no}查询返回 {len(sql_data)} 行，已终止后续 SQL",
+                            step_code=self.step_code,
+                        )
+                        break
+                except StepExecutionError:
+                    raise
+                except Exception as e:
+                    result.success = False
+                    result.error = AutoTestToolService.format_step_error_message(
+                        step=self.step,
+                        exception=e,
+                        is_child_step=False,
+                        offset_message=operate_no
+                    )
+                    self.context.log(result.error, step_code=self.step_code)
+                    database_operates_response.append(
+                        {
+                            "index": db_idx,
+                            "name": operate_name,
+                            "desc": operate_desc,
+                            "project_id": operate_project_id,
+                            "project_name": operate_project_name,
+                            "config_name": operate_config_name,
+                            "database_name": operate_database_name,
+                            "expr": operate_sql_expr,
+                            "variable_name": [operate_variable_name, count_operate_variable_name],
+                            "sql_data": None,
+                            "sql_count": None,
+                            "error": f"{operate_no}: {e}",
+                            "success": False,
+                        }
+                    )
+                    database_operates_request.append(
+                        {
+                            "index": db_idx,
+                            "name": operate_name,
+                            "desc": operate_desc,
+                            "project_id": operate_project_id,
+                            "project_name": operate_project_name,
+                            "config_name": operate_config_name,
+                            "database_name": operate_database_name,
+                            "expr": operate_sql_expr,
+                            "variable_name": [operate_variable_name, count_operate_variable_name],
+                            "error": f"{operate_no}: {e}",
+                        }
+                    )
+
+            response_text_str = json.dumps(database_operates_response, ensure_ascii=False, default=str)
+            result.extract_variables = mark_extract_variables
+            result.request = {
+                "database_operates": database_operates_request,
+                "database_searched": database_searched,
+            }
+            result.response = {
+                "response_code": None,
+                "response_message": None,
+                "response_header": None,
+                "response_cookie": None,
+                "response_body": database_operates_response,
+                "response_text": response_text_str,
+                "response_elapsed": None,
+                "response_bytes": None,
+            }
+
+            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
+            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+            for extract_item in mark_extract_variables:
+                if isinstance(extract_item, dict) and extract_item.get("success") and extract_item.get("name") is not None:
+                    session_lookup_map[extract_item["name"]] = extract_item.get("extract_value")
+
+            try:
+                extract_variables: Optional[List[Dict[str, Any]]] = self.step.get("extract_variables")
+                if extract_variables and not isinstance(extract_variables, list):
+                    raise StepExecutionError("【数据库请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
+                _, extract_results_list = AutoTestToolService.run_extract_variables(
+                    extract_variables=extract_variables,
+                    response_text=response_text_str,
+                    response_json=database_operates_response,
+                    response_headers=None,
+                    response_cookies=None,
+                    session_variables_lookup=session_lookup_map,
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                )
+                result.extract_variables.extend(extract_results_list)
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                self.context.log(f"【数据库请求】变量提取失败: {e}", step_code=self.step_code)
+
+            try:
+                assert_rules = self.step.get("assert_validators")
+                if assert_rules and not isinstance(assert_rules, list):
+                    raise StepExecutionError("【数据库请求】参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
+                validator_results = AutoTestToolService.run_assert_validators(
+                    assert_validators=assert_rules,
+                    response_text=response_text_str,
+                    response_json=database_operates_response,
+                    response_headers=None,
+                    response_cookies=None,
+                    session_variables_lookup=session_lookup_map,
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                )
+                result.assert_validators.extend(validator_results)
+                assert_failed = sum(1 for v in validator_results if not v.get("success", True))
+                if assert_failed > 0:
+                    raise StepExecutionError(f"【数据库请求】【断言验证】共计 {assert_failed} 条未通过, 详情见报告明细")
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                err = f"【数据库请求】断言验证异常: {e}"
+                self.context.log(err, step_code=self.step_code)
+                raise StepExecutionError(err) from e
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
 
 
 class HttpStepExecutor(BaseStepExecutor):
@@ -2324,19 +2557,11 @@ class HttpStepExecutor(BaseStepExecutor):
             request_project_id: int = self.step.get("request_project_id")
             request_method: str = self.step.get("request_method", "").upper()
             if env_name and request_url and not request_url.lower().startswith("http"):
-                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-                env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
-                    only_one=True,
-                    on_error=True,
-                    conditions={"project_id": request_project_id, "env_name": env_name},
+                from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
+
+                execute_env_host, execute_env_port = await resolve_env_api_base_host_port(
+                    int(request_project_id), str(env_name)
                 )
-                execute_env_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
-                execute_env_port: str = env_instance.env_port
-                if not execute_env_host:
-                    raise StepExecutionError(
-                        f"【HTTP请求】环境配置查询异常: (project_id={request_project_id}, env_name={env_name}, "
-                        f"host={execute_env_host}, host={execute_env_port})"
-                    )
                 if not execute_env_port:
                     request_url = f"{execute_env_host}/{request_url}"
                 else:
@@ -2484,13 +2709,9 @@ class HttpStepExecutor(BaseStepExecutor):
             try:
                 extract_variables = self.step.get("extract_variables")
                 if extract_variables and not isinstance(extract_variables, list):
-                    raise StepExecutionError(
-                        f"【变量提取】表达式列表解析失败: "
-                        f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
-                        f"但得到[{type(extract_variables)}]类型"
-                    )
+                    raise StepExecutionError(f"【变量提取】表达式列表解析失败: 参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
                 extract_variables_dict, extract_results_list = AutoTestToolService.run_extract_variables(
-                    extract_variables=extract_variables or [],
+                    extract_variables=extract_variables,
                     response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
                     response_headers=result.response.get("response_header") if result.response else None,
@@ -2510,12 +2731,9 @@ class HttpStepExecutor(BaseStepExecutor):
             try:
                 assert_validators = self.step.get("assert_validators")
                 if assert_validators and not isinstance(assert_validators, list):
-                    raise StepExecutionError(
-                        f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
-                        f"但得到[{type(assert_validators)}]类型"
-                    )
+                    raise StepExecutionError(f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
                 validator_results = AutoTestToolService.run_assert_validators(
-                    assert_validators=assert_validators or [],
+                    assert_validators=assert_validators,
                     response_text=result.response.get("response_text") if result.response else None,
                     response_json=response_json,
                     response_headers=result.response.get("response_header") if result.response else None,

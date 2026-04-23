@@ -19,8 +19,8 @@ from xml.etree import ElementTree as ET
 from jsonpath_ng import parse as jsonpath_parse
 
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
-from backend.common.generate_utils import GenerateUtils
 from backend.common import JSONPathUtils
+from backend.common.generate_utils import GenerateUtils
 
 
 class AutoTestToolService:
@@ -292,6 +292,7 @@ class AutoTestToolService:
             step: Dict[str, Any],
             exception: Exception,
             is_child_step: bool = False,
+            offset_message: str = ""
     ) -> str:
         """
         格式化步骤执行失败信息, 供步骤引擎中各类执行器统一使用
@@ -299,9 +300,11 @@ class AutoTestToolService:
         :param step: 步骤数据字典, 含 case_id、step_id、step_no、step_code、step_name、step_type 等
         :param exception: 异常对象；错误回溯使用 traceback.format_exc(), 在 except 块内调用时即为该异常的堆栈
         :param is_child_step: 是否为子步骤(True=子步骤, False=根步骤)
+        :param offset_message: 关于异常的补偿描述
         :return: 格式化后的错误字符串
         """
         message: str = "【子步骤】" if is_child_step else "【根步骤】"
+        offset_message: str = f", {offset_message}" if offset_message else ""
         case_id = step.get("case_id", "获取失败")
         step_id = step.get("step_id", "获取失败")
         step_no = step.get("step_no", "获取失败")
@@ -309,7 +312,7 @@ class AutoTestToolService:
         step_name = step.get("step_name", "获取失败")
         step_type = step.get("step_type", "获取失败")
         return (
-            f"{message}执行失败: \n"
+            f"{message}执行失败{offset_message}: \n"
             f"用例ID: {case_id}, \n"
             f"步骤ID: {step_id}, \n"
             f"步骤序号: {step_no}, \n"
@@ -344,7 +347,7 @@ class AutoTestToolService:
         """
         从 source 指定来源中按 expr 与 range 提取单个值供 HTTP 调试与步骤引擎共用
 
-        :param source: 来源类型, 如: response json、response xml、response text、response headers、response cookies、session_variables、变量池
+        :param source: 来源类型, 如: response json、response xml、response text、response headers、response cookies、session_variables、变量池；数据库步骤可为 variable_name（与响应列表项匹配）
         :param expr: 提取表达式(JSONPath/XPath/正则), SOME 模式必填
         :param range_type: "ALL" 或 "SOME", 默认 "SOME"
         :param index: 提取结果为数组时的下标
@@ -357,10 +360,10 @@ class AutoTestToolService:
         :return: 提取得到的值
         :raises ValueError: 提取失败时, 携带可读错误信息
         """
-        range_type = (range_type or "SOME").strip().lower()
-        src = (source or "").strip().lower()
+        range_type: str = (range_type or "SOME").strip().lower()
+        source_strip_lower: str = (source or "").strip().lower()
 
-        if src == "response json":
+        if source_strip_lower == "response json":
             if response_json is None:
                 raise ValueError(f"【{operation_type}】响应内容不是有效的JSON数据")
             if range_type == "all":
@@ -381,10 +384,10 @@ class AutoTestToolService:
                         f"给定索引[{index_int}]不可大于数组长度[{len(extract_value)}]"
                     )
                 except (ValueError, TypeError) as e:
-                    raise ValueError(f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}") from e
+                    raise ValueError(f"【{operation_type}】参数[index]必须是类型, 错误描述: {e}") from e
             return extract_value
 
-        if src == "response xml":
+        if source_strip_lower == "response xml":
             if not response_text:
                 raise ValueError(f"【{operation_type}】响应内容不是有效的XML数据")
             if range_type == "all":
@@ -407,7 +410,7 @@ class AutoTestToolService:
                             f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
                         )
                     except (ValueError, TypeError) as e:
-                        raise ValueError(f"【{operation_type}】参数[index]必须是数字类型, 错误描述: {e}") from e
+                        raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
                 element = elements[-1]
                 return element.text if element.text else ET.tostring(element, encoding="unicode")
             except ET.ParseError as e:
@@ -417,7 +420,7 @@ class AutoTestToolService:
             except Exception as e:
                 raise ValueError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误: {e}") from e
 
-        if src == "response text":
+        if source_strip_lower == "response text":
             if not response_text:
                 raise ValueError(f"【{operation_type}】响应内容不是有效的Text数据")
             if range_type == "all":
@@ -432,7 +435,7 @@ class AutoTestToolService:
             except re.error as e:
                 raise ValueError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
 
-        if src in ("response header", "response headers"):
+        if source_strip_lower == "response headers":
             if not response_headers:
                 raise ValueError(f"【{operation_type}】响应 Headers 为空")
             if range_type == "all":
@@ -444,7 +447,7 @@ class AutoTestToolService:
             except Exception as e:
                 raise ValueError(str(e) or f"【{operation_type}】响应 Headers JSONPath匹配失败: {expr}") from e
 
-        if src in ("response cookie", "response cookies"):
+        if source_strip_lower == "response cookies":
             if not response_cookies:
                 raise ValueError(f"【{operation_type}】响应 Cookies 为空")
             if range_type == "all":
@@ -456,7 +459,7 @@ class AutoTestToolService:
             except Exception as e:
                 raise ValueError(str(e) or f"【{operation_type}】响应 Cookies JSONPath匹配失败: {expr}") from e
 
-        if src == "session_variables" or src == "变量池":
+        if source_strip_lower in ("session_variables", "变量池"):
             if not expr:
                 raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
             if session_variables_lookup is None:
@@ -470,6 +473,46 @@ class AutoTestToolService:
                 return AutoTestToolServiceImpl.resolve_json_path(data=session_variables_lookup, expr=expr)
             except Exception as e:
                 raise ValueError(str(e) or f"【{operation_type}】变量池 JSONPath匹配失败: {expr}") from e
+
+        # 数据库请求步骤：source 为「请求」里配置的 variable_name；response_json 为 List[Dict]，每项含 variable_name、sql_data、sql_count 等
+        source_strip: str = (source or "").strip()
+        if source_strip and isinstance(response_json, list) and response_json:
+            all_database_operates_response_safe: bool = all(
+                isinstance(db_operate_resp, dict) and ("variable_name" in db_operate_resp or "sql_data" in db_operate_resp)
+                for db_operate_resp in response_json
+            )
+            expr_executive_data: Optional[Dict[str, Any]] = None
+            for db_operate_resp in response_json:
+                if isinstance(db_operate_resp, dict) and source_strip in db_operate_resp.get("variable_name", []):
+                    expr_executive_data = db_operate_resp["sql_data"]
+                    break
+            if expr_executive_data is not None:
+                if range_type == "all":
+                    return expr_executive_data
+                if not expr:
+                    raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
+                try:
+                    extract_value = AutoTestToolServiceImpl.resolve_json_path(data=expr_executive_data, expr=expr)
+                except Exception as e:
+                    raise ValueError(str(e)) from e
+
+                if isinstance(extract_value, list) and index is not None:
+                    try:
+                        index_int = int(index)
+                        if index_int < len(extract_value):
+                            return extract_value[index_int]
+                        raise ValueError(
+                            f"【{operation_type}】数组越界, "
+                            f"给定索引[{index_int}]不可大于数组长度[{len(extract_value)}]"
+                        )
+                    except (ValueError, TypeError) as e:
+                        raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
+                return extract_value
+            if all_database_operates_response_safe:
+                raise ValueError(
+                    f"【{operation_type}】未找到存储变量[{source_strip}]对应的执行结果, "
+                    f"请与「数据库具体操作」中的 variable_name 一致"
+                )
 
         raise ValueError(f"【{operation_type}】数据源源类型 {source} 不被支持")
 
@@ -996,10 +1039,10 @@ class AutoTestToolServiceImpl:
         :return: 单匹配时返回该值, 多匹配时返回值的列表无匹配时抛出 ValueError
         :raises ValueError: 表达式非法、路径无匹配或解析异常时
         """
-        expr = expr.strip()
+        expr: str = str(expr).strip()
         if not expr or not isinstance(expr, str):
             raise ValueError(f"【JSONPath表达式】必须是非空字符串")
-        if not expr.startswith("$."):
+        if not expr.startswith("$"):
             raise ValueError(f"【JSONPath表达式】必须以$.字符开头")
         if data is None:
             raise ValueError(f"【JSONPath表达式】数据源不允许为空")

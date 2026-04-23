@@ -13,14 +13,13 @@ from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiProjectInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiProjectInfo, AutoTestApiEnvConfigInfo
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
     AutoTestApiProjectDelete,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
 from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
@@ -252,10 +251,13 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             msg = f"应用(name={instance.project_name})下存在{cases_count}个用例, 无法删除，请先解除关联"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
-        # 业务层验证：检查是否存在关联环境
-        env_count = await AUTOTEST_API_ENV_ENUM_CRUD.model.filter(project_id=pid, state__not=1).count()
-        if env_count > 0:
-            msg = f"应用(name={instance.project_name})下存在{env_count}个环境, 无法删除，请先解除关联"
+        # 业务层验证：检查是否存在关联环境配置明细（应用+环境枚举下的配置）
+        config_count = await AutoTestApiEnvConfigInfo.filter(project_id=pid, state__not=1).count()
+        if config_count > 0:
+            msg = (
+                f"应用(name={instance.project_name})下存在{config_count}条环境配置明细, "
+                f"无法删除，请先解除关联"
+            )
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
         # 业务层验证：检查是否存在关联标签

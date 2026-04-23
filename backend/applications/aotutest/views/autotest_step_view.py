@@ -19,7 +19,6 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -350,7 +349,7 @@ async def batch_update_steps_tree(
                                 f"删除更新后多余步骤: "
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
-                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).delete(state=1)
+                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).update(state=1)
                 # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
@@ -459,22 +458,11 @@ async def debug_http_request(
         # 处理请求主机域名
         if request_url and not request_url.lower().startswith("http"):
             try:
-                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-                env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
-                    only_one=True,
-                    on_error=False,
-                    conditions={"project_id": request_project_id, "env_name": env_name},
+                from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
+
+                execute_env_host, execute_env_port = await resolve_env_api_base_host_port(
+                    int(request_project_id), str(env_name)
                 )
-                if not env_instance:
-                    return FailureResponse(
-                        message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
-                    )
-                execute_env_host: str = env_instance.env_host.strip().rstrip("/").rstrip(":")
-                execute_env_port: int = env_instance.env_port
-                if not execute_env_host or not execute_env_port:
-                    return FailureResponse(
-                        message=f"HTTP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不正确"
-                    )
                 if not execute_env_port:
                     request_url = f"{execute_env_host}/{request_url}"
                 else:
@@ -751,18 +739,12 @@ async def debug_tcp_request(
                 logs.append(format_log(f"解析请求信息(host={host}, port={port})失败"))
         if (not host) and env_name and request_project_id:
             try:
-                from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-                env_instance: AutoTestApiEnvEnumInfo = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_conditions(
-                    only_one=True,
-                    on_error=False,
-                    conditions={"project_id": request_project_id, "env_name": env_name},
-                )
-                if not env_instance:
-                    return FailureResponse(
-                        message=f"TCP请求调试失败, 环境(project_id={request_project_id}, env_name={env_name})配置不存在"
-                    )
-                host = (env_instance.env_host or "").strip().rstrip("/").rstrip(":")
-                port = int(env_instance.env_port) if env_instance.env_port is not None else None
+                from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
+
+                rh, ps = await resolve_env_api_base_host_port(int(request_project_id), str(env_name))
+                host = (rh or "").strip().rstrip("/").rstrip(":")
+                if ps and str(ps).strip().isdigit():
+                    port = int(str(ps).strip())
                 logs.append(format_log(f"解析请求信息(host={host}, port={port})成功"))
             except Exception as e:
                 error_message: str = f"解析请求信息(host={host}, port={port})失败, 终止调试: {e}"

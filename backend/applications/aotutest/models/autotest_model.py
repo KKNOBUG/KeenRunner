@@ -48,7 +48,7 @@ def unique_identify() -> str:
 class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     """自动化测试应用（项目）信息模型，对应表 krun_autotest_api_project。"""
 
-    project_name = fields.CharField(max_length=255, unique=True, description="应用名称")
+    project_name = fields.CharField(max_length=128, unique=True, description="应用名称")
     project_desc = fields.CharField(max_length=2048, null=True, description="应用描述")
     project_state = fields.CharField(max_length=64, null=True, description="应用状态")
     project_phase = fields.CharField(max_length=64, null=True, description="应用阶段")
@@ -75,7 +75,9 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    env_name = fields.CharField(max_length=64, index=True, description="环境名称")
+    """全局环境枚举（如 UAT/SIT/PP），不关联应用；与应用的关联在 AutoTestApiEnvConfigInfo。"""
+
+    env_name = fields.CharField(max_length=128, unique=True, index=True, description="环境名称(全局唯一)")
     env_desc = fields.CharField(max_length=2048, null=True, description="环境描述")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
@@ -94,7 +96,7 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
     env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
 
-    config_name = fields.CharField(max_length=64, description="配置名称")
+    config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
     config_type = fields.CharEnumField(AutoTestConfigNodeType, description="配置类型")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
@@ -249,8 +251,16 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 expr、name、range、operation、except_value 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
+
+    # 数据源相关
     data_source_name = fields.CharField(max_length=2048, null=True, description="数据源名称")
     data_source_desc = fields.CharField(max_length=2048, null=True, description="数据源描述")
+
+    # 数据库相关
+    # database_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、sql_expr、variable_name
+    database_operates = fields.JSONField(null=True, description="数据库请求操作列表(根据不同的配置进行操作数据库)")
+    database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续的数据库请求)")
+
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -364,6 +374,8 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="本次执行循环错误策略(快照)")
     loop_timeout = fields.FloatField(ge=0, null=True, description="本次执行条件循环超时(快照)")
     conditions = fields.JSONField(null=True, description="本次执行条件/循环判断条件(快照)")
+    database_operates = fields.JSONField(null=True, description="数据库请求操作列表(快照)")
+    database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(快照)")
     # 变量相关
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
@@ -372,11 +384,9 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
-
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照(head/body/assert)，记录在明细更贴合「每步细节」
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称(参数化)")
     dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
-
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 

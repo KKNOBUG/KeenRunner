@@ -535,9 +535,13 @@ const buildConfigFromState = () => {
     const row = state.form.database_operates[k] || {}
     const pname = String(row.project_name ?? '').trim() || projectNameFromId(row.project_id)
     const rawName = String(row.name ?? '').trim()
+    const rawPid = row.project_id
+    const projectId =
+        rawPid != null && rawPid !== '' && !Number.isNaN(Number(rawPid)) ? Number(rawPid) : null
     return {
       name: rawName || databaseOpDefaultTitle(k),
       desc: row.desc ?? '',
+      project_id: projectId,
       project_name: pname,
       config_name: row.config_name ?? '',
       database_name: row.database_name ?? '',
