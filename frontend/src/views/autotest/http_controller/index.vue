@@ -2448,16 +2448,16 @@ const extractColumns = [
   },
   {
     title: '提取值',
-    key: 'extracted_value',
+    key: 'extract_value',
     width: 120,
     ellipsis: {tooltip: true},
     render: (row) => {
-      if (row.extracted_value === null || row.extracted_value === undefined) {
+      if (row.extract_value === null || row.extract_value === undefined) {
         return '-'
       }
-      const value = typeof row.extracted_value === 'object'
-          ? JSON.stringify(row.extracted_value)
-          : String(row.extracted_value)
+      const value = typeof row.extract_value === 'object'
+          ? JSON.stringify(row.extract_value)
+          : String(row.extract_value)
       return value.length > 100 ? value.substring(0, 100) + '...' : value
     }
   },

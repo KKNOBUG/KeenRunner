@@ -344,9 +344,7 @@
                             <span class="step-number">#{{ idx + 1 }}</span>
                           </span>
                         </div>
-                        <div v-if="!getQuoteStepsFlattened(quoteStepsMap[step.id] || []).length"
-                             class="quote-inner-empty">暂无步骤
-                        </div>
+                        <div v-if="!getQuoteStepsFlattened(quoteStepsMap[step.id] || []).length" class="quote-inner-empty">暂无步骤</div>
                       </div>
                     </div>
                   </div>
@@ -387,8 +385,8 @@
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
-                :project-options="(currentStep?.type === 'http' || currentStep?.type === 'tcp') ? projectOptions : []"
-                :project-loading="(currentStep?.type === 'http' || currentStep?.type === 'tcp') ? projectLoading : false"
+                :project-options="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database') ? projectOptions : []"
+                :project-loading="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database') ? projectLoading : false"
                 :available-variable-list="availableVariableList"
                 :assist-functions="assistFunctionsList"
                 :on-reselect="currentStep?.isQuoteInner ? undefined : handleQuoteReselect"
@@ -449,8 +447,7 @@
             </QueryBarItem>
           </template>
         </CrudTable>
-        <div v-if="scriptDrawerMode === 'copy'"
-             style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--n-border-color);">
+        <div v-if="scriptDrawerMode === 'copy'" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--n-border-color);">
           <span>已选 {{ selectedForCopy.length }} 个脚本</span>
           <n-button type="primary" :disabled="selectedForCopy.length === 0" @click="confirmCopySteps">
             确定复制
@@ -485,7 +482,7 @@
 </template>
 
 <script setup>
-defineOptions({name: '步骤编辑'})
+defineOptions({ name: '步骤编辑' })
 import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
@@ -512,6 +509,7 @@ import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
 import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
 import ApiTcpEditor from "@/views/autotest/tcp_controller/index.vue";
+import ApiDatabaseEditor from "@/views/autotest/database_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
@@ -519,16 +517,16 @@ import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import CrudTable from '@/components/table/CrudTable.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
-import {useAutotestStore, useUserStore} from '@/store';
+import {useUserStore, useAutotestStore} from '@/store';
 
 // 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致
 const stepDefinitions = {
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
-  if: {label: '条件分支', allowChildren: true, icon: 'tabler:brand-stackshare'},
+  if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-plump:web'},
-  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-plump:web'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:network-4'},
+  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
@@ -539,6 +537,7 @@ const editorMap = {
   code: ApiCodeEditor,
   tcp: ApiTcpEditor,
   http: ApiHttpEditor,
+  database: ApiDatabaseEditor,
   if: ApiIfEditor,
   wait: ApiWaitEditor,
   user_variables: ApiUserVariablesEditor,
@@ -657,9 +656,9 @@ const quotePublicScriptQueryItems = ref({
 
 // 复制模式用例类型选项（支持全部、公共脚本、用户脚本）
 const caseTypeOptionsForCopy = [
-  {label: '全部', value: ''},
-  {label: '公共脚本', value: '公共脚本'},
-  {label: '用户脚本', value: '用户脚本'}
+  { label: '全部', value: '' },
+  { label: '公共脚本', value: '公共脚本' },
+  { label: '用户脚本', value: '用户脚本' }
 ]
 
 // 请求前规范化入参：quote 模式仅查公共脚本；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
@@ -678,7 +677,7 @@ const getScriptListForDrawer = (params) => {
 }
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
-  const config = {quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本'}
+  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
@@ -732,7 +731,7 @@ const confirmCopySteps = async () => {
   let lastInsertedId = null
   try {
     for (const row of rows) {
-      const res = await api.copyCaseStepTree({case_id: row.case_id})
+      const res = await api.copyCaseStepTree({ case_id: row.case_id })
       const stepsData = res?.data?.steps || res?.steps || []
       const mapped = stepsData.map(mapBackendStep).filter(Boolean)
       for (const step of mapped) {
@@ -1200,16 +1199,16 @@ const forEachStep = (list, fn) => {
 /** 加载单个引用步骤对应的公共脚本步骤树（仅用于展示，不写入当前用例） */
 const loadQuoteStepsForStep = async (step) => {
   if (step.type !== 'quote' || !step.config?.quote_case_id) {
-    quoteStepsMap.value = {...quoteStepsMap.value, [step.id]: []}
+    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
     return
   }
   try {
-    const res = await api.getAutoTestStepTree({case_id: step.config.quote_case_id})
+    const res = await api.getAutoTestStepTree({ case_id: step.config.quote_case_id })
     const data = Array.isArray(res?.data) ? res.data : []
-    quoteStepsMap.value = {...quoteStepsMap.value, [step.id]: data.map(mapBackendStep).filter(Boolean)}
+    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: data.map(mapBackendStep).filter(Boolean) }
   } catch (e) {
     console.error('加载引用脚本步骤失败', e)
-    quoteStepsMap.value = {...quoteStepsMap.value, [step.id]: []}
+    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
   }
 }
 
@@ -1246,7 +1245,7 @@ const fillQuoteStepsMapFromRawData = (rawList, mappedList) => {
 const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
   if (!list || !Array.isArray(list)) return out
   for (const step of list) {
-    out.push({step, depth})
+    out.push({ step, depth })
     if (step.children && step.children.length) {
       getQuoteStepsFlattened(step.children, depth + 1, out)
     }
@@ -1264,7 +1263,7 @@ const parseQuoteInnerKey = (key) => {
   const quoteStepId = rest.slice(0, colon)
   const flatIndex = parseInt(rest.slice(colon + 1), 10)
   if (Number.isNaN(flatIndex)) return null
-  return {quoteStepId, flatIndex}
+  return { quoteStepId, flatIndex }
 }
 
 /** 根据 quote-inner key 解析出对应的步骤对象（用于右侧只读展示） */
@@ -1275,7 +1274,7 @@ const getQuoteInnerStep = (key) => {
   const flat = getQuoteStepsFlattened(list)
   const item = flat[parsed.flatIndex]
   if (!item) return null
-  return {...item.step, isQuoteInner: true}
+  return { ...item.step, isQuoteInner: true }
 }
 
 /** 前序遍历步骤树，得到扁平列表（用于计算当前步骤之前的可用变量） */
@@ -1316,6 +1315,12 @@ const collectVariableNamesFromStep = (step) => {
   } else if (ev && typeof ev === 'object') {
     Object.values(ev).forEach((x) => {
       if (x && x.name) names.push(String(x.name).trim())
+    })
+  }
+  const dbOps = cfg.database_operates ?? orig.database_operates
+  if (Array.isArray(dbOps)) {
+    dbOps.forEach((x) => {
+      if (x && x.variable_name) names.push(String(x.variable_name).trim())
     })
   }
   return names
@@ -1360,6 +1365,7 @@ const backendTypeToLocal = (step_type) => {
     case 'HTTP请求':
       return 'http'
     case '代码请求(Python)':
+    case '代码请求(Python)':
       return 'code'
     case '条件分支':
       return 'if'
@@ -1369,6 +1375,8 @@ const backendTypeToLocal = (step_type) => {
       return 'loop'
     case '引用公共脚本':
       return 'quote'
+    case '数据库请求':
+      return 'database'
     default:
       return 'code'
   }
@@ -1544,6 +1552,16 @@ const mapBackendStep = (step) => {
       quote_case_id: step.quote_case_id ?? null,
       step_name: step.step_name || (step.quote_case?.case_name || '引用公共脚本')
     }
+  } else if (localType === 'database') {
+    const ops = Array.isArray(step.database_operates) ? step.database_operates : []
+    base.config = {
+      step_name: step.step_name || '',
+      step_desc: step.step_desc || '',
+      database_searched: !!step.database_searched,
+      database_operates: ops.length ? ops : [],
+      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
+      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : []
+    }
   }
 
   if (step.children && step.children.length && stepDefinitions[localType]?.allowChildren) {
@@ -1594,7 +1612,8 @@ const localTypeToBackend = (localType) => {
     'if': '条件分支',
     'loop': '循环结构',
     'wait': '等待控制',
-    'quote': '引用公共脚本'
+    'quote': '引用公共脚本',
+    'database': '数据库请求'
   }
   return typeMap[localType] || '代码请求(Python)'
 }
@@ -1839,6 +1858,26 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   } else if (step.type === 'quote') {
     backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
     backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本')
+  } else if (step.type === 'database') {
+    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
+    backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
+    backendStep.database_searched = !!(config.database_searched ?? original.database_searched)
+    const ops = config.database_operates ?? original.database_operates
+    backendStep.database_operates = Array.isArray(ops) ? ops : (ops ? [ops] : null)
+    if (config.extract_variables !== undefined) {
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
+    } else if (original.extract_variables) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : (original.extract_variables ? [original.extract_variables] : null)
+    } else {
+      backendStep.extract_variables = null
+    }
+    if (config.assert_validators !== undefined) {
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : (config.assert_validators ? [config.assert_validators] : null)
+    } else if (original.assert_validators) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : (original.assert_validators ? [original.assert_validators] : null)
+    } else {
+      backendStep.assert_validators = null
+    }
   }
 
   // 处理子步骤（递归处理）
@@ -1899,6 +1938,46 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
 const hasEmptyKeyInList = (list) => {
   if (!Array.isArray(list)) return false
   return list.some((item) => item != null && String(item.key ?? '').trim() === '' && String(item.value ?? '').trim() !== '')
+}
+
+const validateDatabaseSteps = (stepList) => {
+  for (const step of stepList) {
+    if (step.type === 'database') {
+      const config = step.config || {}
+      const original = step.original || {}
+      const ops = config.database_operates ?? original.database_operates
+      const list = Array.isArray(ops) ? ops : []
+      const stepName = step.name || original.step_name || '未命名步骤'
+      if (!list.length) {
+        return {valid: false, message: `步骤「${stepName}」请至少添加一条数据库具体操作`}
+      }
+      for (let i = 0; i < list.length; i++) {
+        const o = list[i] || {}
+        const hasApp = String(o.project_name ?? '').trim() !== ''
+            || (o.project_id != null && o.project_id !== '')
+        if (!hasApp) {
+          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条数据库操作未选择应用`}
+        }
+        if (!String(o.config_name ?? '').trim()) {
+          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写配置名`}
+        }
+        if (!String(o.database_name ?? '').trim()) {
+          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写数据库名`}
+        }
+        if (!String(o.expr ?? '').trim()) {
+          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写 SQL 语句`}
+        }
+        if (!String(o.variable_name ?? '').trim()) {
+          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写变量名`}
+        }
+      }
+    }
+    if (step.children && step.children.length > 0) {
+      const child = validateDatabaseSteps(step.children)
+      if (!child.valid) return child
+    }
+  }
+  return {valid: true}
 }
 
 // 递归校验步骤树中是否存在“键为空”的键值对（请求头/请求体/变量/用户变量等），若存在则不允许保存
@@ -2019,6 +2098,11 @@ const handleSaveAll = async () => {
       return
     }
 
+    const dbValidation = validateDatabaseSteps(steps.value)
+    if (!dbValidation.valid) {
+      window.$message?.error?.(dbValidation.message)
+      return
+    }
 
     // 键值对去空校验：存在 Key 为空的项时不允许保存
     const emptyKeyValidation = validateEmptyKeyInSteps(steps.value)
@@ -2190,7 +2274,7 @@ const loadEnvNames = async () => {
   try {
     const res = await api.getApiEnvNames()
     const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({label: name, value: name}))
+    envOptions.value = list.map((name) => ({ label: name, value: name }))
     if (envOptions.value.length > 0 && !selectedEnvName.value) {
       selectedEnvName.value = envOptions.value[0].value
     }
@@ -2282,8 +2366,7 @@ const loadSteps = async () => {
       try {
         const caseInfo = JSON.parse(caseInfoStr)
         if (loadStepsFromCopy(caseInfo)) return
-      } catch (_) {
-      }
+      } catch (_) {}
     }
     steps.value = []
     selectedKeys.value = []
@@ -2311,7 +2394,7 @@ const loadSteps = async () => {
     steps.value = mappedSteps
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
     loadQuoteStepsForAllQuoteSteps()
-    autotestStore.setStepTreeCache(caseId.value, caseCode.value, {rawData: data, steps: mappedSteps})
+    autotestStore.setStepTreeCache(caseId.value, caseCode.value, { rawData: data, steps: mappedSteps })
   } catch (error) {
     console.error('Failed to load step tree', error)
     steps.value = []
@@ -2381,16 +2464,27 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
               ? {step_name: '用户定义变量'}
               : type === 'quote'
                   ? {quote_case_id: null, step_name: '引用公共脚本'}
-                  : {}
+                  : type === 'database'
+                      ? {
+                        step_name: '数据库请求',
+                        step_desc: '',
+                        database_searched: false,
+                        database_operates: [],
+                        extract_variables: [],
+                        assert_validators: []
+                      }
+                      : {}
   const defaultName = type === 'loop'
       ? '循环结构(次数循环)'
       : type === 'wait'
           ? '控制等待(2秒)'
           : type === 'user_variables'
               ? '用户定义变量'
-              : type === 'quote' && extraConfig?.step_name
-                  ? extraConfig.step_name
-                  : `${def.label}`
+              : type === 'database'
+                  ? '数据库请求'
+                  : type === 'quote' && extraConfig?.step_name
+                      ? extraConfig.step_name
+                      : `${def.label}`
   const config = extraConfig ? {...defaultConfig, ...extraConfig} : defaultConfig
   const newStep = {
     id: genId(),
@@ -2517,7 +2611,7 @@ const removeAllQuoteSteps = () => {
     }
   })
   quoteIds.forEach((id) => {
-    quoteStepsMap.value = {...quoteStepsMap.value, [id]: []}
+    quoteStepsMap.value = { ...quoteStepsMap.value, [id]: [] }
   })
   if (quoteIds.includes(selectedKeys.value?.[0])) {
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
@@ -2555,7 +2649,7 @@ const restoreStashedQuoteSteps = () => {
     if (pa !== pb) return String(pa).localeCompare(String(pb))
     return a.index - b.index
   })
-  for (const {step, parentId, index} of sorted) {
+  for (const { step, parentId, index } of sorted) {
     const list = parentId === null ? steps.value : (findStep(parentId)?.children || null)
     if (!list) continue
     const safeIndex = Math.min(index, list.length)
@@ -2676,6 +2770,12 @@ const updateStepConfig = (id, config) => {
       if (config.step_name !== undefined) {
         step.name = String(config.step_name).trim() || '代码请求(Python)'
       }
+    } else if (step.type === 'database') {
+      if (config.step_name !== undefined && String(config.step_name).trim()) {
+        step.name = String(config.step_name).trim()
+      } else if (!String(step.name || '').trim()) {
+        step.name = '数据库请求'
+      }
     } else if (step.type === 'quote' || step.type === 'quote_public_script') {
       if (config.step_name !== undefined && config.step_name !== null) {
         step.name = String(config.step_name).trim() || '引用公共脚本'
@@ -2695,9 +2795,9 @@ const getStepIconClass = (type) => {
     loop: 'icon-loop',
     code: 'icon-code',
     http: 'icon-http',
-    tcp: 'icon-tcp',
     if: 'icon-if',
     wait: 'icon-wait',
+    database: 'icon-database',
     user_variables: 'icon-user_variables',
     quote: 'icon-quote',
     quote_public_script: 'icon-quote',
@@ -3662,7 +3762,7 @@ const RecursiveStepChildren = defineComponent({
   color: #3363e0;
 }
 
-:deep(.step-icon.icon-tcp) {
+:deep(.step-icon.icon-database) {
   color: #3363e0;
 }
 
@@ -3671,11 +3771,11 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-wait) {
-  color: #FF9933;
+  color: #48d024;
 }
 
 :deep(.step-icon.icon-user_variables) {
-  color: #F4511E;
+  color: #FF69B4;
 }
 
 :deep(.step-icon.icon-quote) {
@@ -3704,11 +3804,9 @@ const RecursiveStepChildren = defineComponent({
   border-left: 2px solid #18a058;
   padding-left: 8px;
 }
-
 :deep(.quote-inner-list) {
   margin-top: 6px;
 }
-
 :deep(.quote-inner-item) {
   padding: 4px 8px;
   margin-bottom: 2px;
@@ -3717,21 +3815,17 @@ const RecursiveStepChildren = defineComponent({
   cursor: pointer;
   border: none;
 }
-
 :deep(.quote-inner-item:hover) {
   background: rgba(24, 160, 88, 0.12);
 }
-
 :deep(.quote-inner-item .step-name) {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-
 :deep(.quote-inner-item .step-number) {
   margin-left: auto;
 }
-
 :deep(.quote-inner-empty) {
   font-size: 12px;
   color: #999;

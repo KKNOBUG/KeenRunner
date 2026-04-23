@@ -218,22 +218,53 @@
           <!-- 请求信息（优先展示明细中的实际请求，与后端一致） -->
           <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
             <NSpace vertical :size="16">
-              <NAlert v-if="actualRequestFromDetail" type="info" size="small" style="margin-bottom: 8px;">
-                以下为本次执行实际发出的请求（来自报告明细）
-              </NAlert>
               <NCollapse
-                  :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestFormFile', 'requestCode']"
+                  :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestFormFile', 'requestCode', 'requestDatabase']"
                   arrow-placement="right"
               >
-                <NCollapseItem title="Basic" name="requestBasic">
-                  <NDescriptions bordered :column="2" size="small">
-                    <NDescriptionsItem label="请求方法">
-                      <NTag :type="getMethodTagType(requestMethod)" size="small">{{ requestMethod || '-' }}</NTag>
-                    </NDescriptionsItem>
-                    <NDescriptionsItem label="请求URL">
-                      <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
-                    </NDescriptionsItem>
-                  </NDescriptions>
+                <NCollapseItem
+                    title="Basic"
+                    name="requestBasic"
+                    v-if="isReportHttpStep || isReportTcpStep || isReportDatabaseStep"
+                >
+                  <div v-if="isReportHttpStep" class="step-info-grid">
+                    <div class="step-info-row">
+                      <div class="step-info-label">请求方法：</div>
+                      <div class="step-info-value">
+                        <NTag :type="getMethodTagType(requestMethod)" size="small">{{ requestMethod || '-' }}</NTag>
+                      </div>
+                    </div>
+                    <div class="step-info-row">
+                      <div class="step-info-label">请求URL：</div>
+                      <div class="step-info-value">
+                        <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else-if="isReportTcpStep" class="step-info-grid">
+                    <div class="step-info-row">
+                      <div class="step-info-label">请求地址：</div>
+                      <div class="step-info-value">
+                        <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
+                      </div>
+                    </div>
+                    <div class="step-info-row">
+                      <div class="step-info-label">请求端口：</div>
+                      <div class="step-info-value">
+                        <NTag type="info" size="small">{{ requestPort || '-' }}</NTag>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else-if="isReportDatabaseStep" class="step-info-grid">
+                    <div class="step-info-row">
+                      <div class="step-info-label">查到即止：</div>
+                      <div class="step-info-value">
+                        <NTag :type="databaseSearchedForReport === true ? 'success' : 'default'" size="small">
+                          {{ databaseSearchedLabel }}
+                        </NTag>
+                      </div>
+                    </div>
+                  </div>
                 </NCollapseItem>
                 <NCollapseItem title="Headers" name="requestHeaders" v-if="normalizedRequestHeaders != null">
                   <div v-if="isObjectRequestHeaders">
@@ -261,12 +292,20 @@
                       style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
                   >{{ formatJson(normalizedRequestParams) }}</pre>
                 </NCollapseItem>
+                <NCollapseItem title="Form File" name="requestFormFile" v-if="requestFormFileTable.length > 0">
+                  <NDataTable
+                      :columns="[{ title: 'Key', key: 'key' }, { title: 'Value', key: 'value' }]"
+                      :data="requestFormFileTable"
+                      size="small"
+                      :bordered="true"
+                  />
+                </NCollapseItem>
                 <NCollapseItem :title="`Body (${requestBodyType})`" name="requestBody" v-if="hasRequestBody">
                   <div v-if="isJsonRequestBody">
                     <MonacoEditor
                         :value="formatJson(requestBody)"
                         :options="monacoEditorOptions(true)"
-                        style="min-height: 400px; height: auto;"
+                        style="min-height: 500px; height: auto;"
                     />
                   </div>
                   <NDataTable
@@ -281,20 +320,19 @@
                       style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
                   >{{ requestBodyText }}</pre>
                 </NCollapseItem>
-                <NCollapseItem title="Form File" name="requestFormFile" v-if="requestFormFileTable.length > 0">
-                  <NDataTable
-                      :columns="[{ title: 'Key', key: 'key' }, { title: 'Value', key: 'value' }]"
-                      :data="requestFormFileTable"
-                      size="small"
-                      :bordered="true"
-                  />
-                </NCollapseItem>
-                <NCollapseItem title="Code (Python)" name="requestCode"
-                               v-if="currentDetail.step_type === '代码请求(Python)' && stepInfo.code">
+
+                <NCollapseItem title="Code (Python)" name="requestCode" v-if="isReportPythonStep && stepInfo.code">
                   <MonacoEditor
                       :value="stepInfo.code"
                       :options="monacoEditorOptions(true, 'python')"
-                      style="min-height: 400px; height: auto;"
+                      style="min-height: 500px; height: auto;"
+                  />
+                </NCollapseItem>
+                <NCollapseItem title="Database" name="requestDatabase" v-if="databaseOperatesForReport?.length">
+                  <MonacoEditor
+                      :value="formatJson(databaseOperatesForReport)"
+                      :options="monacoEditorOptions(true)"
+                      style="min-height: 500px; height: auto;"
                   />
                 </NCollapseItem>
               </NCollapse>
@@ -306,7 +344,11 @@
             <NSpace vertical :size="16">
               <NCollapse :default-expanded-names="['responseHeaders', 'responseBody']" arrow-placement="right">
                 <NCollapseItem title="Headers" name="responseHeaders" v-if="currentDetail.response_header">
-                  <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ formatJson(currentDetail.response_header) }}</pre>
+                  <MonacoEditor
+                      :value="formatJson(currentDetail.response_header)"
+                      :options="monacoEditorOptions(true)"
+                      style="min-height: 200px; height: auto;"
+                  />
                 </NCollapseItem>
                 <NCollapseItem title="Cookies" name="responseCookies" v-if="currentDetail.response_cookie">
                   <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ formatJson(currentDetail.response_cookie) }}</pre>
@@ -316,7 +358,7 @@
                     <MonacoEditor
                         :value="formatJson(currentDetail.response_body)"
                         :options="monacoEditorOptions(true)"
-                        style="min-height: 400px; height: auto;"
+                        style="min-height: 500px; height: auto;"
                     />
                   </div>
                   <NCode v-else :code="formatResponseText()" :language="responseLanguage" show-line-numbers />
@@ -332,7 +374,7 @@
                 :columns="reportExtractColumns"
                 :data="extractVariablesData"
                 size="small"
-                :bordered="true"
+                :bordered="false"
             />
             <NEmpty v-else description="暂无数据提取结果" />
           </NTabPane>
@@ -344,7 +386,7 @@
                 :columns="reportValidatorColumns"
                 :data="assertValidatorsData"
                 size="small"
-                :bordered="true"
+                :bordered="false"
             />
             <NEmpty v-else description="暂无断言结果" />
           </NTabPane>
@@ -355,7 +397,7 @@
               <MonacoEditor
                   :value="formatJson(currentDetail.session_variables)"
                   :options="monacoEditorOptions(true)"
-                  style="min-height: 500px; height: auto;"
+                  style="min-height: 700px; height: auto;"
               />
             </div>
             <pre v-else style="white-space: pre-wrap; word-wrap: break-word;">{{
@@ -372,7 +414,6 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue'
 import {
-  NAlert,
   NButton,
   NCard,
   NCheckbox,
@@ -380,8 +421,6 @@ import {
   NCollapse,
   NCollapseItem,
   NDataTable,
-  NDescriptions,
-  NDescriptionsItem,
   NDrawer,
   NDrawerContent,
   NEmpty,
@@ -490,7 +529,7 @@ const extractVariablesData = computed(() => {
       source: '-',
       range: '-',
       expr: '-',
-      extracted_value: value,
+      extract_value: value,
       success: true,
       error: '-',
     }))
@@ -501,7 +540,7 @@ const extractVariablesData = computed(() => {
       source: item.source ?? '-',
       range: item.range ?? '-',
       expr: item.expr ?? '-',
-      extracted_value: item.extracted_value ?? item.value ?? '-',
+      extract_value: item.extract_value ?? item.value ?? '-',
       success: item.success !== false,
       error: item.error ?? '-',
     }))
@@ -533,57 +572,52 @@ const isJsonSessionVariables = computed(() => {
 })
 
 const reportExtractColumns = [
-  { title: '变量名', key: 'name', width: 120 },
+  { title: '变量名', key: 'name'},
   {
     title: '提取来源',
     key: 'source',
-    width: 120,
     render: (row) => {
       const map = { 'Response Json': 'Response Json', 'Response Text': 'Response Text', 'Response XML': 'Response XML', 'Response Header': 'Response Header', 'Response Cookie': 'Response Cookie' }
       return map[row.source] || row.source
     },
   },
-  { title: '提取范围', key: 'range', width: 120, render: (row) => (row.range === 'ALL' ? '全部提取' : (row.range || '-')) },
-  { title: '提取路径', key: 'expr', width: 120, ellipsis: { tooltip: true } },
+  { title: '提取范围', key: 'range', render: (row) => (row.range === 'ALL' ? '全部提取' : (row.range || '-')) },
+  { title: '提取路径', key: 'expr',  ellipsis: { tooltip: true } },
   {
     title: '提取值',
-    key: 'extracted_value',
-    width: 120,
+    key: 'extract_value',
     ellipsis: { tooltip: true },
     render: (row) => {
-      if (row.extracted_value === null || row.extracted_value === undefined) return '-'
-      const value = typeof row.extracted_value === 'object' ? JSON.stringify(row.extracted_value) : String(row.extracted_value)
+      if (row.extract_value === null || row.extract_value === undefined) return '-'
+      const value = typeof row.extract_value === 'object' ? JSON.stringify(row.extract_value) : String(row.extract_value)
       return value.length > 100 ? value.substring(0, 100) + '...' : value
     },
   },
   {
     title: '提取结果',
     key: 'success',
-    width: 120,
     render: (row) => h(NTag, { type: row.success ? 'success' : 'error', round: true, size: 'small' }, { default: () => (row.success ? 'pass' : 'fail') }),
   },
-  { title: '错误信息', key: 'error', width: 120, ellipsis: { tooltip: true }, render: (row) => row.error || '-' },
+  { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' },
 ]
 
 const reportValidatorColumns = [
-  { title: '断言名称', key: 'name', width: 120, ellipsis: { tooltip: true } },
+  { title: '断言名称', key: 'name', ellipsis: { tooltip: true } },
   {
     title: '断言对象',
     key: 'source',
-    width: 120,
     render: (row) => {
       const map = { 'Response Json': 'responseJson', 'Response Text': 'responseText', 'Response XML': 'responseXml', 'Response Header': 'responseHeader', 'Response Cookie': 'responseCookie', '变量池': '变量池' }
       return map[row.source] || row.source
     },
   },
-  { title: '断言路径', key: 'expr', width: 130, ellipsis: { tooltip: true } },
-  { title: '结果值', key: 'actual_value', width: 150, ellipsis: { tooltip: true }, render: (row) => (row.actual_value != null ? String(row.actual_value) : '-') },
-  { title: '断言方式', key: 'operation', width: 100 },
-  { title: '期望值', key: 'expect_value', width: 120, ellipsis: { tooltip: true }, render: (row) => { const v = row.except_value ?? row.expect_value; return v != null ? String(v) : '-'; } },
+  { title: '断言路径', key: 'expr', ellipsis: { tooltip: true } },
+  { title: '结果值', key: 'actual_value', ellipsis: { tooltip: true }, render: (row) => (row.actual_value != null ? String(row.actual_value) : '-') },
+  { title: '断言方式', key: 'operation', },
+  { title: '期望值', key: 'expect_value', ellipsis: { tooltip: true }, render: (row) => { const v = row.except_value ?? row.expect_value; return v != null ? String(v) : '-'; } },
   {
     title: '断言结果',
     key: 'success',
-    width: 100,
     render: (row) => h(NTag, { type: row.success ? 'success' : 'error', round: true, size: 'small' }, { default: () => (row.success ? 'pass' : 'fail') }),
   },
   { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' },
@@ -612,16 +646,66 @@ function normalizeRequestField (val) {
   return typeof val === 'object' ? val : null
 }
 
+const databaseOperatesForReport = computed(() => {
+  const d = currentDetail.value
+  if (!d) return null
+  const fromDetail = d.database_operates
+  if (Array.isArray(fromDetail) && fromDetail.length) return fromDetail
+  const fromStep = stepInfo.value?.database_operates
+  if (Array.isArray(fromStep) && fromStep.length) return fromStep
+  return null
+})
+
+const databaseSearchedForReport = computed(() => {
+  const d = currentDetail.value
+  if (d && d.database_searched != null) return !!d.database_searched
+  if (stepInfo.value && stepInfo.value.database_searched != null) return !!stepInfo.value.database_searched
+  return null
+})
+
+const databaseSearchedLabel = computed(() => {
+  const v = databaseSearchedForReport.value
+  if (v === null || v === undefined) return '-'
+  return v ? '是' : '否'
+})
+
+const reportStepType = computed(() => currentDetail.value?.step_type || stepInfo.value?.step_type || '')
+const isReportHttpStep = computed(() => reportStepType.value === 'HTTP请求')
+const isReportTcpStep = computed(() => reportStepType.value === 'TCP请求')
+const isReportDatabaseStep = computed(() => reportStepType.value === '数据库请求')
+const isReportPythonStep = computed(() => {
+  const t = reportStepType.value
+  return t === '代码请求(Python)'
+})
+
 const actualRequestFromDetail = computed(() => {
   const d = currentDetail.value
-  return d && (
+  if (!d) return false
+  if (Array.isArray(d.database_operates) && d.database_operates.length > 0) return true
+  return (
       d.request_header != null || d.request_params != null || d.request_form_data != null ||
       d.request_form_urlencoded != null || d.request_form_file != null || d.request_body != null || d.request_text != null
   )
 })
 
-const requestMethod = computed(() => stepInfo.value?.request_method || '-')
-const requestUrl = computed(() => stepInfo.value?.request_url || '-')
+const requestMethod = computed(() => {
+  const d = currentDetail.value
+  if (d?.request_method != null && String(d.request_method).trim() !== '') return d.request_method
+  const v = stepInfo.value?.request_method
+  return v != null && String(v).trim() !== '' ? v : '-'
+})
+const requestUrl = computed(() => {
+  const d = currentDetail.value
+  if (d?.request_url != null && String(d.request_url).trim() !== '') return d.request_url
+  const v = stepInfo.value?.request_url
+  return v != null && String(v).trim() !== '' ? v : '-'
+})
+const requestPort = computed(() => {
+  const d = currentDetail.value
+  if (d?.request_port != null && String(d.request_port).trim() !== '') return d.request_port
+  const v = stepInfo.value?.request_port
+  return v != null && String(v).trim() !== '' ? v : '-'
+})
 
 const requestHeadersRaw = computed(() => {
   if (actualRequestFromDetail.value && currentDetail.value?.request_header != null) {
@@ -710,6 +794,8 @@ const hasResponseInfo = computed(() => {
 
 const hasRequestInfo = computed(() => {
   const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false
+  if (!isRequestStep) return false
+  if (databaseOperatesForReport.value?.length) return true
   const hasRequestData =
       (requestMethod.value && requestMethod.value !== '-') ||
       (requestUrl.value && requestUrl.value !== '-') ||
@@ -721,7 +807,7 @@ const hasRequestInfo = computed(() => {
       requestFormFile.value != null ||
       requestText.value != null ||
       run_code.value != null
-  return isRequestStep && hasRequestData
+  return hasRequestData
 })
 
 const hasRequestBody = computed(() => !!(requestBody.value || requestFormData.value || requestFormUrlencoded.value || requestText.value))
