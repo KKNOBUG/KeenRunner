@@ -107,16 +107,16 @@
                     <div class="step-info-value">{{ stepInfo.loop_iterable || '-' }}</div>
                   </div>
                   <div class="step-info-row">
-                    <div class="step-info-label">索引变量名称：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_iter_idx || '-' }}</div>
+                    <div class="step-info-label">循环索引（固定）：</div>
+                    <div class="step-info-value">loop_index</div>
                   </div>
                   <div class="step-info-row">
-                    <div class="step-info-label">键的变量名称：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_iter_key || '-' }}</div>
+                    <div class="step-info-label">循环键名（固定，字典循环）：</div>
+                    <div class="step-info-value">loop_key</div>
                   </div>
                   <div class="step-info-row">
-                    <div class="step-info-label">数据变量名称：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_iter_val || '-' }}</div>
+                    <div class="step-info-label">循环数据（固定）：</div>
+                    <div class="step-info-value">loop_value</div>
                   </div>
                   <div class="step-info-row">
                     <div class="step-info-label">错误处理策略：</div>
@@ -132,13 +132,14 @@
               </NCard>
 
               <NCard v-if="currentDetail.step_type === '条件分支'" title="条件分支配置" size="small" :bordered="false">
-                <div v-if="stepInfo.conditions && Array.isArray(stepInfo.conditions) && stepInfo.conditions.length > 0">
+                <div v-if="detailConditionsSnapshot">
                   <MonacoEditor
-                      :value="formatJson(stepInfo.conditions)"
+                      :value="formatJson(detailConditionsSnapshot)"
                       :options="monacoEditorOptions(true)"
                       style="min-height: 200px; height: auto;"
                   />
                 </div>
+                <NEmpty v-else description="本步明细未记录 conditions 快照" size="small" />
               </NCard>
 
               <NCard v-if="currentDetail.step_type === '等待控制'" title="等待控制配置" size="small" :bordered="false">
@@ -461,6 +462,13 @@ const detailDrawerVisible = ref(false)
 const currentDetail = ref(null)
 
 const stepInfo = computed(() => currentDetail.value?.step || {})
+
+/** 本步执行快照中的 conditions（明细表 krun_autotest_api_details），非步骤定义表 */
+const detailConditionsSnapshot = computed(() => {
+  const c = currentDetail.value?.conditions
+  if (c && typeof c === 'object' && !Array.isArray(c)) return c
+  return null
+})
 
 const filteredDetailList = computed(() => {
   if (!onlyShowFailed.value) return detailList.value

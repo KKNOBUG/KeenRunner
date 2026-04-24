@@ -1445,33 +1445,20 @@ const mapBackendStep = (step) => {
   }
 
   if (localType === 'loop') {
-    // 根据后端数据构建循环配置
     base.config = {
       loop_mode: step.loop_mode || '次数循环',
       loop_on_error: step.loop_on_error || '继续下一次循环',
       loop_maximums: step.loop_maximums ? Number(step.loop_maximums) : null,
       loop_interval: step.loop_interval ? Number(step.loop_interval) : 0,
       loop_iterable: step.loop_iterable || '',
-      loop_iter_idx: step.loop_iter_idx || '',
-      loop_iter_key: step.loop_iter_key || '',
-      loop_iter_val: step.loop_iter_val || '',
       loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0
     }
-    // 解析条件循环的conditions
-    if (step.conditions) {
-      try {
-        const condition = typeof step.conditions === 'string'
-            ? JSON.parse(step.conditions)
-            : step.conditions
-        base.config.condition_value = condition.value || ''
-        base.config.condition_operation = condition.operation || 'not_empty'
-        base.config.condition_except_value = condition.except_value || ''
-      } catch (e) {
-        console.error('解析循环条件失败:', e)
-        base.config.condition_value = ''
-        base.config.condition_operation = 'not_empty'
-        base.config.condition_except_value = ''
-      }
+    // 条件循环：conditions 为 Optional[Dict]（与后端一致）
+    if (step.conditions && typeof step.conditions === 'object' && !Array.isArray(step.conditions)) {
+      const condition = step.conditions
+      base.config.condition_value = condition.value || ''
+      base.config.condition_operation = condition.operation || 'not_empty'
+      base.config.condition_except_value = condition.except_value || ''
     } else {
       base.config.condition_value = ''
       base.config.condition_operation = 'not_empty'
@@ -1527,14 +1514,16 @@ const mapBackendStep = (step) => {
       validators: step.validators || {}
     }
   } else if (localType === 'if') {
-    const parsed = parseJsonSafely(step.conditions) || {}
-    // 处理数组格式（后端可能返回数组）
-    const condition = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : parsed
-    base.config = {
+    const raw = step.conditions
+    const condition = (raw != null && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {}
+    const cond = {
       value: condition.value || '',
       operation: condition.operation || '非空',
       except_value: condition.except_value || '',
       desc: condition.desc || ''
+    }
+    base.config = {
+      conditions: { ...cond }
     }
     base.children = []
   } else if (localType === 'wait') {
@@ -1794,39 +1783,31 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     if (backendStep.loop_mode === '次数循环') {
       // 最大循环次数默认 5，与 loop_controller 一致
       backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums != null ? Number(original.loop_maximums) : 5)
-    } else if (backendStep.loop_mode === '对象循环') {
+    } else if (backendStep.loop_mode === '列表循环') {
       backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
-      backendStep.loop_iter_idx = config.loop_iter_idx !== undefined ? config.loop_iter_idx : (original.loop_iter_idx || '')
-      backendStep.loop_iter_val = config.loop_iter_val !== undefined ? config.loop_iter_val : (original.loop_iter_val || '')
     } else if (backendStep.loop_mode === '字典循环') {
       backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
-      backendStep.loop_iter_idx = config.loop_iter_idx !== undefined ? config.loop_iter_idx : (original.loop_iter_idx || '')
-      backendStep.loop_iter_key = config.loop_iter_key !== undefined ? config.loop_iter_key : (original.loop_iter_key || '')
-      backendStep.loop_iter_val = config.loop_iter_val !== undefined ? config.loop_iter_val : (original.loop_iter_val || '')
     } else if (backendStep.loop_mode === '条件循环') {
-      // 条件循环需要将条件对象转换为列表格式（后端期望 List[Dict[str, Any]]）
-      if (config.condition_value !== undefined || config.condition_operation !== undefined || config.condition_except_value !== undefined) {
-        const conditionObj = {
+      const fromConfigDict = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
+          ? config.conditions
+          : null
+      if (fromConfigDict) {
+        backendStep.conditions = {
+          value: fromConfigDict.value || '',
+          operation: fromConfigDict.operation || 'not_empty',
+          except_value: fromConfigDict.except_value || ''
+        }
+      } else if (config.condition_value !== undefined || config.condition_operation !== undefined || config.condition_except_value !== undefined) {
+        backendStep.conditions = {
           value: config.condition_value || '',
           operation: config.condition_operation || 'not_empty',
           except_value: config.condition_except_value || ''
         }
-        backendStep.conditions = [conditionObj]
-      } else if (original.conditions) {
-        // 如果原始数据是字符串，先解析；如果是对象，转换为列表；如果已经是列表，直接使用
-        if (typeof original.conditions === 'string') {
-          try {
-            const parsed = JSON.parse(original.conditions)
-            backendStep.conditions = Array.isArray(parsed) ? parsed : [parsed]
-          } catch (e) {
-            backendStep.conditions = null
-          }
-        } else if (Array.isArray(original.conditions)) {
-          backendStep.conditions = original.conditions
-        } else if (typeof original.conditions === 'object') {
-          backendStep.conditions = [original.conditions]
-        } else {
-          backendStep.conditions = null
+      } else if (original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)) {
+        backendStep.conditions = {
+          value: original.conditions.value || '',
+          operation: original.conditions.operation || 'not_empty',
+          except_value: original.conditions.except_value || ''
         }
       } else {
         backendStep.conditions = null
@@ -1834,15 +1815,26 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
       backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
     }
   } else if (step.type === 'if') {
-    // 根据后端 ConditionStepExecutor 的要求，conditions 应该是列表格式（List[Dict[str, Any]]）
-    const conditionObj = {
-      value: config.value || '',
-      operation: config.operation || '非空',
-      except_value: config.except_value || '',
-      desc: config.desc || ''
-    }
-    // 后端期望 conditions 是列表格式
-    backendStep.conditions = [conditionObj]
+    const fromConfig = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
+        ? config.conditions
+        : null
+    const fromOriginal = original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)
+        ? original.conditions
+        : null
+    const conditionObj = fromConfig || fromOriginal
+    backendStep.conditions = conditionObj
+        ? {
+          value: conditionObj.value || '',
+          operation: conditionObj.operation || '非空',
+          except_value: conditionObj.except_value || '',
+          desc: conditionObj.desc || ''
+        }
+        : {
+          value: '',
+          operation: '非空',
+          except_value: '',
+          desc: ''
+        }
   } else if (step.type === 'wait') {
     backendStep.wait = config.seconds || original.wait || 0
   } else if (step.type === 'user_variables') {
@@ -2661,12 +2653,30 @@ const restoreStashedQuoteSteps = () => {
   return sorted.length
 }
 
+/** 条件分支 / 循环结构在步骤树上的固定展示名（与 updateStepConfig 规则一致）；其它类型返回 null */
+const getFixedBranchStepDisplayName = (step) => {
+  if (!step?.type) return null
+  if (step.type === 'if') {
+    return '条件分支(根据判断结果, 执行不同的路径)'
+  }
+  if (step.type === 'loop') {
+    const mode = (step.config && step.config.loop_mode) || '次数循环'
+    if (mode === '次数循环') return '循环结构(次数循环)'
+    if (mode === '列表循环') return '循环结构(列表循环)'
+    if (mode === '字典循环') return '循环结构(字典循环)'
+    if (mode === '条件循环') return '循环结构-(条件循环)'
+    return '循环结构'
+  }
+  return null
+}
+
 const handleCopyStep = (id) => {
   const step = findStep(id)
   if (!step) return
   const copiedStep = JSON.parse(JSON.stringify(step))
   copiedStep.id = genId()
-  copiedStep.name = `${copiedStep.name}(copy)`
+  const fixedName = getFixedBranchStepDisplayName(copiedStep)
+  copiedStep.name = fixedName ?? `${copiedStep.name}(copy)`
 
   // 复制的步骤是新增的，需要删除 original 中的 id 和 step_code
   // 这样 convertStepToBackend 会将其识别为新增步骤
@@ -2731,18 +2741,9 @@ const updateStepConfig = (id, config) => {
   if (step) {
     step.config = {...step.config, ...config}
     // 根据配置更新步骤名称
-    if (step.type === 'loop') {
-      if (config.loop_mode === '次数循环') {
-        step.name = `循环结构(次数循环)`
-      } else if (config.loop_mode === '对象循环') {
-        step.name = `循环结构(对象循环)`
-      } else if (config.loop_mode === '字典循环') {
-        step.name = `循环结构(字典循环)`
-      } else if (config.loop_mode === '条件循环') {
-        step.name = `循环结构-(条件循环)`
-      } else {
-        step.name = `循环结构`
-      }
+    const branchFixed = getFixedBranchStepDisplayName(step)
+    if (branchFixed) {
+      step.name = branchFixed
     } else if (step.type === 'http') {
       // 如果提供了 step_name，使用用户输入的步骤名称
       if (config.step_name !== undefined && config.step_name.length > 0) {
@@ -2750,13 +2751,6 @@ const updateStepConfig = (id, config) => {
       } else {
         // 否则自动生成步骤名称
         step.name = `HTTP请求(发送请求并验证响应数据)`
-      }
-    } else if (step.type === 'if') {
-      // 如果提供了 step_name，使用用户输入的步骤名称
-      if (config.step_name !== undefined && config.step_name.length > 0) {
-        step.name = config.step_name
-      } else {
-        step.name = `条件分支(根据判断结果, 执行不同的路径)`
       }
     } else if (step.type === 'wait') {
       step.name = `控制等待(${config.seconds ?? 2}秒)`

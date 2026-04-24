@@ -47,9 +47,9 @@ class AutoTestStepType(StringEnum):
 class AutoTestLoopMode(StringEnum):
     # 循环模式：次数循环(loop_mode + loop_maximums + loop_interval)
     COUNT = "次数循环"
-    # 循环模式：对象循环(loop_mode + loop_iterable + loop_iter_idx + loop_iter_val + loop_interval)
-    ITERABLE = "对象循环"
-    # 循环模式：字典循环(loop_mode + loop_iterable + loop_iter_idx + loop_iter_key + loop_iter_val + loop_interval)
+    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量固定 loop_index / loop_value)
+    LIST = "列表循环"
+    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量固定 loop_index / loop_key / loop_value)
     DICT = "字典循环"
     # 循环模式：条件循环(loop_mode + conditions + loop_interval + loop_timeout)
     CONDITION = "条件循环"

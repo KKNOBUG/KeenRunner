@@ -1068,9 +1068,6 @@ class BaseStepExecutor:
                 loop_maximums=self.step.get("loop_maximums") or None,
                 loop_interval=self.step.get("loop_interval") or None,
                 loop_iterable=self.step.get("loop_iterable") or None,
-                loop_iter_idx=self.step.get("loop_iter_idx") or None,
-                loop_iter_key=self.step.get("loop_iter_key") or None,
-                loop_iter_val=self.step.get("loop_iter_val") or None,
                 loop_on_error=self.step.get("loop_on_error") or None,
                 loop_timeout=self.step.get("loop_timeout") or None,
                 conditions=self.step.get("conditions") or None,
@@ -1158,7 +1155,7 @@ class LoopStepExecutor(BaseStepExecutor):
             loop_mode_str = self.step.get("loop_mode")
             if not loop_mode_str:
                 raise StepExecutionError(
-                    "【循环结构】请明确指定循环模式类型(仅允许选择: 次数循环, 对象循环, 字典循环, 条件循环)")
+                    "【循环结构】请明确指定循环模式类型(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)")
             # 获取错误处理策略，必须明确指定
             on_error_str = self.step.get("loop_on_error")
             if not on_error_str:
@@ -1168,7 +1165,7 @@ class LoopStepExecutor(BaseStepExecutor):
                 loop_mode = AutoTestLoopMode(loop_mode_str)
             except (ValueError, TypeError) as e:
                 raise StepExecutionError(
-                    f"【循环结构】循环模式{loop_mode_str}无效(仅允许选择: 次数循环、对象循环、字典循环、条件循环)"
+                    f"【循环结构】循环模式{loop_mode_str}无效(仅允许选择: 次数循环、列表循环、字典循环、条件循环)"
                 ) from e
             try:
                 on_error = AutoTestLoopErrorStrategy(on_error_str)
@@ -1180,8 +1177,8 @@ class LoopStepExecutor(BaseStepExecutor):
             # 根据循环模式执行不同的逻辑
             if loop_mode == AutoTestLoopMode.COUNT:
                 await self._execute_count_loop(result, on_error)
-            elif loop_mode == AutoTestLoopMode.ITERABLE:
-                await self._execute_iterable_loop(result, on_error)
+            elif loop_mode == AutoTestLoopMode.LIST:
+                await self._execute_list_loop(result, on_error)
             elif loop_mode == AutoTestLoopMode.DICT:
                 await self._execute_dict_loop(result, on_error)
             elif loop_mode == AutoTestLoopMode.CONDITION:
@@ -1189,7 +1186,7 @@ class LoopStepExecutor(BaseStepExecutor):
             else:
                 raise StepExecutionError(
                     f"【循环结构】循环模式[{loop_mode_str}]无效"
-                    f"(仅允许选择: 次数循环, 对象循环, 字典循环, 条件循环)"
+                    f"(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)"
                 )
         except StepExecutionError:
             raise
@@ -1218,6 +1215,10 @@ class LoopStepExecutor(BaseStepExecutor):
             if self.step_code:
                 self.context.step_cycle_index[self.step_code] = iteration
             self.context.log(f"【循环结构】次数循环: 第{iteration}/{loop_maximums}次执行", step_code=self.step_code)
+            self.context.update_variables(
+                [{"key": "loop_index", "value": iteration, "desc": ""}],
+                scope="session_variables",
+            )
             for child in self.children:
                 child_code = child.get("step_code")
                 if child_code:
@@ -1271,27 +1272,21 @@ class LoopStepExecutor(BaseStepExecutor):
 
         self.context.log(f"【循环结构】次数循环结束: 共执行{loop_maximums}次", step_code=self.step_code)
 
-    async def _execute_iterable_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
+    async def _execute_list_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        对象循环模式，对可迭代对象（变量或 JSON 数组）逐项执行子步骤，索引与值写入 session_variables。
+        列表循环模式，对可迭代对象（变量或 JSON 数组）逐项执行子步骤；
+        会话变量固定为 loop_index（从 1 起的序号）、loop_value（当前项）。
         :param result:  用于挂载子步骤结果的 StepExecutionResult。
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）。
         :return:
         """
         loop_iterable = self.step.get("loop_iterable")
         if not loop_iterable:
-            raise StepExecutionError("【循环结构】对象循环模式不允许loop_iterable参数为空")
+            raise StepExecutionError("【循环结构】列表循环模式不允许loop_iterable参数为空")
 
-        # 获取变量名（loop_iter_idx 是变量名，用于存储 enumerate 得到的索引值）
-        loop_iter_idx = self.step.get("loop_iter_idx")
-        if isinstance(loop_iter_idx, int):
-            index_var_name = "loop_index"
-        else:
-            index_var_name = loop_iter_idx if loop_iter_idx else "loop_index"
-
-        # 循环索引从1开始（enumerate的start参数固定为1）
+        index_var_name = "loop_index"
+        value_var_name = "loop_value"
         start_index = 1
-        value_var_name = self.step.get("loop_iter_val") or "loop_value"
         loop_interval = self.step.get("loop_interval")
 
         try:
@@ -1299,22 +1294,22 @@ class LoopStepExecutor(BaseStepExecutor):
             # 验证是否为可迭代对象（排除字符串和字节）
             if isinstance(iterable_obj, (str, bytes)):
                 raise StepExecutionError(
-                    f"【循环结构】对象循环模式: loop_iterable 必须是可迭代对象(列表, 元组等), "
+                    f"【循环结构】列表循环模式: loop_iterable 必须是可迭代对象(列表, 元组等), "
                     f"当前类型: {type(iterable_obj).__name__}"
                 )
             if not hasattr(iterable_obj, "__iter__"):
                 raise StepExecutionError(
-                    f"【循环结构】对象循环模式: loop_iterable 必须是可迭代对象(列表, 元组等), "
+                    f"【循环结构】列表循环模式: loop_iterable 必须是可迭代对象(列表, 元组等), "
                     f"当前类型: {type(iterable_obj).__name__}"
                 )
             # 转换为列表以便索引
             iterable_list = list(iterable_obj)
             total_items = len(iterable_list)
             if total_items == 0:
-                self.context.log("【循环结构】对象循环: 可迭代对象为空, 跳过循环", step_code=self.step_code)
+                self.context.log("【循环结构】列表循环: 可迭代对象为空, 跳过循环", step_code=self.step_code)
                 return
             self.context.log(
-                f"【循环结构】对象循环开始: "
+                f"【循环结构】列表循环开始: "
                 f"可迭代对象长度: {total_items}, "
                 f"索引变量: {index_var_name}, "
                 f"数据变量: {value_var_name}",
@@ -1325,13 +1320,15 @@ class LoopStepExecutor(BaseStepExecutor):
                 if self.step_code:
                     self.context.step_cycle_index[self.step_code] = idx
                 self.context.log(
-                    f"【循环结构】对象循环: 第{idx}/{total_items}次执行, 数据: {item}",
+                    f"【循环结构】列表循环: 第{idx}/{total_items}次执行, 数据: {item}",
                     step_code=self.step_code
                 )
-                # 将循环变量注入到上下文
                 self.context.update_variables(
-                    {f"{index_var_name}_{idx}": idx, f"{value_var_name}_{idx}": item},
-                    scope="session_variables"
+                    [
+                        {"key": index_var_name, "value": idx, "desc": ""},
+                        {"key": value_var_name, "value": item, "desc": ""},
+                    ],
+                    scope="session_variables",
                 )
                 # 为子步骤记录当前循环次数
                 for child in self.children:
@@ -1368,7 +1365,7 @@ class LoopStepExecutor(BaseStepExecutor):
                         # CONTINUE 模式继续下一次循环
                         pass
                 except Exception as e:
-                    error_message = f"【循环结构】对象循环: 第{idx}次执行失败, 错误描述: {e}"
+                    error_message = f"【循环结构】列表循环: 第{idx}次执行失败, 错误描述: {e}"
                     self.context.log(error_message, step_code=self.step_code)
                     result.success = False
                     if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1380,16 +1377,17 @@ class LoopStepExecutor(BaseStepExecutor):
                 if idx < total_items and loop_interval and loop_interval > 0:
                     await self.context.sleep(loop_interval)
 
-            self.context.log(f"【循环结构】对象循环结束: 共执行{total_items}次", step_code=self.step_code)
+            self.context.log(f"【循环结构】列表循环结束: 共执行{total_items}次", step_code=self.step_code)
 
         except StepExecutionError:
             raise
         except Exception as e:
-            raise StepExecutionError(f"【循环结构】对象循环执行异常: {e}") from e
+            raise StepExecutionError(f"【循环结构】列表循环执行异常: {e}") from e
 
     async def _execute_dict_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        字典循环模式，对字典逐 (key, value) 执行子步骤，键/值变量名由 loop_iter_key、loop_iter_val 指定。
+        字典循环模式，对字典逐 (key, value) 执行子步骤；
+        会话变量固定为 loop_index（从 1 起的序号）、loop_key、loop_value。
         :param result: 用于挂载子步骤结果的 StepExecutionResult。
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）。
         :return:
@@ -1398,18 +1396,10 @@ class LoopStepExecutor(BaseStepExecutor):
         if not loop_iterable:
             raise StepExecutionError("【循环结构】字典循环模式不允许loop_iterable参数为空")
 
-        # 获取变量名（loop_iter_idx 是索引变量名，loop_iter_key 是键变量名，loop_iter_val 是值变量名）
-        loop_iter_idx = self.step.get("loop_iter_idx")
-        if isinstance(loop_iter_idx, int):
-            index_var_name = "loop_index"
-        else:
-            # 如果是字符串，直接使用；如果为空，使用默认值
-            index_var_name = loop_iter_idx if loop_iter_idx else "loop_index"
-
-        # 循环索引从1开始（enumerate的start参数固定为1）
+        index_var_name = "loop_index"
+        key_var_name = "loop_key"
+        value_var_name = "loop_value"
         start_index = 1
-        key_var_name = self.step.get("loop_iter_key") or "loop_key"
-        value_var_name = self.step.get("loop_iter_val") or "loop_value"
         loop_interval = self.step.get("loop_interval")
 
         try:
@@ -1442,10 +1432,13 @@ class LoopStepExecutor(BaseStepExecutor):
                     f"【循环结构】字典循环: 第{idx}/{total_items}次执行, 键={key}, 值={value}",
                     step_code=self.step_code
                 )
-                # 将循环变量注入到上下文
                 self.context.update_variables(
-                    {f"{index_var_name}_{idx}": idx, f"{value_var_name}_{idx}": value},
-                    scope="session_variables"
+                    [
+                        {"key": index_var_name, "value": idx, "desc": ""},
+                        {"key": key_var_name, "value": key, "desc": ""},
+                        {"key": value_var_name, "value": value, "desc": ""},
+                    ],
+                    scope="session_variables",
                 )
                 # 为子步骤记录当前循环次数
                 for child in self.children:
@@ -1540,6 +1533,10 @@ class LoopStepExecutor(BaseStepExecutor):
             if self.step_code:
                 self.context.step_cycle_index[self.step_code] = iteration
             self.context.log(f"【循环结构】条件循环: 第{iteration}次执行", step_code=self.step_code)
+            self.context.update_variables(
+                [{"key": "loop_index", "value": iteration, "desc": ""}],
+                scope="session_variables",
+            )
             # 为子步骤记录当前循环次数
             for child in self.children:
                 child_code = child.get("step_code") or child.get("id") or ""
@@ -1613,16 +1610,17 @@ class LoopStepExecutor(BaseStepExecutor):
 
         self.context.log(f"【循环结构】条件循环结束: 共执行{iteration}次", step_code=self.step_code)
 
-    def evaluate_condition(self, condition: str) -> bool:
+    def evaluate_condition(self, condition: Any) -> bool:
         """
-        将 condition 中 Python 风格 None/True/False 转为 JSON 后解析，再按 value/operation/except_value 做比较。
-        :param condition: JSON 格式条件字符串，含 value、operation、except_value。
+        按 value/operation/except_value 评估条件；conditions 与落库一致，为 dict。
+        :param condition: 步骤 ``conditions`` 字段（dict）。
         :return: 条件是否满足。
         """
-        try:
-            condition_obj = AutoTestToolService.parse_condition_json(condition, "循环结构")
-        except ValueError as e:
-            raise StepExecutionError(str(e)) from e
+        if not isinstance(condition, dict):
+            raise StepExecutionError(
+                f"【循环结构】conditions 必须为对象(dict), 当前类型: {type(condition).__name__}"
+            )
+        condition_obj = condition
 
         value_expr = condition_obj.get("value")
         operation = condition_obj.get("operation")
@@ -1686,10 +1684,11 @@ class ConditionStepExecutor(BaseStepExecutor):
             condition = self.step.get("conditions")
             if not condition:
                 raise StepExecutionError("【条件分支】缺少必要配置: conditions")
-            try:
-                condition_obj = AutoTestToolService.parse_condition_json(condition, "条件分支")
-            except ValueError as e:
-                raise StepExecutionError(str(e)) from e
+            if not isinstance(condition, dict):
+                raise StepExecutionError(
+                    f"【条件分支】conditions 必须为对象(dict), 当前类型: {type(condition).__name__}"
+                )
+            condition_obj = condition
 
             value_expr = condition_obj.get("value")
             operation = condition_obj.get("operation")

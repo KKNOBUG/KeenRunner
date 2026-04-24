@@ -724,30 +724,6 @@ class AutoTestToolService:
         return validator_results
 
     @classmethod
-    def parse_condition_json(cls, condition: str, error_prefix: str) -> Dict[str, Any]:
-        """
-        将条件字符串中 Python 风格 None/True/False 转为 JSON 后解析为字典, 供步骤引擎中「循环结构」「条件分支」等使用
-
-        :param condition: JSON 格式条件字符串, 含 value、operation、except_value 等
-        :param error_prefix: 错误信息前缀, 如 "循环结构"、"条件分支"
-        :return: 解析后的条件字典
-        :raises ValueError: 非合法 JSON 或解析异常时, 错误信息会包含 error_prefix
-        """
-        try:
-            normalized = re.sub(r'\bNone\b', 'null', condition)
-            normalized = re.sub(r'\bTrue\b', 'true', normalized)
-            normalized = re.sub(r'\bFalse\b', 'false', normalized)
-            return json.loads(normalized)
-        except json.JSONDecodeError as e:
-            raise ValueError(
-                f"【{error_prefix}】条件表达式不是有效的JSON格式, \n"
-                f"错误位置: 第{e.lineno}行, 第{e.colno}列, \n"
-                f"错误信息: {e.msg}"
-            ) from e
-        except Exception as e:
-            raise ValueError(f"【{error_prefix}】条件表达式解析异常, 错误详情: {e}") from e
-
-    @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
         """
         校验步骤树结构：无自循环引用, 且仅有「循环结构」「条件分支」类型可包含子步骤
@@ -813,19 +789,21 @@ class AutoTestToolService:
     @classmethod
     def normalize_step(cls, step: Dict[str, Any]) -> Dict[str, Any]:
         """
-        规范化单条步骤数据：conditions 转为 JSON 字符串、移除 case/quote_case, 并递归规范化 children 与 quote_steps
+        规范化单条步骤数据：conditions 统一为 dict(与 JSONField / Pydantic Optional[Dict] 一致)、移除 case/quote_case,
+        并递归规范化 children 与 quote_steps
 
         :param step: 步骤数据字典(可含 conditions、children、quote_steps 等)
         :return: 规范化后的新字典, 不修改入参
         """
         step = step.copy()
 
-        # 处理conditions：如果是数组, 取第一个并转为JSON字符串
+        # conditions：与模型 / Pydantic ``Optional[Dict[str, Any]]`` 一致, 仅保留 dict 或 None
         conditions = step.get("conditions")
-        if isinstance(conditions, list) and len(conditions) > 0:
-            condition_obj = conditions[0]
-            step["conditions"] = json.dumps(condition_obj, ensure_ascii=False)
-        elif conditions is None:
+        if conditions is None:
+            step["conditions"] = None
+        elif isinstance(conditions, dict):
+            step["conditions"] = conditions
+        else:
             step["conditions"] = None
 
         # extract_variables和assert_validators保持数组格式(执行引擎已支持)
