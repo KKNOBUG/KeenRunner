@@ -226,28 +226,21 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             instance = await self.get_by_code(case_code=case_code, on_error=True)
             case_id: int = instance.id
 
+        case_type: AutoTestCaseType = instance.case_type
+        if case_type == AutoTestCaseType.PUBLIC_SCRIPT:
+            # 业务层验证：检查用例是否被引用
+            quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
+            if quote_steps_count > 0:
+                error_message: str = (
+                    f"根据(quote_case_id={case_id})条件检查步骤信息失败, "
+                    f"用例(id={case_id})存在{quote_steps_count}个引用, 无法直接删除"
+                )
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
+
         # 业务层验证：检查用例是否拥有步骤
-        steps_count = await AutoTestApiStepInfo.filter(case_id=case_id, state__not=1).count()
-        if steps_count > 0:
-            error_message: str = (
-                f"根据(case_id={case_id})条件检查步骤信息失败, "
-                f"用例(id={case_id})存在{steps_count}个步骤, 无法直接删除"
-            )
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
-
-        # 业务层验证：检查用例是否被引用
-        quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
-        if quote_steps_count > 0:
-            error_message: str = (
-                f"根据(quote_case_id={case_id})条件检查步骤信息失败, "
-                f"用例(id={case_id})存在{quote_steps_count}个引用, 无法直接删除"
-            )
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
-
-        instance.state = 1
-        await instance.save(update_fields={"state"})
+        await AutoTestApiStepInfo.filter(case_id=case_id, state__not=1).delete()
+        await instance.delete()
         return instance
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: list) -> tuple:

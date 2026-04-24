@@ -55,6 +55,7 @@ FUNC_LIST: List[Dict[str, Any]] = [
     {"name": "generate_am_or_pm()", "desc": ""},
     {"name": "generate_uuid()", "desc": ""},
     {"name": "generate_phone()", "desc": ""},
+    {"name": "generate_random_number(min_=1, max_=100)", "desc": ""},
     {"name": "generate_ident_card_number()", "desc": ""},
     {"name": "generate_ident_card_number_condition(min_age=18, max_age=65)", "desc": ""},
     {"name": 'generate_ident_card_birthday(ident_card_number="310224199508081212")', "desc": ""},

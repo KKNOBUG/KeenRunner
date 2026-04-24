@@ -6,22 +6,31 @@
 @Module  : data_initialization.py
 @DateTime: 2025/2/19 22:12
 """
+from typing import List
+
 from fastapi import FastAPI
 from tortoise.expressions import Q
 
-from backend.applications.base.models.router_model import Router
+from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate
+from backend.applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
+from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate
+from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
+from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
+from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.schemas.menu_schema import MenuCreate
-from backend.applications.base.services.menu_crud import MENU_CRUD
 from backend.applications.base.models.role_model import Role
+from backend.applications.base.models.router_model import Router
+from backend.applications.base.schemas.menu_schema import MenuCreate
 from backend.applications.base.schemas.role_schema import RoleCreate
+from backend.applications.base.services.menu_crud import MENU_CRUD
 from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.base.services.router_crud import ROUTER_CRUD
 from backend.applications.department.schemas.department_schema import DepartmentCreate
 from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import USER_CRUD
-from backend.enums import MenuType
+from backend.enums import MenuType, AutoTestCaseAttr, AutoTestStepType
 
 
 async def init_database_router(app: FastAPI):
@@ -652,9 +661,223 @@ async def init_database_menu():
         )
 
 
+async def init_database_project():
+    project = await AUTOTEST_API_PROJECT_CRUD.model.exists()
+    if not project:
+        await AUTOTEST_API_PROJECT_CRUD.create_project(
+            AutoTestApiProjectCreate(
+                project_name="KRUN",
+                project_desc="KRUN测管平台",
+                project_state="开发中",
+                project_dev_owners=["秦始皇1号", "秦始皇2号"],
+                project_developers=["螺丝钉1号", "螺丝钉2号", "螺丝钉3号"],
+                project_test_owners=["朱元璋1号", "朱元璋2号"],
+                project_testers=["螺丝帽1号", "螺丝帽2号", "螺丝帽3号"],
+                created_user="admin"
+            )
+        )
+
+
+async def init_database_tag():
+    tag = await AUTOTEST_API_TAG_CRUD.model.exists()
+    if not tag:
+        tags: List[AutoTestApiTagCreate] = [
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="技术研发部",
+                tag_name="后端开发工程师",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="技术研发部",
+                tag_name="前端开发工程师",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="技术研发部",
+                tag_name="测试工程师",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="技术研发部",
+                tag_name="运维工程师",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="技术研发部",
+                tag_name="运维工程师",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="市场营销部",
+                tag_name="新媒体运营",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="市场营销部",
+                tag_name="短视频运营",
+            ),
+            AutoTestApiTagCreate(
+                tag_project=1,
+                tag_mode="市场营销部",
+                tag_name="活动策划",
+            ),
+        ]
+        await tag.bulk_create(tags)
+
+
+async def init_database_case():
+    case = await AUTOTEST_API_CASE_CRUD.model.exists()
+    if not case:
+        cases: List[AutoTestApiCaseCreate] = [
+            AutoTestApiCaseCreate(
+                case_name="测试HTTP请求步骤-1001",
+                case_desc="使用正确的账号和密码发起登录接口, 验证是否能够登录成功",
+                case_tags=[1, 2, 3],
+                case_attr=AutoTestCaseAttr.TRUE_CASE,
+                case_project=1,
+                created_user="admin"
+            ),
+            AutoTestApiCaseCreate(
+                case_name="测试HTTP请求步骤-1002",
+                case_desc="使用错误的账号和密码发起登录接口, 验证是否能够返回正确的错误提示",
+                case_tags=[1, 2, 3],
+                case_attr=AutoTestCaseAttr.TRUE_CASE,
+                case_project=1,
+                created_user="admin"
+            ),
+        ]
+        await case.bulk_create(cases)
+
+
+async def init_database_step():
+    step = await AUTOTEST_API_CASE_CRUD.model.exists()
+    if not step:
+        steps: List[AutoTestApiStepCreate] = [
+            AutoTestApiStepCreate(
+                case_id=1,
+                step_no=1,
+                step_name="用户自定义变量池",
+                step_type=AutoTestStepType.USER_VARIABLES,
+                step_desc="用户自定义的变量, 提供后续步骤使用",
+                created_user="admin",
+                session_variables=[
+                    {
+                        "key": "name",
+                        "desc": "姓名",
+                        "value": "${generate_name()}"
+                    },
+                    {
+                        "key": "ident",
+                        "desc": "年龄",
+                        "value": "${generate_ident_card_number_condition(min_age=18, max_age=18)}"
+                    },
+                    {
+                        "key": "city",
+                        "desc": "城市",
+                        "value": "${generate_city()}"
+                    },
+                    {
+                        "key": "country",
+                        "desc": "国家",
+                        "value": "${generate_country()}"
+                    },
+                    {
+                        "key": "province",
+                        "desc": "省份",
+                        "value": "${generate_province()}"
+                    },
+                    {
+                        "key": "address",
+                        "desc": "地址",
+                        "value": "${generate_address()}"
+                    },
+                    {
+                        "key": "age_phone",
+                        "desc": "",
+                        "value": "18_${generate_phone()}"
+                    },
+                    {
+                        "key": "randomNum",
+                        "desc": "",
+                        "value": "${generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)}"
+                    }
+                ]
+            ),
+            AutoTestApiStepCreate(
+                case_id=1,
+                step_no=2,
+                step_name="登录KRUN测管平台",
+                step_type=AutoTestStepType.HTTP,
+                step_desc="输入正确的账号和密码完成登录",
+                created_user="admin",
+                request_url="http://172.20.10.2:8518/base/auth/access_token",
+                request_method="POST",
+                request_args_type="json",
+                request_header=[
+                    {
+                        "key": "X-name",
+                        "desc": "自定义请求头参数姓名",
+                        "value": "张三"
+                    },
+                    {
+                        "key": "X-random",
+                        "desc": "自定义请求头参数随机数",
+                        "value": "${generate_random_number(min_=1, max_=10)}"
+                    }
+                ],
+                request_body={
+                    "password": "${password}",
+                    "username": "${username}"
+                },
+                defined_variables=[
+                    {
+                        "key": "username",
+                        "desc": "",
+                        "value": "admin"
+                    },
+                    {
+                        "key": "password",
+                        "desc": "",
+                        "value": "123456"
+                    }
+                ],
+                extract_variables=[
+                    {
+                        "expr": "$.data.access_token",
+                        "name": "access_token",
+                        "index": 0,
+                        "range": "SOME",
+                        "source": "Response Json"
+                    }
+                ],
+                assert_validators=[
+                    {
+                        "expr": "$.code",
+                        "name": "code",
+                        "source": "Response Json",
+                        "operation": "等于",
+                        "except_value": "000000"
+                    },
+                    {
+                        "expr": "$.message",
+                        "name": "message",
+                        "source": "Response Json",
+                        "operation": "等于",
+                        "except_value": "请求成功"
+                    }
+                ],
+            ),
+        ]
+        await step.bulk_create(steps)
+
+
 async def init_database_table(app: FastAPI):
     await init_database_role()
     await init_database_dept()
     await init_database_user()
     await init_database_menu()
     await init_database_router(app)
+    await init_database_project()
+    await init_database_tag()
+    await init_database_case()

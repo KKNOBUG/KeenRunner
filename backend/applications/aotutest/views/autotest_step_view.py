@@ -13,6 +13,7 @@ import traceback
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Set, Union
+from urllib.parse import quote, unquote
 
 import httpx
 from fastapi import APIRouter, Body, Query
@@ -546,10 +547,19 @@ async def debug_http_request(
 
         # 过滤None值
         request_kwargs = {k: v for k, v in request_kwargs.items() if v is not None}
+        raw_headers: Dict[str, Any] = request_kwargs.get("headers") or {}
+        if raw_headers:
+            # 对请求头中的中文进行 UTF-8 百分号编码
+            encoded_headers: Dict[str, Any] = {
+                key: quote(value, encoding="utf-8", safe=':/?#[]@!$&\'()*+,;=-._~%')
+                if isinstance(value, str) else value for key, value in raw_headers.items()
+            }
+            if encoded_headers:
+                # 把编码后的 headers 放回 kwargs
+                request_kwargs["headers"] = encoded_headers
 
         # 记录开始时间
         start_time = time.time()
-
         # 发送HTTP请求
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
             try:
