@@ -374,6 +374,7 @@
                 :columns="reportExtractColumns"
                 :data="extractVariablesData"
                 size="small"
+                :scroll-x="2000"
                 :bordered="false"
             />
             <NEmpty v-else description="暂无数据提取结果" />
@@ -386,6 +387,7 @@
                 :columns="reportValidatorColumns"
                 :data="assertValidatorsData"
                 size="small"
+                :scroll-x="2000"
                 :bordered="false"
             />
             <NEmpty v-else description="暂无断言结果" />
@@ -612,7 +614,7 @@ const reportValidatorColumns = [
     },
   },
   { title: '断言路径', key: 'expr', ellipsis: { tooltip: true } },
-  { title: '结果值', key: 'actual_value', ellipsis: { tooltip: true }, render: (row) => (row.actual_value != null ? String(row.actual_value) : '-') },
+  { title: '实际值', key: 'actual_value', ellipsis: { tooltip: true }, render: (row) => (row.actual_value != null ? String(row.actual_value) : '-') },
   { title: '断言方式', key: 'operation', },
   { title: '期望值', key: 'expect_value', ellipsis: { tooltip: true }, render: (row) => { const v = row.except_value ?? row.expect_value; return v != null ? String(v) : '-'; } },
   {

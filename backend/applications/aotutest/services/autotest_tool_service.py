@@ -639,10 +639,7 @@ class AutoTestToolService:
             return validator_results
         if not isinstance(assert_validators, list):
             if log_callback:
-                log_callback(
-                    f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型, "
-                    f"但得到[{type(assert_validators)}]类型"
-                )
+                log_callback("【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
             return validator_results
         for validator_config in assert_validators:
             if not isinstance(validator_config, dict):
@@ -665,9 +662,9 @@ class AutoTestToolService:
                         f"参数[name, expr, operation, source]是必须的, 非空断言时需添加[except_value]参数"
                     )
                 continue
-            error_msg = ""
-            success = False
-            actual_value = None
+            error_message: str = "实际值与期待值不满足指定操作符比较"
+            success: bool = False
+            actual_value: Any = None
             try:
                 actual_value = cls.extract_from_source(
                     source=source,
@@ -682,9 +679,9 @@ class AutoTestToolService:
                     operation_type="断言验证",
                 )
             except Exception as e:
-                error_msg = str(e)
+                error_message = str(e)
                 if log_callback:
-                    log_callback(f"【断言验证】比较失败: {name}, {error_msg}")
+                    log_callback(f"【断言验证】比较失败: {name}, {error_message}")
                 validator_results.append({
                     "name": name,
                     "source": source,
@@ -692,8 +689,8 @@ class AutoTestToolService:
                     "operation": operation,
                     "except_value": except_value,
                     "actual_value": actual_value,
-                    "success": False,
-                    "error": error_msg,
+                    "success": success,
+                    "error": error_message,
                 })
                 continue
             try:
@@ -711,10 +708,9 @@ class AutoTestToolService:
                     else:
                         log_callback(f"【断言验证】比较失败: {expr_message}")
             except Exception as e:
-                error_msg = str(e)
-                success = False
+                error_message = str(e)
                 if log_callback:
-                    log_callback(f"【断言验证】比较异常, 错误描述: {e}: {name}, {error_msg}")
+                    log_callback(f"【断言验证】比较异常, 错误描述: {e}: {name}, {error_message}")
             validator_results.append({
                 "name": name,
                 "source": source,
@@ -723,7 +719,7 @@ class AutoTestToolService:
                 "except_value": except_value,
                 "actual_value": actual_value,
                 "success": success,
-                "error": error_msg,
+                "error": "" if success else error_message,
             })
         return validator_results
 
