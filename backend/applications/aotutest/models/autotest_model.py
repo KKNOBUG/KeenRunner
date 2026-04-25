@@ -244,9 +244,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
     defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
-    # extract_variables 存储为List[Dict[str, Any]]格式，每个元素包含 name、range、source、expr、index 项
+    # extract_variables 存储为List[Dict[str, Any]]格式，每个元素包含 name、scope、source、expr、index 项
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
-    # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 expr、name、range、operation、except_value 项
+    # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 expr、name、source、operation、except_value 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
 
     # 数据源相关
@@ -368,13 +368,14 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="本次执行循环错误策略(快照)")
     loop_timeout = fields.FloatField(ge=0, null=True, description="本次执行条件循环超时(快照)")
     conditions = fields.JSONField(null=True, description="本次执行条件/循环判断条件(快照)")
+    # 数据源相关
     database_operates = fields.JSONField(null=True, description="数据库请求操作列表(快照)")
     database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(快照)")
     # 变量相关
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
     defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
-    # extract_variables 存储为List[Dict[str, Any]]格式，每个元素包含 name、range、source、expr、index、extract_value、success、error 项
+    # extract_variables 存储为List[Dict[str, Any]]格式，每个元素包含 name、scope、source、expr、index、extract_value、success、error 项
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")

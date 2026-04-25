@@ -1680,7 +1680,7 @@ const initFromConfig = () => {
   // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
   state.form.defined_variables = Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
 
-  // 提取：无默认内容，仅当 config/original 有数据时填充（与后端字段对齐：expr, name, source, range, index）
+  // 提取：无默认内容，仅当 config/original 有数据时填充（与后端字段对齐：expr, name, source, scope, index）
   state.form.extract_variables = {}
   extractCollapseState.value = {}
   const extractSource = cfg.extract_variables ?? original.extract_variables
@@ -1694,7 +1694,7 @@ const initFromConfig = () => {
     state.form.extract_variables[key] = {
       name: item.name || '',
       object: item.source || 'Response Json',
-      extractScope: item.range === 'ALL' ? '全部提取' : '部分提取',
+      extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
       jsonpath: item.expr || '',
       continueExtract: item.continueExtract || false,
       extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null
@@ -1750,13 +1750,13 @@ watch(
     {deep: true, immediate: false}
 )
 
-// 与后端 autotest_step_engine 提取字段一致：expr, name, source, range, index；剔除提取名称或提取路径为空的项
+// 与后端提取字段一致：expr, name, source, scope, index；剔除提取名称或提取路径为空的项
 const buildExtractForBackend = () => {
   return Object.values(state.form.extract_variables || {})
       .map(item => ({
         expr: item.jsonpath || '',
         name: item.name || '',
-        range: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+        scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
         source: item.object || 'Response Json',
         index: item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== '' ? Number(item.extractIndex) : null
       }))
@@ -2421,11 +2421,9 @@ const extractColumns = [
   },
   {
     title: '提取范围',
-    key: 'range',
+    key: 'scope',
     width: 120,
-    render: (row) => {
-      return row.range === 'ALL' ? '全部提取' : '部分提取'
-    }
+    render: (row) => (row.scope === 'ALL' ? '全部提取' : '部分提取')
   },
   {
     title: '提取路径',

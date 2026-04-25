@@ -48,6 +48,7 @@ class GenerateVirtualInfo(BaseModel):
     randomOption: List[str] = list(RANDOM_OPTION_MAP.keys())
 
     @field_validator('personOption')
+    @classmethod
     def person_option_conversion(cls, personOption) -> list:
         _option_key: set = set(PERSON_OPTION_MAP.keys())
         if not set(personOption).issubset(_option_key):
@@ -56,6 +57,7 @@ class GenerateVirtualInfo(BaseModel):
         return personOption
 
     @field_validator('datetimeOption')
+    @classmethod
     def datetime_option_conversion(cls, datetimeOption) -> list:
         _option_key: set = set(DATETIME_OPTION_MAP.keys())
         if not set(datetimeOption).issubset(_option_key):
@@ -64,6 +66,7 @@ class GenerateVirtualInfo(BaseModel):
         return datetimeOption
 
     @field_validator('randomOption')
+    @classmethod
     def random_option_conversion(cls, randomOption) -> list:
         _option_key: set = set(RANDOM_OPTION_MAP.keys())
         if not set(randomOption).issubset(_option_key):

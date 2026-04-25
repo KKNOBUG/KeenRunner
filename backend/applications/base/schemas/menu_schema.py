@@ -30,7 +30,7 @@ class BaseMenu(BaseModel):
 
 
 class MenuCreate(BaseModel):
-    menu_type: MenuType = Field(default=MenuType.CATALOG.value)
+    menu_type: MenuType = Field(default=MenuType.CATALOG, description="菜单类型")
     name: str = Field(example="用户管理")
     icon: Optional[str] = "ph:user-list-bold"
     path: str = Field(example="/system/user")
@@ -44,7 +44,7 @@ class MenuCreate(BaseModel):
 
 class MenuUpdate(BaseModel):
     id: int
-    menu_type: Optional[MenuType] = Field(example=MenuType.CATALOG.value)
+    menu_type: Optional[MenuType] = Field(default=None, example=MenuType.CATALOG)
     name: Optional[str] = Field(example="用户管理")
     icon: Optional[str] = "ph:user-list-bold"
     path: Optional[str] = Field(example="/system/user")

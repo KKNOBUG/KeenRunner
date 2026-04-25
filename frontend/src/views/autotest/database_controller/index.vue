@@ -499,7 +499,7 @@ const buildExtractForBackend = () => {
       .map((item) => ({
         expr: item.jsonpath || '',
         name: item.name || '',
-        range: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+        scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
         source: String(item.source ?? '').trim(),
         index: item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
             ? Number(item.extractIndex)
@@ -509,7 +509,7 @@ const buildExtractForBackend = () => {
         const n = String(item.name ?? '').trim()
         const src = String(item.source ?? '').trim()
         if (!n || !src) return false
-        if (item.range === 'ALL') return true
+        if (item.scope === 'ALL') return true
         return String(item.expr ?? '').trim() !== ''
       })
 }
@@ -639,7 +639,7 @@ const initExtractAndAssert = (cfg, original) => {
     state.form.extract_variables[key] = {
       name: item.name || '',
       source: srcVar || null,
-      extractScope: item.range === 'ALL' ? '全部提取' : '部分提取',
+      extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
       jsonpath: item.expr || '',
       continueExtract: item.continueExtract || false,
       extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : 0

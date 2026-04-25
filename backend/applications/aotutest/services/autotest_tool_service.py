@@ -533,7 +533,7 @@ class AutoTestToolService:
         """
         按 extract_variables 配置从响应/变量池中提取变量供 HTTP 调试与步骤引擎共用
 
-        :param extract_variables: 变量提取配置列表, 每项通常包含 name/source/expr, 且可选 range/index
+        :param extract_variables: 变量提取配置列表, 每项通常包含 name/source/expr, 且可选 scope/index
         :param response_text: HTTP 响应文本(用于 response text / response xml)
         :param response_json: HTTP 响应 JSON(用于 response json)
         :param response_headers: HTTP 响应头(用于 response headers)
@@ -541,7 +541,7 @@ class AutoTestToolService:
         :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), Dict[str, Any]
         :param log_callback: 可选日志回调
         :returns: (name->value 字典, 结果列表)
-                  结果列表每项含 name/source/range/expr/index/extract_value/error/success
+                  结果列表每项含 name/source/scope/expr/index/extract_value/error/success
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
@@ -567,13 +567,13 @@ class AutoTestToolService:
             name = ext_config.get("name")
             expr = ext_config.get("expr")
             source = ext_config.get("source")
-            range_type = ext_config.get("range")
+            range_type = ext_config.get("scope")
             index = ext_config.get("index")
             if not name or not expr or not source:
                 if log_callback:
                     log_callback(
                         f"【变量提取】表达式子项解析无效(跳过): "
-                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[range, index]参数"
+                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[scope, index]参数"
                     )
                 continue
             error_msg = ""
@@ -600,7 +600,7 @@ class AutoTestToolService:
             item = {
                 "name": name,
                 "source": source,
-                "range": range_type,
+                "scope": range_type,
                 "expr": expr,
                 "index": index,
                 "extract_value": extract_value,

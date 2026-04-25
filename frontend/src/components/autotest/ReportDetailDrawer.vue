@@ -537,7 +537,7 @@ const extractVariablesData = computed(() => {
     return Object.entries(vars).map(([name, value]) => ({
       name,
       source: '-',
-      range: '-',
+      scope: '-',
       expr: '-',
       extract_value: value,
       success: true,
@@ -545,15 +545,18 @@ const extractVariablesData = computed(() => {
     }))
   }
   if (Array.isArray(vars)) {
-    return vars.map((item) => ({
-      name: item.name ?? item.key ?? '-',
-      source: item.source ?? '-',
-      range: item.range ?? '-',
-      expr: item.expr ?? '-',
-      extract_value: item.extract_value ?? item.value ?? '-',
-      success: item.success !== false,
-      error: item.error ?? '-',
-    }))
+    return vars.map((item) => {
+      const s = item.scope
+      return {
+        name: item.name ?? item.key ?? '-',
+        source: item.source ?? '-',
+        scope: s !== undefined && s !== null && s !== '' ? s : '-',
+        expr: item.expr ?? '-',
+        extract_value: item.extract_value ?? item.value ?? '-',
+        success: item.success !== false,
+        error: item.error ?? '-',
+      }
+    })
   }
   return []
 })
@@ -591,7 +594,10 @@ const reportExtractColumns = [
       return map[row.source] || row.source
     },
   },
-  { title: '提取范围', key: 'range', render: (row) => (row.range === 'ALL' ? '全部提取' : (row.range || '-')) },
+  { title: '提取范围', key: 'scope', render: (row) => {
+      const s = row.scope
+      return s === 'ALL' ? '全部提取' : (s && s !== '-' ? s : '-')
+    } },
   { title: '提取路径', key: 'expr',  ellipsis: { tooltip: true } },
   {
     title: '提取值',

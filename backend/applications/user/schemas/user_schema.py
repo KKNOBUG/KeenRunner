@@ -57,12 +57,12 @@ class UserSelect(BaseModel):
     username: Optional[str] = None
     alias: Optional[str] = None
     email: Optional[EmailStr] = None
-    phone: Optional[bool] = None
+    phone: Optional[str] = None
     state: Optional[int] = None
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
-    created_user: Optional[bool] = None
-    updated_user: Optional[bool] = None
+    created_user: Optional[str] = None
+    updated_user: Optional[str] = None
     created_time: Optional[str] = None
     updated_time: Optional[str] = None
 

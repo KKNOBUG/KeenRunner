@@ -38,8 +38,8 @@ class RoleUpdate(BaseModel):
 
 class RoleUpdateMenusRouters(BaseModel):
     id: int
-    menu_ids: List[int] = []
-    router_infos: List[dict] = []
+    menu_ids: List[int] = Field(default_factory=list)
+    router_infos: List[dict] = Field(default_factory=list)
 
 
 class RoleBatchDelete(BaseModel):

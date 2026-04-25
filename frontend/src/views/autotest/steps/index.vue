@@ -1706,17 +1706,17 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_body = {}
 
     if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
-    } else if (original.extract_variables) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : (original.extract_variables ? [original.extract_variables] : null)
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
+    } else if (original.extract_variables != null) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
     } else {
       backendStep.extract_variables = null
     }
 
     if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : (config.assert_validators ? [config.assert_validators] : null)
-    } else if (original.assert_validators) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : (original.assert_validators ? [original.assert_validators] : null)
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
+    } else if (original.assert_validators != null) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
     } else {
       backendStep.assert_validators = null
     }
@@ -1739,19 +1739,19 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
         ? (config.data_source_desc || null)
         : (original.data_source_desc || null)
 
-    // extract_variables 和 assert_validators 应该是列表格式（List[Dict[str, Any]]）
+    // extract_variables、assert_validators 须为数组，否则为 null
     if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
-    } else if (original.extract_variables) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : (original.extract_variables ? [original.extract_variables] : null)
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
+    } else if (original.extract_variables != null) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
     } else {
       backendStep.extract_variables = null
     }
 
     if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : (config.assert_validators ? [config.assert_validators] : null)
-    } else if (original.assert_validators) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : (original.assert_validators ? [original.assert_validators] : null)
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
+    } else if (original.assert_validators != null) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
     } else {
       backendStep.assert_validators = null
     }
@@ -1761,13 +1761,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   } else if (step.type === 'code') {
     backendStep.code = config.code !== undefined ? config.code : (original.code || '')
     if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators)
-          ? config.assert_validators
-          : (config.assert_validators ? [config.assert_validators] : null)
-    } else if (original.assert_validators) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators)
-          ? original.assert_validators
-          : (original.assert_validators ? [original.assert_validators] : null)
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
+    } else if (original.assert_validators != null) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
     } else {
       backendStep.assert_validators = null
     }
@@ -1860,18 +1856,18 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
     backendStep.database_searched = !!(config.database_searched ?? original.database_searched)
     const ops = config.database_operates ?? original.database_operates
-    backendStep.database_operates = Array.isArray(ops) ? ops : (ops ? [ops] : null)
+    backendStep.database_operates = Array.isArray(ops) ? ops : null
     if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : (config.extract_variables ? [config.extract_variables] : null)
-    } else if (original.extract_variables) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : (original.extract_variables ? [original.extract_variables] : null)
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
+    } else if (original.extract_variables != null) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
     } else {
       backendStep.extract_variables = null
     }
     if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : (config.assert_validators ? [config.assert_validators] : null)
-    } else if (original.assert_validators) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : (original.assert_validators ? [original.assert_validators] : null)
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
+    } else if (original.assert_validators != null) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
     } else {
       backendStep.assert_validators = null
     }
@@ -1943,8 +1939,11 @@ const validateDatabaseSteps = (stepList) => {
       const config = step.config || {}
       const original = step.original || {}
       const ops = config.database_operates ?? original.database_operates
-      const list = Array.isArray(ops) ? ops : []
       const stepName = step.name || original.step_name || '未命名步骤'
+      if (ops != null && !Array.isArray(ops)) {
+        return {valid: false, message: `步骤「${stepName}」database_operates 必须为数组格式`}
+      }
+      const list = Array.isArray(ops) ? ops : []
       if (!list.length) {
         return {valid: false, message: `步骤「${stepName}」请至少添加一条数据库具体操作`}
       }

@@ -50,6 +50,31 @@ class ConditionsBase(BaseModel):
         return AutoTestAssertionOperation(str(v).strip()).value
 
 
+class StepVariablesBase(BaseModel):
+    key: str = Field(..., max_length=1024, description="会话变量(键)")
+    value: Optional[Any] = Field(None, description="会话变量(值)")
+    desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
+
+
+class StepExtractVariableItem(BaseModel):
+    """步骤定义中的单条提取规则；``scope`` 表示 ALL/SOME，对应 ``extract_from_source`` 的 range_type 参数。"""
+    name: str = Field(..., max_length=256, description="提取项名称")
+    source: str = Field(..., max_length=128, description="数据源")
+    expr: str = Field(..., max_length=4096, description="提取表达式")
+    scope: Optional[str] = Field(None, max_length=32, description="ALL 或 SOME 等，与 run_extract 一致")
+    index: Optional[int] = Field(None, description="多匹配时索引")
+
+
+class StepAssertValidatorItem(BaseModel):
+    """步骤定义中的单条断言，与 run_assert_validators 入参一致。"""
+
+    name: str = Field(..., max_length=256, description="断言项名称")
+    source: str = Field(..., max_length=128, description="数据源")
+    expr: str = Field(..., max_length=4096, description="表达式")
+    operation: str = Field(..., max_length=128, description="比较符")
+    except_value: Any = Field(default=None, description="期待值")
+
+
 class AutoTestApiStepReqBase(BaseModel):
     request_url: Optional[str] = Field(None, max_length=2048, description="请求地址")
     request_port: Optional[str] = Field(None, max_length=16, description="请求端口")
@@ -82,54 +107,18 @@ class AutoTestApiStepDbBase(BaseModel):
 
 
 class AutoTestApiStepVarBase(BaseModel):
-    session_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(所有步骤的执行结果持续累积)")
-    defined_variables: NON_LIST_DICT_TYPE = Field(None, description="定义变量(用户自定义、引用函数的结果)")
-    extract_variables: NON_LIST_DICT_TYPE = Field(None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
-    assert_validators: NON_LIST_DICT_TYPE = Field(None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
-
-    @field_validator('session_variables', mode='before')
-    @classmethod
-    def normalize_session_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('defined_variables', mode='before')
-    @classmethod
-    def normalize_defined_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('extract_variables', mode='before')
-    @classmethod
-    def normalize_extract_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('assert_validators', mode='before')
-    @classmethod
-    def normalize_assert_validators(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
+    session_variables: Optional[List[StepVariablesBase]] = Field(
+        default=None, description="会话变量(所有步骤持续累积), 列表项为 key / value / desc"
+    )
+    defined_variables: Optional[List[StepVariablesBase]] = Field(
+        default=None, description="定义变量, 列表项为 key / value / desc"
+    )
+    extract_variables: Optional[List[StepExtractVariableItem]] = Field(
+        default=None, description="提取规则(步骤定义), 使用 scope 表示 ALL/SOME"
+    )
+    assert_validators: Optional[List[StepAssertValidatorItem]] = Field(
+        default=None, description="断言规则(步骤定义)"
+    )
 
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepVarBase):
@@ -237,7 +226,9 @@ class AutoTestStepTreeExecute(BaseModel):
     env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
-    initial_variables: NON_LIST_DICT_TYPE = Field(None, description="会话变量(初始变量池)")
+    initial_variables: Optional[List[StepVariablesBase]] = Field(
+        default=None, description="初始变量池, 列表项为 key / value / desc"
+    )
     # 参数化驱动：运行模式可传多条数据集名称循环执行；调试模式只能传一条
     selected_dataset_names: Optional[List[str]] = Field(None,
                                                         description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
@@ -255,7 +246,9 @@ class AutoTestStepTreeExecute(BaseModel):
 class AutoTestBatchExecuteCases(BaseModel):
     env_name: Optional[str] = Field(None, description="执行环境名称")
     case_ids: List[int] = Field(..., min_length=1, description="用例ID列表")
-    initial_variables: NON_LIST_DICT_TYPE = Field(None, description="初始变量(会应用到所有用例)")
+    initial_variables: Optional[List[StepVariablesBase]] = Field(
+        default=None, description="初始变量(会应用到所有用例), 列表项为 key / value / desc"
+    )
 
 
 # 允许递归引用

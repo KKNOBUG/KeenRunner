@@ -421,10 +421,10 @@ async def debug_http_request(
         request_text: Optional[str] = step_data.request_text
         request_project_id: int = step_data.request_project_id
         request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-        session_variables: List[Dict[str, Any]] = step_data.session_variables or []
-        defined_variables: List[Dict[str, Any]] = step_data.defined_variables or []
-        extract_variables: List[Dict[str, Any]] = step_data.extract_variables or []
-        assert_validators: List[Dict[str, Any]] = step_data.assert_validators or []
+        session_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.session_variables or [])]
+        defined_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.defined_variables or [])]
+        extract_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.extract_variables or [])]
+        assert_validators: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.assert_validators or [])]
 
         # 确保是列表格式
         if not isinstance(request_header, list):
@@ -437,14 +437,6 @@ async def debug_http_request(
             request_form_urlencoded = []
         if not isinstance(request_form_file, list):
             request_form_file = []
-        if not isinstance(session_variables, list):
-            session_variables = []
-        if not isinstance(defined_variables, list):
-            defined_variables = []
-        if not isinstance(extract_variables, list):
-            extract_variables = []
-        if not isinstance(assert_validators, list):
-            assert_validators = []
 
         # 将列表格式的 defined_variables\session_variables 转换为字典格式（用于变量查找）
         merge_all_variables: Dict[str, Any] = {}
@@ -692,19 +684,10 @@ async def debug_tcp_request(
         request_project_id: int = step_data.request_project_id
         # TCP 调试场景下，报文统一以字符串形式存储在 request_text 中，request_args_type 固定为 RAW
         request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-        session_variables: List[Dict[str, Any]] = step_data.session_variables or []
-        defined_variables: List[Dict[str, Any]] = step_data.defined_variables or []
-        extract_variables: List[Dict[str, Any]] = step_data.extract_variables or []
-        assert_validators: List[Dict[str, Any]] = step_data.assert_validators or []
-
-        if not isinstance(session_variables, list):
-            session_variables = []
-        if not isinstance(defined_variables, list):
-            defined_variables = []
-        if not isinstance(extract_variables, list):
-            extract_variables = []
-        if not isinstance(assert_validators, list):
-            assert_validators = []
+        session_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.session_variables or [])]
+        defined_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.defined_variables or [])]
+        extract_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.extract_variables or [])]
+        assert_validators: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.assert_validators or [])]
 
         # 合并变量池（同 HTTP 调试）
         merge_all_variables: Dict[str, Any] = {}
@@ -880,15 +863,9 @@ async def debug_python_code(
         code = step_data.code
         step_name = step_data.step_name or "代码请求(Python)调试"
         # defined_variables、session_variables 必须是列表格式
-        defined_variables = step_data.defined_variables or []
-        session_variables = step_data.session_variables or []
-        assert_validators = step_data.assert_validators or []
-        if not isinstance(defined_variables, list):
-            defined_variables = []
-        if not isinstance(session_variables, list):
-            session_variables = []
-        if assert_validators and not isinstance(assert_validators, list):
-            assert_validators = []
+        defined_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.defined_variables or [])]
+        session_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.session_variables or [])]
+        assert_validators: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.assert_validators or [])]
 
         # 合并变量到执行上下文（列表格式）
         # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）

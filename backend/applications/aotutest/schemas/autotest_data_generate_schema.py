@@ -18,7 +18,7 @@ class AutoTestApiDataCreateCreate(BaseModel):
     file_name: str = Field(..., max_length=255, description="接口文件存储名称")
     file_hash: str = Field(..., max_length=255, description="接口文件哈希代码")
     file_path: str = Field(..., max_length=1024, description="接口文件存储路径")
-    file_desc: str = Field(None, max_length=2048, description="接口文件场景描述")
+    file_desc: Optional[str] = Field(None, max_length=2048, description="接口文件场景描述")
     file_code: Optional[str] = Field(None, max_length=64, description="接口文件标识代码")
     dataset: Optional[Dict[str, Any]] = Field(None, description="接口文件解析后的数据集")
 
@@ -26,5 +26,5 @@ class AutoTestApiDataCreateCreate(BaseModel):
 class AutoTestApiDataCreateUpdate(BaseModel):
     id: int = Field(..., description="ID")
     create_status: str = Field(..., description="创建状态（0：提交，1：生成中，2：失败，3：成功）")
-    file_path: str = Field(None, max_length=1024, description="接口文件存储路径")
-    file_desc: str = Field(None, max_length=2048, description="接口文件场景描述")
+    file_path: Optional[str] = Field(None, max_length=1024, description="接口文件存储路径")
+    file_desc: Optional[str] = Field(None, max_length=2048, description="接口文件场景描述")

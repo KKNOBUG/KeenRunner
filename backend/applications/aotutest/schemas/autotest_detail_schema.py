@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any, Type, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
 from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import AutoTestStepType, HTTPMethod, AutoTestReqArgsType
 
@@ -53,57 +54,19 @@ class AutoTestApiDetailResBase(BaseModel):
 
 
 class AutoTestApiDetailVarBase(BaseModel):
-    session_variables: NON_LIST_DICT_TYPE = Field(default=None, description="会话变量(包含提取变量，以及前后code设置的变量)")
-    defined_variables: NON_LIST_DICT_TYPE = Field(default=None, description="定义变量(自定义变量，如编写指定值或引用随机函数)")
-    extract_variables: NON_LIST_DICT_TYPE = Field(default=None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    session_variables: Optional[List[StepVariablesBase]] = Field(
+        default=None, description="会话变量(包含提取变量，以及前后code设置的变量), 项为 key/value/desc"
+    )
+    defined_variables: Optional[List[StepVariablesBase]] = Field(
+        default=None, description="定义变量(自定义变量，如编写指定值或引用随机函数), 项为 key/value/desc"
+    )
+    extract_variables: NON_LIST_DICT_TYPE = Field(
+        default=None, description="提取结果(与步骤 extract 配置对应；使用 scope 表示 ALL/SOME)"
+    )
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="本次执行数据库操作明细快照(解析后的数据库请求操作列表)")
     step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
-
-    @field_validator('session_variables', mode='before')
-    @classmethod
-    def normalize_session_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('defined_variables', mode='before')
-    @classmethod
-    def normalize_defined_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('extract_variables', mode='before')
-    @classmethod
-    def normalize_extract_variables(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
-
-    @field_validator('assert_validators', mode='before')
-    @classmethod
-    def normalize_assert_validators(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v
-        return v
 
     @field_validator('database_operates', mode='before')
     @classmethod
@@ -119,6 +82,8 @@ class AutoTestApiDetailVarBase(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def normalize_json_fields(cls, v):
+        if not isinstance(v, dict):
+            return v
         executive_logger: List[str] = []
         session_variables_value: Optional[List[Dict[str, Any]]] = v.get("session_variables")
         if session_variables_value:
