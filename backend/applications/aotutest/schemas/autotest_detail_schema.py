@@ -65,8 +65,18 @@ class AutoTestApiDetailVarBase(BaseModel):
     )
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="本次执行数据库操作明细快照(解析后的数据库请求操作列表)")
-    step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志")
+    step_exec_logger: Optional[List[str]] = Field(default=None, description="步骤执行日志(字符串列表)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
+
+    @field_validator("step_exec_logger", mode="before")
+    @classmethod
+    def normalize_step_exec_logger(cls, v: Any) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError("step_exec_logger 须为 list[str] 或 null")
+        out = [str(x) for x in v if x is not None and str(x) != ""]
+        return out or None
 
     @field_validator('database_operates', mode='before')
     @classmethod
@@ -126,10 +136,14 @@ class AutoTestApiDetailVarBase(BaseModel):
                 executive_logger.append(f"字段[database_operates]标准化失败, 已置空, 错误描述: {e}")
 
         if executive_logger:
-            step_exec_logger_est: Optional[str] = v.get("step_exec_logger")
-            step_exec_logger_str: str = str(step_exec_logger_est) if step_exec_logger_est else ""
-            add_executive_logger: str = "\n".join(executive_logger)
-            v["step_exec_logger"] = step_exec_logger_str + ("\n" if step_exec_logger_str else "") + add_executive_logger
+            base = v.get("step_exec_logger")
+            if base is None:
+                base_list: List[str] = []
+            elif isinstance(base, list):
+                base_list = [str(x) for x in base if x is not None and str(x) != ""]
+            else:
+                raise ValueError("step_exec_logger 须为 list[str] 或 null")
+            v["step_exec_logger"] = base_list + [str(x) for x in executive_logger]
 
         return v
 

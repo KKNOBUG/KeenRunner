@@ -198,18 +198,27 @@
               </NCard>
 
               <NCard title="执行日志" size="small" :bordered="false">
-                <NCollapse :default-expanded-names="['errorInfo', 'execLogger']" arrow-placement="right">
+                <template v-if="!hasAnyExecutionLogLines">
+                  <NEmpty description="暂无执行日志" />
+                </template>
+                <NCollapse
+                    v-else
+                    :default-expanded-names="['errorInfo', 'execLogger']"
+                    arrow-placement="right"
+                >
                   <NCollapseItem title="错误日志" name="errorInfo" v-if="currentDetail.step_exec_except">
                     <pre
-                        style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;">{{
-                        currentDetail.step_exec_except
-                      }}</pre>
+                        style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;"
+                    >{{ currentDetail.step_exec_except }}</pre>
                   </NCollapseItem>
-                  <NCollapseItem title="普通日志" name="execLogger" v-if="currentDetail.step_exec_logger">
-                    <pre
-                        style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0;">{{
-                        currentDetail.step_exec_logger
-                      }}</pre>
+                  <NCollapseItem title="普通日志" name="execLogger" v-if="executionNormalLines.length">
+                    <NSpace vertical :size="12">
+                      <pre
+                          v-for="(log, index) in executionNormalLines"
+                          :key="'exec-logger-' + index"
+                          class="log-item"
+                      >{{ log }}</pre>
+                    </NSpace>
                   </NCollapseItem>
                 </NCollapse>
               </NCard>
@@ -469,6 +478,22 @@ const detailConditionsSnapshot = computed(() => {
   if (c && typeof c === 'object' && !Array.isArray(c)) return c
   return null
 })
+
+/** 普通执行日志：后端为 list[str]，与 HTTP 调试「执行日志」Tab 一致逐条 pre.log-item 展示 */
+const normalizeLoggerLines = (raw) => {
+  if (raw == null || !Array.isArray(raw)) return []
+  return raw.map((x) => String(x)).filter((line) => line.length > 0)
+}
+
+const executionNormalLines = computed(() =>
+    normalizeLoggerLines(currentDetail.value?.step_exec_logger)
+)
+
+const hasAnyExecutionLogLines = computed(
+    () =>
+        !!(currentDetail.value?.step_exec_except && String(currentDetail.value.step_exec_except).trim()) ||
+        executionNormalLines.value.length > 0
+)
 
 const filteredDetailList = computed(() => {
   if (!onlyShowFailed.value) return detailList.value
@@ -1035,5 +1060,18 @@ watch(
   font-size: 14px;
   font-weight: 500;
   word-break: break-all;
+}
+
+/* 与 http_controller 执行日志 Tab 中 .log-item 一致 */
+.log-item {
+  background-color: var(--pre-bg-color);
+  color: var(--pre-text-color);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

@@ -336,7 +336,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     step_st_time = fields.CharField(max_length=255, null=True, description="步骤执行开始时间")
     step_ed_time = fields.CharField(max_length=255, null=True, description="步骤执行结束时间")
     step_elapsed = fields.CharField(max_length=16, null=True, description="步骤执行消耗时间")
-    step_exec_logger = fields.TextField(null=True, description="步骤执行日志")
+    step_exec_logger = fields.JSONField(null=True, description="步骤执行日志(字符串列表)")
     step_exec_except = fields.TextField(null=True, description="步骤错误描述")
 
     # 请求相关（实际发出的请求）

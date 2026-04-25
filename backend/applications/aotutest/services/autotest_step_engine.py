@@ -1004,7 +1004,7 @@ class BaseStepExecutor:
             step_ed_time_str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
             step_elapsed = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
             step_logs = self.context.logs.get(self.step_code, [])
-            step_exec_logger = "\n".join(step_logs) if step_logs else None
+            step_exec_logger: Optional[List[str]] = list(step_logs) if step_logs else None
             response_header = None
             response_body = None
             response_text = None
