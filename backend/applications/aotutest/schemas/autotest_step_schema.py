@@ -17,6 +17,7 @@ from backend.enums import (
     AutoTestLoopMode,
     AutoTestReqArgsType,
     AutoTestLoopErrorStrategy,
+    AutoTestAssertionOperation,
 )
 from backend.enums import HTTPMethod
 
@@ -36,10 +37,17 @@ class DataBaseOperates(BaseModel):
 
 
 class ConditionsBase(BaseModel):
-    value: str = Field(..., max_length=128, description="条件表达式")
-    operation: str = Field(..., max_length=128, description="条件比较符")
-    except_value: Any = Field(..., description="条件比对值")
-    desc: Optional[str] = Field(None, max_length=2048, description="条件描述")
+    condition_expr: str = Field(..., max_length=128, description="条件表达式")
+    condition_compare: str = Field(..., max_length=128, description="条件比较符")
+    condition_value: Any = Field(..., description="条件比对值")
+    condition_desc: Optional[str] = Field(None, max_length=2048, description="条件描述")
+
+    @field_validator("condition_compare", mode="before")
+    @classmethod
+    def validate_condition_compare(cls, v: Any) -> str:
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            raise ValueError("条件比较符不能为空")
+        return AutoTestAssertionOperation(str(v).strip()).value
 
 
 class AutoTestApiStepReqBase(BaseModel):

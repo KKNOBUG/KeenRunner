@@ -3,7 +3,7 @@
     <n-form label-placement="left" label-width="100px" :model="form">
       <n-form-item label="条件表达式" required>
         <n-input
-            v-model:value="form.value"
+            v-model:value="form.condition_expr"
             placeholder="变量名或表达式,例如: ${token} 或 ${count}"
             style="width: 80%;"
             :disabled="props.readonly"
@@ -11,7 +11,7 @@
       </n-form-item>
       <n-form-item label="条件比较符" required>
         <n-select
-            v-model:value="form.operation"
+            v-model:value="form.condition_compare"
             :options="operatorOptions"
             placeholder="请选择条件比较符"
             style="width: 80%;"
@@ -20,7 +20,7 @@
       </n-form-item>
       <n-form-item label="条件比对值">
         <n-input
-            v-model:value="form.except_value"
+            v-model:value="form.condition_value"
             placeholder="字符串或变量,例如: 3 或 ${target} (非空/为空操作时可不填)"
             style="width: 80%;"
             :disabled="props.readonly"
@@ -28,7 +28,7 @@
       </n-form-item>
       <n-form-item label="备注">
         <n-input
-            v-model:value="form.desc"
+            v-model:value="form.condition_desc"
             placeholder="请输入备注"
             style="width: 80%;"
             :disabled="props.readonly"
@@ -41,6 +41,10 @@
 <script setup>
 import {reactive, watch, nextTick} from 'vue'
 import {NForm, NFormItem, NInput, NSelect, NCard} from 'naive-ui'
+import {
+  assertionOperationSelectOptions,
+  DEFAULT_ASSERTION_OPERATION,
+} from '@/constants/autotestAssertionOperation'
 
 const props = defineProps({
   config: {
@@ -56,33 +60,25 @@ const props = defineProps({
 
 const emit = defineEmits(['update:config'])
 
-// 操作符选项（必须与后端 ConditionStepExecutor.compare 中的 op_map 一致）
-const operatorOptions = [
-  {label: '等于', value: '等于'},
-  {label: '不等于', value: '不等于'},
-  {label: '大于', value: '大于'},
-  {label: '大于等于', value: '大于等于'},
-  {label: '小于', value: '小于'},
-  {label: '小于等于', value: '小于等于'},
-  {label: '非空', value: '非空'},
-  {label: '为空', value: '为空'}
-]
+const operatorOptions = assertionOperationSelectOptions
 
 const emptyConditionFields = () => ({
-  value: '',
-  operation: '非空',
-  except_value: '',
-  desc: ''
+  condition_expr: '',
+  condition_compare: DEFAULT_ASSERTION_OPERATION,
+  condition_value: '',
+  condition_desc: ''
 })
 
 const fieldsFromConditionsDict = (d) => ({
-  value: d.value !== undefined && d.value !== null ? String(d.value) : '',
-  operation: d.operation !== undefined && d.operation !== null ? String(d.operation) : '非空',
-  except_value: d.except_value !== undefined && d.except_value !== null ? String(d.except_value) : '',
-  desc: d.desc !== undefined && d.desc !== null ? String(d.desc) : ''
+  condition_expr: d.condition_expr !== undefined && d.condition_expr !== null ? String(d.condition_expr) : '',
+  condition_compare: d.condition_compare !== undefined && d.condition_compare !== null
+      ? String(d.condition_compare)
+      : DEFAULT_ASSERTION_OPERATION,
+  condition_value: d.condition_value !== undefined && d.condition_value !== null ? String(d.condition_value) : '',
+  condition_desc: d.condition_desc !== undefined && d.condition_desc !== null ? String(d.condition_desc) : ''
 })
 
-// 合并 config 与 original：conditions 仅为 plain object（与后端 Optional[Dict] 一致）
+// 合并 config 与 original：conditions 与后端 ConditionsBase 字段一致
 const mergeConfigAndOriginal = (config, original) => {
   const c = config?.conditions
   if (c && typeof c === 'object' && !Array.isArray(c)) {
@@ -116,8 +112,8 @@ watch(
       const merged = mergeConfigAndOriginal(config || {}, original)
       const updatedData = { ...emptyConditionFields(), ...merged }
 
-      if (updatedData.operation === undefined || updatedData.operation === null) {
-        updatedData.operation = '非空'
+      if (updatedData.condition_compare === undefined || updatedData.condition_compare === null) {
+        updatedData.condition_compare = DEFAULT_ASSERTION_OPERATION
       }
 
       Object.keys(updatedData).forEach(key => {
@@ -126,8 +122,8 @@ watch(
         }
       })
 
-      if (form.operation === undefined || form.operation === null || typeof form.operation !== 'string') {
-        form.operation = '非空'
+      if (form.condition_compare === undefined || form.condition_compare === null || typeof form.condition_compare !== 'string') {
+        form.condition_compare = DEFAULT_ASSERTION_OPERATION
       }
 
       nextTick(() => {
@@ -139,7 +135,7 @@ watch(
 
 let emitTimer = null
 watch(
-    () => [form.value, form.operation, form.except_value, form.desc],
+    () => [form.condition_expr, form.condition_compare, form.condition_value, form.condition_desc],
     () => {
       if (isExternalUpdate) return
 
@@ -150,10 +146,10 @@ watch(
       emitTimer = setTimeout(() => {
         emit('update:config', {
           conditions: {
-            value: form.value || '',
-            operation: form.operation || '非空',
-            except_value: form.except_value || '',
-            desc: form.desc || ''
+            condition_expr: form.condition_expr || '',
+            condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
+            condition_value: form.condition_value || '',
+            condition_desc: form.condition_desc || ''
           }
         })
       }, 300)

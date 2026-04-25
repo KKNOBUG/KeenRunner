@@ -1453,16 +1453,16 @@ const mapBackendStep = (step) => {
       loop_iterable: step.loop_iterable || '',
       loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0
     }
-    // 条件循环：conditions 为 Optional[Dict]（与后端一致）
+    // 条件循环：conditions 与后端 ConditionsBase 一致
     if (step.conditions && typeof step.conditions === 'object' && !Array.isArray(step.conditions)) {
       const condition = step.conditions
-      base.config.condition_value = condition.value || ''
-      base.config.condition_operation = condition.operation || 'not_empty'
-      base.config.condition_except_value = condition.except_value || ''
+      base.config.condition_expr = condition.condition_expr != null ? String(condition.condition_expr) : ''
+      base.config.condition_compare = condition.condition_compare || '非空'
+      base.config.condition_value = condition.condition_value != null ? String(condition.condition_value) : ''
     } else {
+      base.config.condition_expr = ''
+      base.config.condition_compare = '非空'
       base.config.condition_value = ''
-      base.config.condition_operation = 'not_empty'
-      base.config.condition_except_value = ''
     }
     base.children = []
   } else if (localType === 'code') {
@@ -1517,10 +1517,10 @@ const mapBackendStep = (step) => {
     const raw = step.conditions
     const condition = (raw != null && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {}
     const cond = {
-      value: condition.value || '',
-      operation: condition.operation || '非空',
-      except_value: condition.except_value || '',
-      desc: condition.desc || ''
+      condition_expr: condition.condition_expr != null ? String(condition.condition_expr) : '',
+      condition_compare: condition.condition_compare || '非空',
+      condition_value: condition.condition_value != null ? String(condition.condition_value) : '',
+      condition_desc: condition.condition_desc != null ? String(condition.condition_desc) : ''
     }
     base.config = {
       conditions: { ...cond }
@@ -1793,21 +1793,26 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
           : null
       if (fromConfigDict) {
         backendStep.conditions = {
-          value: fromConfigDict.value || '',
-          operation: fromConfigDict.operation || 'not_empty',
-          except_value: fromConfigDict.except_value || ''
+          condition_expr: fromConfigDict.condition_expr != null ? String(fromConfigDict.condition_expr) : '',
+          condition_compare: fromConfigDict.condition_compare || '非空',
+          condition_value: fromConfigDict.condition_value != null ? String(fromConfigDict.condition_value) : ''
         }
-      } else if (config.condition_value !== undefined || config.condition_operation !== undefined || config.condition_except_value !== undefined) {
+      } else if (
+          config.condition_expr !== undefined ||
+          config.condition_compare !== undefined ||
+          config.condition_value !== undefined
+      ) {
         backendStep.conditions = {
-          value: config.condition_value || '',
-          operation: config.condition_operation || 'not_empty',
-          except_value: config.condition_except_value || ''
+          condition_expr: config.condition_expr != null ? String(config.condition_expr) : '',
+          condition_compare: config.condition_compare || '非空',
+          condition_value: config.condition_value != null ? String(config.condition_value) : ''
         }
       } else if (original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)) {
+        const oc = original.conditions
         backendStep.conditions = {
-          value: original.conditions.value || '',
-          operation: original.conditions.operation || 'not_empty',
-          except_value: original.conditions.except_value || ''
+          condition_expr: oc.condition_expr != null ? String(oc.condition_expr) : '',
+          condition_compare: oc.condition_compare || '非空',
+          condition_value: oc.condition_value != null ? String(oc.condition_value) : ''
         }
       } else {
         backendStep.conditions = null
@@ -1824,16 +1829,16 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     const conditionObj = fromConfig || fromOriginal
     backendStep.conditions = conditionObj
         ? {
-          value: conditionObj.value || '',
-          operation: conditionObj.operation || '非空',
-          except_value: conditionObj.except_value || '',
-          desc: conditionObj.desc || ''
+          condition_expr: conditionObj.condition_expr != null ? String(conditionObj.condition_expr) : '',
+          condition_compare: conditionObj.condition_compare || '非空',
+          condition_value: conditionObj.condition_value != null ? String(conditionObj.condition_value) : '',
+          condition_desc: conditionObj.condition_desc != null ? String(conditionObj.condition_desc) : ''
         }
         : {
-          value: '',
-          operation: '非空',
-          except_value: '',
-          desc: ''
+          condition_expr: '',
+          condition_compare: '非空',
+          condition_value: '',
+          condition_desc: ''
         }
   } else if (step.type === 'wait') {
     backendStep.wait = config.seconds || original.wait || 0

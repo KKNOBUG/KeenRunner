@@ -21,6 +21,7 @@ from jsonpath_ng import parse as jsonpath_parse
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 from backend.common import JSONPathUtils
 from backend.common.generate_utils import GenerateUtils
+from backend.enums.autotest_enum import AutoTestAssertionOperation
 
 
 class AutoTestToolService:
@@ -327,6 +328,7 @@ class AutoTestToolService:
 
     @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
+        """断言比较；``operation`` 须为 ``AutoTestAssertionOperation`` 枚举值字符串。"""
         return AutoTestToolServiceImpl.compare_assertion(actual, operation, expected)
 
     @classmethod
@@ -958,7 +960,7 @@ class AutoTestToolServiceImpl:
 
         :param actual: 实际值
         :param expected: 期望值
-        :param comparator: 二元谓词 (a, b) -> bool, 如 lambda x, y: x > y
+        :param comparator: 二元谓词 ``(左, 右) -> bool``, 例如 ``_assert_ordered_gt``
         :return: 比较结果
         """
         norm_actual = cls._normalize_value(actual)
@@ -970,34 +972,113 @@ class AutoTestToolServiceImpl:
         return comparator(str(actual), str(expected))
 
     @classmethod
+    def _assert_ordered_gt(cls, left: Any, right: Any) -> bool:
+        """供类型感知大小比较使用的二元谓词：左值大于右值"""
+        return left > right
+
+    @classmethod
+    def _assert_ordered_ge(cls, left: Any, right: Any) -> bool:
+        return left >= right
+
+    @classmethod
+    def _assert_ordered_lt(cls, left: Any, right: Any) -> bool:
+        return left < right
+
+    @classmethod
+    def _assert_ordered_le(cls, left: Any, right: Any) -> bool:
+        return left <= right
+
+    @classmethod
+    def _assertion_equal(cls, actual: Any, expected: Any) -> bool:
+        return cls._type_aware_equals(actual, expected)
+
+    @classmethod
+    def _assertion_not_equal(cls, actual: Any, expected: Any) -> bool:
+        return not cls._type_aware_equals(actual, expected)
+
+    @classmethod
+    def _assertion_greater_than(cls, actual: Any, expected: Any) -> bool:
+        return cls._type_aware_compare(actual, expected, cls._assert_ordered_gt)
+
+    @classmethod
+    def _assertion_greater_or_equal(cls, actual: Any, expected: Any) -> bool:
+        return cls._type_aware_compare(actual, expected, cls._assert_ordered_ge)
+
+    @classmethod
+    def _assertion_less_than(cls, actual: Any, expected: Any) -> bool:
+        return cls._type_aware_compare(actual, expected, cls._assert_ordered_lt)
+
+    @classmethod
+    def _assertion_less_or_equal(cls, actual: Any, expected: Any) -> bool:
+        return cls._type_aware_compare(actual, expected, cls._assert_ordered_le)
+
+    @classmethod
+    def _assertion_length_equal(cls, actual: Any, expected: Any) -> bool:
+        nb = cls._normalize_value(expected)
+        if nb is None:
+            return False
+        return len(str(actual)) == int(nb)
+
+    @classmethod
+    def _assertion_contains(cls, actual: Any, expected: Any) -> bool:
+        return str(expected) in str(actual)
+
+    @classmethod
+    def _assertion_not_contains(cls, actual: Any, expected: Any) -> bool:
+        return str(expected) not in str(actual)
+
+    @classmethod
+    def _assertion_starts_with(cls, actual: Any, expected: Any) -> bool:
+        return str(actual).startswith(str(expected))
+
+    @classmethod
+    def _assertion_ends_with(cls, actual: Any, expected: Any) -> bool:
+        return str(actual).endswith(str(expected))
+
+    @classmethod
+    def _assertion_not_empty(cls, actual: Any, expected: Any) -> bool:
+        del expected
+        return actual is not None and actual != ""
+
+    @classmethod
+    def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
+        del expected
+        return actual is None or actual == ""
+
+    @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """
-        根据操作符对实际值与期望值做断言比较, 支持等于、不等于、大于、小于、包含、非空等
+        根据操作符对实际值与期望值做断言比较；``operation`` 须为 ``AutoTestAssertionOperation`` 枚举值。
 
         :param actual: 实际值
-        :param operation: 操作符名称(如 "等于"、"包含"、"非空")
+        :param operation: 操作符(与 ``AutoTestAssertionOperation`` 一致)
         :param expected: 期望值(部分操作符可忽略)
         :return: 断言是否通过
         :raises ValueError: 不支持的操作符或比较过程异常
         """
-        operator_symbol_mapping: Dict[str, Callable] = {
-            "等于": lambda a, b: cls._type_aware_equals(a, b),
-            "不等于": lambda a, b: not cls._type_aware_equals(a, b),
-            "大于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x > y),
-            "大于等于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x >= y),
-            "小于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x < y),
-            "小于等于": lambda a, b: cls._type_aware_compare(a, b, lambda x, y: x <= y),
-            "长度等于": lambda a, b: (lambda nb: len(str(a)) == int(nb) if nb is not None else False)(cls._normalize_value(b)),
-            "包含": lambda a, b: str(b) in str(a),
-            "不包含": lambda a, b: str(b) not in str(a),
-            "以...开始": lambda a, b: str(a).startswith(str(b)),
-            "以...结束": lambda a, b: str(a).endswith(str(b)),
-            "非空": lambda a, _: a is not None and a != "",
-            "为空": lambda a, _: a is None or a == "",
+        try:
+            op = AutoTestAssertionOperation(operation)
+        except ValueError as exc:
+            raise ValueError(f"【断言表达式】操作符[{operation!r}]不被支持") from exc
+
+        handlers: Dict[AutoTestAssertionOperation, Callable[[Any, Any], bool]] = {
+            AutoTestAssertionOperation.EQUAL: cls._assertion_equal,
+            AutoTestAssertionOperation.NOT_EQUAL: cls._assertion_not_equal,
+            AutoTestAssertionOperation.GREATER_THAN: cls._assertion_greater_than,
+            AutoTestAssertionOperation.GREATER_OR_EQUAL: cls._assertion_greater_or_equal,
+            AutoTestAssertionOperation.LESS_THAN: cls._assertion_less_than,
+            AutoTestAssertionOperation.LESS_OR_EQUAL: cls._assertion_less_or_equal,
+            AutoTestAssertionOperation.LENGTH_EQUAL: cls._assertion_length_equal,
+            AutoTestAssertionOperation.CONTAINS: cls._assertion_contains,
+            AutoTestAssertionOperation.NOT_CONTAINS: cls._assertion_not_contains,
+            AutoTestAssertionOperation.STARTS_WITH: cls._assertion_starts_with,
+            AutoTestAssertionOperation.ENDS_WITH: cls._assertion_ends_with,
+            AutoTestAssertionOperation.NOT_EMPTY: cls._assertion_not_empty,
+            AutoTestAssertionOperation.IS_EMPTY: cls._assertion_is_empty,
         }
-        comparator: Optional[Callable] = operator_symbol_mapping.get(operation)
+        comparator = handlers.get(op)
         if comparator is None:
-            raise ValueError(f"【断言表达式】操作符[{operation}]不被支持")
+            raise ValueError(f"【断言表达式】操作符[{operation!r}]未绑定实现")
         try:
             return comparator(actual, expected)
         except Exception as e:

@@ -1497,7 +1497,14 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_condition_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        条件循环：每轮执行子步骤后评估 conditions，不满足或超时则退出；最多 100 次防死循环。
+        条件循环：while 语义——每轮**先**根据 conditions 判断是否继续；仅当条件满足时才执行子步骤，
+        再进入间隔与下一轮判断。条件一开始就不满足时，子步骤一轮都不会执行。
+        超时、条件评估异常、或子步骤按策略中断时退出；最多 100 轮（每轮一次子步骤树）防死循环。
+
+        约定：``conditions`` 与 ``ConditionsBase`` 一致（``condition_expr`` / ``condition_compare`` / ``condition_value``），
+        经 ``compare_assertion`` 评估；返回 True 表示**继续循环**，
+        返回 False 表示**结束循环**（与常见「当条件成立时执行循环体」一致）。
+
         :param result: 用于挂载子步骤结果的 StepExecutionResult。
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）。
         :return:
@@ -1509,7 +1516,7 @@ class LoopStepExecutor(BaseStepExecutor):
         loop_timeout = self.step.get("loop_timeout")
         loop_interval = self.step.get("loop_interval")
 
-        # 记录开始时间（用于超时控制），并设置安全限制
+        # iteration：实际执行子步骤树的轮数（与 loop_index、防死循环计数一致）
         iteration = 0
         guard_limit = 100
         should_continue = True
@@ -1519,25 +1526,44 @@ class LoopStepExecutor(BaseStepExecutor):
             step_code=self.step_code
         )
         while should_continue:
-            iteration += 1
             if loop_timeout and loop_timeout > 0:
                 elapsed = time.time() - start_time
                 if elapsed >= loop_timeout:
                     self.context.log(
                         f"【循环结构】条件循环超时: "
-                        f"已执行 {iteration} 次, 耗时 {elapsed:.2f} 秒, 超过限制 {loop_timeout} 秒",
+                        f"已完成子步骤 {iteration} 轮, 耗时 {elapsed:.2f} 秒, 超过限制 {loop_timeout} 秒",
                         step_code=self.step_code
                     )
                     break
-            # 记录循环次数
+
+            # 先评估条件：不满足则不再执行本轮子步骤（while 语义）
+            try:
+                if not self.evaluate_condition(condition):
+                    self.context.log(
+                        f"【循环结构】条件循环: 条件不满足, 结束循环"
+                        f"(本轮不执行子步骤; 已累计执行子步骤 {iteration} 轮)",
+                        step_code=self.step_code,
+                    )
+                    break
+            except Exception as e:
+                result.success = False
+                error_message = f"【循环结构】条件评估失败: {e}"
+                result.error = error_message
+                self.context.log(error_message, step_code=self.step_code)
+                should_continue = False
+                break
+
+            iteration += 1
             if self.step_code:
                 self.context.step_cycle_index[self.step_code] = iteration
-            self.context.log(f"【循环结构】条件循环: 第{iteration}次执行", step_code=self.step_code)
+            self.context.log(
+                f"【循环结构】条件循环: 第{iteration}轮(条件已满足, 开始执行子步骤)",
+                step_code=self.step_code,
+            )
             self.context.update_variables(
                 [{"key": "loop_index", "value": iteration, "desc": ""}],
                 scope="session_variables",
             )
-            # 为子步骤记录当前循环次数
             for child in self.children:
                 child_code = child.get("step_code") or child.get("id") or ""
                 if child_code:
@@ -1557,7 +1583,6 @@ class LoopStepExecutor(BaseStepExecutor):
                             )
                             return
                         elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                            # CONTINUE 模式继续下一次循环
                             self.context.log(
                                 f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环), {child.error}",
                                 step_code=self.step_code
@@ -1570,10 +1595,9 @@ class LoopStepExecutor(BaseStepExecutor):
                     should_continue = False
                     break
                 elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                    # CONTINUE 模式继续下一次循环
                     pass
             except Exception as e:
-                error_message = f"【循环结构】条件循环: 第{iteration}次执行失败, 错误描述: {e}"
+                error_message = f"【循环结构】条件循环: 第{iteration}轮执行子步骤失败, 错误描述: {e}"
                 self.context.log(error_message, step_code=self.step_code)
                 result.success = False
                 if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1584,66 +1608,59 @@ class LoopStepExecutor(BaseStepExecutor):
 
             if not should_continue:
                 break
-            try:
-                if not self.evaluate_condition(condition):
-                    self.context.log(f"【循环结构】条件循环: 条件不满足, 结束循环", step_code=self.step_code)
-                    should_continue = False
-                    break
-            except Exception as e:
-                result.success = False
-                error_message = f"【循环结构】条件评估失败: {e}"
-                result.error = error_message
-                self.context.log(error_message, step_code=self.step_code)
-                should_continue = False
-                break
 
-            # 安全检查
             if iteration >= guard_limit:
                 raise StepExecutionError(
-                    f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 次, "
+                    f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 轮, "
                     f"疑似无限循环, 为保护系统安全已自动终止循环"
                 )
 
-            # 循环间隔
             if loop_interval and loop_interval > 0:
                 await self.context.sleep(loop_interval)
 
-        self.context.log(f"【循环结构】条件循环结束: 共执行{iteration}次", step_code=self.step_code)
+        self.context.log(
+            f"【循环结构】条件循环结束: 共执行子步骤 {iteration} 轮",
+            step_code=self.step_code,
+        )
 
     def evaluate_condition(self, condition: Any) -> bool:
         """
-        按 value/operation/except_value 评估条件；conditions 与落库一致，为 dict。
-        :param condition: 步骤 ``conditions`` 字段（dict）。
+        评估条件是否成立；``condition`` 须为 dict，字段与 ``ConditionsBase`` 一致：
+        ``condition_expr``、``condition_compare``、``condition_value``。
+
+        :param condition: 步骤 ``conditions`` 字段。
         :return: 条件是否满足。
         """
         if not isinstance(condition, dict):
             raise StepExecutionError(
                 f"【循环结构】conditions 必须为对象(dict), 当前类型: {type(condition).__name__}"
             )
-        condition_obj = condition
-
-        value_expr = condition_obj.get("value")
-        operation = condition_obj.get("operation")
-        except_value = condition_obj.get("except_value")
-        if value_expr is None or operation is None:
-            raise StepExecutionError(f"【循环结构】条件表达式缺少必要字段: [value={value_expr}, operation={operation}]")
+        condition_expr = condition.get("condition_expr")
+        condition_compare = condition.get("condition_compare")
+        condition_value = condition.get("condition_value")
+        if condition_expr is None or condition_compare is None:
+            raise StepExecutionError(
+                f"【循环结构】条件缺少必要字段: "
+                f"[condition_expr={condition_expr!r}, condition_compare={condition_compare!r}]"
+            )
+        expr = str(condition_expr)
 
         try:
-            resolved = self.context.resolve_placeholders(value_expr)
+            resolved = self.context.resolve_placeholders(expr)
             if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
                 variable_name = resolved[2:-1]
                 try:
-                    value = self.context.get_variable(variable_name)
+                    actual_value = self.context.get_variable(variable_name)
                 except KeyError as e:
                     raise StepExecutionError(f"【循环结构】条件表达式中变量未定义: {variable_name}") from e
             else:
-                value = resolved
+                actual_value = resolved
         except Exception as e:
             if isinstance(e, StepExecutionError):
                 raise
             raise StepExecutionError(f"【循环结构】条件表达式中占位符解析异常, 错误描述: {e}") from e
         try:
-            return AutoTestToolService.compare_assertion(value, operation, except_value)
+            return AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value)
         except Exception as e:
             raise StepExecutionError(f"【循环结构】条件表达式执行异常, 错误描述: {e}") from e
 
@@ -1688,18 +1705,18 @@ class ConditionStepExecutor(BaseStepExecutor):
                 raise StepExecutionError(
                     f"【条件分支】conditions 必须为对象(dict), 当前类型: {type(condition).__name__}"
                 )
-            condition_obj = condition
-
-            value_expr = condition_obj.get("value")
-            operation = condition_obj.get("operation")
-            except_value = condition_obj.get("except_value")
-            desc = condition_obj.get("desc")
-            if value_expr is None or operation is None:
+            condition_expr = condition.get("condition_expr")
+            condition_compare = condition.get("condition_compare")
+            condition_value = condition.get("condition_value")
+            condition_desc = condition.get("condition_desc")
+            if condition_expr is None or condition_compare is None:
                 raise StepExecutionError(
-                    f"【条件分支】条件表达式缺少必要字段: [value={value_expr}, operation={operation}]"
+                    f"【条件分支】条件缺少必要字段: "
+                    f"[condition_expr={condition_expr!r}, condition_compare={condition_compare!r}]"
                 )
+            expr = str(condition_expr)
             try:
-                resolved_value_expr = self.context.resolve_placeholders(value_expr)
+                resolved_value_expr = self.context.resolve_placeholders(expr)
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -1710,26 +1727,26 @@ class ConditionStepExecutor(BaseStepExecutor):
                         "${") and resolved_value_expr.endswith("}"):
                     variable_name = resolved_value_expr[2:-1]
                     try:
-                        value = self.context.get_variable(variable_name)
+                        actual_value = self.context.get_variable(variable_name)
                     except KeyError as e:
                         raise StepExecutionError(f"【条件分支】条件表达式中变量未定义: {variable_name}") from e
                 else:
-                    value = resolved_value_expr
+                    actual_value = resolved_value_expr
             except StepExecutionError:
                 raise
             except Exception as e:
                 raise StepExecutionError(f"【条件分支】条件表达式中变量解析异常, 错误描述: {e}") from e
 
             try:
-                if not AutoTestToolService.compare_assertion(value, operation, except_value):
+                if not AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value):
                     result.success = True
-                    result.message = f"【条件分支】条件未满足: {desc}"
+                    result.message = f"【条件分支】条件未满足: {condition_desc}"
                     self.context.log(result.message, step_code=self.step_code)
                     return
             except Exception as e:
                 raise StepExecutionError(f"【条件分支】条件表达式执行异常, 错误描述: {e}") from e
 
-            result.message = f"【条件分支】条件满足: {desc}"
+            result.message = f"【条件分支】条件满足: {condition_desc}"
             self.context.log(result.message, step_code=self.step_code)
             try:
                 child_results = await self._execute_children()

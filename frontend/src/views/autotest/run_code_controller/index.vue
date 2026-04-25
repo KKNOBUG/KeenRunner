@@ -183,6 +183,7 @@ import {
 } from 'naive-ui'
 import MonacoEditor from "@/components/monaco/index.vue"
 import TheIcon from "@/components/icon/TheIcon.vue"
+import { assertionOperationSelectOptions } from '@/constants/autotestAssertionOperation'
 import api from '@/api'
 
 const props = defineProps({
@@ -271,21 +272,7 @@ function getValidatorPlaceholder(object) {
   return '请输入变量名'
 }
 
-const assertionOptions = [
-  { label: '等于', value: '等于' },
-  { label: '不等于', value: '不等于' },
-  { label: '大于', value: '大于' },
-  { label: '大于等于', value: '大于等于' },
-  { label: '小于', value: '小于' },
-  { label: '小于等于', value: '小于等于' },
-  { label: '长度等于', value: '长度等于' },
-  { label: '包含', value: '包含' },
-  { label: '不包含', value: '不包含' },
-  { label: '以...开始', value: '以...开始' },
-  { label: '以...结束', value: '以...结束' },
-  { label: '非空', value: '非空' },
-  { label: '为空', value: '为空' },
-]
+const assertionOptions = assertionOperationSelectOptions
 
 function getNextValidatorKey() {
   const keys = Object.keys(form.assert_validators || {})

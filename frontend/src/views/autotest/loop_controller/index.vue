@@ -109,9 +109,12 @@
         </template>
 
         <template v-else-if="form.loop_mode === '条件循环'">
+          <n-alert type="info" style="margin-bottom: 12px;" :bordered="false">
+            每轮<strong>先</strong>判断条件是否成立；成立则执行循环内步骤，不成立则结束。首轮条件不成立时不会执行子步骤。
+          </n-alert>
           <n-form-item label="条件表达式" required>
             <n-input
-                v-model:value="form.condition_value"
+                v-model:value="form.condition_expr"
                 placeholder="变量名, 例如: ${count} 或 ${status}"
                 style="width: 80%;"
                 :disabled="props.readonly"
@@ -119,7 +122,7 @@
           </n-form-item>
           <n-form-item label="条件比较符" required>
             <n-select
-                v-model:value="form.condition_operation"
+                v-model:value="form.condition_compare"
                 :options="operatorOptions"
                 placeholder="请选择条件比较符"
                 style="width: 80%;"
@@ -128,7 +131,7 @@
           </n-form-item>
           <n-form-item label="条件比较值">
             <n-input
-                v-model:value="form.condition_except_value"
+                v-model:value="form.condition_value"
                 placeholder="字符串或变量, 例如: 3 或 ${target}"
                 style="width: 80%;"
                 :disabled="props.readonly"
@@ -164,7 +167,11 @@
 
 <script setup>
 import { reactive, watch, nextTick } from 'vue'
-import { NForm, NFormItem, NInput, NInputNumber, NRadio, NRadioGroup, NSpace, NCard, NSelect } from 'naive-ui'
+import { NAlert, NForm, NFormItem, NInput, NInputNumber, NRadio, NRadioGroup, NSpace, NCard, NSelect } from 'naive-ui'
+import {
+  assertionOperationSelectOptions,
+  DEFAULT_ASSERTION_OPERATION,
+} from '@/constants/autotestAssertionOperation'
 
 /** 执行引擎写入会话变量的固定名称（不再落库配置字段） */
 const LOOP_INDEX_NAME = 'loop_index'
@@ -191,30 +198,22 @@ const errorStrategyOptions = [
   { label: '停止整个用例执行', value: '停止整个用例执行' }
 ]
 
-const operatorOptions = [
-  { label: '等于', value: 'eq' },
-  { label: '不等于', value: 'ne' },
-  { label: '大于', value: 'gt' },
-  { label: '大于等于', value: 'gte' },
-  { label: '小于', value: 'lt' },
-  { label: '小于等于', value: 'lte' },
-  { label: '包含', value: 'contains' },
-  { label: '不包含', value: 'not_contains' },
-  { label: '非空', value: 'not_empty' },
-  { label: '为空', value: 'empty' },
-  { label: '正则匹配', value: 'regex' }
-]
+const operatorOptions = assertionOperationSelectOptions
 
 const normalizeLoopMode = (m) => m || '次数循环'
 
 const parseCondition = (c) => {
   if (!c || typeof c !== 'object' || Array.isArray(c)) {
-    return { value: '', operation: 'not_empty', except_value: '' }
+    return {
+      condition_expr: '',
+      condition_compare: DEFAULT_ASSERTION_OPERATION,
+      condition_value: ''
+    }
   }
   return {
-    value: c.value || '',
-    operation: c.operation || 'not_empty',
-    except_value: c.except_value || ''
+    condition_expr: c.condition_expr != null ? String(c.condition_expr) : '',
+    condition_compare: c.condition_compare || DEFAULT_ASSERTION_OPERATION,
+    condition_value: c.condition_value != null ? String(c.condition_value) : ''
   }
 }
 
@@ -232,13 +231,13 @@ const initFormFromOriginal = (original) => {
 
   if (original.conditions) {
     const condition = parseCondition(original.conditions)
-    formData.condition_value = condition.value
-    formData.condition_operation = condition.operation
-    formData.condition_except_value = condition.except_value
+    formData.condition_expr = condition.condition_expr
+    formData.condition_compare = condition.condition_compare
+    formData.condition_value = condition.condition_value
   } else {
+    formData.condition_expr = ''
+    formData.condition_compare = DEFAULT_ASSERTION_OPERATION
     formData.condition_value = ''
-    formData.condition_operation = 'not_empty'
-    formData.condition_except_value = ''
   }
 
   return formData
@@ -254,19 +253,23 @@ const mergeConfigAndOriginal = (config, original) => {
     loop_timeout: config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original?.loop_timeout ? Number(original.loop_timeout) : 0)
   }
 
-  if (config.condition_value !== undefined || config.condition_operation !== undefined || config.condition_except_value !== undefined) {
-    merged.condition_value = config.condition_value || ''
-    merged.condition_operation = config.condition_operation || 'not_empty'
-    merged.condition_except_value = config.condition_except_value || ''
+  if (
+      config.condition_expr !== undefined ||
+      config.condition_compare !== undefined ||
+      config.condition_value !== undefined
+  ) {
+    merged.condition_expr = config.condition_expr != null ? String(config.condition_expr) : ''
+    merged.condition_compare = config.condition_compare || DEFAULT_ASSERTION_OPERATION
+    merged.condition_value = config.condition_value != null ? String(config.condition_value) : ''
   } else if (original?.conditions) {
     const condition = parseCondition(original.conditions)
-    merged.condition_value = condition.value
-    merged.condition_operation = condition.operation
-    merged.condition_except_value = condition.except_value
+    merged.condition_expr = condition.condition_expr
+    merged.condition_compare = condition.condition_compare
+    merged.condition_value = condition.condition_value
   } else {
+    merged.condition_expr = ''
+    merged.condition_compare = DEFAULT_ASSERTION_OPERATION
     merged.condition_value = ''
-    merged.condition_operation = 'not_empty'
-    merged.condition_except_value = ''
   }
 
   return merged
@@ -279,9 +282,9 @@ const defaults = {
   loop_interval: 0,
   loop_iterable: '',
   loop_timeout: 0,
-  condition_value: '',
-  condition_operation: 'not_empty',
-  condition_except_value: ''
+  condition_expr: '',
+  condition_compare: DEFAULT_ASSERTION_OPERATION,
+  condition_value: ''
 }
 
 const initialData = {
@@ -289,9 +292,9 @@ const initialData = {
   ...mergeConfigAndOriginal(props.config, props.step?.original)
 }
 
+initialData.condition_expr = initialData.condition_expr ?? ''
+initialData.condition_compare = initialData.condition_compare ?? DEFAULT_ASSERTION_OPERATION
 initialData.condition_value = initialData.condition_value ?? ''
-initialData.condition_operation = initialData.condition_operation ?? 'not_empty'
-initialData.condition_except_value = initialData.condition_except_value ?? ''
 
 const form = reactive(initialData)
 
@@ -311,12 +314,12 @@ watch(
       const merged = mergeConfigAndOriginal(config || {}, original)
       const updatedData = { ...defaults, ...merged }
 
+      updatedData.condition_expr = updatedData.condition_expr ?? ''
+      updatedData.condition_compare = updatedData.condition_compare ?? DEFAULT_ASSERTION_OPERATION
       updatedData.condition_value = updatedData.condition_value ?? ''
-      updatedData.condition_operation = updatedData.condition_operation ?? 'not_empty'
-      updatedData.condition_except_value = updatedData.condition_except_value ?? ''
 
       Object.keys(updatedData).forEach(key => {
-        if ((key === 'condition_value' || key === 'condition_except_value') &&
+        if ((key === 'condition_expr' || key === 'condition_value') &&
             form[key] && form[key].trim() !== '' &&
             form[key] !== updatedData[key] &&
             updatedData[key] === '') {
@@ -327,14 +330,14 @@ watch(
         }
       })
 
+      if (form.condition_expr === undefined || form.condition_expr === null) {
+        form.condition_expr = ''
+      }
+      if (form.condition_compare === undefined || form.condition_compare === null) {
+        form.condition_compare = DEFAULT_ASSERTION_OPERATION
+      }
       if (form.condition_value === undefined || form.condition_value === null) {
         form.condition_value = ''
-      }
-      if (form.condition_operation === undefined || form.condition_operation === null) {
-        form.condition_operation = 'not_empty'
-      }
-      if (form.condition_except_value === undefined || form.condition_except_value === null) {
-        form.condition_except_value = ''
       }
 
       nextTick(() => {
@@ -348,14 +351,14 @@ watch(
     () => form.loop_mode,
     (newMode) => {
       if (newMode === '条件循环') {
+        if (typeof form.condition_expr !== 'string') {
+          form.condition_expr = form.condition_expr ?? ''
+        }
+        if (typeof form.condition_compare !== 'string') {
+          form.condition_compare = form.condition_compare ?? DEFAULT_ASSERTION_OPERATION
+        }
         if (typeof form.condition_value !== 'string') {
           form.condition_value = form.condition_value ?? ''
-        }
-        if (typeof form.condition_operation !== 'string') {
-          form.condition_operation = form.condition_operation ?? 'not_empty'
-        }
-        if (typeof form.condition_except_value !== 'string') {
-          form.condition_except_value = form.condition_except_value ?? ''
         }
       }
     },
@@ -371,9 +374,9 @@ watch(
       form.loop_maximums,
       form.loop_iterable,
       form.loop_timeout,
-      form.condition_value,
-      form.condition_operation,
-      form.condition_except_value
+      form.condition_expr,
+      form.condition_compare,
+      form.condition_value
     ],
     () => {
       if (isExternalUpdate) return
@@ -397,13 +400,13 @@ watch(
           config.loop_iterable = form.loop_iterable
         } else if (form.loop_mode === '条件循环') {
           const conditionObj = {
-            value: form.condition_value || '',
-            operation: form.condition_operation || 'not_empty',
-            except_value: form.condition_except_value || ''
+            condition_expr: form.condition_expr || '',
+            condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
+            condition_value: form.condition_value || ''
           }
-          config.condition_value = conditionObj.value
-          config.condition_operation = conditionObj.operation
-          config.condition_except_value = conditionObj.except_value
+          config.condition_expr = conditionObj.condition_expr
+          config.condition_compare = conditionObj.condition_compare
+          config.condition_value = conditionObj.condition_value
           config.conditions = { ...conditionObj }
           config.loop_timeout = form.loop_timeout || 120
         }

@@ -736,6 +736,7 @@ import {
   NTooltip,
   NUpload,
 } from 'naive-ui'
+import { assertionOperationSelectOptions } from '@/constants/autotestAssertionOperation'
 import api from "@/api";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
@@ -2251,22 +2252,8 @@ const validatorObjectOptions = [
   {label: '变量池', value: '变量池'}
 ]
 
-// 断言方法选项（必须与后端 AutoTestToolService.compare_assertion 中的 op_map 一致）
-const assertionOptions = [
-  {label: '等于', value: '等于'},
-  {label: '不等于', value: '不等于'},
-  {label: '大于', value: '大于'},
-  {label: '大于等于', value: '大于等于'},
-  {label: '小于', value: '小于'},
-  {label: '小于等于', value: '小于等于'},
-  {label: '长度等于', value: '长度等于'},
-  {label: '包含', value: '包含'},
-  {label: '不包含', value: '不包含'},
-  {label: '以...开始', value: '以...开始'},
-  {label: '以...结束', value: '以...结束'},
-  {label: '非空', value: '非空'},
-  {label: '为空', value: '为空'}
-]
+// 断言方法选项（与 backend.enums.autotest_enum.AutoTestAssertionOperation 一致）
+const assertionOptions = assertionOperationSelectOptions
 
 // 提取数量计算
 const extractCount = computed(() => {

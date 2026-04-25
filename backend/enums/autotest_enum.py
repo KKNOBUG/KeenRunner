@@ -61,6 +61,26 @@ class AutoTestLoopErrorStrategy(StringEnum):
     STOP = "停止整个用例执行"
 
 
+class AutoTestAssertionOperation(StringEnum):
+    """
+    断言 / 条件分支 / 条件循环中 ``conditions.condition_compare`` 的合法取值，
+    与 ``AutoTestToolServiceImpl.compare_assertion`` 支持集一致；新增比较方式时在此扩展成员即可。
+    """
+    EQUAL = "等于"
+    NOT_EQUAL = "不等于"
+    GREATER_THAN = "大于"
+    GREATER_OR_EQUAL = "大于等于"
+    LESS_THAN = "小于"
+    LESS_OR_EQUAL = "小于等于"
+    LENGTH_EQUAL = "长度等于"
+    CONTAINS = "包含"
+    NOT_CONTAINS = "不包含"
+    STARTS_WITH = "以...开始"
+    ENDS_WITH = "以...结束"
+    NOT_EMPTY = "非空"
+    IS_EMPTY = "为空"
+
+
 class AutoTestTaskScheduler(StringEnum):
     CRON = "cron"
     INTERVAL = "interval"
