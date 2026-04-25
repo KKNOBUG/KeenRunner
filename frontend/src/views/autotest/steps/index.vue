@@ -385,8 +385,8 @@
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
-                :project-options="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database') ? projectOptions : []"
-                :project-loading="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database') ? projectLoading : false"
+                :project-options="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database' || currentStep?.type === 'quote') ? projectOptions : []"
+                :project-loading="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database' || currentStep?.type === 'quote') ? projectLoading : false"
                 :available-variable-list="availableVariableList"
                 :assist-functions="assistFunctionsList"
                 :on-reselect="currentStep?.isQuoteInner ? undefined : handleQuoteReselect"
@@ -500,7 +500,8 @@ import {
   NPopover,
   NSelect,
   NSpace,
-  NTag
+  NTag,
+  NTooltip
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import {formatDateTime, renderIcon} from '@/utils'
@@ -675,18 +676,38 @@ const getScriptListForDrawer = (params) => {
   if (body.case_type === '') delete body.case_type
   return api.getApiTestcaseList(body)
 }
+/** 从脚本选择抽屉行构造引用脚本用例快照，供右侧「用例信息」只读展示（与步骤树接口 quote_case 字段对齐） */
+const snapshotQuoteCaseFromScriptRow = (row) => {
+  if (!row || row.case_id == null) return null
+  return {
+    case_id: row.case_id,
+    case_code: row.case_code,
+    case_name: row.case_name || '',
+    case_project: row.case_project,
+    case_tags: row.case_tags,
+    case_desc: row.case_desc || '',
+    case_attr: row.case_attr || '',
+    case_type: row.case_type || ''
+  }
+}
+
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
+  const quoteCaseSnapshot = snapshotQuoteCaseFromScriptRow(row)
   const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
-    if (updated) loadQuoteStepsForStep(updated)
+    if (updated) {
+      updated.original = { ...(updated.original || {}), quote_case: quoteCaseSnapshot }
+      loadQuoteStepsForStep(updated)
+    }
     quotePublicScriptReplaceStepId.value = null
   } else {
     const parentId = quotePublicScriptParentId.value
     const created = insertStep(parentId, 'quote', null, config)
     if (created) {
+      created.original = { ...(created.original || {}), quote_case: quoteCaseSnapshot }
       selectedKeys.value = [created.id]
       updateStepDisplayNames()
       loadQuoteStepsForStep(created)
@@ -790,6 +811,44 @@ watch(quotePublicScriptDrawerVisible, (visible) => {
   }
 })
 
+/** 选择公共脚本 / 复制脚本 抽屉表格「所属标签」：单行展示，悬停看全部 */
+const renderQuoteDrawerCaseTagsCompact = (row) => {
+  const tags = Array.isArray(row.case_tags) ? row.case_tags.filter((t) => t && t.tag_name) : []
+  if (!tags.length) return h('span', '')
+  const trigger = h(
+      'div',
+      {
+        class: 'case-tags-cell-trigger',
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+          maxWidth: '100%',
+          minHeight: '22px'
+        }
+      },
+      [
+        h(NTag, {type: 'info', size: 'small', bordered: true}, {default: () => tags[0].tag_name}),
+        tags.length > 1
+            ? h('span', {class: 'case-tags-more'}, `+${tags.length - 1}`)
+            : null
+      ].filter(Boolean)
+  )
+  if (tags.length === 1) return trigger
+  return h(NTooltip, {placement: 'top', trigger: 'hover', showArrow: true}, {
+    trigger: () => trigger,
+    default: () =>
+        h(
+            'div',
+            {class: 'case-tags-tooltip-inner'},
+            tags.map((tag) =>
+                h(NTag, {type: 'info', size: 'small', bordered: true, style: {margin: '2px'}}, {default: () => tag.tag_name})
+            )
+        )
+  })
+}
+
 const quotePublicScriptColumns = [
   {
     title: '所属应用',
@@ -808,20 +867,7 @@ const quotePublicScriptColumns = [
     width: 150,
     align: 'center',
     render(row) {
-      // case_tags 现在是对象数组，使用NTag展示，每个标签换行
-      if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
-        return h('div', {class: 'tag-container'},
-            row.case_tags
-                .filter(tag => tag.tag_name)
-                .map(tag =>
-                    h(NTag, {
-                      type: 'info',
-                      style: 'margin: 2px 4px 2px 0;'
-                    }, {default: () => tag.tag_name})
-                )
-        )
-      }
-      return h('span', '')
+      return renderQuoteDrawerCaseTagsCompact(row)
     },
   },
   {
@@ -3889,6 +3935,25 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.n-list-item:hover) {
   background-color: #f5f5f5;
+}
+
+/* 抽屉内用例列表「所属标签」紧凑展示（与测试用例列表一致） */
+.case-tags-cell-trigger {
+  max-width: 100%;
+}
+
+.case-tags-more {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--n-text-color-2);
+}
+
+.case-tags-tooltip-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 320px;
+  justify-content: flex-start;
 }
 
 </style>

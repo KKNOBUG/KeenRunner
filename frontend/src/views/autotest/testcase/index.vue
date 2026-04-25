@@ -1,7 +1,7 @@
 <script setup>
 import {h, onMounted, ref, resolveDirective, withDirectives, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NInput, NModal, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag} from 'naive-ui'
+import {NButton, NInput, NModal, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag, NTooltip} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -347,6 +347,44 @@ const customHandleAdd = () => {
   router.push({path: '/autotest/steps'})
 }
 
+/** 列表「所属标签」列：仅展示一个标签 + 数量角标，悬停展示全部（避免多标签撑高行高） */
+const renderCaseTagsCompact = (row) => {
+  const tags = Array.isArray(row.case_tags) ? row.case_tags.filter((t) => t && t.tag_name) : []
+  if (!tags.length) return h('span', '')
+  const trigger = h(
+      'div',
+      {
+        class: 'case-tags-cell-trigger',
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+          maxWidth: '100%',
+          minHeight: '22px'
+        }
+      },
+      [
+        h(NTag, {type: 'info', size: 'small', bordered: true}, {default: () => tags[0].tag_name}),
+        tags.length > 1
+            ? h('span', {class: 'case-tags-more'}, `+${tags.length - 1}`)
+            : null
+      ].filter(Boolean)
+  )
+  if (tags.length === 1) return trigger
+  return h(NTooltip, {placement: 'top', trigger: 'hover', showArrow: true}, {
+    trigger: () => trigger,
+    default: () =>
+        h(
+            'div',
+            {class: 'case-tags-tooltip-inner'},
+            tags.map((tag) =>
+                h(NTag, {type: 'info', size: 'small', bordered: true, style: {margin: '2px'}}, {default: () => tag.tag_name})
+            )
+        )
+  })
+}
+
 // 使用 computed 使 columns 依赖 runLoading / 分页元数据，点击运行或翻页后表格会重新渲染
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
@@ -435,22 +473,10 @@ const columns = computed(() => {
     {
       title: '所属标签',
       key: 'case_tags',
+      width: 150,
       align: 'center',
       render(row) {
-        // case_tags 现在是对象数组，使用NTag展示，每个标签换行
-        if (Array.isArray(row.case_tags) && row.case_tags.length > 0) {
-          return h('div', { class: 'tag-container' },
-              row.case_tags
-                  .filter(tag => tag.tag_name)
-                  .map(tag =>
-                      h(NTag, {
-                        type: 'info',
-                        style: 'margin: 2px 4px 2px 0;'
-                      }, { default: () => tag.tag_name })
-                  )
-          )
-        }
-        return h('span', '')
+        return renderCaseTagsCompact(row)
       },
     },
     {
@@ -808,12 +834,22 @@ const columns = computed(() => {
   width: 200px;
 }
 
-/* 标签容器样式 - 每个标签换行展示 */
-.tag-container {
+/* 列表「所属标签」紧凑展示 */
+.case-tags-cell-trigger {
+  max-width: 100%;
+}
+
+.case-tags-more {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--n-text-color-2);
+}
+
+.case-tags-tooltip-inner {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  align-items: flex-start;
+  gap: 6px;
+  max-width: 320px;
   justify-content: flex-start;
 }
 
