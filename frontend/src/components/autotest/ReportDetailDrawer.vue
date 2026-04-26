@@ -96,15 +96,15 @@
                 <div class="step-info-grid">
                   <div class="step-info-row">
                     <div class="step-info-label">最大循环次数：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_maximums || '-' }}</div>
+                    <div class="step-info-value">{{ currentDetail.loop_maximums || '-' }}</div>
                   </div>
                   <div class="step-info-row">
                     <div class="step-info-label">循环间隔时间：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_interval ? `${stepInfo.loop_interval}s` : '-' }}</div>
+                    <div class="step-info-value">{{ currentDetail.loop_interval ? `${currentDetail.loop_interval}s` : '-' }}</div>
                   </div>
                   <div class="step-info-row">
                     <div class="step-info-label">循环对象来源：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_iterable || '-' }}</div>
+                    <div class="step-info-value">{{ currentDetail.loop_iterable || '-' }}</div>
                   </div>
                   <div class="step-info-row">
                     <div class="step-info-label">循环索引（固定）：</div>
@@ -121,12 +121,12 @@
                   <div class="step-info-row">
                     <div class="step-info-label">错误处理策略：</div>
                     <div class="step-info-value">
-                      <NTag type="warning">{{ stepInfo.loop_on_error || '-' }}</NTag>
+                      <NTag type="warning">{{ currentDetail.loop_on_error || '-' }}</NTag>
                     </div>
                   </div>
                   <div class="step-info-row">
                     <div class="step-info-label">循环超时时间：</div>
-                    <div class="step-info-value">{{ stepInfo.loop_timeout ? `${stepInfo.loop_timeout}s` : '-' }}</div>
+                    <div class="step-info-value">{{ currentDetail.loop_timeout ? `${currentDetail.loop_timeout}s` : '-' }}</div>
                   </div>
                 </div>
               </NCard>
@@ -147,7 +147,7 @@
                   <div class="step-info-row">
                     <div class="step-info-label">等待时间：</div>
                     <div class="step-info-value">
-                      <NTag type="info">{{ stepInfo.wait ? `${stepInfo.wait}s` : '-' }}</NTag>
+                      <NTag type="info">{{ currentDetail.wait != null ? `${currentDetail.wait}s` : '-' }}</NTag>
                     </div>
                   </div>
                 </div>
@@ -331,9 +331,9 @@
                   >{{ requestBodyText }}</pre>
                 </NCollapseItem>
 
-                <NCollapseItem title="Code (Python)" name="requestCode" v-if="isReportPythonStep && stepInfo.code">
+                <NCollapseItem title="Code (Python)" name="requestCode" v-if="isReportPythonStep && reportPythonCodeFromDetail">
                   <MonacoEditor
-                      :value="stepInfo.code"
+                      :value="reportPythonCodeFromDetail"
                       :options="monacoEditorOptions(true, 'python')"
                       style="min-height: 500px; height: auto;"
                   />
@@ -470,7 +470,13 @@ const onlyShowFailed = ref(false)
 const detailDrawerVisible = ref(false)
 const currentDetail = ref(null)
 
-const stepInfo = computed(() => currentDetail.value?.step || {})
+/** 明细表 code：本次执行使用的 Python 代码快照（krun_autotest_api_details.code） */
+const reportPythonCodeFromDetail = computed(() => {
+  const c = currentDetail.value?.code
+  if (c == null) return ''
+  const s = String(c).trim()
+  return s
+})
 
 /** 本步执行快照中的 conditions（明细表 krun_autotest_api_details），非步骤定义表 */
 const detailConditionsSnapshot = computed(() => {
@@ -664,7 +670,7 @@ const reportValidatorColumns = [
   { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' },
 ]
 
-// 后端明细表存「实际发出的请求」；步骤表存配置。报告页优先展示明细（实际请求），与后端一致。
+// 报告页仅展示明细表中的「实际发出的请求」字段，不回退到步骤定义表。
 function normalizeRequestField (val) {
   if (val == null) return null
   if (Array.isArray(val)) {
@@ -692,15 +698,13 @@ const databaseOperatesForReport = computed(() => {
   if (!d) return null
   const fromDetail = d.database_operates
   if (Array.isArray(fromDetail) && fromDetail.length) return fromDetail
-  const fromStep = stepInfo.value?.database_operates
-  if (Array.isArray(fromStep) && fromStep.length) return fromStep
   return null
 })
 
 const databaseSearchedForReport = computed(() => {
   const d = currentDetail.value
-  if (d && d.database_searched != null) return !!d.database_searched
-  if (stepInfo.value && stepInfo.value.database_searched != null) return !!stepInfo.value.database_searched
+  if (!d) return null
+  if (d.database_searched != null) return !!d.database_searched
   return null
 })
 
@@ -710,7 +714,7 @@ const databaseSearchedLabel = computed(() => {
   return v ? '是' : '否'
 })
 
-const reportStepType = computed(() => currentDetail.value?.step_type || stepInfo.value?.step_type || '')
+const reportStepType = computed(() => currentDetail.value?.step_type || '')
 const isReportHttpStep = computed(() => reportStepType.value === 'HTTP请求')
 const isReportTcpStep = computed(() => reportStepType.value === 'TCP请求')
 const isReportDatabaseStep = computed(() => reportStepType.value === '数据库请求')
@@ -719,46 +723,29 @@ const isReportPythonStep = computed(() => {
   return t === '代码请求(Python)'
 })
 
-const actualRequestFromDetail = computed(() => {
-  const d = currentDetail.value
-  if (!d) return false
-  if (Array.isArray(d.database_operates) && d.database_operates.length > 0) return true
-  return (
-      d.request_header != null || d.request_params != null || d.request_form_data != null ||
-      d.request_form_urlencoded != null || d.request_form_file != null || d.request_body != null || d.request_text != null
-  )
-})
-
 const requestMethod = computed(() => {
   const d = currentDetail.value
-  if (d?.request_method != null && String(d.request_method).trim() !== '') return d.request_method
-  const v = stepInfo.value?.request_method
-  return v != null && String(v).trim() !== '' ? v : '-'
+  const m = d?.request_method
+  if (m != null && String(m).trim() !== '') return m
+  return '-'
 })
 const requestUrl = computed(() => {
   const d = currentDetail.value
-  if (d?.request_url != null && String(d.request_url).trim() !== '') return d.request_url
-  const v = stepInfo.value?.request_url
-  return v != null && String(v).trim() !== '' ? v : '-'
+  const u = d?.request_url
+  if (u != null && String(u).trim() !== '') return u
+  return '-'
 })
 const requestPort = computed(() => {
   const d = currentDetail.value
-  if (d?.request_port != null && String(d.request_port).trim() !== '') return d.request_port
-  const v = stepInfo.value?.request_port
-  return v != null && String(v).trim() !== '' ? v : '-'
+  const p = d?.request_port
+  if (p != null && String(p).trim() !== '') return p
+  return '-'
 })
 
-const requestHeadersRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_header != null) {
-    return currentDetail.value.request_header
-  }
-  return stepInfo.value?.request_header
-})
+const requestHeadersRaw = computed(() => currentDetail.value?.request_header ?? null)
 const requestParamsRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_params != null) {
-    return currentDetail.value.request_params
-  }
-  const p = stepInfo.value?.request_params
+  const p = currentDetail.value?.request_params
+  if (p == null) return {}
   if (typeof p === 'string') {
     try {
       return JSON.parse(p)
@@ -768,36 +755,11 @@ const requestParamsRaw = computed(() => {
   }
   return p || {}
 })
-const requestBodyRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_body != null) {
-    return currentDetail.value.request_body
-  }
-  return stepInfo.value?.request_body
-})
-const requestFormDataRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_form_data != null) {
-    return currentDetail.value.request_form_data
-  }
-  return stepInfo.value?.request_form_data
-})
-const requestFormUrlencodedRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_form_urlencoded != null) {
-    return currentDetail.value.request_form_urlencoded
-  }
-  return stepInfo.value?.request_form_urlencoded
-})
-const requestFormFileRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_form_file != null) {
-    return currentDetail.value.request_form_file
-  }
-  return stepInfo.value?.request_form_file
-})
-const requestTextRaw = computed(() => {
-  if (actualRequestFromDetail.value && currentDetail.value?.request_text != null) {
-    return currentDetail.value.request_text
-  }
-  return stepInfo.value?.request_text
-})
+const requestBodyRaw = computed(() => currentDetail.value?.request_body ?? null)
+const requestFormDataRaw = computed(() => currentDetail.value?.request_form_data ?? null)
+const requestFormUrlencodedRaw = computed(() => currentDetail.value?.request_form_urlencoded ?? null)
+const requestFormFileRaw = computed(() => currentDetail.value?.request_form_file ?? null)
+const requestTextRaw = computed(() => currentDetail.value?.request_text ?? null)
 
 const normalizedRequestHeaders = computed(() => normalizeRequestField(requestHeadersRaw.value))
 const normalizedRequestParams = computed(() => {
@@ -821,10 +783,13 @@ const requestFormData = computed(() => normalizeRequestField(requestFormDataRaw.
 const requestFormUrlencoded = computed(() => normalizeRequestField(requestFormUrlencodedRaw.value))
 const requestFormFile = computed(() => normalizeRequestField(requestFormFileRaw.value))
 const requestText = computed(() => (requestTextRaw.value != null && requestTextRaw.value !== '') ? requestTextRaw.value : null)
-const run_code = computed(() => stepInfo.value?.code)
+const run_code = computed(() => {
+  const s = reportPythonCodeFromDetail.value
+  return s || null
+})
 
 const hasResponseInfo = computed(() => {
-  const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false
+  const isRequestStep = (reportStepType.value || '').includes('请求')
   const hasResponseData =
       !!(currentDetail.value?.response_body) ||
       !!(currentDetail.value?.response_header) ||
@@ -834,7 +799,7 @@ const hasResponseInfo = computed(() => {
 })
 
 const hasRequestInfo = computed(() => {
-  const isRequestStep = stepInfo.value?.step_type?.includes('请求') ?? false
+  const isRequestStep = (reportStepType.value || '').includes('请求')
   if (!isRequestStep) return false
   if (databaseOperatesForReport.value?.length) return true
   const hasRequestData =
