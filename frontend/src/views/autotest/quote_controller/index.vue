@@ -123,7 +123,7 @@ let tagIdToNameLoading = null
 async function ensureTagIdNameMap() {
   if (tagIdToNameCache) return tagIdToNameCache
   if (tagIdToNameLoading) return tagIdToNameLoading
-  tagIdToNameLoading = api.getApiTagList({ page: 1, page_size: 5000, state: 0 }).then((res) => {
+  tagIdToNameLoading = api.getTagList({ page: 1, page_size: 5000, state: 0 }).then((res) => {
     const map = {}
     for (const t of res?.data || []) {
       if (t && t.tag_id != null) map[t.tag_id] = t.tag_name || ''

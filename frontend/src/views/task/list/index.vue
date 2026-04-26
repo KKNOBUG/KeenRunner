@@ -533,7 +533,7 @@ const tagOptionsForFilter = computed(() =>
 const loadProjects = async () => {
   try {
     projectLoading.value = true
-    const res = await api.getApiProjectList({
+    const res = await api.getProjectList({
       page: 1,
       page_size: 1000,
       state: 0
@@ -554,7 +554,7 @@ const loadProjects = async () => {
 const loadTags = async (projectId = null) => {
   try {
     tagLoading.value = true
-    const res = await api.getApiTagList({
+    const res = await api.getTagList({
       page: 1,
       page_size: 1000,
       state: 0

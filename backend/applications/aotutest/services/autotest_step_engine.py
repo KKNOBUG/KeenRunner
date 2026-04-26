@@ -2145,8 +2145,8 @@ class TcpStepExecutor(BaseStepExecutor):
 
             # 写入 result.request，便于落库与排障
             result.request = {
-                "tcp_host": host,
-                "tcp_port": port,
+                "request_url": host,
+                "request_port": port,
                 "tcp_frame_mode": self.step.get("tcp_frame_mode") or "length_prefix_json",
                 "tcp_length_field_size": self.step.get("tcp_length_field_size") or 8,
                 "tcp_encoding": self.step.get("tcp_encoding") or "utf-8",
@@ -2676,6 +2676,7 @@ class HttpStepExecutor(BaseStepExecutor):
             # 先写入实际发往目标服务器的数据，避免后续处理 response 异常时落库拿不到 request
             result.request = {
                 "request_url": request_url,
+                "request_port": None,
                 "request_method": request_method,
                 "request_header": headers,
                 "request_params": params_payload,

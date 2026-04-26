@@ -4,6 +4,9 @@ import { getToken } from '@/utils'
 
 
 
+/**
+ * 前端 API 封装（与后端路由一一对应）。
+ */
 export default {
   // 登录相关
   login: (data) => request.post('/base/auth/access_token', data, { noNeedToken: true }),
@@ -55,7 +58,7 @@ export default {
   /** 批量删除：Body { audit_ids?: number[] } */
   deleteAuditLogBatch: (data = {}) => request.post('/base/audit/delete', data),
 
-  // 应用管理（autotest 应用/环境/标签）
+  // ---------- autotest：应用 / 环境 / 标签（元数据）----------
   getProject: (params = {}) => request.get('/autotest/project/get', { params }),
   createProject: (data = {}) => request.post('/autotest/project/create', data),
   /** 单笔删除：Query project_id 或 project_code */
@@ -63,6 +66,7 @@ export default {
   /** 批量删除：Body { project_ids?: number[] } 或 { project_codes?: string[] } */
   deleteProjectBatch: (data = {}) => request.post('/autotest/project/delete', data),
   updateProject: (data = {}) => request.post('/autotest/project/update', data),
+  /** 应用分页搜索（默认大页全量；传入 data 可覆盖 page/page_size/state） */
   getProjectList: (data = {}) => request.post('/autotest/project/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
   getEnv: (params = {}) => request.get('/autotest/env/get', { params }),
@@ -91,14 +95,14 @@ export default {
   deleteTag: (params = {}) => request.delete('/autotest/tag/delete', { params }),
   /** 批量删除：Body { tag_ids?: number[] } 或 { tag_codes?: string[] } */
   deleteTagBatch: (data = {}) => request.post('/autotest/tag/delete', data),
+  /** 标签分页搜索（默认大页全量；传入 data 可覆盖 page/page_size/state） */
   getTagList: (data = {}) => request.post('/autotest/tag/search', { page: 1, page_size: 9999, state: 0, ...data }),
-
 
   // 工具箱相关
   runcodePython: (data = {}) => request.post('/toolbox/runcode/python', data),
   generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
 
-  // 自动化测试相关
+  // ---------- autotest：用例 / 步骤 / 报告 / 任务 ----------
   getApiTestcaseList: (data = {}) => request.post('/autotest/case/search', data),
   createApiTestcaseList: (data = {}) => request.post('/autotest/case/create', data),
   updateApiTestcaseList: (data = {}) => request.post('/autotest/case/update', data),
@@ -132,10 +136,6 @@ export default {
     if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
     return request.get(`/autotest/step/copy_tree${q.length ? '?' + q.join('&') : ''}`)
   },
-  // 项目相关
-  getApiProjectList: (data = {}) => request.post('/autotest/project/search', data),
-  // 标签相关
-  getApiTagList: (data = {}) => request.post('/autotest/tag/search', data),
   updateOrCreateStepTree: (data = {}) => request.post('/autotest/step/update_or_create_tree', data),
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http_debugging', data),
   tcpRequestDebugging: (data = {}) => request.post('/autotest/step/tcp_debugging', data),

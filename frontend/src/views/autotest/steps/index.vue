@@ -983,7 +983,7 @@ const currentTagNames = computed(() => {
 const loadProjects = async () => {
   try {
     projectLoading.value = true
-    const res = await api.getApiProjectList({
+    const res = await api.getProjectList({
       page: 1,
       page_size: 1000,
       state: 0
@@ -1005,7 +1005,7 @@ const loadProjects = async () => {
 const loadTags = async (projectId = null) => {
   try {
     tagLoading.value = true
-    const res = await api.getApiTagList({
+    const res = await api.getTagList({
       page: 1,
       page_size: 1000,
       state: 0
@@ -1060,10 +1060,15 @@ const handleTagSelect = (tagId) => {
   }
 }
 
-// 监听项目选择变化，重新加载标签
-watch(() => caseForm.case_project, (newVal) => {
-  loadTags(newVal)
-})
+// 所属应用变化时刷新标签选项；immediate 覆盖首屏（initCaseInfoFromRoute 已先执行，避免 onMounted 里再调 loadTags 导致重复请求）
+initCaseInfoFromRoute()
+watch(
+    () => caseForm.case_project,
+    (newVal) => {
+      loadTags(newVal || null)
+    },
+    {immediate: true},
+)
 
 // 确保 case_tags 始终是数组
 watch(() => caseForm.case_tags, (newVal) => {
@@ -3184,17 +3189,15 @@ watch(() => steps.value, () => {
   initializeStepExpandStates()
 }, {deep: true})
 
+// 同页切换用例（仅 query 变化、组件未销毁）时需重新解析 case_info 并拉步骤树
 watch([() => caseId.value, () => caseCode.value], () => {
+  initCaseInfoFromRoute()
   loadSteps()
 })
 
 onMounted(async () => {
-  // 加载项目列表和标签列表（复用用例管理页面的数据源）
   loadProjects()
-  loadTags()
-  // 先从路由参数中初始化用例信息
-  initCaseInfoFromRoute()
-  // 然后加载步骤树数据
+  // 用例表单与标签：initCaseInfoFromRoute + loadTags 已在 setup 中通过 watch(case_project, { immediate }) 处理，避免进入页时请求两次标签列表
   loadSteps()
   // 辅助函数列表（用于用户变量/关联数据）
   try {
