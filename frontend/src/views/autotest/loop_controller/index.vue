@@ -12,7 +12,7 @@
         </n-radio-group>
       </n-form-item>
 
-      <n-form-item label="错误处理策略" required>
+      <n-form-item label="异常策略" required>
         <n-select
             v-model:value="form.loop_on_error"
             :options="errorStrategyOptions"
@@ -33,7 +33,7 @@
                 :disabled="props.readonly"
             />
           </n-form-item>
-          <n-form-item label="循环索引">
+          <n-form-item label="循环索引变量">
             <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -58,10 +58,10 @@
                 :disabled="props.readonly"
             />
           </n-form-item>
-          <n-form-item label="循环索引">
+          <n-form-item label="循环索引变量">
             <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
           </n-form-item>
-          <n-form-item label="循环数据">
+          <n-form-item label="循环数据变量">
             <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value" style="width: 80%;" />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -86,13 +86,13 @@
                 :disabled="props.readonly"
             />
           </n-form-item>
-          <n-form-item label="循环索引">
+          <n-form-item label="循环索引变量">
             <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
           </n-form-item>
-          <n-form-item label="循环键名">
+          <n-form-item label="循环键名变量">
             <n-input :value="LOOP_KEY_NAME" disabled placeholder="loop_key" style="width: 80%;" />
           </n-form-item>
-          <n-form-item label="循环数据">
+          <n-form-item label="循环数据变量">
             <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value" style="width: 80%;" />
           </n-form-item>
           <n-form-item label="循环间隔时间">
@@ -109,9 +109,6 @@
         </template>
 
         <template v-else-if="form.loop_mode === '条件循环'">
-          <n-alert type="info" style="margin-bottom: 12px;" :bordered="false">
-            每轮<strong>先</strong>判断条件是否成立；成立则执行循环内步骤，不成立则结束。首轮条件不成立时不会执行子步骤。
-          </n-alert>
           <n-form-item label="条件表达式" required>
             <n-input
                 v-model:value="form.condition_expr"
@@ -136,6 +133,9 @@
                 style="width: 80%;"
                 :disabled="props.readonly"
             />
+          </n-form-item>
+          <n-form-item label="循环索引变量">
+            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
