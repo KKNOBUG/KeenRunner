@@ -7,7 +7,7 @@
 @DateTime: 2026/4/16 10:51
 """
 import traceback
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, Tuple
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
@@ -311,6 +311,73 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             error_message: str = f"查询配置信息失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+
+    async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, str]]]]]:
+        """
+        按应用 ID 列表查询未删除的环境配置，嵌套为：
+        project_id -> env_id -> config_type(api|database|file) -> config_name -> {config_host, config_port, database_name}
+        每个出现的 (project_id, env_id) 下均包含 api、database、file 三个类型键（无数据时为空 dict）。
+        请求中的应用 ID 均会出现在第一层；无配置的应用对应空 dict。
+        """
+        if not project_ids:
+            error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        distinct_project_ids: List[int] = list(dict.fromkeys(project_ids))
+        classified_config_result: Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, Any]]]]] = {
+            project_id: {}
+            for project_id in distinct_project_ids
+        }
+        classified_config_type: Tuple[str, ...] = (
+            AutoTestConfigNodeType.API.value,
+            AutoTestConfigNodeType.DB.value,
+            AutoTestConfigNodeType.FILE.value,
+        )
+        env_config_instances: Optional[List[AutoTestApiEnvConfigInfo]] = await self.model.filter(
+            project_id__in=distinct_project_ids,
+            state__not=1,
+        ).all()
+        for cfg_instance in env_config_instances:
+            env_id: int = cfg_instance.env_id
+            project_id: int = cfg_instance.project_id
+            if project_id not in classified_config_result:
+                continue
+            config_type_raw: AutoTestConfigNodeType = cfg_instance.config_type
+            config_type_act = config_type_raw.value if hasattr(config_type_raw, "value") else str(config_type_raw)
+            if config_type_act not in classified_config_type:
+                LOGGER.warning(f"跳过未知配置类型: project_id={project_id}, env_id={env_id}, config_type={config_type_act}")
+                continue
+            if env_id not in classified_config_result[project_id]:
+                classified_config_result[project_id][env_id] = {t: {} for t in classified_config_type}
+
+            config_info: Dict[str, Any] = {
+                "config_host": cfg_instance.config_host,
+                "config_port": cfg_instance.config_port,
+                "database_name": cfg_instance.database_name,
+            }
+            classified_config_result[project_id][env_id][config_type_act][cfg_instance.config_name] = config_info
+        return classified_config_result
+
+    async def list_distinct_config_names(
+            self,
+            project_id: Optional[int] = None,
+            env_id: Optional[int] = None,
+            config_type: Optional[str] = None,
+    ) -> List[str]:
+        """
+        未删除配置中 config_name 去重后的列表（按名称升序）。
+        可组合传入 project_id、env_id、config_type（与库中 CharEnum 取值一致，如 api/database/file）缩小范围。
+        """
+        stmt: QuerySet = self.model.filter(state__not=1)
+        if project_id is not None:
+            stmt = stmt.filter(project_id=project_id)
+        if env_id is not None:
+            stmt = stmt.filter(env_id=env_id)
+        if config_type is not None:
+            stmt = stmt.filter(config_type=config_type)
+        names = await stmt.values_list("config_name", flat=True)
+        return sorted(set(names))
 
 
 AUTOTEST_API_ENV_CONFIG_CRUD = AutoTestApiEnvConfigCrud()

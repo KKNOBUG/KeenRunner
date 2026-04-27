@@ -17,7 +17,8 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
     AutoTestApiConfigSelect,
-    AutoTestApiConfigDelete
+    AutoTestApiConfigDelete,
+    AutoTestEnvConfigQueryByProjectsIn,
 )
 from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
 from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
@@ -35,6 +36,7 @@ from backend.core.responses import (
     ParameterResponse,
     DataBaseStorageResponse
 )
+from backend.enums import AutoTestConfigNodeType
 
 autotest_env_config = APIRouter()
 
@@ -225,4 +227,56 @@ async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., descrip
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按条件查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_env_config.post("/query", summary="API自动化测试-按应用列表查询环境配置并分类")
+async def query_classify_env_config(
+        body: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+):
+    """
+    返回结构：project_id -> env_id -> config_type(api/database/file) -> config_name ->
+    {config_host, config_port, database_name}。
+    """
+    try:
+        data = await AUTOTEST_API_ENV_CONFIG_CRUD.query_classified_by_project_ids(
+            project_ids=body.project_ids,
+        )
+        total_configs: int = sum(
+            len(names)
+            for envs in data.values()
+            for buckets in envs.values()
+            for names in buckets.values()
+        )
+        LOGGER.info(
+            f"按应用列表查询环境配置并分类成功, project_ids={body.project_ids}, 配置条数: {total_configs}"
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total_configs)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_env_config.get("/config_names", summary="API自动化测试-获取去重后的配置名称列表")
+async def get_unique_env_config_name_list(
+        project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
+        env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
+        config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型，可选"),
+):
+    try:
+        config_type_val = config_type.value if config_type is not None else None
+        data = await AUTOTEST_API_ENV_CONFIG_CRUD.list_distinct_config_names(
+            project_id=project_id,
+            env_id=env_id,
+            config_type=config_type_val,
+        )
+        LOGGER.info(
+            f"获取去重配置名称列表成功, project_id={project_id}, env_id={env_id}, "
+            f"config_type={config_type_val}, 数量={len(data)}"
+        )
+        return SuccessResponse(message="查询成功", data=data, total=len(data))
+    except Exception as e:
+        LOGGER.error(f"获取去重配置名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")

@@ -63,3 +63,17 @@ class AutoTestApiConfigSelect(AutoTestApiConfigBase):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+
+
+class AutoTestEnvConfigQueryByProjectsIn(BaseModel):
+    """按应用 ID 列表查询环境配置并分类的请求体。"""
+
+    project_ids: List[int] = Field(..., min_length=1, description="应用(project)ID 列表")
+
+
+class AutoTestEnvConfigClassifiedLeaf(BaseModel):
+    """分类结果中每个配置名称下的字段说明（与库表字段一致）。"""
+
+    config_host: Optional[str] = Field(None, description="主机地址")
+    config_port: Optional[str] = Field(None, description="端口")
+    database_name: Optional[str] = Field(None, description="数据库名称")
