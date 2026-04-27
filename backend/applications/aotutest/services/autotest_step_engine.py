@@ -464,14 +464,15 @@ class StepExecutionContext:
         :param step_result: 可选；传入时写入其 request，记录实际执行代码快照（当前以规范化后的 code 为主）。
         :return: 代码中定义的 result 或单函数返回的 dict；无结果时返回空字典。
         """
+        if step_result is not None:
+            step_result.request = {
+                "code": code,
+                "request_args_type": AutoTestReqArgsType.RAW
+            }
         if not code:
-            if step_result is not None:
-                step_result.request = {"code": ""}
             return {}
         resolved_code: str = self.resolve_code_placeholders(code)
         prepared_code: str = self.normalize_python_code(resolved_code)
-        if step_result is not None:
-            step_result.request = {"code": prepared_code}
         try:
             self._validate_user_python_restricted(prepared_code)
         except StepExecutionError as e:
@@ -1072,11 +1073,7 @@ class BaseStepExecutor:
                 loop_timeout=self.step.get("loop_timeout") or None,
                 conditions=self.step.get("conditions") or None,
                 database_operates=actual_request.get("database_operates") or None,
-                database_searched=(
-                    actual_request["database_searched"]
-                    if "database_searched" in actual_request and actual_request["database_searched"] is not None
-                    else None
-                ),
+                database_searched=actual_request.get("database_searched") or None,
                 # 数据源相关
                 dataset_name=dataset_name if has_data_driven else None,
                 dataset_snapshot=dataset_snapshot if has_data_driven else None,
@@ -1803,6 +1800,7 @@ class PythonStepExecutor(BaseStepExecutor):
                         "response_message": None,
                         "response_header": None,
                         "response_cookie": None,
+                        "request_body": executive_result,
                         "response_text": json.dumps(executive_result, ensure_ascii=False),
                         "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
                         "response_bytes": None,
@@ -2147,6 +2145,7 @@ class TcpStepExecutor(BaseStepExecutor):
             result.request = {
                 "request_url": host,
                 "request_port": port,
+                "request_args_type": AutoTestReqArgsType.RAW,
                 "tcp_frame_mode": self.step.get("tcp_frame_mode") or "length_prefix_json",
                 "tcp_length_field_size": self.step.get("tcp_length_field_size") or 8,
                 "tcp_encoding": self.step.get("tcp_encoding") or "utf-8",
@@ -2328,6 +2327,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
             database_operates_response: List[Dict[str, Any]] = []
             pool_manager: DBConnPoolFromConfig = get_app_database_pool()
             database_searched: bool = bool(self.step.get("database_searched"))
+            executive_st_time: datetime = datetime.now()
             # 步骤响应：列表，每项对应一条 database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
             for db_idx, db_operate in enumerate(database_operates, start=1):
                 if not isinstance(db_operate, dict):
@@ -2473,21 +2473,18 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         }
                     )
 
+            executive_ed_time: datetime = datetime.now()
             response_text_str = json.dumps(database_operates_response, ensure_ascii=False, default=str)
             result.extract_variables = mark_extract_variables
             result.request = {
                 "database_operates": database_operates_request,
                 "database_searched": database_searched,
+                "request_args_type": AutoTestReqArgsType.RAW,
             }
             result.response = {
-                "response_code": None,
-                "response_message": None,
-                "response_header": None,
-                "response_cookie": None,
                 "response_body": database_operates_response,
                 "response_text": response_text_str,
-                "response_elapsed": None,
-                "response_bytes": None,
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
             }
 
             session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
@@ -2678,6 +2675,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 "request_url": request_url,
                 "request_port": None,
                 "request_method": request_method,
+                "request_args_type": AutoTestReqArgsType.RAW,
                 "request_header": headers,
                 "request_params": params_payload,
                 "request_form_data": form_data,
