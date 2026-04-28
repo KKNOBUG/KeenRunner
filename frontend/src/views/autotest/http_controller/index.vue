@@ -45,6 +45,17 @@
               style="width: 160px;"
               :disabled="props.readonly"
           />
+          <n-select
+              v-model:value="state.form.request_config_name"
+              placeholder="配置名称"
+              :options="httpConfigNameOptions"
+              :loading="httpConfigNameLoading"
+              clearable
+              filterable
+              tag
+              style="width: 180px;"
+              :disabled="props.readonly"
+          />
           <n-input
               v-model:value="state.form.url"
               placeholder="请输入请求地址"
@@ -1566,6 +1577,7 @@ const state = reactive({
     step_name: '',
     description: '',
     request_project_id: null, // 请求项目ID（与 request_args_type 等一致，从 form 读写；无 UI 时由 init 从 config/original 带入）
+    request_config_name: null, // 与 /autotest/config/config_names 中 api 类配置名一致
     data_source_name: '',
     data_source_desc: '',
     defined_variables: [],
@@ -1621,6 +1633,7 @@ const initFromConfig = () => {
   state.form.headers = Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : [])
   state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
+  state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
   state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
   state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
 
@@ -1728,6 +1741,41 @@ const initFromConfig = () => {
 
 initFromConfig()
 
+
+const httpConfigNameOptions = ref([])
+const httpConfigNameLoading = ref(false)
+const loadHttpConfigNames = async (projectId) => {
+  const pid = projectId != null && projectId !== '' ? Number(projectId) : null
+  if (!pid) {
+    httpConfigNameOptions.value = []
+    return
+  }
+  httpConfigNameLoading.value = true
+  try {
+    const res = await api.getEnvConfigNameList({ project_id: pid, config_type: 'api' })
+    const list = Array.isArray(res?.data) ? res.data : []
+    httpConfigNameOptions.value = list.map((name) => ({ label: name, value: name }))
+  } catch (e) {
+    console.error('加载配置名称列表失败', e)
+    httpConfigNameOptions.value = []
+  } finally {
+    httpConfigNameLoading.value = false
+  }
+}
+watch(
+    () => state.form.request_project_id,
+    (pid, prev) => {
+      void loadHttpConfigNames(pid)
+      if (pid == null || pid === '') {
+        state.form.request_config_name = null
+      } else if (prev != null && Number(pid) !== Number(prev)) {
+        state.form.request_config_name = null
+      }
+    },
+    { immediate: true }
+)
+
+
 // 标记是否正在从外部更新，避免循环触发
 let isExternalUpdate = false
 
@@ -1834,6 +1882,9 @@ const buildConfigFromState = () => {
     params: normalizeList(paramsList),
     request_args_type: state.form.bodyType,
     request_project_id: state.form.request_project_id ?? null,
+    request_config_name: state.form.request_config_name != null && String(state.form.request_config_name).trim() !== ''
+        ? String(state.form.request_config_name).trim()
+        : null,
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
     data,
@@ -1855,6 +1906,7 @@ watch(
       state.form.url, state.form.headers, state.form.params,
       state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
       state.form.jsonBody, state.form.rawBody, state.form.request_project_id,
+      state.form.request_config_name,
       state.form.data_source_name, state.form.data_source_desc,
       state.form.defined_variables, state.form.extract_variables, state.form.assert_validators
     ],

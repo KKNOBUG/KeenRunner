@@ -1131,7 +1131,7 @@ async def execute_step_tree(
             # 6. 执行（若选择了单条数据集则传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表取数）
             # 调试模式：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
             selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
-            selected_dataset_names = ["场景1名称"]
+            # selected_dataset_names = ["场景1名称"]
             if selected_dataset_names:
                 if len(selected_dataset_names) != 1:
                     return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")

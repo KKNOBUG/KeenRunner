@@ -87,7 +87,8 @@ class AutoTestApiStepReqBase(BaseModel):
     request_form_urlencoded: NON_LIST_DICT_TYPE = Field(None, description="请求键值对数据")
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
     request_project_id: Optional[int] = Field(None, ge=1, description="请求应用ID")
-    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="AutoTestReqArgsType")
+    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
+    request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
 
 
 class AutoTestApiStepDbBase(BaseModel):

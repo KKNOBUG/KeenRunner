@@ -1537,6 +1537,7 @@ const mapBackendStep = (step) => {
       step_name: step.step_name || '',
       step_desc: step.step_desc || '',
       request_project_id: step.request_project_id ?? null,
+      request_config_name: step.request_config_name ?? null,
       host: step.request_url || '',
       port: step.request_port != null && step.request_port !== '' ? String(step.request_port) : '',
       body_format_mode,
@@ -1553,6 +1554,7 @@ const mapBackendStep = (step) => {
       url: step.request_url || '',
       request_args_type: step.request_args_type || 'none',
       request_project_id: step.request_project_id ?? null,
+      request_config_name: step.request_config_name ?? null,
       data_source_name: step.data_source_name || '',
       data_source_desc: step.data_source_desc || '',
       params: Array.isArray(step.request_params) ? step.request_params : [],
@@ -1743,6 +1745,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   if (step.type === 'tcp') {
     // TCP：请求应用 + 请求地址 + 请求端口；亦可仅选应用由执行环境解析 host/port
     backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
+    backendStep.request_config_name = config.request_config_name !== undefined
+        ? (config.request_config_name || null)
+        : (original.request_config_name || null)
     backendStep.request_url = config.host ?? original.request_url ?? ''
     const p = config.port
     backendStep.request_port =
@@ -1778,6 +1783,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_args_type = config.request_args_type ?? original.request_args_type ?? 'none'
     backendStep.request_text = config.request_text ?? original.request_text ?? null
     backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
+    backendStep.request_config_name = config.request_config_name !== undefined
+        ? (config.request_config_name || null)
+        : (original.request_config_name || null)
     backendStep.request_header = filterKeyValueList(Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : []))
     backendStep.request_params = filterKeyValueList(Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : []))
     backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))

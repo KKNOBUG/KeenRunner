@@ -121,11 +121,11 @@
                           @update:value="() => onProjectChange(item)"
                       />
                     </n-form-item>
-                    <n-form-item label="所属配置" required>
+                    <n-form-item label="配置名称" required>
                       <n-select
                           v-model:value="item.config_name"
                           :options="configOptionsForRow(item)"
-                          placeholder="选择或输入所属配置（支持 ${变量}）"
+                          placeholder="选择或输入配置名称（支持 ${变量}）"
                           clearable
                           filterable
                           tag
@@ -443,6 +443,8 @@ const opCollapseState = reactive({})
 const extractCollapseState = reactive({})
 const validatorCollapseState = reactive({})
 const configCache = reactive({})
+/** project_id -> 去重后的配置名称列表（与 getEnvConfigNameList config_type=database 一致） */
+const configNameListByProject = reactive({})
 
 const opKeys = computed(() => Object.keys(state.form.database_operates || {}).map((k) => parseInt(k, 10)).filter((n) => !isNaN(n)).sort((a, b) => a - b))
 
@@ -566,18 +568,24 @@ const loadConfigsForProject = async (projectId, force = false) => {
   if (!pid) return []
   if (configCache[pid] && !force) return configCache[pid]
   try {
-    const res = await api.searchEnvConfig({
-      project_id: pid,
-      config_type: 'database',
-      page: 1,
-      page_size: 500,
-      state: 0
-    })
+    const [resNames, res] = await Promise.all([
+      api.getEnvConfigNameList({ project_id: pid, config_type: 'database' }),
+      api.searchEnvConfig({
+        project_id: pid,
+        config_type: 'database',
+        page: 1,
+        page_size: 500,
+        state: 0
+      })
+    ])
+    const nameList = Array.isArray(resNames?.data) ? resNames.data : []
+    configNameListByProject[pid] = nameList
     const rows = Array.isArray(res?.data) ? res.data : []
     configCache[pid] = rows
     return rows
   } catch (e) {
     console.error('加载数据库配置失败', e)
+    configNameListByProject[pid] = []
     configCache[pid] = []
     return []
   }
@@ -585,9 +593,13 @@ const loadConfigsForProject = async (projectId, force = false) => {
 
 const configOptionsForRow = (item) => {
   const pid = item?.project_id
+  const fromList = configNameListByProject[pid]
+  if (Array.isArray(fromList) && fromList.length) {
+    return fromList.map((name) => ({ label: name, value: name }))
+  }
   const rows = configCache[pid] || []
   const names = [...new Set(rows.map((r) => r.config_name).filter(Boolean))]
-  return names.map((label) => ({label, value: label}))
+  return names.map((label) => ({ label, value: label }))
 }
 
 const dbNameOptionsForRow = (item) => {

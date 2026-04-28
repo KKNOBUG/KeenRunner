@@ -153,7 +153,7 @@
                 </div>
               </NCard>
 
-              <NCard title="执行时间" size="small" :bordered="false">
+              <NCard title="时间信息" size="small" :bordered="false">
                 <div class="step-info-grid">
                   <div class="step-info-row">
                     <div class="step-info-label">开始时间：</div>
@@ -197,7 +197,7 @@
                 </div>
               </NCard>
 
-              <NCard title="执行日志" size="small" :bordered="false">
+              <NCard title="日志信息" size="small" :bordered="false">
                 <template v-if="!hasAnyExecutionLogLines">
                   <NEmpty description="暂无执行日志" />
                 </template>
@@ -237,31 +237,40 @@
                     name="requestBasic"
                     v-if="isReportHttpStep || isReportTcpStep || isReportDatabaseStep"
                 >
-                  <div v-if="isReportHttpStep" class="step-info-grid">
-                    <div class="step-info-row">
-                      <div class="step-info-label">请求方法：</div>
-                      <div class="step-info-value">
-                        <NTag :type="getMethodTagType(requestMethod)" size="small">{{ requestMethod || '-' }}</NTag>
+                  <!-- HTTP / TCP 共用一块 Basic：类型相关字段 + 共用的「配置名称」 -->
+                  <div v-if="isReportHttpStep || isReportTcpStep" class="step-info-grid">
+                    <template v-if="isReportHttpStep">
+                      <div class="step-info-row">
+                        <div class="step-info-label">请求方法：</div>
+                        <div class="step-info-value">
+                          <NTag :type="getMethodTagType(requestMethod)" size="small">{{ requestMethod || '-' }}</NTag>
+                        </div>
                       </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">请求URL：</div>
-                      <div class="step-info-value">
-                        <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
+                      <div class="step-info-row">
+                        <div class="step-info-label">请求URL：</div>
+                        <div class="step-info-value">
+                          <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div v-else-if="isReportTcpStep" class="step-info-grid">
-                    <div class="step-info-row">
-                      <div class="step-info-label">请求地址：</div>
-                      <div class="step-info-value">
-                        <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
+                    </template>
+                    <template v-else>
+                      <div class="step-info-row">
+                        <div class="step-info-label">请求地址：</div>
+                        <div class="step-info-value">
+                          <NText copyable style="font-family: monospace; font-size: 12px;">{{ requestUrl || '-' }}</NText>
+                        </div>
                       </div>
-                    </div>
-                    <div class="step-info-row">
-                      <div class="step-info-label">请求端口：</div>
+                      <div class="step-info-row">
+                        <div class="step-info-label">请求端口：</div>
+                        <div class="step-info-value">
+                          <NTag type="info" size="small">{{ requestPort || '-' }}</NTag>
+                        </div>
+                      </div>
+                    </template>
+                    <div v-if="requestConfigName !== '-'" class="step-info-row">
+                      <div class="step-info-label">配置名称：</div>
                       <div class="step-info-value">
-                        <NTag type="info" size="small">{{ requestPort || '-' }}</NTag>
+                        <NText copyable style="font-size: 12px;">{{ requestConfigName }}</NText>
                       </div>
                     </div>
                   </div>
@@ -735,6 +744,13 @@ const requestUrl = computed(() => {
   if (u != null && String(u).trim() !== '') return u
   return '-'
 })
+/** 明细表 request_config_name，与步骤里所选环境配置名称一致 */
+const requestConfigName = computed(() => {
+  const d = currentDetail.value
+  const n = d?.request_config_name
+  if (n != null && String(n).trim() !== '') return String(n).trim()
+  return '-'
+})
 const requestPort = computed(() => {
   const d = currentDetail.value
   const p = d?.request_port
@@ -805,6 +821,7 @@ const hasRequestInfo = computed(() => {
   const hasRequestData =
       (requestMethod.value && requestMethod.value !== '-') ||
       (requestUrl.value && requestUrl.value !== '-') ||
+      (requestConfigName.value && requestConfigName.value !== '-') ||
       normalizedRequestHeaders.value != null ||
       (normalizedRequestParams.value && Object.keys(normalizedRequestParams.value).length > 0) ||
       requestBody.value != null ||

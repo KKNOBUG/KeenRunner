@@ -36,6 +36,7 @@ class AutoTestApiDetailReqBase(BaseModel):
     request_method: Optional[HTTPMethod] = Field(default=None, max_length=16, description="实际发出的请求方法")
     request_args_type: Optional[AutoTestReqArgsType] = Field(default=None, description="实际发出的请求参数类型")
     request_project_id: Optional[int] = Field(default=None, ge=1, description="实际发出的请求应用ID")
+    request_config_name: Optional[str] = Field(default=None, max_length=128, description="实际发出的请求环境配置名称")
     request_header: NON_DICT_TYPE = Field(default=None, description="实际发出的请求头")
     request_params: NON_DICT_TYPE = Field(default=None, description="实际发出的请求参数")
     request_form_data: NON_DICT_TYPE = Field(default=None, description="实际发出的表单数据")

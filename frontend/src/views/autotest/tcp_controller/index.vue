@@ -25,7 +25,7 @@
           ref="formRef"
       >
         <!-- 左侧「请求应用」与「步骤名称」等同列对齐；右侧一行排地址、端口、调试 -->
-        <n-form-item label="请求应用" path="request_project_id">
+        <n-form-item label="请求应用" path="request_project_id" required>
           <div class="tcp-request-one-line">
             <n-select
                 v-model:value="state.form.request_project_id"
@@ -34,7 +34,18 @@
                 :loading="props.projectLoading"
                 clearable
                 filterable
-                class="tcp-select-app"
+                style="width: 150px;"
+                :disabled="props.readonly"
+            />
+            <n-select
+                v-model:value="state.form.request_config_name"
+                placeholder="配置名称"
+                :options="tcpConfigNameOptions"
+                :loading="tcpConfigNameLoading"
+                clearable
+                filterable
+                tag
+                style="width: 150px;"
                 :disabled="props.readonly"
             />
             <span class="tcp-inline-label">请求地址</span>
@@ -248,6 +259,7 @@ const state = reactive({
     step_name: '',
     step_desc: '',
     request_project_id: null,
+    request_config_name: null,
     host: '',
     port: '',
     request_payload: '',
@@ -295,6 +307,9 @@ const buildConfigFromState = () => {
     step_name: state.form.step_name,
     step_desc: state.form.step_desc,
     request_project_id: state.form.request_project_id,
+    request_config_name: state.form.request_config_name != null && String(state.form.request_config_name).trim() !== ''
+        ? String(state.form.request_config_name).trim()
+        : null,
     host: (state.form.host || '').trim(),
     port: String(state.form.port ?? '').trim(),
     body_format_mode: state.form.body_format_mode || 'xml',
@@ -315,6 +330,7 @@ const initFromProps = () => {
   state.form.step_name = cfg.step_name ?? original.step_name ?? props.step?.name ?? ''
   state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
+  state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
   if (cfg.host !== undefined || cfg.port !== undefined) {
     state.form.host = cfg.host ?? ''
     state.form.port = cfg.port != null && cfg.port !== '' ? String(cfg.port) : ''
@@ -366,6 +382,39 @@ const initFromProps = () => {
 watch(
     () => props.step?.id,
     () => initFromProps(),
+    { immediate: true }
+)
+
+const tcpConfigNameOptions = ref([])
+const tcpConfigNameLoading = ref(false)
+const loadTcpConfigNames = async (projectId) => {
+  const pid = projectId != null && projectId !== '' ? Number(projectId) : null
+  if (!pid) {
+    tcpConfigNameOptions.value = []
+    return
+  }
+  tcpConfigNameLoading.value = true
+  try {
+    const res = await api.getEnvConfigNameList({ project_id: pid, config_type: 'api' })
+    const list = Array.isArray(res?.data) ? res.data : []
+    tcpConfigNameOptions.value = list.map((name) => ({ label: name, value: name }))
+  } catch (e) {
+    console.error('加载配置名称列表失败', e)
+    tcpConfigNameOptions.value = []
+  } finally {
+    tcpConfigNameLoading.value = false
+  }
+}
+watch(
+    () => state.form.request_project_id,
+    (pid, prev) => {
+      void loadTcpConfigNames(pid)
+      if (pid == null || pid === '') {
+        state.form.request_config_name = null
+      } else if (prev != null && Number(pid) !== Number(prev)) {
+        state.form.request_config_name = null
+      }
+    },
     { immediate: true }
 )
 
@@ -548,6 +597,11 @@ const doDebugRequest = async (env_name) => {
 
 .tcp-select-app {
   width: 160px;
+  flex-shrink: 0;
+}
+
+.tcp-select-config {
+  width: 180px;
   flex-shrink: 0;
 }
 

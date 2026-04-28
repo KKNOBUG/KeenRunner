@@ -1055,6 +1055,7 @@ class BaseStepExecutor:
                 request_method=actual_request.get("request_method") or None,
                 request_args_type=actual_request.get("request_args_type") or None,
                 request_project_id=actual_request.get("request_project_id") or None,
+                request_config_name=self.step.get("request_config_name"),
                 request_header=actual_request.get("request_header") or None,
                 request_params=actual_request.get("request_params") or None,
                 request_form_data=actual_request.get("request_form_data") or None,

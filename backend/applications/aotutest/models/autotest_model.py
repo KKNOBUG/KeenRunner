@@ -228,6 +228,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据")
     request_project_id = fields.BigIntField(null=True, description="请求应用ID")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
+    request_config_name = fields.CharField(max_length=128, null=True, description="请求环境配置名称")
 
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")
@@ -345,6 +346,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     request_method = fields.CharField(max_length=16, null=True, description="实际发出的请求方法")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="实际发出的请求参数类型")
     request_project_id = fields.BigIntField(null=True, description="实际发出的请求应用ID")
+    request_config_name = fields.CharField(max_length=128, null=True, description="实际发出的请求环境配置名称")
     request_header = fields.JSONField(null=True, description="实际发出的请求头(列表 key/value/desc)")
     request_params = fields.JSONField(null=True, description="实际发出的请求参数(列表 key/value/desc)")
     request_form_data = fields.JSONField(null=True, description="实际发出的表单数据(列表 key/value/desc)")

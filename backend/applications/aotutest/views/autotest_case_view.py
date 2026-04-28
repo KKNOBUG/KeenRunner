@@ -19,6 +19,7 @@ from backend.applications.aotutest.schemas.autotest_case_schema import (
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
+from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -263,4 +264,32 @@ async def search_cases(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_case.get("/request_step_selected_project", summary="API自动化测试-按id或code获取步骤树中请求步骤选择的应用ID列表", )
+async def get_request_step_project_ids(
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
+):
+    """
+    从步骤树中提取以下步骤类型所选择的应用ID并去重返回：
+    - HTTP请求：step.request_project_id
+    - TCP请求：step.request_project_id
+    - 数据库请求：step.database_operates[*].project_id（可能多个）
+
+    同时递归遍历 children 与 quote_steps（引用公共脚本展开后的步骤）。
+    """
+    try:
+        project_ids: List[int] = await AUTOTEST_API_STEP_CRUD.get_request_step_project_ids(
+            case_id=case_id,
+            case_code=case_code,
+        )
+        project_ids_len: int = len(project_ids)
+        LOGGER.info(f"获取步骤树请求步骤应用ID列表成功, case_id={case_id}, case_code={case_code}, 数量={project_ids_len}, 数据={project_ids}")
+        return SuccessResponse(message="查询成功", data=project_ids, total=project_ids_len)
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"获取步骤树请求步骤应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

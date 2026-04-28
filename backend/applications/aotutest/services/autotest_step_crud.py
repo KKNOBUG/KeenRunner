@@ -287,6 +287,61 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         result.append(step_counter)
         return result
 
+    async def get_request_step_project_ids(
+            self,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None
+    ) -> List[int]:
+        """
+        根据用例 ID 或 case_code 从步骤树中提取「请求相关步骤」所选择的应用ID并去重返回：
+        - HTTP请求：step.request_project_id
+        - TCP请求：step.request_project_id
+        - 数据库请求：step.database_operates[*].project_id（可能多个）
+
+        递归遍历 children 与 quote_steps（引用公共脚本展开后的步骤）。
+        :returns: 去重后的 project_id 列表（升序）。
+        """
+        tree_data: List[Dict[str, Any]] = await self.get_by_case_id(case_id=case_id, case_code=case_code)
+        # 最后一项为 step_counter 统计信息，非步骤
+        if tree_data and isinstance(tree_data[-1], dict) and "total_steps" in tree_data[-1]:
+            tree_data = tree_data[:-1]
+
+        project_ids: Set[int] = set()
+
+        def recursive_require_project_ids(step: Any) -> None:
+            if not isinstance(step, dict):
+                return
+            step_type: AutoTestStepType = step.get("step_type")
+            if step_type in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
+                request_project_id: int = step.get("request_project_id")
+                if request_project_id:
+                    try:
+                        project_ids.add(int(request_project_id))
+                    except Exception:
+                        pass
+            elif step_type == AutoTestStepType.DATABASE.value:
+                database_operates: List[Dict[str, Any]] = step.get("database_operates")
+                if isinstance(database_operates, list):
+                    for db_operate in database_operates:
+                        if not isinstance(db_operate, dict):
+                            continue
+                        project_id = db_operate.get("project_id")
+                        if project_id:
+                            try:
+                                project_ids.add(int(project_id))
+                            except Exception:
+                                pass
+
+            for child in (step.get("children") or []):
+                recursive_require_project_ids(child)
+            for quote_step in (step.get("quote_steps") or []):
+                recursive_require_project_ids(quote_step)
+
+        for node in tree_data:
+            recursive_require_project_ids(node)
+
+        return sorted(project_ids)
+
     async def get_copy_tree(
             self,
             case_id: Optional[int] = None,

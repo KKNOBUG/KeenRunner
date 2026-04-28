@@ -87,6 +87,8 @@ export default {
   /** 批量删除：Body { config_ids?: number[] } 或 { config_codes?: string[] } */
   deleteEnvConfigBatch: (data = {}) => request.post('/autotest/config/delete', data),
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
+  /** Query: project_id、env_id、config_type(api|database|file) 可选 */
+  getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
 
 
   getTag: (params = {}) => request.get('/autotest/tag/get', { params }),
