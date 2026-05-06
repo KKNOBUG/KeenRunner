@@ -1,133 +1,147 @@
 <template>
   <AppPage>
     <n-card size="small" class="case-info-card" title="用例信息">
-      <div class="case-info-fields">
-        <div class="case-field">
-          <span class="case-field-label case-field-required">所属应用</span>
-          <n-select
-              v-model:value="caseForm.case_project"
-              :options="projectOptions"
-              :loading="projectLoading"
-              clearable
-              filterable
-              placeholder="所属应用"
-              size="small"
-              class="case-field-input"
-          />
-        </div>
-
-        <div class="case-field">
-          <span class="case-field-label case-field-required">用例名称</span>
-          <n-input
-              v-model:value="caseForm.case_name"
-              size="small"
-              placeholder="请输入用例名称"
-              class="case-field-input"
-          />
-        </div>
-
-        <div class="case-field">
-          <span class="case-field-label case-field-required">所属标签</span>
-          <n-popover
-              v-model:show="tagPopoverShow"
-              trigger="click"
-              placement="bottom-start"
-              :style="{ width: '400px' }"
-          >
-            <template #trigger>
-              <n-input
-                  :value="getSelectedTagNames()"
+      <!-- 与步骤子页一致：n-form-item + 固定 label-width，必填星号由组件统一排版 -->
+      <n-form
+          :model="caseForm"
+          label-placement="left"
+          label-width="80px"
+          class="case-info-form"
+      >
+        <div class="case-info-fields">
+          <div class="case-field">
+            <n-form-item label="所属应用" path="case_project" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_project"
+                  :options="projectOptions"
+                  :loading="projectLoading"
                   clearable
-                  readonly
-                  placeholder="请选择所属标签"
+                  filterable
+                  placeholder="所属应用"
                   size="small"
                   class="case-field-input"
-                  @clear="caseForm.case_tags = []"
-                  @click="tagPopoverShow = !tagPopoverShow"
               />
-            </template>
-            <template #default>
-              <div style="display: flex; height: 300px; width: 400px;">
-                <div style="width: 45%; overflow-y: auto;">
-                  <n-list v-if="Object.keys(tagModeGroups).length > 0">
-                    <n-list-item
-                        v-for="(tags, mode) in tagModeGroups"
-                        :key="mode"
-                        :class="{ 'tag-mode-selected': selectedTagMode === mode, 'tag-mode-item': true }"
-                        @click="selectedTagMode = mode"
-                    >
-                      <span class="tag-mode-text" :title="mode">{{ mode }}</span>
-                    </n-list-item>
-                  </n-list>
-                  <div v-else style="padding: 20px; text-align: center; color: #999;">
-                    {{ tagLoading ? '加载中...' : '暂无标签数据' }}
+            </n-form-item>
+          </div>
+
+          <div class="case-field">
+            <n-form-item label="用例名称" path="case_name" required :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_name"
+                  size="small"
+                  placeholder="请输入用例名称"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field">
+            <n-form-item label="所属标签" path="case_tags" required :show-feedback="false">
+              <n-popover
+                  v-model:show="tagPopoverShow"
+                  trigger="click"
+                  placement="bottom-start"
+                  :style="{ width: '400px' }"
+              >
+                <template #trigger>
+                  <n-input
+                      :value="getSelectedTagNames()"
+                      clearable
+                      readonly
+                      placeholder="请选择所属标签"
+                      size="small"
+                      class="case-field-input"
+                      @clear="caseForm.case_tags = []"
+                      @click="tagPopoverShow = !tagPopoverShow"
+                  />
+                </template>
+                <template #default>
+                  <div style="display: flex; height: 300px; width: 400px;">
+                    <div style="width: 45%; overflow-y: auto;">
+                      <n-list v-if="Object.keys(tagModeGroups).length > 0">
+                        <n-list-item
+                            v-for="(tags, mode) in tagModeGroups"
+                            :key="mode"
+                            :class="{ 'tag-mode-selected': selectedTagMode === mode, 'tag-mode-item': true }"
+                            @click="selectedTagMode = mode"
+                        >
+                          <span class="tag-mode-text" :title="mode">{{ mode }}</span>
+                        </n-list-item>
+                      </n-list>
+                      <div v-else style="padding: 20px; text-align: center; color: #999;">
+                        {{ tagLoading ? '加载中...' : '暂无标签数据' }}
+                      </div>
+                    </div>
+                    <div style="width: 50%; overflow-y: auto;">
+                      <n-list v-if="selectedTagMode && currentTagNames.length > 0">
+                        <n-list-item
+                            v-for="tag in currentTagNames"
+                            :key="tag.tag_id"
+                            :class="{ 'tag-name-selected': isTagSelected(tag.tag_id) }"
+                            class="tag-list-item"
+                            @click="handleTagSelect(tag.tag_id)"
+                        >
+                          <span class="tag-checkbox">{{ isTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
+                          <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
+                        </n-list-item>
+                      </n-list>
+                      <div v-else style="padding: 20px; text-align: center; color: #999;">
+                        {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div style="width: 50%; overflow-y: auto;">
-                  <n-list v-if="selectedTagMode && currentTagNames.length > 0">
-                    <n-list-item
-                        v-for="tag in currentTagNames"
-                        :key="tag.tag_id"
-                        :class="{ 'tag-name-selected': isTagSelected(tag.tag_id) }"
-                        class="tag-list-item"
-                        @click="handleTagSelect(tag.tag_id)"
-                    >
-                      <span class="tag-checkbox">{{ isTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
-                      <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
-                    </n-list-item>
-                  </n-list>
-                  <div v-else style="padding: 20px; text-align: center; color: #999;">
-                    {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
-                  </div>
-                </div>
-              </div>
-            </template>
-          </n-popover>
-        </div>
+                </template>
+              </n-popover>
+            </n-form-item>
+          </div>
 
-        <div class="case-field">
-          <span class="case-field-label case-field-required">用例属性</span>
-          <n-select
-              v-model:value="caseForm.case_attr"
-              :options="caseAttrOptions"
-              clearable
-              placeholder="请选择用例属性"
-              size="small"
-              class="case-field-input"
-          />
-        </div>
+          <div class="case-field">
+            <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_attr"
+                  :options="caseAttrOptions"
+                  clearable
+                  placeholder="请选择用例属性"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-        <div class="case-field">
-          <span class="case-field-label case-field-required">用例类型</span>
-          <n-select
-              v-model:value="caseForm.case_type"
-              :options="caseTypeOptions"
-              clearable
-              placeholder="请选择用例类型"
-              size="small"
-              class="case-field-input"
-          />
-        </div>
+          <div class="case-field">
+            <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_type"
+                  :options="caseTypeOptions"
+                  clearable
+                  placeholder="请选择用例类型"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-        <div class="case-field case-field-full">
-          <span class="case-field-label">用例描述</span>
-          <n-input
-              v-model:value="caseForm.case_desc"
-              size="small"
-              type="textarea"
-              placeholder="请输入用例描述"
-          />
-        </div>
+          <div class="case-field case-field-full">
+            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_desc"
+                  size="small"
+                  type="textarea"
+                  placeholder="请输入用例描述"
+              />
+            </n-form-item>
+          </div>
 
-        <!-- 按钮放在表单内部 -->
-        <div class="case-field case-field-full case-field-buttons">
-          <n-space justify="end">
-            <n-button type="info" :loading="runLoading" @click="handleRun">执行</n-button>
-            <n-button type="primary" :loading="debugLoading" @click="handleDebug">调试</n-button>
-            <n-button type="success" :loading="saveLoading" @click="handleSaveAll">保存</n-button>
-          </n-space>
+          <!-- 按钮：不占标签列，右对齐 -->
+          <div class="case-field case-field-full case-field-buttons">
+            <n-space justify="end">
+              <n-button type="info" :loading="runLoading" @click="handleRun">执行</n-button>
+              <n-button type="primary" :loading="debugLoading" @click="handleDebug">调试</n-button>
+              <n-button type="success" :loading="saveLoading" @click="handleSaveAll">保存</n-button>
+            </n-space>
+          </div>
         </div>
-      </div>
+      </n-form>
     </n-card>
     <div class="page-container">
       <n-grid :cols="24" :x-gap="16" class="grid-container">
@@ -362,23 +376,7 @@
           </n-card>
         </n-gi>
         <n-gi :span="17" class="right-column">
-          <!--          <n-card :title="currentStepTitle" size="small" hoverable class="config-card">-->
           <n-card size="small" hoverable class="config-card">
-            <!--
-              数据传递说明：
-              1. :config="currentStep.config" - 传递步骤的配置数据（从 mapBackendStep 中提取的配置对象）
-              2. :step="currentStep" - 传递完整的步骤对象，包含：
-                 - id: 步骤ID（step_code）
-                 - type: 步骤类型（http/loop/code/if/wait）
-                 - name: 步骤名称（step_name）
-                 - config: 配置数据对象
-                 - original: 完整的原始后端步骤数据，包含所有字段：
-                   * step_code, step_name, step_desc, step_type
-                   * request_method, request_url, request_header, request_body
-                   * extract_variables, validators, defined_variables
-                   * id, case_id, parent_step_id 等所有后端返回的字段
-              3. 所有编辑器组件（HTTP控制器、循环控制器、条件控制器等）都可以通过 props.step.original 访问完整的原始数据
-            -->
             <component
                 v-if="currentStep"
                 :key="currentStep.id + (currentStep.isQuoteInner ? '-readonly' : '')"
@@ -456,27 +454,306 @@
       </n-drawer-content>
     </n-drawer>
 
-    <!-- 执行/调试前选择环境 -->
+    <!-- 调试 / 执行：脚本执行配置 -->
     <n-modal
-        v-model:show="execModalVisible"
-        preset="dialog"
-        :title="execMode === 'run' ? '选择执行环境' : '选择调试环境'"
-        positive-text="确定"
-        negative-text="取消"
-        @positive-click="confirmExecModal"
+        v-model:show="debugConfigModalVisible"
+        preset="card"
+        title="脚本执行配置"
+        :style="{ width: '70%' }"
+        :bordered="false"
+        :segmented="{ content: true, footer: true }"
+        @after-enter="onDebugModalAfterEnter"
     >
-      <div style="padding: 8px 0;">
-        <div style="margin-bottom: 8px;">执行环境：</div>
-        <n-select
-            v-model:value="selectedEnvName"
-            :options="envOptions"
-            :loading="envLoading"
-            placeholder="请选择执行环境"
-            clearable
-            filterable
-            style="width: 100%;"
-        />
+      <div class="exec-config-toolbar-row">
+        <div class="exec-config-toolbar-inner">
+          <n-space align="center" wrap :size="[8, 12]">
+            <span class="exec-config-global-env-label">全局环境：</span>
+            <n-select
+                v-model:value="debugGlobalEnvId"
+                :options="debugEnvOptions"
+                :loading="envLoading"
+                placeholder="全局环境"
+                clearable
+                filterable
+                style="width: 220px;"
+            />
+            <div class="exec-config-mode">
+              <n-button
+                  size="small"
+                  :type="debugEnvMode === 'single' ? 'primary' : 'default'"
+                  @click="debugEnvMode = 'single'"
+              >
+                单环境
+              </n-button>
+              <n-button
+                  size="small"
+                  :type="debugEnvMode === 'multi' ? 'primary' : 'default'"
+                  @click="debugEnvMode = 'multi'"
+              >
+                多环境
+              </n-button>
+            </div>
+          </n-space>
+          <n-switch
+              v-model:value="debugExecDataSourceEnabled"
+              size="large"
+              :rail-style="debugExecDataSourceRailStyle"
+          >
+            <template #checked>
+              请选择数据源
+            </template>
+            <template #unchecked>
+              未启用数据源
+            </template>
+          </n-switch>
+        </div>
       </div>
+
+      <n-card size="small" title="应用与环境配置" :segmented="{ content: true }" class="exec-config-main-card">
+        <template #header-extra>
+          <n-button quaternary size="small" @click="execConfigMainCardExpanded = !execConfigMainCardExpanded">
+            {{ execConfigMainCardExpanded ? '折叠' : '展开' }}
+          </n-button>
+        </template>
+        <div v-show="execConfigMainCardExpanded" class="exec-config-modal">
+          <div class="exec-config-left">
+            <div class="exec-config-left-head">
+              共 {{ debugApps.length }} 个应用
+            </div>
+            <div class="exec-config-app-list">
+              <div
+                  v-for="app in debugApps"
+                  :key="String(app.project_id)"
+                  class="exec-config-app-item"
+                  :class="{ 'is-active': String(app.project_id) === String(debugSelectedProjectId) }"
+                  @click="debugSelectedProjectId = app.project_id"
+              >
+                <div class="exec-config-app-name">{{ app.label }}</div>
+                <div class="exec-config-app-count">{{ app.totalCount }}条配置</div>
+              </div>
+              <div v-if="debugApps.length === 0" class="exec-config-empty">
+                暂无可配置的请求步骤（HTTP/TCP/数据库）
+              </div>
+            </div>
+          </div>
+
+          <div class="exec-config-right">
+            <div v-if="!debugSelectedProjectId" class="exec-config-empty">
+              请先在左侧选择一个应用
+            </div>
+
+            <template v-else>
+              <div v-if="debugApiRowsForSelected.length" class="exec-config-section">
+                <div class="exec-config-section-title">
+                  API
+                  <n-tag size="small" type="info">{{ debugApiRowsForSelected.length }}条</n-tag>
+                </div>
+                <div class="exec-config-table is-api">
+                  <div class="exec-config-table-header">
+                    <div class="col idx">#</div>
+                    <div class="col env">环境</div>
+                    <div class="col config">配置名</div>
+                    <div class="col addr">IP/端口</div>
+                  </div>
+                  <div v-for="(row, idx) in debugApiRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div class="col idx">{{ idx + 1 }}</div>
+                    <div class="col env">
+                      <n-select
+                          v-model:value="row.env_id"
+                          :options="debugEnvOptions"
+                          size="small"
+                          :disabled="debugEnvMode === 'single'"
+                          placeholder="请选择"
+                          clearable
+                      />
+                    </div>
+                    <div class="col config">
+                      <n-select
+                          v-model:value="row.request_config_name"
+                          size="small"
+                          filterable
+                          tag
+                          clearable
+                          placeholder="选择或输入配置名"
+                          :disabled="!debugGlobalEnvId"
+                          :options="getApiConfigOptions(row)"
+                      />
+                    </div>
+                    <div class="col addr">
+                      <n-input
+                          :value="getRowAddrPreview(row, 'api')"
+                          size="small"
+                          disabled
+                          placeholder="请先选择全局环境和配置"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="debugDbRowsForSelected.length" class="exec-config-section">
+                <div class="exec-config-section-title">
+                  DB
+                  <n-tag size="small" type="warning">{{ debugDbRowsForSelected.length }}条</n-tag>
+                </div>
+                <div class="exec-config-table is-db">
+                  <div class="exec-config-table-header">
+                    <div class="col idx">#</div>
+                    <div class="col env">环境</div>
+                    <div class="col config">配置名</div>
+                    <div class="col config">数据库名</div>
+                    <div class="col addr">IP/端口</div>
+                  </div>
+                  <div v-for="(row, idx) in debugDbRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div class="col idx">{{ idx + 1 }}</div>
+                    <div class="col env">
+                      <n-select
+                          v-model:value="row.env_id"
+                          :options="debugEnvOptions"
+                          size="small"
+                          :disabled="debugEnvMode === 'single'"
+                          placeholder="请选择"
+                          clearable
+                      />
+                    </div>
+                    <div class="col config">
+                      <n-select
+                          v-model:value="row.config_name"
+                          size="small"
+                          filterable
+                          tag
+                          clearable
+                          placeholder="配置名"
+                          :disabled="!debugGlobalEnvId"
+                          :options="getDbConfigOptions(row)"
+                      />
+                    </div>
+                    <div class="col config">
+                      <n-select
+                          v-model:value="row.database_name"
+                          size="small"
+                          filterable
+                          tag
+                          clearable
+                          placeholder="库名"
+                          :disabled="!debugGlobalEnvId"
+                          :options="getDbNameOptions(row)"
+                      />
+                    </div>
+                    <div class="col addr">
+                      <n-input
+                          :value="getRowAddrPreview(row, 'database')"
+                          size="small"
+                          disabled
+                          placeholder="请先选择全局环境和配置"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="debugFileRowsForSelected.length" class="exec-config-section">
+                <div class="exec-config-section-title">
+                  FILE
+                  <n-tag size="small" type="success">{{ debugFileRowsForSelected.length }}条</n-tag>
+                </div>
+                <div class="exec-config-table is-file">
+                  <div class="exec-config-table-header">
+                    <div class="col idx">#</div>
+                    <div class="col env">环境</div>
+                    <div class="col config">配置名</div>
+                    <div class="col addr">IP/端口</div>
+                  </div>
+                  <div v-for="(row, idx) in debugFileRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div class="col idx">{{ idx + 1 }}</div>
+                    <div class="col env">
+                      <n-select
+                          v-model:value="row.env_id"
+                          :options="debugEnvOptions"
+                          size="small"
+                          :disabled="debugEnvMode === 'single'"
+                          placeholder="请选择"
+                          clearable
+                      />
+                    </div>
+                    <div class="col config">
+                      <n-select
+                          v-model:value="row.config_name"
+                          size="small"
+                          filterable
+                          tag
+                          clearable
+                          placeholder="选择或输入配置名"
+                          :disabled="!debugGlobalEnvId"
+                          :options="getFileConfigOptions(row)"
+                      />
+                    </div>
+                    <div class="col addr">
+                      <n-input
+                          :value="getRowAddrPreview(row, 'file')"
+                          size="small"
+                          disabled
+                          placeholder="请先选择全局环境和配置"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </n-card>
+
+      <n-card
+          v-if="debugExecDataSourceEnabled"
+          size="small"
+          title="数据源配置"
+          :segmented="{ content: true }"
+          class="exec-config-dataset-card"
+      >
+        <template #header-extra>
+          <n-button quaternary size="small" @click="execDatasetCardExpanded = !execDatasetCardExpanded">
+            {{ execDatasetCardExpanded ? '折叠' : '展开' }}
+          </n-button>
+        </template>
+        <div v-show="execDatasetCardExpanded" class="exec-config-dataset-wrap">
+          <div class="exec-config-dataset-table">
+            <div class="exec-config-dataset-header">
+              <div class="col idx">序号</div>
+              <div class="col name">数据集名称</div>
+            </div>
+            <div v-if="!debugExecDatasetRows.length" class="exec-config-dataset-empty">
+              <n-empty description="暂无数据" />
+            </div>
+            <div v-else class="exec-config-dataset-body">
+              <div
+                  v-for="(row, idx) in debugExecDatasetRows"
+                  :key="row.id"
+                  class="exec-config-dataset-row"
+              >
+                <div class="col idx">{{ idx + 1 }}</div>
+                <div class="col name">{{ row.name }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="exec-config-dataset-footer">
+            已选 {{ debugExecDatasetSelectedCount }} 项
+          </div>
+        </div>
+      </n-card>
+
+      <template #footer>
+        <n-space justify="end" size="medium">
+          <n-button @click="debugConfigModalVisible = false">取消</n-button>
+          <n-button
+              type="primary"
+              :loading="execConfigMode === 'run' ? runLoading : debugLoading"
+              @click="confirmExecConfigAndAction"
+          >
+            {{ execConfigMode === 'run' ? '确定并执行' : '确定并调试' }}
+          </n-button>
+        </n-space>
+      </template>
     </n-modal>
   </AppPage>
 </template>
@@ -491,17 +768,22 @@ import {
   NDrawer,
   NDropdown,
   NEmpty,
+  NForm,
+  NFormItem,
   NGi,
   NGrid,
   NInput,
   NList,
   NListItem,
+  NModal,
   NPopconfirm,
   NPopover,
   NSelect,
   NSpace,
+  NSwitch,
   NTag,
-  NTooltip
+  NTooltip,
+  useMessage
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import {formatDateTime, renderIcon} from '@/utils'
@@ -520,13 +802,22 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import api from "@/api";
 import {useUserStore, useAutotestStore} from '@/store';
 
+const message = useMessage()
+const notifyError = (msg) => {
+  if (typeof window !== 'undefined' && typeof window.$message?.error === 'function') {
+    window.$message.error(msg)
+  } else {
+    message.error(msg)
+  }
+}
+
 // 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致
 const stepDefinitions = {
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
   if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
   wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
   loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:network-4'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:content-delivery-network'},
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
   database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
@@ -1105,7 +1396,9 @@ watch(() => caseForm.case_type, (newType, oldType) => {
 const runLoading = ref(false)
 const debugLoading = ref(false)
 const saveLoading = ref(false)
-const debugResult = ref(null)
+// 执行/调试共用「脚本执行配置」弹窗：执行时以“DB已保存的步骤树”作为聚合来源
+const execConfigMode = ref('debug') // 'debug' | 'run'
+const execSourceSteps = ref(null) // 执行时用于聚合/执行的步骤树（前端映射后的结构）
 const dragState = ref({
   draggingId: null,
   dragOverId: null, // 当前拖拽进入的 loop/if 步骤 ID（焦点高亮）
@@ -1247,6 +1540,27 @@ const forEachStep = (list, fn) => {
   }
 }
 
+/**
+ * 前序遍历步骤树，对每个步骤执行 fn（可选：包含「引用公共脚本」加载的内部步骤）。
+ * 说明：
+ * - 引用脚本内部步骤来自 quoteStepsMap，仅用于聚合/展示，不写入当前用例
+ * - 为避免嵌套引用导致循环，这里默认不继续展开「被引用脚本」内部的 quote 步骤
+ */
+const forEachStepWithQuote = (list, fn, { includeQuoteInner = true } = {}) => {
+  if (!list || !Array.isArray(list)) return
+  for (const step of list) {
+    fn(step)
+    if (step.children && step.children.length) forEachStepWithQuote(step.children, fn, { includeQuoteInner })
+    if (includeQuoteInner && step?.type === 'quote') {
+      const inner = quoteStepsMap.value?.[step.id] || []
+      if (Array.isArray(inner) && inner.length) {
+        // 被引用脚本内部：不再展开其 quote，避免循环引用
+        forEachStepWithQuote(inner, fn, { includeQuoteInner: false })
+      }
+    }
+  }
+}
+
 /** 加载单个引用步骤对应的公共脚本步骤树（仅用于展示，不写入当前用例） */
 const loadQuoteStepsForStep = async (step) => {
   if (step.type !== 'quote' || !step.config?.quote_case_id) {
@@ -1268,6 +1582,16 @@ const loadQuoteStepsForAllQuoteSteps = () => {
   forEachStep(steps.value, (step) => {
     if (step.type === 'quote') loadQuoteStepsForStep(step)
   })
+}
+
+/** 执行模式/外部树：加载指定步骤树中的所有引用脚本步骤 */
+const loadQuoteStepsForAllQuoteStepsFromList = async (list) => {
+  const quoteSteps = []
+  forEachStep(list, (s) => {
+    if (s?.type === 'quote') quoteSteps.push(s)
+  })
+  if (!quoteSteps.length) return
+  await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s)))
 }
 
 /**
@@ -1992,38 +2316,73 @@ const hasEmptyKeyInList = (list) => {
   return list.some((item) => item != null && String(item.key ?? '').trim() === '' && String(item.value ?? '').trim() !== '')
 }
 
+/** 与 database_controller 一致：database_operates 可为数组或「序号→行」对象 */
+const normalizeDatabaseOperatesList = (ops) => {
+  if (ops == null) return []
+  if (Array.isArray(ops)) return ops
+  if (typeof ops === 'object') {
+    const keys = Object.keys(ops).map((k) => parseInt(k, 10)).filter((n) => !isNaN(n)).sort((a, b) => a - b)
+    return keys.map((k) => ops[k])
+  }
+  return []
+}
+
 const validateDatabaseSteps = (stepList) => {
   for (const step of stepList) {
     if (step.type === 'database') {
       const config = step.config || {}
       const original = step.original || {}
-      const ops = config.database_operates ?? original.database_operates
+      const rawOps = config.database_operates ?? original.database_operates
       const stepName = step.name || original.step_name || '未命名步骤'
-      if (ops != null && !Array.isArray(ops)) {
-        return {valid: false, message: `步骤「${stepName}」database_operates 必须为数组格式`}
+
+      if (rawOps != null && typeof rawOps !== 'object') {
+        return {valid: false, message: `步骤「${stepName}」数据库请求配置格式无效，请重新打开步骤编辑或删除后添加。`}
       }
-      const list = Array.isArray(ops) ? ops : []
+
+      const list = normalizeDatabaseOperatesList(rawOps)
       if (!list.length) {
-        return {valid: false, message: `步骤「${stepName}」请至少添加一条数据库具体操作`}
+        return {
+          valid: false,
+          message: `步骤「${stepName}」数据库请求须配置「请求配置」：请至少添加一条数据库操作（所属应用、配置名称、数据库名称、SQL 语句、存储变量均必填）。`
+        }
       }
+
       for (let i = 0; i < list.length; i++) {
         const o = list[i] || {}
-        const hasApp = String(o.project_name ?? '').trim() !== ''
-            || (o.project_id != null && o.project_id !== '')
+        const idxLabel = `第 ${i + 1} 条`
+        const pid = o.project_id
+        const hasApp =
+            String(o.project_name ?? '').trim() !== ''
+            || (pid != null && pid !== '' && String(pid).trim() !== '')
         if (!hasApp) {
-          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条数据库操作未选择应用`}
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请选择所属应用。`
+          }
         }
         if (!String(o.config_name ?? '').trim()) {
-          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写配置名`}
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写配置名称。`
+          }
         }
         if (!String(o.database_name ?? '').trim()) {
-          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写数据库名`}
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写数据库名称。`
+          }
         }
         if (!String(o.expr ?? '').trim()) {
-          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写 SQL 语句`}
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写 SQL 语句。`
+          }
         }
         if (!String(o.variable_name ?? '').trim()) {
-          return {valid: false, message: `步骤「${stepName}」第 ${i + 1} 条未填写变量名`}
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写存储变量（变量名）。`
+          }
         }
       }
     }
@@ -2033,6 +2392,84 @@ const validateDatabaseSteps = (stepList) => {
     }
   }
   return {valid: true}
+}
+
+/** HTTP：所属应用、配置名称、请求地址必填；TCP：另含请求端口必填（取值与 convertStepToBackend 一致） */
+const validateHttpTcpStepsRequired = (stepList) => {
+  const walk = (list) => {
+    if (!Array.isArray(list)) return {valid: true}
+    for (const step of list) {
+      const stepLabel = step.name || step.original?.step_name || '未命名步骤'
+      const config = step.config || {}
+      const original = step.original || {}
+
+      if (step.type === 'http') {
+        const projectId = config.request_project_id ?? original.request_project_id ?? null
+        const emptyProject = projectId === null || projectId === undefined || projectId === ''
+
+        let cfgName = ''
+        if (config.request_config_name !== undefined) {
+          cfgName = config.request_config_name == null ? '' : String(config.request_config_name).trim()
+        } else {
+          cfgName = String(original.request_config_name ?? '').trim()
+        }
+
+        const url = String(config.url ?? original.request_url ?? '').trim()
+
+        if (emptyProject) {
+          return {valid: false, message: `步骤「${stepLabel}」HTTP请求：请选择所属应用后再保存。`}
+        }
+        if (!cfgName) {
+          return {valid: false, message: `步骤「${stepLabel}」HTTP请求：请填写配置名称后再保存。`}
+        }
+        if (!url) {
+          return {valid: false, message: `步骤「${stepLabel}」HTTP请求：请填写请求地址后再保存。`}
+        }
+      }
+
+      if (step.type === 'tcp') {
+        const projectId = config.request_project_id ?? original.request_project_id ?? null
+        const emptyProject = projectId === null || projectId === undefined || projectId === ''
+
+        let cfgName = ''
+        if (config.request_config_name !== undefined) {
+          cfgName = config.request_config_name == null ? '' : String(config.request_config_name).trim()
+        } else {
+          cfgName = String(original.request_config_name ?? '').trim()
+        }
+
+        const host = String(config.host ?? original.request_url ?? '').trim()
+
+        let portStr = ''
+        const p = config.port
+        if (p !== undefined && p !== null && String(p).trim() !== '') {
+          portStr = String(p).trim()
+        } else if (original.request_port != null && original.request_port !== '') {
+          portStr = String(original.request_port).trim()
+        }
+
+        if (emptyProject) {
+          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请选择所属应用后再保存。`}
+        }
+        if (!cfgName) {
+          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写配置名称后再保存。`}
+        }
+        if (!host) {
+          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写请求地址后再保存。`}
+        }
+        if (!portStr) {
+          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写请求端口后再保存。`}
+        }
+      }
+
+      if (step.children && step.children.length > 0) {
+        const child = walk(step.children)
+        if (!child.valid) return child
+      }
+    }
+    return {valid: true}
+  }
+  return walk(stepList)
 }
 
 // 递归校验步骤树中是否存在“键为空”的键值对（请求头/请求体/变量/用户变量等），若存在则不允许保存
@@ -2144,6 +2581,18 @@ const handleSaveAll = async () => {
       return
     }
 
+    const stepNameValidation = validateStepNamesInSteps(steps.value)
+    if (!stepNameValidation.valid) {
+      notifyError(stepNameValidation.message)
+      return
+    }
+
+    const httpTcpRequired = validateHttpTcpStepsRequired(steps.value)
+    if (!httpTcpRequired.valid) {
+      notifyError(httpTcpRequired.message)
+      return
+    }
+
     // 请求体为 json 时校验 JSON 语法，有错误则提示并阻止保存
     const jsonValidation = validateJsonBodyInSteps(steps.value)
     if (!jsonValidation.valid) {
@@ -2252,58 +2701,42 @@ const handleSaveAll = async () => {
   }
 }
 
-const handleRun = () => {
-  if (!caseId.value) {
+const handleRun = async () => {
+  if (!caseId.value && !caseCode.value) {
     window.$message?.warning?.('请先选择或创建测试用例')
     return
   }
-  openExecModal('run')
-}
 
-// 格式化调试结果树
-const formatDebugResult = (results, indent = 0) => {
-  if (!results || !Array.isArray(results)) return ''
-  let output = ''
-  const prefix = '  '.repeat(indent)
-  for (const result of results) {
-    const status = result.success ? '✓' : '✗'
-    output += `${prefix}${status} [${result.step_no || '-'}] ${result.step_name || result.step_type || '未知步骤'}\n`
-    if (result.message) {
-      output += `${prefix}  消息: ${result.message}\n`
-    }
-    if (result.error) {
-      output += `${prefix}  错误: ${result.error}\n`
-    }
-    if (result.elapsed !== undefined && result.elapsed !== null) {
-      output += `${prefix}  耗时: ${result.elapsed}ms\n`
-    }
-    if (result.extract_variables && result.extract_variables.length > 0) {
-      output += `${prefix}  提取变量: ${JSON.stringify(result.extract_variables, null, 2)}\n`
-    }
-    if (result.assert_validators && result.assert_validators.length > 0) {
-      output += `${prefix}  断言结果: ${JSON.stringify(result.assert_validators, null, 2)}\n`
-    }
-    if (result.children && result.children.length > 0) {
-      output += formatDebugResult(result.children, indent + 1)
-    }
+  // 执行：以“DB已保存的步骤树”为准（避免用例管理页执行时拿不到本地步骤树）
+  try {
+    runLoading.value = true
+    const params = {}
+    if (caseId.value) params.case_id = caseId.value
+    if (caseCode.value) params.case_code = caseCode.value
+    const res = await api.getAutoTestStepTree(params)
+    const data = Array.isArray(res?.data) ? res.data : []
+    execSourceSteps.value = data.map(mapBackendStep).filter(Boolean)
+    // 执行模式也要加载引用公共脚本内部步骤（用于聚合）
+    await loadQuoteStepsForAllQuoteStepsFromList(execSourceSteps.value)
+    execConfigMode.value = 'run'
+    debugEnvMode.value = 'single'
+    execConfigMainCardExpanded.value = true
+    execDatasetCardExpanded.value = true
+    debugExecDataSourceEnabled.value = false
+    debugExecDatasetRows.value = []
+    debugExecDatasetSelectedIds.value = []
+    debugGlobalEnvId.value = null
+    debugSelectedProjectId.value = null
+    debugEnvConfigDict.value = {}
+    debugRows.value = collectDebugRows(execSourceSteps.value)
+    debugConfigModalVisible.value = true
+    loadDebugEnvEnums()
+  } catch (e) {
+    console.error('加载已保存步骤树失败', e)
+    window.$message?.error?.(e?.message || '加载步骤树失败')
+  } finally {
+    runLoading.value = false
   }
-  return output
-}
-
-// 格式化调试日志
-const formatDebugLogs = (logs) => {
-  if (!logs || typeof logs !== 'object') return ''
-  let output = ''
-  for (const [stepCode, logList] of Object.entries(logs)) {
-    if (Array.isArray(logList) && logList.length > 0) {
-      output += `步骤 ${stepCode}:\n`
-      for (const log of logList) {
-        output += `  ${log}\n`
-      }
-      output += '\n'
-    }
-  }
-  return output || '暂无日志'
 }
 
 const handleDebug = () => {
@@ -2311,79 +2744,664 @@ const handleDebug = () => {
     window.$message?.warning?.('请先添加测试步骤')
     return
   }
-  if (!caseId.value) {
-    window.$message?.warning?.('请先保存用例或选择已有用例')
-    return
-  }
-  openExecModal('debug')
+  openDebugConfigModal()
 }
 
-const execModalVisible = ref(false)
-const execMode = ref('run')
-const envOptions = ref([])
 const envLoading = ref(false)
-const selectedEnvName = ref(null)
 
-const loadEnvNames = async () => {
+// 调试弹窗使用 env_id（用于查询环境配置），并通过映射得到 env_name（用于 executeStepTree）
+const debugEnvOptions = ref([]) // [{ label: env_name, value: env_id }]
+const debugEnvIdToName = ref(new Map())
+
+const loadDebugEnvEnums = async () => {
   envLoading.value = true
   try {
-    const res = await api.getApiEnvNames()
-    const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({ label: name, value: name }))
-    if (envOptions.value.length > 0 && !selectedEnvName.value) {
-      selectedEnvName.value = envOptions.value[0].value
-    }
+    const res = await api.getEnvList({ page: 1, page_size: 9999, state: 0 })
+    const list = Array.isArray(res?.data) ? res.data : []
+    debugEnvOptions.value = list
+        .map((x) => ({ label: x.env_name, value: x.env_id }))
+        .filter((x) => x.value != null)
+    const m = new Map()
+    list.forEach((x) => {
+      if (x?.env_id != null) m.set(String(x.env_id), x.env_name)
+    })
+    debugEnvIdToName.value = m
   } catch (e) {
-    console.error('加载环境名称失败', e)
-    envOptions.value = []
+    console.error('加载环境枚举失败', e)
+    debugEnvOptions.value = []
+    debugEnvIdToName.value = new Map()
   } finally {
     envLoading.value = false
   }
 }
 
-const openExecModal = (mode) => {
-  execMode.value = mode
-  selectedEnvName.value = null
-  execModalVisible.value = true
-  loadEnvNames()
+// -----------------------------
+// 调试：脚本执行配置（实时从步骤树聚合）
+// -----------------------------
+const debugConfigModalVisible = ref(false)
+const execConfigMainCardExpanded = ref(true)
+const execDatasetCardExpanded = ref(true)
+const debugExecDataSourceEnabled = ref(false)
+const debugExecDatasetRows = ref([])
+const debugExecDatasetSelectedIds = ref([])
+const debugExecDatasetSelectedCount = computed(() => debugExecDatasetSelectedIds.value.length)
+
+const debugExecDataSourceRailStyle = ({ focused, checked }) => {
+  const style = {}
+  if (checked) {
+    style.background = '#F4511E'
+    if (focused) {
+      style.boxShadow = '0 0 0 2px #d0305040'
+    }
+  } else {
+    style.background = '#2080f0'
+    if (focused) {
+      style.boxShadow = '0 0 0 2px #2080f040'
+    }
+  }
+  return style
 }
 
-const confirmExecModal = async () => {
-  const env_name = selectedEnvName.value ?? undefined
-  execModalVisible.value = false
-  if (execMode.value === 'run') {
-    await doRun(env_name)
-  } else {
-    await doDebug(env_name)
+watch(debugExecDataSourceEnabled, (on) => {
+  if (!on) {
+    debugExecDatasetSelectedIds.value = []
+  }
+})
+
+const debugEnvMode = ref('single') // 'single' | 'multi'
+const debugGlobalEnvId = ref(null)
+const debugSelectedProjectId = ref(null)
+const debugEnvConfigDict = ref({}) // project_id -> env_id -> type -> config_name -> info
+
+const projectLabelMap = computed(() => {
+  const m = new Map()
+  const list = Array.isArray(projectOptions.value) ? projectOptions.value : []
+  list.forEach((x) => {
+    if (x && x.value != null) m.set(String(x.value), x.label ?? String(x.value))
+  })
+  return m
+})
+
+/**
+ * 「调试」按钮 → 打开「脚本执行配置」弹窗时的核心：从步骤树实时聚合右侧表格数据。
+ *
+ * 设计目标：
+ * - 右侧不按“步骤”逐条展示，而是按“配置”聚合（去重）：
+ *   - API：同一应用(project_id)下同一配置名(config_name)只展示一行
+ *   - DB：同一应用(project_id)下同一 (config_name + database_name) 只展示一行
+ *   - FILE：目前步骤树尚无明确字段来源，先保留空列表（后续补齐来源字段即可接入同一套聚合/拆分机制）
+ *
+ * 为什么要保留 targets：
+ * - UI 层只展示“聚合后的一行配置”，但后端执行前替换必须精确知道该配置要作用到哪些步骤。
+ * - 因此每一行都会收集它命中的所有“目标步骤”targets，并在「确定并调试」时再拆分为：
+ *   steps_execute_config: { step_id 或 @@step_name: { config detail } }
+ *
+ * target 的 key 规则（与后端约定）：
+ * - 已落库步骤：使用后端 step_id（前端映射为 step.original.id）
+ * - 未落库新增步骤：使用 @@{step_name}（避免没有 step_id 时后端无法定位）
+ */
+const collectDebugRows = (sourceSteps = null) => {
+  const apiRows = []
+  const dbRows = []
+  const fileRows = []
+
+  // 将步骤转换为“后端可识别”的 key：step_id 或 @@step_name
+  const getBackendKeyFromStep = (step) => {
+    const sid = step?.original?.id
+    if (sid != null) return String(sid)
+    const n = step?.name || step?.original?.step_name || ''
+    return `@@${String(n).trim() || '未命名步骤'}`
+  }
+
+  /**
+   * 将一个 target 追加到某个聚合行中（并做去重）。
+   * - groupKey 决定“哪些步骤算同一行配置”
+   * - row.targets 记录该行配置要作用到哪些步骤（用于提交时拆分回单步配置映射）
+   */
+  const addToGroup = (map, groupKey, rowFactory, target) => {
+    if (!map.has(groupKey)) map.set(groupKey, rowFactory())
+    const row = map.get(groupKey)
+    row.targets = row.targets || []
+    // 避免同一 target 重复加入（尤其 DB 同一步骤多次遍历时）
+    const tkey = `${target.backend_key}#${target.local_step_id}#${target.op_index ?? ''}`
+    if (!row._targetKeySet) row._targetKeySet = new Set()
+    if (!row._targetKeySet.has(tkey)) {
+      row._targetKeySet.add(tkey)
+      row.targets.push(target)
+    }
+    return row
+  }
+
+  const apiGroup = new Map()
+  const dbGroup = new Map()
+  const fileGroup = new Map()
+  const apiConfigNameSetByProject = new Map() // projectId -> Set(configName)
+  const dbConfigNameSetByProject = new Map()
+  const dbNameSetByProject = new Map()
+  const fileConfigNameSetByProject = new Map()
+
+  const pushSet = (map, k, v) => {
+    if (!k) return
+    const key = String(k)
+    if (!map.has(key)) map.set(key, new Set())
+    if (v != null && String(v).trim() !== '') map.get(key).add(String(v))
+  }
+
+  const walk = Array.isArray(sourceSteps) ? sourceSteps : (steps.value || [])
+  // 聚合包含引用公共脚本内部步骤（quoteStepsMap 中的虚拟树）
+  forEachStepWithQuote(walk, (step) => {
+    if (!step) return
+    if (step.type === 'http' || step.type === 'tcp') {
+      const cfg = step.config || {}
+      const orig = step.original || {}
+      const project_id = cfg.request_project_id ?? orig.request_project_id ?? null
+      if (!project_id) return
+      const request_config_name = cfg.request_config_name ?? orig.request_config_name ?? null
+      pushSet(apiConfigNameSetByProject, project_id, request_config_name)
+      const backend_key = getBackendKeyFromStep(step)
+      const normalizedName = request_config_name != null ? String(request_config_name).trim() : ''
+      // 去重策略（API）：
+      // - 若配置名非空：同一应用 + 同一配置名 => 聚合成一行
+      // - 若配置名为空：按步骤维度保留（避免把“未配置/待选择”的多步骤误合并）
+      const groupKey = normalizedName ? `p:${project_id}|n:${normalizedName}` : `p:${project_id}|step:${backend_key}`
+      addToGroup(
+          apiGroup,
+          groupKey,
+          () => ({
+            key: `api:${groupKey}`,
+            project_id,
+            request_config_name: normalizedName || null,
+            env_id: null,
+            targets: [],
+          }),
+          { local_step_id: step.id, backend_key }
+      )
+      // FILE：目前步骤树内暂无明确字段可区分 file 配置，先保留空列表（只展示分类与样式）
+    } else if (step.type === 'database') {
+      const cfg = step.config || {}
+      const orig = step.original || {}
+      const ops = cfg.database_operates ?? orig.database_operates
+      const list = Array.isArray(ops) ? ops : []
+      list.forEach((op, idx) => {
+        if (!op) return
+        const project_id = op.project_id ?? null
+        if (!project_id) return
+        pushSet(dbConfigNameSetByProject, project_id, op.config_name)
+        pushSet(dbNameSetByProject, project_id, op.database_name)
+        const backend_key = getBackendKeyFromStep(step)
+        const cfgName = op.config_name != null ? String(op.config_name).trim() : ''
+        const dbName = op.database_name != null ? String(op.database_name).trim() : ''
+        // 去重策略（DB）：
+        // - 若 config_name + database_name 都存在：同一应用 + 同一(config_name+database_name) => 聚合成一行
+        // - 若缺失：按“步骤 + 操作索引”保留（避免把不同操作误合并）
+        const groupKey = (cfgName && dbName)
+            ? `p:${project_id}|c:${cfgName}|d:${dbName}`
+            : `p:${project_id}|step:${backend_key}|op:${idx}`
+        addToGroup(
+            dbGroup,
+            groupKey,
+            () => ({
+              key: `db:${groupKey}`,
+              project_id,
+              config_name: cfgName || null,
+              database_name: dbName || null,
+              env_id: null,
+              targets: [],
+            }),
+            { local_step_id: step.id, backend_key, op_index: idx }
+        )
+      })
+    }
+  })
+
+  const buildOptions = (set) => Array.from(set || []).map((x) => ({ label: x, value: x }))
+  Array.from(apiGroup.values()).forEach((r) => {
+    const set = apiConfigNameSetByProject.get(String(r.project_id))
+    r._configNameSeed = buildOptions(set)
+  })
+  Array.from(dbGroup.values()).forEach((r) => {
+    const s1 = dbConfigNameSetByProject.get(String(r.project_id))
+    const s2 = dbNameSetByProject.get(String(r.project_id))
+    r._configNameSeed = buildOptions(s1)
+    r._dbNameSeed = buildOptions(s2)
+  })
+  Array.from(fileGroup.values()).forEach((r) => {
+    const s = fileConfigNameSetByProject.get(String(r.project_id))
+    r._configNameSeed = buildOptions(s)
+  })
+
+  apiRows.push(...Array.from(apiGroup.values()).map((r) => {
+    delete r._targetKeySet
+    return r
+  }))
+  dbRows.push(...Array.from(dbGroup.values()).map((r) => {
+    delete r._targetKeySet
+    return r
+  }))
+  fileRows.push(...Array.from(fileGroup.values()).map((r) => {
+    delete r._targetKeySet
+    return r
+  }))
+
+  return { apiRows, dbRows, fileRows }
+}
+
+const debugRows = ref({ apiRows: [], dbRows: [], fileRows: [] })
+
+const debugApps = computed(() => {
+  const byProject = new Map()
+  const addCount = (pid, incApi = 0, incDb = 0) => {
+    const k = String(pid)
+    if (!byProject.has(k)) byProject.set(k, { project_id: pid, api: 0, db: 0 })
+    const item = byProject.get(k)
+    item.api += incApi
+    item.db += incDb
+  }
+  debugRows.value.apiRows.forEach((r) => addCount(r.project_id, 1, 0))
+  debugRows.value.dbRows.forEach((r) => addCount(r.project_id, 0, 1))
+  debugRows.value.fileRows.forEach((r) => addCount(r.project_id, 1, 0))
+
+  const list = Array.from(byProject.values()).map((x) => {
+    const label = projectLabelMap.value.get(String(x.project_id)) || `应用${String(x.project_id)}`
+    return {
+      project_id: x.project_id,
+      label,
+      apiCount: x.api,
+      dbCount: x.db,
+      totalCount: x.api + x.db,
+    }
+  })
+  list.sort((a, b) => String(a.project_id).localeCompare(String(b.project_id)))
+  return list
+})
+
+const debugApiRowsForSelected = computed(() => {
+  const pid = debugSelectedProjectId.value
+  if (!pid) return []
+  return debugRows.value.apiRows.filter((r) => String(r.project_id) === String(pid))
+})
+
+const debugDbRowsForSelected = computed(() => {
+  const pid = debugSelectedProjectId.value
+  if (!pid) return []
+  return debugRows.value.dbRows.filter((r) => String(r.project_id) === String(pid))
+})
+
+const debugFileRowsForSelected = computed(() => {
+  const pid = debugSelectedProjectId.value
+  if (!pid) return []
+  return debugRows.value.fileRows.filter((r) => String(r.project_id) === String(pid))
+})
+
+const openDebugConfigModal = () => {
+  execConfigMode.value = 'debug'
+  execSourceSteps.value = null
+  debugEnvMode.value = 'single'
+  execConfigMainCardExpanded.value = true
+  execDatasetCardExpanded.value = true
+  debugExecDataSourceEnabled.value = false
+  debugExecDatasetRows.value = []
+  debugExecDatasetSelectedIds.value = []
+  debugGlobalEnvId.value = null
+  debugSelectedProjectId.value = null
+  debugEnvConfigDict.value = {}
+  debugRows.value = collectDebugRows()
+  debugConfigModalVisible.value = true
+  loadDebugEnvEnums()
+}
+
+const onDebugModalAfterEnter = () => {
+  // 默认选中第一个应用
+  if (!debugSelectedProjectId.value && debugApps.value.length > 0) {
+    debugSelectedProjectId.value = debugApps.value[0].project_id
+  }
+  // 默认选中第一个环境
+  if (!debugGlobalEnvId.value && debugEnvOptions.value.length > 0) {
+    debugGlobalEnvId.value = debugEnvOptions.value[0].value
+  }
+
+  // 拉取配置：按当前步骤树聚合出的应用列表
+  const project_ids = debugApps.value.map((x) => Number(x.project_id)).filter((x) => !Number.isNaN(x))
+  if (project_ids.length) loadEnvConfigByProjects(project_ids)
+}
+
+// 全局环境切换：默认替换所有行的环境选择（单环境/多环境都生效；多环境下用户仍可再手动改单行）
+watch(() => debugGlobalEnvId.value, (envId) => {
+  if (!envId) return
+  const apply = (rows) => {
+    rows.forEach((r) => { r.env_id = envId })
+  }
+  apply(debugRows.value.apiRows || [])
+  apply(debugRows.value.dbRows || [])
+  apply(debugRows.value.fileRows || [])
+})
+
+const loadEnvConfigByProjects = async (project_ids) => {
+  try {
+    const res = await api.queryEnvConfigClassifiedByProjects({ project_ids })
+    // 后端返回第一层 key 为 int，axios 会转为 string；这里同时兼容两者
+    debugEnvConfigDict.value = res?.data || {}
+  } catch (e) {
+    console.error('加载环境配置失败', e)
+    debugEnvConfigDict.value = {}
   }
 }
 
-const doRun = async (env_name) => {
+const getEffectiveEnvIdForRow = (row) => {
+  return debugEnvMode.value === 'single'
+      ? (debugGlobalEnvId.value || null)
+      : (row.env_id || debugGlobalEnvId.value || null)
+}
+
+const getBucket = (row, configType) => {
+  const dict = debugEnvConfigDict.value || {}
+  const envId = getEffectiveEnvIdForRow(row)
+  if (envId == null) return {}
+  const p = dict?.[row.project_id] || dict?.[String(row.project_id)] || {}
+  const e = p?.[envId] || p?.[String(envId)] || {}
+  return e?.[configType] || {}
+}
+
+const getApiConfigOptions = (row) => {
+  const bucket = getBucket(row, 'api')
+  const names = Object.keys(bucket || {})
+  return names.length ? names.map((x) => ({ label: x, value: x })) : (row._configNameSeed || [])
+}
+
+const getDbConfigOptions = (row) => {
+  const bucket = getBucket(row, 'database')
+  const names = Object.keys(bucket || {})
+  return names.length ? names.map((x) => ({ label: x, value: x })) : (row._configNameSeed || [])
+}
+
+const getDbNameOptions = (row) => {
+  const bucket = getBucket(row, 'database')
+  const dbNames = Object.values(bucket || {})
+      .map((x) => x?.database_name)
+      .filter((x) => x != null && String(x).trim() !== '')
+  const uniq = Array.from(new Set(dbNames))
+  return uniq.length ? uniq.map((x) => ({ label: x, value: x })) : (row._dbNameSeed || [])
+}
+
+const getFileConfigOptions = (row) => {
+  const bucket = getBucket(row, 'file')
+  const names = Object.keys(bucket || {})
+  return names.length ? names.map((x) => ({ label: x, value: x })) : (row._configNameSeed || [])
+}
+
+const getRowAddrPreview = (row, configType) => {
+  const bucket = getBucket(row, configType)
+  const name =
+      configType === 'api'
+          ? row.request_config_name
+          : (configType === 'database' ? row.config_name : row.config_name)
+  const info = name ? bucket?.[name] : null
+  return info?.config_host ? `${info.config_host}${info.config_port ? `:${info.config_port}` : ''}` : ''
+}
+
+const applyDebugConfigToSteps = () => {
+  const apiRows = debugRows.value.apiRows
+  const dbRows = debugRows.value.dbRows
+
+  // API：回写到 http/tcp 步骤的 config 中（统一通过步骤树实时数据）
+  apiRows.forEach((r) => {
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      const step = findStep(t.local_step_id)
+      if (!step) return
+      if (!step.config) step.config = {}
+      step.config.request_project_id = r.project_id ?? step.config.request_project_id
+      step.config.request_config_name = r.request_config_name ?? step.config.request_config_name
+    })
+  })
+
+  // DB：回写到 database_operates
+  dbRows.forEach((r) => {
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      const step = findStep(t.local_step_id)
+      if (!step) return
+      const cfg = step.config || {}
+      const ops = Array.isArray(cfg.database_operates) ? cfg.database_operates : []
+      const idx = t.op_index
+      if (idx == null || !ops[idx]) return
+      ops[idx].project_id = r.project_id ?? ops[idx].project_id
+      ops[idx].config_name = r.config_name ?? ops[idx].config_name
+      ops[idx].database_name = r.database_name ?? ops[idx].database_name
+    })
+  })
+}
+
+/**
+ * 将“聚合后的配置行”拆分为“按步骤定位的配置映射”，用于后端执行前替换。
+ *
+ * 输出结构（提交给后端的 steps_execute_config）：
+ * {
+ *   "步骤ID1": {},
+ *   "步骤ID2": { env_name, config_type, config_name, config_host, config_port, database_name },
+ *   "@@新增步骤名称": { ... },
+ * }
+ *
+ * 说明：
+ * - 即使某些步骤最终没有配置覆盖，也会预填一个空对象，方便后端区分“未配置”与“不存在该 key”。
+ * - 一条聚合行可能命中多个 targets（多个步骤），拆分时会把同一份配置复制到每个 target key 下。
+ */
+const buildStepExecConfigMap = (env_name) => {
+  const map = {}
+  // 预填：所有可配置步骤都要有 key（即便最终为空 {}）
+  const prefill = (rows) => {
+    rows.forEach((r) => {
+      const targets = Array.isArray(r.targets) ? r.targets : []
+      targets.forEach((t) => { map[String(t.backend_key)] = {} })
+    })
+  }
+  prefill(debugRows.value.apiRows || [])
+  prefill(debugRows.value.dbRows || [])
+  prefill(debugRows.value.fileRows || [])
+
+  // 填充：API（将同一行配置复制到该行命中的所有 targets）
+  debugRows.value.apiRows.forEach((r) => {
+    const envId = getEffectiveEnvIdForRow(r)
+    const bucket = getBucket({ ...r, env_id: envId }, 'api')
+    const name = r.request_config_name
+    const info = name ? bucket?.[name] : null
+    if (!env_name || !name || !info) return
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      map[String(t.backend_key)] = {
+        env_name,
+        config_type: 'api',
+        config_name: name,
+        config_host: info.config_host,
+        config_port: info.config_port,
+        database_name: info.database_name ?? null,
+      }
+    })
+  })
+
+  // 填充：DB（将同一行配置复制到该行命中的所有 targets）
+  debugRows.value.dbRows.forEach((r) => {
+    const envId = getEffectiveEnvIdForRow(r)
+    const bucket = getBucket({ ...r, env_id: envId }, 'database')
+    const name = r.config_name
+    const info = name ? bucket?.[name] : null
+    if (!env_name || !name || !info) return
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      map[String(t.backend_key)] = {
+        env_name,
+        config_type: 'database',
+        config_name: name,
+        config_host: info.config_host,
+        config_port: info.config_port,
+        database_name: r.database_name || info.database_name || null,
+      }
+    })
+  })
+
+  // 填充：FILE（将同一行配置复制到该行命中的所有 targets）
+  debugRows.value.fileRows.forEach((r) => {
+    const envId = getEffectiveEnvIdForRow(r)
+    const bucket = getBucket({ ...r, env_id: envId }, 'file')
+    const name = r.config_name
+    const info = name ? bucket?.[name] : null
+    if (!env_name || !name || !info) return
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      map[String(t.backend_key)] = {
+        env_name,
+        config_type: 'file',
+        config_name: name,
+        config_host: info.config_host,
+        config_port: info.config_port,
+        database_name: info.database_name ?? null,
+      }
+    })
+  })
+
+  return map
+}
+
+const confirmDebugConfigAndRun = async () => {
+  if (!debugGlobalEnvId.value) {
+    window.$message?.warning?.('请选择全局环境')
+    return
+  }
+  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  if (!env_name) {
+    window.$message?.warning?.('全局环境无效，请重新选择')
+    return
+  }
+
+  // 校验：已选择环境 + 配置名但无法解析到 host/port（或 DB 缺数据库名）时，阻止调试
+  const missing = []
+  const checkRow = (row, type) => {
+        const cfgName = type === 'api' ? row.request_config_name : row.config_name
+        const envId = getEffectiveEnvIdForRow(row)
+        if (!envId) return
+        if (!cfgName || !String(cfgName).trim()) {
+          missing.push({ type, project_id: row.project_id, name: '(未选择配置名)' })
+          return
+        }
+        const bucket = getBucket({ ...row, env_id: envId }, type === 'db' ? 'database' : type)
+        const info = bucket?.[cfgName]
+        if (!info || !info.config_host) {
+          missing.push({ type, project_id: row.project_id, name: String(cfgName) })
+          return
+        }
+        if (type === 'db') {
+          const dbName = row.database_name || info.database_name
+          if (!dbName || !String(dbName).trim()) {
+            missing.push({ type, project_id: row.project_id, name: `${String(cfgName)}(缺数据库名)` })
+          }
+        }
+      }
+  ;(debugRows.value.apiRows || []).forEach((r) => checkRow(r, 'api'))
+  ;(debugRows.value.dbRows || []).forEach((r) => checkRow(r, 'db'))
+  ;(debugRows.value.fileRows || []).forEach((r) => checkRow(r, 'file'))
+
+  if (missing.length) {
+    const sample = missing.slice(0, 6).map((x) => `${x.type.toUpperCase()}·${x.name}`).join('，')
+    window.$message?.error?.(`存在配置缺失（共${missing.length}条），请补全后再调试：${sample}${missing.length > 6 ? '…' : ''}`)
+    return
+  }
+
+  applyDebugConfigToSteps()
+  debugConfigModalVisible.value = false
+  const step_exec_config_map = buildStepExecConfigMap(env_name)
+  await doDebug(env_name, step_exec_config_map)
+}
+
+// 弹窗 footer 统一入口：根据当前模式分发到「执行」或「调试」
+const confirmExecConfigAndAction = async () => {
+  if (execConfigMode.value === 'run') {
+    await confirmRunConfigAndExecute()
+  } else {
+    await confirmDebugConfigAndRun()
+  }
+}
+
+const confirmRunConfigAndExecute = async () => {
+  if (!debugGlobalEnvId.value) {
+    window.$message?.warning?.('请选择全局环境')
+    return
+  }
+  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  if (!env_name) {
+    window.$message?.warning?.('全局环境无效，请重新选择')
+    return
+  }
+
+  // 复用同一套「缺失配置」校验逻辑
+  const missing = []
+  const checkRow = (row, type) => {
+        const cfgName = type === 'api' ? row.request_config_name : row.config_name
+        const envId = getEffectiveEnvIdForRow(row)
+        if (!envId) return
+        if (!cfgName || !String(cfgName).trim()) {
+          missing.push({ type, project_id: row.project_id, name: '(未选择配置名)' })
+          return
+        }
+        const bucket = getBucket({ ...row, env_id: envId }, type === 'db' ? 'database' : type)
+        const info = bucket?.[cfgName]
+        if (!info || !info.config_host) {
+          missing.push({ type, project_id: row.project_id, name: String(cfgName) })
+          return
+        }
+        if (type === 'db') {
+          const dbName = row.database_name || info.database_name
+          if (!dbName || !String(dbName).trim()) {
+            missing.push({ type, project_id: row.project_id, name: `${String(cfgName)}(缺数据库名)` })
+          }
+        }
+      }
+  ;(debugRows.value.apiRows || []).forEach((r) => checkRow(r, 'api'))
+  ;(debugRows.value.dbRows || []).forEach((r) => checkRow(r, 'db'))
+  ;(debugRows.value.fileRows || []).forEach((r) => checkRow(r, 'file'))
+
+  if (missing.length) {
+    const sample = missing.slice(0, 6).map((x) => `${x.type.toUpperCase()}·${x.name}`).join('，')
+    window.$message?.error?.(`存在配置缺失（共${missing.length}条），请补全后再执行：${sample}${missing.length > 6 ? '…' : ''}`)
+    return
+  }
+
+  debugConfigModalVisible.value = false
+  const step_exec_config_map = buildStepExecConfigMap(env_name)
+  await doExecuteFromSavedTree(env_name, step_exec_config_map)
+}
+
+const doExecuteFromSavedTree = async (env_name, step_exec_config_map = null) => {
+  const source = Array.isArray(execSourceSteps.value) ? execSourceSteps.value : []
+  if (!source.length) {
+    window.$message?.warning?.('暂无已保存的步骤树可执行，请先保存后再执行')
+    return
+  }
   runLoading.value = true
   try {
+    const stepNoMap = assignStepNumbers(source)
+    const backendSteps = source.map((step) => convertStepToBackend(step, null, stepNoMap))
     const res = await api.executeStepTree({
       case_id: caseId.value ? Number(caseId.value) : null,
+      steps: backendSteps,
       initial_variables: [],
-      env_name
+      env_name,
+      steps_execute_config: step_exec_config_map || undefined
     })
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
-      const stats = res.data || {}
-      const msg = res.message
-      window.$message?.success?.(msg)
+      window.$message?.success?.(res?.message || '执行成功')
     } else {
       window.$message?.error?.(res?.message || '执行失败')
     }
   } catch (error) {
-    console.error('Failed to run step tree', error)
+    console.error('Failed to execute step tree', error)
     window.$message?.error?.(error?.message || '执行失败')
   } finally {
     runLoading.value = false
   }
 }
 
-const doDebug = async (env_name) => {
+const doDebug = async (env_name, step_exec_config_map = null) => {
   debugLoading.value = true
-  debugResult.value = null
   try {
     const stepNoMap = assignStepNumbers(steps.value)
     const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
@@ -2391,21 +3409,18 @@ const doDebug = async (env_name) => {
       case_id: caseId.value ? Number(caseId.value) : null,
       steps: backendSteps,
       initial_variables: [],
-      env_name
+      env_name,
+      steps_execute_config: step_exec_config_map || undefined
     })
     if (res?.code === '000000') {
-      const stats = res.data || {}
       const msg = res.message
       window.$message?.success?.(msg)
-      debugResult.value = res.data
     } else {
       window.$message?.error?.(res?.message || '调试失败')
-      debugResult.value = null
     }
   } catch (error) {
     console.error('Failed to debug step tree', error)
     window.$message?.error?.(error?.message || '调试失败')
-    debugResult.value = null
   } finally {
     debugLoading.value = false
   }
@@ -2471,41 +3486,11 @@ const currentStep = computed(() => {
   return findStep(key)
 })
 
-watch(
-    () => currentStep.value,
-    (step) => {
-      if (step) {
-        console.log('========== 步骤编辑页面 - 传递给控制器组件 ==========')
-        console.log('完整的 Step 对象:', step)
-        console.log('Step 对象的所有 key:', Object.keys(step))
-        console.log('Step.config (配置数据):', step.config)
-        console.log('Step.original (原始后端数据):', step.original)
-        if (step.original) {
-          console.log('Step.original 的所有 key:', Object.keys(step.original))
-          console.log('Step.original.step_code:', step.original.step_code)
-          console.log('Step.original.step_name:', step.original.step_name)
-          console.log('Step.original.step_desc:', step.original.step_desc)
-          console.log('Step.original.step_type:', step.original.step_type)
-        }
-        console.log('==================================================')
-      }
-    },
-    {immediate: true}
-)
-
 const editorComponent = computed(() => {
   const step = currentStep.value
   if (!step) return null
   return editorMap[step.type] || null
 })
-
-// const currentStepTitle = computed(() => {
-//   if (!currentStep.value) return '步骤配置'
-//   const label = stepDefinitions[currentStep.value.type]?.label || '步骤配置'
-//   // HTTP 请求编辑器内部会自行展示更完整的内容，外层标题会显得重复
-//   // if (currentStep.value.type === 'http') return null
-//   return currentStep.value.isQuoteInner ? `${label}（只读）` : label
-// })
 
 const insertStep = (parentId, type, index = null, extraConfig = null) => {
   const def = stepDefinitions[type]
@@ -2733,6 +3718,82 @@ const getFixedBranchStepDisplayName = (step) => {
   return null
 }
 
+/** 与 convertStepToBackend 写入后端的 step_name 一致，用于保存前校验重复 */
+const getStepNameAsWillPersist = (step) => {
+  const original = step.original || {}
+  const config = step.config || {}
+  const fixed = getFixedBranchStepDisplayName(step)
+  if (fixed) return String(fixed).trim()
+
+  if (step.type === 'user_variables') {
+    const v = config.step_name !== undefined ? config.step_name : (original.step_name || '')
+    return String(v ?? '').trim()
+  }
+  if (step.type === 'quote' || step.type === 'quote_public_script') {
+    const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本')
+    return String(v ?? '').trim()
+  }
+  if (step.type === 'database') {
+    const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
+    return String(v ?? '').trim()
+  }
+
+  return String(step.name || original.step_name || '').trim()
+}
+
+/** 编辑器已向 config 写入 step_name 且用户清空时视为未填写（HTTP/TCP/代码等） */
+const isStepNameExplicitlyEmptyInEditor = (step) => {
+  const config = step.config || {}
+  if (!Object.prototype.hasOwnProperty.call(config, 'step_name')) return false
+  return String(config.step_name ?? '').trim() === ''
+}
+
+/** 步骤名称必填；除 loop / if 外全局不可重复（前序遍历） */
+const validateStepNamesInSteps = (stepList) => {
+  const usedNames = new Map()
+
+  const walk = (list) => {
+    if (!Array.isArray(list)) return {valid: true}
+    for (const step of list) {
+      const typeLabel = stepDefinitions[step.type]?.label
+          || (step.type === 'quote_public_script' ? '引用公共脚本' : (step.type || '步骤'))
+
+      if (isStepNameExplicitlyEmptyInEditor(step)) {
+        return {
+          valid: false,
+          message: `「${typeLabel}」步骤的步骤名称不能为空，请填写后再保存。`
+        }
+      }
+
+      const name = getStepNameAsWillPersist(step)
+      if (!name) {
+        return {
+          valid: false,
+          message: `「${typeLabel}」步骤的步骤名称不能为空，请填写后再保存。`
+        }
+      }
+
+      const exemptDuplicate = step.type === 'loop' || step.type === 'if'
+      if (!exemptDuplicate) {
+        if (usedNames.has(name)) {
+          return {
+            valid: false,
+            message: `步骤名称「${name}」重复，除循环结构、条件分支外步骤名称不可重复，请修改后再保存。`
+          }
+        }
+        usedNames.set(name, true)
+      }
+      if (step.children && step.children.length > 0) {
+        const child = walk(step.children)
+        if (!child.valid) return child
+      }
+    }
+    return {valid: true}
+  }
+
+  return walk(stepList)
+}
+
 const handleCopyStep = (id) => {
   const step = findStep(id)
   if (!step) return
@@ -2815,6 +3876,10 @@ const updateStepConfig = (id, config) => {
         // 否则自动生成步骤名称
         step.name = `HTTP请求(发送请求并验证响应数据)`
       }
+    } else if (step.type === 'tcp') {
+      if (config.step_name !== undefined && config.step_name !== null) {
+        step.name = String(config.step_name).trim() || 'TCP请求'
+      }
     } else if (step.type === 'wait') {
       step.name = `控制等待(${config.seconds ?? 2}秒)`
     } else if (step.type === 'user_variables') {
@@ -2851,6 +3916,7 @@ const getStepIconClass = (type) => {
   const classMap = {
     loop: 'icon-loop',
     code: 'icon-code',
+    tcp: 'icon-tcp',
     http: 'icon-http',
     if: 'icon-if',
     wait: 'icon-wait',
@@ -3224,7 +4290,6 @@ onUpdated(() => {
 })
 
 const renderDropdownLabel = (option) => {
-  const iconClass = getStepIconClass(option.key)
   return h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}}, [
     h('span', option.label)
   ])
@@ -3246,7 +4311,6 @@ const RecursiveStepChildren = defineComponent({
   setup(props) {
     // 捕获所有需要的变量和函数，确保能够通过闭包访问
     const capturedStepDefinitions = stepDefinitions
-    const capturedIsAllExpanded = isAllExpanded
     const capturedIsStepExpanded = isStepExpanded
     const capturedToggleStepExpand = toggleStepExpand
     const capturedSelectedKeys = selectedKeys
@@ -3479,6 +4543,14 @@ const RecursiveStepChildren = defineComponent({
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.case-info-form {
+  width: 100%;
+}
+.exec-config-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .case-info-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -3486,10 +4558,11 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .case-field {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
+  min-width: 0;
+}
+
+.case-field :deep(.n-form-item) {
+  width: 100%;
 }
 
 .case-field-full {
@@ -3497,25 +4570,12 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .case-field-full.case-field-buttons {
+  display: flex;
   justify-content: flex-end;
 }
 
-.case-field-label {
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  min-width: 70px;
-  flex-shrink: 0;
-}
-
-.case-field-required::before {
-  content: '*';
-  color: #F4511E;
-  margin-right: 4px;
-}
-
 .case-field-input {
-  flex: 1;
+  width: 100%;
   transition: border-color 0.3s ease;
 }
 
@@ -3528,21 +4588,6 @@ const RecursiveStepChildren = defineComponent({
   .case-info-fields {
     grid-template-columns: 1fr;
     gap: 10px;
-  }
-
-  .case-field {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .case-field-label {
-    font-size: 13px;
-    min-width: auto;
-  }
-
-  .case-field-input {
-    width: 100%;
   }
 }
 
@@ -3632,6 +4677,283 @@ const RecursiveStepChildren = defineComponent({
   overflow-x: hidden;
   min-height: 0; /* 重要：允许 flex 子元素缩小 */
   padding: 8px 0;
+}
+
+/* -----------------------------
+ * 调试：脚本执行配置弹窗（对齐项目主题色，避免使用截图中的纯蓝）
+ * ----------------------------- */
+.exec-config-toolbar-row {
+  margin-bottom: 12px;
+}
+
+.exec-config-toolbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.exec-config-toolbar-inner :deep(.n-switch) {
+  flex-shrink: 0;
+}
+
+.exec-config-main-card {
+  margin-top: 0;
+}
+
+.exec-config-main-card :deep(.n-card-header) {
+  align-items: center;
+}
+
+.exec-config-dataset-card {
+  margin-top: 12px;
+}
+
+.exec-config-dataset-card :deep(.n-card-header) {
+  align-items: center;
+}
+
+.exec-config-modal,
+.exec-config-dataset-wrap {
+  /* 原 min-height 620px / max-height 80vh 整体缩减 20% */
+  min-height: calc(620px * 0.8);
+  max-height: calc(80vh * 0.8);
+}
+
+.exec-config-dataset-wrap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.exec-config-dataset-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--n-color);
+}
+
+.exec-config-dataset-header {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+  background: var(--n-color-modal);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.exec-config-dataset-header .col,
+.exec-config-dataset-row .col {
+  min-width: 0;
+}
+
+.exec-config-dataset-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 24px 16px;
+}
+
+.exec-config-dataset-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.exec-config-dataset-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.exec-config-dataset-row:last-child {
+  border-bottom: none;
+}
+
+.exec-config-dataset-footer {
+  flex-shrink: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--n-border-color);
+  text-align: right;
+  font-size: 13px;
+  color: var(--n-text-color-2);
+}
+
+.exec-config-modal {
+  display: flex;
+  overflow: hidden;
+}
+
+.exec-config-left {
+  width: 200px;
+  flex: 0 0 200px;
+  border-right: 2px solid var(--n-border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 左侧标题区（合并原 left-header + left-title，减少一层 div） */
+.exec-config-left-head {
+  flex-shrink: 0;
+  padding: 12px 12px 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.exec-config-app-list {
+  padding: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.exec-config-app-item {
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--n-color);
+  transition: all 0.15s ease;
+  margin-bottom: 8px;
+}
+
+.exec-config-app-item:hover {
+  background: var(--n-color-hover);
+}
+
+.exec-config-app-item.is-active {
+  border-color: #F45E11;
+  background: color-mix(in srgb, var(--n-primary-color) 10%, var(--n-color) 90%);
+}
+
+.exec-config-app-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.exec-config-app-count {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.exec-config-empty {
+  color: var(--n-text-color-3);
+  padding: 16px 12px;
+  font-size: 13px;
+}
+
+.exec-config-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 0 0 14px;
+}
+
+.exec-config-global-env-label {
+  color: var(--n-text-color-2);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.exec-config-section {
+  margin-top: 12px;
+}
+
+.exec-config-section + .exec-config-section {
+  margin-top: 16px;
+}
+
+.exec-config-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--n-text-color);
+}
+
+.exec-config-table {
+  border: 1px solid var(--n-border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.exec-config-table-header,
+.exec-config-table-row {
+  display: grid;
+  /*
+   * 与 5% / 15% / 30% / 50% 同比例；使用 fr 而非 %，避免「列宽总和 100% + gap」超出容器导致 IP/端口列溢出。
+   */
+  grid-template-columns: 5fr 15fr 30fr 50fr;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 10px;
+}
+
+.exec-config-table.is-db .exec-config-table-header,
+.exec-config-table.is-db .exec-config-table-row {
+  /* 与 5% / 15% / 30% / 20% / 30% 同比例 */
+  grid-template-columns: 5fr 15fr 30fr 20fr 30fr;
+}
+
+.exec-config-table .col {
+  min-width: 0;
+}
+
+.exec-config-table .col.addr {
+  overflow: hidden;
+}
+
+.exec-config-table .col.addr :deep(.n-input-wrapper) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.exec-config-table .col.addr :deep(input) {
+  min-width: 0;
+}
+
+.exec-config-table .col > .n-select,
+.exec-config-table .col > .n-input {
+  width: 100%;
+  max-width: 100%;
+}
+
+.exec-config-table-header {
+  background: var(--n-color-embedded);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+  white-space: nowrap;
+}
+
+.exec-config-table-row {
+  background: var(--n-color);
+  border-top: 1px solid var(--n-border-color);
+}
+
+.exec-config-table-row:hover {
+  background: var(--n-color-hover);
 }
 
 /* 自定义滚动条样式（可选，提升用户体验） */
@@ -3810,15 +5132,20 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-code) {
-  color: #3363e0;
+  color: #2080f0;
+}
+
+
+:deep(.step-icon.icon-tcp) {
+  color: #2080f0;
 }
 
 :deep(.step-icon.icon-http) {
-  color: #3363e0;
+  color: #2080f0;
 }
 
 :deep(.step-icon.icon-database) {
-  color: #3363e0;
+  color: #2080f0;
 }
 
 :deep(.step-icon.icon-if) {

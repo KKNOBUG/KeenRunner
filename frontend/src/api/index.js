@@ -89,6 +89,8 @@ export default {
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
   /** Query: project_id、env_id、config_type(api|database|file) 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
+  /** Body: { project_ids: number[] } -> project_id -> env_id -> type -> config_name -> {host,port,...} */
+  queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/config/query', data),
 
 
   getTag: (params = {}) => request.get('/autotest/tag/get', { params }),
@@ -186,6 +188,8 @@ export default {
 
   // 数据源（HTTP 步骤）
   getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
+  /** Form：case_id */
+  queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),
   updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),
   uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
   exportDataSourceXlsx: (params = {}) => axios.get(

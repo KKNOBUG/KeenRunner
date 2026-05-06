@@ -20,70 +20,104 @@
     <n-collapse-transition :show="!requestCardCollapsed">
       <n-form
           :model="state.form"
+          :rules="rules"
           label-placement="left"
           label-width="80px"
           ref="formRef"
       >
-        <!-- 左侧「请求应用」与「步骤名称」等同列对齐；右侧一行排地址、端口、调试 -->
-        <n-form-item label="请求应用" path="request_project_id" required>
-          <div class="tcp-request-one-line">
-            <n-select
-                v-model:value="state.form.request_project_id"
-                placeholder="所属应用"
-                :options="props.projectOptions"
-                :loading="props.projectLoading"
-                clearable
-                filterable
-                style="width: 150px;"
-                :disabled="props.readonly"
-            />
-            <n-select
-                v-model:value="state.form.request_config_name"
-                placeholder="配置名称"
-                :options="tcpConfigNameOptions"
-                :loading="tcpConfigNameLoading"
-                clearable
-                filterable
-                tag
-                style="width: 150px;"
-                :disabled="props.readonly"
-            />
-            <span class="tcp-inline-label">请求地址</span>
-            <n-input
-                v-model:value="state.form.host"
-                placeholder="请输入请求地址"
-                clearable
-                class="tcp-input-host"
-                :disabled="props.readonly"
-            />
-            <span class="tcp-inline-label">请求端口</span>
-            <n-input
-                v-model:value="state.form.port"
-                placeholder="端口"
-                clearable
-                class="tcp-input-port"
-                :disabled="props.readonly"
-            />
-            <n-button
-                v-if="!props.readonly"
-                type="primary"
-                class="tcp-debug-btn"
-                @click="debugging"
-                :loading="debugLoading"
-            >
-              调试
-            </n-button>
+        <!-- 第一行：请求地址60%/请求端口与调试同栏无缝；第二行：步骤名称、所属应用、配置名称 -->
+        <div class="tcp-request-rows">
+          <div class="tcp-request-row tcp-request-row-bottom">
+            <n-form-item label="请求地址" path="host" required class="tcp-field-host">
+              <n-input
+                  v-model:value="state.form.host"
+                  placeholder="请输入请求地址"
+                  clearable
+                  class="request-toolbar-input-fill"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+            <div class="tcp-port-debug-slot">
+              <n-form-item
+                  v-if="!props.readonly"
+                  label="请求端口"
+                  path="port"
+                  required
+                  class="tcp-field-port"
+              >
+                <div class="tcp-port-debug-inline">
+                  <n-input
+                      v-model:value="state.form.port"
+                      placeholder="端口"
+                      clearable
+                      class="request-toolbar-input-fill"
+                      :disabled="props.readonly"
+                  />
+                  <n-button
+                      type="primary"
+                      size="medium"
+                      class="tcp-debug-btn"
+                      @click="debugging"
+                      :loading="debugLoading"
+                  >
+                    调试
+                  </n-button>
+                </div>
+              </n-form-item>
+              <n-form-item
+                  v-else
+                  label="请求端口"
+                  path="port"
+                  required
+                  class="tcp-field-port"
+              >
+                <n-input
+                    v-model:value="state.form.port"
+                    placeholder="端口"
+                    clearable
+                    class="request-toolbar-input-fill"
+                    :disabled="props.readonly"
+                />
+              </n-form-item>
+            </div>
           </div>
-        </n-form-item>
-
-        <n-form-item label="步骤名称" path="step_name" required>
-          <n-input
-              v-model:value="state.form.step_name"
-              placeholder="请输入步骤名称"
-              clearable
-              :disabled="props.readonly"
-          />
-        </n-form-item>
+          <div class="tcp-request-row tcp-request-row-top">
+            <n-form-item label="步骤名称" path="step_name" required class="tcp-field-step-name">
+              <n-input
+                  v-model:value="state.form.step_name"
+                  placeholder="请输入步骤名称"
+                  clearable
+                  class="request-step-name-input"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+            <n-form-item label="所属应用" path="request_project_id" required class="tcp-field-project">
+              <n-select
+                  v-model:value="state.form.request_project_id"
+                  placeholder="所属应用"
+                  :options="props.projectOptions"
+                  :loading="props.projectLoading"
+                  clearable
+                  filterable
+                  class="request-toolbar-select"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+            <n-form-item label="配置名称" path="request_config_name" required class="tcp-field-config">
+              <n-select
+                  v-model:value="state.form.request_config_name"
+                  placeholder="配置名称"
+                  :options="tcpConfigNameOptions"
+                  :loading="tcpConfigNameLoading"
+                  clearable
+                  filterable
+                  tag
+                  class="request-toolbar-select"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+          </div>
+        </div>
 
         <n-form-item label="步骤描述" path="step_desc">
           <n-input
@@ -269,6 +303,60 @@ const state = reactive({
     assert_validators: []
   }
 })
+
+const rules = {
+  request_project_id: [
+    {
+      validator(_rule, value) {
+        if (value === null || value === undefined || value === '') {
+          return new Error('请选择所属应用')
+        }
+        return true
+      },
+      trigger: ['change', 'blur']
+    }
+  ],
+  request_config_name: [
+    {
+      validator(_rule, value) {
+        if (value === null || value === undefined || String(value).trim() === '') {
+          return new Error('请填写或选择配置名称')
+        }
+        return true
+      },
+      trigger: ['change', 'blur']
+    }
+  ],
+  host: [
+    {
+      validator(_rule, value) {
+        if (!String(value ?? '').trim()) {
+          return new Error('请输入请求地址')
+        }
+        return true
+      },
+      trigger: ['change', 'blur']
+    }
+  ],
+  port: [
+    {
+      validator(_rule, value) {
+        if (!String(value ?? '').trim()) {
+          return new Error('请输入请求端口')
+        }
+        return true
+      },
+      trigger: ['change', 'blur']
+    }
+  ],
+  step_name: [
+    {
+      required: true,
+      message: '请输入步骤名称',
+      trigger: 'blur'
+    }
+  ]
+}
 
 const monacoBodyLang = computed(() => {
   const k = state.form.body_format_mode
@@ -577,42 +665,76 @@ const doDebugRequest = async (env_name) => {
   font-size: 12px;
 }
 
-/* 与 http_controller 一致：不对主卡片 header 单独加 padding，避免「Request」与内容区间距与 HTTP 页不一致 */
+.tcp-request-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-/* 请求应用 / 地址 / 端口 / 调试 同一行 */
-.tcp-request-one-line {
+.tcp-request-row {
+  width: 100%;
+}
+
+/* 第二行：40% / 30% / 30%（与 HTTP 一致用 4fr 3fr 3fr） */
+.tcp-request-row-top {
+  display: grid;
+  grid-template-columns: 4fr 2.5fr 3.5fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.tcp-request-row-top :deep(.n-form-item),
+.tcp-request-row-bottom :deep(.n-form-item) {
+  min-width: 0;
+}
+
+.tcp-field-step-name :deep(.n-input),
+.tcp-field-project :deep(.n-select),
+.tcp-field-config :deep(.n-select) {
+  width: 100%;
+}
+
+.request-step-name-input {
+  width: 100%;
+}
+
+.request-toolbar-select {
+  width: 100%;
+}
+
+.request-toolbar-input-fill {
+  width: 100%;
+}
+
+/* 第一行：请求地址约 60%，右侧请求端口与调试同一 form-item 内容区无缝并排 */
+.tcp-request-row-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 60%) minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  width: 100%;
+}
+
+.tcp-port-debug-slot {
+  min-width: 0;
+}
+
+.tcp-field-port :deep(.n-form-item-blank) {
+  width: 100%;
+}
+
+.tcp-port-debug-inline {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 0;
   width: 100%;
   min-width: 0;
 }
 
-.tcp-inline-label {
-  flex-shrink: 0;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.tcp-select-app {
-  width: 160px;
-  flex-shrink: 0;
-}
-
-.tcp-select-config {
-  width: 180px;
-  flex-shrink: 0;
-}
-
-.tcp-input-host {
+.tcp-port-debug-inline .request-toolbar-input-fill {
   flex: 1;
-  min-width: 120px;
-}
-
-.tcp-input-port {
-  width: 100px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .tcp-debug-btn {

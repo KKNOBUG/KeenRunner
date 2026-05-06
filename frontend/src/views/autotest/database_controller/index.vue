@@ -109,56 +109,67 @@
                 </template>
                 <div v-show="!opCollapseState[key]">
                   <n-form :model="item" label-width="96px" label-placement="left">
-                    <n-form-item label="所属应用" required>
-                      <n-select
-                          v-model:value="item.project_id"
-                          placeholder="请选择所属应用"
-                          :options="props.projectOptions"
-                          :loading="props.projectLoading"
-                          clearable
-                          filterable
-                          :disabled="props.readonly"
-                          @update:value="() => onProjectChange(item)"
-                      />
-                    </n-form-item>
-                    <n-form-item label="配置名称" required>
-                      <n-select
-                          v-model:value="item.config_name"
-                          :options="configOptionsForRow(item)"
-                          placeholder="选择或输入配置名称（支持 ${变量}）"
-                          clearable
-                          filterable
-                          tag
-                          :disabled="props.readonly"
-                          @update:value="() => onConfigNameChange(item)"
-                      />
-                    </n-form-item>
-                    <n-form-item label="数据库名" required>
-                      <n-select
-                          v-model:value="item.database_name"
-                          :options="dbNameOptionsForRow(item)"
-                          placeholder="选择或输入库名（支持 ${变量}）"
-                          clearable
-                          filterable
-                          tag
-                          :disabled="props.readonly"
-                      />
-                    </n-form-item>
-                    <n-form-item label="SQL语句" required>
-                      <n-input
-                          v-model:value="item.expr"
-                          type="textarea"
-                          placeholder="支持表名/字段中使用 ${变量名}"
-                          :autosize="{ minRows: 4, maxRows: 18 }"
-                          :disabled="props.readonly"
-                      />
-                    </n-form-item>
-                    <n-form-item label="存储变量" required>
-                      <n-input v-model:value="item.variable_name" placeholder="写入变量池的变量名" clearable :disabled="props.readonly"/>
-                    </n-form-item>
-                    <n-form-item label="请求描述">
-                      <n-input v-model:value="item.desc" placeholder="可选，说明本操作用途" clearable :disabled="props.readonly"/>
-                    </n-form-item>
+                    <div class="db-op-field-rows">
+                      <!-- 第一行：所属应用 30% / 配置名称 40% / 数据库名 30% -->
+                      <div class="db-op-field-row db-op-field-row--cols3">
+                        <n-form-item label="所属应用" required class="db-op-fi-fill">
+                          <n-select
+                              v-model:value="item.project_id"
+                              placeholder="请选择所属应用"
+                              :options="props.projectOptions"
+                              :loading="props.projectLoading"
+                              clearable
+                              filterable
+                              :disabled="props.readonly"
+                              @update:value="() => onProjectChange(item)"
+                          />
+                        </n-form-item>
+                        <n-form-item label="配置名称" required class="db-op-fi-fill">
+                          <n-select
+                              v-model:value="item.config_name"
+                              :options="configOptionsForRow(item)"
+                              placeholder="选择或输入配置名称（支持 ${变量}）"
+                              clearable
+                              filterable
+                              tag
+                              :disabled="props.readonly"
+                              @update:value="() => onConfigNameChange(item)"
+                          />
+                        </n-form-item>
+                        <n-form-item label="数据库名" required class="db-op-fi-fill">
+                          <n-select
+                              v-model:value="item.database_name"
+                              :options="dbNameOptionsForRow(item)"
+                              placeholder="选择或输入库名（支持 ${变量}）"
+                              clearable
+                              filterable
+                              tag
+                              :disabled="props.readonly"
+                          />
+                        </n-form-item>
+                      </div>
+                      <!-- 第二行：存储变量 30%、请求描述 70% -->
+                      <div class="db-op-field-row db-op-field-row--var-desc">
+                        <n-form-item label="存储变量" required class="db-op-fi-fill">
+                          <n-input v-model:value="item.variable_name" placeholder="写入变量池的变量名" clearable :disabled="props.readonly"/>
+                        </n-form-item>
+                        <n-form-item label="请求描述" class="db-op-fi-fill">
+                          <n-input v-model:value="item.desc" placeholder="可选，说明本操作用途" clearable :disabled="props.readonly"/>
+                        </n-form-item>
+                      </div>
+                      <!-- 第三行：SQL语句 -->
+                      <div class="db-op-field-row db-op-field-row--full">
+                        <n-form-item label="SQL语句" required class="db-op-fi-fill">
+                          <n-input
+                              v-model:value="item.expr"
+                              type="textarea"
+                              placeholder="支持表名/字段中使用 ${变量名}"
+                              :autosize="{ minRows: 4, maxRows: 18 }"
+                              :disabled="props.readonly"
+                          />
+                        </n-form-item>
+                      </div>
+                    </div>
                   </n-form>
                 </div>
               </n-card>
@@ -908,6 +919,47 @@ const toggleValidatorCollapse = (key) => {
 
 .db-op-card-wrap :deep(.n-card-header) {
   padding: 10px 14px;
+}
+
+.db-op-field-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.db-op-field-row {
+  width: 100%;
+}
+
+/* 第一行：所属应用 30% / 配置名称 40% / 数据库名 30% */
+.db-op-field-row--cols3 {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 3fr);
+  gap: 12px;
+  align-items: start;
+}
+
+/* 第二行：存储变量 30%、请求描述 70%（与「所属应用」列宽比例一致） */
+.db-op-field-row--var-desc {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.db-op-field-row--full {
+  min-width: 0;
+}
+
+.db-op-field-row--cols3 :deep(.n-form-item),
+.db-op-field-row--var-desc :deep(.n-form-item),
+.db-op-field-row--full :deep(.n-form-item) {
+  min-width: 0;
+}
+
+.db-op-fi-fill :deep(.n-input),
+.db-op-fi-fill :deep(.n-select) {
+  width: 100%;
 }
 
 .extract_variables-item :deep(.n-card-header),

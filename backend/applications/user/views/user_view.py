@@ -171,6 +171,7 @@ async def get_users(
     phone = user_in.phone
     state = user_in.state
     is_admin = user_in.is_admin
+    is_active = user_in.is_active
     is_superuser = user_in.is_superuser
     created_user = user_in.created_user
     updated_user = user_in.updated_user
@@ -185,16 +186,16 @@ async def get_users(
     if phone:
         q &= Q(phone__contains=phone)
     if is_admin is not None:
-        q &= Q(state=state)
-    if is_admin is not None:
-        q &= Q(is_admin=is_admin)
+        q &= Q(is_admin=state)
+    if is_active is not None:
+        q &= Q(is_active=is_active)
     if is_superuser is not None:
         q &= Q(is_superuser=is_superuser)
     if created_user:
         q &= Q(created_user__contains=created_user)
     if updated_user:
         q &= Q(updated_user__contains=updated_user)
-
+    q &= Q(state=state)
     total, instances = await USER_CRUD.list(
         page=page, page_size=page_size, search=q, order=order
     )

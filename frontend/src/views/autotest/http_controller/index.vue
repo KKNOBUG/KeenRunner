@@ -25,57 +25,94 @@
           label-width="80px"
           ref="formRef"
       >
-        <!-- 请求方式、所属应用、请求地址 -->
-        <n-form-item label="请求方式" path="method">
-          <n-select
-              v-model:value="state.form.method"
-              placeholder="请选择请求方式"
-              :options="methodOptions"
-              :render-label="renderMethodLabel"
-              style="width: 100px;"
-              :disabled="props.readonly"
-          />
-          <n-select
-              v-model:value="state.form.request_project_id"
-              placeholder="所属应用"
-              :options="projectOptions"
-              :loading="projectLoading"
-              clearable
-              filterable
-              style="width: 160px;"
-              :disabled="props.readonly"
-          />
-          <n-select
-              v-model:value="state.form.request_config_name"
-              placeholder="配置名称"
-              :options="httpConfigNameOptions"
-              :loading="httpConfigNameLoading"
-              clearable
-              filterable
-              tag
-              style="width: 180px;"
-              :disabled="props.readonly"
-          />
-          <n-input
-              v-model:value="state.form.url"
-              placeholder="请输入请求地址"
-              clearable
-              style="flex: 1;"
-              :disabled="props.readonly"
-          />
-          <n-button v-if="!props.readonly" type="primary" @click="debugging" :loading="debugLoading">调试</n-button>
-        </n-form-item>
-
-        <!-- 步骤名称 -->
-        <n-form-item label="步骤名称" path="step_name" required>
-          <n-input
-              v-model:value="state.form.step_name"
-              placeholder="请输入步骤名称"
-              clearable
-              style="width: 100%;"
-              :disabled="props.readonly"
-          />
-        </n-form-item>
+        <!-- 第一行：请求方式20% + 请求地址（与调试同栏无缝）；第二行：步骤名称、所属应用、配置名称 -->
+        <div class="http-request-rows">
+          <div class="http-request-row http-request-row-bottom">
+            <n-form-item label="请求方式" path="method" required class="http-field-method">
+              <n-select
+                  v-model:value="state.form.method"
+                  placeholder="请选择请求方式"
+                  :options="methodOptions"
+                  :render-label="renderMethodLabel"
+                  class="request-toolbar-select"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+            <div class="http-url-debug-slot">
+              <n-form-item
+                  v-if="!props.readonly"
+                  label="请求地址"
+                  path="url"
+                  required
+                  class="http-field-url"
+              >
+                <div class="http-url-debug-inline">
+                  <n-input
+                      v-model:value="state.form.url"
+                      placeholder="请输入请求地址"
+                      clearable
+                      class="request-toolbar-input-fill"
+                      :disabled="props.readonly"
+                  />
+                  <n-button type="primary" size="medium" class="http-debug-btn" @click="debugging" :loading="debugLoading">
+                    调试
+                  </n-button>
+                </div>
+              </n-form-item>
+              <n-form-item
+                  v-else
+                  label="请求地址"
+                  path="url"
+                  required
+                  class="http-field-url"
+              >
+                <n-input
+                    v-model:value="state.form.url"
+                    placeholder="请输入请求地址"
+                    clearable
+                    class="request-toolbar-input-fill"
+                    :disabled="props.readonly"
+                />
+              </n-form-item>
+            </div>
+          </div>
+          <div class="http-request-row http-request-row-top">
+            <n-form-item label="步骤名称" path="step_name" required class="http-field-step-name">
+              <n-input
+                  v-model:value="state.form.step_name"
+                  placeholder="请输入步骤名称"
+                  clearable
+                  class="request-step-name-input"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+            <n-form-item label="所属应用" path="request_project_id" required class="http-field-project">
+              <n-select
+                  v-model:value="state.form.request_project_id"
+                  placeholder="所属应用"
+                  :options="projectOptions"
+                  :loading="projectLoading"
+                  clearable
+                  filterable
+                  class="request-toolbar-select"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+            <n-form-item label="配置名称" path="request_config_name" required class="http-field-config">
+              <n-select
+                  v-model:value="state.form.request_config_name"
+                  placeholder="配置名称"
+                  :options="httpConfigNameOptions"
+                  :loading="httpConfigNameLoading"
+                  clearable
+                  filterable
+                  tag
+                  class="request-toolbar-select"
+                  :disabled="props.readonly"
+              />
+            </n-form-item>
+          </div>
+        </div>
 
         <!-- 步骤描述 -->
         <n-form-item label="步骤描述" path="description">
@@ -714,7 +751,7 @@
 </template>
 
 <script setup>
-import {computed, h, nextTick, onMounted, reactive, ref, watch} from 'vue'
+import {computed, h, nextTick, reactive, ref, watch} from 'vue'
 import {
   NBadge,
   NButton,
@@ -824,7 +861,11 @@ const toggleResponseCardCollapsed = () => {
 
 const dataSourceCollapsed = ref(true)
 const toggleDataSourceCollapsed = () => {
+  const wasCollapsed = dataSourceCollapsed.value
   dataSourceCollapsed.value = !dataSourceCollapsed.value
+  if (wasCollapsed && !dataSourceCollapsed.value) {
+    loadStepDataframePreview()
+  }
 }
 
 const dataSourceTipText = computed(() => {
@@ -1482,42 +1523,12 @@ const dataSourceSave = async () => {
   }
 }
 
-/** 生成数据（仅前端占位）。 */
-const generateDataSource = () => {
-  // 前端占位：生成两条示例数据
-  const now = new Date()
-  const ts = now.toISOString().slice(0, 19).replace('T', ' ')
-  dataSource.generatedRows = [
-    {id: `g-${Date.now()}-1`, name: '生成数据-1', remark: '示例', generatedAt: ts},
-    {id: `g-${Date.now()}-2`, name: '生成数据-2', remark: '示例', generatedAt: ts}
-  ]
-  $message.info('已生成预览数据（后端暂未实现真实生成）')
-}
-
-/** 保存生成数据到预览数据（仅前端占位）。 */
-const saveGeneratedData = () => {
-  if (dataSource.generatedRows.length === 0) return
-  const now = new Date()
-  const ts = now.toISOString().slice(0, 19).replace('T', ' ')
-  const appended = dataSource.generatedRows.map((x) => ({
-    id: `p-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    name: x.name,
-    remark: x.remark,
-    updatedAt: ts
-  }))
-  dataSource.previewRows = [...appended, ...dataSource.previewRows]
-  dataSource.generatedRows = []
-  $message.success('已保存并追加到已有数据（前端占位）')
-}
-
-onMounted(async () => {
-  await loadStepDataframePreview()
-})
-
 watch(
     () => [route.query.case_id, props.step?.original?.id, props.step?.original?.step_code],
     async () => {
-      await loadStepDataframePreview()
+      if (!dataSourceCollapsed.value) {
+        await loadStepDataframePreview()
+      }
     },
     {deep: false}
 )
@@ -1551,6 +1562,28 @@ const rules = {
       required: true,
       message: '请输入请求地址',
       trigger: 'blur'
+    }
+  ],
+  request_project_id: [
+    {
+      validator(_rule, value) {
+        if (value === null || value === undefined || value === '') {
+          return new Error('请选择所属应用')
+        }
+        return true
+      },
+      trigger: ['change', 'blur']
+    }
+  ],
+  request_config_name: [
+    {
+      validator(_rule, value) {
+        if (value === null || value === undefined || String(value).trim() === '') {
+          return new Error('请填写或选择配置名称')
+        }
+        return true
+      },
+      trigger: ['change', 'blur']
     }
   ],
   step_name: [
@@ -2608,6 +2641,82 @@ const validatorColumns = [
   border-left: 4px solid #F4511E;
 }
 
+.http-request-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.http-request-row {
+  width: 100%;
+}
+
+/* 第二行：步骤名称 40% / 所属应用 30% / 配置名称 30% */
+.http-request-row-top {
+  display: grid;
+  grid-template-columns: 4fr 2.5fr 3.5fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.http-request-row-top :deep(.n-form-item),
+.http-request-row-bottom :deep(.n-form-item) {
+  min-width: 0;
+}
+
+.http-field-step-name :deep(.n-input),
+.http-field-project :deep(.n-select),
+.http-field-config :deep(.n-select) {
+  width: 100%;
+}
+
+.request-step-name-input {
+  width: 100%;
+}
+
+.request-toolbar-select {
+  width: 100%;
+}
+
+.request-toolbar-input-fill {
+  width: 100%;
+}
+
+/* 第一行：请求方式约 20%，右侧为请求地址；调试按钮与输入框同一 form-item 内容区无缝并排（对齐 run_code 顶栏） */
+.http-request-row-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 20%) minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  width: 100%;
+}
+
+.http-url-debug-slot {
+  min-width: 0;
+}
+
+.http-field-url :deep(.n-form-item-blank) {
+  width: 100%;
+}
+
+.http-url-debug-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.http-url-debug-inline .request-toolbar-input-fill {
+  flex: 1;
+  min-width: 0;
+}
+
+.http-debug-btn {
+  flex-shrink: 0;
+}
+
 .panel-title {
   font-weight: 600;
   font-size: 14px;
@@ -2673,10 +2782,6 @@ const validatorColumns = [
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.data-source-toolbar {
-  margin-bottom: 4px;
 }
 
 .data-source-tip {
