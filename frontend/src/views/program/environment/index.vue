@@ -6,7 +6,7 @@ import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { renderIcon } from '@/utils'
+import { apiPermissionKey, renderIcon } from '@/utils'
 import api from '@/api'
 import EnvironmentEditDrawer from './EnvironmentEditDrawer.vue'
 
@@ -124,7 +124,7 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
                   }
               ),
-              [[vPermission, 'post/api/v1/role/update']]
+              [[vPermission, apiPermissionKey('post', '/autotest/env/update')]]
           ),
           h(
               NPopconfirm,
@@ -147,7 +147,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/role/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该环境吗?'),
               }

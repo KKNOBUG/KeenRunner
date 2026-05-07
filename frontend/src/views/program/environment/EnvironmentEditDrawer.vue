@@ -278,7 +278,7 @@ import {
   NTooltip,
 } from 'naive-ui'
 import api from '@/api'
-import {renderIcon} from '@/utils'
+import {apiPermissionKey, renderIcon} from '@/utils'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from "@/components/table/CrudTable.vue"
@@ -514,7 +514,7 @@ const appColumns = computed(() => {
                     icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
                   }
               ),
-              [[vPermission, 'post/api/v1/role/update']]
+              [[vPermission, apiPermissionKey('post', '/autotest/config/update')]]
           ),
           h(
               NPopconfirm,
@@ -537,7 +537,7 @@ const appColumns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/role/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/autotest/config/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该配置吗?'),
               }
@@ -586,7 +586,7 @@ function buildInfraColumnsComputed(metaKey) {
                       icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
                     }
                 ),
-                [[vPermission, 'post/api/v1/role/update']]
+                [[vPermission, apiPermissionKey('post', '/autotest/config/update')]]
             ),
             h(
                 NPopconfirm,
@@ -609,7 +609,7 @@ function buildInfraColumnsComputed(metaKey) {
                                 icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                               }
                           ),
-                          [[vPermission, 'delete/api/v1/role/delete']]
+                          [[vPermission, apiPermissionKey('delete', '/autotest/config/delete')]]
                       ),
                   default: () => h('div', {}, '确定删除该配置吗?'),
                 }

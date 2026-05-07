@@ -7,7 +7,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { renderIcon } from '@/utils'
+import { apiPermissionKey, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
@@ -206,7 +206,7 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit', { size: 16 }),
                   }
               ),
-              [[vPermission, 'post/api/v1/dept/update']]
+              [[vPermission, apiPermissionKey('post', '/dept/update')]]
           ),
           h(
               NPopconfirm,
@@ -229,7 +229,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/dept/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/dept/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该部门吗?'),
               }

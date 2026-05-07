@@ -18,7 +18,7 @@ import QueryBar from '@/components/query-bar/QueryBar.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import ReportDetailDrawer from '@/components/autotest/ReportDetailDrawer.vue'
 
-import {renderIcon} from '@/utils'
+import {apiPermissionKey, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 
@@ -583,7 +583,7 @@ const columnsBase = [
                             icon: renderIcon('material-symbols:delete-outline', {size: 16}),
                           }
                       ),
-                      [[vPermission, 'delete/api/v1/role/delete']]
+                      [[vPermission, apiPermissionKey('delete', '/autotest/report/delete')]]
                   ),
               default: () => h('div', {}, '确定删除该报告吗?'),
             }

@@ -555,37 +555,39 @@
                     <div class="col config">配置名</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div v-for="(row, idx) in debugApiRowsForSelected" :key="row.key" class="exec-config-table-row">
-                    <div class="col idx">{{ idx + 1 }}</div>
-                    <div class="col env">
-                      <n-select
-                          v-model:value="row.env_id"
-                          :options="debugEnvOptions"
-                          size="small"
-                          :disabled="debugEnvMode === 'single'"
-                          placeholder="请选择"
-                          clearable
-                      />
-                    </div>
-                    <div class="col config">
-                      <n-select
-                          v-model:value="row.request_config_name"
-                          size="small"
-                          filterable
-                          tag
-                          clearable
-                          placeholder="选择或输入配置名"
-                          :disabled="!debugGlobalEnvId"
-                          :options="getApiConfigOptions(row)"
-                      />
-                    </div>
-                    <div class="col addr">
-                      <n-input
-                          :value="getRowAddrPreview(row, 'api')"
-                          size="small"
-                          disabled
-                          placeholder="请先选择全局环境和配置"
-                      />
+                  <div class="exec-config-table-body">
+                    <div v-for="(row, idx) in debugApiRowsForSelected" :key="row.key" class="exec-config-table-row">
+                      <div class="col idx">{{ idx + 1 }}</div>
+                      <div class="col env">
+                        <n-select
+                            v-model:value="row.env_id"
+                            :options="debugEnvOptions"
+                            size="small"
+                            :disabled="debugEnvMode === 'single'"
+                            placeholder="请选择"
+                            clearable
+                        />
+                      </div>
+                      <div class="col config">
+                        <n-select
+                            v-model:value="row.request_config_name"
+                            size="small"
+                            filterable
+                            tag
+                            clearable
+                            placeholder="选择或输入配置名"
+                            :disabled="!debugGlobalEnvId"
+                            :options="getApiConfigOptions(row)"
+                        />
+                      </div>
+                      <div class="col addr">
+                        <n-input
+                            :value="getRowAddrPreview(row, 'api')"
+                            size="small"
+                            disabled
+                            placeholder="请先选择全局环境和配置"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -604,49 +606,51 @@
                     <div class="col config">数据库名</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div v-for="(row, idx) in debugDbRowsForSelected" :key="row.key" class="exec-config-table-row">
-                    <div class="col idx">{{ idx + 1 }}</div>
-                    <div class="col env">
-                      <n-select
-                          v-model:value="row.env_id"
-                          :options="debugEnvOptions"
-                          size="small"
-                          :disabled="debugEnvMode === 'single'"
-                          placeholder="请选择"
-                          clearable
-                      />
-                    </div>
-                    <div class="col config">
-                      <n-select
-                          v-model:value="row.config_name"
-                          size="small"
-                          filterable
-                          tag
-                          clearable
-                          placeholder="配置名"
-                          :disabled="!debugGlobalEnvId"
-                          :options="getDbConfigOptions(row)"
-                      />
-                    </div>
-                    <div class="col config">
-                      <n-select
-                          v-model:value="row.database_name"
-                          size="small"
-                          filterable
-                          tag
-                          clearable
-                          placeholder="库名"
-                          :disabled="!debugGlobalEnvId"
-                          :options="getDbNameOptions(row)"
-                      />
-                    </div>
-                    <div class="col addr">
-                      <n-input
-                          :value="getRowAddrPreview(row, 'database')"
-                          size="small"
-                          disabled
-                          placeholder="请先选择全局环境和配置"
-                      />
+                  <div class="exec-config-table-body">
+                    <div v-for="(row, idx) in debugDbRowsForSelected" :key="row.key" class="exec-config-table-row">
+                      <div class="col idx">{{ idx + 1 }}</div>
+                      <div class="col env">
+                        <n-select
+                            v-model:value="row.env_id"
+                            :options="debugEnvOptions"
+                            size="small"
+                            :disabled="debugEnvMode === 'single'"
+                            placeholder="请选择"
+                            clearable
+                        />
+                      </div>
+                      <div class="col config">
+                        <n-select
+                            v-model:value="row.config_name"
+                            size="small"
+                            filterable
+                            tag
+                            clearable
+                            placeholder="配置名"
+                            :disabled="!debugGlobalEnvId"
+                            :options="getDbConfigOptions(row)"
+                        />
+                      </div>
+                      <div class="col config">
+                        <n-select
+                            v-model:value="row.database_name"
+                            size="small"
+                            filterable
+                            tag
+                            clearable
+                            placeholder="库名"
+                            :disabled="!debugGlobalEnvId"
+                            :options="getDbNameOptions(row)"
+                        />
+                      </div>
+                      <div class="col addr">
+                        <n-input
+                            :value="getRowAddrPreview(row, 'database')"
+                            size="small"
+                            disabled
+                            placeholder="请先选择全局环境和配置"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -664,37 +668,39 @@
                     <div class="col config">配置名</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div v-for="(row, idx) in debugFileRowsForSelected" :key="row.key" class="exec-config-table-row">
-                    <div class="col idx">{{ idx + 1 }}</div>
-                    <div class="col env">
-                      <n-select
-                          v-model:value="row.env_id"
-                          :options="debugEnvOptions"
-                          size="small"
-                          :disabled="debugEnvMode === 'single'"
-                          placeholder="请选择"
-                          clearable
-                      />
-                    </div>
-                    <div class="col config">
-                      <n-select
-                          v-model:value="row.config_name"
-                          size="small"
-                          filterable
-                          tag
-                          clearable
-                          placeholder="选择或输入配置名"
-                          :disabled="!debugGlobalEnvId"
-                          :options="getFileConfigOptions(row)"
-                      />
-                    </div>
-                    <div class="col addr">
-                      <n-input
-                          :value="getRowAddrPreview(row, 'file')"
-                          size="small"
-                          disabled
-                          placeholder="请先选择全局环境和配置"
-                      />
+                  <div class="exec-config-table-body">
+                    <div v-for="(row, idx) in debugFileRowsForSelected" :key="row.key" class="exec-config-table-row">
+                      <div class="col idx">{{ idx + 1 }}</div>
+                      <div class="col env">
+                        <n-select
+                            v-model:value="row.env_id"
+                            :options="debugEnvOptions"
+                            size="small"
+                            :disabled="debugEnvMode === 'single'"
+                            placeholder="请选择"
+                            clearable
+                        />
+                      </div>
+                      <div class="col config">
+                        <n-select
+                            v-model:value="row.config_name"
+                            size="small"
+                            filterable
+                            tag
+                            clearable
+                            placeholder="选择或输入配置名"
+                            :disabled="!debugGlobalEnvId"
+                            :options="getFileConfigOptions(row)"
+                        />
+                      </div>
+                      <div class="col addr">
+                        <n-input
+                            :value="getRowAddrPreview(row, 'file')"
+                            size="small"
+                            disabled
+                            placeholder="请先选择全局环境和配置"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -719,11 +725,15 @@
         <div v-show="execDatasetCardExpanded" class="exec-config-dataset-wrap">
           <div class="exec-config-dataset-table">
             <div class="exec-config-dataset-header">
+              <div class="col check"></div>
               <div class="col idx">序号</div>
               <div class="col name">数据集名称</div>
             </div>
-            <div v-if="!debugExecDatasetRows.length" class="exec-config-dataset-empty">
-              <n-empty description="暂无数据" />
+            <div v-if="debugExecDatasetLoading" class="exec-config-dataset-empty">
+              <n-spin size="medium" description="加载数据集列表..." />
+            </div>
+            <div v-else-if="!debugExecDatasetRows.length" class="exec-config-dataset-empty">
+              <n-empty description="暂无数据（请先上传数据源或确认用例已保存）" />
             </div>
             <div v-else class="exec-config-dataset-body">
               <div
@@ -731,13 +741,45 @@
                   :key="row.id"
                   class="exec-config-dataset-row"
               >
+                <div class="col check">
+                  <n-checkbox
+                      size="small"
+                      :checked="debugExecDatasetSelectedIds.includes(row.id)"
+                      @update:checked="(v) => toggleDebugExecDatasetRow(row.id, v)"
+                  />
+                </div>
                 <div class="col idx">{{ idx + 1 }}</div>
                 <div class="col name">{{ row.name }}</div>
               </div>
             </div>
           </div>
           <div class="exec-config-dataset-footer">
-            已选 {{ debugExecDatasetSelectedCount }} 项
+            <div class="exec-config-dataset-footer-inner">
+              <n-space :size="8">
+                <n-button
+                    size="tiny"
+                    quaternary
+                    :disabled="debugExecDatasetBatchDisabled"
+                    @click="selectAllDebugExecDatasets"
+                >
+                  全选
+                </n-button>
+                <n-button
+                    size="tiny"
+                    quaternary
+                    :disabled="debugExecDatasetBatchDisabled"
+                    @click="clearDebugExecDatasetSelection"
+                >
+                  取消全选
+                </n-button>
+              </n-space>
+              <div class="exec-config-dataset-footer-count">
+                已选 {{ debugExecDatasetSelectedCount }} 项
+                <span v-if="execConfigMode === 'debug'" class="exec-config-dataset-mode-tip">
+                  （调试模式须且仅能选 1 条）
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </n-card>
@@ -765,6 +807,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {
   NButton,
   NCard,
+  NCheckbox,
   NDrawer,
   NDropdown,
   NEmpty,
@@ -781,6 +824,7 @@ import {
   NSelect,
   NSpace,
   NSwitch,
+  NSpin,
   NTag,
   NTooltip,
   useMessage
@@ -2784,7 +2828,91 @@ const execDatasetCardExpanded = ref(true)
 const debugExecDataSourceEnabled = ref(false)
 const debugExecDatasetRows = ref([])
 const debugExecDatasetSelectedIds = ref([])
+const debugExecDatasetLoading = ref(false)
 const debugExecDatasetSelectedCount = computed(() => debugExecDatasetSelectedIds.value.length)
+
+/** 调试模式禁止批量全选/清空；无数据或加载中亦不可用 */
+const debugExecDatasetBatchDisabled = computed(
+    () =>
+        execConfigMode.value === 'debug' ||
+        debugExecDatasetLoading.value ||
+        !debugExecDatasetRows.value.length,
+)
+
+const selectAllDebugExecDatasets = () => {
+  if (execConfigMode.value === 'debug' || debugExecDatasetLoading.value) return
+  debugExecDatasetSelectedIds.value = debugExecDatasetRows.value.map((r) => r.id)
+}
+
+const clearDebugExecDatasetSelection = () => {
+  if (execConfigMode.value === 'debug' || debugExecDatasetLoading.value) return
+  debugExecDatasetSelectedIds.value = []
+}
+
+/** 开启数据源开关后拉取案例场景名列表（POST /query_dataset_names），供勾选 */
+const fetchDebugExecDatasetNames = async () => {
+  if (!caseId.value) {
+    debugExecDatasetRows.value = []
+    window.$message?.warning?.('缺少用例 ID，无法加载数据集名称')
+    return
+  }
+  debugExecDatasetLoading.value = true
+  try {
+    const fd = new FormData()
+    fd.append('case_id', String(caseId.value))
+    const res = await api.queryDatasetNames(fd)
+    const names = Array.isArray(res?.data) ? res.data : []
+    debugExecDatasetRows.value = names.map((name) => ({
+      id: String(name),
+      name: String(name),
+    }))
+    const nameSet = new Set(names.map(String))
+    debugExecDatasetSelectedIds.value = debugExecDatasetSelectedIds.value.filter((id) => nameSet.has(String(id)))
+  } catch (e) {
+    debugExecDatasetRows.value = []
+    console.error('queryDatasetNames failed', e)
+  } finally {
+    debugExecDatasetLoading.value = false
+  }
+}
+
+const toggleDebugExecDatasetRow = (rowId, checked) => {
+  const id = String(rowId)
+  if (execConfigMode.value === 'debug') {
+    debugExecDatasetSelectedIds.value = checked ? [id] : []
+    return
+  }
+  const arr = debugExecDatasetSelectedIds.value
+  if (checked) {
+    if (!arr.includes(id)) debugExecDatasetSelectedIds.value = [...arr, id]
+  } else {
+    debugExecDatasetSelectedIds.value = arr.filter((x) => x !== id)
+  }
+}
+
+/** 勾选数据源时的校验（依赖后端：调试仅允许 1 条；运行可多选） */
+const validateExecDatasetSelection = () => {
+  if (!debugExecDataSourceEnabled.value) return true
+  if (debugExecDatasetLoading.value) {
+    window.$message?.warning?.('数据集列表加载中，请稍候')
+    return false
+  }
+  if (!debugExecDatasetRows.value.length) {
+    window.$message?.warning?.('当前用例暂无可用数据集，请先上传数据源或关闭「请选择数据源」')
+    return false
+  }
+  const n = debugExecDatasetSelectedIds.value.length
+  if (execConfigMode.value === 'debug') {
+    if (n !== 1) {
+      window.$message?.warning?.('调试模式下必须且仅能选择一个数据集')
+      return false
+    }
+  } else if (n < 1) {
+    window.$message?.warning?.('请至少勾选一个数据集，或关闭「请选择数据源」')
+    return false
+  }
+  return true
+}
 
 const debugExecDataSourceRailStyle = ({ focused, checked }) => {
   const style = {}
@@ -2805,7 +2933,10 @@ const debugExecDataSourceRailStyle = ({ focused, checked }) => {
 watch(debugExecDataSourceEnabled, (on) => {
   if (!on) {
     debugExecDatasetSelectedIds.value = []
+    debugExecDatasetRows.value = []
+    return
   }
+  fetchDebugExecDatasetNames()
 })
 
 const debugEnvMode = ref('single') // 'single' | 'multi'
@@ -3139,6 +3270,89 @@ const getRowAddrPreview = (row, configType) => {
   return info?.config_host ? `${info.config_host}${info.config_port ? `:${info.config_port}` : ''}` : ''
 }
 
+/**
+ * 校验「应用与环境配置」聚合表中每一行是否已具备：环境、配置名、可解析的 IP/端口、（DB）数据库名。
+ * 调试与执行共用；任一缺失则返回待展示条目（不再静默跳过未选环境的行）。
+ */
+const collectExecConfigMissingRows = () => {
+  const missing = []
+  const push = (type, row, text) => {
+    missing.push({type, project_id: row.project_id, text: String(text || '')})
+  }
+
+  const checkApiRow = (row) => {
+    const envId = getEffectiveEnvIdForRow(row)
+    if (envId == null || String(envId).trim() === '') {
+      push('api', row, '环境未选择')
+      return
+    }
+    const cfgName = row.request_config_name
+    if (!cfgName || !String(cfgName).trim()) {
+      push('api', row, '配置名未填写')
+      return
+    }
+    const addr = getRowAddrPreview(row, 'api')
+    if (!addr || !String(addr).trim()) {
+      push('api', row, `${String(cfgName).trim()}(IP/端口未获取)`)
+    }
+  }
+
+  const checkDbRow = (row) => {
+    const envId = getEffectiveEnvIdForRow(row)
+    if (envId == null || String(envId).trim() === '') {
+      push('db', row, '环境未选择')
+      return
+    }
+    const cfgName = row.config_name
+    if (!cfgName || !String(cfgName).trim()) {
+      push('db', row, '配置名未填写')
+      return
+    }
+    const bucket = getBucket({...row, env_id: envId}, 'database')
+    const info = bucket?.[cfgName]
+    const addr = getRowAddrPreview(row, 'database')
+    if (!addr || !String(addr).trim()) {
+      push('db', row, `${String(cfgName).trim()}(IP/端口未获取)`)
+      return
+    }
+    const dbName = row.database_name || info?.database_name
+    if (!dbName || !String(dbName).trim()) {
+      push('db', row, `${String(cfgName).trim()}(数据库名未获取)`)
+    }
+  }
+
+  const checkFileRow = (row) => {
+        const envId = getEffectiveEnvIdForRow(row)
+        if (envId == null || String(envId).trim() === '') {
+          push('file', row, '环境未选择')
+          return
+        }
+        const cfgName = row.config_name
+        if (!cfgName || !String(cfgName).trim()) {
+          push('file', row, '配置名未填写')
+          return
+        }
+        const addr = getRowAddrPreview(row, 'file')
+        if (!addr || !String(addr).trim()) {
+          push('file', row, `${String(cfgName).trim()}(IP/端口未获取)`)
+        }
+      }
+
+  ;(debugRows.value.apiRows || []).forEach(checkApiRow)
+  ;(debugRows.value.dbRows || []).forEach(checkDbRow)
+  ;(debugRows.value.fileRows || []).forEach(checkFileRow)
+  return missing
+}
+
+const formatExecConfigMissingMessage = (missing, actionLabel) => {
+  const sample = missing
+      .slice(0, 8)
+      .map((x) => `${String(x.type).toUpperCase()}·${x.text}`)
+      .join('，')
+  // return `存在配置未完成（共${missing.length}条），请补全后再${actionLabel}：${sample}${missing.length > 8 ? '…' : ''}`
+  return `存在配置未完成（共${missing.length}条），请补全后再${actionLabel}`
+}
+
 const applyDebugConfigToSteps = () => {
   const apiRows = debugRows.value.apiRows
   const dbRows = debugRows.value.dbRows
@@ -3273,36 +3487,11 @@ const confirmDebugConfigAndRun = async () => {
     return
   }
 
-  // 校验：已选择环境 + 配置名但无法解析到 host/port（或 DB 缺数据库名）时，阻止调试
-  const missing = []
-  const checkRow = (row, type) => {
-        const cfgName = type === 'api' ? row.request_config_name : row.config_name
-        const envId = getEffectiveEnvIdForRow(row)
-        if (!envId) return
-        if (!cfgName || !String(cfgName).trim()) {
-          missing.push({ type, project_id: row.project_id, name: '(未选择配置名)' })
-          return
-        }
-        const bucket = getBucket({ ...row, env_id: envId }, type === 'db' ? 'database' : type)
-        const info = bucket?.[cfgName]
-        if (!info || !info.config_host) {
-          missing.push({ type, project_id: row.project_id, name: String(cfgName) })
-          return
-        }
-        if (type === 'db') {
-          const dbName = row.database_name || info.database_name
-          if (!dbName || !String(dbName).trim()) {
-            missing.push({ type, project_id: row.project_id, name: `${String(cfgName)}(缺数据库名)` })
-          }
-        }
-      }
-  ;(debugRows.value.apiRows || []).forEach((r) => checkRow(r, 'api'))
-  ;(debugRows.value.dbRows || []).forEach((r) => checkRow(r, 'db'))
-  ;(debugRows.value.fileRows || []).forEach((r) => checkRow(r, 'file'))
+  if (!validateExecDatasetSelection()) return
 
-  if (missing.length) {
-    const sample = missing.slice(0, 6).map((x) => `${x.type.toUpperCase()}·${x.name}`).join('，')
-    window.$message?.error?.(`存在配置缺失（共${missing.length}条），请补全后再调试：${sample}${missing.length > 6 ? '…' : ''}`)
+  const missingCfg = collectExecConfigMissingRows()
+  if (missingCfg.length) {
+    window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, '调试'))
     return
   }
 
@@ -3332,36 +3521,11 @@ const confirmRunConfigAndExecute = async () => {
     return
   }
 
-  // 复用同一套「缺失配置」校验逻辑
-  const missing = []
-  const checkRow = (row, type) => {
-        const cfgName = type === 'api' ? row.request_config_name : row.config_name
-        const envId = getEffectiveEnvIdForRow(row)
-        if (!envId) return
-        if (!cfgName || !String(cfgName).trim()) {
-          missing.push({ type, project_id: row.project_id, name: '(未选择配置名)' })
-          return
-        }
-        const bucket = getBucket({ ...row, env_id: envId }, type === 'db' ? 'database' : type)
-        const info = bucket?.[cfgName]
-        if (!info || !info.config_host) {
-          missing.push({ type, project_id: row.project_id, name: String(cfgName) })
-          return
-        }
-        if (type === 'db') {
-          const dbName = row.database_name || info.database_name
-          if (!dbName || !String(dbName).trim()) {
-            missing.push({ type, project_id: row.project_id, name: `${String(cfgName)}(缺数据库名)` })
-          }
-        }
-      }
-  ;(debugRows.value.apiRows || []).forEach((r) => checkRow(r, 'api'))
-  ;(debugRows.value.dbRows || []).forEach((r) => checkRow(r, 'db'))
-  ;(debugRows.value.fileRows || []).forEach((r) => checkRow(r, 'file'))
+  if (!validateExecDatasetSelection()) return
 
-  if (missing.length) {
-    const sample = missing.slice(0, 6).map((x) => `${x.type.toUpperCase()}·${x.name}`).join('，')
-    window.$message?.error?.(`存在配置缺失（共${missing.length}条），请补全后再执行：${sample}${missing.length > 6 ? '…' : ''}`)
+  const missingCfg = collectExecConfigMissingRows()
+  if (missingCfg.length) {
+    window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, '执行'))
     return
   }
 
@@ -3380,13 +3544,17 @@ const doExecuteFromSavedTree = async (env_name, step_exec_config_map = null) => 
   try {
     const stepNoMap = assignStepNumbers(source)
     const backendSteps = source.map((step) => convertStepToBackend(step, null, stepNoMap))
-    const res = await api.executeStepTree({
+    const payload = {
       case_id: caseId.value ? Number(caseId.value) : null,
       steps: backendSteps,
       initial_variables: [],
       env_name,
-      steps_execute_config: step_exec_config_map || undefined
-    })
+      steps_execute_config: step_exec_config_map || undefined,
+    }
+    if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length > 0) {
+      payload.selected_dataset_names = [...debugExecDatasetSelectedIds.value]
+    }
+    const res = await api.executeStepTree(payload)
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
       window.$message?.success?.(res?.message || '执行成功')
     } else {
@@ -3405,13 +3573,17 @@ const doDebug = async (env_name, step_exec_config_map = null) => {
   try {
     const stepNoMap = assignStepNumbers(steps.value)
     const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
-    const res = await api.executeStepTree({
+    const payload = {
       case_id: caseId.value ? Number(caseId.value) : null,
       steps: backendSteps,
       initial_variables: [],
       env_name,
-      steps_execute_config: step_exec_config_map || undefined
-    })
+      steps_execute_config: step_exec_config_map || undefined,
+    }
+    if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length > 0) {
+      payload.selected_dataset_names = [...debugExecDatasetSelectedIds.value]
+    }
+    const res = await api.executeStepTree(payload)
     if (res?.code === '000000') {
       const msg = res.message
       window.$message?.success?.(msg)
@@ -4714,17 +4886,13 @@ const RecursiveStepChildren = defineComponent({
   align-items: center;
 }
 
-.exec-config-modal,
-.exec-config-dataset-wrap {
-  /* 原 min-height 620px / max-height 80vh 整体缩减 20% */
-  min-height: calc(620px * 0.8);
-  max-height: calc(80vh * 0.8);
-}
-
+/* 数据源配置卡片：表体最多 5 行可视高度（与下行高变量一致），超出纵向滚动 */
 .exec-config-dataset-wrap {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 200px;
+  max-height: 300px;
 }
 
 .exec-config-dataset-table {
@@ -4736,11 +4904,14 @@ const RecursiveStepChildren = defineComponent({
   border-radius: 8px;
   overflow: hidden;
   background: var(--n-color);
+  --exec-config-dataset-visible-rows: 5;
+  /* 与 .exec-config-dataset-row 的 padding + 小号控件行高对齐 */
+  --exec-config-dataset-row-height: 51px;
 }
 
 .exec-config-dataset-header {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 44px 72px 1fr;
   gap: 0;
   padding: 10px 12px;
   font-size: 13px;
@@ -4765,14 +4936,17 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .exec-config-dataset-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  max-height: calc(var(--exec-config-dataset-visible-rows) * var(--exec-config-dataset-row-height));
+  overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .exec-config-dataset-row {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 44px 72px 1fr;
   padding: 10px 12px;
   font-size: 13px;
   border-bottom: 1px solid var(--n-border-color);
@@ -4787,14 +4961,44 @@ const RecursiveStepChildren = defineComponent({
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--n-border-color);
-  text-align: right;
   font-size: 13px;
   color: var(--n-text-color-2);
 }
 
+.exec-config-dataset-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.exec-config-dataset-footer-count {
+  margin-left: auto;
+  text-align: right;
+}
+
+.exec-config-dataset-mode-tip {
+  margin-left: 6px;
+  color: var(--n-text-color-3);
+  font-size: 12px;
+}
+
+.exec-config-dataset-row .col.check {
+  display: flex;
+  align-items: center;
+}
+
+/*
+ * 应用与环境配置：左右分栏。
+ * - 右侧 API / DB / FILE 三节纵向堆叠；弹窗可视区域不足时由 .exec-config-right 整体滚动，三节均可到达（不被父级裁剪）。
+ * - 各类型表格表体最多 5 行（见 .exec-config-table-body），超出在表内滚动。
+ */
 .exec-config-modal {
   display: flex;
-  overflow: hidden;
+  align-items: stretch;
+  min-height: 150px;
+  overflow: visible;
 }
 
 .exec-config-left {
@@ -4862,6 +5066,8 @@ const RecursiveStepChildren = defineComponent({
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 0 0 0 14px;
 }
 
@@ -4874,6 +5080,11 @@ const RecursiveStepChildren = defineComponent({
 
 .exec-config-section {
   margin-top: 12px;
+  flex-shrink: 0;
+}
+
+.exec-config-right > .exec-config-section:first-child {
+  margin-top: 0;
 }
 
 .exec-config-section + .exec-config-section {
@@ -4895,6 +5106,16 @@ const RecursiveStepChildren = defineComponent({
   border: 1px solid var(--n-border-color);
   border-radius: 10px;
   overflow: hidden;
+  /* 表体最多展示 5 行数据行高之和，超出纵向滚动（与 .exec-config-table-row 的 padding/border 和小号控件高度对齐） */
+  --exec-config-visible-rows: 5;
+  --exec-config-row-height: 51px;
+}
+
+.exec-config-table-body {
+  max-height: calc(var(--exec-config-visible-rows) * var(--exec-config-row-height));
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .exec-config-table-header,

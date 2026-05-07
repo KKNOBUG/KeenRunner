@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { basicRoutes, vueModules } from '@/router/routes'
 import Layout from '@/layout/index.vue'
 import api from '@/api'
+import { normalizeBackendApiPermissionKey } from '@/utils/permissionKey'
 
 // * 后端路由相关函数
 // 根据后端传来数据构建出前端路由
@@ -85,7 +86,8 @@ export const usePermissionStore = defineStore('permission', {
     },
     async getAccessApis() {
       const res = await api.getUserRouters()
-      this.accessApis = res.data
+      const raw = Array.isArray(res.data) ? res.data : []
+      this.accessApis = raw.map(normalizeBackendApiPermissionKey)
       return this.accessApis
     },
     resetPermission() {

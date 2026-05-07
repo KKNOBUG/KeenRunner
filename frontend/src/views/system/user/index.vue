@@ -23,7 +23,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {formatDate, renderIcon} from '@/utils'
+import {apiPermissionKey, formatDate, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
@@ -253,7 +253,7 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit', {size: 16}),
                   }
               ),
-              [[vPermission, 'post/api/v1/user/update']]
+              [[vPermission, apiPermissionKey('post', '/user/update')]]
           ),
           h(
               NPopconfirm,
@@ -277,7 +277,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', {size: 16}),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/user/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/user/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该用户吗?'),
               }
@@ -312,7 +312,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:lock-reset', {size: 16}),
                             }
                         ),
-                        [[vPermission, 'post/api/v1/user/reset_password']]
+                        [[vPermission, apiPermissionKey('post', '/user/reset_password')]]
                     ),
                 default: () => h('div', {}, '确定重置用户密码为123456吗?'),
               }

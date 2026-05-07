@@ -8,7 +8,7 @@ import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
-import { renderIcon } from '@/utils'
+import { apiPermissionKey, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
@@ -19,6 +19,7 @@ defineOptions({ name: '路由管理' })
 const $table = ref(null)
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
+const ROUTER_REFRESH_PERM = apiPermissionKey('post', '/base/router/refresh')
 
 const checkedRowKeys = ref([])
 /** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
@@ -217,7 +218,7 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit', { size: 16 }),
                   }
               ),
-              [[vPermission, 'post/api/v1/router/update']]
+              [[vPermission, apiPermissionKey('post', '/base/router/update')]]
           ),
           h(
               NPopconfirm,
@@ -240,7 +241,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/router/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/base/router/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该API吗?'),
               }

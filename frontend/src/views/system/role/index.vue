@@ -21,7 +21,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {formatDate, formatDateTime, renderIcon} from '@/utils'
+import {apiPermissionKey, formatDate, formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 
@@ -37,6 +37,7 @@ function onListPaginationMeta(meta) {
 const checkedRowKeys = ref([])
 const queryItems = ref({ name: '' })
 const vPermission = resolveDirective('permission')
+const ROLE_AUTHORIZED_PERM = apiPermissionKey('post', '/base/role/authorized')
 
 const queryBarProps = {
   addReset: true,
@@ -217,7 +218,7 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit-outline', {size: 16}),
                   }
               ),
-              [[vPermission, 'post/api/v1/role/update']]
+              [[vPermission, apiPermissionKey('post', '/base/role/update')]]
           ),
           withDirectives(
               h(
@@ -259,7 +260,8 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit-outline', {size: 16}),
                   }
               ),
-              [[vPermission, 'get/api/v1/role/authorized']]
+              [[vPermission, apiPermissionKey('get', '/base/role/authorized')]]
+
           ),
           h(
               NPopconfirm,
@@ -283,7 +285,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', {size: 16}),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/role/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/base/role/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该角色吗?'),
               }
@@ -422,7 +424,7 @@ async function updateRoleAuthorized() {
           </NGi>
           <NGi offset="2">
             <NButton
-                v-permission="'post/api/v1/role/authorized'"
+                v-permission="ROLE_AUTHORIZED_PERM"
                 type="info"
                 @click="updateRoleAuthorized">
               确定

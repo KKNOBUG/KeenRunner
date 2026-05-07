@@ -22,7 +22,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import IconPicker from '@/components/icon/IconPicker.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
-import { formatDateTime, renderIcon } from '@/utils'
+import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 
@@ -208,7 +208,7 @@ const columns = [
                 },
                 {default: () => '子菜单', icon: renderIcon('material-symbols:add', {size: 16})}
             ),
-            [[vPermission, 'post/api/v1/menu/create']]
+            [[vPermission, apiPermissionKey('post', '/base/menu/create')]]
         ),
         withDirectives(
             h(
@@ -227,7 +227,7 @@ const columns = [
                   icon: renderIcon('material-symbols:edit-outline', {size: 16}),
                 }
             ),
-            [[vPermission, 'post/api/v1/menu/update']]
+            [[vPermission, apiPermissionKey('post', '/base/menu/update')]]
         ),
         h(
             NPopconfirm,
@@ -250,7 +250,7 @@ const columns = [
                             icon: renderIcon('material-symbols:delete-outline', {size: 16}),
                           }
                       ),
-                      [[vPermission, 'delete/api/v1/menu/delete']]
+                      [[vPermission, apiPermissionKey('delete', '/base/menu/delete')]]
                   ),
               default: () => h('div', {}, '确定删除该菜单吗?'),
             }

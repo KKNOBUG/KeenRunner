@@ -14,7 +14,7 @@ function hasPermission(permission) {
 export default function setupPermissionDirective(app) {
   function updateElVisible(el, permission) {
     if (!permission) {
-      throw new Error(`need roles: like v-permission="get/api/v1/user/list"`)
+      throw new Error('v-permission 需要传入 apiPermissionKey(method, path)')
     }
     if (!hasPermission(permission)) {
       el.parentElement?.removeChild(el)

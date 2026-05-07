@@ -7,7 +7,7 @@ import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {formatDateTime, renderIcon} from '@/utils'
+import {apiPermissionKey, formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 import {usePermissionStore, useTagsStore, useUserStore} from '@/store'
@@ -23,7 +23,7 @@ const vPermission = resolveDirective('permission')
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
 /** 与原头部「新增测试用例」按钮一致：无权限则不展示 QueryBar 中的「新增」 */
-const CASE_CREATE_PERM = 'post/api/v1/project/create'
+const CASE_CREATE_PERM = apiPermissionKey('post', '/autotest/case/create')
 const canCreateCase = computed(
     () => userStore.isSuperUser || permissionStore.apis.includes(CASE_CREATE_PERM)
 )
@@ -576,7 +576,8 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit-outline', {size: 16}),
                   }
               ),
-              [[vPermission, 'post/api/v1/role/update']]
+              [[vPermission, apiPermissionKey('post', '/autotest/case/update')]]
+
           ),
           h(
               NButton,
@@ -615,7 +616,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', {size: 16}),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/role/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/autotest/case/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该用例吗?'),
               }

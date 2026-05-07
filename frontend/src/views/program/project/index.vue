@@ -7,7 +7,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { formatDate, renderIcon } from '@/utils'
+import { apiPermissionKey, formatDate, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
@@ -247,7 +247,7 @@ const columns = computed(() => {
                     icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
                   }
               ),
-              [[vPermission, 'post/api/v1/role/update']]
+              [[vPermission, apiPermissionKey('post', '/autotest/project/update')]]
           ),
           h(
               NPopconfirm,
@@ -270,7 +270,7 @@ const columns = computed(() => {
                               icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
                             }
                         ),
-                        [[vPermission, 'delete/api/v1/role/delete']]
+                        [[vPermission, apiPermissionKey('delete', '/autotest/project/delete')]]
                     ),
                 default: () => h('div', {}, '确定删除该应用吗?'),
               }
