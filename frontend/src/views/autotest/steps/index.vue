@@ -1443,6 +1443,32 @@ const saveLoading = ref(false)
 // 执行/调试共用「脚本执行配置」弹窗：执行时以“DB已保存的步骤树”作为聚合来源
 const execConfigMode = ref('debug') // 'debug' | 'run'
 const execSourceSteps = ref(null) // 执行时用于聚合/执行的步骤树（前端映射后的结构）
+
+/** 与后端 AutoTestStepTreeExecute.case_id 一致：优先路由 case_id，否则从步骤树 original 递归解析 */
+const resolveNumericCaseIdForExecuteApi = () => {
+  const toPositiveInt = (v) => {
+    if (v == null || v === '') return null
+    const n = Number(v)
+    if (!Number.isFinite(n) || n < 1) return null
+    return Math.floor(n)
+  }
+  const fromRoute = toPositiveInt(caseId.value)
+  if (fromRoute != null) return fromRoute
+
+  const walk = (arr) => {
+    if (!Array.isArray(arr)) return null
+    for (const s of arr) {
+      const cid = s?.original?.case_id ?? s?.case_id
+      const n = toPositiveInt(cid)
+      if (n != null) return n
+      const nested = walk(s.children)
+      if (nested != null) return nested
+    }
+    return null
+  }
+  return walk(steps.value) ?? walk(execSourceSteps.value)
+}
+
 const dragState = ref({
   draggingId: null,
   dragOverId: null, // 当前拖拽进入的 loop/if 步骤 ID（焦点高亮）
@@ -2762,6 +2788,10 @@ const handleRun = async () => {
     execSourceSteps.value = data.map(mapBackendStep).filter(Boolean)
     // 执行模式也要加载引用公共脚本内部步骤（用于聚合）
     await loadQuoteStepsForAllQuoteStepsFromList(execSourceSteps.value)
+    if (resolveNumericCaseIdForExecuteApi() == null) {
+      window.$message?.warning?.('缺少用例 ID（case_id），无法执行，请先保存用例或从用例管理进入')
+      return
+    }
     execConfigMode.value = 'run'
     debugEnvMode.value = 'single'
     execConfigMainCardExpanded.value = true
@@ -2786,6 +2816,10 @@ const handleRun = async () => {
 const handleDebug = () => {
   if (!steps.value || steps.value.length === 0) {
     window.$message?.warning?.('请先添加测试步骤')
+    return
+  }
+  if (resolveNumericCaseIdForExecuteApi() == null) {
+    window.$message?.warning?.('缺少用例 ID（case_id），请先保存用例后再调试')
     return
   }
   openDebugConfigModal()
@@ -3531,24 +3565,26 @@ const confirmRunConfigAndExecute = async () => {
 
   debugConfigModalVisible.value = false
   const step_exec_config_map = buildStepExecConfigMap(env_name)
-  await doExecuteFromSavedTree(env_name, step_exec_config_map)
+  await doExecuteFromSavedTree(step_exec_config_map)
 }
 
-const doExecuteFromSavedTree = async (env_name, step_exec_config_map = null) => {
+/** 运行模式：仅传 case_id（及配置等），不传 steps，由后端按 case_id 查库执行 */
+const doExecuteFromSavedTree = async (step_exec_config_map = null) => {
   const source = Array.isArray(execSourceSteps.value) ? execSourceSteps.value : []
   if (!source.length) {
     window.$message?.warning?.('暂无已保存的步骤树可执行，请先保存后再执行')
     return
   }
+  const cid = resolveNumericCaseIdForExecuteApi()
+  if (cid == null) {
+    window.$message?.warning?.('缺少用例 ID（case_id），无法执行，请先保存用例或从用例管理进入')
+    return
+  }
   runLoading.value = true
   try {
-    const stepNoMap = assignStepNumbers(source)
-    const backendSteps = source.map((step) => convertStepToBackend(step, null, stepNoMap))
     const payload = {
-      case_id: caseId.value ? Number(caseId.value) : null,
-      steps: backendSteps,
+      case_id: cid,
       initial_variables: [],
-      env_name,
       steps_execute_config: step_exec_config_map || undefined,
     }
     if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length > 0) {
@@ -3569,15 +3605,20 @@ const doExecuteFromSavedTree = async (env_name, step_exec_config_map = null) => 
 }
 
 const doDebug = async (env_name, step_exec_config_map = null) => {
+  const cid = resolveNumericCaseIdForExecuteApi()
+  if (cid == null) {
+    window.$message?.warning?.('缺少用例 ID（case_id），请先保存用例后再调试')
+    return
+  }
   debugLoading.value = true
   try {
     const stepNoMap = assignStepNumbers(steps.value)
     const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
+    /** 调试模式：必须传 case_id + 当前页步骤树 steps（AutoTestStepTreeExecute） */
     const payload = {
-      case_id: caseId.value ? Number(caseId.value) : null,
+      case_id: cid,
       steps: backendSteps,
       initial_variables: [],
-      env_name,
       steps_execute_config: step_exec_config_map || undefined,
     }
     if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length > 0) {

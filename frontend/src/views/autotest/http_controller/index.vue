@@ -404,7 +404,7 @@
     </n-collapse-transition>
   </n-card>
 
-  <!-- DataSource：位于 Request 下方、Response 上方 -->
+  <!-- DataSource卡片：位于 Request 下方、Response 上方 -->
   <n-card
       :bordered="false"
       style="width: 100%;"
@@ -484,7 +484,7 @@
                   :data="dataSource.previewRows"
                   :row-class-name="dataSourcePreviewRowClassName"
                   :bordered="false"
-                  :scroll-x="900"
+                  :scroll-x="dataSourcePreviewScrollX"
                   size="small"
               />
             </n-space>
@@ -738,7 +738,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedEnvName"
+          v-model:value="selectedDebugEnvId"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -1008,6 +1008,20 @@ const previewRowsToDataframeMatrix = (rows) => {
   })
 }
 
+/** 预览矩阵当前最大列序号（c_1 → 1），无数据列为 0 */
+const getMaxPreviewColumnIndex = (rows) => {
+  let max = 0
+  for (const row of rows || []) {
+    for (const k of Object.keys(row || {})) {
+      if (k.startsWith('c_')) {
+        const n = Number(k.slice(2))
+        if (Number.isFinite(n) && n > max) max = n
+      }
+    }
+  }
+  return max
+}
+
 const buildPreviewColumnsByRows = (rows) => {
   const colSet = new Set()
   ;(rows || []).forEach((row) => {
@@ -1019,7 +1033,7 @@ const buildPreviewColumnsByRows = (rows) => {
   const dynamicCols = []
   for (const colKey of colKeys) {
     const colIndex = Number(colKey.slice(2)) || 0
-    dynamicCols.push({
+    const col = {
       title: () => h(
           'div',
           {style: 'display:flex;align-items:center;justify-content:center;gap:4px;'},
@@ -1046,7 +1060,7 @@ const buildPreviewColumnsByRows = (rows) => {
       key: colKey,
       align: 'center',
       ellipsis: {tooltip: true},
-      minWidth: 140,
+      minWidth: 150,
       render: (row) => {
         const editing = previewEditingCell.rowKey === row.__rowKey && previewEditingCell.colKey === colKey
         if (editing) {
@@ -1075,39 +1089,80 @@ const buildPreviewColumnsByRows = (rows) => {
             }
           })
         }
+        const raw = row[colKey]
+        const isEmpty = raw == null || raw === ''
+        const displayText = isEmpty ? '\u00a0' : String(raw)
         return h('div', {
-          style: 'min-height: 22px; cursor: text;',
-          onDblclick: () => {
+          style: {
+            minHeight: '28px',
+            width: '100%',
+            minWidth: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'text',
+            boxSizing: 'border-box',
+          },
+          onDblclick: (e) => {
+            e.stopPropagation()
             if (props.readonly) return
             previewEditingCell.rowKey = row.__rowKey
             previewEditingCell.colKey = colKey
-            previewEditingCell.originalValue = row[colKey] == null ? '' : String(row[colKey])
-          }
-        }, row[colKey] == null ? '' : String(row[colKey]))
+            previewEditingCell.originalValue = isEmpty ? '' : String(raw)
+          },
+        }, displayText)
       }
-    })
+    }
+    if (colKey === 'c_1') {
+      col.fixed = 'left'
+    }
+    dynamicCols.push(col)
   }
   return dynamicCols
 }
 
-const buildBlankPreviewRow = () => {
-  const colKeys = new Set()
+/** 数据预览表横向滚动宽度：固定列 + 每列至少 150px + 末尾「新增列」列，列多时自动超出容器出现滚动条 */
+const dataSourcePreviewScrollX = computed(() => {
+  const PREVIEW_FIXED_COL_WIDTH = 20 + 20 + 50
+  const PREVIEW_COL_ADD_WIDTH = 32
+  const MIN_DYNAMIC_COL_WIDTH = 150
+  const colSet = new Set()
   ;(dataSource.previewRows || []).forEach((row) => {
     Object.keys(row || {}).forEach((k) => {
-      if (k.startsWith('c_')) colKeys.add(k)
+      if (k.startsWith('c_')) colSet.add(k)
     })
   })
+  const n = colSet.size
+  const content = PREVIEW_FIXED_COL_WIDTH + n * MIN_DYNAMIC_COL_WIDTH + PREVIEW_COL_ADD_WIDTH
+  return Math.max(content, 2000)
+})
+
+const buildBlankPreviewRow = () => {
+  const maxCol = getMaxPreviewColumnIndex(dataSource.previewRows || [])
   const blank = {}
-  Array.from(colKeys).forEach((k) => {
-    blank[k] = ''
-  })
+  for (let j = 1; j <= maxCol; j++) {
+    blank[`c_${j}`] = ''
+  }
   return blank
+}
+
+/** 表头「+」：在右侧追加一列（所有行补齐新列；无任何行时插入一行作为表头行） */
+const addPreviewColumn = (e) => {
+  e?.stopPropagation?.()
+  if (props.readonly) return
+  let rows = [...(dataSource.previewRows || [])]
+  if (rows.length === 0) {
+    dataSource.previewRows = [{__rowKey: '1', __rowNo: 1, c_1: ''}]
+    renumberPreviewRows()
+    return
+  }
+  const maxCol = getMaxPreviewColumnIndex(rows)
+  const nextKey = `c_${maxCol + 1}`
+  dataSource.previewRows = rows.map((row) => ({...row, [nextKey]: ''}))
 }
 
 const insertBlankPreviewRowAfter = (row) => {
   if (props.readonly) return
-  // 第一行（字段名）后不允许新增空白行
-  if (Number(row?.__rowNo || 0) === 1) return
   const idx = (dataSource.previewRows || []).findIndex((x) => x.__rowKey === row.__rowKey)
   if (idx < 0) return
   const blankRow = {
@@ -1154,38 +1209,63 @@ const dataSourcePreviewColumns = computed(() => [
     disabled: (row) => isProtectedPreviewRow(row)
   },
   {
-    title: '',
-    key: '__rowAdd',
-    align: 'center',
-    width: 20,
-    render: (row) => h(
-        'div',
-        {style: 'width:100%;display:flex;justify-content:center;align-items:center;'},
-        Number(row?.__rowNo || 0) === 1
-            ? null
-            : h(NButton, {
-              text: true,
-              quaternary: true,
-              size: 'tiny',
-              disabled: props.readonly,
-              title: '在下方新增空白行',
-              onClick: (e) => {
-                e.stopPropagation()
-                insertBlankPreviewRowAfter(row)
-              }
-            }, {
-              icon: () => h(TheIcon, {icon: 'material-symbols-light:add-rounded', size: 14})
-            })
-    )
-  },
-  {
     title: '#',
     key: '__rowNo',
     align: 'center',
     width: 50,
+    fixed: 'left',
     render: (row) => String(row.__rowNo ?? '')
   },
+  {
+    title: '',
+    key: '__rowAdd',
+    align: 'center',
+    width: 20,
+    fixed: 'left',
+    render: (row) => h(
+        'div',
+        {style: 'width:100%;display:flex;justify-content:center;align-items:center;'},
+        h(NButton, {
+          text: true,
+          quaternary: true,
+          size: 'tiny',
+          disabled: props.readonly,
+          title: Number(row?.__rowNo || 0) === 1 ? '在首行（字段行）下方插入空白行' : '在下方新增空白行',
+          onClick: (e) => {
+            e.stopPropagation()
+            insertBlankPreviewRowAfter(row)
+          }
+        }, {
+          icon: () => h(TheIcon, {icon: 'material-symbols-light:add-rounded', size: 14})
+        })
+    )
+  },
   ...buildPreviewColumnsByRows(dataSource.previewRows),
+  {
+    title: () =>
+        h(
+            'div',
+            {style: 'width:100%;display:flex;justify-content:center;align-items:center;'},
+            h(NButton, {
+              text: true,
+              quaternary: true,
+              size: 'tiny',
+              disabled: props.readonly,
+              title: '在右侧新增列',
+              onClick: addPreviewColumn,
+            }, {
+              icon: () => h(TheIcon, {icon: 'material-symbols-light:add-rounded', size: 14}),
+            }),
+        ),
+    key: '__colAdd',
+    align: 'center',
+    width: 32,
+    fixed: 'right',
+    render: () =>
+        h('div', {
+          style: 'min-height:28px;width:100%;',
+        }),
+  },
 ])
 
 
@@ -2171,19 +2251,23 @@ const debugResultRef = ref(null)
 const debugModalVisible = ref(false)
 const envOptions = ref([])
 const envLoading = ref(false)
-const selectedEnvName = ref(null)
+/** 调试所选环境枚举 ID（下拉 label 为环境名称，与 schema 的 env_id 对应） */
+const selectedDebugEnvId = ref(null)
 
 const loadEnvNames = async () => {
   envLoading.value = true
   try {
-    const res = await api.getApiEnvNames()
+    const res = await api.getEnvList()
     const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({label: name, value: name}))
-    if (envOptions.value.length > 0 && !selectedEnvName.value) {
-      selectedEnvName.value = envOptions.value[0].value
+    envOptions.value = list.map((row) => ({
+      label: row.env_name != null ? String(row.env_name) : String(row.env_id),
+      value: row.env_id,
+    }))
+    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
+      selectedDebugEnvId.value = envOptions.value[0].value
     }
   } catch (e) {
-    console.error('加载环境名称失败', e)
+    console.error('加载环境列表失败', e)
     envOptions.value = []
   } finally {
     envLoading.value = false
@@ -2191,14 +2275,14 @@ const loadEnvNames = async () => {
 }
 
 const openDebugModal = () => {
-  selectedEnvName.value = null
+  selectedDebugEnvId.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
   debugModalVisible.value = false
-  doDebugRequest(selectedEnvName.value ?? '')
+  doDebugRequest(selectedDebugEnvId.value)
 }
 
 /* 调试方法：先选环境再发请求 */
@@ -2212,7 +2296,7 @@ const debugging = async () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_name) => {
+const doDebugRequest = async (env_id) => {
   const userStore = useUserStore()
   const currentUser = userStore.username
   debugLoading.value = true
@@ -2245,7 +2329,7 @@ const doDebugRequest = async (env_name) => {
     const original = props.step?.original || {}
 
     const debugPayload = {
-      env_name: env_name || '',
+      env_id: Number(env_id),
       case_id: caseId,
       step_type: original.step_type || 'HTTP/HTTPS协议网络请求',
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
@@ -2253,6 +2337,12 @@ const doDebugRequest = async (env_name) => {
       request_method: cfg.method,
       request_args_type: cfg.request_args_type ?? original.request_args_type ?? 'none',
       request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
+      request_config_name:
+          cfg.request_config_name != null && String(cfg.request_config_name).trim() !== ''
+              ? String(cfg.request_config_name).trim()
+              : (original.request_config_name != null && String(original.request_config_name).trim() !== ''
+                  ? String(original.request_config_name).trim()
+                  : ''),
       request_params: Array.isArray(cfg.params) && cfg.params.length > 0 ? cfg.params : null,
       request_body: cfg.data,
       request_form_data: Array.isArray(cfg.form_data) && cfg.form_data.length > 0 ? cfg.form_data : null,
