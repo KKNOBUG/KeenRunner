@@ -563,21 +563,17 @@
                             v-model:value="row.env_id"
                             :options="debugEnvOptions"
                             size="small"
-                            :disabled="debugEnvMode === 'single'"
-                            placeholder="请选择"
+                            :disabled="!debugGlobalEnvId || debugEnvMode === 'single'"
+                            placeholder="请先选择全局环境"
                             clearable
                         />
                       </div>
                       <div class="col config">
-                        <n-select
-                            v-model:value="row.request_config_name"
+                        <n-input
+                            :value="row.request_config_name || ''"
                             size="small"
-                            filterable
-                            tag
-                            clearable
-                            placeholder="选择或输入配置名"
-                            :disabled="!debugGlobalEnvId"
-                            :options="getApiConfigOptions(row)"
+                            disabled
+                            placeholder="未填写配置名"
                         />
                       </div>
                       <div class="col addr">
@@ -585,7 +581,7 @@
                             :value="getRowAddrPreview(row, 'api')"
                             size="small"
                             disabled
-                            placeholder="请先选择全局环境和配置"
+                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
                         />
                       </div>
                     </div>
@@ -614,33 +610,25 @@
                             v-model:value="row.env_id"
                             :options="debugEnvOptions"
                             size="small"
-                            :disabled="debugEnvMode === 'single'"
-                            placeholder="请选择"
+                            :disabled="!debugGlobalEnvId || debugEnvMode === 'single'"
+                            placeholder="请先选择全局环境"
                             clearable
                         />
                       </div>
                       <div class="col config">
-                        <n-select
-                            v-model:value="row.config_name"
+                        <n-input
+                            :value="row.config_name || ''"
                             size="small"
-                            filterable
-                            tag
-                            clearable
-                            placeholder="配置名"
-                            :disabled="!debugGlobalEnvId"
-                            :options="getDbConfigOptions(row)"
+                            disabled
+                            placeholder="未填写配置名"
                         />
                       </div>
                       <div class="col config">
-                        <n-select
-                            v-model:value="row.database_name"
+                        <n-input
+                            :value="getDbDatabaseDisplay(row)"
                             size="small"
-                            filterable
-                            tag
-                            clearable
-                            placeholder="库名"
-                            :disabled="!debugGlobalEnvId"
-                            :options="getDbNameOptions(row)"
+                            disabled
+                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
                         />
                       </div>
                       <div class="col addr">
@@ -648,7 +636,7 @@
                             :value="getRowAddrPreview(row, 'database')"
                             size="small"
                             disabled
-                            placeholder="请先选择全局环境和配置"
+                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
                         />
                       </div>
                     </div>
@@ -676,21 +664,17 @@
                             v-model:value="row.env_id"
                             :options="debugEnvOptions"
                             size="small"
-                            :disabled="debugEnvMode === 'single'"
-                            placeholder="请选择"
+                            :disabled="!debugGlobalEnvId || debugEnvMode === 'single'"
+                            placeholder="请先选择全局环境"
                             clearable
                         />
                       </div>
                       <div class="col config">
-                        <n-select
-                            v-model:value="row.config_name"
+                        <n-input
+                            :value="row.config_name || ''"
                             size="small"
-                            filterable
-                            tag
-                            clearable
-                            placeholder="选择或输入配置名"
-                            :disabled="!debugGlobalEnvId"
-                            :options="getFileConfigOptions(row)"
+                            disabled
+                            placeholder="未填写配置名"
                         />
                       </div>
                       <div class="col addr">
@@ -698,7 +682,7 @@
                             :value="getRowAddrPreview(row, 'file')"
                             size="small"
                             disabled
-                            placeholder="请先选择全局环境和配置"
+                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
                         />
                       </div>
                     </div>
@@ -1652,6 +1636,19 @@ const loadQuoteStepsForAllQuoteSteps = () => {
   forEachStep(steps.value, (step) => {
     if (step.type === 'quote') loadQuoteStepsForStep(step)
   })
+}
+
+/**
+ * 等待当前页步骤树中所有「引用公共脚本」的内部步骤加载完成（写入 quoteStepsMap）。
+ * 脚本执行配置聚合依赖 quoteStepsMap；若不 await，collectDebugRows 会在引用步骤仍为空的时机执行，导致配置名/IP 等缺失。
+ */
+const loadQuoteStepsForAllQuoteStepsAsync = async () => {
+  const quoteSteps = []
+  forEachStep(steps.value, (s) => {
+    if (s?.type === 'quote' && s?.config?.quote_case_id) quoteSteps.push(s)
+  })
+  if (!quoteSteps.length) return
+  await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s)))
 }
 
 /** 执行模式/外部树：加载指定步骤树中的所有引用脚本步骤 */
@@ -2813,7 +2810,7 @@ const handleRun = async () => {
   }
 }
 
-const handleDebug = () => {
+const handleDebug = async () => {
   if (!steps.value || steps.value.length === 0) {
     window.$message?.warning?.('请先添加测试步骤')
     return
@@ -2822,7 +2819,7 @@ const handleDebug = () => {
     window.$message?.warning?.('缺少用例 ID（case_id），请先保存用例后再调试')
     return
   }
-  openDebugConfigModal()
+  await openDebugConfigModal()
 }
 
 const envLoading = ref(false)
@@ -3091,11 +3088,13 @@ const collectDebugRows = (sourceSteps = null) => {
         if (!op) return
         const project_id = op.project_id ?? null
         if (!project_id) return
-        pushSet(dbConfigNameSetByProject, project_id, op.config_name)
-        pushSet(dbNameSetByProject, project_id, op.database_name)
+        const opCfgName = op.config_name ?? op.configName ?? null
+        const opDbName = op.database_name ?? op.databaseName ?? null
+        pushSet(dbConfigNameSetByProject, project_id, opCfgName)
+        pushSet(dbNameSetByProject, project_id, opDbName)
         const backend_key = getBackendKeyFromStep(step)
-        const cfgName = op.config_name != null ? String(op.config_name).trim() : ''
-        const dbName = op.database_name != null ? String(op.database_name).trim() : ''
+        const cfgName = opCfgName != null ? String(opCfgName).trim() : ''
+        const dbName = opDbName != null ? String(opDbName).trim() : ''
         // 去重策略（DB）：
         // - 若 config_name + database_name 都存在：同一应用 + 同一(config_name+database_name) => 聚合成一行
         // - 若缺失：按“步骤 + 操作索引”保留（避免把不同操作误合并）
@@ -3198,7 +3197,7 @@ const debugFileRowsForSelected = computed(() => {
   return debugRows.value.fileRows.filter((r) => String(r.project_id) === String(pid))
 })
 
-const openDebugConfigModal = () => {
+const openDebugConfigModal = async () => {
   execConfigMode.value = 'debug'
   execSourceSteps.value = null
   debugEnvMode.value = 'single'
@@ -3210,19 +3209,16 @@ const openDebugConfigModal = () => {
   debugGlobalEnvId.value = null
   debugSelectedProjectId.value = null
   debugEnvConfigDict.value = {}
+  await loadQuoteStepsForAllQuoteStepsAsync()
   debugRows.value = collectDebugRows()
   debugConfigModalVisible.value = true
   loadDebugEnvEnums()
 }
 
 const onDebugModalAfterEnter = () => {
-  // 默认选中第一个应用
+  // 默认选中第一个应用（全局环境默认空，由用户选择）
   if (!debugSelectedProjectId.value && debugApps.value.length > 0) {
     debugSelectedProjectId.value = debugApps.value[0].project_id
-  }
-  // 默认选中第一个环境
-  if (!debugGlobalEnvId.value && debugEnvOptions.value.length > 0) {
-    debugGlobalEnvId.value = debugEnvOptions.value[0].value
   }
 
   // 拉取配置：按当前步骤树聚合出的应用列表
@@ -3230,11 +3226,10 @@ const onDebugModalAfterEnter = () => {
   if (project_ids.length) loadEnvConfigByProjects(project_ids)
 }
 
-// 全局环境切换：默认替换所有行的环境选择（单环境/多环境都生效；多环境下用户仍可再手动改单行）
+// 全局环境：选中时同步到各行环境；清空时各行环境置空（右侧 IP/库名等依赖 getBucket 随环境更新）
 watch(() => debugGlobalEnvId.value, (envId) => {
-  if (!envId) return
   const apply = (rows) => {
-    rows.forEach((r) => { r.env_id = envId })
+    rows.forEach((r) => { r.env_id = envId ?? null })
   }
   apply(debugRows.value.apiRows || [])
   apply(debugRows.value.dbRows || [])
@@ -3267,31 +3262,16 @@ const getBucket = (row, configType) => {
   return e?.[configType] || {}
 }
 
-const getApiConfigOptions = (row) => {
-  const bucket = getBucket(row, 'api')
-  const names = Object.keys(bucket || {})
-  return names.length ? names.map((x) => ({ label: x, value: x })) : (row._configNameSeed || [])
-}
-
-const getDbConfigOptions = (row) => {
-  const bucket = getBucket(row, 'database')
-  const names = Object.keys(bucket || {})
-  return names.length ? names.map((x) => ({ label: x, value: x })) : (row._configNameSeed || [])
-}
-
-const getDbNameOptions = (row) => {
-  const bucket = getBucket(row, 'database')
-  const dbNames = Object.values(bucket || {})
-      .map((x) => x?.database_name)
-      .filter((x) => x != null && String(x).trim() !== '')
-  const uniq = Array.from(new Set(dbNames))
-  return uniq.length ? uniq.map((x) => ({ label: x, value: x })) : (row._dbNameSeed || [])
-}
-
-const getFileConfigOptions = (row) => {
-  const bucket = getBucket(row, 'file')
-  const names = Object.keys(bucket || {})
-  return names.length ? names.map((x) => ({ label: x, value: x })) : (row._configNameSeed || [])
+/** DB：库名以当前生效环境下的配置为准，无则回退步骤中的值 */
+const getDbDatabaseDisplay = (row) => {
+  const envId = getEffectiveEnvIdForRow(row)
+  if (envId == null) return ''
+  const bucket = getBucket({ ...row, env_id: envId }, 'database')
+  const cfgName = row.config_name
+  const info = cfgName ? bucket?.[cfgName] : null
+  const fromEnv = info?.database_name
+  if (fromEnv != null && String(fromEnv).trim() !== '') return String(fromEnv)
+  return row.database_name ? String(row.database_name) : ''
 }
 
 const getRowAddrPreview = (row, configType) => {
@@ -3349,7 +3329,7 @@ const collectExecConfigMissingRows = () => {
       push('db', row, `${String(cfgName).trim()}(IP/端口未获取)`)
       return
     }
-    const dbName = row.database_name || info?.database_name
+    const dbName = info?.database_name ?? row.database_name
     if (!dbName || !String(dbName).trim()) {
       push('db', row, `${String(cfgName).trim()}(数据库名未获取)`)
     }
@@ -3403,8 +3383,13 @@ const applyDebugConfigToSteps = () => {
     })
   })
 
-  // DB：回写到 database_operates
+  // DB：回写到 database_operates（库名以当前环境下的解析结果为准）
   dbRows.forEach((r) => {
+    const envId = getEffectiveEnvIdForRow(r)
+    const bucket = getBucket({ ...r, env_id: envId }, 'database')
+    const cfgNm = r.config_name
+    const info = cfgNm ? bucket?.[cfgNm] : null
+    const resolvedDb = info?.database_name ?? r.database_name
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       const step = findStep(t.local_step_id)
@@ -3415,7 +3400,7 @@ const applyDebugConfigToSteps = () => {
       if (idx == null || !ops[idx]) return
       ops[idx].project_id = r.project_id ?? ops[idx].project_id
       ops[idx].config_name = r.config_name ?? ops[idx].config_name
-      ops[idx].database_name = r.database_name ?? ops[idx].database_name
+      ops[idx].database_name = resolvedDb ?? ops[idx].database_name
     })
   })
 }
@@ -3482,7 +3467,7 @@ const buildStepExecConfigMap = (env_name) => {
         config_name: name,
         config_host: info.config_host,
         config_port: info.config_port,
-        database_name: r.database_name || info.database_name || null,
+        database_name: info.database_name ?? r.database_name ?? null,
       }
     })
   })
