@@ -6,14 +6,13 @@
 @Module  : autotest_step_view.py
 @DateTime: 2025/4/28
 """
-
 import json
 import time
 import traceback
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Set, Union
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Body, Query
@@ -32,9 +31,14 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestTcpDebugRequest,
     AutoTestStepTreeExecute,
     AutoTestPythonCodeDebugRequest,
+    StepVariablesBase,
+    StepExtractVariableItem,
+    StepAssertValidatorItem,
+    StepsExecuteConfigBase,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
+from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -350,7 +354,7 @@ async def batch_update_steps_tree(
                                 f"删除更新后多余步骤: "
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
-                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).update(state=1)
+                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).delete()
                 # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
@@ -359,9 +363,7 @@ async def batch_update_steps_tree(
                             case_id=successful_case_id
                         )
                         if deleted_step_count > 0:
-                            LOGGER.warning(
-                                f"步骤已全部删除: 用例(case_id={successful_case_id})下 {deleted_step_count} 个步骤已被软删除"
-                            )
+                            LOGGER.warning(f"步骤已全部删除: 用例(case_id={successful_case_id})下 {deleted_step_count} 个步骤已被软删除")
                 LOGGER.info(
                     f"步骤处理完成："
                     f"新增步骤: {created_step_count}个, "
@@ -370,15 +372,8 @@ async def batch_update_steps_tree(
                     f"成功明细: {success_step_detail}"
                 )
                 # 6. 构建返回结果
-                return SuccessResponse(
-                    message="更新用例及步骤树成功",
-                    data={"cases": case_result, "steps": step_result}
-                )
-        except (
-                TypeRejectException,
-                NotFoundException, ParameterException,
-                DataBaseStorageException, DataAlreadyExistsException,
-        ) as e:
+                return SuccessResponse(message="更新用例及步骤树成功", data={"cases": case_result, "steps": step_result})
+        except (TypeRejectException, NotFoundException, ParameterException, DataBaseStorageException, DataAlreadyExistsException) as e:
             return FailureResponse(message=e.message)
         except Exception as e:
             # 事务会自动回滚
@@ -408,85 +403,144 @@ async def debug_http_request(
 ):
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
-        env_name = step_data.env_name
-        step_name = step_data.step_name
-        request_url = step_data.request_url.lstrip("/")
-        request_method = (step_data.request_method or "GET").upper()
-        request_header = step_data.request_header or []
-        request_params = step_data.request_params or []
-        request_form_data = step_data.request_form_data or []
-        request_form_file = step_data.request_form_file or []
-        request_form_urlencoded = step_data.request_form_urlencoded or []
+        env_id: int = step_data.env_id
+        step_name: str = step_data.step_name
+        request_project_id: int = step_data.request_project_id
+        request_config_name: str = step_data.request_config_name
+        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
+
+        request_url: str = step_data.request_url.lstrip("/")
+        request_method: str = (step_data.request_method or "GET").upper()
+        request_header: Optional[List[Dict[str, Any]]] = step_data.request_header
+        request_params: Optional[List[Dict[str, Any]]] = step_data.request_params
+        request_form_data: Optional[List[Dict[str, Any]]] = step_data.request_form_data
+        request_form_file: Optional[List[Dict[str, Any]]] = step_data.request_form_file
+        request_form_urlencoded: Optional[List[Dict[str, Any]]] = step_data.request_form_urlencoded
         request_body: Optional[Dict[str, Any]] = step_data.request_body
         request_text: Optional[str] = step_data.request_text
-        request_project_id: int = step_data.request_project_id
-        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-        session_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.session_variables or [])]
-        defined_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.defined_variables or [])]
-        extract_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.extract_variables or [])]
-        assert_validators: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.assert_validators or [])]
+
+        session_variables: List[StepVariablesBase] = step_data.session_variables
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables
+        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
 
         # 确保是列表格式
-        if not isinstance(request_header, list):
+        if not request_header or not isinstance(request_header, list):
             request_header = []
-        if not isinstance(request_params, list):
+        if not request_params or not isinstance(request_params, list):
             request_params = []
-        if not isinstance(request_form_data, list):
+        if not request_form_data or not isinstance(request_form_data, list):
             request_form_data = []
-        if not isinstance(request_form_urlencoded, list):
-            request_form_urlencoded = []
-        if not isinstance(request_form_file, list):
+        if not request_form_file or not isinstance(request_form_file, list):
             request_form_file = []
+        if not request_form_urlencoded or not isinstance(request_form_urlencoded, list):
+            request_form_urlencoded = []
+
+        if not session_variables or not isinstance(session_variables, list):
+            session_variables = []
+        if not defined_variables or not isinstance(defined_variables, list):
+            defined_variables = []
+        if not extract_variables or not isinstance(extract_variables, list):
+            extract_variables = []
+        if not assert_validators or not isinstance(assert_validators, list):
+            assert_validators = []
 
         # 将列表格式的 defined_variables\session_variables 转换为字典格式（用于变量查找）
         merge_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
-            if isinstance(item, dict) and item.get("key"):
-                merge_all_variables[item["key"]] = item
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables[item.key] = item.dict()
         for item in session_variables:
-            if isinstance(item, dict) and item.get("key"):
-                merge_all_variables[item["key"]] = item
-        initial_variables = list(merge_all_variables.values())
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables[item.key] = item.dict()
+        initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
 
         # 处理请求主机域名
         if request_url and not request_url.lower().startswith("http"):
             try:
-                from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
-
-                execute_env_host, execute_env_port = await resolve_env_api_base_host_port(
-                    int(request_project_id), str(env_name)
+                env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
+                    only_one=True,
+                    on_error=False,
+                    conditions={
+                        "env_id": env_id,
+                        "project_id": request_project_id,
+                        "config_name": request_config_name
+                    }
                 )
+                if not env_config_instance:
+                    return NotFoundResponse(message=f"HTTP请求调试失败, 环境配置[{request_config_name}]不存在")
+                execute_env_host: str = env_config_instance.config_host.strip().rstrip("/").rstrip(":")
+                execute_env_port: str = env_config_instance.config_port
+                if not execute_env_host or not execute_env_port:
+                    return NotFoundResponse(message=f"HTTP请求调试失败, 环境配置[{request_config_name}]正确")
                 if not execute_env_port:
                     request_url = f"{execute_env_host}/{request_url}"
                 else:
                     request_url = f"{execute_env_host}:{execute_env_port}/{request_url}"
-
             except Exception as e:
-                LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
+                LOGGER.error(f"HTTP请求调试异常, 错误描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(f"HTTP请求调试异常, 错误描述: {e}")
 
-        # 日志辅助函数：添加时间戳和步骤名称
-        def format_log(message: str) -> str:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            return f"[{timestamp}] [{step_name}] {message}"
-
         # 记录执行日志，用于前端反馈
-        logs = [
-            format_log(f"HTTP请求调试开始: \n请求方法: {request_method}\n请求地址: {request_url}"),
-            format_log(f"参数替换开始: "),
-        ]
+        debugging_logs: List[str] = []
 
+        # 日志辅助函数：添加时间戳和步骤名称
+        def append_debugging_log(message: str) -> None:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
+
+        append_debugging_log(
+            message=f"【HTTP请求】调试开始: \n\t"
+                    f"环境ID: {env_id}\n\t"
+                    f"应用ID: {request_project_id}\n\t"
+                    f"配置名称: {request_config_name}\n\t"
+                    f"请求方法: {request_method}\n\t"
+                    f"请求地址: {request_url}"
+        )
+        append_debugging_log(message="【参数替换】开始: ")
         # 解析请求参数（列表格式）及 request_body、request_text 中的占位符
-        finished_variables = AutoTestToolService.resolve_placeholders(initial_variables, logs.append, False, finished_variables={})
-        headers_list = AutoTestToolService.resolve_placeholders(request_header, logs.append, False, finished_variables=finished_variables)
-        params_list = AutoTestToolService.resolve_placeholders(request_params, logs.append, False, finished_variables=finished_variables)
-        form_data_list = AutoTestToolService.resolve_placeholders(request_form_data, logs.append, False, finished_variables=finished_variables)
-        urlencoded_list = AutoTestToolService.resolve_placeholders(request_form_urlencoded, logs.append, False, finished_variables=finished_variables)
-        form_files_list = AutoTestToolService.resolve_placeholders(request_form_file, logs.append, False, finished_variables=finished_variables)
+        finished_variables: List[Dict[str, Any]] = AutoTestToolService.resolve_placeholders(
+            value=initial_variables,
+            logger_object=append_debugging_log,
+            finished_variables={}
+        )
+        headers_list = AutoTestToolService.resolve_placeholders(
+            value=request_header,
+            logger_object=append_debugging_log,
+            finished_variables=finished_variables
+        )
+        params_list = AutoTestToolService.resolve_placeholders(
+            value=request_params,
+            logger_object=append_debugging_log,
+            finished_variables=finished_variables
+        )
+        form_data_list = AutoTestToolService.resolve_placeholders(
+            value=request_form_data,
+            logger_object=append_debugging_log,
+            finished_variables=finished_variables
+        )
+        urlencoded_list = AutoTestToolService.resolve_placeholders(
+            value=request_form_urlencoded,
+            logger_object=append_debugging_log,
+            finished_variables=finished_variables
+        )
+        form_files_list = AutoTestToolService.resolve_placeholders(
+            value=request_form_file,
+            logger_object=append_debugging_log,
+            finished_variables=finished_variables
+        )
         if request_body is not None:
-            request_body = AutoTestToolService.resolve_placeholders(request_body, logs.append, False, finished_variables=finished_variables)
+            request_body = AutoTestToolService.resolve_placeholders(
+                value=request_body,
+                logger_object=append_debugging_log,
+                finished_variables=finished_variables
+            )
         if request_text is not None:
-            request_text = AutoTestToolService.resolve_placeholders(request_text, logs.append, False, finished_variables=finished_variables)
+            request_text = AutoTestToolService.resolve_placeholders(
+                value=request_text,
+                logger_object=append_debugging_log,
+                finished_variables=finished_variables
+            )
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         headers = AutoTestToolService.convert_list_to_dict_for_http(headers_list)
@@ -524,7 +578,7 @@ async def debug_http_request(
             data_payload = urlencoded
 
         # 构建请求参数
-        logs.append(format_log("参数替换结束"))
+        append_debugging_log(message="【参数替换】完成")
         request_kwargs = {
             "headers": headers if headers else None,
             "params": params if params else None,
@@ -568,7 +622,7 @@ async def debug_http_request(
                 return FailureResponse(message=f"请求失败: {str(e)}")
             except Exception as e:
                 error_message: str = (
-                    f"【HTTP请求调试】请求服务器发生未知错误, "
+                    f"【HTTP请求】调试异常, "
                     f"错误类型: {type(e).__name__}, "
                     f"错误描述: {e}"
                 )
@@ -577,7 +631,12 @@ async def debug_http_request(
 
         # 计算耗时
         duration = int((time.time() - start_time) * 1000)  # 转换为毫秒
-        logs.append(format_log(f"HTTP请求调试完成: 状态码 {response.status_code}, 耗时 {duration}ms"))
+        append_debugging_log(
+            message=f"【HTTP请求】调试完成: \n\t"
+                    f"状态描述: {response.reason_phrase}\n\t"
+                    f"状态代码: {response.status_code}\n\t"
+                    f"响应耗时: {duration}ms"
+        )
 
         # 解析响应数据
         response_json = None
@@ -602,16 +661,17 @@ async def debug_http_request(
         size_str = f"{response_size / 1024:.2f}KB" if response_size > 1024 else f"{response_size}B"
 
         # 处理数据提取（使用与步骤引擎共用的工具方法）
-        _, extract_results = AutoTestToolService.run_extract_variables(
+        extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
             response_json=response_json,
             response_headers=response_headers,
             response_cookies=response_cookies,
             session_variables_lookup=merge_all_variables,
-            log_callback=lambda msg: logs.append(format_log(msg)),
+            log_callback=lambda message: append_debugging_log(message=message),
         )
-
+        for extract_key, extract_value in extract_data.items():
+            finished_variables.append({"key": extract_key, "value": extract_value, "desc": ""})
         # 处理断言验证（使用与步骤引擎共用的工具方法）
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
@@ -620,7 +680,9 @@ async def debug_http_request(
             response_headers=response_headers,
             response_cookies=response_cookies,
             session_variables_lookup=merge_all_variables,
-            log_callback=lambda msg: logs.append(format_log(msg)),
+            log_callback=lambda message: append_debugging_log(message=message),
+            finished_variables=finished_variables,
+            is_core_engine=False,
         )
 
         # 构建返回数据（包含处理后的请求信息，用于前端展示实际发送的报文）
@@ -652,7 +714,7 @@ async def debug_http_request(
             "size": size_str,
             "extract_results": extract_results,
             "validator_results": validator_results,
-            "logs": logs,
+            "logs": debugging_logs,
             "request_info": {
                 "url": request_url,
                 "method": request_method,
@@ -662,10 +724,9 @@ async def debug_http_request(
                 "body": actual_body
             }
         }
+        LOGGER.info(f"HTTP请求调试完成: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
 
-        LOGGER.info(f"HTTP调试请求成功: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
-
-        return SuccessResponse(message="HTTP调试请求成功", data=result_data)
+        return SuccessResponse(message="HTTP请求调试完成", data=result_data)
     except Exception as e:
         LOGGER.error(f"HTTP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
@@ -676,45 +737,73 @@ async def debug_tcp_request(
         step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据")
 ):
     try:
-        env_name: str = step_data.env_name
+        env_id: int = step_data.env_id
         step_name: str = step_data.step_name
+        request_project_id: int = step_data.request_project_id
+        request_config_name: str = step_data.request_config_name
+        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
+
         request_url: str = (step_data.request_url or "").strip()
         request_port: str = step_data.request_port
         request_text: str = step_data.request_text
-        request_project_id: int = step_data.request_project_id
-        # TCP 调试场景下，报文统一以字符串形式存储在 request_text 中，request_args_type 固定为 RAW
-        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-        session_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.session_variables or [])]
-        defined_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.defined_variables or [])]
-        extract_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.extract_variables or [])]
-        assert_validators: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.assert_validators or [])]
+
+        session_variables: List[StepVariablesBase] = step_data.session_variables
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables
+        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
+
+        if not session_variables or not isinstance(session_variables, list):
+            session_variables = []
+        if not defined_variables or not isinstance(defined_variables, list):
+            defined_variables = []
+        if not extract_variables or not isinstance(extract_variables, list):
+            extract_variables = []
+        if not assert_validators or not isinstance(assert_validators, list):
+            assert_validators = []
 
         # 合并变量池（同 HTTP 调试）
         merge_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
-            if isinstance(item, dict) and item.get("key"):
-                merge_all_variables[item["key"]] = item
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables[item.key] = item.dict()
         for item in session_variables:
-            if isinstance(item, dict) and item.get("key"):
-                merge_all_variables[item["key"]] = item
-        initial_variables = list(merge_all_variables.values())
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables[item.key] = item.dict()
+        initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
 
-        # 日志辅助函数
-        def format_log(message: str) -> str:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            return f"[{timestamp}] [{step_name}] {message}"
+        # 记录执行日志，用于前端反馈
+        debugging_logs: List[str] = []
 
-        logs = [format_log("TCP请求调试开始:"), format_log("参数替换开始:")]
+        # 日志辅助函数：添加时间戳和步骤名称
+        def append_debugging_log(message: str) -> None:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
+
+        append_debugging_log(
+            message=f"TCP请求调试开始: \n\t"
+                    f"环境ID: {env_id}\n\t"
+                    f"应用ID: {request_project_id}\n\t"
+                    f"配置名称: {request_config_name}\n\t"
+                    f"请求地址: {request_url}\n\t"
+                    f"请求端口: {request_port}"
+        )
+        append_debugging_log(message="【参数替换】开始: ")
+
         finished_variables = AutoTestToolService.resolve_placeholders(
-            initial_variables, logs.append, False, finished_variables={}
+            value=initial_variables,
+            logger_object=append_debugging_log,
+            finished_variables={}
         )
         if request_text is not None:
             request_text = AutoTestToolService.resolve_placeholders(
-                request_text, logs.append, False, finished_variables=finished_variables
+                value=request_text,
+                logger_object=append_debugging_log,
+                finished_variables=finished_variables
             )
-        logs.append(format_log("参数替换结束"))
+        append_debugging_log(message="【参数替换】结束")
 
         # 解析 host/port（支持 host:port；若仅选应用则走环境配置）
+
         host: str = ""
         port: Optional[int] = None
         if request_url and ":" in request_url:
@@ -722,26 +811,26 @@ async def debug_tcp_request(
             if len(request_parts) == 2 and request_parts[1].isdigit():
                 host = request_parts[0].strip()
                 port = int(request_parts[1])
-                logs.append(format_log(f"解析请求信息(host={host}, port={port})成功"))
+                append_debugging_log(message=f"解析请求信息(host={host}, port={port})成功")
         if not host:
             host = request_url
         if port is None and request_port not in (None, ""):
             try:
                 port = int(str(request_port).strip())
             except Exception:
-                logs.append(format_log(f"解析请求信息(host={host}, port={port})失败"))
-        if (not host) and env_name and request_project_id:
+                append_debugging_log(message=f"解析请求信息(host={host}, port={port})失败")
+        if (not host) and env_id and request_project_id:
             try:
                 from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
 
-                rh, ps = await resolve_env_api_base_host_port(int(request_project_id), str(env_name))
+                rh, ps = await resolve_env_api_base_host_port(int(request_project_id), str(env_id))
                 host = (rh or "").strip().rstrip("/").rstrip(":")
                 if ps and str(ps).strip().isdigit():
                     port = int(str(ps).strip())
-                logs.append(format_log(f"解析请求信息(host={host}, port={port})成功"))
+                append_debugging_log(message=f"解析请求信息(host={host}, port={port})成功")
             except Exception as e:
                 error_message: str = f"解析请求信息(host={host}, port={port})失败, 终止调试: {e}"
-                logs.append(format_log(error_message))
+                append_debugging_log(message=error_message)
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message=error_message)
 
@@ -775,7 +864,7 @@ async def debug_tcp_request(
         # 解析响应：优先 JSON，否则当作 text
         response_json: Optional[Dict[str, Any]] = None
         duration = int((time.time() - start_time) * 1000)
-        logs.append(format_log(f"TCP请求调试完成: 耗时: {duration}ms"))
+        append_debugging_log(message=f"TCP请求调试完成: 耗时: {duration}ms")
         response_text: str = raw_bytes.decode("utf-8", errors="ignore")
         response_data: Optional[Union[str, Dict[str, Any]]] = response_text
         try:
@@ -793,7 +882,7 @@ async def debug_tcp_request(
             response_headers=None,
             response_cookies=None,
             session_variables_lookup=merge_all_variables,
-            log_callback=lambda msg: logs.append(format_log(msg)),
+            log_callback=lambda message: append_debugging_log(message=message),
         )
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
@@ -802,7 +891,9 @@ async def debug_tcp_request(
             response_headers=None,
             response_cookies=None,
             session_variables_lookup=merge_all_variables,
-            log_callback=lambda msg: logs.append(format_log(msg)),
+            log_callback=lambda message: append_debugging_log(message=message),
+            finished_variables=finished_variables,
+            is_core_engine=False,
         )
 
         size = len(raw_bytes)
@@ -816,7 +907,7 @@ async def debug_tcp_request(
             "size": size_str,
             "extract_results": extract_results,
             "validator_results": validator_results,
-            "logs": logs,
+            "logs": debugging_logs,
             "request_info": {
                 "url": f"{host}:{port}",
                 "method": "TCP",
@@ -863,21 +954,27 @@ async def debug_python_code(
         code = step_data.code
         step_name = step_data.step_name or "代码请求(Python)调试"
         # defined_variables、session_variables 必须是列表格式
-        defined_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.defined_variables or [])]
-        session_variables: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.session_variables or [])]
-        assert_validators: List[Dict[str, Any]] = [m.model_dump() for m in (step_data.assert_validators or [])]
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables
+        session_variables: List[StepVariablesBase] = step_data.session_variables
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
+
+        if not session_variables or not isinstance(session_variables, list):
+            session_variables = []
+        if not defined_variables or not isinstance(defined_variables, list):
+            defined_variables = []
+        if not assert_validators or not isinstance(assert_validators, list):
+            assert_validators = []
 
         # 合并变量到执行上下文（列表格式）
         # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）
-        merged_variables = {}
-        for item in session_variables:
-            if isinstance(item, dict) and "key" in item:
-                merged_variables[item.get("key")] = item
+        merge_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
-            if isinstance(item, dict) and "key" in item:
-                merged_variables[item.get("key")] = item
-        initial_variables = list(merged_variables.values())
-
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables[item.key] = item.dict()
+        for item in session_variables:
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables[item.key] = item.dict()
+        initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
         # 创建执行上下文（使用虚拟的case_id和case_code）
         from backend.applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError, StepExecutionResult
         async with StepExecutionContext(case_id=0, case_code="DEBUG", initial_variables=initial_variables) as context:
@@ -906,17 +1003,19 @@ async def debug_python_code(
                             raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
 
                     session_lookup_map: Dict[str, Any] = {}
-                    session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))
-                    session_lookup_map.update(AutoTestToolService.list_to_dict(session_variables))
+                    session_lookup_map.update(AutoTestToolService.list_to_dict([d.model_dump() for d in defined_variables]))
+                    session_lookup_map.update(AutoTestToolService.list_to_dict([s.model_dump() for s in session_variables]))
                     session_lookup_map.update(executive_result or {})
                     validator_result = AutoTestToolService.run_assert_validators(
-                        assert_validators=assert_validators,
+                        assert_validators=[a.model_dump() for a in (assert_validators or [])],
                         response_text=None,
                         response_json=None,
                         response_headers=None,
                         response_cookies=None,
                         session_variables_lookup=session_lookup_map,
                         log_callback=lambda msg: context.log(msg),
+                        finished_variables=context,
+                        is_core_engine=True,
                     )
                     assert_failed_number: int = sum(
                         1 for valid in validator_result if not valid.get("success", True)
@@ -968,10 +1067,11 @@ async def execute_step_tree(
       返回：完整的步骤级执行结果（含每一步的状态、日志、变量提取结果、会话变量的累积）+ 整体执行汇总。
     """
     try:
-        env_name = request.env_name
-        case_id = request.case_id
-        steps = request.steps
-        initial_variables = request.initial_variables
+        case_id: int = request.case_id
+        steps: Optional[List[AutoTestStepTreeUpdateItem]] = request.steps
+        initial_variables: Optional[List[StepVariablesBase]] = request.initial_variables
+        steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = request.steps_execute_config
+        selected_dataset_names: Optional[List[str]] = request.selected_dataset_names
 
         # 判断运行模式还是调试模式
         # 运行模式：只传递 case_id，不传递 steps
@@ -1003,14 +1103,13 @@ async def execute_step_tree(
         # ========== 运行模式 ==========
         if is_run_mode:
             try:
-                selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
                 # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
-                selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
+                # selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
                 if not selected_dataset_names:
                     # 普通单次执行（无选中数据集）
                     result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                         case_id=case_id,
-                        env_name=env_name,
+                        steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
                         report_type=AutoTestReportType.SYNC_EXEC
                     )
@@ -1030,7 +1129,7 @@ async def execute_step_tree(
                 for dataset_name in selected_dataset_names:
                     single_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                         case_id=case_id,
-                        env_name=env_name,
+                        steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables or [],
                         report_type=AutoTestReportType.SYNC_EXEC,
                         batch_code=batch_code,
@@ -1070,7 +1169,7 @@ async def execute_step_tree(
         # ========== 调试模式 ==========
         else:
             # 1. 将Pydantic模型转换为字典
-            steps_dict = []
+            steps_dict: List[Dict[str, Any]] = []
             for step in steps:
                 if hasattr(step, 'model_dump'):
                     steps_dict.append(step.model_dump())
@@ -1106,20 +1205,20 @@ async def execute_step_tree(
             # initial_variables 和 all_session_variables 都是列表格式，每个元素包含 key、value、desc
             all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
             # 合并两个列表，如果存在相同的key，使用 all_session_variables 中的值（后收集的优先）
-            merged_variables = {}
+            merge_all_variables: Dict[str, Any] = {}
             # 先添加 initial_variables
             if isinstance(initial_variables, list):
                 for item in initial_variables:
                     if isinstance(item, dict) and "key" in item:
-                        merged_variables[item.get("key")] = item
+                        merge_all_variables[item.get("key")] = item
             # 再添加 all_session_variables（会覆盖相同的key）
             if isinstance(all_session_variables, list):
                 for item in all_session_variables:
                     if isinstance(item, dict) and "key" in item:
-                        merged_variables[item.get("key")] = item
+                        merge_all_variables[item.get("key")] = item
             try:
                 # 转换回列表格式
-                initial_variables = list(merged_variables.values())
+                initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
             except Exception as e:
                 return ParameterResponse(message=str(e))
 
@@ -1130,7 +1229,7 @@ async def execute_step_tree(
 
             # 6. 执行（若选择了单条数据集则传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表取数）
             # 调试模式：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
-            selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
+            # selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
             # selected_dataset_names = ["场景1名称"]
             if selected_dataset_names:
                 if len(selected_dataset_names) != 1:
@@ -1142,7 +1241,7 @@ async def execute_step_tree(
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
                 steps=root_steps,
-                env_name=env_name,
+                steps_execute_config=steps_execute_config,
                 initial_variables=initial_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC,
                 dataset_name=debug_dataset_name,

@@ -14,11 +14,11 @@ import re
 import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Callable, Union
-from xml.etree import ElementTree as ET
+from xml.etree import ElementTree
 
 from jsonpath_ng import parse as jsonpath_parse
 
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
+from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem, StepExtractVariableItem, StepAssertValidatorItem
 from backend.common import JSONPathUtils
 from backend.common.generate_utils import GenerateUtils
 from backend.enums.autotest_enum import AutoTestAssertionOperation
@@ -176,7 +176,7 @@ class AutoTestToolService:
         return AutoTestToolService.acquire_dataset_payload(step_data)
 
     @staticmethod
-    def append_assert_to_validators(
+    def append_assert_validators(
             *,
             step_struct: Optional[Dict[str, Dict[str, Any]]],
             validator_results: List[Dict[str, Any]],
@@ -185,11 +185,15 @@ class AutoTestToolService:
             response_headers: Optional[Dict[str, Any]],
             response_cookies: Optional[Dict[str, Any]],
             session_variables_lookup: Optional[Dict[str, Any]],
-            compare_fail_message: str = "实际值与期待值不满足指定操作符比较",
+            compare_fail_message: str = "实际值与预期值不满足指定操作符比较",
+            finished_variables: Optional[Any] = None,
+            is_core_engine: bool = False,
+            log_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         """
         将数据驱动场景的 assert_head / assert_body 追加到 validator_results（原地修改）。
         assert_body 在 response_json 为 None 时逐条记失败，与 TCP 步骤原行为一致。
+        若提供 finished_variables，则预期值先经 ``resolve_placeholders`` 解析再比较（含义同该函数同名参数）。
         """
         if not isinstance(step_struct, dict):
             return
@@ -198,6 +202,16 @@ class AutoTestToolService:
         for except_path, except_value in assert_head_map.items():
             if not except_path:
                 continue
+            resolved_except_value = (
+                except_value
+                if finished_variables is None
+                else AutoTestToolService.resolve_placeholders(
+                    value=except_value,
+                    logger_object=log_callback,
+                    is_core_engine=is_core_engine,
+                    finished_variables=finished_variables,
+                )
+            )
             header_key = AutoTestToolServiceImpl.by_jsonpath_modify_request_header(except_path) or str(except_path).strip()
             try:
                 actual_value = AutoTestToolService.extract_from_source(
@@ -212,13 +226,17 @@ class AutoTestToolService:
                     session_variables_lookup=session_variables_lookup,
                     operation_type="断言验证",
                 )
-                success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                success: bool = AutoTestToolService.compare_assertion(
+                    actual=actual_value,
+                    operation="等于",
+                    expected=resolved_except_value
+                )
                 validator_results.append({
                     "name": except_path,
                     "expr": except_path,
                     "source": "response headers",
                     "operation": "等于",
-                    "except_value": except_value,
+                    "except_value": resolved_except_value,
                     "actual_value": actual_value,
                     "success": success,
                     "error": "" if success else compare_fail_message,
@@ -229,7 +247,7 @@ class AutoTestToolService:
                     "expr": except_path,
                     "source": "response headers",
                     "operation": "等于",
-                    "except_value": except_value,
+                    "except_value": resolved_except_value,
                     "actual_value": None,
                     "success": False,
                     "error": str(e),
@@ -239,13 +257,23 @@ class AutoTestToolService:
         for except_path, except_value in assert_body_map.items():
             if not except_path:
                 continue
+            resolved_except_value = (
+                except_value
+                if finished_variables is None
+                else AutoTestToolService.resolve_placeholders(
+                    value=except_value,
+                    logger_object=log_callback,
+                    is_core_engine=is_core_engine,
+                    finished_variables=finished_variables,
+                )
+            )
             if response_json is None:
                 validator_results.append({
                     "name": except_path,
                     "expr": except_path,
                     "source": "response json",
                     "operation": "等于",
-                    "except_value": except_value,
+                    "except_value": resolved_except_value,
                     "actual_value": None,
                     "success": False,
                     "error": "响应不是JSON，无法进行JSONPath断言",
@@ -264,13 +292,17 @@ class AutoTestToolService:
                     session_variables_lookup=session_variables_lookup,
                     operation_type="断言验证",
                 )
-                success = AutoTestToolService.compare_assertion(actual_value, "等于", except_value)
+                success = AutoTestToolService.compare_assertion(
+                    actual=actual_value,
+                    operation="等于",
+                    expected=resolved_except_value
+                )
                 validator_results.append({
                     "name": except_path,
                     "expr": except_path,
                     "source": "response json",
                     "operation": "等于",
-                    "except_value": except_value,
+                    "except_value": resolved_except_value,
                     "actual_value": actual_value,
                     "success": success,
                     "error": "" if success else compare_fail_message,
@@ -281,7 +313,7 @@ class AutoTestToolService:
                     "expr": except_path,
                     "source": "response json",
                     "operation": "等于",
-                    "except_value": except_value,
+                    "except_value": resolved_except_value,
                     "actual_value": None,
                     "success": False,
                     "error": str(e),
@@ -329,7 +361,7 @@ class AutoTestToolService:
     @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """断言比较；``operation`` 须为 ``AutoTestAssertionOperation`` 枚举值字符串。"""
-        return AutoTestToolServiceImpl.compare_assertion(actual, operation, expected)
+        return AutoTestToolServiceImpl.compare_assertion(actual=actual, operation=operation, expected=expected)
 
     @classmethod
     def extract_from_source(
@@ -349,7 +381,8 @@ class AutoTestToolService:
         """
         从 source 指定来源中按 expr 与 range 提取单个值供 HTTP 调试与步骤引擎共用
 
-        :param source: 来源类型, 如: response json、response xml、response text、response headers、response cookies、session_variables、变量池；数据库步骤可为 variable_name（与响应列表项匹配）
+        :param source: 来源类型, 如: response json、response xml、response text、response headers、response cookies、session_variables、变量池；
+        数据库步骤可为 variable_name（与响应列表项匹配）
         :param expr: 提取表达式(JSONPath/XPath/正则), SOME 模式必填
         :param range_type: "ALL" 或 "SOME", 默认 "SOME"
         :param index: 提取结果为数组时的下标
@@ -397,7 +430,7 @@ class AutoTestToolService:
             if not expr:
                 raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
             try:
-                response_xml = ET.fromstring(response_text)
+                response_xml = ElementTree.fromstring(response_text)
                 elements = response_xml.findall(expr)
                 if not elements:
                     raise ValueError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
@@ -406,7 +439,7 @@ class AutoTestToolService:
                         index_int = int(index)
                         if index_int < len(elements):
                             element = elements[index_int]
-                            return element.text if element.text else ET.tostring(element, encoding="unicode")
+                            return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
                         raise ValueError(
                             f"【{operation_type}】数组越界, "
                             f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
@@ -414,8 +447,8 @@ class AutoTestToolService:
                     except (ValueError, TypeError) as e:
                         raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
                 element = elements[-1]
-                return element.text if element.text else ET.tostring(element, encoding="unicode")
-            except ET.ParseError as e:
+                return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+            except ElementTree.ParseError as e:
                 raise ValueError(f"【{operation_type}】响应内容不是有效的XML格式, 错误描述: {e}") from e
             except ValueError:
                 raise
@@ -550,33 +583,40 @@ class AutoTestToolService:
         if not isinstance(extract_variables, list):
             if log_callback:
                 log_callback(
-                    f"【变量提取】表达式列表解析失败: "
-                    f"参数[extract_variables]必须是[List[Dict[str, Any]]]类型, "
-                    f"但得到[{type(extract_variables)}]类型"
+                    f"【变量提取】表达式列表解析失败: \n\t"
+                    f"预期类型: List[Dict[str, Any]] 或 List[StepExtractVariableItem]\n\t"
+                    f"实际类型: [{type(extract_variables)}]"
                 )
             return extract_results_dict, extract_results_list
-        for ext_config in extract_variables:
-            if not isinstance(ext_config, dict):
+        for extract_config in extract_variables:
+            if isinstance(extract_config, StepExtractVariableItem):
+                name = extract_config.name
+                expr = extract_config.expr
+                source = extract_config.source
+                range_type = extract_config.scope
+                index = extract_config.index
+            elif isinstance(extract_config, dict):
+                name = extract_config.get("name")
+                expr = extract_config.get("expr")
+                source = extract_config.get("source")
+                range_type = extract_config.get("scope")
+                index = extract_config.get("index")
+            else:
                 if log_callback:
                     log_callback(
-                        f"【变量提取】表达式子项解析无效(跳过): "
-                        f"参数[extract_variables]的子项必须是[Dict[str, Any]]类型, "
-                        f"但得到[{type(ext_config)}]类型: {ext_config}"
+                        f"【变量提取】表达式子项解析无效(跳过提取): \n\t"
+                        f"预期类型: Dict[str, Any] 或 StepExtractVariableItem\n\t"
+                        f"实际类型: [{type(extract_config)}]"
                     )
                 continue
-            name = ext_config.get("name")
-            expr = ext_config.get("expr")
-            source = ext_config.get("source")
-            range_type = ext_config.get("scope")
-            index = ext_config.get("index")
             if not name or not expr or not source:
                 if log_callback:
                     log_callback(
-                        f"【变量提取】表达式子项解析无效(跳过): "
+                        f"【变量提取】表达式子项解析无效(跳过提取): \n\t"
                         f"参数[name, expr, source]是必须的, 如需继续提取可添加[scope, index]参数"
                     )
                 continue
-            error_msg = ""
+            error_message: str = ""
             extract_value = None
             try:
                 extract_value = cls.extract_from_source(
@@ -592,11 +632,28 @@ class AutoTestToolService:
                     operation_type="变量提取",
                 )
                 if log_callback:
-                    log_callback(f"【变量提取】成功: {name}  <==>  {extract_value}")
+                    log_callback(
+                        f"【变量提取】成功: \n\t"
+                        f"提取名称: {name}\n\t"
+                        f"提取对象: {source}\n\t"
+                        f"提取范围: {range_type}\n\t"
+                        f"提取路径: {expr}\n\t"
+                        f"提取索引: {index}\n\t"
+                        f"提取数据: {extract_value}"
+                    )
             except Exception as e:
-                error_msg = str(e)
+                error_message = str(e)
                 if log_callback:
-                    log_callback(f"【变量提取】失败: {name}, {error_msg}")
+                    log_callback(
+                        f"【变量提取】失败: \n\t"
+                        f"提取名称: {name}\n\t"
+                        f"提取对象: {source}\n\t"
+                        f"提取范围: {range_type}\n\t"
+                        f"提取路径: {expr}\n\t"
+                        f"提取索引: {index}\n\t"
+                        f"提取数据: {extract_value}\n\t"
+                        f"错误描述: {error_message}"
+                    )
             item = {
                 "name": name,
                 "source": source,
@@ -604,11 +661,11 @@ class AutoTestToolService:
                 "expr": expr,
                 "index": index,
                 "extract_value": extract_value,
-                "error": error_msg,
-                "success": error_msg == "",
+                "error": error_message,
+                "success": error_message == "",
             }
             extract_results_list.append(item)
-            if error_msg == "":
+            if error_message == "":
                 extract_results_dict[name] = extract_value
         return extract_results_dict, extract_results_list
 
@@ -623,6 +680,8 @@ class AutoTestToolService:
             response_cookies: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
+            finished_variables: Optional[Any] = None,
+            is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         按 assert_validators 配置从响应/变量池取实际值并与期望值比较供 HTTP 调试与步骤引擎共用
@@ -634,37 +693,50 @@ class AutoTestToolService:
         :param response_cookies: HTTP 响应 cookies(用于 response cookies)
         :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), Dict[str, Any]
         :param log_callback: 可选日志回调
-        :returns: 每条断言结果列表, 含 name/source/expr/operation/except_value/actual_value/success/error
+        :param finished_variables: 非 None 时先对 except_value 调用 ``resolve_placeholders``（与同名参数含义一致；步骤引擎传 StepExecutionContext；调试传变量列表）
+        :param is_core_engine: 含义同 ``resolve_placeholders``；为 True 时 finished_variables 须提供 ``get_variable``
+        :returns: 每条断言结果列表, 含 name/source/expr/operation/except_value/actual_value/success/error（except_value 为解析后的参与比较值）
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
             return validator_results
         if not isinstance(assert_validators, list):
             if log_callback:
-                log_callback("【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
+                log_callback(
+                    f"【断言验证】表达式列表解析失败: \n\t"
+                    f"预期类型: List[Dict[str, Any]] 或 List[StepAssertValidatorItem]\n\t"
+                    f"实际类型: [{type(assert_validators)}]"
+                )
             return validator_results
         for validator_config in assert_validators:
-            if not isinstance(validator_config, dict):
+            if isinstance(validator_config, StepAssertValidatorItem):
+                name = validator_config.name
+                expr = validator_config.expr
+                operation = validator_config.operation
+                except_value = validator_config.except_value
+                source = validator_config.source
+            elif isinstance(validator_config, dict):
+                name = validator_config.get("name")
+                expr = validator_config.get("expr")
+                operation = validator_config.get("operation")
+                except_value = validator_config.get("except_value")
+                source = validator_config.get("source")
+            else:
                 if log_callback:
                     log_callback(
-                        f"【断言验证】表达式子项解析无效(跳过): "
-                        f"参数[assert_validators]的子项必须是[Dict[str, Any]]类型, "
-                        f"但得到[{type(validator_config)}]类型: {validator_config}"
+                        f"【断言验证】表达式子项解析无效(跳过断言): \n\t"
+                        f"预期类型: Dict[str, Any] 或 StepAssertValidatorItem\n\t"
+                        f"实际类型: [{type(validator_config)}]"
                     )
                 continue
-            name = validator_config.get("name")
-            expr = validator_config.get("expr")
-            operation = validator_config.get("operation")
-            except_value = validator_config.get("except_value")
-            source = validator_config.get("source")
             if not name or not expr or not operation or not source:
                 if log_callback:
                     log_callback(
-                        f"【断言验证】表达式子项解析无效(跳过): "
+                        f"【断言验证】表达式子项解析无效(跳过断言): \n\t"
                         f"参数[name, expr, operation, source]是必须的, 非空断言时需添加[except_value]参数"
                     )
                 continue
-            error_message: str = "实际值与期待值不满足指定操作符比较"
+            error_message: str = "实际值与预期值不满足指定操作符比较"
             success: bool = False
             actual_value: Any = None
             try:
@@ -683,7 +755,15 @@ class AutoTestToolService:
             except Exception as e:
                 error_message = str(e)
                 if log_callback:
-                    log_callback(f"【断言验证】比较失败: {name}, {error_message}")
+                    expr_message: str = (
+                        f"数据源: {source}\n\t"
+                        f"表达式: {expr}\n\t"
+                        f"实际值: {actual_value}\n\t"
+                        f"操作符: {operation}\n\t"
+                        f"预期值: {except_value}\n\t"
+                        f"错误描述: {error_message}"
+                    )
+                    log_callback(f"【断言验证】获取实际值失败: \n\t{expr_message}")
                 validator_results.append({
                     "name": name,
                     "source": source,
@@ -695,30 +775,52 @@ class AutoTestToolService:
                     "error": error_message,
                 })
                 continue
+            resolved_except_value = (
+                except_value
+                if finished_variables is None
+                else cls.resolve_placeholders(
+                    value=except_value,
+                    logger_object=log_callback,
+                    is_core_engine=is_core_engine,
+                    finished_variables=finished_variables,
+                )
+            )
             try:
-                success = cls.compare_assertion(actual=actual_value, operation=operation, expected=except_value)
+                success: bool = cls.compare_assertion(
+                    actual=actual_value,
+                    operation=operation,
+                    expected=resolved_except_value
+                )
                 if log_callback:
                     expr_message: str = (
-                        f"\n\t数据源: [{source}], \n"
-                        f"\t表达式: [{expr}], \n"
-                        f"\t实际值: [{actual_value}], \n"
-                        f"\t操作符: [{operation}], \n"
-                        f"\t预期值: [{except_value}]\n\n"
+                        f"数据源: {source}\n\t"
+                        f"表达式: {expr}\n\t"
+                        f"实际值: {actual_value}\n\t"
+                        f"操作符: {operation}\n\t"
+                        f"预期值: {resolved_except_value}"
                     )
                     if success:
-                        log_callback(f"【断言验证】比较成功: {expr_message}")
+                        log_callback(f"【断言验证】成功: \n\t{expr_message}")
                     else:
-                        log_callback(f"【断言验证】比较失败: {expr_message}")
-            except Exception as e:
+                        log_callback(f"【断言验证】失败: \n\t{expr_message}")
+            except ValueError as e:
                 error_message = str(e)
                 if log_callback:
-                    log_callback(f"【断言验证】比较异常, 错误描述: {e}: {name}, {error_message}")
+                    expr_message: str = (
+                        f"数据源: {source}\n\t"
+                        f"表达式: {expr}\n\t"
+                        f"实际值: {actual_value}\n\t"
+                        f"操作符: {operation}\n\t"
+                        f"预期值: {except_value}\n\t"
+                        f"错误描述: {error_message}"
+                    )
+                    log_callback(f"【断言验证】异常: \n\t{expr_message}")
             validator_results.append({
                 "name": name,
                 "source": source,
                 "expr": expr,
                 "operation": operation,
-                "except_value": except_value,
+                "except_value": resolved_except_value,
                 "actual_value": actual_value,
                 "success": success,
                 "error": "" if success else error_message,
@@ -897,7 +999,7 @@ class AutoTestToolServiceImpl:
         :param skip_if_no_value: 为 True 时仅当项中含 value 键才加入结果；为 False 时仅要求 "key", value 可为 None
         :return: 键值对字典；非列表入参返回空字典
         """
-        if not isinstance(items, list):
+        if not items or not isinstance(items, list):
             return {}
         result: Dict[str, Any] = {}
         for item in items:
@@ -1059,7 +1161,7 @@ class AutoTestToolServiceImpl:
         try:
             op = AutoTestAssertionOperation(operation)
         except ValueError as exc:
-            raise ValueError(f"【断言表达式】操作符[{operation!r}]不被支持") from exc
+            raise ValueError(f"操作符[{operation!r}]不被支持") from exc
 
         handlers: Dict[AutoTestAssertionOperation, Callable[[Any, Any], bool]] = {
             AutoTestAssertionOperation.EQUAL: cls._assertion_equal,
@@ -1078,11 +1180,11 @@ class AutoTestToolServiceImpl:
         }
         comparator = handlers.get(op)
         if comparator is None:
-            raise ValueError(f"【断言表达式】操作符[{operation!r}]未绑定实现")
+            raise ValueError(f"操作符[{operation!r}]未绑定实现")
         try:
             return comparator(actual, expected)
         except Exception as e:
-            raise ValueError(f"【断言表达式】执行失败, 实际值[{actual}] 操作符[{operation}] 期待值[{expected}] {e}") from e
+            raise ValueError(f"比较失败: 实际值[{actual}] 操作符[{operation}] 预期值[{expected}] {e}") from e
 
     @classmethod
     def resolve_json_path(cls, data: Any, expr: str) -> Any:
@@ -1355,7 +1457,7 @@ class AutoTestToolServiceImpl:
             return finished_variables.get_variable(inner)
         resolved = AutoTestToolService.get_value_from_list(finished_variables, inner)
         if resolved is None:
-            raise KeyError(f"【占位填充】获取数据失败, 必须是已经存在且有值的变量: {inner!r}")
+            raise KeyError(f"必须是已经存在且有值的变量: {inner!r}")
         return resolved
 
     @classmethod
@@ -1585,18 +1687,18 @@ class AutoTestToolServiceImpl:
         for match in regularly_matched:
             inner: str = match.group(1).strip()
             if not inner:
-                logger_object(f"【占位填充】获取数据失败, 不允许使用空字符串, 保留原值")
+                logger_object(f"【参数替换】获取数据失败: \n\t不允许使用空字符串, 保留原值")
                 regularly_slots.append((match, None, match.group(0)))
                 continue
             try:
                 value = cls._resolve_placeholder_inner(inner, is_core_engine, finished_variables)
-                logger_object("【占位填充】获取数据成功, ${" + inner + "}  >>>  " + str(value))
+                logger_object("【参数替换】获取数据成功: \n\t${" + inner + "}  >>>>>  " + str(value))
                 regularly_slots.append((match, value, None))
             except KeyError as e:
-                logger_object(e.args[0])
+                logger_object(f"【参数替换】获取数据异常: \n\t错误描述: {e}")
                 regularly_slots.append((match, None, match.group(0)))
-            except Exception as e:
-                logger_object(f"【占位填充】获取数据失败, 引用[{inner!r}]发生异常, 保留原值, {e}")
+            except AttributeError as e:
+                logger_object(f"【参数替换】获取数据异常: \n\t错误描述: {e}")
                 regularly_slots.append((match, None, match.group(0)))
 
         if any(failed_content is not None for match, value, failed_content in regularly_slots):
@@ -1690,11 +1792,12 @@ class AutoTestToolServiceImpl:
                     }
                 except Exception as e:
                     logger_object(
-                        f"【占位填充】解析字典中的占位符时发生异常, 键: {list(value.keys())}, "
-                        f"错误描述: {e}, \n"
-                        f"错误类型: {type(e).__name__}, \n"
-                        f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
-                        f"错误回溯: {traceback.format_exc()}\n"
+                        f"【参数替换】解析字典中的占位符时发生异常: \n\t"
+                        f"键: {list(value.keys())}\n\t"
+                        f"错误描述: {e}\n\t"
+                        f"错误类型: {type(e).__name__}\n\t"
+                        f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
+                        f"错误回溯: {traceback.format_exc()}"
                     )
                     return value
 
@@ -1726,7 +1829,7 @@ class AutoTestToolServiceImpl:
             return value
         except Exception as e:
             logger_object(
-                f"【占位填充】解析列表中的占位符时发生异常, 保留原值, "
+                f"【参数替换】解析列表中的占位符时发生异常: \n\t"
                 f"错误描述: {e}, \n"
                 f"错误类型: {type(e).__name__}, \n"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"

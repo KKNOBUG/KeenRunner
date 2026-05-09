@@ -18,6 +18,7 @@ from backend.enums import (
     AutoTestReqArgsType,
     AutoTestLoopErrorStrategy,
     AutoTestAssertionOperation,
+    AutoTestConfigNodeType,
 )
 from backend.enums import HTTPMethod
 
@@ -54,6 +55,15 @@ class StepVariablesBase(BaseModel):
     key: str = Field(..., max_length=1024, description="会话变量(键)")
     value: Optional[Any] = Field(None, description="会话变量(值)")
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
+
+
+class StepsExecuteConfigBase(BaseModel):
+    env_name: str = Field(..., max_length=128, description="环境名称")
+    config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
+    config_name: str = Field(..., max_length=128, description="配置名称")
+    config_host: str = Field(..., max_length=128, description="配置主机")
+    config_port: str = Field(..., max_length=8, description="配置端口")
+    database_name: Optional[str] = Field(None, max_length=128, description="数据库名称")
 
 
 class StepExtractVariableItem(BaseModel):
@@ -108,18 +118,10 @@ class AutoTestApiStepDbBase(BaseModel):
 
 
 class AutoTestApiStepVarBase(BaseModel):
-    session_variables: Optional[List[StepVariablesBase]] = Field(
-        default=None, description="会话变量(所有步骤持续累积), 列表项为 key / value / desc"
-    )
-    defined_variables: Optional[List[StepVariablesBase]] = Field(
-        default=None, description="定义变量, 列表项为 key / value / desc"
-    )
-    extract_variables: Optional[List[StepExtractVariableItem]] = Field(
-        default=None, description="提取规则(步骤定义), 使用 scope 表示 ALL/SOME"
-    )
-    assert_validators: Optional[List[StepAssertValidatorItem]] = Field(
-        default=None, description="断言规则(步骤定义)"
-    )
+    session_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(所有步骤持续累积), 列表项为 key / value / desc")
+    defined_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="定义变量, 列表项为 key / value / desc")
+    extract_variables: Optional[List[StepExtractVariableItem]] = Field(default=None, description="提取规则(步骤定义), 使用 scope 表示 ALL/SOME")
+    assert_validators: Optional[List[StepAssertValidatorItem]] = Field(default=None, description="断言规则(步骤定义)")
 
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepVarBase):
@@ -196,11 +198,12 @@ class AutoTestStepTreeUpdateList(BaseModel):
 
 
 class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_id: int = Field(..., ge=1, description="环境枚举ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
     request_project_id: int = Field(..., ge=1, description="请求应用ID")
+    request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
 
 
 class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
@@ -213,9 +216,10 @@ class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
         2) host（如 127.0.0.1），此时可配 request_port
     - request_args_type: raw/json（沿用 AutoTestReqArgsType）
     """
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_id: int = Field(..., ge=1, description="环境枚举ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_project_id: Optional[int] = Field(None, description="请求应用ID（可选）")
+    request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
 
 
 class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
@@ -224,15 +228,14 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
-    case_id: Optional[int] = Field(None, description="用例ID(运行模式和调试模式都必填)")
+    case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
-    initial_variables: Optional[List[StepVariablesBase]] = Field(
-        default=None, description="初始变量池, 列表项为 key / value / desc"
-    )
-    # 参数化驱动：运行模式可传多条数据集名称循环执行；调试模式只能传一条
-    selected_dataset_names: Optional[List[str]] = Field(None,
-                                                        description="选中的数据集名称列表。运行模式：可多条，按条数循环执行；调试模式：必须且只能一条")
+    initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="初始变量池, 列表项为 key / value / desc")
+    # 脚本执行配置：key=步骤ID(step_id) 或 @@{step_name}（当步骤未落库时），value=配置明细；空 dict 表示该步骤无配置覆盖
+    # { step_id 或 @@step_name: {env_name, config_type(api|database|file), config_name, config_host, config_port, database_name} }
+    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default=None, description="脚本执行配置作用环境")
+    # 参数化驱动：运行模式可传多条数据集名称，按条数循环执行；调试模式只能传一条
+    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表。运行模式可选多条；调试模式仅可选一条")
 
     @model_validator(mode='after')
     def validate_mode(self):

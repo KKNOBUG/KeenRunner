@@ -197,20 +197,6 @@ async def search_step_details(
                 },
                 replace_fields={"id": "detail_id"}
             )
-            step_id: int = serialize["step_id"]
-            step_instance = await AUTOTEST_API_STEP_CRUD.get_by_id(
-                on_error=True,
-                step_id=step_id
-            )
-            serialize["step"] = await step_instance.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_user", "updated_user",
-                    "created_time", "updated_time",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
-                replace_fields={"id": "step_id"}
-            )
             detail_serializes.append(serialize)
         LOGGER.info(f"按条件查询明细成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=detail_serializes, total=total)

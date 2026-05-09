@@ -28,6 +28,7 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
 from backend.applications.aotutest.services.autotest_data_source_parser import (
+    _dataframe_to_matrix,
     parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
     parse_xlsx_to_parsed_data_async,
@@ -237,6 +238,17 @@ async def get_data_source_info(
     except Exception as e:
         LOGGER.error(f"查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_data_source.post(path="/query_dataset_names", summary="API自动化测试-案例数据场景查询")
+async def query_case_name(
+        case_id: str = Form(..., title="案例ID")
+):
+    instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_id(case_id=case_id)
+    if not instance:
+        return FailureResponse(message="ID对应场景不存在")
+
+    return SuccessResponse(message="查询数据源成功", data=instance.dataset_names)
 
 
 @autotest_data_source.post("/search", summary="API自动化测试-按条件分页查询数据源")
@@ -570,11 +582,9 @@ async def batch_step_dataset_upload(
             step_code = str(sheet_name).strip()[:64] if sheet_name else f"sheet_{i}"
 
             try:
-                # 取该 sheet 的原始二维矩阵（header=None，与解析一致）
-                import pandas as pd
                 df = pd.read_excel(file_path, sheet_name=i, header=None, engine="openpyxl")
                 if not df.empty:
-                    dataframe = df.where(pd.notna(df), None).values.tolist()
+                    dataframe = _dataframe_to_matrix(df)
             except Exception as e:
                 LOGGER.warning(f"读取 sheet 原始二维矩阵失败(sheet_index={i}, step_code={step_code}): {e}")
 

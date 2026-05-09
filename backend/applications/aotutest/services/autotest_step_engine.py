@@ -24,6 +24,7 @@ from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseI
 from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
+from backend.applications.aotutest.schemas.autotest_step_schema import StepsExecuteConfigBase
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
@@ -37,7 +38,8 @@ from backend.enums import (
     AutoTestLoopMode,
     AutoTestCaseType,
     AutoTestLoopErrorStrategy,
-    AutoTestReqArgsType
+    AutoTestReqArgsType,
+    AutoTestConfigNodeType
 )
 from backend.services import CTX_USER_ID
 
@@ -128,7 +130,7 @@ class StepExecutionContext:
             case_id: int,
             case_code: str,
             *,
-            env_name: Optional[str] = None,
+            steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = None,
             report_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
             http_client: Optional[HttpClientProtocol] = None,
@@ -139,15 +141,16 @@ class StepExecutionContext:
         初始化步骤执行上下文。
         :param case_id: 用例 ID。
         :param case_code: 用例编码。
-        :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
+        :param steps_execute_config: 执行环境配置。
         :param report_code: 报告编码，用于保存步骤明细。
         :param dataset_name: 参数化时传入的数据集名称，仅 HttpStepExecutor 内据此 + case_id/step_no/step_code 查表取数。
         :param http_client: 可选 HTTP 客户端，不传则在 __aenter__ 中创建。
-        :param initial_variables: 初始会话变量列表，类型 List[Dict[str, Any]]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
+        :param initial_variables: 初始会话变量列表，类型 List[StepVariablesBase]，每项含 key、value、desc；会原样赋给 self.session_variables，供步骤中变量引用与占位符解析使用。
         :param pending_details: 延后落库时收集明细的列表，非 None 时 _save_step_detail 只追加不写库。
         """
         self.case_id = case_id
-        self.env_name = env_name
+        # 前端执行前配置替换映射（key=step_id 或 @@step_name）
+        self.steps_execute_config: Dict[str, Any] = steps_execute_config or {}
         self.case_code = case_code
         self.report_code = report_code
         self.dataset_name = dataset_name
@@ -222,7 +225,7 @@ class StepExecutionContext:
         :return:
         """
         step_code = step_code or self._current_step_code
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         self.logs.setdefault(step_code, []).append(f"[{timestamp}] {message}")
 
     def set_current_step_code(self, step_code: Optional[str] = None) -> None:
@@ -255,7 +258,11 @@ class StepExecutionContext:
         if scope in ("defined_variables", "session_variables"):
             # defined_variables 和 session_variables 使用列表格式
             if not isinstance(data, list):
-                raise ValueError(f"【更新变量】-【{scope}】错误: {scope}必须是列表类型，每个元素包含key、value、desc")
+                raise ValueError(
+                    f"【更新变量】失败: \n\t"
+                    f"预期类型: List[Dict[str, Any]] 且每项需包含key、value、desc字段\n\t"
+                    f"实际类型: {type(scope)}"
+                )
 
             target_list = self.defined_variables if scope == "defined_variables" else self.session_variables
 
@@ -276,11 +283,16 @@ class StepExecutionContext:
                 if not found:
                     target_list.append(item)
 
-            self.log(f"【更新变量】-【{scope}】成功: {data}")
+            self.log(
+                f"【更新变量】成功: \n\t"
+                f"更新作用域: {scope}\n\t"
+                f"更新变量名: {'、'.join(data)}"
+            )
         else:
             raise ValueError(
-                f"【更新变量】-【{scope}】错误: '{scope}' 不是有效的变量作用域"
-                f"(仅支持: defined_variables、session_variables)"
+                f"【更新变量】失败: \n\t"
+                f"无效作用域: {scope}\n\t"
+                f"有效作用域: defined_variables 或 session_variables"
             )
 
     def get_variable(self, name: str) -> Any:
@@ -387,9 +399,6 @@ class StepExecutionContext:
                     if encoded_headers:
                         # 把编码后的 headers 放回 kwargs
                         kwargs["headers"] = encoded_headers
-                self.log(f"【HTTP请求】请求方式: {method}")
-                self.log(f"【HTTP请求】请求地址: {url}")
-                self.log(f"【HTTP请求】请求参数: {kwargs}")
                 response = await client.request(method, url, **kwargs)
                 self.log(
                     f"【HTTP请求】请求成功: "
@@ -904,6 +913,17 @@ class BaseStepExecutor:
             key=lambda item: item.get("step_no", 0),
         )
 
+    def get_execute_config(self) -> Optional[StepsExecuteConfigBase]:
+        """获取当前步骤的执行配置覆盖项（key=step_id 或 @@step_name）。"""
+        step_exec_config_map: Dict[str, StepsExecuteConfigBase] = self.context.steps_execute_config
+        if not step_exec_config_map or not isinstance(step_exec_config_map, dict):
+            return None
+        step_id: Optional[int] = self.step.get("step_id")
+        step_name: Optional[str] = self.step.get("step_name")
+        cfg_key = str(step_id) if step_id else f"@@{str(step_name).strip()}"
+        cfg_value: StepsExecuteConfigBase = step_exec_config_map.get(cfg_key)
+        return cfg_value if cfg_value and isinstance(cfg_value, StepsExecuteConfigBase) else None
+
     async def execute(self) -> StepExecutionResult:
         """
         执行当前步骤：注入 defined_variables、调用 _execute、合并 extract_variables、可选保存明细。
@@ -959,10 +979,6 @@ class BaseStepExecutor:
                     ]
                     if extract_list:
                         self.context.update_variables(extract_list, scope="session_variables")
-                        self.context.log(
-                            f"【合并变量】-【session_variables】成功: {[e.get('key') for e in extract_list]}",
-                            step_code=self.step_code
-                        )
             except Exception as e:
                 self.context.log(f"【更新变量】-【session_variables】错误: {e}", step_code=self.step_code)
 
@@ -1033,14 +1049,16 @@ class BaseStepExecutor:
             dataset_snapshot: Optional[Dict[str, Any]] = getattr(result, "dataset_snapshot", None)
             has_data_driven: bool = dataset_snapshot is not None
             actual_request: Dict[str, Any] = getattr(result, "request", None) or {}
+            # 当step_id、step_code为None时说明是临时步骤(没有保存入库)，所以替换为step_timestamp、temporary-step-debugging标识
+            step_timestamp: int = int(str(datetime.now().timestamp()).replace(".", ""))
             detail_create = AutoTestApiDetailCreate(
                 case_id=self.context.case_id,
                 case_code=self.context.case_code,
                 report_code=self.context.report_code,
-                step_id=self.step_id,
+                step_id=self.step_id or step_timestamp,
                 step_no=self.step_no,
                 step_name=self.step_name,
-                step_code=self.step_code,
+                step_code=self.step_code or "temporary-step-debugging",
                 step_type=self.step_type,
                 step_state=result.success,
                 step_st_time=step_st_time_str,
@@ -1659,7 +1677,7 @@ class LoopStepExecutor(BaseStepExecutor):
             raise StepExecutionError(f"【循环结构】条件表达式中占位符解析异常, 错误描述: {e}") from e
         try:
             return AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value)
-        except Exception as e:
+        except ValueError as e:
             raise StepExecutionError(f"【循环结构】条件表达式执行异常, 错误描述: {e}") from e
 
     def parse_iterable_source(self, source: Any) -> Any:
@@ -1741,7 +1759,7 @@ class ConditionStepExecutor(BaseStepExecutor):
                     result.message = f"【条件分支】条件未满足: {condition_desc}"
                     self.context.log(result.message, step_code=self.step_code)
                     return
-            except Exception as e:
+            except ValueError as e:
                 raise StepExecutionError(f"【条件分支】条件表达式执行异常, 错误描述: {e}") from e
 
             result.message = f"【条件分支】条件满足: {condition_desc}"
@@ -1782,7 +1800,6 @@ class PythonStepExecutor(BaseStepExecutor):
 
             if executive_result:
                 try:
-                    import json
                     result.extract_variables = [
                         {
                             "name": k,
@@ -1812,7 +1829,11 @@ class PythonStepExecutor(BaseStepExecutor):
             assert_validators: Optional[List[Dict[str, Any]]] = self.step.get("assert_validators")
             if assert_validators:
                 if not isinstance(assert_validators, list):
-                    raise StepExecutionError(f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
+                    raise StepExecutionError(
+                        f"【断言验证】表达式列表解析失败: \n\t"
+                        f"预期类型: List[Dict[str, Any]] 或 List[StepAssertValidatorItem]\n\t"
+                        f"实际类型: [{type(assert_validators)}]"
+                    )
                 for valid in assert_validators:
                     if not isinstance(valid, dict):
                         continue
@@ -1835,15 +1856,15 @@ class PythonStepExecutor(BaseStepExecutor):
                         response_cookies=None,
                         session_variables_lookup=python_session_lookup,
                         log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                        finished_variables=self.context,
+                        is_core_engine=True,
                     )
                     result.assert_validators.extend(validator_results)
-                    assert_failed_number: int = sum(
-                        1 for valid in validator_results if not valid.get("success", True)
-                    )
-                    if assert_failed_number > 0:
-                        error_message: str = (
-                            f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过, 详情见报告明细"
-                        )
+                    assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
+                    assert_failed_total: int = len(assert_failed_items)
+                    assert_failed_dumps: str = json.dumps(assert_failed_items, ensure_ascii=False, indent=8)
+                    if assert_failed_total > 0:
+                        error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
                         raise StepExecutionError(error_message)
                 except StepExecutionError:
                     raise
@@ -1897,20 +1918,14 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
-            raw_variables = self.step.get("session_variables")
-            if not isinstance(raw_variables, list):
+            session_variables_raw = self.step.get("session_variables")
+            if not isinstance(session_variables_raw, list):
                 return
             # 深拷贝后在副本上执行解析，避免修改原始步骤数据
-            variables: List[Dict[str, Any]] = copy.deepcopy(raw_variables)
-            variables = self.context.resolve_placeholders(variables)
-            if variables:
-                self.context.update_variables(variables, scope="session_variables")
-                self.context.log(
-                    f"【用户变量】合并到 session_variables: {[e.get('key') for e in variables]}",
-                    step_code=self.step_code
-                )
-        except (AttributeError, StepExecutionError) as e:
-            raise StepExecutionError(f"【用户变量】解析或执行失败: {e}") from e
+            session_variables_copy: List[Dict[str, Any]] = copy.deepcopy(session_variables_raw)
+            session_variables_copy = self.context.resolve_placeholders(session_variables_copy)
+            if session_variables_copy:
+                self.context.update_variables(session_variables_copy, scope="session_variables")
         except Exception as e:
             result.success = False
             result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
@@ -2043,6 +2058,20 @@ class TcpStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
+            # 获取当前步骤的执行配置处理请求URL
+            request_url = (self.step.get("request_url") or "").strip()
+            request_port = self.step.get("request_port")
+            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
+            if current_step_config:
+                config_type: AutoTestConfigNodeType = current_step_config.config_type
+                if current_step_config and config_type == AutoTestConfigNodeType.API:
+                    request_url: str = current_step_config.config_host
+                    request_port: str = current_step_config.config_port
+                    self.step["request_config_name"] = current_step_config.config_name
+
+            if not request_url or not request_port:
+                raise StepExecutionError(f"【TCP请求】请求主机[{request_url!r}]或请求端口[{request_port!r}]不是有效的配置")
+
             # 参数化驱动：与 HTTP 步骤一致（当存在 dataset_name 且不是引用公共脚本时）
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
@@ -2058,52 +2087,12 @@ class TcpStepExecutor(BaseStepExecutor):
             # ----------------------------
             # 1) 解析目标地址（host/port）
             # ----------------------------
-            env_name: Optional[str] = getattr(self.context, "env_name", None)
             request_project_id: Optional[int] = self.step.get("request_project_id")
-            host_raw = (self.step.get("request_url") or "").strip()
-            port_raw = self.step.get("request_port")
-
-            # allow host:port in request_url
-            host = host_raw
-            port: Optional[int] = None
-            if ":" in host_raw and not host_raw.lower().startswith("http"):
-                # 仅处理形如 127.0.0.1:9000 的写法，避免误伤 IPv6（暂不支持）
-                parts = host_raw.split(":")
-                if len(parts) == 2 and parts[1].isdigit():
-                    host = parts[0].strip()
-                    port = int(parts[1])
-
-            # 若未手动提供 host/port，则通过「应用 + 执行环境」从 AutoTestApiEnvConfigInfo（config_type=api）解析
-            if (not host_raw or host_raw == "") and (port_raw is None or str(port_raw).strip() == ""):
-                if env_name and request_project_id:
-                    try:
-                        from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
-
-                        rh, ps = await resolve_env_api_base_host_port(int(request_project_id), str(env_name))
-                        host = (rh or "").strip().rstrip("/").rstrip(":")
-                        if ps and str(ps).strip().isdigit():
-                            port = int(str(ps).strip())
-                    except StepExecutionError:
-                        raise
-                    except (NotFoundException, ParameterException) as e:
-                        raise StepExecutionError(
-                            f"【TCP请求】环境 API 配置不可用: {getattr(e, 'message', str(e))}"
-                        ) from e
-                    except Exception as e:
-                        raise StepExecutionError(f"【TCP请求】环境配置查询异常, 错误描述: {e}") from e
-
-            if port is None:
-                try:
-                    if port_raw is None or str(port_raw).strip() == "":
-                        raise ValueError("端口未配置")
-                    port = int(str(port_raw).strip())
-                except Exception as e:
-                    raise StepExecutionError(f"【TCP请求】端口(request_port)解析失败: {e}") from e
-
-            if not host:
-                raise StepExecutionError("【TCP请求】TCP请求配置错误: 主机(request_url)为空（也未能从环境配置解析到host）")
-            if not (1 <= int(port) <= 65535):
-                raise StepExecutionError(f"【TCP请求】端口(request_port)不合法: {port}")
+            request_config_name: Optional[str] = self.step.get("request_config_name")
+            if not request_project_id:
+                raise StepExecutionError("【TCP请求】参数[request_project_id]不能为空")
+            if not request_config_name:
+                raise StepExecutionError("【TCP请求】参数[request_config_name]不能为空")
 
             # ----------------------------
             # 2) 构造报文（先数据驱动，再占位符）
@@ -2144,8 +2133,8 @@ class TcpStepExecutor(BaseStepExecutor):
 
             # 写入 result.request，便于落库与排障
             result.request = {
-                "request_url": host,
-                "request_port": port,
+                "request_url": request_url,
+                "request_port": request_port,
                 "request_args_type": AutoTestReqArgsType.RAW,
                 "tcp_frame_mode": self.step.get("tcp_frame_mode") or "length_prefix_json",
                 "tcp_length_field_size": self.step.get("tcp_length_field_size") or 8,
@@ -2192,8 +2181,8 @@ class TcpStepExecutor(BaseStepExecutor):
                     max_response_bytes=int(max_response_bytes),
             ) as client:
                 utils = await client.tcp(
-                    host,
-                    int(port),
+                    request_url,
+                    int(request_port),
                     payload,
                     frame_mode=frame_mode,
                     encoding=encoding,
@@ -2262,7 +2251,14 @@ class TcpStepExecutor(BaseStepExecutor):
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
-                result.extract_variables = extract_results_list
+                result.extract_variables.extend(extract_results_list)
+                # 检查是否存在提取失败的项（这里暂定不允许存在失败）
+                extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
+                extract_failed_total: int = len(extract_failed_items)
+                extract_failed_dumps: str = json.dumps(extract_failed_items, ensure_ascii=False, indent=8)
+                if extract_failed_total > 0:
+                    error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
+                    raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -2280,9 +2276,11 @@ class TcpStepExecutor(BaseStepExecutor):
                     response_cookies=None,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                    finished_variables=self.context,
+                    is_core_engine=True,
                 )
                 # 参数化驱动：assert_head（响应头键）、assert_body（响应 JSONPath）
-                AutoTestToolService.append_assert_to_validators(
+                AutoTestToolService.append_assert_validators(
                     step_struct=step_struct,
                     validator_results=validator_results,
                     response_text=result.response.get("response_text") if result.response else None,
@@ -2291,6 +2289,9 @@ class TcpStepExecutor(BaseStepExecutor):
                     response_cookies=None,
                     session_variables_lookup=session_lookup_map,
                     compare_fail_message="断言失败",
+                    finished_variables=self.context,
+                    is_core_engine=True,
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 result.assert_validators = validator_results
                 if any(item.get("success") is False for item in validator_results if isinstance(item, dict)):
@@ -2314,15 +2315,34 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
-            env_name: Optional[str] = self.context.env_name
-            if not env_name or not str(env_name).strip():
-                raise StepExecutionError("【数据库请求】缺少执行环境(env_name)无法匹配环境配置")
+            # 获取当前步骤的执行配置处理请求URL
+            env_name: Optional[str] = ""
             database_operates: List[Dict[str, Any]] = self.step.get("database_operates")
             if not isinstance(database_operates, list):
                 raise StepExecutionError("【数据库请求】参数[database_operates]必须是必须是[List[Dict[str, Any]]]类型")
             if not database_operates:
                 raise StepExecutionError("【数据库请求】参数[database_operates]至少有一条数据库操作配置")
-
+            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
+            if current_step_config:
+                config_type: AutoTestConfigNodeType = current_step_config.config_type
+                if current_step_config and config_type == AutoTestConfigNodeType.DB:
+                    env_name: str = current_step_config.env_name
+                    config_name: str = current_step_config.config_name
+                    database_name: str = current_step_config.database_name
+                    self.step["request_config_name"] = config_name
+                    for db_operate in database_operates:
+                        if not isinstance(db_operate, dict):
+                            continue
+                        db_operate["config_name"] = config_name
+                        db_operate["database_name"] = database_name
+            """
+            用例及步骤树编辑页面frontend/src/views/autotest/steps/index.vue中的“调试”和“执行”按钮已经改造完毕，但是有些需要优化：
+            
+            - 用户自定义变量池步骤：步骤名称必输，如果为空时不可使用保存和调试按钮
+            - HTTP请求步骤：步骤名称、所属应用、配置名称、请求地址均是必输，如果为空时不可使用保存和调试按钮
+            - Python代码请求步骤：步骤名称必输，如果为空时不可使用保存和调试按钮
+            - 
+            """
             mark_extract_variables: List[Dict[str, Any]] = []
             database_operates_request: List[Dict[str, Any]] = []
             database_operates_response: List[Dict[str, Any]] = []
@@ -2508,6 +2528,13 @@ class DataBaseStepExecutor(BaseStepExecutor):
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 result.extract_variables.extend(extract_results_list)
+                # 检查是否存在提取失败的项（这里暂定不允许存在失败）
+                extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
+                extract_failed_total: int = len(extract_failed_items)
+                extract_failed_dumps: str = json.dumps(extract_failed_items, ensure_ascii=False, indent=8)
+                if extract_failed_total > 0:
+                    error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
+                    raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -2525,11 +2552,16 @@ class DataBaseStepExecutor(BaseStepExecutor):
                     response_cookies=None,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                    finished_variables=self.context,
+                    is_core_engine=True,
                 )
                 result.assert_validators.extend(validator_results)
-                assert_failed = sum(1 for v in validator_results if not v.get("success", True))
-                if assert_failed > 0:
-                    raise StepExecutionError(f"【数据库请求】【断言验证】共计 {assert_failed} 条未通过, 详情见报告明细")
+                assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
+                assert_failed_total: int = len(assert_failed_items)
+                assert_failed_dumps: str = json.dumps(assert_failed_items, ensure_ascii=False, indent=8)
+                if assert_failed_total > 0:
+                    error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
+                    raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -2553,6 +2585,24 @@ class HttpStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
+            # 获取当前步骤的执行配置处理请求URL
+            request_url: str = (self.step.get("request_url") or "").strip().lstrip("/")
+            request_method: str = self.step.get("request_method", "").strip().upper()
+            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
+            if current_step_config:
+                config_type: AutoTestConfigNodeType = current_step_config.config_type
+                if current_step_config and config_type == AutoTestConfigNodeType.API:
+                    config_name: str = current_step_config.config_name
+                    config_host: str = current_step_config.config_host
+                    config_port: str = current_step_config.config_port
+                    self.step["request_config_name"] = config_name
+                    request_url = f"{config_host}:{config_port}/{request_url}"
+
+            if not request_url or not request_url.lower().startswith("http"):
+                raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址")
+
+            self.context.log(f"【HTTP请求】请求方式: {request_method}")
+            self.context.log(f"【HTTP请求】请求地址: {request_url}")
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
@@ -2564,30 +2614,10 @@ class HttpStepExecutor(BaseStepExecutor):
             )
             result.dataset_snapshot = step_struct
             result.dataset_name = dataset_name
-
-            # 处理请求URL
-            env_name: str = self.context.env_name
-            request_url: str = self.step.get("request_url").lstrip("/")
-            request_project_id: int = self.step.get("request_project_id")
-            request_method: str = self.step.get("request_method", "").upper()
-            if env_name and request_url and not request_url.lower().startswith("http"):
-                from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
-
-                execute_env_host, execute_env_port = await resolve_env_api_base_host_port(
-                    int(request_project_id), str(env_name)
-                )
-                if not execute_env_port:
-                    request_url = f"{execute_env_host}/{request_url}"
-                else:
-                    request_url = f"{execute_env_host}:{execute_env_port}/{request_url}"
-                if not request_url or request_url and not request_url.lower().startswith("http"):
-                    raise StepExecutionError(f"【HTTP请求】请求URL[{request_url!r}]不是有效的HTTP/HTTPS地址")
         except StepExecutionError:
             raise
-        except (ParameterException, NotFoundException) as e:
-            raise StepExecutionError(f"【HTTP请求】{e.message}") from e
         except Exception as e:
-            raise StepExecutionError(f"【HTTP请求】数据源或环境配置处理时发生异常: {e}") from e
+            raise StepExecutionError(f"【HTTP请求】数据源或请求配置处理时发生异常: {e}") from e
 
         try:
             # 先转成字典，再「先数据驱动替换、再变量占位符替换」，保证最终报文 = 数据驱动覆盖后再占位符替换
@@ -2596,15 +2626,15 @@ class HttpStepExecutor(BaseStepExecutor):
             request_form_data_raw = self.step.get("request_form_data")
             request_form_urlencoded_raw = self.step.get("request_form_urlencoded")
             request_form_file_raw = self.step.get("request_form_file")
-            if not isinstance(request_header_raw, list):
+            if not request_header_raw or not isinstance(request_header_raw, list):
                 request_header_raw = []
-            if not isinstance(request_params_raw, list):
+            if not request_params_raw or not isinstance(request_params_raw, list):
                 request_params_raw = []
-            if not isinstance(request_form_data_raw, list):
+            if not request_form_data_raw or not isinstance(request_form_data_raw, list):
                 request_form_data_raw = []
-            if not isinstance(request_form_urlencoded_raw, list):
+            if not request_form_urlencoded_raw or not isinstance(request_form_urlencoded_raw, list):
                 request_form_urlencoded_raw = []
-            if not isinstance(request_form_file_raw, list):
+            if not request_form_file_raw or not isinstance(request_form_file_raw, list):
                 request_form_file_raw = []
 
             # 1）转成字典（尚未解析占位符）
@@ -2676,7 +2706,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 "request_url": request_url,
                 "request_port": None,
                 "request_method": request_method,
-                "request_args_type": AutoTestReqArgsType.RAW,
+                "request_args_type": request_args_type_raw,
                 "request_header": headers,
                 "request_params": params_payload,
                 "request_form_data": form_data,
@@ -2685,6 +2715,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 "request_body": json_payload,
                 "request_text": request_text,
             }
+            self.context.log(f"【HTTP请求】请求参数类型: {request_args_type_raw}")
             response = await self.context.send_http_request(
                 request_method,
                 request_url,
@@ -2736,7 +2767,14 @@ class HttpStepExecutor(BaseStepExecutor):
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
-                result.extract_variables = extract_results_list
+                result.extract_variables.extend(extract_results_list)
+                # 检查是否存在提取失败的项（这里暂定不允许存在失败）
+                extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
+                extract_failed_total: int = len(extract_failed_items)
+                extract_failed_dumps: str = json.dumps(extract_failed_items, ensure_ascii=False, indent=8)
+                if extract_failed_total > 0:
+                    error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
+                    raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -2745,7 +2783,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 self.context.log(error_message, step_code=self.step_code)
 
             try:
-                assert_validators = self.step.get("assert_validators")
+                assert_validators: Optional[List[Dict[str, Any]]] = self.step.get("assert_validators")
                 if assert_validators and not isinstance(assert_validators, list):
                     raise StepExecutionError(f"【断言验证】表达式列表解析失败: 参数[assert_validators]必须是[List[Dict[str, Any]]]类型")
                 validator_results = AutoTestToolService.run_assert_validators(
@@ -2756,9 +2794,11 @@ class HttpStepExecutor(BaseStepExecutor):
                     response_cookies=result.response.get("response_cookie") if result.response else None,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                    finished_variables=self.context,
+                    is_core_engine=True,
                 )
                 # 参数化驱动：assert_head（响应头键名）、assert_body（响应 JSONPath）
-                AutoTestToolService.append_assert_to_validators(
+                AutoTestToolService.append_assert_validators(
                     step_struct=step_struct,
                     validator_results=validator_results,
                     response_text=result.response.get("response_text") if result.response else None,
@@ -2766,11 +2806,16 @@ class HttpStepExecutor(BaseStepExecutor):
                     response_headers=result.response.get("response_header") if result.response else None,
                     response_cookies=result.response.get("response_cookie") if result.response else None,
                     session_variables_lookup=session_lookup_map,
+                    finished_variables=self.context,
+                    is_core_engine=True,
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
                 result.assert_validators.extend(validator_results)
-                assert_failed_number: int = sum(1 for valid in validator_results if not valid.get("success", True))
-                if assert_failed_number > 0:
-                    error_message: str = f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过, 详情见报告明细"
+                assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
+                assert_failed_total: int = len(assert_failed_items)
+                assert_failed_dumps: str = json.dumps(assert_failed_items, ensure_ascii=False, indent=8)
+                if assert_failed_total > 0:
+                    error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
                     raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
@@ -2881,7 +2926,7 @@ class AutoTestStepExecutionEngine:
             steps: Iterable[Dict[str, Any]],
             report_type: AutoTestReportType,
             *,
-            env_name: Optional[str] = None,
+            steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = None,
             initial_variables: Optional[List[Dict[str, Any]]] = None,
             dataset_name: Optional[str] = None,
     ) -> Tuple[
@@ -2900,7 +2945,7 @@ class AutoTestStepExecutionEngine:
         :param case: 用例信息字典，含 case_id、case_code、case_name。
         :param steps: 根步骤可迭代对象（已排序按 step_no）。
         :param report_type: 报告类型枚举。
-        :param env_name: 执行环境名称，用于 HTTP 步骤补全 base URL。
+        :param steps_execute_config: 执行配置
         :param initial_variables: 初始会话变量列表，每项含 key、value、desc。
         :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数。
         :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。results 为根步骤执行结果列表；logs 按 step_code 分组；report_code 未保存时为 None；statistics 含 total_steps、success_steps、failed_steps、passed_ratio；session_variables 为执行后变量列表。当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case。
@@ -2918,7 +2963,7 @@ class AutoTestStepExecutionEngine:
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,
-                env_name=env_name,
+                steps_execute_config=steps_execute_config,
                 initial_variables=initial_variables,
                 http_client=self._http_client,
                 report_code=report_code,

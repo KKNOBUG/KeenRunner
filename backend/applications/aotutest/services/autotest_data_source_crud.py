@@ -361,6 +361,19 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
+    async def get_by_case_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
+        if not case_id:
+            error_message: str = "查询数据源失败, 参数(case_id)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        instance = await self.model.filter(case_id=case_id, file_hash__not='', state__not=1).order_by("-id").first()
+        if not instance and on_error:
+            error_message: str = f"查询数据源失败, 数据源(case_id={case_id})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
+
     async def get_dataset_scenario(self, case_id: int, step_code: str, dataset_name: str) -> Optional[Dict[str, Any]]:
         """
         根据用例、步骤、数据集名称取该步骤下单个场景的结构化数据。

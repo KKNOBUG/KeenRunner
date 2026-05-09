@@ -24,7 +24,9 @@ from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestA
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
-    AutoTestStepTreeUpdateItem
+    AutoTestStepTreeUpdateItem,
+    StepsExecuteConfigBase,
+    StepVariablesBase,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
@@ -1009,8 +1011,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             self,
             case_id: int,
             report_type: AutoTestReportType,
-            initial_variables: Optional[List[Dict[str, Any]]] = None,
-            env_name: Optional[str] = None,
+            initial_variables: Optional[List[StepVariablesBase]] = None,
+            steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = None,
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
@@ -1022,16 +1024,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param case_id: 用例主键 ID。
         :param report_type: 报告类型枚举。
         :param initial_variables: 初始变量列表，每项含 key、value、desc。
-        :param env_name: 环境名称，用于解析请求 host。
+        :param steps_execute_config: 执行配置。
         :param task_code: 任务标识代码，可选。
         :param batch_code: 批次标识代码，可选。
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由 HTTP 步骤执行器内查表获取。
         :returns: 包含报告与执行结果的字典（如 report_code、case_state、details 等）。
         :raises NotFoundException: 用例不存在时。
         """
-        if initial_variables is None:
-            initial_variables = []
-        if not isinstance(initial_variables, list):
+        if not initial_variables or not isinstance(initial_variables, list):
+            LOGGER.info(f"初始化变量[initial_variables]为空或非列表类型")
             initial_variables = []
 
         # 1. 查询用例信息
@@ -1057,19 +1058,18 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
         # 4. 合并会话变量：用例级 session_variables → 步骤树中收集的 session_variables → 入参 initial_variables（同 key 后者覆盖）
-        merge_all_variables: Dict[str, Any] = {}
+        merge_all_variables: List[Dict[str, Any]] = []
         case_session_variables = getattr(case_instance, "session_variables", None) or []
         all_step_session_variables = AutoTestToolService.collect_session_variables(tree_data)
         for item in case_session_variables:
-            if isinstance(item, dict) and item.get("key"):
-                merge_all_variables[item["key"]] = item
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables.append(item.dict())
         for item in all_step_session_variables:
-            if isinstance(item, dict) and "key" in item:
-                merge_all_variables[item.get("key")] = item
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables.append(item.dict())
         for item in initial_variables:
-            if isinstance(item, dict) and "key" in item:
-                merge_all_variables[item.get("key")] = item
-        initial_variables = list(merge_all_variables.values())
+            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                merge_all_variables.append(item.dict())
         LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功")
 
         # 5. 获取根步骤
@@ -1084,8 +1084,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
             case=case_dict,
             steps=root_steps,
-            initial_variables=initial_variables,
-            env_name=env_name,
+            initial_variables=merge_all_variables,
+            steps_execute_config=steps_execute_config,
             report_type=report_type,
             dataset_name=dataset_name,
         )
@@ -1126,8 +1126,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             self,
             case_ids: List[int],
             report_type: AutoTestReportType,
-            initial_variables: Optional[List[Dict[str, Any]]] = None,
-            env_name: Optional[str] = None,
+            initial_variables: Optional[List[StepVariablesBase]] = None,
+            steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = None,
             task_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """批量执行多个用例，依次调用 execute_single_case 并汇总成功/失败数与详情。
@@ -1135,13 +1135,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param case_ids: 用例主键 ID 列表。
         :param report_type: 报告类型枚举。
         :param initial_variables: 初始变量列表，每项含 key、value、desc。
-        :param env_name: 环境名称，用于解析请求 host。
+        :param steps_execute_config: 执行配置。
         :param task_code: 任务标识代码，可选。
         :returns: 包含 total_cases、success_cases、failed_cases、results 等汇总信息的字典。
         """
-        if initial_variables is None:
-            initial_variables = []
-        if not isinstance(initial_variables, list):
+        if not initial_variables or not isinstance(initial_variables, list):
             initial_variables = []
 
         total_cases: int = len(case_ids)
@@ -1158,7 +1156,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 result = await self.execute_single_case(
                     case_id=case_id,
                     initial_variables=initial_variables,
-                    env_name=env_name,
+                    steps_execute_config=steps_execute_config,
                     report_type=report_type,
                     task_code=task_code,
                     batch_code=batch_code,

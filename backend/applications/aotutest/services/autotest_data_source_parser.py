@@ -13,7 +13,7 @@ import asyncio
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Any, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import pandas as pd
 
@@ -114,12 +114,26 @@ async def _parse_sheet_async(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     return await loop.run_in_executor(_executor, _parse_sheet_fast, df)
 
 
+def _cell_is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str) and not value.strip():
+        return True
+    return False
+
+
 def _dataframe_to_matrix(df: pd.DataFrame) -> Union[List[Any], object]:
-    """将 DataFrame 转为二维矩阵（NaN/NaT 置为 None），用于原始数据预览与编辑。"""
+    """将 DataFrame 转为二维矩阵（NaN/NaT 置为 None），剔除子项全为空白(None/NaN/空串)的行。"""
     if df is None or df.empty:
         return []
     safe_df = df.where(pd.notna(df), None)
-    return safe_df.values.tolist()
+    rows: List[List[Any]] = safe_df.values.tolist()
+    return [row for row in rows if not all(_cell_is_blank(c) for c in row)]
 
 
 async def _excel_to_json_async(file_path: str) -> Dict[str, Dict[str, Dict[str, Any]]]:
