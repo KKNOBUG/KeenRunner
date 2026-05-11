@@ -2996,7 +2996,8 @@ const projectLabelMap = computed(() => {
  * 为什么要保留 targets：
  * - UI 层只展示“聚合后的一行配置”，但后端执行前替换必须精确知道该配置要作用到哪些步骤。
  * - 因此每一行都会收集它命中的所有“目标步骤”targets，并在「确定并调试」时再拆分为：
- *   steps_execute_config: { step_id 或 @@step_name: { config detail } }
+ *   steps_execute_config: { step_id 或 @@step_name: { config detail } }；
+ *   数据库步骤若含多条 operate：每条 operate 使用独立 key「step 级 key + '_@@' + operate 下标」。
  *
  * target 的 key 规则（与后端约定）：
  * - 已落库步骤：使用后端 step_id（前端映射为 step.original.id）
@@ -3415,22 +3416,31 @@ const applyDebugConfigToSteps = () => {
  *   "@@新增步骤名称": { ... },
  * }
  *
+ * 数据库步骤：每条 database_operates 对应 key 为 `${step_id 或 @@step_name}_@@${operate 下标}`。
+ *
  * 说明：
  * - 即使某些步骤最终没有配置覆盖，也会预填一个空对象，方便后端区分“未配置”与“不存在该 key”。
  * - 一条聚合行可能命中多个 targets（多个步骤），拆分时会把同一份配置复制到每个 target key 下。
  */
 const buildStepExecConfigMap = (env_name) => {
   const map = {}
-  // 预填：所有可配置步骤都要有 key（即便最终为空 {}）
-  const prefill = (rows) => {
+  // 预填：所有可配置步骤都要有 key（即便最终为空 {}）；DB 为「stepKey_@@ + operate 下标」
+  const prefill = (rows, mode) => {
     rows.forEach((r) => {
       const targets = Array.isArray(r.targets) ? r.targets : []
-      targets.forEach((t) => { map[String(t.backend_key)] = {} })
+      targets.forEach((t) => {
+        const bk = String(t.backend_key)
+        if (mode === 'db' && t.op_index != null && t.op_index >= 0) {
+          map[`${bk}_@@${t.op_index}`] = {}
+        } else if (mode !== 'db') {
+          map[bk] = {}
+        }
+      })
     })
   }
-  prefill(debugRows.value.apiRows || [])
-  prefill(debugRows.value.dbRows || [])
-  prefill(debugRows.value.fileRows || [])
+  prefill(debugRows.value.apiRows || [], 'api')
+  prefill(debugRows.value.dbRows || [], 'db')
+  prefill(debugRows.value.fileRows || [], 'file')
 
   // 填充：API（将同一行配置复制到该行命中的所有 targets）
   debugRows.value.apiRows.forEach((r) => {
@@ -3452,7 +3462,7 @@ const buildStepExecConfigMap = (env_name) => {
     })
   })
 
-  // 填充：DB（将同一行配置复制到该行命中的所有 targets）
+  // 填充：DB — key 为 `${backend_key}_@@${operate 下标}`，与后端 DataBaseStepExecutor 约定一致
   debugRows.value.dbRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
     const bucket = getBucket({ ...r, env_id: envId }, 'database')
@@ -3461,7 +3471,10 @@ const buildStepExecConfigMap = (env_name) => {
     if (!env_name || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
-      map[String(t.backend_key)] = {
+      const opIdx = t.op_index
+      if (opIdx == null || opIdx < 0) return
+      const execKey = `${String(t.backend_key)}_@@${opIdx}`
+      map[execKey] = {
         env_name,
         config_type: 'database',
         config_name: name,

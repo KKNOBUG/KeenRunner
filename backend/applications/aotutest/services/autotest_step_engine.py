@@ -913,16 +913,32 @@ class BaseStepExecutor:
             key=lambda item: item.get("step_no", 0),
         )
 
-    def get_execute_config(self) -> Optional[StepsExecuteConfigBase]:
-        """获取当前步骤的执行配置覆盖项（key=step_id 或 @@step_name）。"""
-        step_exec_config_map: Dict[str, StepsExecuteConfigBase] = self.context.steps_execute_config
+    def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:
+        """
+        获取当前步骤的执行配置（HTTP请求、TCP请求、SQL请求）
+        执行配置KEY组成规则：step_id优先、其次是@@step_name、如果是SQL请求则需要继续拼接操作序号
+        :param database_operates_index: 操作序号
+        :return:
+        """
+        step_exec_config_map: Dict[str, Any] = self.context.steps_execute_config
         if not step_exec_config_map or not isinstance(step_exec_config_map, dict):
             return None
         step_id: Optional[int] = self.step.get("step_id")
         step_name: Optional[str] = self.step.get("step_name")
-        cfg_key = str(step_id) if step_id else f"@@{str(step_name).strip()}"
-        cfg_value: StepsExecuteConfigBase = step_exec_config_map.get(cfg_key)
-        return cfg_value if cfg_value and isinstance(cfg_value, StepsExecuteConfigBase) else None
+        cfg_key: str = str(step_id) if step_id else f"@@{str(step_name).strip()}"
+        if database_operates_index is not None and database_operates_index >= 0:
+            cfg_key += f"_@@{database_operates_index}"
+        cfg_value: Any = step_exec_config_map.get(cfg_key)
+        if not cfg_value:
+            return None
+        elif isinstance(cfg_value, StepsExecuteConfigBase):
+            return cfg_value
+        elif isinstance(cfg_value, dict):
+            try:
+                return StepsExecuteConfigBase.model_validate(cfg_value)
+            except Exception:
+                return None
+        return None
 
     async def execute(self) -> StepExecutionResult:
         """
@@ -2316,33 +2332,12 @@ class DataBaseStepExecutor(BaseStepExecutor):
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
             # 获取当前步骤的执行配置处理请求URL
-            env_name: Optional[str] = ""
+            env_name: Optional[str] = None
             database_operates: List[Dict[str, Any]] = self.step.get("database_operates")
             if not isinstance(database_operates, list):
                 raise StepExecutionError("【数据库请求】参数[database_operates]必须是必须是[List[Dict[str, Any]]]类型")
             if not database_operates:
                 raise StepExecutionError("【数据库请求】参数[database_operates]至少有一条数据库操作配置")
-            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
-            if current_step_config:
-                config_type: AutoTestConfigNodeType = current_step_config.config_type
-                if current_step_config and config_type == AutoTestConfigNodeType.DB:
-                    env_name: str = current_step_config.env_name
-                    config_name: str = current_step_config.config_name
-                    database_name: str = current_step_config.database_name
-                    self.step["request_config_name"] = config_name
-                    for db_operate in database_operates:
-                        if not isinstance(db_operate, dict):
-                            continue
-                        db_operate["config_name"] = config_name
-                        db_operate["database_name"] = database_name
-            """
-            用例及步骤树编辑页面frontend/src/views/autotest/steps/index.vue中的“调试”和“执行”按钮已经改造完毕，但是有些需要优化：
-            
-            - 用户自定义变量池步骤：步骤名称必输，如果为空时不可使用保存和调试按钮
-            - HTTP请求步骤：步骤名称、所属应用、配置名称、请求地址均是必输，如果为空时不可使用保存和调试按钮
-            - Python代码请求步骤：步骤名称必输，如果为空时不可使用保存和调试按钮
-            - 
-            """
             mark_extract_variables: List[Dict[str, Any]] = []
             database_operates_request: List[Dict[str, Any]] = []
             database_operates_response: List[Dict[str, Any]] = []
@@ -2350,10 +2345,17 @@ class DataBaseStepExecutor(BaseStepExecutor):
             database_searched: bool = bool(self.step.get("database_searched"))
             executive_st_time: datetime = datetime.now()
             # 步骤响应：列表，每项对应一条 database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
-            for db_idx, db_operate in enumerate(database_operates, start=1):
+            for db_idx, db_operate in enumerate(database_operates):
                 if not isinstance(db_operate, dict):
                     continue
-                operate_no: str = f"第{db_idx}条数据库配置"
+                operate_no: str = f"第{db_idx+1}条数据库配置"
+                current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(database_operates_index=db_idx)
+                if current_op_execute_cfg and current_op_execute_cfg.config_type == AutoTestConfigNodeType.DB:
+                    env_name = str(current_op_execute_cfg.env_name or "").strip()
+                    db_operate["config_name"] = current_op_execute_cfg.config_name
+                    db_operate["database_name"] = current_op_execute_cfg.database_name
+                    self.step["request_config_name"] = current_op_execute_cfg.config_name
+
                 operate_name: str = db_operate.get("name")
                 operate_desc: Optional[str] = db_operate.get("desc")
                 operate_variable_name: str = db_operate.get("variable_name")
@@ -2364,11 +2366,11 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 operate_project_name: str = db_operate.get("project_name")
                 operate_database_name: str = db_operate.get("database_name")
                 try:
+                    # 处理变量占位符
                     operate_sql_expr: str = self.context.resolve_placeholders(operate_sql_expr)
                     operate_config_name: str = self.context.resolve_placeholders(operate_config_name)
                     operate_project_name: str = self.context.resolve_placeholders(operate_project_name)
                     operate_database_name: str = self.context.resolve_placeholders(operate_database_name)
-
                     if not operate_project_id and operate_project_name.strip():
                         project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(operate_project_name.strip(), on_error=False)
                         if not project_instance:
