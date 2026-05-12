@@ -89,6 +89,7 @@
       <n-tabs type="line" animated style="margin-top: 16px;">
         <n-tab-pane name="body" tab="请求体">
           <div v-if="!props.readonly" class="tcp-body-toolbar">
+              (排版规则：XML格式 -> JSON格式 -> 纯文本)
             <n-button size="small" type="primary" tertiary @click="beautifyRequestPayload">
               一键排版
             </n-button>

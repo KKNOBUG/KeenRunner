@@ -1064,12 +1064,18 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         for item in case_session_variables:
             if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
                 merge_all_variables.append(item.dict())
+            elif isinstance(item, dict) and "key" in item:
+                merge_all_variables.append(item)
         for item in all_step_session_variables:
             if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
                 merge_all_variables.append(item.dict())
+            elif isinstance(item, dict) and "key" in item:
+                merge_all_variables.append(item)
         for item in initial_variables:
             if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
                 merge_all_variables.append(item.dict())
+            elif isinstance(item, dict) and "key" in item:
+                merge_all_variables.append(item)
         LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功")
 
         # 5. 获取根步骤

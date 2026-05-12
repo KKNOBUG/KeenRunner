@@ -1209,13 +1209,13 @@ async def execute_step_tree(
             # 先添加 initial_variables
             if isinstance(initial_variables, list):
                 for item in initial_variables:
-                    if isinstance(item, dict) and "key" in item:
-                        merge_all_variables[item.get("key")] = item
+                    if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                        merge_all_variables[item.key] = item.dict()
             # 再添加 all_session_variables（会覆盖相同的key）
             if isinstance(all_session_variables, list):
                 for item in all_session_variables:
-                    if isinstance(item, dict) and "key" in item:
-                        merge_all_variables[item.get("key")] = item
+                    if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
+                        merge_all_variables[item.key] = item.dict()
             try:
                 # 转换回列表格式
                 initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
