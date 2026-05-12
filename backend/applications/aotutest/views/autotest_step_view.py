@@ -62,7 +62,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
-from backend.enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType
+from backend.enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, AutoTestConfigNodeType
 
 autotest_step = APIRouter()
 
@@ -464,7 +464,8 @@ async def debug_http_request(
                     conditions={
                         "env_id": env_id,
                         "project_id": request_project_id,
-                        "config_name": request_config_name
+                        "config_name": request_config_name,
+                        "config_type": AutoTestConfigNodeType.API
                     }
                 )
                 if not env_config_instance:
@@ -742,9 +743,6 @@ async def debug_tcp_request(
         request_project_id: int = step_data.request_project_id
         request_config_name: str = step_data.request_config_name
         request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-
-        request_url: str = (step_data.request_url or "").strip()
-        request_port: str = step_data.request_port
         request_text: str = step_data.request_text
 
         session_variables: List[StepVariablesBase] = step_data.session_variables
@@ -784,8 +782,7 @@ async def debug_tcp_request(
                     f"环境ID: {env_id}\n\t"
                     f"应用ID: {request_project_id}\n\t"
                     f"配置名称: {request_config_name}\n\t"
-                    f"请求地址: {request_url}\n\t"
-                    f"请求端口: {request_port}"
+                    f"目标地址: 由环境配置解析(config_host/config_port)"
         )
         append_debugging_log(message="【参数替换】开始: ")
 
@@ -802,40 +799,37 @@ async def debug_tcp_request(
             )
         append_debugging_log(message="【参数替换】结束")
 
-        # 解析 host/port（支持 host:port；若仅选应用则走环境配置）
-
+        # 按 env_id + 应用 + 配置名解析 host/port（与 HTTP 调试一致，不使用 request_url/request_port）
         host: str = ""
-        port: Optional[int] = None
-        if request_url and ":" in request_url:
-            request_parts = request_url.split(":")
-            if len(request_parts) == 2 and request_parts[1].isdigit():
-                host = request_parts[0].strip()
-                port = int(request_parts[1])
-                append_debugging_log(message=f"解析请求信息(host={host}, port={port})成功")
-        if not host:
-            host = request_url
-        if port is None and request_port not in (None, ""):
-            try:
-                port = int(str(request_port).strip())
-            except Exception:
-                append_debugging_log(message=f"解析请求信息(host={host}, port={port})失败")
-        if (not host) and env_id and request_project_id:
-            try:
-                from backend.applications.aotutest.services.autotest_env_crud import resolve_env_api_base_host_port
-
-                rh, ps = await resolve_env_api_base_host_port(int(request_project_id), str(env_id))
-                host = (rh or "").strip().rstrip("/").rstrip(":")
-                if ps and str(ps).strip().isdigit():
-                    port = int(str(ps).strip())
-                append_debugging_log(message=f"解析请求信息(host={host}, port={port})成功")
-            except Exception as e:
-                error_message: str = f"解析请求信息(host={host}, port={port})失败, 终止调试: {e}"
-                append_debugging_log(message=error_message)
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-                return FailureResponse(message=error_message)
+        port: Optional[str] = None
+        try:
+            env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
+                only_one=True,
+                on_error=False,
+                conditions={
+                    "env_id": env_id,
+                    "project_id": request_project_id,
+                    "config_name": request_config_name,
+                    "config_type": AutoTestConfigNodeType.API
+                },
+            )
+            if not env_config_instance:
+                msg = f"TCP请求调试失败, 环境配置[{request_config_name}]不存在"
+                append_debugging_log(message=msg)
+                return NotFoundResponse(message=msg)
+            host: str = (env_config_instance.config_host or "").strip().replace("http://", "").replace("https://", "")
+            port: str = (env_config_instance.config_port or "").strip()
+            append_debugging_log(message=f"解析请求信息(host={host}, port={port})成功")
+        except Exception as e:
+            error_message: str = f"解析请求信息失败, 终止调试: {e}"
+            append_debugging_log(message=error_message)
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            return FailureResponse(message=error_message)
 
         if not host or not port:
-            return FailureResponse(message="TCP请求调试失败, 目标服务器地址或端口未配置(可选择应用+环境或手动输入host:port)")
+            return FailureResponse(
+                message="TCP请求调试失败, 目标服务器地址或端口未配置(请检查该环境下的 API 环境配置中的 config_host/config_port)"
+            )
 
         # 发送TCP请求
         payload = request_text
@@ -875,7 +869,7 @@ async def debug_tcp_request(
             response_json = None
 
         # 变量提取 / 断言（同 HTTP 调试）
-        _, extract_results = AutoTestToolService.run_extract_variables(
+        extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
             response_json=response_json,
@@ -884,6 +878,8 @@ async def debug_tcp_request(
             session_variables_lookup=merge_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
         )
+        for extract_key, extract_value in extract_data.items():
+            finished_variables.append({"key": extract_key, "value": extract_value, "desc": ""})
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
             response_text=response_text,

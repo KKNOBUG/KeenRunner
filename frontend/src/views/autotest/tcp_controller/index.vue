@@ -87,9 +87,9 @@
       </n-form>
 
       <n-tabs type="line" animated style="margin-top: 16px;">
-        <n-tab-pane name="body" tab="请求体">
+        <n-tab-pane name="body" tab="请求">
           <div v-if="!props.readonly" class="tcp-body-toolbar">
-              (排版规则：XML格式 -> JSON格式 -> 纯文本)
+            (排版规则：XML格式 -> JSON格式 -> 纯文本)
             <n-button size="small" type="primary" tertiary @click="beautifyRequestPayload">
               一键排版
             </n-button>
@@ -103,7 +103,7 @@
               :readOnly="props.readonly"
           />
         </n-tab-pane>
-        <n-tab-pane name="extract" tab="变量提取">
+        <n-tab-pane name="extract" tab="提取">
           <KeyValueEditor
               v-model:items="state.form.extract_variables"
               :body-type="'none'"
@@ -115,7 +115,7 @@
               placeholder-value="expr"
           />
         </n-tab-pane>
-        <n-tab-pane name="assert" tab="断言验证">
+        <n-tab-pane name="assert" tab="断言">
           <KeyValueEditor
               v-model:items="state.form.assert_validators"
               :body-type="'none'"
@@ -168,20 +168,22 @@
     </n-collapse-transition>
   </n-card>
 
-  <n-modal v-model:show="debugModalVisible" preset="dialog" title="选择环境" :show-icon="false">
+  <n-modal v-model:show="debugModalVisible" preset="dialog" title="选择调试环境" :show-icon="false">
     <div style="padding: 8px 0;">
+      <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedEnvName"
+          v-model:value="selectedDebugEnvId"
           :options="envOptions"
           :loading="envLoading"
-          placeholder="请选择环境"
+          placeholder="请选择执行环境"
           filterable
           clearable
+          style="width: 100%;"
       />
     </div>
     <template #action>
       <n-button @click="debugModalVisible = false">取消</n-button>
-      <n-button type="primary" :disabled="!selectedEnvName" @click="confirmDebugModal">确定</n-button>
+      <n-button type="primary" :disabled="selectedDebugEnvId == null || selectedDebugEnvId === ''" @click="confirmDebugModal">确定</n-button>
     </template>
   </n-modal>
 </template>
@@ -206,8 +208,6 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import MonacoEditor from '@/components/monaco/index.vue'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
 import api from '@/api'
-import { useRoute } from 'vue-router'
-import { useUserStore } from '@/store'
 
 const props = defineProps({
   config: { type: Object, default: () => ({}) },
@@ -490,8 +490,7 @@ watch(
     { deep: true }
 )
 
-/* =================== Debug（参考 HTTP 控制器） =================== */
-const route = useRoute()
+/* =================== Debug（与 AutoTestTcpDebugRequest 一致，仅传 schema 所需字段） =================== */
 const response = ref(null)
 const debugLoading = ref(false)
 const responseCardCollapsed = ref(false)
@@ -503,20 +502,24 @@ const formatResponseData = (data) => {
 
 const envOptions = ref([])
 const envLoading = ref(false)
-const selectedEnvName = ref(null)
+/** 调试所选环境枚举 ID（与 HTTP 控制器、后端 schema 的 env_id 一致） */
+const selectedDebugEnvId = ref(null)
 const debugModalVisible = ref(false)
 
 const loadEnvNames = async () => {
   envLoading.value = true
   try {
-    const res = await api.getApiEnvNames()
+    const res = await api.getEnvList()
     const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({ label: name, value: name }))
-    if (envOptions.value.length > 0 && !selectedEnvName.value) {
-      selectedEnvName.value = envOptions.value[0].value
+    envOptions.value = list.map((row) => ({
+      label: row.env_name != null ? String(row.env_name) : String(row.env_id),
+      value: row.env_id
+    }))
+    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
+      selectedDebugEnvId.value = envOptions.value[0].value
     }
   } catch (e) {
-    console.error('加载环境名称失败', e)
+    console.error('加载环境列表失败', e)
     envOptions.value = []
   } finally {
     envLoading.value = false
@@ -524,14 +527,14 @@ const loadEnvNames = async () => {
 }
 
 const openDebugModal = () => {
-  selectedEnvName.value = null
+  selectedDebugEnvId.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
   debugModalVisible.value = false
-  doDebugRequest(selectedEnvName.value ?? '')
+  doDebugRequest(selectedDebugEnvId.value)
 }
 
 const debugging = async () => {
@@ -544,33 +547,40 @@ const debugging = async () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_name) => {
-  const userStore = useUserStore()
-  const currentUser = userStore.username
+const doDebugRequest = async (env_id) => {
   debugLoading.value = true
   response.value = null
   try {
     const cfg = buildConfigFromState()
     const original = props.step?.original || {}
-    const caseId = route.query.case_id ? Number(route.query.case_id) : null
 
+    const requestConfigName =
+        cfg.request_config_name != null && String(cfg.request_config_name).trim() !== ''
+            ? String(cfg.request_config_name).trim()
+            : (original.request_config_name != null && String(original.request_config_name).trim() !== ''
+                ? String(original.request_config_name).trim()
+                : '')
+
+    const bodyText = cfg.request_text ?? cfg.request_payload
+    const requestText = bodyText != null && String(bodyText) !== '' ? String(bodyText) : undefined
+
+    /** @type {Record<string, unknown>} */
     const debugPayload = {
-      env_name: env_name || '',
-      case_id: caseId,
-      step_type: original.step_type || 'TCP请求',
+      env_id: Number(env_id),
       step_name: state.form.step_name || original.step_name || 'TCP 调试',
-      request_url: '',
-      request_port: null,
-      request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
-      request_args_type: 'raw',
-      request_text: cfg.request_text ?? cfg.request_payload ?? null,
-      request_body: {},
-      defined_variables: Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null,
-      session_variables: Array.isArray(cfg.session_variables) && cfg.session_variables.length > 0 ? cfg.session_variables : null,
-      extract_variables: cfg.extract_variables ?? null,
-      assert_validators: cfg.assert_validators ?? null,
-      created_user: currentUser,
-      updated_user: currentUser
+      request_project_id: Number(cfg.request_project_id ?? original.request_project_id),
+      request_config_name: requestConfigName
+    }
+    if (requestText !== undefined) {
+      debugPayload.request_text = requestText
+    }
+    const ev = cfg.extract_variables
+    if (Array.isArray(ev) && ev.length > 0) {
+      debugPayload.extract_variables = ev
+    }
+    const av = cfg.assert_validators
+    if (Array.isArray(av) && av.length > 0) {
+      debugPayload.assert_validators = av
     }
 
     const res = await api.tcpRequestDebugging(debugPayload)

@@ -207,18 +207,10 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 
 
 class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
-    """
-    TCP 请求调试入参：
-
-    - env_name + request_project_id 可用于根据环境配置解析 host/port（与 HTTP 调试一致）
-    - request_url 支持两种形式：
-        1) host:port（如 127.0.0.1:8080）
-        2) host（如 127.0.0.1），此时可配 request_port
-    - request_args_type: raw/json（沿用 AutoTestReqArgsType）
-    """
     env_id: int = Field(..., ge=1, description="环境枚举ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
-    request_project_id: Optional[int] = Field(None, description="请求应用ID（可选）")
+    request_text: Optional[str] = Field(None, description="请求体数据(Text格式)")
+    request_project_id: int = Field(..., ge=1, description="请求应用ID")
     request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
 
 
