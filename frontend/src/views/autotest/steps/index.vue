@@ -1929,8 +1929,6 @@ const mapBackendStep = (step) => {
       step_desc: step.step_desc || '',
       request_project_id: step.request_project_id ?? null,
       request_config_name: step.request_config_name ?? null,
-      host: step.request_url || '',
-      port: step.request_port != null && step.request_port !== '' ? String(step.request_port) : '',
       body_format_mode,
       request_args_type: 'raw',
       request_payload: payloadStr,
@@ -2134,17 +2132,33 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
 
   // 根据类型设置特定字段
   if (step.type === 'tcp') {
-    // TCP：请求应用 + 请求地址 + 请求端口；亦可仅选应用由执行环境解析 host/port
+    // TCP：应用 + 配置名称 + 请求体；host/port 由执行/调试时环境配置或脚本执行配置解析
     backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
     backendStep.request_config_name = config.request_config_name !== undefined
         ? (config.request_config_name || null)
         : (original.request_config_name || null)
-    backendStep.request_url = config.host ?? original.request_url ?? ''
-    const p = config.port
-    backendStep.request_port =
-        p !== undefined && p !== null && String(p).trim() !== ''
-            ? p
-            : (original.request_port ?? null)
+    const urlExplicit = Object.prototype.hasOwnProperty.call(config, 'request_url')
+    const hostLegacy = Object.prototype.hasOwnProperty.call(config, 'host')
+    backendStep.request_url = urlExplicit
+        ? String(config.request_url ?? '').trim()
+        : (hostLegacy ? String(config.host ?? '').trim() : (original.request_url ?? ''))
+
+    const portExplicit = Object.prototype.hasOwnProperty.call(config, 'request_port')
+    const portLegacy = Object.prototype.hasOwnProperty.call(config, 'port')
+    let portRaw
+    if (portExplicit) {
+      portRaw = config.request_port
+    } else if (portLegacy) {
+      portRaw = config.port
+    } else {
+      portRaw = original.request_port
+    }
+    if (portRaw !== undefined && portRaw !== null && String(portRaw).trim() !== '') {
+      const n = Number(String(portRaw).trim())
+      backendStep.request_port = Number.isFinite(n) ? n : portRaw
+    } else {
+      backendStep.request_port = null
+    }
     backendStep.request_args_type = 'raw'
     backendStep.request_text =
         config.request_text != null && config.request_text !== ''
@@ -2461,7 +2475,7 @@ const validateDatabaseSteps = (stepList) => {
   return {valid: true}
 }
 
-/** HTTP：所属应用、配置名称、请求地址必填；TCP：另含请求端口必填（取值与 convertStepToBackend 一致） */
+/** HTTP：所属应用、配置名称、请求地址必填；TCP：所属应用、配置名称必填（地址端口由环境/脚本配置解析） */
 const validateHttpTcpStepsRequired = (stepList) => {
   const walk = (list) => {
     if (!Array.isArray(list)) return {valid: true}
@@ -2505,27 +2519,11 @@ const validateHttpTcpStepsRequired = (stepList) => {
           cfgName = String(original.request_config_name ?? '').trim()
         }
 
-        const host = String(config.host ?? original.request_url ?? '').trim()
-
-        let portStr = ''
-        const p = config.port
-        if (p !== undefined && p !== null && String(p).trim() !== '') {
-          portStr = String(p).trim()
-        } else if (original.request_port != null && original.request_port !== '') {
-          portStr = String(original.request_port).trim()
-        }
-
         if (emptyProject) {
           return {valid: false, message: `步骤「${stepLabel}」TCP请求：请选择所属应用后再保存。`}
         }
         if (!cfgName) {
           return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写配置名称后再保存。`}
-        }
-        if (!host) {
-          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写请求地址后再保存。`}
-        }
-        if (!portStr) {
-          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写请求端口后再保存。`}
         }
       }
 

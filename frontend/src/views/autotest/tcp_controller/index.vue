@@ -25,85 +25,31 @@
           label-width="80px"
           ref="formRef"
       >
-        <!-- 第一行：请求地址60%/请求端口与调试同栏无缝；第二行：步骤名称、所属应用、配置名称 -->
-        <div class="tcp-request-rows">
-          <div class="tcp-request-row tcp-request-row-bottom">
-            <n-form-item label="请求地址" path="host" required class="tcp-field-host">
-              <n-input
-                  v-model:value="state.form.host"
-                  placeholder="请输入请求地址"
-                  clearable
-                  class="request-toolbar-input-fill"
-                  :disabled="props.readonly"
-              />
-            </n-form-item>
-            <div class="tcp-port-debug-slot">
-              <n-form-item
-                  v-if="!props.readonly"
-                  label="请求端口"
-                  path="port"
-                  required
-                  class="tcp-field-port"
-              >
-                <div class="tcp-port-debug-inline">
-                  <n-input
-                      v-model:value="state.form.port"
-                      placeholder="端口"
-                      clearable
-                      class="request-toolbar-input-fill"
-                      :disabled="props.readonly"
-                  />
-                  <n-button
-                      type="primary"
-                      size="medium"
-                      class="tcp-debug-btn"
-                      @click="debugging"
-                      :loading="debugLoading"
-                  >
-                    调试
-                  </n-button>
-                </div>
-              </n-form-item>
-              <n-form-item
-                  v-else
-                  label="请求端口"
-                  path="port"
-                  required
-                  class="tcp-field-port"
-              >
-                <n-input
-                    v-model:value="state.form.port"
-                    placeholder="端口"
-                    clearable
-                    class="request-toolbar-input-fill"
-                    :disabled="props.readonly"
-                />
-              </n-form-item>
-            </div>
-          </div>
-          <div class="tcp-request-row tcp-request-row-top">
-            <n-form-item label="步骤名称" path="step_name" required class="tcp-field-step-name">
-              <n-input
-                  v-model:value="state.form.step_name"
-                  placeholder="请输入步骤名称"
-                  clearable
-                  class="request-step-name-input"
-                  :disabled="props.readonly"
-              />
-            </n-form-item>
-            <n-form-item label="所属应用" path="request_project_id" required class="tcp-field-project">
-              <n-select
-                  v-model:value="state.form.request_project_id"
-                  placeholder="所属应用"
-                  :options="props.projectOptions"
-                  :loading="props.projectLoading"
-                  clearable
-                  filterable
-                  class="request-toolbar-select"
-                  :disabled="props.readonly"
-              />
-            </n-form-item>
-            <n-form-item label="配置名称" path="request_config_name" required class="tcp-field-config">
+        <!-- 前两列：步骤名称、所属应用；第三列：配置名称 + 调试同表单项内 flex 并排，避免末列与 n-select 垂直错位 -->
+        <div class="tcp-request-row tcp-request-row-top">
+          <n-form-item label="步骤名称" path="step_name" required class="tcp-field-step-name">
+            <n-input
+                v-model:value="state.form.step_name"
+                placeholder="请输入步骤名称"
+                clearable
+                class="request-step-name-input"
+                :disabled="props.readonly"
+            />
+          </n-form-item>
+          <n-form-item label="所属应用" path="request_project_id" required class="tcp-field-project">
+            <n-select
+                v-model:value="state.form.request_project_id"
+                placeholder="所属应用"
+                :options="props.projectOptions"
+                :loading="props.projectLoading"
+                clearable
+                filterable
+                class="request-toolbar-select"
+                :disabled="props.readonly"
+            />
+          </n-form-item>
+          <n-form-item label="配置名称" path="request_config_name" required class="tcp-field-config">
+            <div class="tcp-config-debug-inline">
               <n-select
                   v-model:value="state.form.request_config_name"
                   placeholder="配置名称"
@@ -112,11 +58,21 @@
                   clearable
                   filterable
                   tag
-                  class="request-toolbar-select"
+                  class="request-toolbar-select tcp-config-select-inline"
                   :disabled="props.readonly"
               />
-            </n-form-item>
-          </div>
+              <n-button
+                  v-if="!props.readonly"
+                  type="primary"
+                  size="medium"
+                  class="tcp-debug-btn"
+                  @click="debugging"
+                  :loading="debugLoading"
+              >
+                调试
+              </n-button>
+            </div>
+          </n-form-item>
         </div>
 
         <n-form-item label="步骤描述" path="step_desc">
@@ -132,32 +88,19 @@
 
       <n-tabs type="line" animated style="margin-top: 16px;">
         <n-tab-pane name="body" tab="请求体">
-          <!-- 与 HTTP「请求体」json 区布局一致；编辑模式仅影响 Monaco 语法高亮，不做自动排版美化 -->
-          <div class="tcp-body-mode-row">
-            <span class="tcp-body-mode-label">编辑模式</span>
-            <n-radio-group
-                v-model:value="state.form.body_format_mode"
-                name="tcpBodyFormat"
-                :disabled="props.readonly"
-            >
-              <n-space>
-                <n-radio value="xml">XML</n-radio>
-                <n-radio value="json">JSON</n-radio>
-                <n-radio value="text">文本</n-radio>
-              </n-space>
-            </n-radio-group>
+          <div v-if="!props.readonly" class="tcp-body-toolbar">
+            <n-button size="small" type="primary" tertiary @click="beautifyRequestPayload">
+              一键排版
+            </n-button>
           </div>
           <monaco-editor
               v-model:value="state.form.request_payload"
               :lang="monacoBodyLang"
               :options="monacoEditorOptionsForBody()"
               class="json-editor"
-              style="min-height: 400px; height: auto; margin-top: 12px;"
+              style="min-height: 400px; height: auto; margin-top: 8px;"
               :readOnly="props.readonly"
           />
-          <div class="hint" style="margin-top: 8px;">
-            编辑模式仅切换语法高亮。TCP 保存与调试按原始字符串发送（raw），暂不实现 JSON/XML 一键排版。
-          </div>
         </n-tab-pane>
         <n-tab-pane name="extract" tab="变量提取">
           <KeyValueEditor
@@ -170,9 +113,6 @@
               placeholder-key="name"
               placeholder-value="expr"
           />
-          <div class="hint">
-            source 建议使用：<code>response json</code> / <code>response xml</code> / <code>response text</code> / <code>session_variables</code>。
-          </div>
         </n-tab-pane>
         <n-tab-pane name="assert" tab="断言验证">
           <KeyValueEditor
@@ -248,7 +188,7 @@
 <script setup>
 defineOptions({ name: 'TCP请求控制器' })
 
-import { computed, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
@@ -257,10 +197,7 @@ import {
   NFormItem,
   NInput,
   NModal,
-  NRadio,
-  NRadioGroup,
   NSelect,
-  NSpace,
   NTabPane,
   NTabs
 } from 'naive-ui'
@@ -294,11 +231,7 @@ const state = reactive({
     step_desc: '',
     request_project_id: null,
     request_config_name: null,
-    host: '',
-    port: '',
     request_payload: '',
-    /** xml | json | text：Monaco 语法高亮，默认 XML */
-    body_format_mode: 'xml',
     extract_variables: [],
     assert_validators: []
   }
@@ -327,28 +260,6 @@ const rules = {
       trigger: ['change', 'blur']
     }
   ],
-  host: [
-    {
-      validator(_rule, value) {
-        if (!String(value ?? '').trim()) {
-          return new Error('请输入请求地址')
-        }
-        return true
-      },
-      trigger: ['change', 'blur']
-    }
-  ],
-  port: [
-    {
-      validator(_rule, value) {
-        if (!String(value ?? '').trim()) {
-          return new Error('请输入请求端口')
-        }
-        return true
-      },
-      trigger: ['change', 'blur']
-    }
-  ],
   step_name: [
     {
       required: true,
@@ -358,12 +269,93 @@ const rules = {
   ]
 }
 
-const monacoBodyLang = computed(() => {
-  const k = state.form.body_format_mode
-  if (k === 'xml') return 'xml'
-  if (k === 'text') return 'plaintext'
-  return 'json'
-})
+/** Monaco 语言：xml | json | plaintext，与落库 body_format_mode 对应 */
+const monacoBodyLang = ref('xml')
+
+/** 将 Monaco languageId 转为步骤 config 中的 body_format_mode */
+const monacoLangToBodyFormatMode = (lang) => {
+  if (lang === 'plaintext') return 'text'
+  if (lang === 'json' || lang === 'xml') return lang
+  return 'text'
+}
+
+/** 校验是否为可解析的 XML（无 parsererror） */
+const tryParseValidXml = (raw) => {
+  const s = String(raw ?? '').trim()
+  if (!s || !s.includes('<')) return null
+  const doc = new DOMParser().parseFromString(s, 'text/xml')
+  const pe = doc.querySelector('parsererror')
+  if (pe && String(pe.textContent || '').trim()) return null
+  if (!doc.documentElement) return null
+  return doc
+}
+
+/**
+ * 简易 XML 排版：在已通过 DOMParser 校验后，在标签间断行并缩进（与常见 snippet 行为一致）
+ */
+const formatXmlPretty = (xml) => {
+  let formatted = ''
+  let pad = 0
+  const normalized = String(xml).replace(/>\s*</g, '>\n<')
+  normalized.split('\n').forEach((line) => {
+    const node = line.trim()
+    if (!node) return
+    let indent = 0
+    if (node.match(/.+<\/\w[^>]*>$/)) {
+      indent = 0
+    } else if (node.match(/^<\/\w/)) {
+      if (pad > 0) pad -= 1
+    } else if (node.match(/^<\w[^>]*[^/]>.*$/)) {
+      indent = 1
+    } else {
+      indent = 0
+    }
+    formatted += `${'  '.repeat(pad)}${node}\n`
+    pad += indent
+  })
+  return formatted.trimEnd()
+}
+
+const tryBeautifyJson = (raw) => {
+  const s = String(raw ?? '').trim()
+  if (!s) return null
+  try {
+    return JSON.stringify(JSON.parse(s), null, 2)
+  } catch {
+    return null
+  }
+}
+
+/** 非 XML/JSON 时仅做轻量纯文本整理 */
+const normalizePlainText = (raw) =>
+    String(raw ?? '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd()
+
+const beautifyRequestPayload = () => {
+  if (props.readonly) return
+  const raw = state.form.request_payload
+  const doc = tryParseValidXml(raw)
+  if (doc) {
+    const ser = new XMLSerializer().serializeToString(doc.documentElement)
+    state.form.request_payload = formatXmlPretty(ser)
+    monacoBodyLang.value = 'xml'
+    window.$message?.success?.('已按 XML 排版')
+    return
+  }
+  const jsonStr = tryBeautifyJson(raw)
+  if (jsonStr != null) {
+    state.form.request_payload = jsonStr
+    monacoBodyLang.value = 'json'
+    window.$message?.success?.('已按 JSON 排版')
+    return
+  }
+  state.form.request_payload = normalizePlainText(raw)
+  monacoBodyLang.value = 'plaintext'
+  window.$message?.info?.('未识别为 XML/JSON，已按纯文本整理')
+}
 
 /** 与 http_controller 请求体 JSON 编辑器 options 一致 */
 const monacoEditorOptions = (readOnly) => {
@@ -398,9 +390,10 @@ const buildConfigFromState = () => {
     request_config_name: state.form.request_config_name != null && String(state.form.request_config_name).trim() !== ''
         ? String(state.form.request_config_name).trim()
         : null,
-    host: (state.form.host || '').trim(),
-    port: String(state.form.port ?? '').trim(),
-    body_format_mode: state.form.body_format_mode || 'xml',
+    /** 目标地址由「脚本执行配置」或后端按应用+环境解析，页面不再编辑 */
+    request_url: '',
+    request_port: null,
+    body_format_mode: monacoLangToBodyFormatMode(monacoBodyLang.value),
     // TCP 步骤：始终按原始文本发送，不区分 JSON/XML 提交类型
     request_args_type: 'raw',
     request_text: payloadText,
@@ -419,25 +412,6 @@ const initFromProps = () => {
   state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
   state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
-  if (cfg.host !== undefined || cfg.port !== undefined) {
-    state.form.host = cfg.host ?? ''
-    state.form.port = cfg.port != null && cfg.port !== '' ? String(cfg.port) : ''
-  } else if (cfg.target) {
-    const t = String(cfg.target).trim()
-    const m = t.match(/^(.+):(\d{1,5})$/)
-    if (m) {
-      state.form.host = m[1].trim()
-      state.form.port = m[2]
-    } else {
-      state.form.host = t
-      state.form.port = ''
-    }
-  } else {
-    state.form.host = original.request_url ?? ''
-    state.form.port = original.request_port != null && original.request_port !== ''
-        ? String(original.request_port)
-        : ''
-  }
   const argsType = String(cfg.request_args_type ?? original.request_args_type ?? '').toLowerCase()
   if (argsType === 'json') {
     const bodyObj = cfg.data ?? original.request_body ?? {}
@@ -450,17 +424,17 @@ const initFromProps = () => {
 
   const rawAfterLoad = String(state.form.request_payload || '')
   if (cfg.body_format_mode && ['xml', 'json', 'text'].includes(cfg.body_format_mode)) {
-    state.form.body_format_mode = cfg.body_format_mode
+    monacoBodyLang.value = cfg.body_format_mode === 'text' ? 'plaintext' : cfg.body_format_mode
   } else if (cfg.body_editor_kind && ['json', 'xml', 'text'].includes(cfg.body_editor_kind)) {
-    state.form.body_format_mode = cfg.body_editor_kind
+    monacoBodyLang.value = cfg.body_editor_kind === 'text' ? 'plaintext' : cfg.body_editor_kind
   } else if (!rawAfterLoad.trim()) {
-    state.form.body_format_mode = 'xml'
+    monacoBodyLang.value = 'xml'
   } else if (argsType === 'json') {
-    state.form.body_format_mode = 'json'
+    monacoBodyLang.value = 'json'
   } else if (/^\s*</.test(rawAfterLoad)) {
-    state.form.body_format_mode = 'xml'
+    monacoBodyLang.value = 'xml'
   } else {
-    state.form.body_format_mode = 'text'
+    monacoBodyLang.value = 'plaintext'
   }
 
   state.form.extract_variables = cfg.extract_variables ?? original.extract_variables ?? []
@@ -584,10 +558,8 @@ const doDebugRequest = async (env_name) => {
       case_id: caseId,
       step_type: original.step_type || 'TCP请求',
       step_name: state.form.step_name || original.step_name || 'TCP 调试',
-      request_url: (state.form.host || '').trim(),
-      request_port: String(state.form.port || '').trim()
-          ? Number(String(state.form.port).trim())
-          : null,
+      request_url: '',
+      request_port: null,
       request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
       request_args_type: 'raw',
       request_text: cfg.request_text ?? cfg.request_payload ?? null,
@@ -665,27 +637,43 @@ const doDebugRequest = async (env_name) => {
   font-size: 12px;
 }
 
-.tcp-request-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .tcp-request-row {
   width: 100%;
 }
 
-/* 第二行：40% / 30% / 30%（与 HTTP 一致用 4fr 3fr 3fr） */
+/* 三列：步骤名 / 应用 /（配置名+调试）；第三列内 flex 保证下拉与按钮同一基线 */
 .tcp-request-row-top {
   display: grid;
-  grid-template-columns: 4fr 2.5fr 3.5fr;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 2.5fr) minmax(0, 3.5fr);
   gap: 12px;
   align-items: start;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.tcp-request-row-top :deep(.n-form-item),
-.tcp-request-row-bottom :deep(.n-form-item) {
+.tcp-request-row-top :deep(.n-form-item) {
   min-width: 0;
+}
+
+.tcp-config-debug-inline {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.tcp-config-select-inline {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tcp-debug-btn {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .tcp-field-step-name :deep(.n-input),
@@ -702,57 +690,11 @@ const doDebugRequest = async (env_name) => {
   width: 100%;
 }
 
-.request-toolbar-input-fill {
-  width: 100%;
-}
-
-/* 第一行：请求地址约 60%，右侧请求端口与调试同一 form-item 内容区无缝并排 */
-.tcp-request-row-bottom {
-  display: grid;
-  grid-template-columns: minmax(0, 60%) minmax(0, 1fr);
-  column-gap: 12px;
-  align-items: start;
-  width: 100%;
-}
-
-.tcp-port-debug-slot {
-  min-width: 0;
-}
-
-.tcp-field-port :deep(.n-form-item-blank) {
-  width: 100%;
-}
-
-.tcp-port-debug-inline {
+.tcp-body-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 0;
-  width: 100%;
-  min-width: 0;
-}
-
-.tcp-port-debug-inline .request-toolbar-input-fill {
-  flex: 1;
-  min-width: 0;
-}
-
-.tcp-debug-btn {
-  flex-shrink: 0;
-}
-
-.tcp-body-mode-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-bottom: 4px;
-}
-
-.tcp-body-mode-label {
-  font-size: 14px;
-  color: var(--n-text-color-2);
-  min-width: 56px;
+  justify-content: flex-end;
+  margin-bottom: 0;
 }
 
 /* 与 http_controller「请求体」json 编辑器一致 */
