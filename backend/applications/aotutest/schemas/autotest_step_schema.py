@@ -188,8 +188,8 @@ class AutoTestApiStepSelect(BaseModel):
 class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
-    quote_steps: Optional[List[Any]] = Field(None, description="引用步骤列表(更新时忽略)")
-    quote_case: Optional[Any] = Field(None, description="引用公共脚本信息(更新时忽略)")
+    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表(更新时忽略)")
+    quote_case: Optional[NON_DICT_TYPE] = Field(None, description="引用公共脚本信息(更新时忽略)")
 
 
 class AutoTestStepTreeUpdateList(BaseModel):

@@ -255,7 +255,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     data_source_desc = fields.CharField(max_length=2048, null=True, description="数据源描述")
 
     # 数据库相关
-    # database_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、sql_expr、variable_name
+    # database_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr、variable_name
     database_operates = fields.JSONField(null=True, description="数据库请求操作列表(根据不同的配置进行操作数据库)")
     database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续的数据库请求)")
 
