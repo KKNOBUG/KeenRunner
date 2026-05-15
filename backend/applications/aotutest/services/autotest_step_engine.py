@@ -1085,6 +1085,7 @@ class BaseStepExecutor:
                 request_args_type=actual_request.get("request_args_type") or None,
                 request_project_id=actual_request.get("request_project_id") or None,
                 request_config_name=self.step.request_config_name,
+                request_env_name=actual_request.get("request_env_name") or None,
                 request_header=actual_request.get("request_header") or None,
                 request_params=actual_request.get("request_params") or None,
                 request_form_data=actual_request.get("request_form_data") or None,
@@ -2064,6 +2065,7 @@ class TcpStepExecutor(BaseStepExecutor):
             # 获取当前步骤的执行配置处理请求URL
             request_url = (self.step.request_url or "").strip()
             request_port = self.step.request_port
+            env_name: Optional[str] = None
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
             if current_step_config:
                 config_type: AutoTestConfigNodeType = current_step_config.config_type
@@ -2071,6 +2073,7 @@ class TcpStepExecutor(BaseStepExecutor):
                     request_url: str = current_step_config.config_host
                     request_port: str = current_step_config.config_port
                     self.step.request_config_name = current_step_config.config_name
+                    env_name = current_step_config.env_name
 
             if not request_url or not request_port:
                 raise StepExecutionError(f"【TCP请求】请求主机[{request_url!r}]或请求端口[{request_port!r}]不是有效的配置")
@@ -2138,6 +2141,7 @@ class TcpStepExecutor(BaseStepExecutor):
             result.request = {
                 "request_url": request_url,
                 "request_port": request_port,
+                "request_env_name": env_name,
                 "request_args_type": AutoTestReqArgsType.RAW,
                 "tcp_frame_mode": self.step.tcp_frame_mode or "length_prefix_json",
                 "tcp_length_field_size": self.step.tcp_length_field_size or 8,
@@ -2316,7 +2320,10 @@ class DataBaseStepExecutor(BaseStepExecutor):
         try:
             # 获取当前步骤的执行配置处理请求URL
             env_name: Optional[str] = None
-            database_operates = self.step.database_operates
+            merge_operates_env_name: Optional[str] = None
+            config_host: Optional[str] = None
+            config_port: Optional[str] = None
+            database_operates: Optional[List[DataBaseOperates]] = self.step.database_operates
             if database_operates is None:
                 raise StepExecutionError("【数据库请求】参数[database_operates]不能为空")
             if not isinstance(database_operates, list):
@@ -2330,29 +2337,40 @@ class DataBaseStepExecutor(BaseStepExecutor):
             database_searched: bool = bool(self.step.database_searched)
             executive_st_time: datetime = datetime.now()
             # 步骤响应：列表，每项对应一条 database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
-            for db_idx, db_op in enumerate(database_operates):
-                if not isinstance(db_op, DataBaseOperates):
-                    raise StepExecutionError(
-                        f"【数据库请求】第{db_idx + 1}条配置类型非法: 期望 DataBaseOperates，得到 {type(db_op).__name__}"
-                    )
-                db_operate: Dict[str, Any] = db_op.model_dump()
+            for db_idx, db_operate in enumerate(database_operates):
                 operate_no: str = f"第{db_idx + 1}条数据库配置"
+                if not isinstance(db_operate, DataBaseOperates):
+                    raise StepExecutionError(
+                        f"【数据库请求】第{operate_no}条配置类型非法: \n\t"
+                        f"预期类型: DataBaseOperates\n\t"
+                        f"实际类型: {type(db_operate).__name__}"
+                    )
                 current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(database_operates_index=db_idx)
                 if current_op_execute_cfg and current_op_execute_cfg.config_type == AutoTestConfigNodeType.DB:
-                    env_name = str(current_op_execute_cfg.env_name or "").strip()
-                    db_operate["config_name"] = current_op_execute_cfg.config_name
-                    db_operate["database_name"] = current_op_execute_cfg.database_name
-                    self.step.request_config_name = current_op_execute_cfg.config_name
+                    env_name: str = str(current_op_execute_cfg.env_name or "").strip()
+                    config_host: str = current_op_execute_cfg.config_host
+                    config_port: str = current_op_execute_cfg.config_port
+                    db_operate.config_name = current_op_execute_cfg.config_name
+                    db_operate.database_name = current_op_execute_cfg.database_name
+                    request_config_name: Optional[str] = self.step.request_config_name
+                    if request_config_name:
+                        self.step.request_config_name += f", ({db_idx}){db_operate.config_name}"
+                    else:
+                        self.step.request_config_name = f"({db_idx}){db_operate.config_name}"
+                    if merge_operates_env_name:
+                        merge_operates_env_name += f", ({db_idx}){env_name}"
+                    else:
+                        merge_operates_env_name = f"({db_idx}){env_name}"
 
-                operate_name: str = db_operate.get("name")
-                operate_desc: Optional[str] = db_operate.get("desc")
-                operate_variable_name: str = db_operate.get("variable_name")
-                count_operate_variable_name: str = f"{operate_variable_name}_count"
-                operate_project_id: int = db_operate.get("project_id")
-                operate_sql_expr: str = db_operate.get("expr")
-                operate_config_name: str = db_operate.get("config_name")
-                operate_project_name: str = db_operate.get("project_name")
-                operate_database_name: str = db_operate.get("database_name")
+                operate_name: str = db_operate.name
+                operate_sql_expr: str = db_operate.expr
+                operate_project_id: int = db_operate.project_id
+                operate_project_name: str = db_operate.project_name
+                operate_variable_name: str = db_operate.variable_name
+                operate_config_name: str = db_operate.config_name
+                operate_database_name: str = db_operate.database_name
+                operate_desc: Optional[str] = db_operate.desc
+                operate_result_count: str = f"{operate_variable_name}_count"
                 try:
                     # 处理变量占位符
                     operate_sql_expr: str = self.context.resolve_placeholders(operate_sql_expr)
@@ -2403,7 +2421,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                     })
                     mark_extract_variables.append({
                         "index": db_idx,
-                        "name": count_operate_variable_name,
+                        "name": operate_result_count,
                         "source": "数据库请求",
                         "scope": "ALL",
                         "expr": "SQL语句",
@@ -2411,29 +2429,33 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         "success": True,
                         "error": "",
                     })
-                    database_operates_response.append({
-                        "index": db_idx,
-                        "name": operate_name,
-                        "desc": operate_desc,
-                        "project_id": operate_project_id,
-                        "project_name": operate_project_name,
-                        "config_name": operate_config_name,
-                        "database_name": operate_database_name,
-                        "expr": operate_sql_expr,
-                        "variable_name": [operate_variable_name, count_operate_variable_name],
-                        "sql_data": sql_data,
-                        "sql_count": sql_count,
-                    })
                     database_operates_request.append({
                         "index": db_idx,
                         "name": operate_name,
-                        "desc": operate_desc,
+                        "env_name": env_name,
+                        "expr": operate_sql_expr,
                         "project_id": operate_project_id,
                         "project_name": operate_project_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
                         "config_name": operate_config_name,
                         "database_name": operate_database_name,
-                        "expr": operate_sql_expr,
-                        "variable_name": [operate_variable_name, count_operate_variable_name],
+                        "desc": operate_desc,
+                    })
+                    database_operates_response.append({
+                        "index": db_idx,
+                        "name": operate_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "sql_meta": {
+                            "env_name": env_name,
+                            "project_id": operate_project_id,
+                            "project_name": operate_project_name,
+                            "config_name": operate_config_name,
+                            "database_name": operate_database_name,
+                            "config_host": config_host,
+                            "config_port": config_port,
+                        },
+                        "sql_data": sql_data,
+                        "sql_count": sql_count,
                     })
                     if database_searched and isinstance(sql_data, list) and len(sql_data) > 0:
                         self.context.log(
@@ -2452,37 +2474,35 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         offset_message=operate_no
                     )
                     self.context.log(result.error, step_code=self.step_code)
-                    database_operates_response.append(
-                        {
-                            "index": db_idx,
-                            "name": operate_name,
-                            "desc": operate_desc,
+                    database_operates_request.append({
+                        "index": db_idx,
+                        "name": operate_name,
+                        "env_name": env_name,
+                        "expr": operate_sql_expr,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "desc": operate_desc,
+                    })
+                    database_operates_response.append({
+                        "index": db_idx,
+                        "name": operate_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "sql_meta": {
+                            "env_name": env_name,
                             "project_id": operate_project_id,
                             "project_name": operate_project_name,
                             "config_name": operate_config_name,
                             "database_name": operate_database_name,
-                            "expr": operate_sql_expr,
-                            "variable_name": [operate_variable_name, count_operate_variable_name],
-                            "sql_data": None,
-                            "sql_count": None,
-                            "error": f"{operate_no}: {e}",
-                            "success": False,
-                        }
-                    )
-                    database_operates_request.append(
-                        {
-                            "index": db_idx,
-                            "name": operate_name,
-                            "desc": operate_desc,
-                            "project_id": operate_project_id,
-                            "project_name": operate_project_name,
-                            "config_name": operate_config_name,
-                            "database_name": operate_database_name,
-                            "expr": operate_sql_expr,
-                            "variable_name": [operate_variable_name, count_operate_variable_name],
-                            "error": f"{operate_no}: {e}",
-                        }
-                    )
+                            "config_host": config_host,
+                            "config_port": config_port,
+                        },
+                        "sql_data": None,
+                        "sql_count": None,
+                        "error": f"{operate_no}: {e}",
+                    })
 
             executive_ed_time: datetime = datetime.now()
             response_text_str = json.dumps(database_operates_response, ensure_ascii=False, default=str)
@@ -2491,6 +2511,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 "database_operates": database_operates_request,
                 "database_searched": database_searched,
                 "request_args_type": AutoTestReqArgsType.RAW,
+                "request_env_name": merge_operates_env_name,
             }
             result.response = {
                 "response_body": database_operates_response,
@@ -2703,6 +2724,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 "request_url": request_url,
                 "request_port": None,
                 "request_method": request_method.value,
+                "request_env_name": env_name,
                 "request_args_type": request_args_type_raw,
                 "request_header": headers,
                 "request_params": params_payload,

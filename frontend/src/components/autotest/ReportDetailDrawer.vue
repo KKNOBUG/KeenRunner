@@ -237,7 +237,7 @@
                     name="requestBasic"
                     v-if="isReportHttpStep || isReportTcpStep || isReportDatabaseStep"
                 >
-                  <!-- HTTP / TCP 共用一块 Basic：类型相关字段 + 共用的「配置名称」 -->
+                  <!-- HTTP / TCP 共用一块 Basic：类型相关字段 + 环境名称 + 配置名称 -->
                   <div v-if="isReportHttpStep || isReportTcpStep" class="step-info-grid">
                     <template v-if="isReportHttpStep">
                       <div class="step-info-row">
@@ -267,6 +267,12 @@
                         </div>
                       </div>
                     </template>
+                    <div v-if="requestEnvName !== '-'" class="step-info-row">
+                      <div class="step-info-label">环境名称：</div>
+                      <div class="step-info-value">
+                        <NText copyable style="font-size: 12px;">{{ requestEnvName }}</NText>
+                      </div>
+                    </div>
                     <div v-if="requestConfigName !== '-'" class="step-info-row">
                       <div class="step-info-label">配置名称：</div>
                       <div class="step-info-value">
@@ -751,6 +757,13 @@ const requestConfigName = computed(() => {
   if (n != null && String(n).trim() !== '') return String(n).trim()
   return '-'
 })
+/** 明细表 request_env_name，本次执行所选环境枚举名称 */
+const requestEnvName = computed(() => {
+  const d = currentDetail.value
+  const n = d?.request_env_name
+  if (n != null && String(n).trim() !== '') return String(n).trim()
+  return '-'
+})
 const requestPort = computed(() => {
   const d = currentDetail.value
   const p = d?.request_port
@@ -821,6 +834,7 @@ const hasRequestInfo = computed(() => {
   const hasRequestData =
       (requestMethod.value && requestMethod.value !== '-') ||
       (requestUrl.value && requestUrl.value !== '-') ||
+      (requestEnvName.value && requestEnvName.value !== '-') ||
       (requestConfigName.value && requestConfigName.value !== '-') ||
       normalizedRequestHeaders.value != null ||
       (normalizedRequestParams.value && Object.keys(normalizedRequestParams.value).length > 0) ||

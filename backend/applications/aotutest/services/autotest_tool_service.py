@@ -1406,7 +1406,12 @@ class AutoTestToolServiceImpl:
         """
         if len(regularly_slots) == 1:
             _, value, _ = regularly_slots[0]
-            if isinstance(value, str):
+            if value is None:
+                return False
+            try:
+                float(value)
+                return True
+            except ValueError:
                 return False
 
         skeleton_parts: List[str] = []
@@ -1677,6 +1682,33 @@ class AutoTestToolServiceImpl:
         """
         try:
             if isinstance(value, str):
+                if "${" in value and value.startswith(("{", "[")):
+                    try:
+                        value_json = json.loads(value)
+                    except json.JSONDecodeError:
+                        return value
+
+                    def _treatment(_value: Dict[str, Any]):
+                        for ck, cv in _value.items():
+                            if "${" in cv:
+                                _value[ck] = cls._resolve_string_placeholders(
+                                    content=cv,
+                                    logger_object=logger_object,
+                                    is_core_engine=is_core_engine,
+                                    finished_variables=finished_variables
+                                )
+                        return _value
+
+                    if not isinstance(value_json, (dict, list)):
+                        return value
+                    if isinstance(value_json, dict):
+                        _treatment(value_json)
+                    elif isinstance(value_json, list):
+                        for vid, item in enumerate(value_json):
+                            if isinstance(item, dict):
+                                value_json[vid] = _treatment(item)
+                    return json.dumps(value_json, ensure_ascii=False)
+
                 return cls._resolve_string_placeholders(
                     content=value,
                     logger_object=logger_object,
@@ -1710,26 +1742,26 @@ class AutoTestToolServiceImpl:
                 result: List[StepVariablesBase] = []
                 for item in value:
                     # if isinstance(item, StepVariablesBase):
-                        resolved: StepVariablesBase = item.model_copy(
-                            update={
-                                "value": cls.resolve_placeholders(
-                                    value=item.value,
-                                    logger_object=logger_object,
-                                    is_core_engine=is_core_engine,
-                                    finished_variables=finished_variables,
-                                )
-                            }
-                        )
-                        result.append(resolved)
-                    # else:
-                    #     result.append(
-                    #         cls.resolve_placeholders(
-                    #             value=item,
-                    #             logger_object=logger_object,
-                    #             is_core_engine=is_core_engine,
-                    #             finished_variables=finished_variables,
-                    #         )
-                    #     )
+                    resolved: StepVariablesBase = item.model_copy(
+                        update={
+                            "value": cls.resolve_placeholders(
+                                value=item.value,
+                                logger_object=logger_object,
+                                is_core_engine=is_core_engine,
+                                finished_variables=finished_variables,
+                            )
+                        }
+                    )
+                    result.append(resolved)
+                # else:
+                #     result.append(
+                #         cls.resolve_placeholders(
+                #             value=item,
+                #             logger_object=logger_object,
+                #             is_core_engine=is_core_engine,
+                #             finished_variables=finished_variables,
+                #         )
+                #     )
                 return result
             return value
         except Exception as e:

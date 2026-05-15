@@ -393,7 +393,23 @@ const toggleMainCardCollapsed = () => {
 const databaseOpDefaultTitle = (key) => {
   const i = opKeys.value.indexOf(Number(key))
   const n = i >= 0 ? i + 1 : Number(key) + 1
-  return `数据库请求 ${n}`
+  return `数据库请求${n}`
+}
+
+/** 生成未与当前各条「操作名称」重复的名称（用于新增 / 复制） */
+const nextUniqueDatabaseOpName = () => {
+  const used = new Set()
+  for (const k of opKeys.value) {
+    const t = String(state.form.database_operates[k]?.name ?? '').trim()
+    if (t) used.add(t)
+  }
+  let n = 1
+  let candidate = `数据库请求${n}`
+  while (used.has(candidate)) {
+    n += 1
+    candidate = `数据库请求${n}`
+  }
+  return candidate
 }
 
 const databaseOpDisplayTitle = (item, key) => {
@@ -547,12 +563,11 @@ const buildConfigFromState = () => {
   const list = opKeys.value.map((k) => {
     const row = state.form.database_operates[k] || {}
     const pname = String(row.project_name ?? '').trim() || projectNameFromId(row.project_id)
-    const rawName = String(row.name ?? '').trim()
     const rawPid = row.project_id
     const projectId =
         rawPid != null && rawPid !== '' && !Number.isNaN(Number(rawPid)) ? Number(rawPid) : null
     return {
-      name: rawName || databaseOpDefaultTitle(k),
+      name: String(row.name ?? '').trim(),
       desc: row.desc ?? '',
       project_id: projectId,
       project_name: pname,
@@ -752,7 +767,9 @@ const addOp = () => {
   editingDatabaseOpKey.value = ''
   const keys = opKeys.value
   const newKey = keys.length ? Math.max(...keys) + 1 : 0
-  state.form.database_operates[newKey] = emptyOp()
+  const row = emptyOp()
+  row.name = nextUniqueDatabaseOpName()
+  state.form.database_operates[newKey] = row
   opCollapseState[newKey] = false
 }
 
@@ -769,7 +786,10 @@ const duplicateOp = (key) => {
   editingDatabaseOpKey.value = ''
   const keys = opKeys.value
   const newKey = keys.length ? Math.max(...keys) + 1 : 0
-  state.form.database_operates[newKey] = {...row}
+  state.form.database_operates[newKey] = {
+    ...row,
+    name: nextUniqueDatabaseOpName()
+  }
   opCollapseState[newKey] = false
 }
 

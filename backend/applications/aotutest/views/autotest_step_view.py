@@ -1043,7 +1043,7 @@ async def debug_python_code(
                 # 构建失败响应
                 debugging_return["error"] = str(e)
                 LOGGER.error(f"【Python代码调试】失败, 错误回溯: {traceback.format_exc()}")
-                return SuccessResponse(message="Python代码调试失败", data=debugging_result, total=1)
+                return SuccessResponse(message="Python代码调试失败", data=debugging_return, total=1)
 
     except Exception as e:
         response_data = {

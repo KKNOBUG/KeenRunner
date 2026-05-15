@@ -2361,7 +2361,8 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
       case_tags: Array.isArray(caseForm.case_tags) ? caseForm.case_tags : [],
       case_type: caseForm.case_type || null,
       case_attr: caseForm.case_attr || null,
-      case_desc: caseForm.case_desc || null
+      // 空描述须传 ""：后端 model_dump(exclude_none=True) 会丢掉 null，无法清空库里的 case_desc
+      case_desc: caseForm.case_desc ?? ''
     }
   }
 
@@ -2465,6 +2466,25 @@ const validateDatabaseSteps = (stepList) => {
             message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写存储变量（变量名）。`
           }
         }
+        const opDisplayName = String(o.name ?? '').trim()
+        if (!opDisplayName) {
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写操作名称（卡片标题不能为空）。`
+          }
+        }
+      }
+
+      const firstNameIndex = new Map()
+      for (let j = 0; j < list.length; j++) {
+        const nm = String((list[j] || {}).name ?? '').trim()
+        if (firstNameIndex.has(nm)) {
+          return {
+            valid: false,
+            message: `步骤「${stepName}」数据库请求：操作名称「${nm}」不能重复（第 ${firstNameIndex.get(nm) + 1} 条与第 ${j + 1} 条），请修改后再保存或调试。`
+          }
+        }
+        firstNameIndex.set(nm, j)
       }
     }
     if (step.children && step.children.length > 0) {
@@ -2709,7 +2729,8 @@ const handleSaveAll = async () => {
       case_tags: Array.isArray(caseForm.case_tags) ? caseForm.case_tags : [],
       case_type: caseForm.case_type || null,
       case_attr: caseForm.case_attr || null,
-      case_desc: caseForm.case_desc || null,
+      // 空描述须传 ""：后端 model_dump(exclude_none=True) 会丢掉 null，无法清空库里的 case_desc
+      case_desc: caseForm.case_desc ?? '',
       case_steps: totalSteps, // 用例步骤数量(含所有子级步骤)
       session_variables: null, // 如果需要可以从其他地方获取
       updated_user: currentUser
@@ -2815,6 +2836,11 @@ const handleDebug = async () => {
   }
   if (resolveNumericCaseIdForExecuteApi() == null) {
     window.$message?.warning?.('缺少用例 ID（case_id），请先保存用例后再调试')
+    return
+  }
+  const dbValidation = validateDatabaseSteps(steps.value)
+  if (!dbValidation.valid) {
+    window.$message?.error?.(dbValidation.message)
     return
   }
   await openDebugConfigModal()
