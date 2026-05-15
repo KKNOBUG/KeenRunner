@@ -19,6 +19,7 @@ from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -230,10 +231,16 @@ async def get_step_tree(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
 ):
     try:
-        tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id, case_code=case_code)
-        step_counter: Dict[str, Any] = tree_data.pop(-1)
-        LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {step_counter}")
-        return SuccessResponse(message="查询成功", data=tree_data, total=step_counter["total_steps"])
+        load = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id, case_code=case_code)
+        LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {load.step_counter.model_dump()}")
+        if load.root_steps:
+            data = [s.model_dump(mode="json") for s in load.root_steps]
+        elif load.case_only_when_no_steps is not None:
+            data = [{"case": load.case_only_when_no_steps.model_dump(mode="json")}]
+        else:
+            data = []
+        total = load.step_counter.total_steps
+        return SuccessResponse(message="查询成功", data=data, total=total)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
@@ -445,15 +452,17 @@ async def debug_http_request(
         if not assert_validators or not isinstance(assert_validators, list):
             assert_validators = []
 
-        # 将列表格式的 defined_variables\session_variables 转换为字典格式（用于变量查找）
-        merge_all_variables: Dict[str, Any] = {}
+        # 将 defined / session 变量合并为查找 dict（提取/断言用）及 StepVariablesBase 列表（占位符解析用）
+        merged_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables[item.key] = item.dict()
+            if isinstance(item, StepVariablesBase) and item.key:
+                merged_all_variables[item.key] = item.value
         for item in session_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables[item.key] = item.dict()
-        initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
+            if isinstance(item, StepVariablesBase) and item.key:
+                merged_all_variables[item.key] = item.value
+        initial_var_models: List[StepVariablesBase] = [
+            StepVariablesBase(key=k, value=v, desc="") for k, v in merged_all_variables.items()
+        ]
 
         # 处理请求主机域名
         if request_url and not request_url.lower().startswith("http"):
@@ -498,10 +507,9 @@ async def debug_http_request(
                     f"请求方法: {request_method}\n\t"
                     f"请求地址: {request_url}"
         )
-        append_debugging_log(message="【参数替换】开始: ")
         # 解析请求参数（列表格式）及 request_body、request_text 中的占位符
-        finished_variables: List[Dict[str, Any]] = AutoTestToolService.resolve_placeholders(
-            value=initial_variables,
+        finished_variables: List[StepVariablesBase] = AutoTestToolService.resolve_placeholders(
+            value=initial_var_models,
             logger_object=append_debugging_log,
             finished_variables={}
         )
@@ -579,7 +587,6 @@ async def debug_http_request(
             data_payload = urlencoded
 
         # 构建请求参数
-        append_debugging_log(message="【参数替换】完成")
         request_kwargs = {
             "headers": headers if headers else None,
             "params": params if params else None,
@@ -636,6 +643,8 @@ async def debug_http_request(
             message=f"【HTTP请求】调试完成: \n\t"
                     f"状态描述: {response.reason_phrase}\n\t"
                     f"状态代码: {response.status_code}\n\t"
+                    f"响应字符: {response.encoding}\n\t"
+                    f"响应版本: {response.http_version}\n\t"
                     f"响应耗时: {duration}ms"
         )
 
@@ -668,11 +677,11 @@ async def debug_http_request(
             response_json=response_json,
             response_headers=response_headers,
             response_cookies=response_cookies,
-            session_variables_lookup=merge_all_variables,
+            session_variables_lookup=merged_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
         )
         for extract_key, extract_value in extract_data.items():
-            finished_variables.append({"key": extract_key, "value": extract_value, "desc": ""})
+            finished_variables.append(StepVariablesBase(key=extract_key, value=extract_value, desc=""))
         # 处理断言验证（使用与步骤引擎共用的工具方法）
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
@@ -680,7 +689,7 @@ async def debug_http_request(
             response_json=response_json,
             response_headers=response_headers,
             response_cookies=response_cookies,
-            session_variables_lookup=merge_all_variables,
+            session_variables_lookup=merged_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
             finished_variables=finished_variables,
             is_core_engine=False,
@@ -762,12 +771,14 @@ async def debug_tcp_request(
         # 合并变量池（同 HTTP 调试）
         merge_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables[item.key] = item.dict()
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
         for item in session_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables[item.key] = item.dict()
-        initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
+        initial_var_models: List[StepVariablesBase] = [
+            StepVariablesBase(key=k, value=v, desc="") for k, v in merge_all_variables.items()
+        ]
 
         # 记录执行日志，用于前端反馈
         debugging_logs: List[str] = []
@@ -787,7 +798,7 @@ async def debug_tcp_request(
         append_debugging_log(message="【参数替换】开始: ")
 
         finished_variables = AutoTestToolService.resolve_placeholders(
-            value=initial_variables,
+            value=initial_var_models,
             logger_object=append_debugging_log,
             finished_variables={}
         )
@@ -879,7 +890,7 @@ async def debug_tcp_request(
             log_callback=lambda message: append_debugging_log(message=message),
         )
         for extract_key, extract_value in extract_data.items():
-            finished_variables.append({"key": extract_key, "value": extract_value, "desc": ""})
+            finished_variables.append(StepVariablesBase(key=extract_key, value=extract_value, desc=""))
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
             response_text=response_text,
@@ -965,12 +976,14 @@ async def debug_python_code(
         # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）
         merge_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables[item.key] = item.dict()
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
         for item in session_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables[item.key] = item.dict()
-        initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
+        initial_variables: List[StepVariablesBase] = [
+            StepVariablesBase(key=k, value=v, desc="") for k, v in merge_all_variables.items()
+        ]
         # 创建执行上下文（使用虚拟的case_id和case_code）
         from backend.applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError, StepExecutionResult
         async with StepExecutionContext(case_id=0, case_code="DEBUG", initial_variables=initial_variables) as context:
@@ -989,21 +1002,18 @@ async def debug_python_code(
                 )
                 executive_namespace: Dict[str, Any] = context.clone_state()
                 executive_result: Dict[str, Any] = context.run_python_code(code, namespace=executive_namespace, step_result=debugging_result)
-                debugging_return["request"] = debugging_result.request
                 if assert_validators:
                     for vc in assert_validators:
-                        if not isinstance(vc, dict):
-                            continue
-                        source: str = (vc.get("source") or "").strip().lower()
+                        source: str = (vc.source or "").strip().lower()
                         if source and source not in ("session_variables", "变量池"):
                             raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
 
                     session_lookup_map: Dict[str, Any] = {}
-                    session_lookup_map.update(AutoTestToolService.list_to_dict([d.model_dump() for d in defined_variables]))
-                    session_lookup_map.update(AutoTestToolService.list_to_dict([s.model_dump() for s in session_variables]))
+                    session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))
+                    session_lookup_map.update(AutoTestToolService.list_to_dict(session_variables))
                     session_lookup_map.update(executive_result or {})
                     validator_result = AutoTestToolService.run_assert_validators(
-                        assert_validators=[a.model_dump() for a in (assert_validators or [])],
+                        assert_validators=assert_validators,
                         response_text=None,
                         response_json=None,
                         response_headers=None,
@@ -1103,7 +1113,7 @@ async def execute_step_tree(
                 # selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
                 if not selected_dataset_names:
                     # 普通单次执行（无选中数据集）
-                    result_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+                    result_data: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.execute_single_case(
                         case_id=case_id,
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
@@ -1164,69 +1174,38 @@ async def execute_step_tree(
 
         # ========== 调试模式 ==========
         else:
-            # 1. 将Pydantic模型转换为字典
-            steps_dict: List[Dict[str, Any]] = []
-            for step in steps:
-                if hasattr(step, 'model_dump'):
-                    steps_dict.append(step.model_dump())
-                elif isinstance(step, dict):
-                    steps_dict.append(step)
-                else:
-                    steps_dict.append(dict(step))
-
-            tree_data = steps_dict
-
-            # 2. 从步骤中提取case_info（如果存在）
-            case_info = None
-            if tree_data and isinstance(tree_data[0], dict):
-                case_obj = tree_data[0].get("case")
-                if case_obj:
-                    case_info = {
-                        "case_id": case_obj.get("case_id"),
-                        "case_code": case_obj.get("case_code"),
-                        "case_name": case_obj.get("case_name"),
-                    }
+            case_info: Optional[Dict[str, Any]] = None
+            if steps and getattr(steps[0], "case", None) and isinstance(steps[0].case, dict):
+                first_step: Dict[str, Any] = steps[0].case
+                case_info = {
+                    "case_id": first_step.get("case_id"),
+                    "case_code": first_step.get("case_code"),
+                    "case_name": first_step.get("case_name"),
+                }
             if not case_info:
-                case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+                case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
                 case_info = {
                     "case_id": case_id,
                     "case_code": case_instance.case_code,
                     "case_name": case_instance.case_name,
                 }
 
-            # 3. 规范化步骤数据
-            tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
+            def merged_variables(*variables: List[StepVariablesBase]) -> List[StepVariablesBase]:
+                merged: Dict[str, StepVariablesBase] = {}
+                builtin_merged_append = merged.__setitem__
+                for variable in variables:
+                    for var in variable:
+                        key: str = var.key
+                        key and builtin_merged_append(key, var)
+                return list(merged.values())
 
-            # 4. 收集defined_variables
-            # initial_variables 和 all_session_variables 都是列表格式，每个元素包含 key、value、desc
-            all_session_variables = AutoTestToolService.collect_session_variables(tree_data)
-            # 合并两个列表，如果存在相同的key，使用 all_session_variables 中的值（后收集的优先）
-            merge_all_variables: Dict[str, Any] = {}
-            # 先添加 initial_variables
-            if isinstance(initial_variables, list):
-                for item in initial_variables:
-                    if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                        merge_all_variables[item.key] = item.dict()
-            # 再添加 all_session_variables（会覆盖相同的key）
-            if isinstance(all_session_variables, list):
-                for item in all_session_variables:
-                    if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                        merge_all_variables[item.key] = item.dict()
-            try:
-                # 转换回列表格式
-                initial_variables: List[Dict[str, Any]] = list(merge_all_variables.values())
-            except Exception as e:
-                return ParameterResponse(message=str(e))
-
-            # 5. 获取根步骤
-            root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
-            if not root_steps:
+            collected_session_variables: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(steps)
+            merged_variables: List[StepVariablesBase] = merged_variables(collected_session_variables, initial_variables)
+            all_root_steps: List[AutoTestStepTreeUpdateItem] = [step for step in steps if step.parent_step_id is None]
+            if not all_root_steps:
                 return BadReqResponse(message="没有可执行的根步骤")
 
-            # 6. 执行（若选择了单条数据集则传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表取数）
-            # 调试模式：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
-            # selected_dataset_names = getattr(request, "selected_dataset_names", None) or []
-            # selected_dataset_names = ["场景1名称"]
+            # 6. 调试模式执行：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
             if selected_dataset_names:
                 if len(selected_dataset_names) != 1:
                     return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
@@ -1236,9 +1215,9 @@ async def execute_step_tree(
             engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
-                steps=root_steps,
+                steps=all_root_steps,
                 steps_execute_config=steps_execute_config,
-                initial_variables=initial_variables,
+                initial_variables=merged_variables,
                 report_type=AutoTestReportType.DEBUG_EXEC,
                 dataset_name=debug_dataset_name,
             )
@@ -1249,8 +1228,8 @@ async def execute_step_tree(
                         for detail_create in (pending_create_details or []):
                             detail_schema = detail_create.model_copy(update={"report_code": report_instance.report_code})
                             await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_schema)
-                        case_state = statistics.get("failed_steps", 0) == 0
-                        case_last_time = defer_create_report.case_ed_time
+                        case_state: bool = statistics.get("failed_steps", 0) == 0
+                        case_last_time: str = defer_create_report.case_ed_time
                         await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
                             case_id=case_id,
                             case_state=case_state,
@@ -1259,22 +1238,15 @@ async def execute_step_tree(
                 except Exception as e:
                     LOGGER.error(f"执行或调试步骤树(调试模式)时发生未知异常，错误描述: {e}\n{traceback.format_exc()}")
 
-            # 7. 获取最终会话变量（从执行引擎返回）
-            # session_variables 和 initial_variables 都是列表格式，每个元素包含 key、value、desc
-            # 合并两个列表，如果存在相同的key，使用 session_variables 中的值（后执行的优先）
-            final_session_variables = {}
-            # 先添加 initial_variables
-            if isinstance(initial_variables, list):
-                for item in initial_variables:
-                    if isinstance(item, dict) and "key" in item:
-                        final_session_variables[item.get("key")] = item
-            # 再添加 session_variables（会覆盖相同的key）
-            if isinstance(session_variables, list):
-                for item in session_variables:
-                    if isinstance(item, dict) and "key" in item:
-                        final_session_variables[item.get("key")] = item
-            # 转换回列表格式
-            final_session_variables = list(final_session_variables.values())
+            # 7. 获取最终会话变量：merged_variables 与引擎返回的 session_variables（均为模型列表）按 key 合并
+            final_m: Dict[str, StepVariablesBase] = {}
+            for it in merged_variables:
+                if it.key:
+                    final_m[it.key] = it
+            for it in (session_variables or []):
+                if isinstance(it, StepVariablesBase) and it.key:
+                    final_m[it.key] = it
+            final_session_variables = [v.model_dump(mode="json") for v in final_m.values()]
 
             # 8. 返回调试模式的详细结果
             total_steps: int = statistics.get("total_steps", 0)
@@ -1295,7 +1267,7 @@ async def execute_step_tree(
             return SuccessResponse(
                 message=f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, 失败{failed_steps}步, 成功率: {passed_ratio}%",
                 data=result_data,
-                total=1
+                total=total_steps
             )
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))

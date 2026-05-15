@@ -13,12 +13,17 @@ import json
 import re
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 from xml.etree import ElementTree
 
 from jsonpath_ng import parse as jsonpath_parse
 
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem, StepExtractVariableItem, StepAssertValidatorItem
+from backend.applications.aotutest.schemas.autotest_step_schema import (
+    AutoTestStepTreeUpdateItem,
+    StepAssertValidatorItem,
+    StepExtractVariableItem,
+    StepVariablesBase,
+)
 from backend.common import JSONPathUtils
 from backend.common.generate_utils import GenerateUtils
 from backend.enums.autotest_enum import AutoTestAssertionOperation
@@ -28,50 +33,43 @@ class AutoTestToolService:
     """服务层：对外稳定 API；内部实现见 `AutoTestToolServiceImpl`"""
 
     @classmethod
-    def list_to_dict(cls, variable_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def list_to_dict(cls, variable_list: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将 key/value/desc 列表转为 name -> value 字典, 供 **Python 代码命名空间** 使用
+        将 ``StepVariablesBase`` 列表转为 name -> value 字典, 供 **Python 代码命名空间** 使用
 
-        与 convert_list_to_dict_for_http 的区别：本函数仅保留含 "value" 键的项(skip_if_no_value=True),
-        无 value 的项不进入结果, 避免在 exec 命名空间中注入 key->None 导致歧义或异常
-        使用处：StepExecutionContext.clone_state(), 将 defined_variables / session_variables 转为字典后
-        作为 run_python_code(..., namespace=...) 的命名空间
-
-        :param variable_list: 变量列表, 每项为含 key、value 的字典
+        :param variable_list: 变量模型列表
         :return: 键为变量名、值为变量值的字典
         """
-        variable_list: List[Dict[str, Any]] = variable_list if isinstance(variable_list, list) else []
-        return AutoTestToolServiceImpl.key_value_list_to_dict(items=variable_list, skip_if_no_value=True)
+        items = list(variable_list) if variable_list is not None else []
+        return AutoTestToolServiceImpl.key_value_list_to_dict(items, skip_if_no_value=True)
 
     @classmethod
-    def convert_list_to_dict_for_http(cls, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
         """
-        将 key/value/desc 列表转为 key -> value 字典, 供 **HTTP 请求头/参数/表单** 使用
-
-        与 list_to_dict 的区别：本函数不要求项必有 "value"(skip_if_no_value=False), 只要有 "key" 即加入结果,
-        value 可为 None, 以支持 HTTP 中合法的空值(如空 header、未填表单字段)
-        使用处：HttpStepExecutor 中将 request_header、request_params、form_data、urlencoded、form_files
-        等列表转为字典后传给 httpx 发请求
-
-        :param data: 每项含 key、value 的列表
-        :return: 键值对字典；非列表入参返回空字典
+        将 HTTP 步骤中的 key/value 列表转为字典。列表项优先为 ``StepVariablesBase``；
+        历史 JSON 仍为 ``dict`` 时在边界 ``model_validate`` 后应已为模型，此处仅作有限兼容。
         """
-        return AutoTestToolServiceImpl.key_value_list_to_dict(data if isinstance(data, list) else [], skip_if_no_value=False)
+        if not data or not isinstance(data, list):
+            return {}
+        result: Dict[str, Any] = {}
+        for item in data:
+            if isinstance(item, StepVariablesBase):
+                if item.key:
+                    result[item.key] = item.value
+            elif isinstance(item, dict) and item.get("key") is not None:
+                result[item["key"]] = item.get("value")
+        return result
 
     @staticmethod
-    def get_value_from_list(variable_list: List[Dict[str, Any]], name: str) -> Any:
+    def get_value_from_list(variables: Sequence[StepVariablesBase], name: str) -> Any:
         """
-        从 key/value/desc 列表中取 key 为 name 的项的 value
-
-        :param variable_list: 变量列表, 每项为含 key、value 的字典
-        :param name: 要查找的 key 名
-        :return: 对应的 value, 未找到返回 None
+        从 ``StepVariablesBase`` 列表中取 key 为 name 的项的 value
         """
-        if not isinstance(variable_list, list):
+        if variables is None:
             return None
-        for item in variable_list:
-            if isinstance(item, dict) and item.get("key") == name:
-                return item.get("value")
+        for variable in variables:
+            if isinstance(variable, StepVariablesBase) and getattr(variable, "key", None) and variable.key == name:
+                return variable.value
         return None
 
     @staticmethod
@@ -322,7 +320,7 @@ class AutoTestToolService:
     @classmethod
     def format_step_error_message(
             cls,
-            step: Dict[str, Any],
+            step: AutoTestStepTreeUpdateItem,
             exception: Exception,
             is_child_step: bool = False,
             offset_message: str = ""
@@ -330,20 +328,16 @@ class AutoTestToolService:
         """
         格式化步骤执行失败信息, 供步骤引擎中各类执行器统一使用
 
-        :param step: 步骤数据字典, 含 case_id、step_id、step_no、step_code、step_name、step_type 等
-        :param exception: 异常对象；错误回溯使用 traceback.format_exc(), 在 except 块内调用时即为该异常的堆栈
-        :param is_child_step: 是否为子步骤(True=子步骤, False=根步骤)
-        :param offset_message: 关于异常的补偿描述
-        :return: 格式化后的错误字符串
+        :param step: 步骤模型
         """
         message: str = "【子步骤】" if is_child_step else "【根步骤】"
         offset_message: str = f", {offset_message}" if offset_message else ""
-        case_id = step.get("case_id", "获取失败")
-        step_id = step.get("step_id", "获取失败")
-        step_no = step.get("step_no", "获取失败")
-        step_code = step.get("step_code", "获取失败")
-        step_name = step.get("step_name", "获取失败")
-        step_type = step.get("step_type", "获取失败")
+        case_id = step.case_id
+        step_id = step.step_id
+        step_no = step.step_no
+        step_code = step.step_code
+        step_name = step.step_name
+        step_type = step.step_type
         return (
             f"{message}执行失败{offset_message}: \n"
             f"用例ID: {case_id}, \n"
@@ -555,7 +549,7 @@ class AutoTestToolService:
     def run_extract_variables(
             cls,
             *,
-            extract_variables: List[Dict[str, Any]],
+            extract_variables: Sequence[StepExtractVariableItem],
             response_text: Optional[str] = None,
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
@@ -564,51 +558,26 @@ class AutoTestToolService:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        按 extract_variables 配置从响应/变量池中提取变量供 HTTP 调试与步骤引擎共用
-
-        :param extract_variables: 变量提取配置列表, 每项通常包含 name/source/expr, 且可选 scope/index
-        :param response_text: HTTP 响应文本(用于 response text / response xml)
-        :param response_json: HTTP 响应 JSON(用于 response json)
-        :param response_headers: HTTP 响应头(用于 response headers)
-        :param response_cookies: HTTP 响应 cookies(用于 response cookies)
-        :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), Dict[str, Any]
-        :param log_callback: 可选日志回调
-        :returns: (name->value 字典, 结果列表)
-                  结果列表每项含 name/source/scope/expr/index/extract_value/error/success
+        按 ``StepExtractVariableItem`` 列表从响应/变量池中提取变量。
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
         if not extract_variables:
             return extract_results_dict, extract_results_list
-        if not isinstance(extract_variables, list):
-            if log_callback:
-                log_callback(
-                    f"【变量提取】表达式列表解析失败: \n\t"
-                    f"预期类型: List[Dict[str, Any]] 或 List[StepExtractVariableItem]\n\t"
-                    f"实际类型: [{type(extract_variables)}]"
-                )
-            return extract_results_dict, extract_results_list
+        if not isinstance(extract_variables, (list, tuple)):
+            raise TypeError(
+                f"extract_variables 必须为序列类型 StepExtractVariableItem，当前: {type(extract_variables).__name__}"
+            )
         for extract_config in extract_variables:
-            if isinstance(extract_config, StepExtractVariableItem):
-                name = extract_config.name
-                expr = extract_config.expr
-                source = extract_config.source
-                range_type = extract_config.scope
-                index = extract_config.index
-            elif isinstance(extract_config, dict):
-                name = extract_config.get("name")
-                expr = extract_config.get("expr")
-                source = extract_config.get("source")
-                range_type = extract_config.get("scope")
-                index = extract_config.get("index")
-            else:
-                if log_callback:
-                    log_callback(
-                        f"【变量提取】表达式子项解析无效(跳过提取): \n\t"
-                        f"预期类型: Dict[str, Any] 或 StepExtractVariableItem\n\t"
-                        f"实际类型: [{type(extract_config)}]"
-                    )
-                continue
+            if not isinstance(extract_config, StepExtractVariableItem):
+                raise TypeError(
+                    f"extract_variables 子项必须为 StepExtractVariableItem，当前: {type(extract_config).__name__}"
+                )
+            name = extract_config.name
+            expr = extract_config.expr
+            source = extract_config.source
+            range_type = extract_config.scope
+            index = extract_config.index
             if not name or not expr or not source:
                 if log_callback:
                     log_callback(
@@ -673,7 +642,7 @@ class AutoTestToolService:
     def run_assert_validators(
             cls,
             *,
-            assert_validators: List[Dict[str, Any]],
+            assert_validators: Sequence[StepAssertValidatorItem],
             response_text: Optional[str] = None,
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
@@ -684,51 +653,25 @@ class AutoTestToolService:
             is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        按 assert_validators 配置从响应/变量池取实际值并与期望值比较供 HTTP 调试与步骤引擎共用
-
-        :param assert_validators: 断言配置列表, 每项通常包含 name/source/expr/operation/except_value
-        :param response_text: HTTP 响应文本(用于 response text / response xml)
-        :param response_json: HTTP 响应 JSON(用于 response json)
-        :param response_headers: HTTP 响应头(用于 response headers)
-        :param response_cookies: HTTP 响应 cookies(用于 response cookies)
-        :param session_variables_lookup: 变量池(source=session_variables/变量池 时使用), Dict[str, Any]
-        :param log_callback: 可选日志回调
-        :param finished_variables: 非 None 时先对 except_value 调用 ``resolve_placeholders``（与同名参数含义一致；步骤引擎传 StepExecutionContext；调试传变量列表）
-        :param is_core_engine: 含义同 ``resolve_placeholders``；为 True 时 finished_variables 须提供 ``get_variable``
-        :returns: 每条断言结果列表, 含 name/source/expr/operation/except_value/actual_value/success/error（except_value 为解析后的参与比较值）
+        按 ``StepAssertValidatorItem`` 列表从响应/变量池取实际值并与期望值比较。
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
             return validator_results
-        if not isinstance(assert_validators, list):
-            if log_callback:
-                log_callback(
-                    f"【断言验证】表达式列表解析失败: \n\t"
-                    f"预期类型: List[Dict[str, Any]] 或 List[StepAssertValidatorItem]\n\t"
-                    f"实际类型: [{type(assert_validators)}]"
-                )
-            return validator_results
+        if not isinstance(assert_validators, (list, tuple)):
+            raise TypeError(
+                f"assert_validators 必须为序列类型 StepAssertValidatorItem，当前: {type(assert_validators).__name__}"
+            )
         for validator_config in assert_validators:
-            if isinstance(validator_config, StepAssertValidatorItem):
-                name = validator_config.name
-                expr = validator_config.expr
-                operation = validator_config.operation
-                except_value = validator_config.except_value
-                source = validator_config.source
-            elif isinstance(validator_config, dict):
-                name = validator_config.get("name")
-                expr = validator_config.get("expr")
-                operation = validator_config.get("operation")
-                except_value = validator_config.get("except_value")
-                source = validator_config.get("source")
-            else:
-                if log_callback:
-                    log_callback(
-                        f"【断言验证】表达式子项解析无效(跳过断言): \n\t"
-                        f"预期类型: Dict[str, Any] 或 StepAssertValidatorItem\n\t"
-                        f"实际类型: [{type(validator_config)}]"
-                    )
-                continue
+            if not isinstance(validator_config, StepAssertValidatorItem):
+                raise TypeError(
+                    f"assert_validators 子项必须为 StepAssertValidatorItem，当前: {type(validator_config).__name__}"
+                )
+            name = validator_config.name
+            expr = validator_config.expr
+            operation = validator_config.operation
+            except_value = validator_config.except_value
+            source = validator_config.source
             if not name or not expr or not operation or not source:
                 if log_callback:
                     log_callback(
@@ -891,67 +834,37 @@ class AutoTestToolService:
         return True, None
 
     @classmethod
-    def normalize_step(cls, step: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize_step(cls, step: Any) -> AutoTestStepTreeUpdateItem:
         """
-        规范化单条步骤数据：conditions 统一为 dict(与 JSONField / Pydantic Optional[Dict] 一致)、移除 case/quote_case,
-        并递归规范化 children 与 quote_steps
-
-        :param step: 步骤数据字典(可含 conditions、children、quote_steps 等)
-        :return: 规范化后的新字典, 不修改入参
+        .. deprecated::
+            请使用 ``backend.applications.aotutest.schemas.autotest_step_schema.step_tree_item_from_storage``。
         """
-        step = step.copy()
+        import warnings
+        from backend.applications.aotutest.schemas.autotest_step_schema import step_tree_item_from_storage
 
-        # conditions：与模型 / Pydantic ``Optional[Dict[str, Any]]`` 一致, 仅保留 dict 或 None
-        conditions = step.get("conditions")
-        if conditions is None:
-            step["conditions"] = None
-        elif isinstance(conditions, dict):
-            step["conditions"] = conditions
-        else:
-            step["conditions"] = None
-
-        # extract_variables和assert_validators保持数组格式(执行引擎已支持)
-        # 移除不需要的字段
-        step.pop("case", None)
-        step.pop("quote_case", None)
-
-        # 递归处理children和quote_steps
-        if "children" in step and isinstance(step["children"], list):
-            step["children"] = [cls.normalize_step(child) for child in step["children"]]
-        if "quote_steps" in step and isinstance(step["quote_steps"], list):
-            step["quote_steps"] = [cls.normalize_step(quote_step) for quote_step in step["quote_steps"]]
-
-        return step
+        warnings.warn(
+            "AutoTestToolService.normalize_step 已废弃，请使用 step_tree_item_from_storage",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return step_tree_item_from_storage(step)
 
     @classmethod
-    def collect_session_variables(cls, steps_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
-        递归收集步骤树中所有步骤的 session_variables, 合并为扁平列表(每项含 key、value、desc)
-
-        :param steps_list: 步骤列表, 每项可含 children、quote_steps
-        :return: 合并后的变量列表
+        递归收集步骤树中所有步骤的 session_variables, 合并为扁平列表（模型项）。
         """
-        variables = []
-        if not steps_list:
+        variables: List[StepVariablesBase] = []
+        if not steps:
             return variables
-        for step in steps_list:
-            session_variables = step.get("session_variables")
-            if isinstance(session_variables, list):
-                variables.extend(session_variables)
-            # 递归处理children和quote_steps
-            children = step.get("children", []) or []
-            quote_steps = step.get("quote_steps", []) or []
-            variables.extend(cls.collect_session_variables(children))
-            variables.extend(cls.collect_session_variables(quote_steps))
+        for step in steps:
+            variables.extend(step.session_variables or [])
+            variables.extend(cls.collect_session_variables(step.children or []))
+            variables.extend(cls.collect_session_variables(step.quote_steps or []))
         return variables
 
     @classmethod
-    def execute_func_string(cls, session_variables: List[Dict[str, Any]]):
-        """
-        对会话变量列表中 func_name(...) 形式调用 GenerateUtils(实现见 AutoTestToolServiceImpl)
-        :param session_variables:
-        :return:
-        """
+    def execute_func_string(cls, session_variables: List[StepVariablesBase]) -> None:
         return AutoTestToolServiceImpl.execute_func_string(session_variables)
 
     @classmethod
@@ -991,25 +904,21 @@ class AutoTestToolServiceImpl:
     """实现层：占位符解析、断言比较、GenerateUtils 调用等内部逻辑, 仅供 AutoTestToolService 使用"""
 
     @classmethod
-    def key_value_list_to_dict(cls, items: List[Dict[str, Any]], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
+    def key_value_list_to_dict(cls, items: Sequence[StepVariablesBase], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
         """
-        将 List[Dict[str, Any]] 列表嵌套字典的数据平铺为 Dict[str, Any] 格式, 提供变量列表或HTTP请求步骤参数使用
-
-        :param items: 每项元素包含 key、value 的字典的列表
-        :param skip_if_no_value: 为 True 时仅当项中含 value 键才加入结果；为 False 时仅要求 "key", value 可为 None
-        :return: 键值对字典；非列表入参返回空字典
+        将 ``StepVariablesBase`` 列表平铺为 Dict[str, Any], 提供变量列表或 HTTP 请求步骤参数使用
         """
-        if not items or not isinstance(items, list):
+        if not items:
             return {}
         result: Dict[str, Any] = {}
         for item in items:
-            if not isinstance(item, dict) or "key" not in item:
+            if not isinstance(item, StepVariablesBase):
+                raise TypeError(f"变量项必须为 StepVariablesBase，得到 {type(item).__name__}")
+            if skip_if_no_value and item.value is None:
                 continue
-            if skip_if_no_value and "value" not in item:
-                continue
-            key: Optional[str] = item.get("key")
+            key: Optional[str] = item.key
             if key:
-                result[key] = item.get("value")
+                result[key] = item.value
         return result
 
     @classmethod
@@ -1253,19 +1162,17 @@ class AutoTestToolServiceImpl:
         return func_name.strip(), args_dict
 
     @classmethod
-    def execute_func_string(cls, session_variables: List[Dict[str, Any]]):
+    def execute_func_string(cls, session_variables: List[StepVariablesBase]) -> None:
         """
-        针对会话变量中 value 为函数调用字符串格式, 如: func_name(...) 的场景，通过 GenerateUtils 类实现反射机制动态执行对应函数，并将函数返回值替换原变量值
-        :param session_variables: 变量列表(列表嵌套字典的数据), 每个元素是包含 key、value、desc 的字典
-        :raises AttributeError: 函数不存在、参数不匹配或执行失败时
+        对会话变量列表中 func_name(...) 形式调用 GenerateUtils；原地更新各 ``StepVariablesBase.value``。
         """
         if not isinstance(session_variables, list):
             return
-        for item in session_variables:
-            if not isinstance(item, dict) or "key" not in item or "value" not in item:
-                continue
-            key = item.get("key")
-            func_string = item.get("value")
+        for idx, item in enumerate(list(session_variables)):
+            if not isinstance(item, StepVariablesBase):
+                raise TypeError(f"session_variables 项必须为 StepVariablesBase，得到 {type(item).__name__}")
+            key = item.key
+            func_string = item.value
             if not key or not isinstance(func_string, str):
                 continue
             try:
@@ -1277,13 +1184,14 @@ class AutoTestToolServiceImpl:
             if not hasattr(GenerateUtils, func_name):
                 raise AttributeError(f"【辅助函数】[{func_name}]调用失败, 未定义或不被允许调用")
             try:
-                item["value"] = getattr(GenerateUtils(), func_name)(**func_args or {})
+                new_val = getattr(GenerateUtils(), func_name)(**func_args or {})
             except TypeError as e:
                 raise AttributeError(f"【辅助函数】[{func_name}]调用失败, 参数签名或类型不匹配: {e}") from e
             except SyntaxError as e:
                 raise AttributeError(f"【辅助函数】[{func_name}]调用失败, 语法解析失败或未定义: {e}") from e
             except Exception as e:
                 raise AttributeError(f"【辅助函数】[{func_name}]调用失败, 在动态注入时发生异常: {e}") from e
+            session_variables[idx] = item.model_copy(update={"value": new_val})
 
     @classmethod
     def execute_func_string_single(cls, content: str) -> Any:
@@ -1694,10 +1602,7 @@ class AutoTestToolServiceImpl:
                 value = cls._resolve_placeholder_inner(inner, is_core_engine, finished_variables)
                 logger_object("【参数替换】获取数据成功: \n\t${" + inner + "}  >>>>>  " + str(value))
                 regularly_slots.append((match, value, None))
-            except KeyError as e:
-                logger_object(f"【参数替换】获取数据异常: \n\t错误描述: {e}")
-                regularly_slots.append((match, None, match.group(0)))
-            except AttributeError as e:
+            except (KeyError, AttributeError) as e:
                 logger_object(f"【参数替换】获取数据异常: \n\t错误描述: {e}")
                 regularly_slots.append((match, None, match.group(0)))
 
@@ -1802,34 +1707,34 @@ class AutoTestToolServiceImpl:
                     return value
 
             if isinstance(value, list):
-                # 处理列表格式的变量(每个元素包含key、value、desc)
-                result = []
+                result: List[StepVariablesBase] = []
                 for item in value:
-                    if isinstance(item, dict) and "key" in item and "value" in item:
-                        # 列表格式的变量项, 只解析value字段
-                        resolved_item = dict(item)
-                        resolved_item["value"] = cls.resolve_placeholders(
-                            value=item.get("value"),
-                            logger_object=logger_object,
-                            is_core_engine=is_core_engine,
-                            finished_variables=finished_variables
+                    # if isinstance(item, StepVariablesBase):
+                        resolved: StepVariablesBase = item.model_copy(
+                            update={
+                                "value": cls.resolve_placeholders(
+                                    value=item.value,
+                                    logger_object=logger_object,
+                                    is_core_engine=is_core_engine,
+                                    finished_variables=finished_variables,
+                                )
+                            }
                         )
-                        result.append(resolved_item)
-                    else:
-                        # 普通列表项, 递归解析
-                        result.append(
-                            cls.resolve_placeholders(
-                                value=item,
-                                logger_object=logger_object,
-                                is_core_engine=is_core_engine,
-                                finished_variables=finished_variables
-                            )
-                        )
+                        result.append(resolved)
+                    # else:
+                    #     result.append(
+                    #         cls.resolve_placeholders(
+                    #             value=item,
+                    #             logger_object=logger_object,
+                    #             is_core_engine=is_core_engine,
+                    #             finished_variables=finished_variables,
+                    #         )
+                    #     )
                 return result
             return value
         except Exception as e:
             logger_object(
-                f"【参数替换】解析列表中的占位符时发生异常: \n\t"
+                f"【参数替换】解析占位符时发生异常: \n\t"
                 f"错误描述: {e}, \n"
                 f"错误类型: {type(e).__name__}, \n"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"

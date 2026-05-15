@@ -98,12 +98,9 @@ async def _sync_step_data_source_meta(
 
 async def _get_case_root_steps_async(case_id: int) -> List[Dict[str, Any]]:
     """获取用例根步骤列表（按 step_no 排序）。"""
-    tree_data = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id)
-    if not tree_data or not isinstance(tree_data, list):
-        return []
-    if len(tree_data) > 1 and isinstance(tree_data[-1], dict) and "total_steps" in tree_data[-1]:
-        tree_data = tree_data[:-1]
-    root_steps = [s for s in tree_data if isinstance(s, dict) and s.get("step_no") is not None]
+    load = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id)
+    root_models = list(load.root_steps)
+    root_steps = [s.model_dump(mode="json") for s in root_models if s.step_no is not None]
     root_steps.sort(key=lambda x: (x.get("step_no") or 0))
     return root_steps
 

@@ -8,7 +8,7 @@
 """
 from typing import Optional, List, Dict, Any, Type
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.base.services.scaffold import UpperStr
@@ -40,7 +40,7 @@ class DataBaseOperates(BaseModel):
 class ConditionsBase(BaseModel):
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
-    condition_value: Any = Field(..., description="条件比对值")
+    condition_value: Optional[Any] = Field(None, description="条件比对值")
     condition_desc: Optional[str] = Field(None, max_length=2048, description="条件描述")
 
     @field_validator("condition_compare", mode="before")
@@ -99,6 +99,14 @@ class AutoTestApiStepReqBase(BaseModel):
     request_project_id: Optional[int] = Field(None, ge=1, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
     request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
+    # TCP 步骤扩展（与 TcpStepExecutor 约定一致；存库 JSON 可含下列键）
+    tcp_frame_mode: Optional[str] = Field(None, max_length=64, description="TCP 帧模式，如 length_prefix_json / raw")
+    tcp_length_field_size: Optional[int] = Field(None, ge=1, le=32, description="长度前缀字段宽度")
+    tcp_encoding: Optional[str] = Field(None, max_length=32, description="文本编码，如 utf-8")
+    tcp_connect_timeout: Optional[float] = Field(None, ge=0, description="连接超时（秒）")
+    tcp_read_timeout: Optional[float] = Field(None, ge=0, description="读写超时（秒）")
+    tcp_max_response_bytes: Optional[int] = Field(None, ge=1, description="最大读取字节数")
+    tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析：json|xml|text|bytes")
 
 
 class AutoTestApiStepDbBase(BaseModel):
@@ -114,7 +122,9 @@ class AutoTestApiStepDbBase(BaseModel):
             return [v]
         if isinstance(v, list):
             return v
-        return v
+        raise ValueError(
+            f"database_operates 必须为 null、单条对象或对象数组，当前类型: {type(v).__name__}"
+        )
 
 
 class AutoTestApiStepVarBase(BaseModel):
@@ -123,8 +133,46 @@ class AutoTestApiStepVarBase(BaseModel):
     extract_variables: Optional[List[StepExtractVariableItem]] = Field(default=None, description="提取规则(步骤定义), 使用 scope 表示 ALL/SOME")
     assert_validators: Optional[List[StepAssertValidatorItem]] = Field(default=None, description="断言规则(步骤定义)")
 
+    @field_validator("session_variables", mode="before")
+    @classmethod
+    def _session_variables_list_shape(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError(f"session_variables 必须为数组或 null，当前类型: {type(v).__name__}")
+        return v
+
+    @field_validator("defined_variables", mode="before")
+    @classmethod
+    def _defined_variables_list_shape(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError(f"defined_variables 必须为数组或 null，当前类型: {type(v).__name__}")
+        return v
+
+    @field_validator("extract_variables", mode="before")
+    @classmethod
+    def _extract_variables_list_shape(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError(f"extract_variables 必须为数组或 null，当前类型: {type(v).__name__}")
+        return v
+
+    @field_validator("assert_validators", mode="before")
+    @classmethod
+    def _assert_validators_list_shape(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError(f"assert_validators 必须为数组或 null，当前类型: {type(v).__name__}")
+        return v
+
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepVarBase):
+    model_config = ConfigDict(extra="ignore")
+
     step_id: Optional[int] = Field(None, description="步骤ID(更新必填, 新增不填)")
     step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码(更新必填, 新增不填)")
@@ -149,6 +197,19 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     conditions: Optional[ConditionsBase] = Field(None, description="判断条件(循环结构或条件分支)")
 
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+
+    @field_validator("conditions", mode="before")
+    @classmethod
+    def _conditions_must_be_object_or_none(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, ConditionsBase):
+            return v
+        if isinstance(v, dict):
+            return v
+        raise ValueError(
+            f"conditions 必须为对象或 null，当前类型: {type(v).__name__}"
+        )
 
 
 class AutoTestApiStepChildren(BaseModel):
@@ -188,8 +249,26 @@ class AutoTestApiStepSelect(BaseModel):
 class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
-    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表(更新时忽略)")
-    quote_case: Optional[NON_DICT_TYPE] = Field(None, description="引用公共脚本信息(更新时忽略)")
+    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表(与 children 同型；更新时忽略)")
+    quote_case: Optional[Any] = Field(None, description="引用公共脚本信息(更新时忽略)")
+
+
+class StepTreeCounter(BaseModel):
+    """步骤树统计：与历史 get_by_case_id 末尾元数据字段一致。"""
+    direct_steps: int = 0
+    child_steps: int = 0
+    quote_steps: int = 0
+    total_steps: int = 0
+
+
+class AutoTestCaseStepTreeLoadResult(BaseModel):
+    """仓储层从 DB 构建步骤树后的对外结果：根步骤均为已校验模型。"""
+    root_steps: List["AutoTestStepTreeUpdateItem"] = Field(default_factory=list)
+    step_counter: StepTreeCounter
+    case_only_when_no_steps: Optional[AutoTestApiCaseUpdate] = Field(
+        default=None,
+        description="无任何根步骤时，与历史接口中单节点仅含 case 的占位信息对应",
+    )
 
 
 class AutoTestStepTreeUpdateList(BaseModel):
@@ -217,6 +296,13 @@ class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     code: str = Field(..., description="执行代码(Python)")
+
+
+class AutoTestCaseRunInfo(BaseModel):
+    """执行/调试时传入引擎的用例上下文（与 ORM to_dict 的 case 摘要字段对齐）。"""
+    case_id: int = Field(..., ge=1, description="用例ID")
+    case_code: str = Field(..., max_length=64, description="用例标识代码")
+    case_name: str = Field(..., max_length=255, description="用例名称")
 
 
 class AutoTestStepTreeExecute(BaseModel):
@@ -247,6 +333,59 @@ class AutoTestBatchExecuteCases(BaseModel):
     )
 
 
+def step_variables_list_from_storage(raw: Any) -> List[StepVariablesBase]:
+    """ORM/JSON 边界：将存库的变量列表转为 ``StepVariablesBase`` 列表。"""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(f"变量列表必须为数组或 null，当前类型: {type(raw).__name__}")
+    out: List[StepVariablesBase] = []
+    for i, x in enumerate(raw):
+        if isinstance(x, StepVariablesBase):
+            out.append(x)
+        elif isinstance(x, dict):
+            out.append(StepVariablesBase.model_validate(x))
+        else:
+            raise ValueError(f"变量列表第 {i + 1} 项类型非法: {type(x).__name__}")
+    return out
+
+
+def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
+    """
+    唯一推荐入口：将仓储层 ``to_dict`` 得到的单步 JSON 转为 ``AutoTestStepTreeUpdateItem``。
+    已为目标模型时直接返回；递归处理 ``children`` / ``quote_steps``。
+    """
+    if isinstance(data, AutoTestStepTreeUpdateItem):
+        return data
+    if not isinstance(data, dict):
+        raise TypeError(f"步骤树节点必须为 dict 或 AutoTestStepTreeUpdateItem，当前: {type(data).__name__}")
+    payload = dict(data)
+    children_raw = payload.get("children") or []
+    quotes_raw = payload.get("quote_steps") or []
+    if children_raw and not isinstance(children_raw, list):
+        raise ValueError("children 必须为数组或 null")
+    if quotes_raw and not isinstance(quotes_raw, list):
+        raise ValueError("quote_steps 必须为数组或 null")
+    payload["children"] = [step_tree_item_from_storage(c) for c in children_raw] if children_raw else []
+    payload["quote_steps"] = [step_tree_item_from_storage(q) for q in quotes_raw] if quotes_raw else []
+    return AutoTestStepTreeUpdateItem.model_validate(payload)
+
+
+def prepare_step_tree_item_for_execution(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
+    """执行前在模型上去除 case/quote_case，并递归子树（不做 model_dump 往返）。"""
+    children = [prepare_step_tree_item_for_execution(c) for c in (step.children or [])]
+    quotes = [prepare_step_tree_item_for_execution(q) for q in (step.quote_steps or [])]
+    return step.model_copy(
+        update={
+            "case": None,
+            "quote_case": None,
+            "children": children or None,
+            "quote_steps": quotes or None,
+        }
+    )
+
+
 # 允许递归引用
 AutoTestApiStepBase.model_rebuild()
 AutoTestStepTreeUpdateItem.model_rebuild()
+AutoTestCaseStepTreeLoadResult.model_rebuild()

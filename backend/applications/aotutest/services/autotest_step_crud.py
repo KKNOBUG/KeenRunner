@@ -24,9 +24,13 @@ from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestA
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
+    AutoTestCaseStepTreeLoadResult,
     AutoTestStepTreeUpdateItem,
-    StepsExecuteConfigBase,
+    StepTreeCounter,
     StepVariablesBase,
+    StepsExecuteConfigBase,
+    step_tree_item_from_storage,
+    step_variables_list_from_storage,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
@@ -144,13 +148,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             self,
             case_id: Optional[int] = None,
             case_code: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> AutoTestCaseStepTreeLoadResult:
         """
         根据用例 ID 或 case_code 获取该用例的步骤树（含引用脚本步骤及统计信息）。
 
         :param case_id: 用例主键 ID，与 case_code 二选一。
         :param case_code: 用例标识代码，与 case_id 二选一。
-        :returns: 步骤树列表（最后一项为 step_counter 统计字典）。
+        :returns: ``AutoTestCaseStepTreeLoadResult``：根步骤均为 ``AutoTestStepTreeUpdateItem``，计数见 ``step_counter``。
         :raises NotFoundException: 用例不存在时。
         """
         # 业务层验证：检查用例是否存在
@@ -273,7 +277,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.info(f">>>>>>>>>>>>>>> 构建第{root_id}个根步骤树结构: ")
             result.append(await build_step_tree(root_step))
 
-        # 没有测试步骤明细时将测试用例本身添加到返回结果
+        # 没有测试步骤明细时将测试用例本身添加到返回结果（历史：单节点仅含 case）
         if not result:
             result.append({
                 "case": await case_instance.to_dict(
@@ -286,8 +290,19 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     replace_fields={"id": "case_id"}
                 )
             })
-        result.append(step_counter)
-        return result
+        meta = StepTreeCounter(**step_counter)
+        raw_roots = result
+        case_only: Optional[AutoTestApiCaseUpdate] = None
+        if len(raw_roots) == 1 and isinstance(raw_roots[0], dict) and list(raw_roots[0].keys()) == ["case"]:
+            case_only = AutoTestApiCaseUpdate.model_validate(raw_roots[0]["case"])
+            root_models: List[AutoTestStepTreeUpdateItem] = []
+        else:
+            root_models = [step_tree_item_from_storage(r) for r in raw_roots]
+        return AutoTestCaseStepTreeLoadResult(
+            root_steps=root_models,
+            step_counter=meta,
+            case_only_when_no_steps=case_only,
+        )
 
     async def get_request_step_project_ids(
             self,
@@ -303,43 +318,42 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         递归遍历 children 与 quote_steps（引用公共脚本展开后的步骤）。
         :returns: 去重后的 project_id 列表（升序）。
         """
-        tree_data: List[Dict[str, Any]] = await self.get_by_case_id(case_id=case_id, case_code=case_code)
-        # 最后一项为 step_counter 统计信息，非步骤
-        if tree_data and isinstance(tree_data[-1], dict) and "total_steps" in tree_data[-1]:
-            tree_data = tree_data[:-1]
-
+        load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
         project_ids: Set[int] = set()
 
-        def recursive_require_project_ids(step: Any) -> None:
-            if not isinstance(step, dict):
-                return
-            step_type: AutoTestStepType = step.get("step_type")
-            if step_type in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
-                request_project_id: int = step.get("request_project_id")
+        def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
+            if st is None:
+                return None
+            if isinstance(st, AutoTestStepType):
+                return st
+            try:
+                return AutoTestStepType(st)
+            except (ValueError, TypeError):
+                return None
+
+        def recursive_require_project_ids(step: AutoTestStepTreeUpdateItem) -> None:
+            st_e = _norm_step_type(step.step_type)
+            if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+                request_project_id = step.request_project_id
                 if request_project_id:
                     try:
                         project_ids.add(int(request_project_id))
                     except Exception:
                         pass
-            elif step_type == AutoTestStepType.DATABASE.value:
-                database_operates: List[Dict[str, Any]] = step.get("database_operates")
-                if isinstance(database_operates, list):
-                    for db_operate in database_operates:
-                        if not isinstance(db_operate, dict):
-                            continue
-                        project_id = db_operate.get("project_id")
-                        if project_id:
-                            try:
-                                project_ids.add(int(project_id))
-                            except Exception:
-                                pass
-
-            for child in (step.get("children") or []):
+            elif st_e == AutoTestStepType.DATABASE:
+                for db_operate in step.database_operates or []:
+                    project_id = db_operate.project_id
+                    if project_id:
+                        try:
+                            project_ids.add(int(project_id))
+                        except Exception:
+                            pass
+            for child in step.children or []:
                 recursive_require_project_ids(child)
-            for quote_step in (step.get("quote_steps") or []):
+            for quote_step in step.quote_steps or []:
                 recursive_require_project_ids(quote_step)
 
-        for node in tree_data:
+        for node in load.root_steps:
             recursive_require_project_ids(node)
 
         return sorted(project_ids)
@@ -366,48 +380,40 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param case_code: 用例标识代码，与 case_id 二选一。
         :returns: {"case": {...}, "steps": [...]}，case 中 case_id/case_code 置空。
         """
-        tree_data = await self.get_by_case_id(case_id=case_id, case_code=case_code)
-        # step_counter：get_by_case_id 返回的最后一页为统计元数据，非步骤，弹出并丢弃
-        step_counter = tree_data.pop(-1) if tree_data else {}
+        load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
 
-        def strip_step_for_copy(step_dict: Dict[str, Any]) -> Dict[str, Any]:
-            """递归移除 step_id、step_code、parent_step_id、step_no 等更新/序号标识，保留结构及业务字段。
-            移除 step_no 以便插入目标树时由前端按插入位置重新编排，避免与现有步骤序号冲突。
-            保留 quote_steps、quote_case，使复制后的树包含引用脚本下的完整步骤（用于展示/编辑）。
-            quote_steps 内的步骤也需递归 strip，以移除其 step_id/step_code/step_no 等。
-            """
-            out = dict(step_dict)
-            out.pop("id", None)
-            out.pop("step_id", None)
-            out.pop("step_no", None)
-            out.pop("step_code", None)
-            out.pop("parent_step_id", None)
-            if "case" in out:
-                case_info = dict(out["case"])
+        def strip_step_for_copy_model(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
+            """在模型上递归移除 step_id、step_code、parent_step_id、step_no；case 内 case_id/case_code 置空。"""
+            case_block = step.case
+            if isinstance(case_block, dict):
+                case_block = {**case_block, "case_id": None, "case_code": None}
+            children = [strip_step_for_copy_model(c) for c in (step.children or [])]
+            quotes = [strip_step_for_copy_model(q) for q in (step.quote_steps or [])]
+            return step.model_copy(
+                update={
+                    "step_id": None,
+                    "step_no": None,
+                    "step_code": None,
+                    "parent_step_id": None,
+                    "case": case_block,
+                    "children": children or None,
+                    "quote_steps": quotes or None,
+                }
+            )
+
+        if load.case_only_when_no_steps is not None:
+            c = load.case_only_when_no_steps.model_copy(update={"case_id": None, "case_code": None})
+            return {"case": c.model_dump(mode="json"), "steps": []}
+
+        steps: List[Dict[str, Any]] = []
+        case_info: Optional[Dict[str, Any]] = None
+        for root in load.root_steps:
+            stripped = strip_step_for_copy_model(root)
+            steps.append(stripped.model_dump(mode="json"))
+            if case_info is None and stripped.case is not None and isinstance(stripped.case, dict):
+                case_info = {**stripped.case}
                 case_info["case_id"] = None
                 case_info["case_code"] = None
-                out["case"] = case_info
-            if "children" in out and out["children"]:
-                out["children"] = [strip_step_for_copy(c) for c in out["children"]]
-            # 保留 quote_steps、quote_case，并递归 strip 引用脚本内的步骤
-            if "quote_steps" in out and out["quote_steps"]:
-                out["quote_steps"] = [strip_step_for_copy(q) for q in out["quote_steps"]]
-            return out
-
-        steps = []
-        case_info = None
-        for item in tree_data:
-            if isinstance(item, dict):
-                if "children" in item:
-                    steps.append(strip_step_for_copy(item))
-                    if case_info is None and item.get("case"):
-                        case_info = dict(item["case"])
-                        case_info["case_id"] = None
-                        case_info["case_code"] = None
-                elif "case" in item and case_info is None:
-                    case_info = dict(item["case"])
-                    case_info["case_id"] = None
-                    case_info["case_code"] = None
 
         return {"case": case_info or {}, "steps": steps}
 
@@ -1043,43 +1049,33 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         )
         LOGGER.info(f"查询用例信息(case_id={case_id})成功, 结果: {case_dict}")
 
-        # 2. 查询步骤树数据
-        tree_data_count: Dict[str, Any] = {}
-        tree_data = await self.get_by_case_id(case_id)
-        if "total_steps" in tree_data[-1]:
-            tree_data_count = tree_data.pop(-1)
-        if not tree_data_count or tree_data_count.get("total_steps") == 0:
+        # 2. 查询步骤树数据（边界层已 model_validate）
+        load = await self.get_by_case_id(case_id)
+        tree_data_count = load.step_counter.model_dump()
+        if load.step_counter.total_steps == 0:
             error_message: str = f"查询步骤为空, 用例(case_id={case_id})没有任何可执行的根步骤"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 3. 规范化步骤数据
         LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
-        tree_data = [AutoTestToolService.normalize_step(step) for step in tree_data]
 
-        # 4. 合并会话变量：用例级 session_variables → 步骤树中收集的 session_variables → 入参 initial_variables（同 key 后者覆盖）
-        merge_all_variables: List[Dict[str, Any]] = []
-        case_session_variables = getattr(case_instance, "session_variables", None) or []
-        all_step_session_variables = AutoTestToolService.collect_session_variables(tree_data)
-        for item in case_session_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables.append(item.dict())
-            elif isinstance(item, dict) and "key" in item:
-                merge_all_variables.append(item)
-        for item in all_step_session_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables.append(item.dict())
-            elif isinstance(item, dict) and "key" in item:
-                merge_all_variables.append(item)
-        for item in initial_variables:
-            if isinstance(item, StepVariablesBase) and getattr(item, "key", None):
-                merge_all_variables.append(item.dict())
-            elif isinstance(item, dict) and "key" in item:
-                merge_all_variables.append(item)
-        LOGGER.info(f"步骤树数据规范检查成功, 收集会话变量成功")
+        def _merge_session_variables(*parts: List[StepVariablesBase]) -> List[StepVariablesBase]:
+            merged: Dict[str, StepVariablesBase] = {}
+            for part in parts:
+                for it in part:
+                    if it.key:
+                        merged[it.key] = it
+            return list(merged.values())
 
-        # 5. 获取根步骤
-        root_steps = [s for s in tree_data if s.get("parent_step_id") is None]
+        merge_all_variables = _merge_session_variables(
+            step_variables_list_from_storage(getattr(case_instance, "session_variables", None)),
+            AutoTestToolService.collect_session_variables(load.root_steps),
+            list(initial_variables or []),
+        )
+        LOGGER.info("步骤树数据规范检查成功, 收集会话变量成功")
+
+        # 5. 获取根步骤（执行前在引擎内统一 prepare）
+        root_steps = [s for s in load.root_steps if s.parent_step_id is None]
         if not root_steps:
             error_message: str = f"获取用例(case_id={case_id})根步骤失败, 没有任何可执行的根步骤"
             LOGGER.error(error_message)
@@ -1113,7 +1109,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.error(f"执行或调试步骤树(运行模式)时发生未知异常，错误描述: {e}\n{traceback.format_exc()}")
 
             # 返回运行模式的简化结果
-            result_data = {
+            result_data: Dict[str, Any] = {
                 "success": statistics.get("failed_steps", 0) == 0,
                 "total_steps": statistics.get("total_steps", 0),
                 "success_steps": statistics.get("success_steps", 0),

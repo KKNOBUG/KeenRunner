@@ -354,6 +354,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 # 如果没有任何可更新的字段，跳过
                 update_case_dict: Dict[str, Any] = case_data.model_dump(
                     exclude_none=True,
+                    exclude_unset=True,
                     exclude={"case_id", "case_code"}
                 )
                 if not update_case_dict:

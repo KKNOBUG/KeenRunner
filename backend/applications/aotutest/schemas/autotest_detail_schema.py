@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestStepType, HTTPMethod, AutoTestReqArgsType
+from backend.enums import AutoTestStepType, HTTPMethod, AutoTestReqArgsType, AutoTestAssertionOperation
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
@@ -28,6 +28,20 @@ class DataBaseOperates(BaseModel):
     config_name: str = Field(..., max_length=128, description="所属环境配置名称")
     database_name: str = Field(..., max_length=128, description="所属数据库名称")
     desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
+
+
+class ConditionsBase(BaseModel):
+    condition_expr: str = Field(..., max_length=128, description="条件表达式")
+    condition_compare: str = Field(..., max_length=128, description="条件比较符")
+    condition_value: Optional[Any] = Field(None, description="条件比对值")
+    condition_desc: Optional[str] = Field(None, max_length=2048, description="条件描述")
+
+    @field_validator("condition_compare", mode="before")
+    @classmethod
+    def validate_condition_compare(cls, v: Any) -> str:
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            raise ValueError("条件比较符不能为空")
+        return AutoTestAssertionOperation(str(v).strip()).value
 
 
 class AutoTestApiDetailReqBase(BaseModel):
@@ -55,6 +69,7 @@ class AutoTestApiDetailResBase(BaseModel):
 
 
 class AutoTestApiDetailVarBase(BaseModel):
+    conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件/循环判断条件")
     session_variables: Optional[List[StepVariablesBase]] = Field(
         default=None, description="会话变量(包含提取变量，以及前后code设置的变量), 项为 key/value/desc"
     )
@@ -96,18 +111,26 @@ class AutoTestApiDetailVarBase(BaseModel):
         if not isinstance(v, dict):
             return v
         executive_logger: List[str] = []
-        session_variables_value: Optional[List[Dict[str, Any]]] = v.get("session_variables")
+        conditions_value: Optional[ConditionsBase] = v.get("conditions")
+        if conditions_value:
+            try:
+                v["conditions"] = conditions_value.model_dump()
+            except Exception as e:
+                v["conditions"] = None
+                executive_logger.append(f"字段[conditions]标准化失败, 已置空, 错误描述: {e}")
+
+        session_variables_value: Optional[List[StepVariablesBase]] = v.get("session_variables")
         if session_variables_value:
             try:
-                v["session_variables"] = json.loads(json.dumps(session_variables_value, ensure_ascii=False))
+                v["session_variables"] = [item.model_dump() for item in session_variables_value]
             except Exception as e:
                 v["session_variables"] = None
                 executive_logger.append(f"字段[session_variables]标准化失败, 已置空, 错误描述: {e}")
 
-        defined_variables_value: Optional[List[Dict[str, Any]]] = v.get("defined_variables")
+        defined_variables_value: Optional[List[StepVariablesBase]] = v.get("defined_variables")
         if defined_variables_value:
             try:
-                v["defined_variables"] = json.loads(json.dumps(defined_variables_value, ensure_ascii=False))
+                v["defined_variables"] = [item.model_dump() for item in defined_variables_value]
             except Exception as e:
                 v["defined_variables"] = None
                 executive_logger.append(f"字段[defined_variables]标准化失败, 已置空, 错误描述: {e}")
@@ -164,7 +187,6 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_iterable: Optional[str] = Field(default=None, max_length=512, description="本次执行循环对象来源")
     loop_on_error: Optional[Any] = Field(default=None, description="本次执行循环错误策略")
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
-    conditions: NON_DICT_TYPE = Field(default=None, description="本次执行条件/循环判断条件")
     database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
