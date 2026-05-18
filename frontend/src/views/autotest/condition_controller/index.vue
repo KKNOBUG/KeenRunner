@@ -78,7 +78,6 @@ const fieldsFromConditionsDict = (d) => ({
   condition_desc: d.condition_desc !== undefined && d.condition_desc !== null ? String(d.condition_desc) : ''
 })
 
-// 合并 config 与 original：conditions 与后端 ConditionsBase 字段一致
 const mergeConfigAndOriginal = (config, original) => {
   const c = config?.conditions
   if (c && typeof c === 'object' && !Array.isArray(c)) {
@@ -91,70 +90,57 @@ const mergeConfigAndOriginal = (config, original) => {
   return emptyConditionFields()
 }
 
+const buildConditionsPayload = () => ({
+  condition_expr: String(form.condition_expr ?? ''),
+  condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
+  condition_value: String(form.condition_value ?? ''),
+  condition_desc: String(form.condition_desc ?? '')
+})
+
 const form = reactive({
   ...emptyConditionFields(),
   ...mergeConfigAndOriginal(props.config, props.step?.original)
 })
 
 let isExternalUpdate = false
-let lastConfigRef = null
 
+/**
+ * 与 user_variables_controller / run_code 修复方式一致：
+ * - 仅在选择步骤（step.id 变化）时从 props 灌入 form
+ * - 输入过程中父级会更新 config，但绝不再写回 form（否则与 v-model 抢值 → 卡顿丢字）
+ */
 watch(
-    () => [props.step?.id, props.config, props.step?.original],
-    ([stepId, config, original]) => {
-      const currentConfigStr = JSON.stringify({ config, original, stepId })
-      if (lastConfigRef === currentConfigStr && lastConfigRef !== null) {
-        return
-      }
-      lastConfigRef = currentConfigStr
-
+    () => props.step?.id,
+    () => {
       isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(config || {}, original)
-      const updatedData = { ...emptyConditionFields(), ...merged }
-
-      if (updatedData.condition_compare === undefined || updatedData.condition_compare === null) {
-        updatedData.condition_compare = DEFAULT_ASSERTION_OPERATION
-      }
-
-      Object.keys(updatedData).forEach(key => {
-        if (form[key] !== updatedData[key]) {
-          form[key] = updatedData[key]
-        }
-      })
-
-      if (form.condition_compare === undefined || form.condition_compare === null || typeof form.condition_compare !== 'string') {
-        form.condition_compare = DEFAULT_ASSERTION_OPERATION
-      }
-
+      const merged = mergeConfigAndOriginal(props.config || {}, props.step?.original)
+      form.condition_expr = merged.condition_expr
+      form.condition_compare = merged.condition_compare
+      form.condition_value = merged.condition_value
+      form.condition_desc = merged.condition_desc
       nextTick(() => {
         isExternalUpdate = false
       })
     },
-    {deep: true, immediate: true}
+    {immediate: true}
 )
 
-let emitTimer = null
+/** 立即同步到父级，不做防抖（防抖期间 props 回写曾导致丢字） */
 watch(
-    () => [form.condition_expr, form.condition_compare, form.condition_value, form.condition_desc],
+    () => [
+      form.condition_expr,
+      form.condition_compare,
+      form.condition_value,
+      form.condition_desc
+    ],
     () => {
-      if (isExternalUpdate) return
-
-      if (emitTimer) {
-        clearTimeout(emitTimer)
+      if (isExternalUpdate || props.readonly) {
+        return
       }
-
-      emitTimer = setTimeout(() => {
-        emit('update:config', {
-          conditions: {
-            condition_expr: form.condition_expr || '',
-            condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
-            condition_value: form.condition_value || '',
-            condition_desc: form.condition_desc || ''
-          }
-        })
-      }, 300)
-    },
-    {deep: true}
+      emit('update:config', {
+        conditions: buildConditionsPayload()
+      })
+    }
 )
 </script>
 

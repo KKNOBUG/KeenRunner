@@ -786,7 +786,7 @@
 
 <script setup>
 defineOptions({ name: '步骤编辑' })
-import {computed, defineComponent, h, nextTick, onMounted, onUpdated, reactive, ref, watch} from 'vue'
+import {computed, defineComponent, h, nextTick, onMounted, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
   NButton,
@@ -4095,10 +4095,26 @@ const handleCopyStep = (id) => {
   selectedKeys.value = [copiedStep.id]
 }
 
+/** 条件分支仅更新 conditions 时：就地合并，避免整包替换 config 加剧响应式抖动 */
+const isIfConditionsOnlyPatch = (step, config) => {
+  if (!step || step.type !== 'if' || !config?.conditions) return false
+  if (typeof config.conditions !== 'object' || Array.isArray(config.conditions)) return false
+  return Object.keys(config).length === 1 && Object.keys(config)[0] === 'conditions'
+}
+
 const updateStepConfig = (id, config) => {
   const step = findStep(id)
   if (step) {
-    step.config = {...step.config, ...config}
+    if (isIfConditionsOnlyPatch(step, config)) {
+      const prev = step.config?.conditions
+      if (prev && typeof prev === 'object' && !Array.isArray(prev)) {
+        Object.assign(prev, config.conditions)
+      } else {
+        step.config = {...step.config, conditions: {...config.conditions}}
+      }
+    } else {
+      step.config = {...step.config, ...config}
+    }
     // 根据配置更新步骤名称
     const branchFixed = getFixedBranchStepDisplayName(step)
     if (branchFixed) {
@@ -4138,8 +4154,10 @@ const updateStepConfig = (id, config) => {
         step.name = String(config.step_name).trim() || '引用公共脚本'
       }
     }
-    // 更新显示名称
-    updateStepDisplayNames()
+    // 条件分支仅改 conditions 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
+    if (!isIfConditionsOnlyPatch(step, config)) {
+      updateStepDisplayNames()
+    }
   }
 }
 
@@ -4492,10 +4510,17 @@ const updateStepDisplayNames = () => {
   })
 }
 
-// 监听steps变化，更新显示名称和展开状态
+// 监听 steps 变化：防抖刷新左侧树展示名（避免条件分支等编辑器逐字 emit 时整树重算导致输入卡顿）
+let stepTreeLayoutTimer = null
 watch(() => steps.value, () => {
-  updateStepDisplayNames()
-  initializeStepExpandStates()
+  if (stepTreeLayoutTimer) {
+    clearTimeout(stepTreeLayoutTimer)
+  }
+  stepTreeLayoutTimer = setTimeout(() => {
+    updateStepDisplayNames()
+    initializeStepExpandStates()
+    stepTreeLayoutTimer = null
+  }, 80)
 }, {deep: true})
 
 // 同页切换用例（仅 query 变化、组件未销毁）时需重新解析 case_info 并拉步骤树
@@ -4519,10 +4544,7 @@ onMounted(async () => {
   }
 })
 
-onUpdated(() => {
-  // 组件更新后重新计算显示名称
-  updateStepDisplayNames()
-})
+// 不在 onUpdated 中刷新展示名：每次子编辑器 emit 都会触发父组件 patch，导致输入卡顿/丢字
 
 const renderDropdownLabel = (option) => {
   return h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}}, [
