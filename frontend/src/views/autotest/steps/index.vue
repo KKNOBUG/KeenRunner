@@ -842,14 +842,14 @@ const notifyError = (msg) => {
 // 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致
 const stepDefinitions = {
   user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
-  if: {label: '条件分支', allowChildren: true, icon: 'tabler:arrow-loop-right-2'},
-  wait: {label: '等待控制', allowChildren: false, icon: 'meteor-icons:alarm-clock'},
-  loop: {label: '循环结构', allowChildren: true, icon: 'streamline:arrow-reload-horizontal-2'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'carbon:content-delivery-network'},
-  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:worldwide-web-network-www'},
-  code: {label: '代码请求(Python)', allowChildren: false, icon: 'teenyicons:python-outline'},
-  database: {label: '数据库请求', allowChildren: false, icon: 'material-symbols:database-search-outline'},
-  quote: {label: '引用公共脚本', allowChildren: false, icon: 'material-symbols:link'},
+  if: {label: '条件分支', allowChildren: true, icon: 'gravity-ui:shuffle'},
+  wait: {label: '等待控制', allowChildren: false, icon: 'gravity-ui:stopwatch'},
+  loop: {label: '循环结构', allowChildren: true, icon: 'gravity-ui:arrows-rotate-right'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'gravity-ui:abbr-api'},
+  http: {label: 'HTTP请求', allowChildren: false, icon: 'gravity-ui:abbr-api'},
+  code: {label: '代码请求(Python)', allowChildren: false, icon: 'gravity-ui:logo-python'},
+  database: {label: '数据库请求', allowChildren: false, icon: 'gravity-ui:abbr-sql'},
+  quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
 }
 
 const editorMap = {
@@ -5376,6 +5376,7 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-item-child) {
   padding-left: 12px;
+  margin-left: 12px;
 }
 
 :deep(.step-name) {
@@ -5438,20 +5439,20 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-code) {
-  color: #2080f0;
+  color: #800080;
 }
 
 
 :deep(.step-icon.icon-tcp) {
-  color: #2080f0;
+  color: #49CC90;
 }
 
 :deep(.step-icon.icon-http) {
-  color: #2080f0;
+  color: #49CC90;
 }
 
 :deep(.step-icon.icon-database) {
-  color: #2080f0;
+  color: #800080;
 }
 
 :deep(.step-icon.icon-if) {
@@ -5459,7 +5460,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-wait) {
-  color: #48d024;
+  color: #F4511E;
 }
 
 :deep(.step-icon.icon-user_variables) {
@@ -5467,7 +5468,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-quote) {
-  color: #18a058;
+  color: #F4511E;
 }
 
 :deep(.action-btn) {
@@ -5487,9 +5488,8 @@ const RecursiveStepChildren = defineComponent({
 
 /* 引用步骤：脚本内步骤展示（只读，含递归子级） */
 :deep(.quote-inner-steps) {
-  margin-top: 6px;
   margin-left: 12px;
-  border-left: 2px solid #18a058;
+  border-left: 2px solid #F4511E;
   padding-left: 8px;
 }
 :deep(.quote-inner-list) {
@@ -5498,13 +5498,9 @@ const RecursiveStepChildren = defineComponent({
 :deep(.quote-inner-item) {
   padding: 4px 8px;
   margin-bottom: 2px;
-  background: rgba(24, 160, 88, 0.06);
   border-radius: 6px;
   cursor: pointer;
   border: none;
-}
-:deep(.quote-inner-item:hover) {
-  background: rgba(24, 160, 88, 0.12);
 }
 :deep(.quote-inner-item .step-name) {
   display: flex;
@@ -5561,7 +5557,7 @@ const RecursiveStepChildren = defineComponent({
   flex-shrink: 0;
   width: 16px;
   text-align: center;
-  color: #18a058;
+  color: #F4511E;
   font-weight: bold;
 }
 
