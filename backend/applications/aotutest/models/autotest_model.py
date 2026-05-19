@@ -40,8 +40,8 @@ def unique_identify() -> str:
     :returns: 格式为 ``{timestamp}-{uuid4_hex}`` 的唯一标识字符串。
     :rtype: str
     """
-    timestamp = int(datetime.datetime.now().timestamp())
-    uuid4_str = uuid.uuid4().hex.upper()
+    timestamp: int = int(datetime.datetime.now().timestamp())
+    uuid4_str: str = uuid.uuid4().hex.upper()
     return f"{timestamp}-{uuid4_str}"
 
 

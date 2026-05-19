@@ -157,9 +157,9 @@ class StepExecutionContext:
         :param pending_details: 延后落库时收集明细的列表，非 None 时 _save_step_detail 只追加不写库。
         """
         self.case_id = case_id
+        self.case_code = case_code
         # 前端执行前配置替换映射（key=step_id 或 @@step_name）
         self.steps_execute_config: Dict[str, Any] = steps_execute_config or {}
-        self.case_code = case_code
         self.report_code = report_code
         self.dataset_name = dataset_name
         self.logs: Dict[str, List[str]] = {}
@@ -208,6 +208,8 @@ class StepExecutionContext:
             self.log(message=error_message)
 
     def resolve_placeholders(self, variables, step_code: Optional[str] = None) -> Any:
+        if not variables:
+            return None
         return AutoTestToolService.resolve_placeholders(
             value=variables or [],
             logger_object=self.log,
@@ -1033,9 +1035,9 @@ class BaseStepExecutor:
             step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
             step_logs: List[str] = self.context.logs.get(self.step_code, [])
             step_exec_logger: Optional[List[str]] = list(step_logs) if step_logs else None
-            response_header = None
             response_body = None
             response_text = None
+            response_header = None
             response_cookie = None
             response_elapsed = None
             if result.response:
@@ -1052,14 +1054,13 @@ class BaseStepExecutor:
                 if response_cookie:
                     response_cookie = json.dumps(response_cookie, ensure_ascii=False)
 
-            result_extract: List = getattr(result, "extract_variables", None)
-            extract_variables = list(result_extract) if isinstance(result_extract, list) else []
-            defined_variables = list(self.context.defined_variables) if self.context.defined_variables else []
-            session_variables = list(self.context.session_variables) if self.context.session_variables else []
-            dataset_name: Optional[str] = getattr(result, "dataset_name", None)
-            dataset_snapshot: Optional[Dict[str, Any]] = getattr(result, "dataset_snapshot", None)
-            has_data_driven: bool = dataset_snapshot is not None
-            actual_request: Dict[str, Any] = getattr(result, "request", None) or {}
+            extract_variables: List[Dict[str, Any]] = result.extract_variables
+            defined_variables: List[StepVariablesBase] = self.context.defined_variables
+            session_variables: List[StepVariablesBase] = self.context.session_variables
+            dataset_name: Optional[str] = result.dataset_name
+            dataset_snapshot: Optional[Dict[str, Any]] = result.dataset_snapshot
+            have_data_driven: bool = dataset_snapshot is not None
+            actual_request: Dict[str, Any] = result.request or {}
             # 当step_id、step_code为None时说明是临时步骤(没有保存入库)，所以替换为step_timestamp、temporary-step-debugging标识
             step_timestamp: int = int(str(datetime.now().timestamp()).replace(".", ""))
             detail_create = AutoTestApiDetailCreate(
@@ -1106,8 +1107,8 @@ class BaseStepExecutor:
                 database_operates=actual_request.get("database_operates") or None,
                 database_searched=actual_request.get("database_searched") or None,
                 # 数据源相关
-                dataset_name=dataset_name if has_data_driven else None,
-                dataset_snapshot=dataset_snapshot if has_data_driven else None,
+                dataset_name=dataset_name if have_data_driven else None,
+                dataset_snapshot=dataset_snapshot if have_data_driven else None,
                 # 响应相关
                 response_cookie=response_cookie or None,
                 response_header=response_header or None,
@@ -1757,10 +1758,7 @@ class ConditionStepExecutor(BaseStepExecutor):
                 raise StepExecutionError(f"【条件分支】条件表达式中变量解析异常, 错误描述: {e}") from e
 
             # 写入 result.request，便于落库与排障
-            result.request = {
-                "conditions": condition.model_copy(update={"condition_expr": actual_value}),
-            }
-
+            result.request = {"conditions": condition.model_copy(update={"condition_expr": actual_value})}
             try:
                 if not AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value):
                     result.success = True
@@ -2600,8 +2598,7 @@ class HttpStepExecutor(BaseStepExecutor):
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
             env_name: Optional[str] = None
             if current_step_config:
-                config_type: AutoTestConfigNodeType = current_step_config.config_type
-                if current_step_config and config_type == AutoTestConfigNodeType.API:
+                if current_step_config.config_type == AutoTestConfigNodeType.API:
                     env_name: str = current_step_config.env_name
                     config_name: str = current_step_config.config_name
                     config_host: str = current_step_config.config_host
@@ -2614,7 +2611,7 @@ class HttpStepExecutor(BaseStepExecutor):
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct = await AutoTestToolService.load_dataset_for_request_step(
+            step_struct: Optional[Dict[str, Dict[str, Any]]] = await AutoTestToolService.load_dataset_for_request_step(
                 case_id=self.case_id,
                 step_code=self.step_code,
                 dataset_name=dataset_name,
@@ -2639,112 +2636,89 @@ class HttpStepExecutor(BaseStepExecutor):
 
         try:
             # 先转成字典，再「先数据驱动替换、再变量占位符替换」，保证最终报文 = 数据驱动覆盖后再占位符替换
-            request_header_raw = self.step.request_header
-            request_params_raw = self.step.request_params
-            request_form_data_raw = self.step.request_form_data
-            request_form_urlencoded_raw = self.step.request_form_urlencoded
-            request_form_file_raw = self.step.request_form_file
-            if not request_header_raw or not isinstance(request_header_raw, list):
-                request_header_raw = []
-            if not request_params_raw or not isinstance(request_params_raw, list):
-                request_params_raw = []
-            if not request_form_data_raw or not isinstance(request_form_data_raw, list):
-                request_form_data_raw = []
-            if not request_form_urlencoded_raw or not isinstance(request_form_urlencoded_raw, list):
-                request_form_urlencoded_raw = []
-            if not request_form_file_raw or not isinstance(request_form_file_raw, list):
-                request_form_file_raw = []
-
             # 1）转成字典（尚未解析占位符）
-            headers = AutoTestToolService.convert_list_to_dict_for_http(request_header_raw)
-            params_payload = AutoTestToolService.convert_list_to_dict_for_http(request_params_raw)
-            form_data = AutoTestToolService.convert_list_to_dict_for_http(request_form_data_raw)
-            urlencoded = AutoTestToolService.convert_list_to_dict_for_http(request_form_urlencoded_raw)
-            form_files_list = self.context.resolve_placeholders(request_form_file_raw)
-            form_files = AutoTestToolService.convert_list_to_dict_for_http(form_files_list)
-            request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
-            request_text = self.step.request_text
+            request_header: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_header)
+            request_params: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_params)
+            request_form_data: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_form_data)
+            request_form_urlencoded: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_form_urlencoded)
+            request_form_file: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_form_file)
+            request_body: Dict[str, Any] = AutoTestToolService.try_serialize_request_body(self.step.request_body)
+            request_text: Optional[str] = self.step.request_text
 
             # 2）数据驱动：先 JSONPath 替换报文（head 写请求头后与 body 一并写入 body/form/urlencoded），再占位符
             if AutoTestToolService.try_acquire_step_dataset(step_struct):
                 out = AutoTestToolService.replace_json_datagram(
                     head_map=step_struct.get("head") or {},
                     body_map=step_struct.get("body") or {},
-                    request_headers=headers,
+                    request_headers=request_header,
                     request_body=request_body,
-                    form_data=form_data,
-                    urlencoded=urlencoded,
+                    form_data=request_form_data,
+                    urlencoded=request_form_urlencoded,
                 )
-                headers = out["headers"]
+                request_header = out["headers"]
                 request_body = out["request_body"]
 
             # 3）再对报文做变量占位符解析
-            headers = self.context.resolve_placeholders(headers)
-            params_payload = self.context.resolve_placeholders(params_payload)
-            form_data = self.context.resolve_placeholders(form_data)
-            urlencoded = self.context.resolve_placeholders(urlencoded)
+            request_header = self.context.resolve_placeholders(request_header)
+            request_params = self.context.resolve_placeholders(request_params)
+            request_form_data = self.context.resolve_placeholders(request_form_data)
+            request_form_urlencoded = self.context.resolve_placeholders(request_form_urlencoded)
             request_body = self.context.resolve_placeholders(request_body)
             request_text = self.context.resolve_placeholders(request_text)
 
-            # 按 request_args_type 选取请求体类型，仅使用一种方式，避免冲突
-            request_args_type_raw = self.step.request_args_type
-            try:
-                args_type = AutoTestReqArgsType(request_args_type_raw) if request_args_type_raw is not None else None
-            except (ValueError, TypeError):
-                args_type = None
-
-            data_payload: Optional[Any] = None
             json_payload: Optional[Any] = None
             file_payload: Optional[Any] = None
-            if args_type is None:
+            data_payload: Optional[Any] = None
+            # 按 request_args_type 选取请求体类型，仅使用一种方式，避免冲突
+            request_args_type: AutoTestReqArgsType = self.step.request_args_type
+            if request_args_type is None:
                 # 未配置时保持兼容：优先 raw -> form-data -> urlencoded 作为 data，若有 request_body 则作为 json
                 if request_text:
                     data_payload = request_text
-                elif form_data or form_files:
-                    data_payload = form_data
-                    file_payload = form_files if form_files else None
-                elif urlencoded:
-                    data_payload = urlencoded
+                elif request_form_data or request_form_file:
+                    data_payload = request_form_data
+                    file_payload = request_form_file if request_form_file else None
+                elif request_form_urlencoded:
+                    data_payload = request_form_urlencoded
                 if request_body and not data_payload:
                     json_payload = request_body
-            elif args_type in (AutoTestReqArgsType.NONE, AutoTestReqArgsType.PARAMS):
+            elif request_args_type in (AutoTestReqArgsType.NONE, AutoTestReqArgsType.PARAMS):
                 # 无请求体或仅查询参数
                 pass
-            elif args_type == AutoTestReqArgsType.RAW:
+            elif request_args_type == AutoTestReqArgsType.RAW:
                 data_payload = request_text
-            elif args_type == AutoTestReqArgsType.JSON:
+            elif request_args_type == AutoTestReqArgsType.JSON:
                 json_payload = request_body
-            elif args_type == AutoTestReqArgsType.FORM_DATA:
-                data_payload = form_data
-                file_payload = form_files if form_files else None
-            elif args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
-                data_payload = urlencoded
+            elif request_args_type == AutoTestReqArgsType.FORM_DATA:
+                data_payload = request_form_data
+                file_payload = request_form_file if request_form_file else None
+            elif request_args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
+                data_payload = request_form_urlencoded
             # 先写入实际发往目标服务器的数据，避免后续处理 response 异常时落库拿不到 request
             result.request = {
                 "request_url": request_url,
-                "request_port": None,
                 "request_method": request_method.value,
                 "request_env_name": env_name,
-                "request_args_type": request_args_type_raw,
-                "request_header": headers,
-                "request_params": params_payload,
-                "request_form_data": form_data,
-                "request_form_urlencoded": urlencoded,
-                "request_form_file": form_files,
+                "request_args_type": request_args_type,
+                "request_header": request_header,
+                "request_params": request_params,
+                "request_form_data": request_form_data,
+                "request_form_urlencoded": request_form_urlencoded,
+                "request_form_file": request_form_file,
                 "request_body": json_payload,
                 "request_text": request_text,
             }
-            response = await self.context.send_http_request(
+            response: httpx.Response = await self.context.send_http_request(
                 request_method,
                 request_url,
-                headers=headers,
-                params=params_payload,
+                headers=request_header,
+                params=request_params,
                 data=data_payload,
                 json_data=json_payload,
                 files=file_payload,
             )
             try:
-                cookies = {}
+                cookies: Dict[str, Any] = {}
                 if response.cookies:
                     for cookie in response.cookies.jar:
                         cookies[cookie.name] = cookie.value
@@ -2755,7 +2729,6 @@ class HttpStepExecutor(BaseStepExecutor):
                     "response_text": response.text,
                     "response_cookie": cookies,
                     "response_elapsed": str(response.elapsed.total_seconds()),
-                    "response_bytes": None,
                 }
             except AttributeError as e:
                 raise StepExecutionError(f"【HTTP请求】响应对象缺少必要属性, 错误详情: {e}") from e
@@ -2975,11 +2948,11 @@ class AutoTestStepExecutionEngine:
                 case_id=case_id,
                 case_code=case_code,
                 steps_execute_config=steps_execute_config,
-                initial_variables=initial_variables,
-                http_client=self._http_client,
                 report_code=report_code,
-                pending_details=pending_details_arg,
                 dataset_name=dataset_name,
+                http_client=self._http_client,
+                initial_variables=initial_variables,
+                pending_details=pending_details_arg,
         ) as context:
             ordered_root_steps: List[AutoTestStepTreeUpdateItem] = sorted(
                 [prepare_step_tree_item_for_execution(s) for s in steps],

@@ -1145,16 +1145,16 @@ class AutoTestToolServiceImpl:
         func_args: str = func_args.rstrip(")")
         args_dict: Dict[str, Any] = {}
         if func_args.strip():
-            _args = func_args.split(",")
+            _args: List[str] = func_args.split(",")
             for item in _args:
                 # key, value = item.split("=")
                 # args_dict[str(key).strip()] = eval(value)
-                part = item.strip()
+                part: str = item.strip()
                 if "=" not in part:
                     continue
                 key, _, value_part = part.partition("=")
                 key = str(key).strip()
-                value_part = value_part.strip()
+                value_part: str = value_part.strip()
                 try:
                     args_dict[key] = ast.literal_eval(value_part)
                 except (ValueError, SyntaxError) as e:
@@ -1211,8 +1211,7 @@ class AutoTestToolServiceImpl:
         if not hasattr(GenerateUtils, func_name):
             raise AttributeError(f"【辅助函数】[{func_name}]调用失败, 未定义或不被允许调用")
         try:
-            execute_result = getattr(GenerateUtils(), func_name)(**(func_args or {}))
-            return execute_result
+            return getattr(GenerateUtils(), func_name)(**(func_args or {}))
         except TypeError as e:
             raise AttributeError(f"【辅助函数】[{func_name}]调用失败, 参数签名或类型不匹配: {e}") from e
         except SyntaxError as e:
@@ -1405,7 +1404,9 @@ class AutoTestToolServiceImpl:
         - 单占位符场景下, 若结果是字符串, 直接按字符串返回, 避免如 "00123" 被数值化后丢失前导 0
         """
         if len(regularly_slots) == 1:
-            _, value, _ = regularly_slots[0]
+            if re.search(r"[+\-*/]]", content) is None:
+                return False
+            match, value, failed_content = regularly_slots[0]
             if value is None:
                 return False
             try:
@@ -1645,10 +1646,10 @@ class AutoTestToolServiceImpl:
             try:
                 calculated_result: Union[int, float] = cls._safe_calculation_expr(merged)
                 formatted_result: str = cls._formatter_calculated_result(calculated_result)
-                logger_object(f"【变量运算】算式求值成功: [{content!r}] >>> [{merged}] >>> {formatted_result}")
+                logger_object(f"【变量运算】算式求值成功\n\t: {content} >>>>> {merged} >>>>> {formatted_result}")
                 return formatted_result
             except Exception as e:
-                logger_object(f"【变量运算】算式求值失败: [{content!r}] >>> [{merged}] >>> {e}, 改为按字符串拼接")
+                logger_object(f"【变量运算】算式求值失败\n\t: {content} >>>>> {merged} >>>>> {e}, 改为按字符串拼接")
 
         return cls._split_placeholders(
             content=content,

@@ -309,7 +309,6 @@
                               <RecursiveStepChildren
                                   v-if="stepDefinitions[child.type]?.allowChildren"
                                   :step="child"
-                                  :parent-id="step.id"
                               />
                             </div>
                           </div>
@@ -2096,18 +2095,6 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   const hasStepId = original.id !== undefined && original.id !== null
   const hasStepCode = original.step_code !== undefined && original.step_code !== null && original.step_code !== ''
   const isUpdate = hasStepId && hasStepCode
-
-  // 调试日志：帮助排查问题
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[convertStepToBackend] Step ${step.name}:`, {
-      hasStepId,
-      hasStepCode,
-      isUpdate,
-      originalId: original.id,
-      originalStepCode: original.step_code,
-      stepNo
-    })
-  }
 
   // 基础字段（step_desc 优先用 config，来自 HTTP 等编辑器的 emit）
   const backendStep = {
@@ -4559,10 +4546,6 @@ const RecursiveStepChildren = defineComponent({
     step: {
       type: Object,
       required: true
-    },
-    parentId: {
-      type: String,
-      default: null
     }
   },
   setup(props) {
@@ -4577,8 +4560,6 @@ const RecursiveStepChildren = defineComponent({
     const capturedGetStepNumber = getStepNumber
     const capturedHandleSelect = handleSelect
     const capturedHandleDragStart = handleDragStart
-    const capturedHandleDragOver = handleDragOver
-    const capturedHandleDragLeave = handleDragLeave
     const capturedHandleDragOverInChildrenArea = handleDragOverInChildrenArea
     const capturedHandleDragLeaveInChildrenArea = handleDragLeaveInChildrenArea
     const capturedHandleDragOverOnChild = handleDragOverOnChild
@@ -4592,7 +4573,7 @@ const RecursiveStepChildren = defineComponent({
     const capturedDragState = dragState
 
     return () => {
-      const {step, parentId} = props
+      const {step} = props
       if (!capturedStepDefinitions[step.type]?.allowChildren) return null
 
       // 局部展开优先于全局状态：如果步骤被局部展开，就显示，不管全局状态如何
@@ -4735,8 +4716,7 @@ const RecursiveStepChildren = defineComponent({
               ]),
               // 递归渲染子步骤（只有当子步骤允许有子步骤时才渲染）
               capturedStepDefinitions[child.type]?.allowChildren ? h(RecursiveStepChildren, {
-                step: child,
-                parentId: step.id
+                step: child
               }) : null
             ])
           ]),

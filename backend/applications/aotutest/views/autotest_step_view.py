@@ -431,27 +431,6 @@ async def debug_http_request(
         extract_variables: List[StepExtractVariableItem] = step_data.extract_variables
         assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
 
-        # 确保是列表格式
-        if not request_header or not isinstance(request_header, list):
-            request_header = []
-        if not request_params or not isinstance(request_params, list):
-            request_params = []
-        if not request_form_data or not isinstance(request_form_data, list):
-            request_form_data = []
-        if not request_form_file or not isinstance(request_form_file, list):
-            request_form_file = []
-        if not request_form_urlencoded or not isinstance(request_form_urlencoded, list):
-            request_form_urlencoded = []
-
-        if not session_variables or not isinstance(session_variables, list):
-            session_variables = []
-        if not defined_variables or not isinstance(defined_variables, list):
-            defined_variables = []
-        if not extract_variables or not isinstance(extract_variables, list):
-            extract_variables = []
-        if not assert_validators or not isinstance(assert_validators, list):
-            assert_validators = []
-
         # 将 defined / session 变量合并为查找 dict（提取/断言用）及 StepVariablesBase 列表（占位符解析用）
         merged_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
@@ -758,15 +737,6 @@ async def debug_tcp_request(
         defined_variables: List[StepVariablesBase] = step_data.defined_variables
         extract_variables: List[StepExtractVariableItem] = step_data.extract_variables
         assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
-
-        if not session_variables or not isinstance(session_variables, list):
-            session_variables = []
-        if not defined_variables or not isinstance(defined_variables, list):
-            defined_variables = []
-        if not extract_variables or not isinstance(extract_variables, list):
-            extract_variables = []
-        if not assert_validators or not isinstance(assert_validators, list):
-            assert_validators = []
 
         # 合并变量池（同 HTTP 调试）
         merge_all_variables: Dict[str, Any] = {}
@@ -1110,7 +1080,6 @@ async def execute_step_tree(
         if is_run_mode:
             try:
                 # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
-                # selected_dataset_names = ["场景1名称", "场景2名称", "场景3名称"]
                 if not selected_dataset_names:
                     # 普通单次执行（无选中数据集）
                     result_data: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.execute_single_case(
@@ -1209,16 +1178,16 @@ async def execute_step_tree(
             if selected_dataset_names:
                 if len(selected_dataset_names) != 1:
                     return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
-                debug_dataset_name = selected_dataset_names[0]
+                debug_dataset_name: str = selected_dataset_names[0]
             else:
-                debug_dataset_name = None
+                debug_dataset_name: Optional[str] = None
             engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
                 steps=all_root_steps,
+                report_type=AutoTestReportType.DEBUG_EXEC,
                 steps_execute_config=steps_execute_config,
                 initial_variables=merged_variables,
-                report_type=AutoTestReportType.DEBUG_EXEC,
                 dataset_name=debug_dataset_name,
             )
             if defer_create_report is not None:

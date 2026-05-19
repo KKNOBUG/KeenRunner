@@ -1050,8 +1050,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"查询用例信息(case_id={case_id})成功, 结果: {case_dict}")
 
         # 2. 查询步骤树数据（边界层已 model_validate）
-        load = await self.get_by_case_id(case_id)
-        tree_data_count = load.step_counter.model_dump()
+        load: AutoTestCaseStepTreeLoadResult = await self.get_by_case_id(case_id)
+        tree_data_count: Dict[str, int] = load.step_counter.model_dump()
         if load.step_counter.total_steps == 0:
             error_message: str = f"查询步骤为空, 用例(case_id={case_id})没有任何可执行的根步骤"
             LOGGER.error(error_message)
@@ -1067,7 +1067,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         merged[it.key] = it
             return list(merged.values())
 
-        merge_all_variables = _merge_session_variables(
+        merge_all_variables: List[StepVariablesBase] = _merge_session_variables(
             step_variables_list_from_storage(getattr(case_instance, "session_variables", None)),
             AutoTestToolService.collect_session_variables(load.root_steps),
             list(initial_variables or []),
@@ -1075,7 +1075,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info("步骤树数据规范检查成功, 收集会话变量成功")
 
         # 5. 获取根步骤（执行前在引擎内统一 prepare）
-        root_steps = [s for s in load.root_steps if s.parent_step_id is None]
+        root_steps: List[AutoTestStepTreeUpdateItem] = [s for s in load.root_steps if s.parent_step_id is None]
         if not root_steps:
             error_message: str = f"获取用例(case_id={case_id})根步骤失败, 没有任何可执行的根步骤"
             LOGGER.error(error_message)
