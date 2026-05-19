@@ -339,17 +339,17 @@ class AutoTestToolService:
         step_name = step.step_name
         step_type = step.step_type
         return (
-            f"{message}执行失败{offset_message}: \n"
-            f"用例ID: {case_id}, \n"
-            f"步骤ID: {step_id}, \n"
-            f"步骤序号: {step_no}, \n"
-            f"步骤标识: {step_code}, \n"
-            f"步骤名称: {step_name}, \n"
-            f"步骤类型: {step_type}, \n"
-            f"错误描述: {exception}, \n"
-            f"错误类型: {type(exception).__name__}, \n"
-            f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
-            f"错误回溯: {traceback.format_exc()}\n"
+            f"{message}执行失败{offset_message}: \n\t"
+            f"用例ID: {case_id}\n\t"
+            f"步骤ID: {step_id}\n\t"
+            f"步骤序号: {step_no}\n\t"
+            f"步骤标识: {step_code}\n\t"
+            f"步骤名称: {step_name}\n\t"
+            f"步骤类型: {step_type}\n\t"
+            f"错误描述: {exception}\n\t"
+            f"错误类型: {type(exception).__name__}\n\t"
+            f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
+            f"错误回溯: {traceback.format_exc()}"
         )
 
     @classmethod

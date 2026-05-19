@@ -189,7 +189,7 @@ class StepExecutionContext:
                 self._http_client = await self._exit_stack.enter_async_context(client)
             return self
         except Exception as e:
-            error_message: str = f"异步上下文管理器: 创建HTTP客户端连接失败, 错误描述: {e}"
+            error_message: str = f"异步上下文管理器创建HTTP客户端连接失败: \n\t错误描述: {e}"
             self.log(message=error_message)
             raise StepExecutionError(error_message) from e
 
@@ -306,7 +306,7 @@ class StepExecutionContext:
         :return: 变量值。
         """
         if not name or not isinstance(name, str):
-            raise StepExecutionError(f"【获取变量】变量名无效: 变量名必须是非空字符串, 当前值: {name}")
+            raise StepExecutionError(f"【获取变量】变量名无效: \n\t变量名必须是非空字符串, 当前值: {name}")
 
         for scope_name, scope_list in [
             ("defined_variables", self.defined_variables),
@@ -316,7 +316,7 @@ class StepExecutionContext:
             if value is not None:
                 return value
 
-        raise KeyError(f"【获取变量】变量({name})未定义, 请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
+        raise KeyError(f"【获取变量】变量({name})未定义: \n\t请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
 
     async def sleep(self, seconds: Optional[float]) -> None:
         """
@@ -329,28 +329,16 @@ class StepExecutionContext:
         try:
             wait_time = float(seconds)
         except (ValueError, TypeError) as e:
-            raise StepExecutionError(
-                f"【等待控制】等待时间解析失败: "
-                f"参数[seconds]必须是[float]类型, 且不允许小于0, "
-                f"但得到[{type(seconds)}类型: [{seconds}], 错误描述: {e}"
-            ) from e
+            raise StepExecutionError(f"【等待控制】参数异常: \n\t预期类型: float\n\t实际类型: [{type(seconds).__name__}") from e
         if wait_time < 0:
-            raise StepExecutionError(
-                f"【等待控制】等待时间解析失败: "
-                f"参数[seconds]必须是[float]类型, 且不允许小于0, "
-                f"但得到[{type(seconds)}类型: [{seconds}]"
-            )
+            raise StepExecutionError(f"【等待控制】参数异常: \n\t参数[seconds]必须是[float]类型, 且不允许小于0")
         if wait_time > 300:
-            raise StepExecutionError(
-                f"【等待控制】等待时间解析失败: "
-                f"参数[seconds]必须是[float]类型, 且不允许大于300, "
-                f"但得到[{type(seconds)}类型: [{seconds}]"
-            )
+            raise StepExecutionError(f"【等待控制】参数异常: \n\t参数[seconds]必须是[float]类型, 且不允许大于300")
         try:
             await asyncio.sleep(wait_time)
             self.log(f"【等待控制】等待 {wait_time} 秒成功")
         except Exception as e:
-            raise StepExecutionError(f"【等待控制】执行等待操作时发生异常: {e}") from e
+            raise StepExecutionError(f"【等待控制】执行等待时发生异常: {e}") from e
 
     async def send_http_request(
             self,
@@ -414,7 +402,7 @@ class StepExecutionContext:
                     f"【HTTP请求】请求无效: \n\t"
                     f"请求的URL地址不符合规范(可能原因: 地址或端口拼写错误或目标服务器处于宕机状态)\n\t"
                     f"错误类型: {type(e).__name__}\n\t"
-                    f"错误描述: {e}\n\t"
+                    f"错误描述: {e}"
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message) from e
@@ -423,7 +411,7 @@ class StepExecutionContext:
                     f"【HTTP请求】请求超时: \n\t"
                     f"在规定时间范围内未能从服务器获取到响应数据(可能原因: 网络延迟、服务器响应慢或超时设置过短)\n\t"
                     f"错误类型: {type(e).__name__}\n\t"
-                    f"错误描述: {e}\n\t"
+                    f"错误描述: {e}"
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message) from e
@@ -432,7 +420,7 @@ class StepExecutionContext:
                     f"【HTTP请求】请求失败: \n\t"
                     f"无法建立到达目标服务器的连接(可能原因: 网络连接不可达、DNS解析失败或目标服务器处于拒绝状态)\n\t"
                     f"错误类型: {type(e).__name__}\n\t"
-                    f"错误描述: {e}\n\t"
+                    f"错误描述: {e}"
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message) from e
@@ -441,7 +429,7 @@ class StepExecutionContext:
                     f"【HTTP请求】请求异常: \n\t"
                     f"目标服务器无法完成该请求处理(可能原因: 网络连接异常、数据包缺少或丢失\n\t"
                     f"错误类型: {type(e).__name__}\n\t"
-                    f"错误描述: {e}\n\t"
+                    f"错误描述: {e}"
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message) from e
@@ -449,7 +437,7 @@ class StepExecutionContext:
                 error_message: str = (
                     f"【HTTP请求】请求服务器时发生未知错误: \n\t"
                     f"错误类型: {type(e).__name__}\n\t"
-                    f"错误描述: {e}\n\t"
+                    f"错误描述: {e}"
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message) from e
@@ -546,30 +534,30 @@ class StepExecutionContext:
             exec(prepared_code, safe_globals, local_context)
         except SyntaxError as e:
             error_message: str = (
-                f"【代码请求(Python)】代码解析失败: \n"
-                f"请遵循 Python PEP8 编码规范, \n"
-                f"错误描述: {e}\n"
-                f"错误位置: 第{e.lineno}行, \n"
-                f"错误类型: {type(e).__name__}, \n"
+                f"【代码请求(Python)】代码解析失败: \n\t"
+                f"请遵循 Python PEP8 编码规范\n\t"
+                f"错误描述: {e}\n\t"
+                f"错误位置: 第{e.lineno}行\n\t"
+                f"错误类型: {type(e).__name__}\n\t"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             self.log(error_message)
             raise StepExecutionError(error_message) from e
         except NameError as e:
             error_message: str = (
-                f"【代码请求(Python)】代码解析失败: \n"
-                f"请检查代码中是否引用了未定义的变量或函数, \n"
-                f"错误描述: {e}\n"
-                f"错误类型: {type(e).__name__}, \n"
+                f"【代码请求(Python)】代码解析失败: \n\t"
+                f"请检查代码中是否引用了未定义的变量或函数\n\t"
+                f"错误描述: {e}\n\t"
+                f"错误类型: {type(e).__name__}\n\t"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             self.log(error_message)
             raise StepExecutionError(error_message) from e
         except Exception as e:
             error_message: str = (
-                f"【代码请求(Python)】代码解析异常: \n"
-                f"错误描述: {e}, \n"
-                f"错误类型: {type(e).__name__}, \n"
+                f"【代码请求(Python)】代码解析异常: \n\t"
+                f"错误描述: {e}\n\t"
+                f"错误类型: {type(e).__name__}\n\t"
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
             self.log(error_message)
@@ -587,9 +575,9 @@ class StepExecutionContext:
                     result = func()
                 except Exception as e:
                     error_message: str = (
-                        f"【代码请求(Python)】执行异常: \n"
-                        f"错误描述: {e}\n"
-                        f"错误类型: {type(e).__name__}, \n"
+                        f"【代码请求(Python)】执行异常: \n\t"
+                        f"错误描述: {e}\n\t"
+                        f"错误类型: {type(e).__name__}\n\t"
                         f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     self.log(error_message)
@@ -597,7 +585,7 @@ class StepExecutionContext:
             else:
                 func_names = ", ".join(functions.keys())
                 error_message: str = (
-                    f"【代码请求(Python)】执行失败: "
+                    f"【代码请求(Python)】执行失败: \n\t"
                     f"仅支持定义一个函数作为入口, 当前存在多个函数: {func_names}"
                 )
                 self.log(error_message)
@@ -608,19 +596,18 @@ class StepExecutionContext:
             result = None
 
         if result is None:
-            self.log("【代码请求(Python)】执行完成, 但无结果")
+            self.log(f"【代码请求(Python)】执行完成, 但无结果: {result!r}")
             return {}
         if not isinstance(result, dict):
             error_message: str = (
-                f"【代码请求(Python)】执行失败: "
-                f"返回值类型不被接受, "
-                f"期望返回类型: Dict[str, Any], "
-                f"实际返回类型: {type(result).__name__}, "
-                f"返回值: {result}"
+                f"【代码请求(Python)】执行失败, 返回值类型不被接受: \n\t"
+                f"预期类型: Dict[str, Any]\n\t"
+                f"实际类型: {type(result).__name__}\n\t"
+                f"返回结果: {result!r}"
             )
             self.log(error_message)
             raise StepExecutionError(error_message)
-        self.log(f"【代码请求(Python)】执行完成, 返回结果: \n{json.dumps(result, ensure_ascii=False, indent=8)}")
+        self.log(f"【代码请求(Python)】执行完成, 返回结果: \n\t{json.dumps(result, ensure_ascii=False, indent=8)}")
         return result
 
     @staticmethod
@@ -639,28 +626,30 @@ class StepExecutionContext:
                     root = alias.name.split(".", 1)[0]
                     if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
                         error_message = (
-                            "【代码请求(Python)】安全限制: "
-                            f"仅允许导入标准库模块: {allowed_cn}；"
-                            f"不允许: {alias.name}"
+                            "【代码请求(Python)】安全限制(仅允许导入预期定义的标准库模块): \n\t"
+                            f"允许依赖: {allowed_cn}\n\t"
+                            f"非法依赖: {alias.name}"
                         )
                         raise StepExecutionError(error_message)
             elif isinstance(node, ast.ImportFrom):
                 if node.level != 0:
                     error_message = (
-                        "【代码请求(Python)】安全限制: 不允许相对导入 (from . / from ..)"
+                        "【代码请求(Python)】安全限制: \n\t"
+                        "不允许相对导入, 如: from . import xx 或 from .. import xx"
                     )
                     raise StepExecutionError(error_message)
                 if not node.module:
                     error_message = (
-                        "【代码请求(Python)】安全限制: 不允许此类 from 导入"
+                        "【代码请求(Python)】安全限制: \n\t"
+                        "不允许此类 from 导入"
                     )
                     raise StepExecutionError(error_message)
                 root = node.module.split(".", 1)[0]
                 if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
                     error_message = (
-                        "【代码请求(Python)】安全限制: "
-                        f"仅允许从以下模块 from 导入: {allowed_cn}；"
-                        f"不允许: {node.module}"
+                        "【代码请求(Python)】安全限制(仅允许从以下模块 from 导入): \n\t"
+                        f"允许依赖: {allowed_cn}\n\t"
+                        f"非法依赖: {node.module}"
                     )
                     raise StepExecutionError(error_message)
 
@@ -756,7 +745,7 @@ class StepExecutionContext:
             quote_char = match.group(1)
             var_name = match.group(2)
             if not var_name:
-                self.log("【代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
+                self.log("【代码请求(Python)】占位符解析失败: \n\t不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
                 # 支持函数占位符: "${generate_phone()}"
@@ -765,10 +754,10 @@ class StepExecutionContext:
                 else:
                     var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【代码请求(Python)】占位符解析失败, 变量或函数({var_name})未定义, 保留原值")
+                self.log(f"【代码请求(Python)】占位符解析失败: \n\t变量或函数({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【代码请求(Python)】占位符解析失败, 引用变量或函数({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【代码请求(Python)】占位符解析失败: \n\t引用变量或函数({var_name})失败, 保留原值\n\t错误描述: {e}")
                 return match.group(0)
 
             # 在字符串字面量中，替换为合法的 Python 字面量，避免产生无效代码（如 dic["k"] = 邵刚 导致 NameError）
@@ -793,15 +782,15 @@ class StepExecutionContext:
             var_name = match.group(3)
             suffix = match.group(4)
             if not var_name:
-                self.log("【代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
+                self.log("【代码请求(Python)】占位符解析失败: \n\t不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                self.log(f"【代码请求(Python)】占位符解析失败: \n\t变量({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【代码请求(Python)】占位符解析失败: \n\t引用变量({var_name})失败, 保留原值\n\t错误描述: {e}")
                 return match.group(0)
 
             # 字符串拼接，保持字符串格式
@@ -820,15 +809,15 @@ class StepExecutionContext:
         def replace_code_placeholder(match: re.Match[str]) -> str:
             var_name = match.group(1)
             if not var_name:
-                self.log("【代码请求(Python)】占位符解析失败, 不允许引用空白符, 保留原值")
+                self.log("【代码请求(Python)】占位符解析失败: \n\t不允许引用空白符, 保留原值")
                 return match.group(0)
             try:
                 var_value = self.get_variable(var_name)
             except KeyError:
-                self.log(f"【代码请求(Python)】占位符解析失败, 变量({var_name})未定义, 保留原值")
+                self.log(f"【代码请求(Python)】占位符解析失败: \n\t变量({var_name})未定义, 保留原值")
                 return match.group(0)
             except Exception as e:
-                self.log(f"【代码请求(Python)】占位符解析失败, 引用变量({var_name})失败, 保留原值, 错误描述: {e}")
+                self.log(f"【代码请求(Python)】占位符解析失败: \n\t引用变量({var_name})失败, 保留原值\n\t错误描述: {e}")
                 return match.group(0)
 
             # 在代码逻辑中，返回值的Python表示
@@ -847,9 +836,9 @@ class StepExecutionContext:
             return resolved_code
         except Exception as e:
             error_message: str = (
-                f"【代码请求(Python)】占位符解析异常, 保留原值, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}"
+                f"【代码请求(Python)】占位符解析异常, 保留原值: \n\t"
+                f"错误类型: {type(e).__name__}\n\t"
+                f"错误描述: {e}\n\t"
             )
             self.log(error_message)
             return code
@@ -1004,17 +993,17 @@ class BaseStepExecutor:
                 except Exception as e:
                     # 保存步骤明细失败不应该影响执行流程
                     error_message: str = (
-                        f"保存步骤明细执行失败: \n"
-                        f"用例ID: {self.case_id}, \n"
-                        f"步骤ID: {self.step_id}, \n"
-                        f"步骤序号: {self.step_no}, \n"
-                        f"步骤标识: {self.step_code}, \n"
-                        f"步骤名称: {self.step_name}, \n"
-                        f"步骤类型: {self.step_type}, \n"
-                        f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, \n"
-                        f"错误描述: {e}, \n"
-                        f"错误类型: {type(e).__name__}, \n"
-                        f"错误回溯: {traceback.format_exc()}\n"
+                        f"保存步骤明细执行失败: \n\t"
+                        f"用例ID: {self.case_id}\n\t"
+                        f"步骤ID: {self.step_id}\n\t"
+                        f"步骤序号: {self.step_no}\n\t"
+                        f"步骤标识: {self.step_code}\n\t"
+                        f"步骤名称: {self.step_name}\n\t"
+                        f"步骤类型: {self.step_type}\n\t"
+                        f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
+                        f"错误描述: {e}\n\t"
+                        f"错误类型: {type(e).__name__}\n\t"
+                        f"错误回溯: {traceback.format_exc()}"
                     )
                     print(error_message)
                     self.context.log(error_message, step_code=self.step_code)
@@ -1029,110 +1018,102 @@ class BaseStepExecutor:
         :param num_cycles: 循环第几轮（非循环步骤可为 None）。
         :return:
         """
-        try:
-            step_end_time: datetime = datetime.now()
-            step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
-            step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
-            step_logs: List[str] = self.context.logs.get(self.step_code, [])
-            step_exec_logger: Optional[List[str]] = list(step_logs) if step_logs else None
-            response_body = None
-            response_text = None
-            response_header = None
-            response_cookie = None
-            response_elapsed = None
-            if result.response:
-                response_text = result.response.get("response_text")
-                response_body = result.response.get("response_body")
-                response_header = result.response.get("response_header")
-                response_cookie = result.response.get("response_cookie")
-                response_elapsed = result.response.get("response_elapsed")
-                if response_text and not response_body:
-                    try:
-                        response_body = json.loads(response_text)
-                    except (ValueError, TypeError):
-                        response_body = None
-                if response_cookie:
-                    response_cookie = json.dumps(response_cookie, ensure_ascii=False)
+        step_end_time: datetime = datetime.now()
+        step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
+        step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
+        step_logs: List[str] = self.context.logs.get(self.step_code, [])
+        step_exec_logger: Optional[List[str]] = list(step_logs) if step_logs else None
+        response_body = None
+        response_text = None
+        response_header = None
+        response_cookie = None
+        response_elapsed = None
+        if result.response:
+            response_text = result.response.get("response_text")
+            response_body = result.response.get("response_body")
+            response_header = result.response.get("response_header")
+            response_cookie = result.response.get("response_cookie")
+            response_elapsed = result.response.get("response_elapsed")
+            if response_text and not response_body:
+                try:
+                    response_body = json.loads(response_text)
+                except (ValueError, TypeError):
+                    response_body = None
+            if response_cookie:
+                response_cookie = json.dumps(response_cookie, ensure_ascii=False)
 
-            extract_variables: List[Dict[str, Any]] = result.extract_variables
-            defined_variables: List[StepVariablesBase] = self.context.defined_variables
-            session_variables: List[StepVariablesBase] = self.context.session_variables
-            dataset_name: Optional[str] = result.dataset_name
-            dataset_snapshot: Optional[Dict[str, Any]] = result.dataset_snapshot
-            have_data_driven: bool = dataset_snapshot is not None
-            actual_request: Dict[str, Any] = result.request or {}
-            # 当step_id、step_code为None时说明是临时步骤(没有保存入库)，所以替换为step_timestamp、temporary-step-debugging标识
-            step_timestamp: int = int(str(datetime.now().timestamp()).replace(".", ""))
-            detail_create = AutoTestApiDetailCreate(
-                case_id=self.context.case_id,
-                case_code=self.context.case_code,
-                report_code=self.context.report_code,
-                step_id=self.step_id or step_timestamp,
-                step_no=self.step_no,
-                step_name=self.step_name,
-                step_code=self.step_code or "temporary-step-debugging",
-                step_type=self.step_type,
-                step_state=result.success,
-                step_st_time=step_st_time_str,
-                step_ed_time=step_ed_time_str,
-                step_elapsed=step_elapsed,
-                step_exec_logger=step_exec_logger,
-                step_exec_except=result.error,
-                num_cycles=num_cycles,
-                # 请求相关
-                request_url=actual_request.get("request_url") or None,
-                request_port=actual_request.get("request_port") or None,
-                request_method=actual_request.get("request_method") or None,
-                request_args_type=actual_request.get("request_args_type") or None,
-                request_project_id=actual_request.get("request_project_id") or None,
-                request_config_name=self.step.request_config_name,
-                request_env_name=actual_request.get("request_env_name") or None,
-                request_header=actual_request.get("request_header") or None,
-                request_params=actual_request.get("request_params") or None,
-                request_form_data=actual_request.get("request_form_data") or None,
-                request_form_urlencoded=actual_request.get("request_form_urlencoded") or None,
-                request_form_file=actual_request.get("request_form_file") or None,
-                request_body=actual_request.get("request_body") or None,
-                request_text=actual_request.get("request_text") or None,
-                # 逻辑相关
-                code=actual_request.get("code") or None,
-                wait=self.step.wait or None,
-                loop_mode=self.step.loop_mode or None,
-                loop_maximums=self.step.loop_maximums or None,
-                loop_interval=self.step.loop_interval or None,
-                loop_iterable=self.step.loop_iterable or None,
-                loop_on_error=self.step.loop_on_error or None,
-                loop_timeout=self.step.loop_timeout or None,
-                conditions=actual_request.get("conditions") or None,
-                database_operates=actual_request.get("database_operates") or None,
-                database_searched=actual_request.get("database_searched") or None,
-                # 数据源相关
-                dataset_name=dataset_name if have_data_driven else None,
-                dataset_snapshot=dataset_snapshot if have_data_driven else None,
-                # 响应相关
-                response_cookie=response_cookie or None,
-                response_header=response_header or None,
-                response_body=response_body or None,
-                response_text=response_text or None,
-                response_elapsed=response_elapsed,
-                # 变量相关
-                session_variables=session_variables,
-                defined_variables=defined_variables,
-                extract_variables=extract_variables,
-                assert_validators=result.assert_validators or None
-            )
-            if self.context.pending_details is not None:
-                self.context.pending_details.append(detail_create)
-                return
-            from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-            await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_create)
-        except Exception as e:
-            error_message: str = (
-                f"保存步骤明细(case_id={self.case_id}, step_id={self.step_id}, "
-                f"step_no={self.step_no}, step_code={self.step_code})失败, 错误描述: {e}"
-            )
-            print(error_message)
-            raise StepExecutionError(error_message)
+        extract_variables: List[Dict[str, Any]] = result.extract_variables
+        defined_variables: List[StepVariablesBase] = self.context.defined_variables
+        session_variables: List[StepVariablesBase] = self.context.session_variables
+        dataset_name: Optional[str] = result.dataset_name
+        dataset_snapshot: Optional[Dict[str, Any]] = result.dataset_snapshot
+        have_data_driven: bool = dataset_snapshot is not None
+        actual_request: Dict[str, Any] = result.request or {}
+        # 当step_id、step_code为None时说明是临时步骤(没有保存入库)，所以替换为step_timestamp、temporary-step-debugging标识
+        step_timestamp: int = int(str(datetime.now().timestamp()).replace(".", ""))
+        detail_create = AutoTestApiDetailCreate(
+            case_id=self.context.case_id,
+            case_code=self.context.case_code,
+            report_code=self.context.report_code,
+            step_id=self.step_id or step_timestamp,
+            step_no=self.step_no,
+            step_name=self.step_name,
+            step_code=self.step_code or "temporary-step-debugging",
+            step_type=self.step_type,
+            step_state=result.success,
+            step_st_time=step_st_time_str,
+            step_ed_time=step_ed_time_str,
+            step_elapsed=step_elapsed,
+            step_exec_logger=step_exec_logger,
+            step_exec_except=result.error,
+            num_cycles=num_cycles,
+            # 请求相关
+            request_url=actual_request.get("request_url") or None,
+            request_port=actual_request.get("request_port") or None,
+            request_method=actual_request.get("request_method") or None,
+            request_args_type=actual_request.get("request_args_type") or None,
+            request_project_id=actual_request.get("request_project_id") or None,
+            request_config_name=self.step.request_config_name,
+            request_env_name=actual_request.get("request_env_name") or None,
+            request_header=actual_request.get("request_header") or None,
+            request_params=actual_request.get("request_params") or None,
+            request_form_data=actual_request.get("request_form_data") or None,
+            request_form_urlencoded=actual_request.get("request_form_urlencoded") or None,
+            request_form_file=actual_request.get("request_form_file") or None,
+            request_body=actual_request.get("request_body") or None,
+            request_text=actual_request.get("request_text") or None,
+            # 逻辑相关
+            code=actual_request.get("code") or None,
+            wait=self.step.wait or None,
+            loop_mode=self.step.loop_mode or None,
+            loop_maximums=self.step.loop_maximums or None,
+            loop_interval=self.step.loop_interval or None,
+            loop_iterable=self.step.loop_iterable or None,
+            loop_on_error=self.step.loop_on_error or None,
+            loop_timeout=self.step.loop_timeout or None,
+            conditions=actual_request.get("conditions") or None,
+            database_operates=actual_request.get("database_operates") or None,
+            database_searched=actual_request.get("database_searched") or None,
+            # 数据源相关
+            dataset_name=dataset_name if have_data_driven else None,
+            dataset_snapshot=dataset_snapshot if have_data_driven else None,
+            # 响应相关
+            response_cookie=response_cookie or None,
+            response_header=response_header or None,
+            response_body=response_body or None,
+            response_text=response_text or None,
+            response_elapsed=response_elapsed,
+            # 变量相关
+            session_variables=session_variables,
+            defined_variables=defined_variables,
+            extract_variables=extract_variables,
+            assert_validators=result.assert_validators or None
+        )
+        if self.context.pending_details is not None:
+            self.context.pending_details.append(detail_create)
+            return
+        from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
+        await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_create)
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -1184,23 +1165,29 @@ class LoopStepExecutor(BaseStepExecutor):
             loop_mode_str = self.step.loop_mode
             if not loop_mode_str:
                 raise StepExecutionError(
-                    "【循环结构】请明确指定循环模式类型(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)")
-            # 获取错误处理策略，必须明确指定
-            on_error_str = self.step.loop_on_error
-            if not on_error_str:
-                raise StepExecutionError(
-                    "【循环结构】请明确指定错误处理策略(仅允许选择: 继续下一次循环, 中断循环, 停止整个用例执行)")
+                    "【循环结构】请明确指定循环模式类型: \n\t"
+                    "仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环"
+                )
             try:
                 loop_mode = AutoTestLoopMode(loop_mode_str)
             except (ValueError, TypeError) as e:
                 raise StepExecutionError(
-                    f"【循环结构】循环模式{loop_mode_str}无效(仅允许选择: 次数循环、列表循环、字典循环、条件循环)"
+                    f"【循环结构】循环模式{loop_mode_str}无效: \n\t"
+                    f"仅允许选择: 次数循环、列表循环、字典循环、条件循环"
                 ) from e
+            # 获取错误处理策略，必须明确指定
+            on_error_str = self.step.loop_on_error
+            if not on_error_str:
+                raise StepExecutionError(
+                    "【循环结构】请明确指定错误处理策略: \n\t"
+                    "仅允许选择: 继续下一次循环, 中断循环, 停止整个用例执行"
+                )
             try:
                 on_error = AutoTestLoopErrorStrategy(on_error_str)
             except (ValueError, TypeError) as e:
                 raise StepExecutionError(
-                    f"【循环结构】错误处理策略{on_error_str}无效(仅允许选择: 继续下一次循环、中断循环、停止整个用例执行)"
+                    f"【循环结构】错误处理策略{on_error_str}无效: \n\t"
+                    f"仅允许选择: 继续下一次循环、中断循环、停止整个用例执行"
                 ) from e
 
             # 根据循环模式执行不同的逻辑
@@ -1214,8 +1201,8 @@ class LoopStepExecutor(BaseStepExecutor):
                 await self._execute_condition_loop(result, on_error)
             else:
                 raise StepExecutionError(
-                    f"【循环结构】循环模式[{loop_mode_str}]无效"
-                    f"(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)"
+                    f"【循环结构】循环模式[{loop_mode_str}]无效: \n\t"
+                    f"仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环"
                 )
         except StepExecutionError:
             raise
@@ -1259,16 +1246,21 @@ class LoopStepExecutor(BaseStepExecutor):
                     if not child.success:
                         result.success = False
                         if on_error == AutoTestLoopErrorStrategy.STOP:
-                            raise StepExecutionError(f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行), {child.error}")
+                            raise StepExecutionError(
+                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
+                                f"错误描述: {child.error!r}"
+                            )
                         elif on_error == AutoTestLoopErrorStrategy.BREAK:
                             self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 中断循环), {child.error}",
+                                f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
+                                f"错误描述: {child.error!r}",
                                 step_code=self.step_code
                             )
                             return
                         elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
                             self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环), {child.error}",
+                                f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
+                                f"错误描述: {child.error!r}",
                                 step_code=self.step_code
                             )
                             pass
@@ -1280,7 +1272,7 @@ class LoopStepExecutor(BaseStepExecutor):
                 elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
                     pass
             except Exception as e:
-                error_message = f"【循环结构】次数循环: 第{iteration}次执行失败, 错误描述: {e}"
+                error_message = f"【循环结构】次数循环: 第{iteration}次执行失败, \n\t错误描述: {e}"
                 self.context.log(error_message, step_code=self.step_code)
                 result.success = False
                 if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1295,8 +1287,8 @@ class LoopStepExecutor(BaseStepExecutor):
             # 安全检查
             if iteration >= guard_limit:
                 raise StepExecutionError(
-                    f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 次, "
-                    f"疑似无限循环, 为保护系统安全已自动终止循环"
+                    f"【循环结构】循环次数超过最大限制{guard_limit}次: \n\t"
+                    f"已执行 {iteration} 次, 疑似无限循环, 为保护系统安全已自动终止循环"
                 )
 
         self.context.log(f"【循环结构】次数循环结束: 共执行{loop_maximums}次", step_code=self.step_code)
@@ -1311,7 +1303,7 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
-            raise StepExecutionError("【循环结构】列表循环模式不允许loop_iterable参数为空")
+            raise StepExecutionError("【循环结构】列表循环模式下参数[loop_iterable]不允许为空")
 
         index_var_name = "loop_index"
         value_var_name = "loop_value"
@@ -1321,14 +1313,10 @@ class LoopStepExecutor(BaseStepExecutor):
         try:
             iterable_obj = self.parse_iterable_source(loop_iterable)
             # 验证是否为可迭代对象（排除字符串和字节）
-            if isinstance(iterable_obj, (str, bytes)):
+            if isinstance(iterable_obj, (str, bytes)) or not hasattr(iterable_obj, "__iter__"):
                 raise StepExecutionError(
-                    f"【循环结构】列表循环模式: loop_iterable 必须是可迭代对象(列表, 元组等), "
-                    f"当前类型: {type(iterable_obj).__name__}"
-                )
-            if not hasattr(iterable_obj, "__iter__"):
-                raise StepExecutionError(
-                    f"【循环结构】列表循环模式: loop_iterable 必须是可迭代对象(列表, 元组等), "
+                    f"【循环结构】参数异常: \n\t"
+                    f"预期类型: List[...] | Tuple[...] 等可迭代对象\n\t"
                     f"当前类型: {type(iterable_obj).__name__}"
                 )
             # 转换为列表以便索引
@@ -1338,9 +1326,9 @@ class LoopStepExecutor(BaseStepExecutor):
                 self.context.log("【循环结构】列表循环: 可迭代对象为空, 跳过循环", step_code=self.step_code)
                 return
             self.context.log(
-                f"【循环结构】列表循环开始: "
-                f"可迭代对象长度: {total_items}, "
-                f"索引变量: {index_var_name}, "
+                f"【循环结构】列表循环开始: \n\t"
+                f"迭代长度: {total_items}\n\t"
+                f"索引变量: {index_var_name}\n\t"
                 f"数据变量: {value_var_name}",
                 step_code=self.step_code
             )
@@ -1349,7 +1337,9 @@ class LoopStepExecutor(BaseStepExecutor):
                 if self.step_code:
                     self.context.step_cycle_index[self.step_code] = idx
                 self.context.log(
-                    f"【循环结构】列表循环: 第{idx}/{total_items}次执行, 数据: {item}",
+                    f"【循环结构】列表循环: \n\t"
+                    f"第{idx}/{total_items}次执行\n\t"
+                    f"数据: {item!r}",
                     step_code=self.step_code
                 )
                 self.context.update_variables(
@@ -1371,17 +1361,22 @@ class LoopStepExecutor(BaseStepExecutor):
                         if not child.success:
                             result.success = False
                             if on_error == AutoTestLoopErrorStrategy.STOP:
-                                raise StepExecutionError(f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)")
+                                raise StepExecutionError(
+                                    f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
+                                    f"错误描述: {child.error!r}"
+                                )
                             elif on_error == AutoTestLoopErrorStrategy.BREAK:
                                 self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 中断循环), {child.error}",
+                                    f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
+                                    f"错误描述: {child.error!r}",
                                     step_code=self.step_code
                                 )
                                 return
                             elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
                                 # CONTINUE 模式继续下一次循环
                                 self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环), {child.error}",
+                                    f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
+                                    f"错误描述: {child.error!r}",
                                     step_code=self.step_code
                                 )
                                 pass
@@ -1394,7 +1389,7 @@ class LoopStepExecutor(BaseStepExecutor):
                         # CONTINUE 模式继续下一次循环
                         pass
                 except Exception as e:
-                    error_message = f"【循环结构】列表循环: 第{idx}次执行失败, 错误描述: {e}"
+                    error_message = f"【循环结构】列表循环: \n\t第{idx}次执行失败: {e}"
                     self.context.log(error_message, step_code=self.step_code)
                     result.success = False
                     if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1423,7 +1418,7 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
-            raise StepExecutionError("【循环结构】字典循环模式不允许loop_iterable参数为空")
+            raise StepExecutionError("【循环结构】字典循环模式下参数[loop_iterable]不允许为空")
 
         index_var_name = "loop_index"
         key_var_name = "loop_key"
@@ -1437,8 +1432,9 @@ class LoopStepExecutor(BaseStepExecutor):
             # 验证是否为字典
             if not isinstance(dict_obj, dict):
                 raise StepExecutionError(
-                    f"【循环结构】字典循环模式: loop_iterable 必须是字典类型, "
-                    f"当前类型: {type(dict_obj).__name__}"
+                    f"【循环结构】字典循环模式: \n\t"
+                    f"预期类型: Dict[str, Any]\n\t"
+                    f"实际类型: {type(dict_obj).__name__}"
                 )
             total_items = len(dict_obj)
             if total_items == 0:
@@ -1446,10 +1442,10 @@ class LoopStepExecutor(BaseStepExecutor):
                 return
 
             self.context.log(
-                f"【循环结构】字典循环开始: "
-                f"字典键数量: {total_items}, "
-                f"索引变量: {index_var_name}, "
-                f"键变量: {key_var_name}, "
+                f"【循环结构】字典循环开始: \n\t"
+                f"字典键数量: {total_items}\n\t"
+                f"索引变量: {index_var_name}\n\t"
+                f"键变量: {key_var_name}\n\t"
                 f"值变量: {value_var_name}",
                 step_code=self.step_code
             )
@@ -1458,7 +1454,10 @@ class LoopStepExecutor(BaseStepExecutor):
                 if self.step_code:
                     self.context.step_cycle_index[self.step_code] = idx
                 self.context.log(
-                    f"【循环结构】字典循环: 第{idx}/{total_items}次执行, 键={key}, 值={value}",
+                    f"【循环结构】字典循环: \n\t"
+                    f"第{idx}/{total_items}次执行\n\t"
+                    f"键={key}\n\t"
+                    f"值={value}",
                     step_code=self.step_code
                 )
                 self.context.update_variables(
@@ -1482,17 +1481,22 @@ class LoopStepExecutor(BaseStepExecutor):
                         if not child.success:
                             result.success = False
                             if on_error == AutoTestLoopErrorStrategy.STOP:
-                                raise StepExecutionError(f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)")
+                                raise StepExecutionError(
+                                    f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
+                                    f"错误描述: {child.error!r}"
+                                )
                             elif on_error == AutoTestLoopErrorStrategy.BREAK:
                                 self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 中断循环), {child.error}",
+                                    f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
+                                    f"错误描述: {child.error!r}",
                                     step_code=self.step_code
                                 )
                                 return
                             elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
                                 # CONTINUE 模式继续下一次循环
                                 self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环), {child.error}",
+                                    f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
+                                    f"错误描述: {child.error!r}",
                                     step_code=self.step_code
                                 )
                                 pass
@@ -1505,7 +1509,7 @@ class LoopStepExecutor(BaseStepExecutor):
                         # CONTINUE 模式继续下一次循环
                         pass
                 except Exception as e:
-                    error_message = f"【循环结构】字典循环: 第{idx}次执行失败, 错误描述: {e}"
+                    error_message = f"【循环结构】字典循环: \n\t第{idx}次执行失败: {e}"
                     self.context.log(error_message, step_code=self.step_code)
                     result.success = False
                     if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1540,7 +1544,7 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         condition = self.step.conditions
         if not condition:
-            raise StepExecutionError("【循环结构】条件循环模式不允许conditions参数为空")
+            raise StepExecutionError("【循环结构】条件循环模式下参数[conditions]不允许为空")
 
         loop_timeout = self.step.loop_timeout
         loop_interval = self.step.loop_interval
@@ -1551,7 +1555,8 @@ class LoopStepExecutor(BaseStepExecutor):
         should_continue = True
         start_time = time.time()
         self.context.log(
-            f"【循环结构】条件循环开始: 循环超时时间配置 {loop_timeout} 秒",
+            f"【循环结构】条件循环开始: \n\t"
+            f"循环超时时间配置: {loop_timeout}s",
             step_code=self.step_code
         )
         while should_continue:
@@ -1559,8 +1564,10 @@ class LoopStepExecutor(BaseStepExecutor):
                 elapsed = time.time() - start_time
                 if elapsed >= loop_timeout:
                     self.context.log(
-                        f"【循环结构】条件循环超时: "
-                        f"已完成子步骤 {iteration} 轮, 耗时 {elapsed:.2f} 秒, 超过限制 {loop_timeout} 秒",
+                        f"【循环结构】条件循环超时: \n\t"
+                        f"已累计执行子步骤: {iteration}轮\n\t"
+                        f"当前耗时: {elapsed:.2f}s\n\t"
+                        f"最大时间: {loop_timeout}s",
                         step_code=self.step_code
                     )
                     break
@@ -1569,8 +1576,8 @@ class LoopStepExecutor(BaseStepExecutor):
             try:
                 if not self.evaluate_condition(condition):
                     self.context.log(
-                        f"【循环结构】条件循环: 条件不满足, 结束循环"
-                        f"(本轮不执行子步骤; 已累计执行子步骤 {iteration} 轮)",
+                        f"【循环结构】条件不满足, 结束循环: \n\t"
+                        f"本轮不执行子步骤, 已累计执行子步骤: {iteration}轮",
                         step_code=self.step_code,
                     )
                     break
@@ -1604,16 +1611,21 @@ class LoopStepExecutor(BaseStepExecutor):
                     if not child.success:
                         result.success = False
                         if on_error == AutoTestLoopErrorStrategy.STOP:
-                            raise StepExecutionError(f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)")
+                            raise StepExecutionError(
+                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
+                                f"错误描述: {child.error!r}"
+                            )
                         elif on_error == AutoTestLoopErrorStrategy.BREAK:
                             self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 中断循环), {child.error}",
+                                f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
+                                f"错误描述: {child.error!r}",
                                 step_code=self.step_code
                             )
                             return
                         elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
                             self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环), {child.error}",
+                                f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
+                                f"错误描述: {child.error!r}",
                                 step_code=self.step_code
                             )
                             pass
@@ -1626,7 +1638,7 @@ class LoopStepExecutor(BaseStepExecutor):
                 elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
                     pass
             except Exception as e:
-                error_message = f"【循环结构】条件循环: 第{iteration}轮执行子步骤失败, 错误描述: {e}"
+                error_message = f"【循环结构】条件循环: 第{iteration}轮执行子步骤失败: {e}"
                 self.context.log(error_message, step_code=self.step_code)
                 result.success = False
                 if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1640,8 +1652,8 @@ class LoopStepExecutor(BaseStepExecutor):
 
             if iteration >= guard_limit:
                 raise StepExecutionError(
-                    f"【循环结构】循环次数超过最大限制{guard_limit}次: 已执行 {iteration} 轮, "
-                    f"疑似无限循环, 为保护系统安全已自动终止循环"
+                    f"【循环结构】循环次数超过最大限制{guard_limit}次: \n\t"
+                    f"已累计执行子步骤{iteration}轮, 疑似无限循环, 为保护系统安全已自动终止循环"
                 )
 
             if loop_interval and loop_interval > 0:
@@ -1661,13 +1673,12 @@ class LoopStepExecutor(BaseStepExecutor):
         condition_value = condition.condition_value
         if condition_expr is None or condition_compare is None:
             raise StepExecutionError(
-                f"【循环结构】条件缺少必要字段: "
-                f"[condition_expr={condition_expr!r}, condition_compare={condition_compare!r}]"
+                f"【循环结构】条件缺少必要字段: \n\t"
+                f"条件表达式: {condition_expr!r}\n\t"
+                f"条件操作符: {condition_compare!r}"
             )
-        expr = str(condition_expr)
-
         try:
-            resolved = self.context.resolve_placeholders(expr)
+            resolved = self.context.resolve_placeholders(condition_expr)
             if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
                 variable_name = resolved[2:-1]
                 try:
@@ -1733,7 +1744,8 @@ class ConditionStepExecutor(BaseStepExecutor):
             if condition_expr is None or condition_compare is None:
                 raise StepExecutionError(
                     f"【条件分支】条件缺少必要字段: \n\t"
-                    f"[condition_expr={condition_expr!r}, condition_compare={condition_compare!r}]"
+                    f"条件表达式: {condition_expr!r}\n\t"
+                    f"条件操作符: {condition_compare!r}"
                 )
             try:
                 resolved_value_expr: Any = self.context.resolve_placeholders(condition_expr)
@@ -1762,7 +1774,7 @@ class ConditionStepExecutor(BaseStepExecutor):
             try:
                 if not AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value):
                     result.success = True
-                    result.message = f"【条件分支】条件未满足: {condition_desc}"
+                    result.message = f"【条件分支】条件表达式不成立: {condition_expr!r}"
                     self.context.log(result.message, step_code=self.step_code)
                     return
             except ValueError as e:
@@ -1837,7 +1849,9 @@ class PythonStepExecutor(BaseStepExecutor):
                 for valid in assert_validators:
                     if not isinstance(valid, StepAssertValidatorItem):
                         raise StepExecutionError(
-                            f"【断言验证】子项必须为 StepAssertValidatorItem，当前: {type(valid).__name__}"
+                            f"【断言验证】子项参数异常: \n\t"
+                            f"预期类型: StepAssertValidatorItem\n\t"
+                            f"实际类型: {type(valid).__name__}"
                         )
                     if valid.source is None:
                         continue
@@ -1892,20 +1906,7 @@ class WaitStepExecutor(BaseStepExecutor):
             if wait_seconds is None:
                 raise StepExecutionError("【等待控制】缺少必要配置: wait")
 
-            try:
-                wait_float = float(wait_seconds)
-            except (ValueError, TypeError) as e:
-                raise StepExecutionError(
-                    f"【等待控制】参数[wait]必须是[float]类型, 且不允许小于0, "
-                    f"但得到[{type(wait_seconds)}]类型: {wait_seconds}, 错误: {e}"
-                ) from e
-
-            try:
-                await self.context.sleep(wait_float)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                raise StepExecutionError(f"【等待控制】步骤执行失败: {e}") from e
+            await self.context.sleep(wait_seconds)
         except StepExecutionError:
             raise
         except Exception as e:
@@ -1955,9 +1956,9 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     }
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(f"【引用公共脚本】用例(id={quote_case_id})不存在, 错误描述: {e.message}") from e
+                raise StepExecutionError(f"【引用公共脚本】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
             except Exception as e:
-                raise StepExecutionError(f"【引用公共脚本】用例(id={quote_case_id})查询异常, 错误描述: {e}") from e
+                raise StepExecutionError(f"【引用公共脚本】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
