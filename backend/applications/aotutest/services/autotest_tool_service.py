@@ -30,12 +30,12 @@ from backend.enums.autotest_enum import AutoTestAssertionOperation
 
 
 class AutoTestToolService:
-    """服务层：对外稳定 API；内部实现见 `AutoTestToolServiceImpl`"""
+    """服务层：对外稳定 API；内部实现见AutoTestToolServiceImpl"""
 
     @classmethod
     def list_to_dict(cls, variable_list: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将 ``StepVariablesBase`` 列表转为 name -> value 字典, 供 **Python 代码命名空间** 使用
+        将StepVariablesBase列表转为 name -> value 字典, 供 **Python 代码命名空间** 使用
 
         :param variable_list: 变量模型列表
         :return: 键为变量名、值为变量值的字典
@@ -46,8 +46,8 @@ class AutoTestToolService:
     @classmethod
     def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
         """
-        将 HTTP 步骤中的 key/value 列表转为字典。列表项优先为 ``StepVariablesBase``；
-        历史 JSON 仍为 ``dict`` 时在边界 ``model_validate`` 后应已为模型，此处仅作有限兼容。
+        将 HTTP 步骤中的 key/value 列表转为字典。列表项优先为StepVariablesBase；
+        历史 JSON 仍为dict时在边界model_validate后应已为模型，此处仅作有限兼容。
         """
         if not data or not isinstance(data, list):
             return {}
@@ -63,7 +63,7 @@ class AutoTestToolService:
     @staticmethod
     def get_value_from_list(variables: Sequence[StepVariablesBase], name: str) -> Any:
         """
-        从 ``StepVariablesBase`` 列表中取 key 为 name 的项的 value
+        从StepVariablesBase列表中取 key 为 name 的项的 value
         """
         if variables is None:
             return None
@@ -191,7 +191,7 @@ class AutoTestToolService:
         """
         将数据驱动场景的 assert_head / assert_body 追加到 validator_results（原地修改）。
         assert_body 在 response_json 为 None 时逐条记失败，与 TCP 步骤原行为一致。
-        若提供 finished_variables，则预期值先经 ``resolve_placeholders`` 解析再比较（含义同该函数同名参数）。
+        若提供 finished_variables，则预期值先经 resolve_placeholders解析再比较（含义同该函数同名参数）。
         """
         if not isinstance(step_struct, dict):
             return
@@ -354,7 +354,7 @@ class AutoTestToolService:
 
     @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
-        """断言比较；``operation`` 须为 ``AutoTestAssertionOperation`` 枚举值字符串。"""
+        """断言比较；operation须为AutoTestAssertionOperation枚举值字符串。"""
         return AutoTestToolServiceImpl.compare_assertion(actual=actual, operation=operation, expected=expected)
 
     @classmethod
@@ -558,7 +558,7 @@ class AutoTestToolService:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        按 ``StepExtractVariableItem`` 列表从响应/变量池中提取变量。
+        按StepExtractVariableItem列表从响应/变量池中提取变量。
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
@@ -653,7 +653,7 @@ class AutoTestToolService:
             is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        按 ``StepAssertValidatorItem`` 列表从响应/变量池取实际值并与期望值比较。
+        按StepAssertValidatorItem列表从响应/变量池取实际值并与期望值比较。
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
@@ -837,7 +837,7 @@ class AutoTestToolService:
     def normalize_step(cls, step: Any) -> AutoTestStepTreeUpdateItem:
         """
         .. deprecated::
-            请使用 ``backend.applications.aotutest.schemas.autotest_step_schema.step_tree_item_from_storage``。
+            请使用backend.applications.aotutest.schemas.autotest_step_schema.step_tree_item_from_storage。
         """
         import warnings
         from backend.applications.aotutest.schemas.autotest_step_schema import step_tree_item_from_storage
@@ -906,7 +906,7 @@ class AutoTestToolServiceImpl:
     @classmethod
     def key_value_list_to_dict(cls, items: Sequence[StepVariablesBase], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
         """
-        将 ``StepVariablesBase`` 列表平铺为 Dict[str, Any], 提供变量列表或 HTTP 请求步骤参数使用
+        将StepVariablesBase列表平铺为 Dict[str, Any], 提供变量列表或 HTTP 请求步骤参数使用
         """
         if not items:
             return {}
@@ -971,7 +971,7 @@ class AutoTestToolServiceImpl:
 
         :param actual: 实际值
         :param expected: 期望值
-        :param comparator: 二元谓词 ``(左, 右) -> bool``, 例如 ``_assert_ordered_gt``
+        :param comparator: 二元谓词(左, 右) -> bool, 例如_assert_ordered_gt
         :return: 比较结果
         """
         norm_actual = cls._normalize_value(actual)
@@ -1059,10 +1059,10 @@ class AutoTestToolServiceImpl:
     @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """
-        根据操作符对实际值与期望值做断言比较；``operation`` 须为 ``AutoTestAssertionOperation`` 枚举值。
+        根据操作符对实际值与期望值做断言比较；operation须为AutoTestAssertionOperation枚举值。
 
         :param actual: 实际值
-        :param operation: 操作符(与 ``AutoTestAssertionOperation`` 一致)
+        :param operation: 操作符(与AutoTestAssertionOperation一致)
         :param expected: 期望值(部分操作符可忽略)
         :return: 断言是否通过
         :raises ValueError: 不支持的操作符或比较过程异常
@@ -1164,7 +1164,7 @@ class AutoTestToolServiceImpl:
     @classmethod
     def execute_func_string(cls, session_variables: List[StepVariablesBase]) -> None:
         """
-        对会话变量列表中 func_name(...) 形式调用 GenerateUtils；原地更新各 ``StepVariablesBase.value``。
+        对会话变量列表中 func_name(...) 形式调用 GenerateUtils；原地更新各StepVariablesBase.value
         """
         if not isinstance(session_variables, list):
             return
@@ -1740,29 +1740,17 @@ class AutoTestToolServiceImpl:
                     return value
 
             if isinstance(value, list):
-                result: List[StepVariablesBase] = []
-                for item in value:
-                    # if isinstance(item, StepVariablesBase):
-                    resolved: StepVariablesBase = item.model_copy(
-                        update={
-                            "value": cls.resolve_placeholders(
-                                value=item.value,
-                                logger_object=logger_object,
-                                is_core_engine=is_core_engine,
-                                finished_variables=finished_variables,
-                            )
-                        }
-                    )
-                    result.append(resolved)
-                # else:
-                #     result.append(
-                #         cls.resolve_placeholders(
-                #             value=item,
-                #             logger_object=logger_object,
-                #             is_core_engine=is_core_engine,
-                #             finished_variables=finished_variables,
-                #         )
-                #     )
+                result: List[StepVariablesBase] = [
+                    item.model_copy(update={
+                        "value": cls.resolve_placeholders(
+                            value=item.value,
+                            logger_object=logger_object,
+                            is_core_engine=is_core_engine,
+                            finished_variables=finished_variables,
+                        )
+                    })
+                    for item in value
+                ]
                 return result
             return value
         except Exception as e:
