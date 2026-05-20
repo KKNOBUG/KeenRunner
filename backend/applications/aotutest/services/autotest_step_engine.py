@@ -163,6 +163,14 @@ class HttpClientProtocol(Protocol):
     """
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """
+        发起 HTTP 请求（由httpx.AsyncClient实现）
+
+        :param method: HTTP 方法
+        :param url: 请求 URL
+        :param kwargs: 传给 httpx 的额外参数（headers、json 等）
+        :return: 响应对象
+        """
         ...
 
 
@@ -787,6 +795,9 @@ class StepExecutionContext:
             return code
 
         def replace_string_placeholder(match: re.Match[str]) -> str:
+            """
+            替换引号内完整占位符 '${var}' 为合法 Python 字面量。
+            """
             quote_char = match.group(1)
             var_name = match.group(2)
             if not var_name:
@@ -820,6 +831,9 @@ class StepExecutionContext:
         code = _RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
 
         def replace_string_concat_placeholder(match: re.Match[str]) -> str:
+            """
+            替换引号内拼接占位符 'prefix_${var}_suffix'，保持字符串形态。
+            """
             quote_char = match.group(1)
             prefix = match.group(2)
             var_name = match.group(3)
@@ -848,6 +862,9 @@ class StepExecutionContext:
             code = new_code
 
         def replace_code_placeholder(match: re.Match[str]) -> str:
+            """
+            替换代码逻辑中的裸占位符 ${var} 为 Python 字面量表示。
+            """
             var_name = match.group(1)
             if not var_name:
                 self.log("【代码请求(Python)】占位符解析失败: \n\t不允许引用空白符, 保留原值")
@@ -937,6 +954,9 @@ class BaseStepExecutor:
 
     @property
     def children(self) -> List[AutoTestStepTreeUpdateItem]:
+        """
+        当前步骤的子步骤列表（children + quote_steps，按 step_no 排序）。
+        """
         return sorted(
             list(self.step.children or []) + list(self.step.quote_steps or []),
             key=lambda item: (item.step_no or 0),
@@ -946,8 +966,8 @@ class BaseStepExecutor:
         """
         获取当前步骤的执行配置（HTTP请求、TCP请求、SQL请求）
         执行配置KEY组成规则：step_id优先、其次是@@step_name、如果是SQL请求则需要继续拼接操作序号
-        :param database_operates_index: 操作序号
-        :return:
+        :param database_operates_index: 数据库多操作时的操作序号（拼接配置 key 后缀）
+        :return: 执行环境配置；未配置或解析失败时返回None
         """
         step_exec_config_map: Dict[str, Any] = self.context.steps_execute_config
         if not step_exec_config_map or not isinstance(step_exec_config_map, dict):
@@ -1059,7 +1079,7 @@ class BaseStepExecutor:
         :param result: 本步骤执行结果对象
         :param step_st_time_str: 步骤开始时间字符串
         :param num_cycles: 循环第几轮（非循环步骤可为 None）
-        :return:
+        :return: None
         """
         step_end_time: datetime = datetime.now()
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -1161,14 +1181,15 @@ class BaseStepExecutor:
         """
         子类实现：执行当前步骤逻辑，成功/失败写入 result，异常由 execute() 捕获
         :param result: 用于写入本步骤执行结果的 StepExecutionResult 实例
-        :return:
+        :return: None
         """
         raise NotImplementedError
 
     async def _execute_children(self) -> List[StepExecutionResult]:
         """
-        按 step_no 顺序执行所有子步骤（children + quote_steps），返回结果列表
-        :return:
+        按step_no顺序执行所有子步骤（children + quote_steps）
+
+        :return: 子步骤执行结果列表；单个子步骤异常时生成失败结果项而非中断整列表
         """
         results: List[StepExecutionResult] = []
         for child in self.children:
@@ -1202,7 +1223,7 @@ class BaseStepExecutor:
 
 class LoopStepExecutor(BaseStepExecutor):
     """
-    循环结构执行器：按 ``loop_mode`` 分派次数/列表/字典/条件循环，维护 ``loop_index`` 等会话变量并执行子步骤
+    循环结构执行器：按 loop_mode 分派次数/列表/字典/条件循环，维护 loop_index 等会话变量并执行子步骤
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -1266,7 +1287,7 @@ class LoopStepExecutor(BaseStepExecutor):
         次数循环模式，按 loop_maximums 执行固定次数循环，可选 loop_interval 间隔；超 100 次强制终止
         :param result: 用于挂载子步骤结果的 StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
-        :return:
+        :return: None
         """
         loop_maximums = self.step.loop_maximums
         if not loop_maximums:
@@ -1346,7 +1367,7 @@ class LoopStepExecutor(BaseStepExecutor):
         会话变量固定为 loop_index（从 1 起的序号）、loop_value（当前项）
         :param result:  用于挂载子步骤结果的 StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
-        :return:
+        :return: None
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1455,7 +1476,7 @@ class LoopStepExecutor(BaseStepExecutor):
         会话变量固定为 loop_index（从 1 起的序号）、loop_key、loop_value
         :param result: 用于挂载子步骤结果的 StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
-        :return:
+        :return: None
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1574,7 +1595,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param result: 用于挂载子步骤结果的 StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
-        :return:
+        :return: None
         """
         condition = self.step.conditions
         if not condition:
@@ -1700,7 +1721,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
     def evaluate_condition(self, condition: ConditionsBase) -> bool:
         """
-        评估条件是否成立；``condition`` 为 ``ConditionsBase`` 模型实例。
+        评估条件是否成立；condition 为 ConditionsBase 模型实例。
         """
         condition_expr = condition.condition_expr
         condition_compare = condition.condition_compare
@@ -1732,12 +1753,14 @@ class LoopStepExecutor(BaseStepExecutor):
 
     def parse_iterable_source(self, source: Any) -> Any:
         """
-        解析循环数据源：先做占位符替换，再按变量名、JSON 字符串或原值得到可迭代对象。
-        :param source: 数据源，可为变量名（${var}）、JSON 字符串或已解析对象
+        解析循环数据源：先做占位符替换，再按变量名、JSON 字符串或原值得到可迭代对象
+
+        :param source: 数据源，可为 ${var}、JSON 字符串或已解析对象
         :return: 可迭代对象（如 list、dict）
+        :raises StepExecutionError: 解析失败时
         """
         try:
-            # 先解析占位符
+            # 占位符解析后再解析 ${var} 或 JSON 字面量
             resolved_source = self.context.resolve_placeholders(source)
             # 如果是字符串且以 ${ 开头，尝试获取变量
             if isinstance(resolved_source, str) and resolved_source.startswith("${") and resolved_source.endswith("}"):

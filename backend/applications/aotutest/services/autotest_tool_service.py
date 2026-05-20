@@ -30,12 +30,17 @@ from backend.enums.autotest_enum import AutoTestAssertionOperation
 
 
 class AutoTestToolService:
-    """服务层：对外稳定 API；内部实现见AutoTestToolServiceImpl"""
+    """
+    自动化测试工具服务
+
+    占位符解析、变量提取、断言比较、数据驱动报文替换等能力在此暴露；
+    内部实现见：AutoTestToolServiceImpl
+    """
 
     @classmethod
     def list_to_dict(cls, variable_list: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将StepVariablesBase列表转为 name -> value 字典, 供 **Python 代码命名空间** 使用
+        将StepVariablesBase列表转为 name -> value 字典, 供 Python 代码命名空间 使用
 
         :param variable_list: 变量模型列表
         :return: 键为变量名、值为变量值的字典
@@ -46,8 +51,11 @@ class AutoTestToolService:
     @classmethod
     def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
         """
-        将 HTTP 步骤中的 key/value 列表转为字典。列表项优先为StepVariablesBase；
-        历史 JSON 仍为dict时在边界model_validate后应已为模型，此处仅作有限兼容。
+        将HTTP步骤中的key/value列表（列表项优先为StepVariablesBase）转为字典
+        历史 JSON 仍为 dict 时在边界 model_validate 后应已为模型，此处仅作有限兼容
+
+        :param data: key/value 列表或空
+        :return: 请求参数字典
         """
         if not data or not isinstance(data, list):
             return {}
@@ -63,7 +71,11 @@ class AutoTestToolService:
     @staticmethod
     def get_value_from_list(variables: Sequence[StepVariablesBase], name: str) -> Any:
         """
-        从StepVariablesBase列表中取 key 为 name 的项的 value
+        从StepVariablesBase列表中取key为name的项的value
+
+        :param variables: 变量列表。
+        :param name: 变量名
+        :return: 变量值；未找到时返回None
         """
         if variables is None:
             return None
@@ -85,8 +97,8 @@ class AutoTestToolService:
         """
         数据驱动报文替换：先按 head_map 更新请求头键值，再依次将 head_map、body_map
         按 JSONPath 应用到 request_body / form_data / urlencoded（与仅 body_map 时的规则一致；
-        request_body 中也可能出现 head 侧 JSONPath）。
-        :returns: 含 request_body、headers、form_data、urlencoded 的字典（多为原地修改后的引用）。
+        request_body 中也可能出现 head 侧 JSONPath）
+        :returns: 含 request_body、headers、form_data、urlencoded 的字典（多为原地修改后的引用）
         """
         head_map = head_map or {}
         body_map = body_map or {}
@@ -114,7 +126,12 @@ class AutoTestToolService:
 
     @staticmethod
     def acquire_dataset_payload(step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-        """将数据源单行解析为步骤内使用的 head/body/assert_head/assert_body"""
+        """
+        将数据源单行场景 dict 规范为步骤内使用的结构。
+
+        :param step_data: 含head、body、assert-head、assert-body的原始场景
+        :return: 键为head、body、assert_head、assert_body的字典
+        """
         head = step_data.get("head") or {}
         body = step_data.get("body") or {}
         assert_head = step_data.get("assert-head") or {}
@@ -128,7 +145,12 @@ class AutoTestToolService:
 
     @staticmethod
     def try_serialize_request_body(raw: Any) -> Any:
-        """步骤里的 request_body：若为 JSON 字符串则尽量解析为 dict，否则保持原样。"""
+        """
+        将步骤中的 request_body 规范为对象：JSON 字符串尽量解析为 dict，否则保持原样。
+
+        :param raw: 原始 request_body
+        :return: 解析后的 dict 或原值
+        """
         if isinstance(raw, str):
             try:
                 return json.loads(raw) if raw.strip() else {}
@@ -138,7 +160,12 @@ class AutoTestToolService:
 
     @staticmethod
     def try_acquire_step_dataset(step_struct: Optional[Dict[str, Any]]) -> bool:
-        """是否存在数据驱动所需的 head/body/断言配置。"""
+        """
+        判断步骤是否具备数据驱动所需的 head/body/断言配置
+
+        :param step_struct: acquire_dataset_payload 的返回值
+        :return: 任一块非空则为 True。
+        """
         if not isinstance(step_struct, dict):
             return False
         return bool(
@@ -158,7 +185,12 @@ class AutoTestToolService:
     ) -> Optional[Dict[str, Dict[str, Any]]]:
         """
         按 dataset_name + case_id/step_code 加载数据源场景；引用公共脚本执行时不加载。
-        :returns: (step_struct, 原始场景 dict 供 dataset_snapshot)；无数据时 (None, None)。
+
+        :param case_id: 用例 ID
+        :param step_code: 步骤标识
+        :param dataset_name: 数据集名称
+        :param executing_quote_case_id: 非空表示处于引用公共脚本链，此时不加载数据源
+        :return: acquire_dataset_payload 结构；不满足加载条件或查无数据时返回 None
         """
         if not (dataset_name and step_code and not executing_quote_case_id):
             return None
@@ -191,7 +223,20 @@ class AutoTestToolService:
         """
         将数据驱动场景的 assert_head / assert_body 追加到 validator_results（原地修改）。
         assert_body 在 response_json 为 None 时逐条记失败，与 TCP 步骤原行为一致。
-        若提供 finished_variables，则预期值先经 resolve_placeholders解析再比较（含义同该函数同名参数）。
+        若提供 finished_variables，则预期值先经 resolve_placeholders 解析再比较。
+
+        :param step_struct: 数据驱动结构（含 assert_head/assert_body）
+        :param validator_results: 断言结果列表（原地追加）
+        :param response_text: 响应正文
+        :param response_json: 响应 JSON
+        :param response_headers: 响应头
+        :param response_cookies: 响应 Cookie
+        :param session_variables_lookup: 变量池字典
+        :param compare_fail_message: 比较失败时的默认错误文案
+        :param finished_variables: 占位符解析上下文
+        :param is_core_engine: 是否由步骤引擎调用
+        :param log_callback: 可选日志回调
+        :return: None
         """
         if not isinstance(step_struct, dict):
             return
@@ -329,6 +374,10 @@ class AutoTestToolService:
         格式化步骤执行失败信息, 供步骤引擎中各类执行器统一使用
 
         :param step: 步骤模型
+        :param exception: 捕获的异常
+        :param is_child_step: 是否为子步骤失败
+        :param offset_message: 附加偏移说明（如数据库第 N 条操作）
+        :return: 格式化后的多行错误字符串
         """
         message: str = "【子步骤】" if is_child_step else "【根步骤】"
         offset_message: str = f", {offset_message}" if offset_message else ""
@@ -354,7 +403,14 @@ class AutoTestToolService:
 
     @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
-        """断言比较；operation须为AutoTestAssertionOperation枚举值字符串。"""
+        """
+        按操作符比较实际值与期望值（委托 AutoTestToolServiceImpl）
+
+        :param actual: 实际值
+        :param operation: AutoTestAssertionOperation 枚举值字符串
+        :param expected: 期望值
+        :return: 断言是否成立
+        """
         return AutoTestToolServiceImpl.compare_assertion(actual=actual, operation=operation, expected=expected)
 
     @classmethod
@@ -558,7 +614,16 @@ class AutoTestToolService:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        按StepExtractVariableItem列表从响应/变量池中提取变量。
+        按 StepExtractVariableItem 列表从响应/变量池中提取变量。
+
+        :param extract_variables: 提取规则列表
+        :param response_text: 响应正文
+        :param response_json: 响应 JSON 或数据库步骤的响应列表
+        :param response_headers: 响应头
+        :param response_cookies: 响应 Cookie
+        :param session_variables_lookup: 变量池字典
+        :param log_callback: 可选日志回调
+        :return: (name -> value 字典, 逐项结果列表)
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
@@ -653,7 +718,18 @@ class AutoTestToolService:
             is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        按StepAssertValidatorItem列表从响应/变量池取实际值并与期望值比较。
+        按 StepAssertValidatorItem 列表取实际值并与期望值比较。
+
+        :param assert_validators: 断言规则列表
+        :param response_text: 响应正文
+        :param response_json: 响应 JSON
+        :param response_headers: 响应头
+        :param response_cookies: 响应 Cookie
+        :param session_variables_lookup: 变量池字典
+        :param log_callback: 可选日志回调
+        :param finished_variables: 非空时对 except_value 先做占位符解析
+        :param is_core_engine: 是否由步骤引擎调用
+        :return: 每项断言的结果 dict 列表
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
@@ -833,26 +909,18 @@ class AutoTestToolService:
 
         return True, None
 
-    @classmethod
-    def normalize_step(cls, step: Any) -> AutoTestStepTreeUpdateItem:
-        """
-        .. deprecated::
-            请使用backend.applications.aotutest.schemas.autotest_step_schema.step_tree_item_from_storage。
-        """
-        import warnings
-        from backend.applications.aotutest.schemas.autotest_step_schema import step_tree_item_from_storage
-
-        warnings.warn(
-            "AutoTestToolService.normalize_step 已废弃，请使用 step_tree_item_from_storage",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return step_tree_item_from_storage(step)
+    # @classmethod
+    # def normalize_step(cls, step: Any) -> AutoTestStepTreeUpdateItem:
+    #     from backend.applications.aotutest.schemas.autotest_step_schema import step_tree_item_from_storage
+    #     return step_tree_item_from_storage(step)
 
     @classmethod
     def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
-        递归收集步骤树中所有步骤的 session_variables, 合并为扁平列表（模型项）。
+        递归收集步骤树中所有步骤的 session_variables，合并为扁平列表。
+
+        :param steps: 根步骤或子步骤列表
+        :return: 合并后的 StepVariablesBase 列表（不去重）
         """
         variables: List[StepVariablesBase] = []
         if not steps:
@@ -865,14 +933,21 @@ class AutoTestToolService:
 
     @classmethod
     def execute_func_string(cls, session_variables: List[StepVariablesBase]) -> None:
+        """
+        对会话变量列表中 func_name(...) 形式调用 GenerateUtils，原地更新各 value
+
+        :param session_variables: 待处理的变量列表
+        :return: None
+        """
         return AutoTestToolServiceImpl.execute_func_string(session_variables)
 
     @classmethod
     def execute_func_string_single(cls, content: str) -> Any:
         """
-        单条函数字符串执行(实现见 AutoTestToolServiceImpl)
-        :param content:
-        :return:
+        单条 func_name(...) 字符串执行（实现见 AutoTestToolServiceImpl）
+
+        :param content: 函数调用字符串
+        :return: 函数返回值
         """
         return AutoTestToolServiceImpl.execute_func_string_single(content)
 
@@ -885,12 +960,13 @@ class AutoTestToolService:
             finished_variables: Optional[Any] = None,
     ) -> Any:
         """
-        递归解析 str/dict/list 中的 ${...} 占位符(实现见 AutoTestToolServiceImpl)
-        :param value:
-        :param logger_object:
-        :param is_core_engine:
-        :param finished_variables:
-        :return:
+        递归解析 str/dict/list 中的 ${...} 占位符（实现见 AutoTestToolServiceImpl）
+
+        :param value: 待解析对象
+        :param logger_object: 日志回调 (str) -> None
+        :param is_core_engine: 是否由步骤引擎调用
+        :param finished_variables: 引擎上下文或变量列表
+        :return: 解析后的值
         """
         return AutoTestToolServiceImpl.resolve_placeholders(
             value,
@@ -901,12 +977,21 @@ class AutoTestToolService:
 
 
 class AutoTestToolServiceImpl:
-    """实现层：占位符解析、断言比较、GenerateUtils 调用等内部逻辑, 仅供 AutoTestToolService 使用"""
+    """
+    自动化测试工具服务实现层
+
+    占位符解析、断言比较、JSONPath 报文改写、GenerateUtils 调用等；
+    仅供 AutoTestToolService 委托，不对外直接引用
+    """
 
     @classmethod
     def key_value_list_to_dict(cls, items: Sequence[StepVariablesBase], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
         """
-        将StepVariablesBase列表平铺为 Dict[str, Any], 提供变量列表或 HTTP 请求步骤参数使用
+        将 StepVariablesBase 列表平铺为 Dict[str, Any]
+
+        :param items: 变量项序列
+        :param skip_if_no_value: 为 True 时跳过 value 为 None 的项
+        :return: key -> value 字典
         """
         if not items:
             return {}
@@ -984,7 +1069,6 @@ class AutoTestToolServiceImpl:
 
     @classmethod
     def _assert_ordered_gt(cls, left: Any, right: Any) -> bool:
-        """供类型感知大小比较使用的二元谓词：左值大于右值"""
         return left > right
 
     @classmethod
@@ -1292,7 +1376,14 @@ class AutoTestToolServiceImpl:
 
     @staticmethod
     def by_jsonpath_modify_request_header(json_path: str) -> str:
-        """从 JSONPath 取请求头键名，如 $.Content-Type -> Content-Type。"""
+        """
+        从 JSONPath 提取 HTTP 请求头字段名。
+
+        例如 $.Content-Type -> Content-Type
+
+        :param json_path: JSONPath 字符串
+        :return: 头字段名；无效时返回空串
+        """
         if not json_path or not isinstance(json_path, str):
             return ""
         s = json_path.strip()
@@ -1374,7 +1465,7 @@ class AutoTestToolServiceImpl:
         返回 float 对象：可参与算术计算
         返回 None：应按字符串拼接处理, 不参与算术计算
         :param value: 目标值
-        :return:
+        :return: 可参与算术的 float；否则 None（按字符串拼接处理）
         """
         if value is None:
             return None
@@ -1430,9 +1521,9 @@ class AutoTestToolServiceImpl:
         将浮点数转换为可以安全嵌入算术表达式的数字字面量字符串
         - 若 f 等价整数(如: 5.0、-2.0), 返回不带小数点和后缀0的整数字符串(如: "5"、"-2")
         - 若 f 不等价整数(如: 3.14、2.5), 直接返回原浮点数字符串(如: "3.14"、"2.5")
-        目的：避免表达式中出现 100.0 这类冗余格式，提升可读性。
+        目的：避免表达式中出现 100.0 这类冗余格式，提升可读性
         :param f: 目标浮点数
-        :return:
+        :return: 可嵌入算术表达式的数字字面量字符串
         """
         if f.is_integer():
             return str(int(f))
@@ -1689,7 +1780,13 @@ class AutoTestToolServiceImpl:
                     except json.JSONDecodeError:
                         return value
 
-                    def _treatment(_value: Dict[str, Any]):
+                    def _treatment(_value: Dict[str, Any]) -> Dict[str, Any]:
+                        """
+                        对 JSON 对象各字段值中的占位符做原地替换。
+
+                        :param _value: 待处理的 dict。
+                        :return: 处理后的同一 dict 引用。
+                        """
                         for ck, cv in _value.items():
                             if "${" in cv:
                                 _value[ck] = cls._resolve_string_placeholders(
