@@ -459,8 +459,8 @@
         preset="card"
         title="脚本执行配置"
         :style="{ width: '70%' }"
-        :bordered="false"
-        :segmented="{ content: true, footer: true }"
+        :segmented="{ content: true }"
+        :close-on-esc="true"
         @after-enter="onDebugModalAfterEnter"
     >
       <div class="exec-config-toolbar-row">
@@ -548,7 +548,7 @@
                   API
                   <n-tag size="small" type="info">{{ debugApiRowsForSelected.length }}条</n-tag>
                 </div>
-                <div class="exec-config-table is-api">
+                <div>
                   <div class="exec-config-table-header">
                     <div class="col idx">#</div>
                     <div class="col env">环境</div>
@@ -591,7 +591,7 @@
 
               <div v-if="debugDbRowsForSelected.length" class="exec-config-section">
                 <div class="exec-config-section-title">
-                  DB
+                  DataBase
                   <n-tag size="small" type="warning">{{ debugDbRowsForSelected.length }}条</n-tag>
                 </div>
                 <div class="exec-config-table is-db">
@@ -646,10 +646,10 @@
 
               <div v-if="debugFileRowsForSelected.length" class="exec-config-section">
                 <div class="exec-config-section-title">
-                  FILE
+                  File Server
                   <n-tag size="small" type="success">{{ debugFileRowsForSelected.length }}条</n-tag>
                 </div>
-                <div class="exec-config-table is-file">
+                <div>
                   <div class="exec-config-table-header">
                     <div class="col idx">#</div>
                     <div class="col env">环境</div>
@@ -5096,7 +5096,6 @@ const RecursiveStepChildren = defineComponent({
   padding: 10px 12px;
   cursor: pointer;
   border: 1px solid transparent;
-  background: var(--n-color);
   transition: all 0.15s ease;
   margin-bottom: 8px;
 }
@@ -5111,14 +5110,14 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .exec-config-app-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .exec-config-app-count {
+  color: #999;
   margin-top: 4px;
   font-size: 12px;
-  color: var(--n-text-color-3);
 }
 
 .exec-config-empty {
@@ -5139,8 +5138,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .exec-config-global-env-label {
-  color: var(--n-text-color-2);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -5231,7 +5229,6 @@ const RecursiveStepChildren = defineComponent({
   background: var(--n-color-embedded);
   font-size: 12px;
   font-weight: 600;
-  color: var(--n-text-color-2);
   white-space: nowrap;
 }
 
