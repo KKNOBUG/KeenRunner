@@ -497,6 +497,7 @@
               v-model:value="debugExecDataSourceEnabled"
               size="large"
               :rail-style="debugExecDataSourceRailStyle"
+              style="font-size: 12px;"
           >
             <template #checked>
               请选择数据源
@@ -510,7 +511,7 @@
 
       <n-card size="small" title="应用与环境配置" :segmented="{ content: true }" class="exec-config-main-card">
         <template #header-extra>
-          <n-button quaternary size="small" @click="execConfigMainCardExpanded = !execConfigMainCardExpanded">
+          <n-button quaternary size="small" @click="execConfigMainCardExpanded = !execConfigMainCardExpanded" style="font-size: 12px;">
             {{ execConfigMainCardExpanded ? '折叠' : '展开' }}
           </n-button>
         </template>
@@ -531,14 +532,14 @@
                 <div class="exec-config-app-count">{{ app.totalCount }}条配置</div>
               </div>
               <div v-if="debugApps.length === 0" class="exec-config-empty">
-                暂无可配置的请求步骤（HTTP/TCP/数据库）
+                暂无可配置的请求步骤
               </div>
             </div>
           </div>
 
           <div class="exec-config-right">
             <div v-if="!debugSelectedProjectId" class="exec-config-empty">
-              请先在左侧选择一个应用
+              请选择应用
             </div>
 
             <template v-else>
@@ -4941,6 +4942,7 @@ const RecursiveStepChildren = defineComponent({
 
 .exec-config-main-card :deep(.n-card-header) {
   align-items: center;
+  font-size: 13px;
 }
 
 .exec-config-dataset-card {
@@ -5079,7 +5081,7 @@ const RecursiveStepChildren = defineComponent({
 .exec-config-left-head {
   flex-shrink: 0;
   padding: 12px 12px 8px;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -5120,9 +5122,9 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .exec-config-empty {
-  color: var(--n-text-color-3);
+  color: #999;
   padding: 16px 12px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .exec-config-right {
