@@ -356,7 +356,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     request_body = fields.JSONField(null=True, description="实际发出的请求体(JSON)")
     request_text = fields.TextField(null=True, description="实际发出的请求体(Raw)")
     # 响应相关
-    response_cookie = fields.TextField(null=True, description="响应信息(cookies)")
+    response_cookie = fields.JSONField(null=True, description="响应信息(cookies)")
     response_header = fields.JSONField(null=True, description="响应信息(headers)")
     response_body = fields.JSONField(null=True, description="响应信息(body)")
     response_text = fields.TextField(null=True, description="响应信息(text)")

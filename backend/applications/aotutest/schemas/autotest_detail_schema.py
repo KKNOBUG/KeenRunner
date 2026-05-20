@@ -20,7 +20,9 @@ NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
 class DataBaseOperates(BaseModel):
+    index: int = Field(..., ge=0, description="数据库操作序号")
     name: str = Field(..., max_length=128, description="数据库操作名称")
+    env_name: str = Field(..., max_length=128, description="数据库操作环境名称")
     expr: str = Field(..., max_length=4096, description="数据库操作SQL语句")
     project_id: int = Field(..., ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
