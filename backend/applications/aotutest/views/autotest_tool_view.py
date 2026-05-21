@@ -101,9 +101,9 @@ def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
 
         # 匹配三种可调用方法：普通函数、类方法、静态方法
         if not any((
-            inspect.isfunction(member),
-            inspect.ismethod(member),
-            inspect.isbuiltin(member)
+                inspect.isfunction(member),
+                inspect.ismethod(member),
+                inspect.isbuiltin(member)
         )):
             continue
 
@@ -141,9 +141,6 @@ def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
             continue
 
     return result
-
-
-print(_build_func_list_with_desc2(GenerateUtils))
 
 
 @autotest_tool.get("/get", summary="API自动化测试-辅助函数查询")

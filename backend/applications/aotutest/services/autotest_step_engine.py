@@ -1015,7 +1015,10 @@ class BaseStepExecutor:
         self.context.set_current_step_code(self.step_code)
         # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
         step_defined_variables: List[StepVariablesBase] = self.step.defined_variables
-        self.context.defined_variables = self.context.resolve_placeholders(step_defined_variables, step_code=self.step_code)
+        self.context.defined_variables = self.context.resolve_placeholders(
+            variables=step_defined_variables,
+            step_code=self.step_code
+        )
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -1733,7 +1736,7 @@ class LoopStepExecutor(BaseStepExecutor):
                 f"条件操作符: {condition_compare!r}"
             )
         try:
-            resolved = self.context.resolve_placeholders(condition_expr)
+            resolved = self.context.resolve_placeholders(variables=condition_expr, step_code=self.step_code)
             if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
                 variable_name = resolved[2:-1]
                 try:
@@ -1761,7 +1764,7 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         try:
             # 占位符解析后再解析 ${var} 或 JSON 字面量
-            resolved_source = self.context.resolve_placeholders(source)
+            resolved_source = self.context.resolve_placeholders(variables=source, step_code=self.step_code)
             # 如果是字符串且以 ${ 开头，尝试获取变量
             if isinstance(resolved_source, str) and resolved_source.startswith("${") and resolved_source.endswith("}"):
                 variable_name = resolved_source[2:-1]
@@ -1815,7 +1818,10 @@ class ConditionStepExecutor(BaseStepExecutor):
                     f"条件操作符: {condition_compare!r}"
                 )
             try:
-                resolved_value_expr: Any = self.context.resolve_placeholders(condition_expr)
+                resolved_value_expr: Any = self.context.resolve_placeholders(
+                    variables=condition_expr,
+                    step_code=self.step_code
+                )
             except StepExecutionError:
                 raise
             except Exception as e:
@@ -2005,7 +2011,7 @@ class UserVariablesStepExecutor(BaseStepExecutor):
             session_variables_raw: List[StepVariablesBase] = self.step.session_variables
             if not session_variables_raw:
                 return
-            session_variables_resolved: List[StepVariablesBase] = self.context.resolve_placeholders(session_variables_raw)
+            session_variables_resolved: List[StepVariablesBase] = self.context.resolve_placeholders(session_variables_raw, step_code=self.step_code)
             if session_variables_resolved:
                 self.context.update_variables(session_variables_resolved, scope="session_variables")
         except Exception as e:
@@ -2202,8 +2208,14 @@ class TcpStepExecutor(BaseStepExecutor):
                 )
                 request_body = out["request_body"]
 
-            request_body = self.context.resolve_placeholders(request_body)
-            request_text = self.context.resolve_placeholders(request_text)
+            request_body = self.context.resolve_placeholders(
+                variables=request_body,
+                step_code=self.step_code
+            )
+            request_text = self.context.resolve_placeholders(
+                variables=request_text,
+                step_code=self.step_code
+            )
 
             request_args_type_raw = self.step.request_args_type
             payload: Any = None
@@ -2452,10 +2464,22 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 operate_result_count: str = f"{operate_variable_name}_count"
                 try:
                     # 处理变量占位符
-                    operate_sql_expr: str = self.context.resolve_placeholders(operate_sql_expr)
-                    operate_config_name: str = self.context.resolve_placeholders(operate_config_name)
-                    operate_project_name: str = self.context.resolve_placeholders(operate_project_name)
-                    operate_database_name: str = self.context.resolve_placeholders(operate_database_name)
+                    operate_sql_expr: str = self.context.resolve_placeholders(
+                        variables=operate_sql_expr,
+                        step_code=self.step_code
+                    )
+                    operate_config_name: str = self.context.resolve_placeholders(
+                        variables=operate_config_name,
+                        step_code=self.step_code
+                    )
+                    operate_project_name: str = self.context.resolve_placeholders(
+                        variables=operate_project_name,
+                        step_code=self.step_code
+                    )
+                    operate_database_name: str = self.context.resolve_placeholders(
+                        variables=operate_database_name,
+                        step_code=self.step_code
+                    )
                     if not operate_project_id and operate_project_name.strip():
                         project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(operate_project_name.strip(), on_error=False)
                         if not project_instance:
@@ -2747,12 +2771,30 @@ class HttpStepExecutor(BaseStepExecutor):
                 request_body = out["request_body"]
 
             # 3）再对报文做变量占位符解析
-            request_header = self.context.resolve_placeholders(request_header)
-            request_params = self.context.resolve_placeholders(request_params)
-            request_form_data = self.context.resolve_placeholders(request_form_data)
-            request_form_urlencoded = self.context.resolve_placeholders(request_form_urlencoded)
-            request_body = self.context.resolve_placeholders(request_body)
-            request_text = self.context.resolve_placeholders(request_text)
+            request_header = self.context.resolve_placeholders(
+                variables=request_header,
+                step_code=self.step_code
+            )
+            request_params = self.context.resolve_placeholders(
+                variables=request_params,
+                step_code=self.step_code
+            )
+            request_form_data = self.context.resolve_placeholders(
+                variables=request_form_data,
+                step_code=self.step_code
+            )
+            request_form_urlencoded = self.context.resolve_placeholders(
+                variables=request_form_urlencoded,
+                step_code=self.step_code
+            )
+            request_body = self.context.resolve_placeholders(
+                variables=request_body,
+                step_code=self.step_code
+            )
+            request_text = self.context.resolve_placeholders(
+                variables=request_text,
+                step_code=self.step_code
+            )
 
             json_payload: Optional[Any] = None
             file_payload: Optional[Any] = None
