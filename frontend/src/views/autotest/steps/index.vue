@@ -229,112 +229,10 @@
                       </n-popconfirm>
                     </span>
                   </span>
-                    <div v-if="stepDefinitions[step.type]?.allowChildren">
-                      <div
-                          v-show="isStepExpanded(step.id)"
-                          @dragover.prevent="handleDragOverInChildrenArea($event, step.id)"
-                          @dragleave="handleDragLeaveInChildrenArea($event, step.id)"
-                      >
-                        <!-- 无子女时显示空的拖拽区域 -->
-                        <div
-                            v-if="!step.children || step.children.length === 0"
-                            class="step-drop-zone"
-                            :class="{ 'is-drag-over': dragState.dragOverId === step.id }"
-                            @drop="handleDrop($event, step.id, step.id, 0)"
-                        >
-                          <div class="step-drop-zone-hint">拖拽步骤到这里</div>
-                        </div>
-                        <template v-for="(child, childIndex) in (step.children || [])" :key="child.id">
-                          <!-- 插入位置指示器：在子步骤之前 -->
-                          <div
-                              v-if="dragState.draggingId && dragState.dragOverId === step.id && dragState.insertTargetId === child.id && dragState.insertPosition === 'before'"
-                              class="step-insert-indicator"
-                          ></div>
-                          <div
-                              class="step-item"
-                              :class="{ 'is-selected': selectedKeys.includes(child.id) }"
-                              :draggable="true"
-                              @dragstart.stop="handleDragStart($event, child.id, step.id, childIndex)"
-                              @dragover.prevent.stop="handleDragOverOnChild($event, child.id, step.id, childIndex)"
-                              @dragleave.stop="handleDragLeaveOnChild($event, child.id)"
-                              @drop.stop="handleDrop($event, child.id, step.id, childIndex)"
-                              @click.stop="handleSelect([child.id])"
-                          >
-                            <div class="step-item-child">
-                            <span class="step-name" :title="child.name">
-                              <TheIcon
-                                  :icon="getStepIcon(child.type)"
-                                  :size="18"
-                                  class="step-icon"
-                                  :class="getStepIconClass(child.type)"
-                              />
-                              <!-- 子级步骤名称 -->
-                              <span class="step-name-text">{{ getStepDisplayName(child.name, child.id) }}</span>
-                              <span class="step-actions">
-                                <span class="step-number">#{{ getStepNumber(child.id) }}</span>
-                                <n-button
-                                    v-if="stepDefinitions[child.type]?.allowChildren"
-                                    text
-                                    size="tiny"
-                                    @click.stop="toggleStepExpand(child.id, $event)"
-                                    class="action-btn"
-                                    :title="!isStepExpanded(step.id) ? '折叠当前步骤' : '展开当前步骤'"
-                                >
-                                  <template #icon>
-                                    <TheIcon
-                                        :icon="isStepExpanded(child.id) ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down'"
-                                        :size="16"
-                                    />
-                                  </template>
-                                </n-button>
-                                <n-button text size="tiny" @click.stop="handleCopyStep(child.id)" class="action-btn"
-                                          title="复制当前步骤">
-                                  <template #icon>
-                                    <TheIcon icon="material-symbols:content-copy" :size="16"/>
-                                  </template>
-                                </n-button>
-                                <n-popconfirm @positive-click="handleDeleteStep(child.id)" @click.stop>
-                                  <template #trigger>
-                                    <n-button text size="tiny" type="error" class="action-btn" title="删除当前步骤">
-                                      <template #icon>
-                                        <TheIcon icon="material-symbols:delete" :size="14"/>
-                                      </template>
-                                    </n-button>
-                                  </template>
-                                  确认删除该步骤?
-                                </n-popconfirm>
-                              </span>
-                            </span>
-                              <!-- 使用递归组件渲染子步骤 -->
-                              <RecursiveStepChildren
-                                  v-if="stepDefinitions[child.type]?.allowChildren"
-                                  :step="child"
-                              />
-                            </div>
-                          </div>
-                          <!-- 插入位置指示器：在子步骤之后 -->
-                          <div
-                              v-if="dragState.draggingId && dragState.dragOverId === step.id && dragState.insertTargetId === child.id && dragState.insertPosition === 'after'"
-                              class="step-insert-indicator"
-                          ></div>
-                        </template>
-                        <!-- 插入位置指示器：在最后一个子步骤之后（无子女时显示在空拖拽区域） -->
-                        <div
-                            v-if="dragState.draggingId && dragState.dragOverId === step.id && dragState.insertTargetId === null && dragState.insertPosition === 'after' && step.children && step.children.length > 0"
-                            class="step-insert-indicator"
-                        ></div>
-                        <div class="step-add-btn">
-                          <n-dropdown
-                              trigger="click"
-                              :options="addOptions"
-                              :render-label="renderDropdownLabel"
-                              @select="(key) => handleAddStep(key, step.id)"
-                          >
-                            <n-button dashed size="small" class="add-step-btn" @click.stop>添加步骤</n-button>
-                          </n-dropdown>
-                        </div>
-                      </div>
-                    </div>
+                    <RecursiveStepChildren
+                        v-if="stepDefinitions[step.type]?.allowChildren"
+                        :step="step"
+                    />
                     <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存） -->
                     <div v-if="step.type === 'quote'" class="quote-inner-steps">
                       <div class="quote-inner-list">
@@ -382,10 +280,10 @@
                 :is="editorComponent"
                 :config="currentStep.config"
                 :step="currentStep"
-                :project-options="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database' || currentStep?.type === 'quote') ? projectOptions : []"
-                :project-loading="(currentStep?.type === 'http' || currentStep?.type === 'tcp' || currentStep?.type === 'database' || currentStep?.type === 'quote') ? projectLoading : false"
-                :available-variable-list="availableVariableList"
-                :assist-functions="assistFunctionsList"
+                :project-options="currentEditorNeedsProject ? projectOptions : []"
+                :project-loading="currentEditorNeedsProject ? projectLoading : false"
+                :available-variable-list="currentEditorNeedsVarAssist ? availableVariableList : []"
+                :assist-functions="currentEditorNeedsVarAssist ? assistFunctionsList : []"
                 :on-reselect="currentStep?.isQuoteInner ? undefined : handleQuoteReselect"
                 :readonly="!!currentStep?.isQuoteInner"
                 @update:config="(val) => { if (!currentStep?.isQuoteInner) updateStepConfig(currentStep.id, val) }"
@@ -515,7 +413,7 @@
           arrow-placement="right"
       >
         <n-collapse-item title="应用环境配置" name="env">
-          <div v-show="isExecConfigEnvExpanded" class="exec-config-modal">
+          <div class="exec-config-modal">
             <div class="exec-config-left">
               <div class="exec-config-app-list">
                 <div
@@ -692,7 +590,7 @@
         </n-collapse-item>
 
         <n-collapse-item v-if="debugExecDataSourceEnabled" title="数据驱动配置" name="dataset">
-          <div v-show="isExecConfigDatasetExpanded" class="exec-config-dataset-wrap">
+          <div class="exec-config-dataset-wrap">
             <div class="exec-config-dataset-table">
               <div class="exec-config-dataset-header">
                 <div class="col check"></div>
@@ -1071,7 +969,7 @@ const confirmCopySteps = async () => {
       updateStepDisplayNames()
       loadQuoteStepsForAllQuoteSteps()
       if (lastInsertedId) selectedKeys.value = [lastInsertedId]
-      window.$message?.success?.(`已复制 ${insertedCount} 个步骤`)
+      window.$message?.success?.(`已复制${insertedCount}个步骤`)
     }
     quotePublicScriptDrawerVisible.value = false
     selectedForCopy.value = []
@@ -1392,18 +1290,18 @@ watch(() => caseForm.case_type, (newType, oldType) => {
       const removedCount = removeAllQuoteSteps()
       if (removedCount > 0) {
         stashedQuoteStepsWhenPublic.value = toStash
-        window.$message?.warning?.(`切换为公共脚本，已临时移除 ${removedCount} 个「引用公共脚本」步骤（若误操作，可切回用户脚本恢复）`)
+        window.$message?.warning?.(`切换为公共脚本，已临时移除${removedCount}个引用公共脚本步骤，若误操作可切回用户脚本恢复`)
       }
     } else {
       const removedCount = removeAllQuoteSteps()
       if (removedCount > 0) {
-        window.$message?.warning?.(`切换为公共脚本，已自动移除 ${removedCount} 个「引用公共脚本」步骤（公共脚本不可引用其他脚本）`)
+        window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本步骤，公共脚本不允许引用其他脚本`)
       }
     }
   } else if (newType === '用户脚本' && stashedQuoteStepsWhenPublic.value.length > 0) {
     const restoredCount = restoreStashedQuoteSteps()
     if (restoredCount > 0) {
-      window.$message?.info?.(`已恢复 ${restoredCount} 个「引用公共脚本」步骤。`)
+      window.$message?.info?.(`已恢复${restoredCount}个引用公共脚本步骤`)
     }
   }
 })
@@ -1794,7 +1692,6 @@ const backendTypeToLocal = (step_type) => {
     case 'HTTP请求':
       return 'http'
     case '代码请求(Python)':
-    case '代码请求(Python)':
       return 'code'
     case '条件分支':
       return 'if'
@@ -1808,16 +1705,6 @@ const backendTypeToLocal = (step_type) => {
       return 'database'
     default:
       return 'code'
-  }
-}
-
-const parseJsonSafely = (val) => {
-  if (!val) return null
-  if (typeof val === 'object') return val
-  try {
-    return JSON.parse(val)
-  } catch (e) {
-    return null
   }
 }
 
@@ -2393,20 +2280,20 @@ const validateDatabaseSteps = (stepList) => {
       const stepName = step.name || original.step_name || '未命名步骤'
 
       if (rawOps != null && typeof rawOps !== 'object') {
-        return {valid: false, message: `步骤「${stepName}」数据库请求配置格式无效，请重新打开步骤编辑或删除后添加。`}
+        return {valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开步骤编辑或删除后添加`}
       }
 
       const list = normalizeDatabaseOperatesList(rawOps)
       if (!list.length) {
         return {
           valid: false,
-          message: `步骤「${stepName}」数据库请求须配置「请求配置」：请至少添加一条数据库操作（所属应用、配置名称、数据库名称、SQL 语句、存储变量均必填）。`
+          message: `步骤：${stepName}：请至少添加一条数据库操作`
         }
       }
 
       for (let i = 0; i < list.length; i++) {
         const o = list[i] || {}
-        const idxLabel = `第 ${i + 1} 条`
+        const idxLabel = `第${i + 1}条`
         const pid = o.project_id
         const hasApp =
             String(o.project_name ?? '').trim() !== ''
@@ -2414,38 +2301,38 @@ const validateDatabaseSteps = (stepList) => {
         if (!hasApp) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请选择所属应用。`
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择所属应用`
           }
         }
         if (!String(o.config_name ?? '').trim()) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写配置名称。`
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写配置名称`
           }
         }
         if (!String(o.database_name ?? '').trim()) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写数据库名称。`
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写数据库名称`
           }
         }
         if (!String(o.expr ?? '').trim()) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写 SQL 语句。`
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写SQL语句`
           }
         }
         if (!String(o.variable_name ?? '').trim()) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写存储变量（变量名）。`
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写存储变量`
           }
         }
         const opDisplayName = String(o.name ?? '').trim()
         if (!opDisplayName) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求「请求配置」${idxLabel}：请填写操作名称（卡片标题不能为空）。`
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写操作名称`
           }
         }
       }
@@ -2456,7 +2343,7 @@ const validateDatabaseSteps = (stepList) => {
         if (firstNameIndex.has(nm)) {
           return {
             valid: false,
-            message: `步骤「${stepName}」数据库请求：操作名称「${nm}」不能重复（第 ${firstNameIndex.get(nm) + 1} 条与第 ${j + 1} 条），请修改后再保存或调试。`
+            message: `步骤：${stepName}，操作名称不允许重复，请修改后再保存或调试`
           }
         }
         firstNameIndex.set(nm, j)
@@ -2493,13 +2380,13 @@ const validateHttpTcpStepsRequired = (stepList) => {
         const url = String(config.url ?? original.request_url ?? '').trim()
 
         if (emptyProject) {
-          return {valid: false, message: `步骤「${stepLabel}」HTTP请求：请选择所属应用后再保存。`}
+          return {valid: false, message: `步骤：${stepLabel}，请选择所属应用后再保存`}
         }
         if (!cfgName) {
-          return {valid: false, message: `步骤「${stepLabel}」HTTP请求：请填写配置名称后再保存。`}
+          return {valid: false, message: `步骤：${stepLabel}，请填写配置名称后再保存`}
         }
         if (!url) {
-          return {valid: false, message: `步骤「${stepLabel}」HTTP请求：请填写请求地址后再保存。`}
+          return {valid: false, message: `步骤：${stepLabel}，请填写请求地址后再保存`}
         }
       }
 
@@ -2515,10 +2402,10 @@ const validateHttpTcpStepsRequired = (stepList) => {
         }
 
         if (emptyProject) {
-          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请选择所属应用后再保存。`}
+          return {valid: false, message: `步骤：${stepLabel}，请选择所属应用后再保存`}
         }
         if (!cfgName) {
-          return {valid: false, message: `步骤「${stepLabel}」TCP请求：请填写配置名称后再保存。`}
+          return {valid: false, message: `步骤：${stepLabel}，请填写配置名称后再保存`}
         }
       }
 
@@ -2657,7 +2544,7 @@ const handleSaveAll = async () => {
     const jsonValidation = validateJsonBodyInSteps(steps.value)
     if (!jsonValidation.valid) {
       window.$message?.error?.(
-          `步骤「${jsonValidation.stepName}」请求体 JSON 格式错误，请修正后再保存。}`
+          `步骤：${jsonValidation.stepName}，请求体JSON格式错误，请修正后再保存`
       )
       return
     }
@@ -2672,7 +2559,7 @@ const handleSaveAll = async () => {
     const emptyKeyValidation = validateEmptyKeyInSteps(steps.value)
     if (!emptyKeyValidation.valid) {
       window.$message?.error?.(
-          `步骤 [${emptyKeyValidation.stepName}] : [${emptyKeyValidation.listName}] 存在键为空的项，请填写或删除后再保存。`
+          `步骤：${emptyKeyValidation.stepName}，${emptyKeyValidation.listName}存在键为空的项，请填写或删除后再保存`
       )
       return
     }
@@ -2853,8 +2740,6 @@ const loadDebugEnvEnums = async () => {
 // -----------------------------
 const debugConfigModalVisible = ref(false)
 const execConfigCollapseExpanded = ref(['env'])
-const isExecConfigEnvExpanded = computed(() => execConfigCollapseExpanded.value.includes('env'))
-const isExecConfigDatasetExpanded = computed(() => execConfigCollapseExpanded.value.includes('dataset'))
 const debugExecDataSourceEnabled = ref(false)
 const debugExecDatasetRows = ref([])
 const debugExecDatasetSelectedIds = ref([])
@@ -3282,7 +3167,7 @@ const getRowAddrPreview = (row, configType) => {
   const name =
       configType === 'api'
           ? row.request_config_name
-          : (configType === 'database' ? row.config_name : row.config_name)
+          : row.config_name
   const info = name ? bucket?.[name] : null
   return info?.config_host ? `${info.config_host}${info.config_port ? `:${info.config_port}` : ''}` : ''
 }
@@ -3361,14 +3246,8 @@ const collectExecConfigMissingRows = () => {
   return missing
 }
 
-const formatExecConfigMissingMessage = (missing, actionLabel) => {
-  const sample = missing
-      .slice(0, 8)
-      .map((x) => `${String(x.type).toUpperCase()}·${x.text}`)
-      .join('，')
-  // return `存在配置未完成（共${missing.length}条），请补全后再${actionLabel}：${sample}${missing.length > 8 ? '…' : ''}`
-  return `存在配置未完成（共${missing.length}条），请补全后再${actionLabel}`
-}
+const formatExecConfigMissingMessage = (missing, actionLabel) =>
+    `存在${missing.length}条配置未完成，请补全后再${actionLabel}`
 
 const applyDebugConfigToSteps = () => {
   const apiRows = debugRows.value.apiRows
@@ -3510,7 +3389,8 @@ const buildStepExecConfigMap = (env_name) => {
   return map
 }
 
-const confirmDebugConfigAndRun = async () => {
+/** 调试/执行：校验环境与配置后关闭弹窗并执行回调 */
+const confirmExecConfigBeforeRun = async (actionLabel, runAction) => {
   if (!debugGlobalEnvId.value) {
     window.$message?.warning?.('请选择全局环境')
     return
@@ -3520,19 +3400,20 @@ const confirmDebugConfigAndRun = async () => {
     window.$message?.warning?.('全局环境无效，请重新选择')
     return
   }
-
   if (!validateExecDatasetSelection()) return
-
   const missingCfg = collectExecConfigMissingRows()
   if (missingCfg.length) {
-    window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, '调试'))
+    window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, actionLabel))
     return
   }
-
-  applyDebugConfigToSteps()
   debugConfigModalVisible.value = false
   const step_exec_config_map = buildStepExecConfigMap(env_name)
-  await doDebug(env_name, step_exec_config_map)
+  await runAction(env_name, step_exec_config_map)
+}
+
+const confirmDebugConfigAndRun = async () => {
+  applyDebugConfigToSteps()
+  await confirmExecConfigBeforeRun('调试', doDebug)
 }
 
 // 弹窗 footer 统一入口：根据当前模式分发到「执行」或「调试」
@@ -3545,27 +3426,7 @@ const confirmExecConfigAndAction = async () => {
 }
 
 const confirmRunConfigAndExecute = async () => {
-  if (!debugGlobalEnvId.value) {
-    window.$message?.warning?.('请选择全局环境')
-    return
-  }
-  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
-  if (!env_name) {
-    window.$message?.warning?.('全局环境无效，请重新选择')
-    return
-  }
-
-  if (!validateExecDatasetSelection()) return
-
-  const missingCfg = collectExecConfigMissingRows()
-  if (missingCfg.length) {
-    window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, '执行'))
-    return
-  }
-
-  debugConfigModalVisible.value = false
-  const step_exec_config_map = buildStepExecConfigMap(env_name)
-  await doExecuteFromSavedTree(step_exec_config_map)
+  await confirmExecConfigBeforeRun('执行', doExecuteFromSavedTree)
 }
 
 /** 运行模式：仅传 case_id（及配置等），不传 steps，由后端按 case_id 查库执行 */
@@ -3703,6 +3564,16 @@ const editorComponent = computed(() => {
   const step = currentStep.value
   if (!step) return null
   return editorMap[step.type] || null
+})
+
+const currentEditorNeedsProject = computed(() => {
+  const t = currentStep.value?.type
+  return t === 'http' || t === 'tcp' || t === 'database' || t === 'quote'
+})
+
+const currentEditorNeedsVarAssist = computed(() => {
+  const t = currentStep.value?.type
+  return t === 'http' || t === 'tcp' || t === 'user_variables'
 })
 
 const insertStep = (parentId, type, index = null, extraConfig = null) => {
@@ -3974,7 +3845,7 @@ const validateStepNamesInSteps = (stepList) => {
       if (isStepNameExplicitlyEmptyInEditor(step)) {
         return {
           valid: false,
-          message: `「${typeLabel}」步骤的步骤名称不能为空，请填写后再保存。`
+          message: `${typeLabel}：步骤名称不能为空，请填写后再保存`
         }
       }
 
@@ -3982,7 +3853,7 @@ const validateStepNamesInSteps = (stepList) => {
       if (!name) {
         return {
           valid: false,
-          message: `「${typeLabel}」步骤的步骤名称不能为空，请填写后再保存。`
+          message: `${typeLabel}：步骤名称不能为空，请填写后再保存`
         }
       }
 
@@ -3991,7 +3862,7 @@ const validateStepNamesInSteps = (stepList) => {
         if (usedNames.has(name)) {
           return {
             valid: false,
-            message: `步骤名称「${name}」重复，除循环结构、条件分支外步骤名称不可重复，请修改后再保存。`
+            message: `步骤名称重复：${name}，除循环结构、条件分支外步骤名称不可重复，请修改后再保存`
           }
         }
         usedNames.set(name, true)
@@ -4802,6 +4673,16 @@ const RecursiveStepChildren = defineComponent({
   justify-content: flex-end;
 }
 
+.query-input {
+  width: 200px;
+}
+
+.step-item-distance {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .case-field-input {
   width: 100%;
   transition: border-color 0.3s ease;
@@ -5299,7 +5180,8 @@ const RecursiveStepChildren = defineComponent({
   flex-shrink: 0;
 }
 
-.add-step-btn {
+.add-step-btn,
+:deep(.add-step-btn) {
   width: 100%;
   margin-bottom: 10px;
   border-radius: 10px;
@@ -5514,11 +5396,6 @@ const RecursiveStepChildren = defineComponent({
   font-size: 12px;
   color: #999;
   padding: 6px 0;
-}
-
-:deep(.add-step-btn) {
-  width: 100%;
-  margin-bottom: 10px;
 }
 
 /* 标签选择器样式 */

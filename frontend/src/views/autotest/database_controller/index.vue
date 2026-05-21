@@ -27,7 +27,7 @@
     </template>
 
     <n-collapse-transition :show="!mainCardCollapsed">
-      <n-form :model="state.form" label-placement="left" label-width="88px" ref="formRef">
+      <n-form :model="state.form" label-placement="left" label-width="88px">
         <n-form-item label="步骤名称" path="step_name" required>
           <n-input
               v-model:value="state.form.step_name"
@@ -60,7 +60,7 @@
                 <template #header>
                   <div class="db-op-header">
                     <div class="db-op-title-row">
-                      <template v-if="editingDatabaseOpKey === String(key) && !readonly">
+                      <template v-if="editingDatabaseOpKey === String(key) && !props.readonly">
                         <n-input
                             v-model:value="item.name"
                             size="small"
@@ -73,7 +73,7 @@
                       </template>
                       <template v-else>
                         <span class="db-op-title-text">{{ databaseOpDisplayTitle(item, key) }}</span>
-                        <n-tooltip v-if="!readonly" trigger="hover">
+                        <n-tooltip v-if="!props.readonly" trigger="hover">
                           <template #trigger>
                             <n-button text size="tiny" class="db-op-title-edit" @click="startEditDatabaseOpTitle(key)">
                               <template #icon>
@@ -382,7 +382,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:config'])
 
-const formRef = ref(null)
 const mainCardCollapsed = ref(false)
 /** 正在编辑卡片标题（item.name）的数据库操作项 key（字符串） */
 const editingDatabaseOpKey = ref('')
@@ -393,7 +392,7 @@ const toggleMainCardCollapsed = () => {
 const databaseOpDefaultTitle = (key) => {
   const i = opKeys.value.indexOf(Number(key))
   const n = i >= 0 ? i + 1 : Number(key) + 1
-  return `数据库请求${n}`
+  return `数据库请求 ${n}`
 }
 
 /** 生成未与当前各条「操作名称」重复的名称（用于新增 / 复制） */
@@ -404,10 +403,10 @@ const nextUniqueDatabaseOpName = () => {
     if (t) used.add(t)
   }
   let n = 1
-  let candidate = `数据库请求${n}`
+  let candidate = `数据库请求 ${n}`
   while (used.has(candidate)) {
     n += 1
-    candidate = `数据库请求${n}`
+    candidate = `数据库请求 ${n}`
   }
   return candidate
 }
