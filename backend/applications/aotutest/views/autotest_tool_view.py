@@ -67,7 +67,8 @@ FUNC_LIST: List[Dict[str, Any]] = [
 ]
 
 
-def _build_func_list_with_desc() -> List[Dict[str, Any]]:
+# 获取GenerateUtils类型公共函数方法1
+def _build_func_list_with_desc1() -> List[Dict[str, Any]]:
     """为 FUNC_LIST 中每项补全 desc（从 GenerateUtils 反射）。"""
     result: List[Dict[str, Any]] = []
     for item in FUNC_LIST:
@@ -78,10 +79,77 @@ def _build_func_list_with_desc() -> List[Dict[str, Any]]:
     return result
 
 
+# 获取GenerateUtils类型公共函数方法2
+def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
+    """
+    获取类下所有公共方法信息
+    支持：实例方法 / @classmethod / @staticmethod
+    返回结构：[{"name": "函数名(干净无类型参数)", "desc": "函数首行文档注释"}]
+    规则：
+    1. 仅收集非下划线开头公共方法
+    2. 剔除 self / cls
+    3. 剔除所有类型注解、返回值注解
+    4. 保留参数默认值
+    5. desc 取函数首行文档注释，无注释则为空
+    """
+    result: List[Dict[str, Any]] = []
+
+    for name, member in inspect.getmembers(cls):
+        # 过滤私有方法
+        if name.startswith("_"):
+            continue
+
+        # 匹配三种可调用方法：普通函数、类方法、静态方法
+        if not any((
+            inspect.isfunction(member),
+            inspect.ismethod(member),
+            inspect.isbuiltin(member)
+        )):
+            continue
+
+        try:
+            sig = inspect.signature(member)
+            params = list(sig.parameters.values())
+
+            # 剔除 self / cls
+            if params:
+                first_p = params[0]
+                if first_p.name in ("self", "cls"):
+                    params = params[1:]
+
+            # 拼接纯参数（无类型注解）
+            param_parts = []
+            for p in params:
+                if p.default is inspect.Parameter.empty:
+                    param_parts.append(p.name)
+                else:
+                    param_parts.append(f"{p.name}={p.default!r}")
+
+            param_str = ", ".join(param_parts)
+            func_full_name = f"{name}({param_str})"
+
+            # 提取首行注释
+            doc = inspect.getdoc(member) or ""
+            # 仅收录简要说明，不包含参数说明
+            # desc = doc.splitlines()[0].strip() if doc else ""
+
+            result.append({
+                "name": func_full_name,
+                "desc": doc
+            })
+        except (ValueError, TypeError):
+            continue
+
+    return result
+
+
+print(_build_func_list_with_desc2(GenerateUtils))
+
+
 @autotest_tool.get("/get", summary="API自动化测试-辅助函数查询")
 async def get_func_info():
     try:
-        func_list = _build_func_list_with_desc()
+        func_list = _build_func_list_with_desc2(GenerateUtils)
         LOGGER.info("辅助函数查询成功")
         return SuccessResponse(message="查询成功", data=func_list, total=len(func_list))
     except Exception as e:

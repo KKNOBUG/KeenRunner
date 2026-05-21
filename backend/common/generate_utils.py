@@ -19,7 +19,7 @@ from xpinyin import Pinyin
 
 
 class GenerateUtils:
-    """数据生成工具类（单例），提供随机字符串、时间、姓名、地址等生成方法，供占位符与测试数据使用。"""
+    """数据生成工具类(单例)，提供随机字符串、时间、姓名、地址等生成方法，供占位符与测试数据使用"""
 
     # 用于存储该类的唯一实例
     __private_instance = None
@@ -28,14 +28,14 @@ class GenerateUtils:
 
     def __new__(cls, *args, **kwargs) -> object:
         """
-        创建并返回类的唯一实例。
+        创建并返回类的唯一实例
 
-        使用单例模式，在整个应用程序的生命周期内仅创建一个 GenerateUtils 实例。
-        在多线程环境下，通过 ``threading.Lock`` 确保线程安全。
+        使用单例模式，在整个应用程序的生命周期内仅创建一个 GenerateUtils 实例
+        在多线程环境下，通过 threading.Lock 确保线程安全
 
-        :param args: 位置参数（未使用）。
-        :param kwargs: 关键字参数（未使用）。
-        :returns: GenerateUtils 类的唯一实例。
+        :param args: 非必填项，位置参数(未使用)
+        :param kwargs: 非必填项，关键字参数(未使用)
+        :return: GenerateUtils 类的唯一实例
         """
         if not cls.__private_instance and not cls.__private_initialized:
             with cls.__private_lock:
@@ -46,7 +46,13 @@ class GenerateUtils:
         return cls.__private_instance
 
     def __init__(self, *args, **kwargs):
-        """初始化 Faker 与 Pinyin 实例及日期时间格式映射。"""
+        """
+        初始化 Faker(中英文)、Pinyin 实例及日期时间格式映射表
+
+        :param args: 非必填项，位置参数(未使用)
+        :param kwargs: 非必填项，关键字参数(未使用)
+        :return: 无返回值
+        """
         super().__init__(*args, **kwargs)
         self.faker_cn = Faker(locale="zh_CN")
         self.faker_en = Faker(locale="en_US")
@@ -79,84 +85,135 @@ class GenerateUtils:
         }
 
     def generate_country(self):
-        """生成随机国家名称（中文）。"""
+        """生成随机国家名称"""
         return self.faker_cn.country()
 
     def generate_province(self):
-        """生成随机省份名称（中文）。"""
+        """生成随机省份名称"""
         return self.faker_cn.province()
 
     def generate_city(self):
-        """生成随机城市名称（中文）。"""
+        """生成随机城市名称"""
         return self.faker_cn.city()
 
     def generate_district(self):
-        """生成随机区县名称（中文）。"""
+        """生成随机区县名称"""
         return self.faker_cn.district()
 
     def generate_address(self):
-        """生成随机地址（中文）。"""
+        """生成随机地址"""
         return self.faker_cn.address()
 
     def generate_company(self):
-        """生成随机公司名称（中文）。"""
+        """生成随机公司名称"""
         return self.faker_cn.company()
 
     def generate_bank_account_number(self):
-        """生成随机银行卡号。"""
+        """生成随机银行卡号"""
         return self.faker_cn.credit_card_number()
 
     def generate_email(self):
-        """生成随机邮箱地址。"""
+        """生成随机邮箱地址"""
         return self.faker_cn.email()
 
     def generate_job(self):
+        """生成随机岗位名称"""
         return self.faker_cn.job()
 
     def generate_name(self):
+        """生成随机人员姓名"""
         return self.faker_cn.name()
 
     def generate_phone(self):
+        """生成随机手机号码"""
         return self.faker_cn.phone_number()
 
     @classmethod
     def generate_week_number(cls):
+        """获取当前日期在ISO日历中的周数(1～53 的整数)"""
         today = datetime.today()
-        return today.isocalendar()[:2][1]
+        return today.isocalendar()[1]
 
     def generate_week_name(self):
+        """获取当前日期所属星期名称 """
         return self.faker_cn.day_of_week()
 
     @classmethod
     def generate_day(cls):
+        """获取当前日期在当年中的第几天(1～366 的整数)"""
         return datetime.now().timetuple().tm_yday
 
     def generate_am_or_pm(self):
+        """生成随机上午或下午"""
         return "上午" if self.faker_cn.am_pm() == "AM" else "下午"
 
     def generate_ident_card_number(self):
+        """生成随机18～65岁对应的身份证号码"""
         return self.faker_cn.ssn(min_age=18, max_age=65)
 
     def generate_ident_card_number_condition(self, min_age: int, max_age: int):
+        """
+        生成随机身份证号码(可指定年龄范围)
+
+        :param min_age: 必填项，最小年龄
+        :param max_age: 必填项，最大年龄
+        :return: 18 位身份证号码字符串
+        """
         return self.faker_cn.ssn(min_age=min_age, max_age=max_age)
 
     @classmethod
     def generate_ident_card_birthday(cls, ident_card_number: str):
+        """
+        从身份证号码中解析出生日期段
+
+        :param ident_card_number: 必填项，18 位身份证号码
+        :return: 出生日期字符串，格式为: YYYYMMDD
+        """
         return ident_card_number[6:-4]
 
     @classmethod
     def generate_ident_card_gender(cls, ident_card_number: str):
+        """
+        从身份证号码中解析性别
+
+        :param ident_card_number: 必填项，18 位身份证号码
+        :return: 男 或 女
+        """
         return "女" if int(ident_card_number[-2]) % 2 == 0 else "男"
 
-    def generates(self, funcname: str, funcargs: Optional[dict] = None, funclocale: Literal["en", "cn"] = "cn"):
-        return getattr(eval("self.faker_" + funclocale), funcname)(**funcargs or {})
+    def generate_invoke(self, func_name: str, func_args: Optional[dict] = None, func_local: Literal["en", "cn"] = "cn"):
+        """
+        通过反射调用 Faker 实例上的指定方法生成数据
+
+        :param func_name: 必填项，Faker的方法名，如ssn、profile
+        :param func_args: 非必填项，传给Faker方法的关键字参数字典，默认None表示无额外参数
+        :param func_local: 非必填项，语言环境，默认cn，可选cn、en
+        :return: 对应 Faker 方法的返回值，类型随方法而定
+        """
+        return getattr(eval("self.faker_" + func_local), func_name)(**func_args or {})
 
     @classmethod
     def generate_random_number(cls, min_: int, max_: int) -> int:
+        """
+        生成指定范围内的随机整数
+
+        :param min_: 必填项，随机数下限
+        :param max_: 必填项，随机数上限
+        :return: [min_, max_]范围内的随机整数
+        """
         return random.randint(min_, max_)
 
     @staticmethod
     def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
+        """
+        生成随机可指定长度及字符类型组合的字符串
+
+        :param length: 必填项，目标字符串长度
+        :param digit: 非必填项，是否包含数字，默认 False
+        :param char: 非必填项，是否包含英文字母，默认 False
+        :param chinese: 非必填项，是否包含中文汉字，默认 False
+        :return: 按规则拼接后的随机字符串；未指定类型时默认仅数字
+        """
         try:
             length: int = int(length)
             number = "".join(random.sample(string.digits * length, length))
@@ -196,15 +253,16 @@ class GenerateUtils:
                           fmt: Optional[Union[int, str]] = None, isMicrosecond: bool = False) -> Union[datetime, str]:
         """
         根据当前日期时间自定义修改年、月、日、时、分、秒和格式
-        :param year:    非必填项，年份控制
-        :param month:   非必填项，月份控制
-        :param day:     非必填项，日份控制
-        :param hour:    非必填项，小时控制
-        :param minute:  非必填项，分钟控制
-        :param second:  非必填项，秒数控制
-        :param fmt:  非必填项，格式控制
-        :param isMicrosecond:  非必填项，毫秒控制
-        :return: 默认以XXXX-XX-XX XX:XX:XX格式返回当前日期时间
+
+        :param year: 非必填项，年份偏移量，正数为向后、负数为向前，默认0
+        :param month: 非必填项，月份偏移量，默认0
+        :param day: 非必填项，日份偏移量，默认0
+        :param hour: 非必填项，小时偏移量，默认0
+        :param minute: 非必填项，分钟偏移量，默认0
+        :param second: 非必填项，秒数偏移量，默认0
+        :param fmt: 非必填项，输出格式；可为formats字段中的键或自定义格式串，默认不格式化
+        :param isMicrosecond: 非必填项，是否保留微秒，默认 False 时清零微秒
+        :return: 未指定fmt时返回datetime对象；指定fmt时返回格式化后的字符串，默认YYYY-MM-DD HH:MM:SS
         """
         # 获取当前日期时间
         current_datetime = datetime.now()
@@ -230,11 +288,26 @@ class GenerateUtils:
 
     def generate_pinyin(self, chars: str, splitter: str = "",
                         convert: Literal["lower", "upper", "capitalize"] = "lower"):
-        # 暂时无法处理多音字
+        """
+        将中文文本转换为拼音(暂不支持多音字消歧)
+
+        :param chars: 必填项，待转换的中文字符串
+        :param splitter: 非必填项，拼音音节之间的分隔符，默认空字符串
+        :param convert: 非必填项，大小写形式，默认lower，可选lower、upper、capitalize
+        :return: 转换后的拼音字符串。
+        """
         return self.pinyin.get_pinyin(chars=chars, splitter=splitter, convert=convert)
 
     def generate_information(self, minAge: int = 18, maxAge: int = 65,
                              convert: Literal["lower", "upper", "capitalize"] = "upper"):
+        """
+        生成随机一套关联的个人测试信息(姓名、身份证、银行卡、联系方式等)
+
+        :param minAge: 非必填项，身份证对应最小年龄，默认18
+        :param maxAge: 非必填项，身份证对应最大年龄，默认65
+        :param convert: 非必填项，姓名拼音的大小写形式，默认upper，可选lower、upper、capitalize
+        :return: 包含 name、alias、age、gender、ssn、card、phone、email、address 等字段的字典
+        """
         ident_card_name: str = self.generate_name()
         ident_card_number: str = self.generate_ident_card_number_condition(minAge, maxAge)
         ident_card_gender: str = self.generate_ident_card_gender(ident_card_number)
@@ -261,7 +334,11 @@ class GenerateUtils:
 
     def generate_global_serial_number(self):
         """
-        全局流水号，28位（年 + 月 + 日 + 时 + 分 + 秒 + 毫秒 + 9999 + 4位随机数）
+        生成随机3条结构相同、后缀不同全局流水号
+
+        格式：年+月+日+时+分+秒+毫秒+固定后缀9999+4位随机字符，合计约28位
+
+        :return: 三元组 (g1, g2, g3)，均为流水号字符串
         """
         stamp = self.generate_datetime(fmt=51, isMicrosecond=True)
         g1 = stamp + "9999" + self.generate_string(length=4)
@@ -271,18 +348,38 @@ class GenerateUtils:
 
     @classmethod
     def generate_uuid(cls):
+        """
+        生成随机标准UUID4字符串
+
+        :return: 形如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        """
         return uuid.uuid4().__str__()
 
     @classmethod
     def generate_timestamp(cls):
+        """
+        生成当前时间的微秒级时间戳
+
+        :return: 自1970-01-01起算的整数时间戳(微秒精度)
+        """
         now = datetime.now()
         timestamp = (now - datetime(1970, 1, 1)).total_seconds() * 1000000
         return int(timestamp)
 
     @classmethod
-    def generate_seconds_until_22h(cls):
+    def generate_seconds_until_24h(cls, hour: int = 23, minute: int = 59, second: int = 59):
+        """
+        计算距离指定的时分秒还剩下多少秒
+        如果当前时间已过该时间点，则自动顺延到第二天同一时间
+        适用于每日固定时间点的倒计时、定时任务计算
+
+        :param hour: 小时
+        :param minute: 分钟
+        :param second: 秒
+        :return: 距离目标时间点的剩余秒数(永远为正整数)
+        """
         now = datetime.now()
-        midnight = now.replace(hour=22, minute=0, second=0, microsecond=0)
+        midnight = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
         if now >= midnight:
             midnight += timedelta(days=1)
         delta = midnight - now
@@ -291,6 +388,18 @@ class GenerateUtils:
     @classmethod
     def generate_seconds_until(cls, year: int = 0, month: int = 0, day: int = 0,
                                hour: int = 0, minute: int = 0, second: int = 0) -> int:
+        """
+        基于当前时间，计算增加指定偏移量后的目标时间，返回剩余秒数
+        支持年、月、日、时、分、秒偏移，如果目标时间早于当前时间，则返回0
+
+        :param year: 非必填项，目标时间年份偏移量，默认0
+        :param month: 非必填项，目标时间月份偏移量，默认0
+        :param day: 非必填项，目标时间日份偏移量，默认0
+        :param hour: 非必填项，目标时间小时偏移量，默认0
+        :param minute: 非必填项，目标时间分钟偏移量，默认0
+        :param second: 非必填项，目标时间秒数偏移量，默认0
+        :return: 剩余秒数；若目标时间不晚于当前时间则返回0
+        """
         # 当前时间
         current_datetime: datetime = datetime.now()
         target_datetime: datetime = current_datetime
@@ -317,14 +426,15 @@ if __name__ == '__main__':
     # print("身份证号码：", vd.generate_ident_card_number_condition(1, 10))
     # print("身份证生日：", vd.generate_ident_card_birthday(idn))
     # print("身份证性别：", vd.generate_ident_card_gender(idn))
-    # print("周名：", vd.generate_week_name())
-    # print("周号：", vd.generate_week_number())
+    # print("周号：", vd.generate_week_name())
+    # print("周数：", vd.generate_week_number())
     # print("天：", vd.generate_day())
-    # print("反射：", vd.generates(funcname="ssn"))
-    # print("反射：", vd.generates(funcname="ssn", funcargs={"min_age": 18, "max_age": 18}))
-    # print("反射：", vd.generates(funcname="profile", funcargs={"fields": None, "sex": "F"}))
-    # print("反射：", vd.generates(funcname="simple_profile", funcargs={"sex": "M"}))
-    # print("个人档案：", vd.generates(funcname="profile"))
+    # print("上午或下午：", vd.generate_am_or_pm())
+    # print("反射：", vd.generate_invoke(func_name="ssn"))
+    # print("反射：", vd.generate_invoke(func_name="ssn", func_args={"min_age": 18, "max_age": 18}))
+    # print("反射：", vd.generate_invoke(func_name="profile", func_args={"fields": None, "sex": "F"}))
+    # print("反射：", vd.generate_invoke(func_name="simple_profile", func_args={"sex": "M"}))
+    # print("个人档案：", vd.generate_invoke(func_name="profile"))
     # print("个人档案：", vd.generate_information())
     # print("时间：", vd.generate_datetime(fmt=11))
     # print("时间：", vd.generate_datetime(fmt=21))
@@ -333,7 +443,7 @@ if __name__ == '__main__':
     # print("时间：", vd.generate_datetime(fmt="%Y----%m"))
     # print("时间：", vd.generate_datetime(year=int("-1"), fmt=23))
     # print("时间：", vd.generate_datetime(fmt="%Y----%23"))
-    print("时间戳：", vd.generate_timestamp())
+    # print("时间戳：", vd.generate_timestamp())
     # print("拼音：", vd.generate_pinyin("上海银行"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-", convert="upper"))

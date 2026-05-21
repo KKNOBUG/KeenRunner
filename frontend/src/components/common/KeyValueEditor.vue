@@ -79,56 +79,110 @@
             <n-popover
                 v-if="!disabled"
                 :show="associationTargetIndex === index"
-                @update:show="(v) => { if (!v) associationTargetIndex = -1 }"
+                @update:show="(v) => handleAssociationPopoverShow(v, index)"
                 trigger="click"
                 placement="bottom-start"
-                :width="500"
+                :width="560"
             >
               <template #trigger>
-                <n-button
-                    circle
-                    tertiary
-                    type="primary"
-                    size="small"
-                    class="join-button"
-                    @click="associationTargetIndex = index"
-                >
-                  <template #icon>
-                    <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                <n-tooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <n-button
+                        circle
+                        tertiary
+                        type="primary"
+                        size="small"
+                        class="join-button"
+                        @click="openAssociationPopover(index)"
+                    >
+                      <template #icon>
+                        <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
+                      </template>
+                    </n-button>
                   </template>
-                </n-button>
+                  使用全局变量或调用内置函数
+                </n-tooltip>
               </template>
-              <div class="association-popover-content">
-                <div v-if="availableVariableList.length > 0" class="association-section">
-                  <div class="association-section-title">可选变量</div>
-                  <n-scrollbar style="max-height: 200px;">
+              <div class="association-menu">
+                <n-input
+                    v-model:value="associationSearch"
+                    placeholder="搜索变量名称或函数名称、注释"
+                    clearable
+                    size="small"
+                    class="association-search"
+                />
+                <div class="association-menu-body">
+                  <div class="association-sidebar">
                     <div
-                        v-for="(name, i) in availableVariableList"
-                        :key="'v-' + i"
-                        class="association-item"
-                        @click="insertAssociationValue(index, '${' + name + '}')"
+                        v-if="availableVariableList.length > 0"
+                        class="association-sidebar-item"
+                        :class="{ active: associationTab === 'variables' }"
+                        @click="associationTab = 'variables'"
                     >
-                      {{ name }}
+                      全局变量({{ availableVariableList.length }}个)
                     </div>
-                  </n-scrollbar>
-                </div>
-                <div v-if="assistFunctions.length > 0" class="association-section">
-                  <div class="association-section-title">辅助函数</div>
-                  <n-scrollbar style="max-height: 300px">
                     <div
-                        v-for="(fn, i) in assistFunctions"
-                        :key="'f-' + i"
-                        class="association-item association-item-fn"
-                        @click="insertAssociationValue(index, '${' + (fn.name || fn) + '}')"
+                        v-if="assistFunctions.length > 0"
+                        class="association-sidebar-item"
+                        :class="{ active: associationTab === 'functions' }"
+                        @click="associationTab = 'functions'"
                     >
-                      <span class="association-fn-name">{{ fn.name || fn }}</span>
-                      <span v-if="fn.desc" class="association-fn-desc">{{ fn.desc }}</span>
+                      内置函数({{ assistFunctions.length }}个)
                     </div>
-                  </n-scrollbar>
+                  </div>
+                  <div class="association-list-panel">
+                    <n-scrollbar style="max-height: 300px;">
+                      <template v-if="associationTab === 'variables'">
+                        <div
+                            v-for="(name, i) in filteredVariableList"
+                            :key="'v-' + i"
+                            class="association-list-item"
+                            :class="{ selected: associationPreview === wrapPlaceholder(name) }"
+                            @click="selectAssociationVariable(name)"
+                        >
+                          <div class="association-list-item-name">{{ name }}</div>
+                        </div>
+                        <div v-if="!filteredVariableList.length" class="association-empty">
+                          {{ associationSearch ? '无匹配的全局变量' : '暂无全局变量' }}
+                        </div>
+                      </template>
+                      <template v-else-if="associationTab === 'functions'">
+                        <div
+                            v-for="(fn, i) in filteredAssistFunctions"
+                            :key="'f-' + i"
+                            class="association-list-item association-list-item-fn"
+                            :class="{ selected: associationPreview === wrapPlaceholder(fn.name || fn) }"
+                            @click="selectAssociationFunction(fn)"
+                        >
+                          <div class="association-list-item-name">{{ fn.name || fn }}</div>
+                          <pre v-if="fn.desc" class="association-list-item-desc">{{ fn.desc }}</pre>
+                        </div>
+                        <div v-if="!filteredAssistFunctions.length" class="association-empty">
+                          {{ associationSearch ? '无匹配的内置函数' : '暂无内置函数' }}
+                        </div>
+                      </template>
+                      <div
+                          v-else-if="!availableVariableList.length && !assistFunctions.length"
+                          class="association-empty"
+                      >
+                        暂无可用变量或内置函数
+                      </div>
+                    </n-scrollbar>
+                  </div>
                 </div>
-                <div v-if="!availableVariableList.length && !assistFunctions.length" class="association-empty">
-                  暂无可用变量或辅助函数
+                <div class="association-preview-wrap">
+                  <span class="association-preview-label">预览：</span>
+                  <n-input
+                      v-model:value="associationPreview"
+                      type="textarea"
+                      placeholder="可选择全局变量、内置函数或手动输入..."
+                      :autosize="{ minRows: 2, maxRows: 4 }"
+                      class="association-preview-input"
+                  />
                 </div>
+                <n-button type="primary" block class="association-confirm-btn" @click="confirmAssociationValue(index)">
+                  确定
+                </n-button>
               </div>
             </n-popover>
           </div>
@@ -211,7 +265,7 @@
 </template>
 
 <script setup>
-import {computed, defineEmits, defineProps, ref} from 'vue';
+import {computed, defineEmits, defineProps, ref, watch} from 'vue';
 import TheIcon from "@/components/icon/TheIcon.vue";
 
 
@@ -236,7 +290,7 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  // 辅助函数列表 [{ name, desc }]，用于“关联数据”插入 func_name()
+  // 内置函数列表 [{ name, desc }]，desc 为后端完整 docstring（含参数说明）
   assistFunctions: {
     type: Array,
     default: () => []
@@ -255,6 +309,66 @@ const isBatchAddModalVisible = ref(false);
 const batchInput = ref('');
 // 当前打开“关联数据”弹层的行索引，-1 表示未打开
 const associationTargetIndex = ref(-1);
+// 关联菜单：variables | functions
+const associationTab = ref('variables');
+const associationSearch = ref('');
+const associationPreview = ref('');
+
+const wrapPlaceholder = (inner) => '${' + inner + '}';
+
+const matchAssociationSearch = (text, query) => {
+  if (!query?.trim()) return true;
+  const q = query.trim().toLowerCase();
+  return String(text ?? '').toLowerCase().includes(q);
+};
+
+const filteredVariableList = computed(() =>
+    props.availableVariableList.filter((name) => matchAssociationSearch(name, associationSearch.value))
+);
+
+const filteredAssistFunctions = computed(() =>
+    props.assistFunctions.filter((fn) => {
+      const name = fn?.name ?? fn ?? '';
+      const desc = fn?.desc ?? '';
+      return matchAssociationSearch(name, associationSearch.value)
+          || matchAssociationSearch(desc, associationSearch.value);
+    })
+);
+
+const resetAssociationMenuState = (index) => {
+  associationSearch.value = '';
+  const hasVars = props.availableVariableList.length > 0;
+  const hasFns = props.assistFunctions.length > 0;
+  associationTab.value = hasVars ? 'variables' : (hasFns ? 'functions' : 'variables');
+  const cur = props.items[index]?.value ?? '';
+  associationPreview.value = typeof cur === 'string' ? cur : '';
+};
+
+const openAssociationPopover = (index) => {
+  associationTargetIndex.value = index;
+  resetAssociationMenuState(index);
+};
+
+const handleAssociationPopoverShow = (visible, index) => {
+  if (visible) {
+    associationTargetIndex.value = index;
+    resetAssociationMenuState(index);
+  } else {
+    associationTargetIndex.value = -1;
+  }
+};
+
+const selectAssociationVariable = (name) => {
+  associationPreview.value = wrapPlaceholder(name);
+};
+
+const selectAssociationFunction = (fn) => {
+  associationPreview.value = wrapPlaceholder(fn?.name ?? fn);
+};
+
+watch(associationTab, () => {
+  associationSearch.value = '';
+});
 
 // 计算是否为 form-data 模式且是请求体部分
 const isFormDataAndForBody = computed(() => props.bodyType === 'form-data' && props.isForBody);
@@ -361,11 +475,10 @@ const handleTypeChange = (value, index) => {
   emit('update:items', newItems);
 };
 
-// 在指定行的 value 中插入一段文本（变量占位符或辅助函数调用），并关闭弹层
-const insertAssociationValue = (index, text) => {
+// 将预览内容写入指定行 value 并关闭弹层
+const confirmAssociationValue = (index) => {
   const newItems = [...props.items];
-  const cur = newItems[index]?.value ?? '';
-  newItems[index] = { ...newItems[index], value: cur + text };
+  newItems[index] = { ...newItems[index], value: associationPreview.value ?? '' };
   emit('update:items', newItems);
   associationTargetIndex.value = -1;
 };
@@ -417,56 +530,124 @@ const insertAssociationValue = (index, text) => {
   padding: 0;
 }
 
-.association-popover-content {
-  padding: 8px 0;
-  min-width: 380px;
-  min-height: 120px;
+.association-menu {
+  padding: 4px 0 0;
+  min-width: 520px;
 }
 
-.association-section {
-  margin-bottom: 8px;
+.association-search {
+  margin-bottom: 10px;
 }
-.association-section:last-child {
-  margin-bottom: 0;
+
+.association-menu-body {
+  display: flex;
+  min-height: 300px;
+  border: 1px solid var(--n-border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 10px;
 }
-.association-section-title {
+
+.association-sidebar {
+  flex-shrink: 0;
+  width: 128px;
+  border-right: 1px solid var(--n-border-color);
+  background: var(--n-color-modal);
+  padding: 6px 0;
+}
+
+.association-sidebar-item {
+  padding: 10px 8px 10px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: break-all;
+  cursor: pointer;
+  color: var(--n-text-color-2);
+  border-left: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.association-sidebar-item:hover {
+  color: #F4511E;
+  background: var(--n-color-hover);
+}
+
+.association-sidebar-item.active {
+  color: #F4511E;
+  font-weight: 500;
+  border-left-color: #F4511E;
+  background: var(--n-color-hover);
+}
+
+.association-list-panel {
+  flex: 1;
+  min-width: 0;
+  background: var(--n-color);
+}
+
+.association-list-item {
+  padding: 8px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--n-border-color);
+  transition: background 0.15s;
+}
+
+.association-list-item:last-child {
+  border-bottom: none;
+}
+
+.association-list-item:hover,
+.association-list-item.selected {
+  background: var(--n-color-hover);
+}
+
+.association-list-item:hover .association-list-item-name,
+.association-list-item.selected .association-list-item-name {
+  color: #F4511E;
+}
+
+.association-list-item-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.association-list-item-fn .association-list-item-desc {
+  margin: 6px 0 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #999;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.association-preview-wrap {
+  margin-bottom: 10px;
+}
+
+.association-preview-label {
+  display: block;
   font-size: 12px;
   color: var(--n-text-color-3);
   margin-bottom: 6px;
-  padding: 0 12px;
 }
-.association-item {
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 6px;
+
+.association-preview-input :deep(.n-input__textarea-el) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
 }
-.association-item:hover {
-  background: var(--n-color-hover);
-  color: #F4511E;
+
+.association-confirm-btn {
+  margin-top: 2px;
 }
-.association-item:hover .association-fn-name,
-.association-item:hover .association-fn-desc {
-  color: #F4511E;
-}
-.association-item-fn {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.association-fn-name {
-  font-family: monospace;
-  font-size: 12px;
-}
-.association-fn-desc {
-  font-size: 11px;
-  color: var(--n-text-color-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+
 .association-empty {
-  padding: 16px;
+  padding: 24px 16px;
   text-align: center;
   color: var(--n-text-color-3);
   font-size: 13px;
