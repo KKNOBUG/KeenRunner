@@ -426,10 +426,10 @@ async def debug_http_request(
         request_body: Optional[Dict[str, Any]] = step_data.request_body
         request_text: Optional[str] = step_data.request_text
 
-        session_variables: List[StepVariablesBase] = step_data.session_variables
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables
-        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
+        session_variables: List[StepVariablesBase] = step_data.session_variables or []
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
+        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
 
         # 将 defined / session 变量合并为查找 dict（提取/断言用）及 StepVariablesBase 列表（占位符解析用）
         merged_all_variables: Dict[str, Any] = {}
@@ -457,11 +457,11 @@ async def debug_http_request(
                     }
                 )
                 if not env_config_instance:
-                    return NotFoundResponse(message=f"HTTP请求调试失败, 环境配置[{request_config_name}]不存在")
+                    return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不存在")
                 execute_env_host: str = env_config_instance.config_host.strip().rstrip("/").rstrip(":")
                 execute_env_port: str = env_config_instance.config_port
                 if not execute_env_host or not execute_env_port:
-                    return NotFoundResponse(message=f"HTTP请求调试失败, 环境配置[{request_config_name}]正确")
+                    return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不完整")
                 if not execute_env_port:
                     request_url = f"{execute_env_host}/{request_url}"
                 else:
@@ -931,16 +931,9 @@ async def debug_python_code(
         code = step_data.code
         step_name = step_data.step_name or "代码请求(Python)调试"
         # defined_variables、session_variables 必须是列表格式
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables
-        session_variables: List[StepVariablesBase] = step_data.session_variables
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
-
-        if not session_variables or not isinstance(session_variables, list):
-            session_variables = []
-        if not defined_variables or not isinstance(defined_variables, list):
-            defined_variables = []
-        if not assert_validators or not isinstance(assert_validators, list):
-            assert_validators = []
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
+        session_variables: List[StepVariablesBase] = step_data.session_variables or []
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
 
         # 合并变量到执行上下文（列表格式）
         # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）

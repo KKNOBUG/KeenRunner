@@ -215,8 +215,8 @@ class StepExecutionContext:
         self.executing_quote_case_id: Optional[int] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
-        self.defined_variables: List[StepVariablesBase] = field(default_factory=list)
-        self.session_variables: List[StepVariablesBase] = field(default_factory=list)
+        self.defined_variables: List[StepVariablesBase] = []
+        self.session_variables: List[StepVariablesBase] = []
         self.session_variables = self.resolve_placeholders(initial_variables) or []
         self.timeout: float = 30.0
         self.connect: float = 10.0
