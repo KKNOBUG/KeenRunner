@@ -128,14 +128,10 @@
                   </div>
                 </div>
               </template>
-              <n-dropdown
-                  trigger="click"
-                  :options="addOptions"
-                  :render-label="renderDropdownLabel"
+              <AddStepPopover
+                  :is-public-script-case="isPublicScriptCase"
                   @select="(key) => handleAddStep(key, null)"
-              >
-                <n-button dashed size="small" class="add-step-btn">添加步骤</n-button>
-              </n-dropdown>
+              />
             </div>
           </n-card>
         </n-gi>
@@ -186,7 +182,7 @@
  * index.vue — API 自动化「步骤编辑」页编排层
  *
  * 本文件：左侧步骤树、右侧动态编辑器、步骤树 CRUD、前后端映射、保存/加载。
- * CaseInfoPanel：用例信息；ExecConfigModal：执行/调试配置；ScriptSelectDrawer：选脚本。
+ * CaseInfoPanel：用例信息；ExecConfigModal：执行/调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
 defineOptions({ name: '步骤编辑' })
 import {computed, defineComponent, h, nextTick, onMounted, ref, watch} from 'vue'
@@ -195,7 +191,6 @@ import {
   NButton,
   NCard,
   NCheckbox,
-  NDropdown,
   NEmpty,
   NGi,
   NGrid,
@@ -215,6 +210,7 @@ import AppPage from "@/components/page/AppPage.vue";
 import CaseInfoPanel from './components/CaseInfoPanel.vue'
 import ScriptSelectDrawer from './components/ScriptSelectDrawer.vue'
 import ExecConfigModal from './components/ExecConfigModal.vue'
+import AddStepPopover from './components/AddStepPopover.vue'
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
 import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
@@ -243,13 +239,24 @@ const stepDefinitions = {
   if: {label: '条件分支', allowChildren: true, icon: 'gravity-ui:shuffle'},
   wait: {label: '等待控制', allowChildren: false, icon: 'gravity-ui:stopwatch'},
   loop: {label: '循环结构', allowChildren: true, icon: 'gravity-ui:arrows-rotate-right'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'gravity-ui:abbr-api'},
-  http: {label: 'HTTP请求', allowChildren: false, icon: 'gravity-ui:abbr-api'},
-  code: {label: '代码请求(Python)', allowChildren: false, icon: 'gravity-ui:logo-python'},
-  database: {label: '数据库请求', allowChildren: false, icon: 'gravity-ui:abbr-sql'},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-freehand:server-api-cloud'},
+  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:server-api-cloud'},
+  code: {label: '代码请求(Python)', allowChildren: false, icon: 'ph:file-py'},
+  database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
 }
 
+const STEP_ICON = {
+  user_variables: 'gravity-ui:magic-wand',
+  http: 'streamline-freehand-color:server-api-cloud',
+  tcp: 'streamline-freehand-color:server-api-cloud',
+  code: 'ph:file-py',
+  database: 'ph:file-sql',
+  wait: 'gravity-ui:stopwatch',
+  if: 'gravity-ui:shuffle',
+  loop: 'gravity-ui:arrows-rotate-right',
+  quote_public_script: 'gravity-ui:link',
+}
 const editorMap = {
   loop: ApiLoopEditor,
   code: ApiCodeEditor,
@@ -681,34 +688,6 @@ const dragState = ref({
   insertPosition: null, // 'before' | 'after' | null，用于指示插入位置
   insertTargetId: null // 插入目标步骤 ID（用于显示指示器）
 })
-
-// 下拉展示“引用公共脚本”；quote 仅用于后端步骤类型与展示
-// 当用例类型为“公共脚本”时，“引用公共脚本”置灰，防止循环引用
-const addOptions = computed(() => {
-  const isPublicScript = isPublicScriptCase.value
-  return [
-    ...Object.entries(stepDefinitions)
-        .filter(([key]) => key !== 'quote')
-        .map(([value, item]) => ({
-          label: item.label,
-          key: value,
-          icon: renderIcon(item.icon, {size: 16})
-        })),
-    {
-      label: '引用公共脚本',
-      key: 'quote_public_script',
-      icon: renderIcon('material-symbols:library-books-outline', {size: 16}),
-      disabled: isPublicScript
-    },
-    // 【复制指定脚本】多选其他脚本，将步骤插入当前用例（与用例管理「复制」共用 copyCaseStepTree 接口，仅用 steps）
-    {
-      label: '复制指定脚本',
-      key: 'copy_steps',
-      icon: renderIcon('material-symbols:content-copy-outline', {size: 16})
-    }
-  ]
-})
-
 
 // 计算总步骤数（包括子步骤）
 const totalStepsCount = computed(() => {
@@ -2901,13 +2880,6 @@ onMounted(async () => {
 
 // 不在 onUpdated 中刷新展示名：每次子编辑器 emit 都会触发父组件 patch，导致输入卡顿/丢字
 
-/** 添加步骤下拉项的自定义渲染 */
-const renderDropdownLabel = (option) => {
-  return h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}}, [
-    h('span', option.label)
-  ])
-}
-
 // 递归子步骤组件
 const RecursiveStepChildren = defineComponent({
   name: 'RecursiveStepChildren',
@@ -2936,8 +2908,7 @@ const RecursiveStepChildren = defineComponent({
     const capturedHandleDrop = handleDrop
     const capturedHandleCopyStep = handleCopyStep
     const capturedHandleDeleteStep = handleDeleteStep
-    const capturedAddOptions = addOptions
-    const capturedRenderDropdownLabel = renderDropdownLabel
+    const capturedIsPublicScriptCase = isPublicScriptCase
     const capturedHandleAddStep = handleAddStep
     const capturedDragState = dragState
 
@@ -3108,23 +3079,10 @@ const RecursiveStepChildren = defineComponent({
         h('div', {
           class: 'step-add-btn'
         }, [
-          h(NDropdown, {
-            trigger: 'click',
-            options: capturedAddOptions.value,
-            renderLabel: capturedRenderDropdownLabel,
-            onSelect: (key) => {
-              capturedHandleAddStep(key, step.id)
-            }
-          }, {
-            default: () => h(NButton, {
-              dashed: true,
-              size: 'small',
-              class: 'add-step-btn',
-              onClick: (e) => e.stopPropagation()
-            }, {
-              default: () => '添加步骤'
-            })
-          })
+          h(AddStepPopover, {
+            isPublicScriptCase: capturedIsPublicScriptCase.value,
+            onSelect: (key) => capturedHandleAddStep(key, step.id),
+          }),
         ])
       ])
     }
@@ -3263,8 +3221,7 @@ const RecursiveStepChildren = defineComponent({
   flex-shrink: 0;
 }
 
-.add-step-btn,
-:deep(.add-step-btn) {
+:deep(.step-add-btn .add-step-trigger-btn) {
   width: 100%;
   margin-bottom: 10px;
   border-radius: 10px;
@@ -3399,25 +3356,28 @@ const RecursiveStepChildren = defineComponent({
   align-items: center;
 }
 
-:deep(.step-icon.icon-loop) {
-  color: #F4511E;
+:deep(.step-icon.icon-user_variables) {
+  color: #FF69B4;
 }
 
 :deep(.step-icon.icon-code) {
-  color: #800080;
-}
-
-
-:deep(.step-icon.icon-tcp) {
-  color: #49CC90;
-}
-
-:deep(.step-icon.icon-http) {
-  color: #49CC90;
+  color: #BA55D3;
 }
 
 :deep(.step-icon.icon-database) {
-  color: #800080;
+  color: #BA55D3;
+}
+
+:deep(.step-icon.icon-tcp) {
+  color: #2080F0;
+}
+
+:deep(.step-icon.icon-http) {
+  color: #2080F0;
+}
+
+:deep(.step-icon.icon-loop) {
+  color: #F4511E;
 }
 
 :deep(.step-icon.icon-if) {
@@ -3426,10 +3386,6 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-icon.icon-wait) {
   color: #F4511E;
-}
-
-:deep(.step-icon.icon-user_variables) {
-  color: #FF69B4;
 }
 
 :deep(.step-icon.icon-quote) {

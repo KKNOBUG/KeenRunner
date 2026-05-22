@@ -1616,9 +1616,9 @@ watch(
 
 // 请求方式下拉框
 const methodOptions = [
-  {label: 'GET', value: 'GET', color: '#49CC90'},
-  {label: 'POST', value: 'POST', color: '#FFA500'},
-  {label: 'PUT', value: 'PUT', color: '#61AFFE'},
+  {label: 'GET', value: 'GET', color: '#2080F0'},
+  {label: 'POST', value: 'POST', color: '#18A058'},
+  {label: 'PUT', value: 'PUT', color: '#FCA130'},
   {label: 'DELETE', value: 'DELETE', color: '#F4511E'}
 ]
 const renderMethodLabel = (option) => {
