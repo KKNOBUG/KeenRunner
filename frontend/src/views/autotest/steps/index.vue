@@ -114,7 +114,7 @@
                           <span class="step-name">
                             <TheIcon
                                 :icon="getStepIcon(item.step.type)"
-                                :size="14"
+                                :size="16"
                                 class="step-icon"
                                 :class="getStepIconClass(item.step.type)"
                             />
@@ -293,9 +293,9 @@ const scriptSelectDrawerRef = ref(null)
 
 /** 左侧步骤树面板宽度（可拖拽调整，持久化到 localStorage） */
 const LEFT_PANEL_WIDTH_STORAGE_KEY = 'autotest-steps-left-panel-width'
-const LEFT_PANEL_WIDTH_DEFAULT = 300
-const LEFT_PANEL_WIDTH_MIN = 220
-const LEFT_PANEL_WIDTH_MAX = 560
+const LEFT_PANEL_WIDTH_DEFAULT = 350
+const LEFT_PANEL_WIDTH_MIN = 200
+const LEFT_PANEL_WIDTH_MAX = 600
 
 const leftPanelWidth = ref(LEFT_PANEL_WIDTH_DEFAULT)
 
@@ -3194,7 +3194,7 @@ const RecursiveStepChildren = defineComponent({
   height: 100%;
   min-height: 0;
   min-width: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
 }
 
@@ -3303,8 +3303,8 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-add-btn .add-step-trigger-btn) {
-  width: 100%;
-  margin-bottom: 6px;
+  width: 99%;
+  margin-bottom: 5px;
   border-radius: 8px;
 }
 
@@ -3314,7 +3314,7 @@ const RecursiveStepChildren = defineComponent({
   border-radius: 8px;
   transition: all .2s;
   cursor: pointer;
-  padding: 2px 0;
+  padding: 3px 0;
   margin: 0;
 }
 
@@ -3368,7 +3368,7 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-drop-zone-hint) {
   color: #999;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   padding: 4px;
 }
@@ -3387,7 +3387,7 @@ const RecursiveStepChildren = defineComponent({
   align-items: center;
   gap: 4px;
   flex: 1;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   background-color: rgba(222, 222, 222, 0.20);
   padding: 4px 6px;
@@ -3427,7 +3427,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-number) {
-  font-size: 12px;
+  font-size: 13px;
   color: #666;
   font-weight: 400;
   margin-right: 2px;
@@ -3486,7 +3486,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-add-btn) {
-  padding-top: 2px;
+  padding-top: 5px;
   padding-left: 8px;
 }
 
@@ -3502,7 +3502,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.quote-inner-item) {
-  padding: 2px 0;
+  padding: 3px 0;
   margin: 0;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -3513,7 +3513,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.quote-inner-empty) {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   color: #999;
   padding: 4px 0;

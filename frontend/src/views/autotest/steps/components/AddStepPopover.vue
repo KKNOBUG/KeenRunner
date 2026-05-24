@@ -43,7 +43,7 @@
             <TheIcon
                 v-if="item.iconName"
                 :icon="item.iconName"
-                :size="18"
+                :size="16"
                 class="add-step-item-icon"
                 :class="item.iconClass"
             />
@@ -203,7 +203,8 @@ const handleSelectItem = (item) => {
 <style scoped>
 .add-step-trigger-btn {
   font-size: 12px;
-  width: 100%;
+  border-radius: 12px;
+  width: 99%;
 }
 
 .add-step-menu-scroll {
@@ -230,11 +231,11 @@ const handleSelectItem = (item) => {
 }
 
 .add-step-section-title {
-  padding: 4px 2px;
+  padding: 1px 1px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .add-step-item {
@@ -242,7 +243,7 @@ const handleSelectItem = (item) => {
   align-items: flex-start;
   gap: 8px;
   padding: 8px;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   cursor: pointer;
 }
 
@@ -288,17 +289,16 @@ const handleSelectItem = (item) => {
 }
 
 .add-step-item-title {
-  font-weight: 500;
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.15;
   transition: color 0.15s;
 }
 
 .add-step-item-desc {
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 11px;
   color: #999;
-  line-height: 1.2;
+  line-height: 1.15;
   word-break: break-word;
 }
 </style>
