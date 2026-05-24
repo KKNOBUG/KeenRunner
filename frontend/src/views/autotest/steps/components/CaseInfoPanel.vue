@@ -433,7 +433,7 @@ defineExpose({
 
 <style scoped>
 .case-info-card {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }

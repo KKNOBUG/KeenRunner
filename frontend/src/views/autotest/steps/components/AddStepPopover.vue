@@ -8,9 +8,11 @@
       :show="show"
       trigger="click"
       placement="bottom"
-      :width="350"
+      to="body"
+      flip
+      :width="330"
       :show-arrow="true"
-      scrollable
+      :content-style="popoverContentStyle"
       @update:show="handleShowUpdate"
   >
     <template #trigger>
@@ -23,33 +25,35 @@
         添加步骤
       </n-button>
     </template>
-    <div class="add-step-menu">
-      <section
-          v-for="section in menuSections"
-          :key="section.key"
-          class="add-step-section"
-      >
-        <div class="add-step-section-title">{{ section.label }}</div>
-        <div
-            v-for="item in section.items"
-            :key="item.key"
-            class="add-step-item"
-            :class="{ 'is-disabled': item.disabled }"
-            @click="handleSelectItem(item)"
+    <div class="add-step-menu-scroll">
+      <div class="add-step-menu">
+        <section
+            v-for="section in menuSections"
+            :key="section.key"
+            class="add-step-section"
         >
-          <TheIcon
-              v-if="item.iconName"
-              :icon="item.iconName"
-              :size="18"
-              class="add-step-item-icon"
-              :class="item.iconClass"
-          />
-          <div class="add-step-item-body">
-            <div class="add-step-item-title">{{ item.label }}</div>
-            <div v-if="item.desc" class="add-step-item-desc">{{ item.desc }}</div>
+          <div class="add-step-section-title">{{ section.label }}</div>
+          <div
+              v-for="item in section.items"
+              :key="item.key"
+              class="add-step-item"
+              :class="{ 'is-disabled': item.disabled }"
+              @click="handleSelectItem(item)"
+          >
+            <TheIcon
+                v-if="item.iconName"
+                :icon="item.iconName"
+                :size="18"
+                class="add-step-item-icon"
+                :class="item.iconClass"
+            />
+            <div class="add-step-item-body">
+              <div class="add-step-item-title">{{ item.label }}</div>
+              <div v-if="item.desc" class="add-step-item-desc">{{ item.desc }}</div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   </n-popover>
 </template>
@@ -95,6 +99,12 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 const show = ref(false)
+
+/** 限制弹层高度并在视口内可滚动，避免底部步骤树区域裁切导致首项「用户变量」不可点 */
+const popoverContentStyle = {
+  maxHeight: 'min(400px, calc(100vh - 112px))',
+  boxSizing: 'border-box',
+}
 
 const buildItem = (key, { label, desc, iconName, disabled } = {}) => {
   const labels = {
@@ -192,7 +202,23 @@ const handleSelectItem = (item) => {
 
 <style scoped>
 .add-step-trigger-btn {
+  font-size: 12px;
   width: 100%;
+}
+
+.add-step-menu-scroll {
+  max-height: min(400px, calc(100vh - 112px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.add-step-menu-scroll::-webkit-scrollbar {
+  width: 1px;
+}
+
+.add-step-menu-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .add-step-menu {

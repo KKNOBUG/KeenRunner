@@ -661,6 +661,9 @@ class StepExecutionContext:
             self.log(error_message)
             raise StepExecutionError(error_message)
         self.log(f"【代码请求(Python)】执行完成, 返回结果: \n{json.dumps(result, ensure_ascii=False, indent=8)}")
+        # 对于f-string支持度不够，如下示例：
+        #     id_card = '${generate_ident_card_number()}'
+        #     birthday = f'${{generate_ident_card_birthday(ident_card_number={id_card})}}'
         return result
 
     @staticmethod

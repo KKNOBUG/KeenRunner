@@ -193,7 +193,7 @@ class GenerateUtils:
         return getattr(eval("self.faker_" + func_local), func_name)(**func_args or {})
 
     @classmethod
-    def generate_random_number(cls, min_: int, max_: int) -> int:
+    def generate_random_int(cls, min_: int, max_: int) -> int:
         """
         生成指定范围内的随机整数
 
@@ -202,6 +202,18 @@ class GenerateUtils:
         :return: [min_, max_]范围内的随机整数
         """
         return random.randint(min_, max_)
+
+    @classmethod
+    def generate_random_float(cls, min_: float, max_: float, num_: int = 2) -> float:
+        """
+        生成指定范围内的随机小数
+
+        :param min_: 必填项，随机数下限
+        :param max_: 必填项，随机数上限
+        :param num_: 必填项，保留小数位，默认2位
+        :return: [min_, max_]范围内的随机整数
+        """
+        return round(random.uniform(min_, max_), num_)
 
     @staticmethod
     def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
@@ -228,7 +240,7 @@ class GenerateUtils:
         elif char and not digit and not chinese:
             generate_string = english
         elif chinese and not digit and not char:
-            generate_string = english
+            generate_string = word
 
         # 2.随机两种
         elif digit and char and not chinese:
@@ -447,12 +459,12 @@ if __name__ == '__main__':
     # print("拼音：", vd.generate_pinyin("上海银行"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-", convert="upper"))
-    # print(vd.generate_string(length=10))
-    # print(vd.generate_string(length=10, char=True))
-    # print(vd.generate_string(length=10, chinese=True))
-    # print(vd.generate_string(length=10, digit=True))
-    # print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
-    print(vd.generate_random_number(1, 20))
+    print(vd.generate_string(length=10))
+    print(vd.generate_string(length=10, char=True))
+    print(vd.generate_string(length=10, chinese=True))
+    print(vd.generate_string(length=10, digit=True))
+    print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
+    # print(vd.generate_random_int(1, 20))
     # print(vd.generate_global_serial_number())
     # print(vd.generate_seconds_until_22h())
     # print(vd.generate_seconds_until())

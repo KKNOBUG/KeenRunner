@@ -11,8 +11,8 @@
         @save="handleSaveAll"
     />
     <div class="page-container">
-      <n-grid :cols="24" :x-gap="16" class="grid-container">
-        <n-gi :span="7" class="left-column">
+      <div class="steps-split-layout">
+        <div class="left-column" :style="{ width: `${leftPanelWidth}px` }">
           <n-card size="small" hoverable class="step-card">
             <template #header>
               <div class="step-header">
@@ -51,7 +51,7 @@
                     <span class="step-name" :title="step.name">
                     <TheIcon
                         :icon="getStepIcon(step.type)"
-                        :size="18"
+                        :size="16"
                         class="step-icon"
                         :class="getStepIconClass(step.type)"
                     />
@@ -69,7 +69,7 @@
                         <template #icon>
                           <TheIcon
                               :icon="isStepExpanded(step.id) ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down'"
-                              :size="16"
+                              :size="14"
                           />
                         </template>
                       </n-button>
@@ -81,14 +81,14 @@
                           title="复制当前步骤"
                       >
                         <template #icon>
-                          <TheIcon icon="material-symbols:content-copy" :size="16"/>
+                          <TheIcon icon="material-symbols:content-copy" :size="14"/>
                         </template>
                       </n-button>
                       <n-popconfirm @positive-click="handleDeleteStep(step.id)" @click.stop>
                         <template #trigger>
                           <n-button text size="tiny" type="error" class="action-btn" title="删除当前步骤">
                             <template #icon>
-                              <TheIcon icon="material-symbols:delete" :size="16"/>
+                              <TheIcon icon="material-symbols:delete" :size="14"/>
                             </template>
                           </n-button>
                         </template>
@@ -108,13 +108,13 @@
                             :key="'quote-' + step.id + '-' + idx + '-' + (item.step.id || '')"
                             class="step-item quote-inner-item"
                             :class="{ 'is-selected': selectedKeys.includes(getQuoteInnerKey(step.id, idx)) }"
-                            :style="{ marginLeft: (item.depth * 14) + 'px' }"
+                            :style="{ marginLeft: (item.depth * 10) + 'px' }"
                             @click.stop="handleSelect([getQuoteInnerKey(step.id, idx)])"
                         >
                           <span class="step-name">
                             <TheIcon
                                 :icon="getStepIcon(item.step.type)"
-                                :size="16"
+                                :size="14"
                                 class="step-icon"
                                 :class="getStepIconClass(item.step.type)"
                             />
@@ -134,8 +134,13 @@
               />
             </div>
           </n-card>
-        </n-gi>
-        <n-gi :span="17" class="right-column">
+        </div>
+        <div
+            class="steps-split-resizer"
+            title="拖动调整步骤树宽度"
+            @mousedown="startResizeLeftPanel"
+        />
+        <div class="right-column steps-split-main">
           <n-card size="small" hoverable class="config-card">
             <component
                 v-if="currentStep"
@@ -153,8 +158,8 @@
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
           </n-card>
-        </n-gi>
-      </n-grid>
+        </div>
+      </div>
     </div>
 
     <ScriptSelectDrawer
@@ -185,15 +190,13 @@
  * CaseInfoPanel：用例信息；ExecConfigModal：执行/调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
 defineOptions({ name: '步骤编辑' })
-import {computed, defineComponent, h, nextTick, onMounted, ref, watch} from 'vue'
+import {computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
   NButton,
   NCard,
   NCheckbox,
   NEmpty,
-  NGi,
-  NGrid,
   NInput,
   NPopconfirm,
   NSelect,
@@ -287,6 +290,65 @@ const caseInfoPanelRef = ref(null)
 const execConfigModalRef = ref(null)
 /** 引用/复制脚本抽屉 ref */
 const scriptSelectDrawerRef = ref(null)
+
+/** 左侧步骤树面板宽度（可拖拽调整，持久化到 localStorage） */
+const LEFT_PANEL_WIDTH_STORAGE_KEY = 'autotest-steps-left-panel-width'
+const LEFT_PANEL_WIDTH_DEFAULT = 300
+const LEFT_PANEL_WIDTH_MIN = 220
+const LEFT_PANEL_WIDTH_MAX = 560
+
+const leftPanelWidth = ref(LEFT_PANEL_WIDTH_DEFAULT)
+
+function clampLeftPanelWidth(width) {
+  return Math.min(LEFT_PANEL_WIDTH_MAX, Math.max(LEFT_PANEL_WIDTH_MIN, width))
+}
+
+function loadLeftPanelWidth() {
+  try {
+    const raw = localStorage.getItem(LEFT_PANEL_WIDTH_STORAGE_KEY)
+    if (raw == null) return
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) return
+    leftPanelWidth.value = clampLeftPanelWidth(parsed)
+  } catch {
+    /* ignore */
+  }
+}
+
+function saveLeftPanelWidth() {
+  try {
+    localStorage.setItem(LEFT_PANEL_WIDTH_STORAGE_KEY, String(leftPanelWidth.value))
+  } catch {
+    /* ignore */
+  }
+}
+
+let resizeLeftPanelStartX = 0
+let resizeLeftPanelStartWidth = LEFT_PANEL_WIDTH_DEFAULT
+
+function onResizeLeftPanelMove(event) {
+  leftPanelWidth.value = clampLeftPanelWidth(
+      resizeLeftPanelStartWidth + event.clientX - resizeLeftPanelStartX
+  )
+}
+
+function stopResizeLeftPanel() {
+  saveLeftPanelWidth()
+  document.removeEventListener('mousemove', onResizeLeftPanelMove)
+  document.removeEventListener('mouseup', stopResizeLeftPanel)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+function startResizeLeftPanel(event) {
+  if (event.button !== 0) return
+  resizeLeftPanelStartX = event.clientX
+  resizeLeftPanelStartWidth = leftPanelWidth.value
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onResizeLeftPanelMove)
+  document.addEventListener('mouseup', stopResizeLeftPanel)
+}
 
 /** 右侧步骤编辑器使用的「所属应用」选项（来自 CaseInfoPanel） */
 const editorProjectOptions = computed(() => {
@@ -2865,7 +2927,12 @@ watch([() => caseId.value, () => caseCode.value], () => {
   loadSteps()
 })
 
+onUnmounted(() => {
+  stopResizeLeftPanel()
+})
+
 onMounted(async () => {
+  loadLeftPanelWidth()
   await loadSteps()
   // 辅助函数列表（用于用户变量/关联数据）
   try {
@@ -2993,7 +3060,7 @@ const RecursiveStepChildren = defineComponent({
               }, [
                 h(TheIcon, {
                   icon: capturedGetStepIcon(child.type),
-                  size: 18,
+                  size: 16,
                   class: ['step-icon', capturedGetStepIconClass(child.type)]
                 }),
                 h('span', {
@@ -3016,7 +3083,7 @@ const RecursiveStepChildren = defineComponent({
                   }, {
                     icon: () => h(TheIcon, {
                       icon: capturedIsStepExpanded(child.id) ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down',
-                      size: 16
+                      size: 14
                     })
                   }) : null,
                   h(NButton, {
@@ -3031,7 +3098,7 @@ const RecursiveStepChildren = defineComponent({
                   }, {
                     icon: () => h(TheIcon, {
                       icon: 'material-symbols:content-copy',
-                      size: 16,
+                      size: 14,
                     })
                   }),
                   h(NPopconfirm, {
@@ -3102,35 +3169,46 @@ const RecursiveStepChildren = defineComponent({
 }
 
 
-.grid-container {
-  height: 100%;
+.steps-split-layout {
+  display: flex;
   flex: 1;
-  min-height: 0; /* 重要：允许 flex 子元素缩小 */
-}
-
-/* 确保 n-grid 内部元素正确布局 */
-.grid-container :deep(.n-grid) {
+  align-items: stretch;
   height: 100%;
+  min-height: 0;
+  min-width: 0;
 }
 
-.grid-container :deep(.n-grid-item) {
-  height: 100%;
+.steps-split-resizer {
+  flex-shrink: 0;
+  width: 3px;
+  margin: 0 3px;
+  cursor: col-resize;
+  background: transparent;
 }
 
-/* 左侧列：使用 flex 布局 */
+/* 左侧列：步骤树统一字号与字重 */
 .left-column {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 400;
 }
 
-/* 右侧列：使用 flex 布局 */
+/* 右侧列：使用 flex 布局，占据剩余空间 */
 .right-column {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+}
+
+.steps-split-main {
+  flex: 1;
+  min-width: 0;
 }
 
 /* 步骤卡片：使用 flex 布局，占满可用高度 */
@@ -3174,33 +3252,36 @@ const RecursiveStepChildren = defineComponent({
   min-height: 0;
 }
 
-/* 步骤树容器：固定高度，超出时滚动 */
+/* 步骤树容器：默认隐藏滚动条，悬停且内容溢出时出现 */
 .step-tree-container {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  min-height: 0; /* 重要：允许 flex 子元素缩小 */
-  padding: 8px 0;
+  min-height: 0;
+  padding: 4px 0;
+  scrollbar-width: none;
 }
 
+.step-tree-container:hover {
+  scrollbar-width: thin;
+  scrollbar-color: #c0c0c0 transparent;
+}
 
-/* 自定义滚动条样式（可选，提升用户体验） */
 .step-tree-container::-webkit-scrollbar {
+  width: 0;
+}
+
+.step-tree-container:hover::-webkit-scrollbar {
   width: 4px;
 }
 
-.step-tree-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 5px;
+.step-tree-container:hover::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.step-tree-container::-webkit-scrollbar-thumb {
-  background: #a8a8a8;
-  border-radius: 5px;
-}
-
-.step-tree-container::-webkit-scrollbar-thumb:hover {
-  background: #F4511E;
+.step-tree-container:hover::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
 }
 
 .step-header {
@@ -3213,7 +3294,7 @@ const RecursiveStepChildren = defineComponent({
 
 .step-count {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 /* 下拉菜单中的图标样式 */
@@ -3223,18 +3304,18 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-add-btn .add-step-trigger-btn) {
   width: 100%;
-  margin-bottom: 10px;
-  border-radius: 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
 }
 
-/* 样式穿透：确保递归组件中所有嵌套层级的样式都能正确应用 */
+/* 样式穿透：根步骤 / 子步骤 / 引用内步骤统一间距 */
 :deep(.step-item) {
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   transition: all .2s;
   cursor: pointer;
-  padding-top: 5px;
-  padding-bottom: 5px;
+  padding: 2px 0;
+  margin: 0;
 }
 
 :deep(.step-item.is-selected) {
@@ -3258,7 +3339,7 @@ const RecursiveStepChildren = defineComponent({
 :deep(.step-insert-indicator) {
   height: 2px;
   background-color: #F4511E;
-  margin: 4px 12px;
+  margin: 2px 8px;
   border-radius: 1px;
   box-shadow: 0 0 4px rgba(244, 81, 30, 0.6);
 }
@@ -3268,10 +3349,10 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-drop-zone) {
-  min-height: 40px;
+  min-height: 28px;
   border: 2px dashed #ccc;
   border-radius: 8px;
-  margin: 8px 12px;
+  margin: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3288,29 +3369,29 @@ const RecursiveStepChildren = defineComponent({
 :deep(.step-drop-zone-hint) {
   color: #999;
   font-size: 12px;
-  padding: 8px;
+  font-weight: 400;
+  padding: 4px;
 }
 
 :deep(.step-drop-zone.is-drag-over .step-drop-zone-hint) {
   color: #F4511E;
-  font-weight: 500;
 }
 
 :deep(.step-item-child) {
-  padding-left: 12px;
-  margin-left: 12px;
+  padding-left: 8px;
+  margin-left: 8px;
 }
 
 :deep(.step-name) {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex: 1;
-  font-size: 14px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   background-color: rgba(222, 222, 222, 0.20);
-  padding: 8px 8px;
-  border-radius: 10px;
+  padding: 4px 6px;
+  border-radius: 8px;
   box-sizing: border-box;
   position: relative;
   min-width: 0;
@@ -3326,8 +3407,10 @@ const RecursiveStepChildren = defineComponent({
   overflow: hidden;
   white-space: nowrap;
   margin-right: auto;
-  padding-right: 8px;
+  padding-right: 4px;
   display: inline-block;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 :deep(.step-actions) {
@@ -3346,12 +3429,12 @@ const RecursiveStepChildren = defineComponent({
 :deep(.step-number) {
   font-size: 12px;
   color: #666;
-  font-weight: 500;
-  margin-right: 4px;
+  font-weight: 400;
+  margin-right: 2px;
 }
 
 :deep(.step-icon) {
-  font-size: 18px;
+  font-size: 16px;
   flex-shrink: 0;
   align-items: center;
 }
@@ -3403,38 +3486,37 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-add-btn) {
-  padding-top: 5px;
-  padding-left: 12px;
-}
-
-/* 引用步骤：脚本内步骤展示（只读，含递归子级） */
-:deep(.quote-inner-steps) {
-  margin-left: 12px;
-  border-left: 2px solid #F4511E;
+  padding-top: 2px;
   padding-left: 8px;
 }
+
+/* 引用步骤内嵌树：与主步骤树共用 .step-item / .step-name 样式，仅保留结构缩进 */
+:deep(.quote-inner-steps) {
+  margin: 2px 0 2px 8px;
+  border-left: 2px solid #F4511E;
+  padding-left: 6px;
+}
+
 :deep(.quote-inner-list) {
-  margin-top: 6px;
+  margin-top: 2px;
 }
+
 :deep(.quote-inner-item) {
-  padding: 4px 8px;
-  margin-bottom: 2px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: none;
+  padding: 2px 0;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
 }
-:deep(.quote-inner-item .step-name) {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+
+:deep(.quote-inner-item.is-selected) {
+  border: 1px dashed #F4511E;
 }
-:deep(.quote-inner-item .step-number) {
-  margin-left: auto;
-}
+
 :deep(.quote-inner-empty) {
   font-size: 12px;
+  font-weight: 400;
   color: #999;
-  padding: 6px 0;
+  padding: 4px 0;
 }
 
 

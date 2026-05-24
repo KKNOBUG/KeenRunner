@@ -1,7 +1,17 @@
 <template>
-  <div class="monaco-editor" ref="monacoEditorRef"></div>
+  <div className="monaco-editor" ref="monacoEditorRef"></div>
 </template>
 <script setup name="monacoEditor">
+/**
+ * 通用 Monaco 编辑器封装
+ *
+ * 能力概览：
+ * - 支持 v-model:value 双向绑定、props.options 透传 Monaco 配置
+ * - 可选 Diff 双栏对比（isDiff + oldString）
+ * - SQL：表字段智能补全、右键执行
+ * - JSON：光标处 JsonPath 计算、右键复制路径
+ * - 暴露 getValue / setValue / insertAtCursor 等供业务页插入代码片段
+ */
 import * as monaco from 'monaco-editor'
 import editorWorker from '~/node_modules/monaco-editor/esm/vs/editor/editor.worker?worker';
 import jsonWorker from '~/node_modules/monaco-editor/esm/vs/language/json/json.worker?worker';
@@ -14,7 +24,10 @@ import SQLSnippets from "./core/sql.js"
 import {getJsonPath} from '@/utils/common/jsonPath'
 import commonFunction from "@/utils/common/commonFunction";
 
-// 在初始化之前，先设置MonacoEnvironment
+/**
+ * Monaco Web Worker 环境配置（须在 create 编辑器之前设置）
+ * 按语言类型加载对应 worker，避免主线程解析大文件时卡顿
+ */
 self.MonacoEnvironment = {
   getWorker(_, label) {
     if (label === 'json') {
@@ -34,30 +47,32 @@ self.MonacoEnvironment = {
 }
 
 const props = defineProps({
-  // 展示的字符串
+  /** @deprecated 与 value 二选一；当前实现以 value + update:value 为主 */
   modelValue: {
     type: String,
     default: '',
   },
+  /** 编辑器绑定文本，变更时通过 update:value 回传父组件 */
   value: {
     type: String,
     default: '',
   },
-  // 是否启用比对
+  /** true 时使用 DiffEditor 左右对比，否则为单编辑器 */
   isDiff: {
     type: Boolean,
     default: false,
   },
+  /** 是否只读（也可在 options.readOnly 中设置） */
   readOnly: {
     type: Boolean,
     default: false,
   },
-  // 比对需要的源数据
+  /** Diff 模式左侧原文（original） */
   oldString: {
     type: String,
     default: '',
   },
-  // 比对需要的新数据
+  /** Diff 模式右侧文案预留；当前 Diff 实现主要使用 value / oldString */
   newString: {
     type: String,
     default: '',
@@ -82,64 +97,116 @@ const props = defineProps({
       return {}
     }
   },
+  /** SQL 右键「执行」时调用的回调 */
   executeHandle: {
     type: Function,
   },
+  /** 数据库列表（历史字段，补全主要使用 dbs） */
   dbList: {
     type: Array,
     default: () => []
   },
+  /** SQL 补全：表别名列表或返回表别名的函数 */
   onInputTableAlia: {
     type: [Array, Function],
     default: () => []
   },
+  /** SQL 补全：可选字段名列表 */
   onInputField: {
     type: Array,
     default: () => []
   },
+  /** SQL 补全：库表结构 schema，变更时触发 watch 刷新 SQLSnippets */
   dbs: {
     type: Array,
     default: () => []
   }
 })
 
+/** 光标移动时向父组件上报偏移（JSON 场景） */
 const emit = defineEmits(["on-cursor-change", "update:value"])
 
+/** 普通模式下的 Monaco 编辑器实例；Diff 模式下为 DiffEditor 实例 */
 const editor = ref(null)
+/** 挂载 Monaco 的 DOM 容器 */
 const monacoEditorRef = ref()
+/** Diff 模式：左侧「原始」文本 Model */
 const originalEditor = ref(null)
+/** Diff 模式：右侧「修改后」文本 Model */
 const modifiedEditor = ref(null)
+
+/**
+ * 组件内部运行时状态（非 props，随编辑生命周期变化）
+ */
 const state = reactive({
+  /** SQL 智能提示实例；lang=sql 时由 SQLSnippets 提供表/字段补全，其它语言为 null */
   sqlSnippets: null,
+  /**
+   * 编辑器当前内容的快照，用于与 props.value 比对
+   * 避免父组件回写时触发 watch → setValue → 再次 emit 的循环
+   */
   contentBackup: null,
+  /**
+   * 是否正在通过 setValue / watch 程序化写入内容
+   * 为 true 时 onDidChangeModelContent 不向父组件 emit，防止脏循环
+   */
   isSettingContent: false,
+  /**
+   * 光标所在位置的 JsonPath 字符串（仅 lang=json 时由 getJsonPath 计算）
+   * 供右键「复制 JsonPath」使用
+   */
   jsonPath: null,
+  /**
+   * 传给 monaco.editor.create / createDiffEditor 的默认配置
+   * 初始化时与 props.options 合并，运行时可通过 setOptions 再覆盖
+   */
   options: {
-    value: props.value,  // 值
-    theme: props.theme,   // 主题
-    autoIndex: true,  //
-    language: props.lang, // 语言类型
+    /** 编辑器初始文本，与 props.value 同步 */
+    value: props.value,
+    /** 配色主题：vs / vs-dark / hc-black */
+    theme: props.theme,
+    /** 是否开启自动索引（历史配置项，具体行为依赖 Monaco 版本） */
+    autoIndex: true,
+    /** 语法高亮与补全所用的语言 id，与 props.lang 一致 */
+    language: props.lang,
+    /** Tab 键触发补全 */
     tabCompletion: 'on',
+    /** 光标移动时平滑动画 */
     cursorSmoothCaretAnimation: true,
+    /** 粘贴时自动格式化 */
     formatOnPaste: true,
+    /**
+     * 滚轮缩放：触底时把滚轮事件交给外层页面，避免编辑器吃掉滚动
+     * 返回 false 表示禁用 Monaco 默认 Ctrl+滚轮缩放
+     */
     mouseWheelZoom: function (e) {
       const editor = e.target;
       const isAtBottom = editor.getScrollTop() >= editor.getScrollHeight() - editor.getLayoutInfo().height;
       if (isAtBottom) {
-        e.browserEvent.stopPropagation(); // 阻止 Monaco Editor 捕获事件
+        e.browserEvent.stopPropagation();
       }
-      return false; // 禁用默认的缩放行为
+      return false;
     },
-    folding: true, //代码折叠
+    /** 是否显示代码折叠控件 */
+    folding: true,
+    /** 输入时自动补全括号 */
     autoClosingBrackets: 'always',
+    /** 覆盖输入时自动补全括号 */
     autoClosingOvertype: 'always',
+    /** 输入时自动补全引号 */
     autoClosingQuotes: 'always',
+    /** 容器尺寸变化时自动 layout（适配 flex / 抽屉等动态布局） */
     automaticLayout: 'always',
   }
 })
 
+/**
+ * 创建或重建 Monaco 编辑器
+ * - 注册语言与补全（SQL 走 SQLSnippets）
+ * - 根据 isDiff 创建单编辑器或 Diff 双栏
+ * - 绑定内容变更、自定义右键菜单与光标事件
+ */
 const initEditor = () => {
-  // 初始化编辑器，确保dom已经渲染
   let options = {...state.options, ...props.options}
   state.sqlSnippets = new SQLSnippets(
       monaco,
@@ -206,11 +273,15 @@ const initEditor = () => {
   }
 }
 
-// 获取value
+/** 读取编辑器全文（供父组件 ref 调用或内部同步） */
 const getValue = () => {
   return toRaw(editor.value).getValue()
 }
 
+/**
+ * 用新字符串替换编辑器全部内容
+ * 可编辑模式下通过 executeEdits 写入并保留 undo 栈；只读模式直接 setValue
+ */
 const setValue = (val) => {
   const isReadOnly = toRaw(editor.value).getRawOptions().readOnly;
   if (isReadOnly) {
@@ -227,22 +298,51 @@ const setValue = (val) => {
   setLineColor()
 }
 
+/** 返回当前选区内的文本；无选区时可能为空字符串 */
 const getSelectionValue = () => {
   return toRaw(editor.value).getModel().getValueInRange(toRaw(editor.value).getSelection())
 }
 
+/**
+ * 在光标处插入文本（有选区则替换选区）
+ * 更新 contentBackup 并 emit update:value；Diff 模式与只读场景下不执行
+ */
+const insertAtCursor = (text) => {
+  if (!text || !editor.value || props.isDiff) return
+  const ed = toRaw(editor.value)
+  const selection = ed.getSelection()
+  ed.executeEdits('insertSnippet', [{
+    range: selection,
+    text,
+    forceMoveMarkers: true,
+  }])
+  ed.focus()
+  const content = ed.getValue()
+  state.contentBackup = content
+  emit('update:value', content)
+}
+
+/** 获取当前文档 Model（可访问 undoStack、offset 等底层 API） */
 const getModel = () => {
   return toRaw(editor.value).getModel()
 }
 
+/** 折叠所有可折叠代码块 */
 const foldAll = () => {
   toRaw(editor.value).getAction('editor.foldAll').run()
 }
 
+/** 展开所有已折叠代码块 */
 const unfoldAll = () => {
   toRaw(editor.value).getAction('editor.unfoldAll').run()
 }
 
+/**
+ * 为指定编辑器实例注册业务侧扩展能力
+ * - JSON：右键复制 JsonPath、光标移动时计算 jsonPath / 上报 offset
+ * - SQL：右键「执行」回调 props.executeHandle
+ * - 通用：滚轮触底/触顶时事件冒泡给外层滚动容器
+ */
 const registerCustomEvent = (editor) => {
   if (props.lang === 'json') {
     editor.addAction({
@@ -307,6 +407,7 @@ const registerCustomEvent = (editor) => {
 
 }
 
+/** JSON 右键菜单：将 state.jsonPath 复制到剪贴板 */
 const copyToClipboard = () => {
   if (state.jsonPath) {
     commonFunction().copyText(state.jsonPath, `复制成功 🎉  ${state.jsonPath}`)
@@ -315,7 +416,10 @@ const copyToClipboard = () => {
   }
 }
 
-
+/**
+ * 为首行/次行添加高亮装饰（橙色背景）
+ * 用于 setValue 后视觉标记变更区域，具体范围目前写死为 1～2 行
+ */
 const setLineColor = () => {
   toRaw(editor.value).createDecorationsCollection([
     {
@@ -335,14 +439,18 @@ const setLineColor = () => {
   ])
 }
 
+/**
+ * 运行时合并并应用 Monaco 配置项（字体、只读、minimap 等）
+ * @param {Object} options 本次要覆盖的选项，会与 props.options 一起传入 updateOptions
+ */
 const setOptions = (options = {}) => {
   toRaw(editor.value).updateOptions({
-    // renderSideBySide: false,  // 并排显示
     ...props.options,
     ...options,
   });
 }
 
+/** 父组件 value 变化时同步到编辑器（与 contentBackup 比较，跳过由本组件触发的回写） */
 watch(
     () => props.value,
     (newVal) => {
@@ -360,6 +468,7 @@ watch(
     {deep: true}
 )
 
+/** 语言切换时更新 Model 的 languageId（Diff 模式暂未处理双栏） */
 watch(
     () => props.lang,
     (newVal) => {
@@ -372,6 +481,7 @@ watch(
     },
     {deep: true}
 )
+/** 主题变更时全局切换 Monaco 主题 */
 watch(
     () => props.theme,
     () => {
@@ -380,6 +490,7 @@ watch(
     },
     {deep: true}
 )
+/** Diff / 普通模式切换时销毁旧实例并重新 initEditor */
 watch(
     () => props.isDiff,
     () => {
@@ -388,6 +499,7 @@ watch(
     },
     {deep: true}
 )
+/** Diff 模式：左侧原始文本随 props.oldString 更新 */
 watch(
     () => props.oldString,
     (newVal) => {
@@ -403,6 +515,7 @@ watch(
 //     {deep: true}
 // )
 
+/** SQL 场景：库表元数据变化时刷新补全数据源 */
 watch(
     () => props.dbs,
     () => {
@@ -415,11 +528,12 @@ onMounted(() => {
   initEditor()
 })
 
+/** 组件卸载时释放编辑器实例，避免内存泄漏 */
 onUnmounted(() => {
   toRaw(editor.value)?.dispose()
 })
 
-
+/** 供父组件通过 ref 调用的公开 API */
 defineExpose({
   getValue,
   getModel,
@@ -427,6 +541,7 @@ defineExpose({
   foldAll,
   unfoldAll,
   getSelectionValue,
+  insertAtCursor,
 })
 </script>
 <style>

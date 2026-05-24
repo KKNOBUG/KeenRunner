@@ -43,12 +43,30 @@
               <p>• 「断言」页仅支持从<code>变量池</code>取实际值（变量名为表达式），与 HTTP 步骤中断言列表布局一致。</p>
             </div>
           </div>
-          <monaco-editor
-              v-model:value="form.code"
-              :options="codeEditorOptions"
-              class="code-editor"
-              style="min-height: 400px; height: auto;"
-          />
+          <div class="code-editor-row">
+            <monaco-editor
+                ref="codeEditorRef"
+                v-model:value="form.code"
+                :options="codeEditorOptions"
+                class="code-editor code-editor-main"
+                style="min-height: 500px; height: auto;"
+            />
+            <aside class="code-snippets-panel">
+              <div class="code-snippets-title">代码片段</div>
+              <ul class="code-snippets-list">
+                <li v-for="item in codeSnippets" :key="item.label">
+                  <button
+                      type="button"
+                      class="code-snippet-link"
+                      :disabled="props.readonly"
+                      @click="insertCodeSnippet(item)"
+                  >
+                    {{ item.label }}
+                  </button>
+                </li>
+              </ul>
+            </aside>
+          </div>
         </n-tab-pane>
         <n-tab-pane name="assert_validators" tab="断言">
           <template #tab>
@@ -140,7 +158,7 @@
               :value="debugResultText"
               :options="responseEditorOptions"
               class="response-editor"
-              style="min-height: 300px; height: auto;"
+              style="min-height: 500px; height: auto;"
               :read-only="true"
           />
         </n-tab-pane>
@@ -320,7 +338,7 @@ function toggleValidatorCollapse(key) {
 const monacoEditorOptions = {
   theme: 'vs-dark',
   language: 'python',
-  fontSize: 14,
+  fontSize: 12,
   tabSize: 4,
   automaticLayout: true,
   minimap: {enabled: true},
@@ -334,10 +352,105 @@ const codeEditorOptions = computed(() => ({
   readOnly: props.readonly
 }))
 
+/**
+ * 常用代码片段（与执行上下文 defined_variables / session_variables 一致）
+ * 展示名以 @ 开头表示在光标处插入；无 @ 则在文末换行追加
+ */
+/** 点击「示例代码」时替换编辑器全部内容的模板 */
+const PYTHON_STEP_EXAMPLE = `import random
+
+
+def generate_test_data() -> dict:
+    """
+    利用内置函数生成虚拟数据
+    :return:
+    """
+    job = '\${generate_job()}'
+    name = '\${generate_name()}'
+    phone = '\${generate_phone()}'
+    email = '\${generate_email()}'
+    address = '\${generate_address()}'
+    id_card = '\${generate_ident_card_number()}'
+    birthday = f'\${{generate_ident_card_birthday(ident_card_number={id_card})}}'
+    gender = f'\${{generate_ident_card_gender(ident_card_number={id_card})}}'
+    datetime_str1 = '\${generate_datetime(fmt=11)}'
+    datetime_str2 = '\${generate_datetime(fmt=21)}'
+    datetime_str3 = '\${generate_datetime(fmt=31)}'
+    datetime_str4 = '\${generate_datetime(fmt=41)}'
+    datetime_str5 = '\${generate_datetime(fmt=42)}'
+    datetime_str6 = '\${generate_datetime(fmt=51)}'
+    datetime_str7 = '\${generate_datetime(fmt=52)}'
+    random_float = '\${generate_float(min_=100, max_=999, num_3)}'
+    random_int1 = '\${generate_random_int(min_=100000, max_=999999)}'
+    random_int2 = '\${generate_random_int(min_=100, max_=999)}'
+    random_int3 = '\${generate_string(length=10, digit=True)}'
+    random_str1 = '\${generate_string(length=10, char=True)}'
+    random_str2 = '\${generate_string(length=10, chinese=True)}'
+    random_str3 = '\${generate_string(length=20, char=True, chinese=True, digit=True)}'
+
+    # 布尔 & 状态
+    is_active = random.choice([True, False])
+    status = random.choice(["pending", "success", "failed", "closed"])
+    return {
+        "id": random_int1,
+        "no": random_int2,
+        "username": name,
+        "password": random_str1,
+        "phone": phone,
+        "email": email,
+        "job": job,
+        "address": address,
+        "id_card": id_card,
+        "birthday": birthday,
+        "gender": gender,
+        "random_str1": random_str3,
+        "random_str2": random_str2,
+        "random_int": random_int3,
+        "random_float": random_float,
+        "datetime_str1": datetime_str1,
+        "datetime_str2": datetime_str2,
+        "datetime_str3": datetime_str3,
+        "datetime_str4": datetime_str4,
+        "datetime_str5": datetime_str5,
+        "datetime_str6": datetime_str6,
+        "datetime_str7": datetime_str7,
+        "is_active": is_active,
+        "status": status,
+    }
+`
+
+const codeSnippets = [
+  { label: '@插入UUID', content: "uuid_str = '${generate_uuid()}'" },
+  { label: '@插入时间戳', content: "timestamp = '${generate_timestamp()}'" },
+  { label: '示例代码', content: PYTHON_STEP_EXAMPLE },
+]
+
+function shouldInsertAtCursor(snippet) {
+  const label = snippet?.label || ''
+  return label.startsWith('@')
+}
+
+function insertCodeSnippet(snippet) {
+  if (props.readonly || !snippet?.content) return
+  const text = snippet.content
+  if (shouldInsertAtCursor(snippet) && codeEditorRef.value?.insertAtCursor) {
+    codeEditorRef.value.insertAtCursor(text)
+    form.code = codeEditorRef.value.getValue?.() ?? form.code
+    return
+  }
+  // 示例代码：先清空再写入完整模板
+  if (snippet.label === '示例代码') {
+    form.code = text
+    codeEditorRef.value?.setValue?.(text)
+    return
+  }
+  form.code = form.code?.trim() ? `${form.code}\n${text}` : text
+}
+
 const responseEditorOptions = {
   theme: 'vs-dark',
   language: 'json',
-  fontSize: 14,
+  fontSize: 12,
   tabSize: 2,
   automaticLayout: true,
   minimap: {enabled: true},
@@ -347,6 +460,8 @@ const responseEditorOptions = {
   folding: true,
   readOnly: true,
 }
+
+const codeEditorRef = ref(null)
 
 // 调试相关状态
 const debugLoading = ref(false)
@@ -524,8 +639,6 @@ const handleDebug = async () => {
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
 }
 
 .python-logo {
@@ -549,14 +662,14 @@ const handleDebug = async () => {
 }
 
 .hint-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   margin-bottom: 8px;
 }
 
 .hint-content {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .hint-content p {
@@ -602,6 +715,68 @@ const handleDebug = async () => {
   padding: 12px 16px;
   background-color: #fafafa;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.code-editor-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+}
+
+.code-editor-main {
+  flex: 0 0 85%;
+  max-width: 85%;
+  min-width: 0;
+}
+
+.code-snippets-panel {
+  flex: 0 0 15%;
+  max-width: 15%;
+  min-width: 0;
+  padding: 2px 4px 8px 8px;
+  border-left: 1px solid #999;
+  box-sizing: border-box;
+  line-height: 1.2;
+}
+
+.code-snippets-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.code-snippets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.code-snippets-list li + li {
+  margin-top: 10px;
+}
+
+.code-snippet-link {
+  display: block;
+  width: 100%;
+  padding: 0 0 4px 8px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #2080f0;
+  cursor: pointer;
+}
+
+.code-snippet-link:hover:not(:disabled) {
+  color: #F4511E;
+  text-decoration: underline;
+}
+
+.code-snippet-link:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .code-editor {

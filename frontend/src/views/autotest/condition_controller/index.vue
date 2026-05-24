@@ -4,7 +4,7 @@
       <n-form-item label="条件表达式" required>
         <n-input
             v-model:value="form.condition_expr"
-            placeholder="变量名或表达式,例如: ${token} 或 ${count}"
+            placeholder="变量名称或自定义表达式，例如: ${var} 或 具体数据"
             style="width: 80%;"
             :disabled="props.readonly"
         />
@@ -21,7 +21,7 @@
       <n-form-item label="条件比对值">
         <n-input
             v-model:value="form.condition_value"
-            placeholder="字符串或变量,例如: 3 或 ${target} (非空/为空操作时可不填)"
+            placeholder="变量名称或自定义比较值，例如: ${target} 或 具体数据 (非空/为空操作时可不填)"
             style="width: 80%;"
             :disabled="props.readonly"
         />
