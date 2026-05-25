@@ -154,9 +154,9 @@ watch(
 <style scoped>
 .user-variables-card {
   margin: 8px 0;
-  border-radius: 10px;
-  box-shadow: 0 0 12px rgba(204, 204, 204, 0.99);
-  border-left: 4px solid #F4511E;
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  border-left: 3px solid #F4511E;
 }
 
 .variables-section {
