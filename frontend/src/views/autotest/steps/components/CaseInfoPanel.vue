@@ -9,147 +9,153 @@
   - case_type 变化时 emit case-type-change，父级负责步骤树里「引用公共脚本」的移除/恢复
 -->
 <template>
-  <n-card size="small" class="case-info-card" title="用例信息">
-    <n-form
-        :model="caseForm"
-        label-placement="left"
-        label-width="80px"
-        class="case-info-form"
-    >
-      <div class="case-info-fields">
-        <div class="case-field">
-          <n-form-item label="所属应用" path="case_project" required :show-feedback="false">
-            <n-select
-                v-model:value="caseForm.case_project"
-                :options="projectOptions"
-                :loading="projectLoading"
-                clearable
-                filterable
-                placeholder="所属应用"
-                size="small"
-                class="case-field-input"
-            />
-          </n-form-item>
-        </div>
+  <n-collapse
+      v-model:expanded-names="caseInfoExpandedNames"
+      class="case-info-collapse"
+      arrow-placement="right"
+      :trigger-areas="['main', 'arrow']"
+  >
+    <n-collapse-item title="用例信息" name="caseInfo">
+      <template #header-extra>
+        <n-space :size="8" class="case-info-header-actions" @click.stop>
+          <n-button type="info" size="small" :loading="runLoading" @click="emit('run')">执行</n-button>
+          <n-button type="primary" size="small" :loading="debugLoading" @click="emit('debug')">调试</n-button>
+          <n-button type="success" size="small" :loading="saveLoading" @click="emit('save')">保存</n-button>
+        </n-space>
+      </template>
+      <n-form
+          :model="caseForm"
+          label-placement="left"
+          label-width="80px"
+          class="case-info-form"
+      >
+        <div class="case-info-fields">
+          <div class="case-field">
+            <n-form-item label="所属应用" path="case_project" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_project"
+                  :options="projectOptions"
+                  :loading="projectLoading"
+                  clearable
+                  filterable
+                  placeholder="所属应用"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-        <div class="case-field">
-          <n-form-item label="用例名称" path="case_name" required :show-feedback="false">
-            <n-input
-                v-model:value="caseForm.case_name"
-                size="small"
-                placeholder="请输入用例名称"
-                class="case-field-input"
-            />
-          </n-form-item>
-        </div>
+          <div class="case-field">
+            <n-form-item label="用例名称" path="case_name" required :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_name"
+                  size="small"
+                  placeholder="请输入用例名称"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-        <div class="case-field">
-          <n-form-item label="所属标签" path="case_tags" required :show-feedback="false">
-            <n-popover
-                v-model:show="tagPopoverShow"
-                trigger="click"
-                placement="bottom-start"
-                :style="{ width: '400px' }"
-            >
-              <template #trigger>
-                <n-input
-                    :value="getSelectedTagNames()"
-                    clearable
-                    readonly
-                    placeholder="请选择所属标签"
-                    size="small"
-                    class="case-field-input"
-                    @clear="caseForm.case_tags = []"
-                    @click="tagPopoverShow = !tagPopoverShow"
-                />
-              </template>
-              <template #default>
-                <div style="display: flex; height: 300px; width: 400px;">
-                  <div style="width: 45%; overflow-y: auto;">
-                    <n-list v-if="Object.keys(tagModeGroups).length > 0">
-                      <n-list-item
-                          v-for="(tags, mode) in tagModeGroups"
-                          :key="mode"
-                          :class="{ 'tag-mode-selected': selectedTagMode === mode, 'tag-mode-item': true }"
-                          @click="selectedTagMode = mode"
-                      >
-                        <span class="tag-mode-text" :title="mode">{{ mode }}</span>
-                      </n-list-item>
-                    </n-list>
-                    <div v-else style="padding: 20px; text-align: center; color: #999;">
-                      {{ tagLoading ? '加载中...' : '暂无标签数据' }}
+          <div class="case-field">
+            <n-form-item label="所属标签" path="case_tags" required :show-feedback="false">
+              <n-popover
+                  v-model:show="tagPopoverShow"
+                  trigger="click"
+                  placement="bottom-start"
+                  :style="{ width: '400px' }"
+              >
+                <template #trigger>
+                  <n-input
+                      :value="getSelectedTagNames()"
+                      clearable
+                      readonly
+                      placeholder="请选择所属标签"
+                      size="small"
+                      class="case-field-input"
+                      @clear="caseForm.case_tags = []"
+                      @click="tagPopoverShow = !tagPopoverShow"
+                  />
+                </template>
+                <template #default>
+                  <div style="display: flex; height: 300px; width: 400px;">
+                    <div style="width: 45%; overflow-y: auto;">
+                      <n-list v-if="Object.keys(tagModeGroups).length > 0">
+                        <n-list-item
+                            v-for="(tags, mode) in tagModeGroups"
+                            :key="mode"
+                            :class="{ 'tag-mode-selected': selectedTagMode === mode, 'tag-mode-item': true }"
+                            @click="selectedTagMode = mode"
+                        >
+                          <span class="tag-mode-text" :title="mode">{{ mode }}</span>
+                        </n-list-item>
+                      </n-list>
+                      <div v-else style="padding: 20px; text-align: center; color: #999;">
+                        {{ tagLoading ? '加载中...' : '暂无标签数据' }}
+                      </div>
+                    </div>
+                    <div style="width: 50%; overflow-y: auto;">
+                      <n-list v-if="selectedTagMode && currentTagNames.length > 0">
+                        <n-list-item
+                            v-for="tag in currentTagNames"
+                            :key="tag.tag_id"
+                            :class="{ 'tag-name-selected': isTagSelected(tag.tag_id) }"
+                            class="tag-list-item"
+                            @click="handleTagSelect(tag.tag_id)"
+                        >
+                          <span class="tag-checkbox">{{ isTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
+                          <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
+                        </n-list-item>
+                      </n-list>
+                      <div v-else style="padding: 20px; text-align: center; color: #999;">
+                        {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
+                      </div>
                     </div>
                   </div>
-                  <div style="width: 50%; overflow-y: auto;">
-                    <n-list v-if="selectedTagMode && currentTagNames.length > 0">
-                      <n-list-item
-                          v-for="tag in currentTagNames"
-                          :key="tag.tag_id"
-                          :class="{ 'tag-name-selected': isTagSelected(tag.tag_id) }"
-                          class="tag-list-item"
-                          @click="handleTagSelect(tag.tag_id)"
-                      >
-                        <span class="tag-checkbox">{{ isTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
-                        <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
-                      </n-list-item>
-                    </n-list>
-                    <div v-else style="padding: 20px; text-align: center; color: #999;">
-                      {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </n-popover>
-          </n-form-item>
-        </div>
+                </template>
+              </n-popover>
+            </n-form-item>
+          </div>
 
-        <div class="case-field">
-          <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
-            <n-select
-                v-model:value="caseForm.case_attr"
-                :options="caseAttrOptions"
-                clearable
-                placeholder="请选择用例属性"
-                size="small"
-                class="case-field-input"
-            />
-          </n-form-item>
-        </div>
+          <div class="case-field">
+            <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_attr"
+                  :options="caseAttrOptions"
+                  clearable
+                  placeholder="请选择用例属性"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-        <div class="case-field">
-          <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
-            <n-select
-                v-model:value="caseForm.case_type"
-                :options="caseTypeOptions"
-                clearable
-                placeholder="请选择用例类型"
-                size="small"
-                class="case-field-input"
-            />
-          </n-form-item>
-        </div>
+          <div class="case-field">
+            <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_type"
+                  :options="caseTypeOptions"
+                  clearable
+                  placeholder="请选择用例类型"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-        <div class="case-field case-field-full">
-          <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
-            <n-input
-                v-model:value="caseForm.case_desc"
-                size="small"
-                type="textarea"
-                placeholder="请输入用例描述"
-            />
-          </n-form-item>
+          <div class="case-field case-field-full">
+            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_desc"
+                  size="small"
+                  type="textarea"
+                  placeholder="请输入用例描述"
+              />
+            </n-form-item>
+          </div>
         </div>
-
-        <div class="case-field case-field-full case-field-buttons">
-          <n-space justify="end">
-            <n-button type="info" :loading="runLoading" @click="emit('run')">执行</n-button>
-            <n-button type="primary" :loading="debugLoading" @click="emit('debug')">调试</n-button>
-            <n-button type="success" :loading="saveLoading" @click="emit('save')">保存</n-button>
-          </n-space>
-        </div>
-      </div>
-    </n-form>
-  </n-card>
+      </n-form>
+    </n-collapse-item>
+  </n-collapse>
 </template>
 
 <script setup>
@@ -171,7 +177,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NButton,
-  NCard,
+  NCollapse,
+  NCollapseItem,
   NForm,
   NFormItem,
   NInput,
@@ -192,6 +199,9 @@ defineProps({
 const emit = defineEmits(['run', 'debug', 'save', 'case-type-change'])
 
 const route = useRoute()
+
+/** 用例信息折叠面板展开项，默认展开 */
+const caseInfoExpandedNames = ref(['caseInfo'])
 
 /** 用例基本信息，保存时由 getCasePayload() 交给 index 拼进 updateOrCreateStepTree */
 const caseForm = reactive({
@@ -432,14 +442,57 @@ defineExpose({
 </script>
 
 <style scoped>
-.case-info-card {
-  margin-bottom: 8px;
+.case-info-collapse {
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.case-info-collapse :deep(.n-collapse-item) {
+  border: 1px solid var(--n-border-color);
   border-radius: 8px;
+  overflow: hidden;
+  background: var(--n-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.case-info-collapse :deep(.n-collapse-item__header) {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px !important;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+
+.case-info-collapse :deep(.n-collapse-item__header-main) {
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
+}
+
+.case-info-collapse :deep(.n-collapse-item__header-extra) {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  margin-left: 12px;
+}
+
+.case-info-header-actions :deep(.n-button) {
+  font-size: 13px;
+}
+
+.case-info-collapse :deep(.n-collapse-item__content-inner) {
+  padding: 0 12px 12px;
+}
+
+.case-info-collapse :deep(.n-form-item-label) {
+  font-size: 13px;
 }
 
 .case-info-form {
   width: 100%;
+  font-size: 13px;
 }
 
 .case-info-fields {
@@ -458,11 +511,6 @@ defineExpose({
 
 .case-field-full {
   grid-column: 1 / -1;
-}
-
-.case-field-full.case-field-buttons {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .case-field-input {
