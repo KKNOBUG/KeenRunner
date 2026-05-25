@@ -35,12 +35,12 @@
           <div class="hint-box">
             <div class="hint-title">使用说明</div>
             <div class="hint-content">
-              <p>• 仅可定义单个函数作为入口，系统将<code>自动调用</code>该函数；</p>
-              <p>• 支持函数内部使用 <code>${变量名}</code> 占位符引用上下文变量；</p>
-              <p>• 支持代码调试查看执行结果，如遇异常也会<code>反馈错误消息</code>；</p>
-              <p>• 函数返回的执行结果类型必须是 <code>Dict[str, Any]</code>类型;</p>
-              <p>• 系统会自动的获取该函数执行结果，并添加到<code>会话变量池;</code></p>
-              <p>• 「断言」页仅支持从<code>变量池</code>取实际值（变量名为表达式），与 HTTP 步骤中断言列表布局一致。</p>
+              <p>• 脚本以函数形式作为执行入口，<code>必须符合PEP8编码规范</code>，标准声明格式：<code>def func() -> dict: ...</code></p>
+              <p>• 函数最终返回值固定要求为字典类型：<code>Dict[str, Any]</code>，如：<code>return {"name": "value", ...}</code></p>
+              <p>• 函数内部支持使用 <code>${函数名称}</code> 格式占位符调用系统内置函数，使用 <code>${变量名称}</code> 格式占位符引用上下文变量</p>
+              <p>• 函数支持调试，可实时查看执行状态、执行结果；如果脚本存在异常时主动抛出报错信息，error: ...</p>
+              <p>• 系统将自动解析占位符并执行对应逻辑，运行结果同步存入会话变量池中，供后续步骤使用</p>
+              <p>• 支持结果断言校验，可从会话变量池读取目标变量，与预设预期值完成比对核验</p>
             </div>
           </div>
           <div class="code-editor-row">
