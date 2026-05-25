@@ -92,7 +92,7 @@
                           <span class="tag-mode-text" :title="mode">{{ mode }}</span>
                         </n-list-item>
                       </n-list>
-                      <div v-else style="padding: 20px; text-align: center; color: #999;">
+                      <div v-else class="autotest-empty-hint">
                         {{ tagLoading ? '加载中...' : '暂无标签数据' }}
                       </div>
                     </div>
@@ -109,7 +109,7 @@
                           <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
                         </n-list-item>
                       </n-list>
-                      <div v-else style="padding: 20px; text-align: center; color: #999;">
+                      <div v-else class="autotest-empty-hint">
                         {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
                       </div>
                     </div>
@@ -461,7 +461,7 @@ defineExpose({
 
 .case-info-collapse :deep(.n-collapse-item) {
   border-radius: 12px;
-  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--n-border-color) 50%, transparent);
   border-left: 3px solid #F4511E;
   background: var(--n-color);
 }

@@ -233,101 +233,10 @@
               <span>提取</span>
             </n-badge>
           </template>
-          <!-- 提取配置 -->
-          <n-space vertical :size="12" class="extract-validator-list">
-            <div v-for="(item, key) in state.form.extract_variables" :key="key" class="extract_variables-item">
-              <n-card
-                  size="small"
-                  hoverable
-                  :class="{ 'is-item-collapsed': extractCollapseState[key] }"
-              >
-                <template #header>
-                  <div class="extract-validator-card-header">
-                    <span>{{ item.name || '未命名提取' }} {{
-                        getExtractObjectLabel(item.object)
-                      }}{{
-                        item.extractScope === '部分提取' && item.jsonpath ? `( ${item.jsonpath} )` : item.extractScope === '全部提取' ? '( 全部提取 )' : ''
-                      }}</span>
-                    <n-space>
-                      <n-button text @click="toggleExtractCollapse(key)" size="small">
-                        <template #icon>
-                          <TheIcon
-                              :icon="extractCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                              :size="18"/>
-                        </template>
-                      </n-button>
-                      <n-button text @click="duplicateExtract(key)" type="info" size="small">
-                        <template #icon>
-                          <TheIcon icon="material-symbols:content-copy" :size="18"/>
-                        </template>
-                      </n-button>
-                      <n-button text @click="removeExtract(key)" type="error" size="small">
-                        <template #icon>
-                          <TheIcon icon="material-symbols:delete-outline" :size="18"/>
-                        </template>
-                      </n-button>
-                    </n-space>
-                  </div>
-                </template>
-                <div v-show="!extractCollapseState[key]">
-                  <n-form :model="item" label-width="auto" label-placement="left">
-                    <n-form-item label="提取名称">
-                      <n-input v-model:value="item.name" placeholder="请输入提取名称" clearable/>
-                    </n-form-item>
-                    <n-form-item label="提取对象">
-                      <n-select
-                          v-model:value="item.object"
-                          :options="extractObjectOptions"
-                          placeholder="请选择提取对象"
-                      />
-                    </n-form-item>
-                    <n-form-item label="提取范围">
-                      <n-space align="center" :wrap-item="false">
-                        <n-radio-group v-model:value="item.extractScope" name="extractScope">
-                          <n-space>
-                            <n-radio value="部分提取">部分提取</n-radio>
-                            <n-radio value="全部提取">全部提取</n-radio>
-                          </n-space>
-                        </n-radio-group>
-                        <n-tooltip trigger="hover">
-                          <template #trigger>
-                            <TheIcon icon="material-symbols:help-outline" :size="18"
-                                     style="cursor: help; margin-left: 8px;"/>
-                          </template>
-                          选择提取范围：部分提取需要指定JSONPath/XPath等表达式，全部提取将提取整个响应内容
-                        </n-tooltip>
-                      </n-space>
-                    </n-form-item>
-                    <n-form-item v-if="item.extractScope === '部分提取'" label="提取路径">
-                      <n-space align="center" :wrap-item="false" style="width: 100%;">
-                        <n-input
-                            v-model:value="item.jsonpath"
-                            :placeholder="getExtractPlaceholder(item.object)"
-                            clearable
-                            style="flex: 1;"
-                        />
-                        <n-button text type="primary" @click="continueExtract(key)">
-                          继续提取
-                          <template #icon>
-                            <TheIcon icon="material-symbols:dataset-linked-outline" :size="18"/>
-                          </template>
-                        </n-button>
-                        <n-switch v-model:value="item.continueExtract" size="small"/>
-                        <n-input-number v-model:value="item.extractIndex" :min="0" size="small" style="width: 80px;"/>
-                        <n-tooltip trigger="hover">
-                          <template #trigger>
-                            <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;"/>
-                          </template>
-                          0 表示第1项，1表示第2项，-1表示倒数第1项，-2表示倒数第2项，以此类推
-                        </n-tooltip>
-                      </n-space>
-                    </n-form-item>
-                  </n-form>
-                </div>
-              </n-card>
-            </div>
-            <n-button type="primary" @click="addExtract" block dashed>添加提取</n-button>
-          </n-space>
+          <StepExtractPanel
+              v-model="state.form.extract_variables"
+              mode="response"
+          />
         </n-tab-pane>
         <n-tab-pane name="assert_validators" tab="断言">
           <template #tab>
@@ -335,78 +244,7 @@
               <span>断言</span>
             </n-badge>
           </template>
-          <!-- 断言配置 -->
-          <n-space vertical :size="12" class="extract-validator-list">
-            <div v-for="(item, key) in state.form.assert_validators" :key="key" class="validator-item">
-              <n-card
-                  size="small"
-                  hoverable
-                  :class="{ 'is-item-collapsed': validatorCollapseState[key] }"
-              >
-                <template #header>
-                  <div class="extract-validator-card-header">
-                    <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
-                        item.jsonpath || ''
-                      }} )</span>
-                    <n-space>
-                      <n-button text @click="toggleValidatorCollapse(key)" size="small">
-                        <template #icon>
-                          <TheIcon
-                              :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                              :size="18"/>
-                        </template>
-                      </n-button>
-                      <n-button text @click="duplicateValidator(key)" type="info" size="small">
-                        <template #icon>
-                          <TheIcon icon="material-symbols:content-copy" :size="18"/>
-                        </template>
-                      </n-button>
-                      <n-button text @click="removeValidator(key)" type="error" size="small">
-                        <template #icon>
-                          <TheIcon icon="material-symbols:delete-outline" :size="18"/>
-                        </template>
-                      </n-button>
-                    </n-space>
-                  </div>
-                </template>
-                <div v-show="!validatorCollapseState[key]">
-                  <n-form :model="item" label-width="auto" label-placement="left">
-                    <n-form-item label="断言名称">
-                      <n-input v-model:value="item.name" placeholder="请输入断言名称" clearable/>
-                    </n-form-item>
-                    <n-form-item label="断言对象">
-                      <n-select
-                          v-model:value="item.object"
-                          :options="validatorObjectOptions"
-                          placeholder="请选择断言对象"
-                      />
-                    </n-form-item>
-                    <n-form-item label="断言表达式">
-                      <n-space align="center" :wrap-item="false" style="width: 100%;">
-                        <n-input
-                            v-model:value="item.jsonpath"
-                            :placeholder="getValidatorPlaceholder(item.object)"
-                            clearable
-                            style="flex: 1;"
-                        />
-                      </n-space>
-                    </n-form-item>
-                    <n-form-item label="断言操作符">
-                      <n-select
-                          v-model:value="item.assertion"
-                          :options="assertionOptions"
-                          placeholder="请选择断言方法"
-                      />
-                    </n-form-item>
-                    <n-form-item label="断言预期值">
-                      <n-input v-model:value="item.value" placeholder="请输入预期值" clearable/>
-                    </n-form-item>
-                  </n-form>
-                </div>
-              </n-card>
-            </div>
-            <n-button type="primary" @click="addValidator" block dashed>添加断言</n-button>
-          </n-space>
+          <StepAssertPanel v-model="state.form.assert_validators" mode="response" />
         </n-tab-pane>
       </n-tabs>
     </n-collapse-transition>
@@ -792,11 +630,22 @@ import {
   NTooltip,
   NUpload,
 } from 'naive-ui'
-import { assertionOperationSelectOptions } from '@/constants/autotestAssertionOperation'
 import api from "@/api";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
 import MonacoEditor from "@/components/monaco/index.vue";
 import TheIcon from "@/components/icon/TheIcon.vue";
+import StepExtractPanel from '@/components/autotest/StepExtractPanel.vue'
+import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
+import {
+  ASSERT_MODE_RESPONSE,
+  buildAssertListFromDict,
+  buildExtractListFromDict,
+  countDictKeys,
+  EXTRACT_MODE_RESPONSE,
+  hydrateAssertDictFromBackend,
+  hydrateExtractDictFromBackend,
+  normalizeBackendList,
+} from '@/utils/autotestExtractAssert'
 import {useUserStore} from '@/store';
 import {useRoute} from 'vue-router'
 
@@ -1707,10 +1556,6 @@ const state = reactive({
   }
 })
 
-// 提取/断言折叠状态
-const extractCollapseState = ref({})
-const validatorCollapseState = ref({})
-
 // 注意：不再使用 kvObjectToList 和 kvListToObject，所有字段都必须是列表格式
 
 const initFromConfig = () => {
@@ -1814,50 +1659,14 @@ const initFromConfig = () => {
   // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
   state.form.defined_variables = Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
 
-  // 提取：无默认内容，仅当 config/original 有数据时填充（与后端字段对齐：expr, name, source, scope, index）
-  state.form.extract_variables = {}
-  extractCollapseState.value = {}
-  const extractSource = cfg.extract_variables ?? original.extract_variables
-  const extractList = !extractSource
-      ? []
-      : Array.isArray(extractSource)
-          ? extractSource
-          : (typeof extractSource === 'object' && Object.keys(extractSource).length > 0 ? [extractSource] : [])
-  extractList.forEach((item, index) => {
-    const key = String(index + 1)
-    state.form.extract_variables[key] = {
-      name: item.name || '',
-      object: item.source || 'Response Json',
-      extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
-      jsonpath: item.expr || '',
-      continueExtract: item.continueExtract || false,
-      extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null
-    }
-    extractCollapseState.value[key] = false
-  })
-
-  // 断言：无默认内容，仅当 config/original 有数据时填充（与后端字段对齐：expr, name, source, operation, except_value）
-  state.form.assert_validators = {}
-  validatorCollapseState.value = {}
-  const validatorsSource = cfg.assert_validators ?? original.assert_validators
-  const validatorsList = !validatorsSource
-      ? []
-      : Array.isArray(validatorsSource)
-          ? validatorsSource
-          : (typeof validatorsSource === 'object' && Object.keys(validatorsSource).length > 0 ? [validatorsSource] : [])
-  validatorsList.forEach((item, index) => {
-    const key = String(index + 1)
-    state.form.assert_validators[key] = {
-      name: item.name || '',
-      object: item.source || 'Response Json',
-      jsonpath: item.expr || '',
-      assertion: item.operation || '等于',
-      value: item.except_value != null ? String(item.except_value) : '',
-      continueExtract: item.continueExtract || false,
-      extractIndex: item.extractIndex ?? 0
-    }
-    validatorCollapseState.value[key] = false
-  })
+  state.form.extract_variables = hydrateExtractDictFromBackend(
+      normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
+      EXTRACT_MODE_RESPONSE
+  )
+  state.form.assert_validators = hydrateAssertDictFromBackend(
+      normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
+      ASSERT_MODE_RESPONSE
+  )
 }
 
 initFromConfig()
@@ -1919,31 +1728,11 @@ watch(
     {deep: true, immediate: false}
 )
 
-// 与后端提取字段一致：expr, name, source, scope, index；剔除提取名称或提取路径为空的项
-const buildExtractForBackend = () => {
-  return Object.values(state.form.extract_variables || {})
-      .map(item => ({
-        expr: item.jsonpath || '',
-        name: item.name || '',
-        scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
-        source: item.object || 'Response Json',
-        index: item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== '' ? Number(item.extractIndex) : null
-      }))
-      .filter(item => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== '')
-}
+const buildExtractForBackend = () =>
+    buildExtractListFromDict(state.form.extract_variables, EXTRACT_MODE_RESPONSE)
 
-// 与后端 autotest_step_engine 断言字段一致：expr, name, source, operation, except_value；剔除断言名称或断言表达式为空的项
-const buildValidatorsForBackend = () => {
-  return Object.values(state.form.assert_validators || {})
-      .map(item => ({
-        expr: item.jsonpath || '',
-        name: item.name || '',
-        source: item.object || 'Response Json',
-        operation: item.assertion || '等于',
-        except_value: item.value != null ? String(item.value) : ''
-      }))
-      .filter(item => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== '')
-}
+const buildValidatorsForBackend = () =>
+    buildAssertListFromDict(state.form.assert_validators, ASSERT_MODE_RESPONSE)
 
 const buildConfigFromState = () => {
   // 列表格式：每个元素包含 key、value、desc
@@ -2413,172 +2202,8 @@ const doDebugRequest = async (env_id) => {
   }
 };
 
-/* ======================================= */
-/* =============== Extract =============== */
-/*  ====================================== */
-// 提取对象选项
-const extractObjectOptions = [
-  {label: 'Response Json', value: 'Response Json'},
-  {label: 'Response Text', value: 'Response Text'},
-  {label: 'Response XML', value: 'Response XML'},
-  {label: 'Response Header', value: 'Response Header'},
-  {label: 'Response Cookie', value: 'Response Cookie'}
-]
-
-// 断言对象选项（包含变量池）
-const validatorObjectOptions = [
-  {label: 'Response Json', value: 'Response Json'},
-  {label: 'Response Text', value: 'Response Text'},
-  {label: 'Response XML', value: 'Response XML'},
-  {label: 'Response Header', value: 'Response Header'},
-  {label: 'Response Cookie', value: 'Response Cookie'},
-  {label: '变量池', value: '变量池'}
-]
-
-// 断言方法选项（与 backend.enums.autotest_enum.AutoTestAssertionOperation 一致）
-const assertionOptions = assertionOperationSelectOptions
-
-// 提取数量计算
-const extractCount = computed(() => {
-  return Object.keys(state.form.extract_variables).length
-})
-
-// 断言数量计算
-const validatorsCount = computed(() => {
-  return Object.keys(state.form.assert_validators).length
-})
-
-// 获取提取对象标签
-const getExtractObjectLabel = (value) => {
-  const option = extractObjectOptions.find(opt => opt.value === value) || validatorObjectOptions.find(opt => opt.value === value)
-  return option ? option.label : value || ''
-}
-
-// 获取提取功能的placeholder
-const getExtractPlaceholder = (object) => {
-  const placeholderMap = {
-    'Response Json': '请输入JSONPath表达式，如：$.data.name',
-    'Response Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
-    'Response XML': '请输入XPath表达式，如：/store/book[1]/title',
-    'Response Header': '请输入 Header 名称，如：Content-Type',
-    'Response Cookie': '请输入 Cookie 名称，如：Auth'
-  }
-  return placeholderMap[object] || '请输入表达式'
-}
-
-// 获取断言功能的placeholder
-const getValidatorPlaceholder = (object) => {
-  const placeholderMap = {
-    'Response Json': '请输入JSONPath表达式，如：$.data.name',
-    'Response Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
-    'Response XML': '请输入XPath表达式，如：/store/book[1]/title',
-    'Response Header': '请输入 Header 名称，如：Content-Type',
-    'Response Cookie': '请输入 Cookie 名称，如：Auth',
-    '变量池': '请输入变量名称，如：name'
-  }
-  return placeholderMap[object] || '请输入表达式'
-}
-
-// 生成下一个提取序号
-const getNextExtractKey = () => {
-  const keys = Object.keys(state.form.extract_variables).map(k => parseInt(k)).filter(k => !isNaN(k))
-  if (keys.length === 0) return '1'
-  return String(Math.max(...keys) + 1)
-}
-
-// 生成下一个断言序号
-const getNextValidatorKey = () => {
-  const keys = Object.keys(state.form.assert_validators).map(k => parseInt(k)).filter(k => !isNaN(k))
-  if (keys.length === 0) return '1'
-  return String(Math.max(...keys) + 1)
-}
-
-// 添加提取
-const addExtract = () => {
-  const key = getNextExtractKey()
-  state.form.extract_variables[key] = {
-    name: '',
-    object: 'Response Json',
-    extractScope: '部分提取', // 默认选择部分提取
-    jsonpath: '',
-    continueExtract: false,
-    extractIndex: 0
-  }
-  extractCollapseState.value[key] = false
-}
-
-// 删除提取
-const removeExtract = (key) => {
-  delete state.form.extract_variables[key]
-  delete extractCollapseState.value[key]
-}
-
-// 复制提取
-const duplicateExtract = (key) => {
-  const item = state.form.extract_variables[key]
-  if (item) {
-    const newKey = getNextExtractKey()
-    state.form.extract_variables[newKey] = {
-      ...JSON.parse(JSON.stringify(item)),
-      name: item.name ? `${item.name}_副本` : ''
-    }
-    extractCollapseState.value[newKey] = extractCollapseState.value[key] ?? false
-  }
-}
-
-const toggleExtractCollapse = (key) => {
-  extractCollapseState.value[key] = !extractCollapseState.value[key]
-}
-
-// 继续提取（提取功能）
-const continueExtract = (key) => {
-  // TODO: 实现继续提取逻辑
-  $message.info('继续提取功能待实现')
-}
-
-// 添加断言
-const addValidator = () => {
-  const key = getNextValidatorKey()
-  state.form.assert_validators[key] = {
-    name: '',
-    object: 'Response Json',
-    jsonpath: '',
-    assertion: '等于',
-    value: '',
-    continueExtract: false,
-    extractIndex: 0
-  }
-  validatorCollapseState.value[key] = false
-}
-
-// 删除断言
-const removeValidator = (key) => {
-  delete state.form.assert_validators[key]
-  delete validatorCollapseState.value[key]
-}
-
-// 复制断言
-const duplicateValidator = (key) => {
-  const item = state.form.assert_validators[key]
-  if (item) {
-    const newKey = getNextValidatorKey()
-    state.form.assert_validators[newKey] = {
-      ...JSON.parse(JSON.stringify(item)),
-      name: item.name ? `${item.name}_副本` : ''
-    }
-    validatorCollapseState.value[newKey] = validatorCollapseState.value[key] ?? false
-  }
-}
-
-const toggleValidatorCollapse = (key) => {
-  validatorCollapseState.value[key] = !validatorCollapseState.value[key]
-}
-
-// 继续提取（断言功能）
-const continueExtractValidator = (key) => {
-  // TODO: 实现继续提取逻辑
-  $message.info('继续提取功能待实现')
-}
+const extractCount = computed(() => countDictKeys(state.form.extract_variables))
+const validatorsCount = computed(() => countDictKeys(state.form.assert_validators))
 
 // 数据提取结果表格列定义
 const extractColumns = [
@@ -2735,7 +2360,7 @@ const validatorColumns = [
 .http-card {
   margin: 8px 0;
   border-radius: 12px;
-  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
   border-left: 3px solid #F4511E
 }
 
@@ -2891,11 +2516,6 @@ const validatorColumns = [
   white-space: nowrap;
 }
 
-/* HEAD/BODY/ASSERT 关键行：背景色与表头接近，便于识别且不可删行有视觉提示 */
-:deep(.locked-keyword-row td) {
-  background-color: #f6f8fa !important;
-}
-
 .key-value-editor .key-value-row {
   display: grid;
   grid-template-columns: 1fr 1fr 100px;
@@ -2924,21 +2544,9 @@ const validatorColumns = [
   overflow: auto; /* 添加滚动条 */
 }
 
-:global(:root) {
-  --pre-bg-color: #f4f4f4;
-  --pre-text-color: #333;
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(:root) {
-    --pre-bg-color: #222;
-    --pre-text-color: #eee;
-  }
-}
-
 pre {
-  background-color: var(--pre-bg-color);
-  color: var(--pre-text-color);
+  background-color: var(--autotest-pre-bg-color);
+  color: var(--autotest-pre-text-color);
   padding: 10px;
   border-radius: 4px;
   white-space: pre-wrap;

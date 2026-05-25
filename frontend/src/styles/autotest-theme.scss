@@ -1,0 +1,80 @@
+/**
+ * 自动化测试及相关页面：明暗主题通用样式
+ * 依赖 Naive NConfigProvider 的 CSS 变量，与 html.dark（useDark）一致
+ */
+
+:root {
+  --autotest-pre-bg-color: var(--n-color-embedded);
+  --autotest-pre-text-color: var(--n-text-color);
+}
+
+/* 步骤/控制器面板卡片阴影（各控制器 .http-card 共用） */
+.http-card {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--n-border-color) 50%, transparent);
+}
+
+/* 工具类 */
+.autotest-muted-text {
+  color: var(--n-text-color-3);
+}
+
+.autotest-secondary-text {
+  color: var(--n-text-color-2);
+}
+
+.autotest-empty-hint {
+  padding: 20px;
+  text-align: center;
+  color: var(--n-text-color-3);
+}
+
+.autotest-hint-text {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.autotest-list-selected {
+  background-color: var(--n-color-primary-hover);
+  font-weight: 500;
+}
+
+.autotest-pre-block {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--autotest-pre-bg-color);
+  color: var(--autotest-pre-text-color);
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.autotest-error-log-pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--n-color-error);
+  background: var(--n-color-error-hover);
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--n-color-error-suppl);
+}
+
+/* 报告/任务表格分组行 */
+.report-group-row,
+.report-group-row td {
+  background-color: var(--n-color-embedded) !important;
+}
+
+.report-batch-row,
+.report-batch-row td {
+  background-color: var(--n-color-target, var(--n-color-embedded)) !important;
+}
+
+/* HTTP KeyValue 锁定行 */
+.locked-keyword-row td {
+  background-color: var(--n-color-embedded) !important;
+}
+
+pre.log-item,
+.log-item {
+  background-color: var(--autotest-pre-bg-color);
+  color: var(--autotest-pre-text-color);
+}

@@ -722,7 +722,7 @@ const columns = computed(() => {
                       <span class="tag-mode-text" :title="mode">{{ mode }}</span>
                     </NListItem>
                   </NList>
-                  <div v-else style="padding: 20px; text-align: center; color: #999;">
+                  <div v-else class="autotest-empty-hint">
                     {{ tagLoading ? '加载中...' : '暂无标签数据' }}
                   </div>
                 </div>
@@ -739,7 +739,7 @@ const columns = computed(() => {
                       <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
                     </NListItem>
                   </NList>
-                  <div v-else style="padding: 20px; text-align: center; color: #999;">
+                  <div v-else class="autotest-empty-hint">
                     {{ selectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
                   </div>
                 </div>
@@ -813,12 +813,12 @@ const columns = computed(() => {
 }
 
 .tag-mode-selected {
-  background-color: #e3f2fd;
+  background-color: var(--n-color-primary-hover);
   font-weight: 500;
 }
 
 .tag-name-selected {
-  background-color: #e3f2fd;
+  background-color: var(--n-color-primary-hover);
   font-weight: 500;
 }
 
@@ -827,7 +827,7 @@ const columns = computed(() => {
 }
 
 :deep(.n-list-item:hover) {
-  background-color: #f5f5f5;
+  background-color: var(--n-color-hover);
 }
 
 /* 统一查询输入框宽度 */

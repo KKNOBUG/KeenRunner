@@ -619,7 +619,7 @@ const confirmAssociationValue = (index) => {
   font-family: inherit;
   font-size: 10px;
   line-height: 1.5;
-  color: #999;
+  color: var(--n-text-color-3);
   white-space: pre-wrap;
   word-break: break-word;
   overflow: visible;

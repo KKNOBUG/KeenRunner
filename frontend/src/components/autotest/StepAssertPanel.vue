@@ -1,0 +1,212 @@
+<template>
+  <n-space vertical :size="8" class="extract-validator-list">
+    <div v-for="(item, key) in model" :key="key" class="validator-item">
+      <n-card
+        size="small"
+        hoverable
+        :class="{ 'is-item-collapsed': collapseState[key] }"
+      >
+        <template #header>
+          <div class="extract-validator-card-header">
+            <span>{{ formatAssertCardTitle(item, assertMode) }}</span>
+            <n-space>
+              <n-button text size="small" :disabled="readonly" @click="toggleCollapse(key)">
+                <template #icon>
+                  <TheIcon
+                    :icon="collapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                    :size="18"
+                  />
+                </template>
+              </n-button>
+              <n-button text type="info" size="small" :disabled="readonly" @click="duplicateItem(key)">
+                <template #icon>
+                  <TheIcon icon="material-symbols:content-copy" :size="18" />
+                </template>
+              </n-button>
+              <n-button text type="error" size="small" :disabled="readonly" @click="removeItem(key)">
+                <template #icon>
+                  <TheIcon icon="material-symbols:delete-outline" :size="18" />
+                </template>
+              </n-button>
+            </n-space>
+          </div>
+        </template>
+        <div v-show="!collapseState[key]">
+          <n-form
+            :model="item"
+            label-width="auto"
+            label-placement="left"
+            size="small"
+            class="step-ev-form"
+          >
+            <n-form-item label="断言名称">
+              <n-input
+                v-model:value="item.name"
+                placeholder="请输入断言名称"
+                clearable
+                :disabled="readonly"
+              />
+            </n-form-item>
+
+            <n-form-item v-if="isDatabase" label="断言来源">
+              <n-select
+                v-model:value="item.source"
+                :options="sourceOptions"
+                placeholder="选择「请求」中的存储变量名（variable_name）"
+                filterable
+                clearable
+                :disabled="readonly || !sourceOptions.length"
+              />
+            </n-form-item>
+            <n-form-item v-else-if="!isPython" label="断言对象">
+              <n-select
+                v-model:value="item.object"
+                :options="RESPONSE_ASSERT_OBJECT_OPTIONS"
+                placeholder="请选择断言对象"
+                :disabled="readonly"
+              />
+            </n-form-item>
+            <n-form-item v-else label="断言对象">
+              <n-select
+                v-model:value="item.object"
+                :options="PYTHON_ASSERT_OBJECT_OPTIONS"
+                placeholder="变量池"
+                :disabled="readonly"
+              />
+            </n-form-item>
+
+            <n-form-item :label="isDatabase ? '断言表达式' : '断言表达式'">
+              <n-input
+                v-model:value="item.jsonpath"
+                :placeholder="exprPlaceholder(item)"
+                clearable
+                :disabled="readonly"
+              />
+            </n-form-item>
+            <n-form-item label="断言操作符">
+              <n-select
+                v-model:value="item.assertion"
+                :options="assertionOptions"
+                placeholder="请选择断言方法"
+                :disabled="readonly"
+              />
+            </n-form-item>
+            <n-form-item label="断言预期值">
+              <n-input
+                v-model:value="item.value"
+                placeholder="请输入预期值"
+                clearable
+                :disabled="readonly"
+              />
+            </n-form-item>
+          </n-form>
+        </div>
+      </n-card>
+    </div>
+    <n-button type="primary" block dashed :disabled="readonly" @click="addItem">添加断言</n-button>
+  </n-space>
+</template>
+
+<script setup>
+import { computed, reactive, watch } from 'vue'
+import {
+  NButton,
+  NCard,
+  NForm,
+  NFormItem,
+  NInput,
+  NSelect,
+  NSpace,
+} from 'naive-ui'
+import TheIcon from '@/components/icon/TheIcon.vue'
+import {
+  assertionOptions,
+  ASSERT_MODE_DATABASE,
+  ASSERT_MODE_PYTHON,
+  ASSERT_MODE_RESPONSE,
+  createEmptyAssertItem,
+  formatAssertCardTitle,
+  getAssertPlaceholder,
+  getNextDictKey,
+  PYTHON_ASSERT_OBJECT_OPTIONS,
+  RESPONSE_ASSERT_OBJECT_OPTIONS,
+} from '@/utils/autotestExtractAssert'
+
+const props = defineProps({
+  /** response | database | python */
+  mode: {
+    type: String,
+    default: ASSERT_MODE_RESPONSE,
+    validator: (v) => [ASSERT_MODE_RESPONSE, ASSERT_MODE_DATABASE, ASSERT_MODE_PYTHON].includes(v),
+  },
+  readonly: { type: Boolean, default: false },
+  sourceOptions: { type: Array, default: () => [] },
+})
+
+const model = defineModel({ type: Object, default: () => ({}) })
+
+const assertMode = computed(() => props.mode)
+const isDatabase = computed(() => props.mode === ASSERT_MODE_DATABASE)
+const isPython = computed(() => props.mode === ASSERT_MODE_PYTHON)
+
+const collapseState = reactive({})
+
+function syncCollapseKeys() {
+  const keys = new Set(Object.keys(model.value || {}))
+  Object.keys(collapseState).forEach((k) => {
+    if (!keys.has(k)) delete collapseState[k]
+  })
+  keys.forEach((k) => {
+    if (collapseState[k] === undefined) collapseState[k] = false
+  })
+}
+
+watch(model, syncCollapseKeys, { deep: true, immediate: true })
+
+function defaultSource() {
+  if (!isDatabase.value) return null
+  return props.sourceOptions[0]?.value ?? null
+}
+
+function exprPlaceholder(item) {
+  if (isDatabase.value) return getAssertPlaceholder(null, ASSERT_MODE_DATABASE)
+  return getAssertPlaceholder(item?.object, props.mode)
+}
+
+function addItem() {
+  const key = getNextDictKey(model.value)
+  model.value[key] = createEmptyAssertItem(props.mode, defaultSource())
+  collapseState[key] = false
+}
+
+function removeItem(key) {
+  delete model.value[key]
+  delete collapseState[key]
+}
+
+function duplicateItem(key) {
+  const item = model.value[key]
+  if (!item) return
+  const newKey = getNextDictKey(model.value)
+  model.value[newKey] = {
+    ...JSON.parse(JSON.stringify(item)),
+    name: item.name ? `${item.name}_副本` : '',
+  }
+  collapseState[newKey] = collapseState[key] ?? false
+}
+
+function toggleCollapse(key) {
+  collapseState[key] = !collapseState[key]
+}
+
+defineExpose({
+  resetCollapse() {
+    Object.keys(collapseState).forEach((k) => delete collapseState[k])
+    syncCollapseKeys()
+  },
+})
+</script>
+
+<style scoped lang="scss">
+@import './step-extract-assert-panel.scss';
+</style>

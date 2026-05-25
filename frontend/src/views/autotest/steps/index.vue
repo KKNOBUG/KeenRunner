@@ -3261,7 +3261,7 @@ const RecursiveStepChildren = defineComponent({
 .step-tree-container:hover,
 .config-card :deep(.n-card__content):hover {
   scrollbar-width: thin;
-  scrollbar-color: #c0c0c0 transparent;
+  scrollbar-color: color-mix(in srgb, var(--n-border-color) 75%, transparent) transparent;
 }
 
 .step-tree-container::-webkit-scrollbar,
@@ -3281,7 +3281,7 @@ const RecursiveStepChildren = defineComponent({
 
 .step-tree-container:hover::-webkit-scrollbar-thumb,
 .config-card :deep(.n-card__content):hover::-webkit-scrollbar-thumb {
-  background: #c0c0c0;
+  background: color-mix(in srgb, var(--n-border-color) 75%, transparent);
   border-radius: 4px;
 }
 
@@ -3351,14 +3351,14 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-drop-zone) {
   min-height: 28px;
-  border: 2px dashed #ccc;
+  border: 2px dashed var(--n-border-color);
   border-radius: 8px;
   margin: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  background-color: #fafafa;
+  background-color: var(--n-color-embedded);
 }
 
 :deep(.step-drop-zone.is-drag-over) {
@@ -3368,7 +3368,7 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-drop-zone-hint) {
-  color: #999;
+  color: var(--n-text-color-3);
   font-size: 13px;
   font-weight: 400;
   padding: 4px;
@@ -3390,7 +3390,7 @@ const RecursiveStepChildren = defineComponent({
   flex: 1;
   font-size: 13px;
   font-weight: 400;
-  background-color: rgba(222, 222, 222, 0.20);
+  background-color: color-mix(in srgb, var(--n-border-color) 35%, transparent);
   padding: 4px 6px;
   border-radius: 8px;
   box-sizing: border-box;
@@ -3429,7 +3429,7 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-number) {
   font-size: 13px;
-  color: #666;
+  color: var(--n-text-color-2);
   font-weight: 400;
   margin-right: 2px;
 }
@@ -3517,7 +3517,7 @@ const RecursiveStepChildren = defineComponent({
 :deep(.quote-inner-empty) {
   font-size: 13px;
   font-weight: 400;
-  color: #999;
+  color: var(--n-text-color-3);
   padding: 4px 0;
 }
 

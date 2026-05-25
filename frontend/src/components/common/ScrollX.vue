@@ -10,11 +10,11 @@
     </template>
 
     <div
-      ref="content"
-      v-resize="refreshIsOverflow"
-      class="content"
-      :class="{ overflow: isOverflow && showArrow }"
-      :style="{
+        ref="content"
+        v-resize="refreshIsOverflow"
+        class="content"
+        :class="{ overflow: isOverflow && showArrow }"
+        :style="{
         transform: `translateX(${translateX}px)`,
       }"
     >
@@ -113,7 +113,7 @@ defineExpose({
 <style lang="scss" scoped>
 .wrapper {
   display: flex;
-  background-color: #fff;
+  background-color: var(--n-color, #fff);
 
   z-index: 9;
   overflow: hidden;
@@ -131,7 +131,7 @@ defineExpose({
   }
   .left,
   .right {
-    background-color: #fff;
+    background-color: var(--n-color, #fff);
     position: absolute;
     top: 0;
     bottom: 0;

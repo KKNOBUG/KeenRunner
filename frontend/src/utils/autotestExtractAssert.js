@@ -1,0 +1,313 @@
+import { assertionOperationSelectOptions } from '@/constants/autotestAssertionOperation'
+
+/** 提取：HTTP/TCP 响应对象 */
+export const EXTRACT_MODE_RESPONSE = 'response'
+/** 提取：数据库步骤，来源为请求中的 variable_name */
+export const EXTRACT_MODE_DATABASE = 'database'
+
+/** 断言：HTTP/TCP 响应 + 变量池 */
+export const ASSERT_MODE_RESPONSE = 'response'
+/** 断言：数据库步骤，来源为 variable_name */
+export const ASSERT_MODE_DATABASE = 'database'
+/** 断言：Python 代码步骤，仅变量池 */
+export const ASSERT_MODE_PYTHON = 'python'
+
+export const RESPONSE_EXTRACT_OBJECT_OPTIONS = [
+  { label: 'Response Json', value: 'Response Json' },
+  { label: 'Response Text', value: 'Response Text' },
+  { label: 'Response XML', value: 'Response XML' },
+  { label: 'Response Header', value: 'Response Header' },
+  { label: 'Response Cookie', value: 'Response Cookie' },
+]
+
+export const RESPONSE_ASSERT_OBJECT_OPTIONS = [
+  ...RESPONSE_EXTRACT_OBJECT_OPTIONS,
+  { label: '变量池', value: '变量池' },
+]
+
+export const PYTHON_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
+
+export const DB_JSONPATH_PLACEHOLDER =
+  '如 $.sql_data[0].列名 或 $.sql_count（相对该 variable_name 对应执行结果项）'
+
+export const DB_SOURCE_HINT =
+  '与执行结果列表中该 variable_name 对应项匹配；JSONPath 写在该项对象上，例如 $.sql_data[0].列名、$.sql_count。'
+
+export const assertionOptions = assertionOperationSelectOptions
+
+export function normalizeBackendList(source) {
+  if (!source) return []
+  if (Array.isArray(source)) return source
+  if (typeof source === 'object' && Object.keys(source).length > 0) return [source]
+  return []
+}
+
+export function getNextDictKey(dict) {
+  const keys = Object.keys(dict || {})
+      .map((k) => parseInt(k, 10))
+      .filter((k) => !Number.isNaN(k))
+  if (!keys.length) return '1'
+  return String(Math.max(...keys) + 1)
+}
+
+export function countDictKeys(dict) {
+  return Object.keys(dict || {}).length
+}
+
+export function resolveDatabaseSourceVar(item) {
+  let srcVar = String(item?.source ?? '').trim()
+  if (!srcVar || srcVar.toLowerCase() === 'response json') {
+    srcVar = String(item?.subject_key ?? '').trim()
+  }
+  return srcVar || null
+}
+
+export function getExtractObjectLabel(value) {
+  const option =
+    RESPONSE_EXTRACT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+    || RESPONSE_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+    || PYTHON_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+  return option ? option.label : value || ''
+}
+
+export function getExtractPlaceholder(object) {
+  const placeholderMap = {
+    'Response Json': '请输入JSONPath表达式，如：$.data.name',
+    'Response Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
+    'Response XML': '请输入XPath表达式，如：/store/book[1]/title',
+    'Response Header': '请输入 Header 名称，如：Content-Type',
+    'Response Cookie': '请输入 Cookie 名称，如：Auth',
+  }
+  return placeholderMap[object] || '请输入表达式'
+}
+
+export function getAssertPlaceholder(object, assertMode) {
+  if (assertMode === ASSERT_MODE_DATABASE) return DB_JSONPATH_PLACEHOLDER
+  if (object === '变量池' || assertMode === ASSERT_MODE_PYTHON) {
+    return '请输入变量池中的变量名，如：token'
+  }
+  return getExtractPlaceholder(object)
+}
+
+export function createEmptyExtractItem(extractMode, defaultSource = null) {
+  if (extractMode === EXTRACT_MODE_DATABASE) {
+    return {
+      name: '',
+      source: defaultSource ?? null,
+      extractScope: '部分提取',
+      jsonpath: '',
+      continueExtract: false,
+      extractIndex: 0,
+    }
+  }
+  return {
+    name: '',
+    object: 'Response Json',
+    extractScope: '部分提取',
+    jsonpath: '',
+    continueExtract: false,
+    extractIndex: 0,
+  }
+}
+
+export function createEmptyAssertItem(assertMode, defaultSource = null) {
+  if (assertMode === ASSERT_MODE_DATABASE) {
+    return {
+      name: '',
+      source: defaultSource ?? null,
+      jsonpath: '',
+      assertion: '等于',
+      value: '',
+    }
+  }
+  if (assertMode === ASSERT_MODE_PYTHON) {
+    return {
+      name: '',
+      object: '变量池',
+      jsonpath: '',
+      assertion: '等于',
+      value: '',
+    }
+  }
+  return {
+    name: '',
+    object: 'Response Json',
+    jsonpath: '',
+    assertion: '等于',
+    value: '',
+    continueExtract: false,
+    extractIndex: 0,
+  }
+}
+
+export function hydrateExtractDictFromBackend(list, extractMode) {
+  const dict = {}
+  const rows = normalizeBackendList(list)
+  rows.forEach((item, index) => {
+    const key = String(index + 1)
+    if (extractMode === EXTRACT_MODE_DATABASE) {
+      dict[key] = {
+        name: item.name || '',
+        source: resolveDatabaseSourceVar(item),
+        extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
+        jsonpath: item.expr || '',
+        continueExtract: item.continueExtract || false,
+        extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : 0,
+      }
+    } else {
+      dict[key] = {
+        name: item.name || '',
+        object: item.source || 'Response Json',
+        extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
+        jsonpath: item.expr || '',
+        continueExtract: item.continueExtract || false,
+        extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null,
+      }
+    }
+  })
+  return dict
+}
+
+export function hydrateAssertDictFromBackend(list, assertMode) {
+  const dict = {}
+  const rows = normalizeBackendList(list)
+  rows.forEach((item, index) => {
+    const key = String(index + 1)
+    if (assertMode === ASSERT_MODE_DATABASE) {
+      dict[key] = {
+        name: item.name || '',
+        source: resolveDatabaseSourceVar(item),
+        jsonpath: item.expr || '',
+        assertion: item.operation || '等于',
+        value: item.except_value != null ? String(item.except_value) : '',
+      }
+    } else if (assertMode === ASSERT_MODE_PYTHON) {
+      dict[key] = {
+        name: item.name || '',
+        object: '变量池',
+        jsonpath: item.expr || '',
+        assertion: item.operation || '等于',
+        value: item.except_value != null ? String(item.except_value) : '',
+      }
+    } else {
+      dict[key] = {
+        name: item.name || '',
+        object: item.source || 'Response Json',
+        jsonpath: item.expr || '',
+        assertion: item.operation || '等于',
+        value: item.except_value != null ? String(item.except_value) : '',
+        continueExtract: item.continueExtract || false,
+        extractIndex: item.extractIndex ?? 0,
+      }
+    }
+  })
+  return dict
+}
+
+export function formatExtractCardTitle(item, extractMode) {
+  const name = item?.name || '未命名提取'
+  if (extractMode === EXTRACT_MODE_DATABASE) {
+    const src = item?.source || '未选来源'
+    const path =
+      item?.extractScope === '部分提取' && item?.jsonpath
+        ? ` (${item.jsonpath})`
+        : item?.extractScope === '全部提取'
+          ? ' (全部提取)'
+          : ''
+    return `${name} · ${src}${path}`
+  }
+  const objLabel = getExtractObjectLabel(item?.object)
+  const path =
+    item?.extractScope === '部分提取' && item?.jsonpath
+      ? `( ${item.jsonpath} )`
+      : item?.extractScope === '全部提取'
+        ? '( 全部提取 )'
+        : ''
+  return `${name} ${objLabel}${path ? ` ${path}` : ''}`
+}
+
+export function formatAssertCardTitle(item, assertMode) {
+  const name = item?.name || '未命名断言'
+  const expr = item?.jsonpath || ''
+  if (assertMode === ASSERT_MODE_DATABASE) {
+    return `${name} · ${item?.source || '未选来源'} ( ${expr} )`
+  }
+  const objLabel = getExtractObjectLabel(item?.object)
+  return `${name} ${objLabel}( ${expr} )`
+}
+
+export function buildExtractListFromDict(dict, extractMode) {
+  if (extractMode === EXTRACT_MODE_DATABASE) {
+    return Object.values(dict || {})
+        .map((item) => ({
+          expr: item.jsonpath || '',
+          name: item.name || '',
+          scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+          source: String(item.source ?? '').trim(),
+          index:
+            item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
+              ? Number(item.extractIndex)
+              : null,
+        }))
+        .filter((item) => {
+          const n = String(item.name ?? '').trim()
+          const src = String(item.source ?? '').trim()
+          if (!n || !src) return false
+          if (item.scope === 'ALL') return true
+          return String(item.expr ?? '').trim() !== ''
+        })
+  }
+  return Object.values(dict || {})
+      .map((item) => ({
+        expr: item.jsonpath || '',
+        name: item.name || '',
+        scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+        source: item.object || 'Response Json',
+        index:
+          item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
+            ? Number(item.extractIndex)
+            : null,
+      }))
+      .filter(
+        (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
+      )
+}
+
+export function buildAssertListFromDict(dict, assertMode) {
+  if (assertMode === ASSERT_MODE_DATABASE) {
+    return Object.values(dict || {})
+        .map((item) => ({
+          expr: item.jsonpath || '',
+          name: item.name || '',
+          source: String(item.source ?? '').trim(),
+          operation: item.assertion || '等于',
+          except_value: item.value != null ? String(item.value) : '',
+        }))
+        .filter(
+          (item) =>
+            String(item.name ?? '').trim() !== ''
+            && String(item.source ?? '').trim() !== ''
+            && String(item.expr ?? '').trim() !== ''
+        )
+  }
+  if (assertMode === ASSERT_MODE_PYTHON) {
+    return Object.values(dict || {}).map((item) => ({
+      expr: item.jsonpath || '',
+      name: item.name || '',
+      source: '变量池',
+      operation: item.assertion || '等于',
+      except_value: item.value != null ? String(item.value) : '',
+    }))
+  }
+  return Object.values(dict || {})
+      .map((item) => ({
+        expr: item.jsonpath || '',
+        name: item.name || '',
+        source: item.object || 'Response Json',
+        operation: item.assertion || '等于',
+        except_value: item.value != null ? String(item.value) : '',
+      }))
+      .filter(
+        (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
+      )
+}

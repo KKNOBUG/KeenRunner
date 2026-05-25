@@ -110,7 +110,7 @@ const userStore = useUserStore()
   width: 150px; /* 固定宽度 */
   border: 1px solid #e5e5e5; /* 移除默认边框 */
   border-radius: 12px; /* 圆角边框 */
-  background-color: #f9f9f9; /* 背景颜色 */
+  background-color: var(--n-color-embedded);
   box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.01); /* 阴影效果 */
   padding: 5px; /* 内边距 */
   transition: border-color 0.3s; /* 过渡动画 */

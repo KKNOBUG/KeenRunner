@@ -1,0 +1,81 @@
+.extract-validator-list {
+  width: 100%;
+}
+
+.extract-validator-list :deep(.n-space-item) {
+  width: 100%;
+}
+
+.extract-validator-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 24px;
+  line-height: 1.35;
+  font-size: 13px;
+}
+
+.extract_variables-item,
+.validator-item {
+  width: 100%;
+}
+
+.extract_variables-item :deep(.n-card),
+.validator-item :deep(.n-card) {
+  border: 1px solid var(--n-border-color);
+  background-color: var(--n-color);
+}
+
+.extract_variables-item :deep(.n-card-header),
+.validator-item :deep(.n-card-header) {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 12px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+}
+
+.extract_variables-item :deep(.n-card-header__main),
+.validator-item :deep(.n-card-header__main) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.extract_variables-item :deep(.n-card__content),
+.validator-item :deep(.n-card__content) {
+  padding: 8px 12px;
+}
+
+.extract_variables-item :deep(.n-card.is-item-collapsed .n-card-header),
+.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
+  border-bottom: none;
+}
+
+.extract_variables-item :deep(.n-card.is-item-collapsed .n-card__content),
+.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
+  display: none;
+  padding: 0;
+}
+
+.step-ev-form {
+  font-size: 13px;
+}
+
+.step-ev-form :deep(.n-form-item) {
+  margin-bottom: 0;
+}
+
+.step-ev-form :deep(.n-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+.step-ev-form :deep(.n-form-item-label) {
+  font-size: 13px;
+  padding-bottom: 0;
+}

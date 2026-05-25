@@ -207,9 +207,7 @@
                     arrow-placement="right"
                 >
                   <NCollapseItem title="错误日志" name="errorInfo" v-if="currentDetail.step_exec_except">
-                    <pre
-                        style="white-space: pre-wrap; word-wrap: break-word; color: #d03050; background: #fff5f5; padding: 12px; border-radius: 4px; border: 1px solid #ffccc7;"
-                    >{{ currentDetail.step_exec_except }}</pre>
+                    <pre class="autotest-error-log-pre">{{ currentDetail.step_exec_except }}</pre>
                   </NCollapseItem>
                   <NCollapseItem title="普通日志" name="execLogger" v-if="executionNormalLines.length">
                     <NSpace vertical :size="12">
@@ -299,10 +297,7 @@
                         style="min-height: 200px; height: auto;"
                     />
                   </div>
-                  <pre
-                      v-else
-                      style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
-                  >{{ formatRequestHeadersText() }}</pre>
+                  <pre v-else class="autotest-pre-block">{{ formatRequestHeadersText() }}</pre>
                 </NCollapseItem>
                 <NCollapseItem title="Params" name="requestParams" v-if="normalizedRequestParams && Object.keys(normalizedRequestParams).length > 0">
                   <div v-if="isObjectRequestParams">
@@ -312,10 +307,7 @@
                         style="min-height: 200px; height: auto;"
                     />
                   </div>
-                  <pre
-                      v-else
-                      style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
-                  >{{ formatJson(normalizedRequestParams) }}</pre>
+                  <pre v-else class="autotest-pre-block">{{ formatJson(normalizedRequestParams) }}</pre>
                 </NCollapseItem>
                 <NCollapseItem title="Form File" name="requestFormFile" v-if="requestFormFileTable.length > 0">
                   <NDataTable
@@ -340,10 +332,7 @@
                       size="small"
                       :bordered="true"
                   />
-                  <pre
-                      v-else
-                      style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 12px; border-radius: 4px;"
-                  >{{ requestBodyText }}</pre>
+                  <pre v-else class="autotest-pre-block">{{ requestBodyText }}</pre>
                 </NCollapseItem>
 
                 <NCollapseItem title="Code (Python)" name="requestCode" v-if="isReportPythonStep && reportPythonCodeFromDetail">
@@ -1048,7 +1037,7 @@ watch(
 .step-info-label {
   font-size: 14px;
   font-weight: bold;
-  color: #666;
+  color: var(--n-text-color-2);
   flex-shrink: 0;
 }
 .step-info-value {
@@ -1060,8 +1049,8 @@ watch(
 
 /* 与 http_controller 执行日志 Tab 中 .log-item 一致 */
 .log-item {
-  background-color: var(--pre-bg-color);
-  color: var(--pre-text-color);
+  background-color: var(--autotest-pre-bg-color);
+  color: var(--autotest-pre-text-color);
   padding: 8px 12px;
   border-radius: 4px;
   margin-bottom: 8px;

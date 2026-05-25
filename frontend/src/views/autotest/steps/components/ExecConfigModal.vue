@@ -1221,7 +1221,7 @@ defineExpose({
   margin-top: 10px;
   padding-top: 10px;
   font-size: 12px;
-  color: #999;
+  color: var(--n-text-color-3);
 }
 
 .exec-config-dataset-footer-inner {
@@ -1300,13 +1300,13 @@ defineExpose({
 }
 
 .exec-config-app-count {
-  color: #999;
+  color: var(--n-text-color-3);
   margin-top: 4px;
   font-size: 12px;
 }
 
 .exec-config-empty {
-  color: #999;
+  color: var(--n-text-color-3);
   padding: 16px 12px;
   font-size: 12px;
 }

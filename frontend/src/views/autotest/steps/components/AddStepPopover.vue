@@ -297,7 +297,7 @@ const handleSelectItem = (item) => {
 .add-step-item-desc {
   margin-top: 5px;
   font-size: 11px;
-  color: #999;
+  color: var(--n-text-color-3);
   line-height: 1.15;
   word-break: break-word;
 }

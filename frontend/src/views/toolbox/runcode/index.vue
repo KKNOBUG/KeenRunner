@@ -215,6 +215,6 @@ const runCode = async () => {
 */
 :deep(.cm-editor .cm-content ::selection) {
   background-color: #3e4451;
-  color: #999;
+  color: var(--n-text-color-3);
 }
 </style>

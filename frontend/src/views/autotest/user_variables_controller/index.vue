@@ -155,7 +155,7 @@ watch(
 .user-variables-card {
   margin: 8px 0;
   border-radius: 12px;
-  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
   border-left: 3px solid #F4511E;
 }
 
@@ -166,7 +166,7 @@ watch(
 .section-label {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #666;
+  color: var(--n-text-color-2);
 }
 </style>
 

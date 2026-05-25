@@ -130,13 +130,13 @@ const KeyValueTable = {
   props: ['data', 'showBulkEdit', 'showDescription', 'enableFile'],
   template: `
     <n-data-table
-      :columns="columns"
-      :data="data"
-      :pagination="false"
+        :columns="columns"
+        :data="data"
+        :pagination="false"
     >
-      <template #action="{ index }">
-        <n-button text @click="removeRow(index)">删除</n-button>
-      </template>
+    <template #action="{ index }">
+      <n-button text @click="removeRow(index)">删除</n-button>
+    </template>
     </n-data-table>
   `,
   setup(props) {
@@ -254,7 +254,7 @@ function buildBody() {
 
 .status-bar {
   padding: 10px;
-  background: #f8f8f8;
+  background: var(--n-color-embedded);
   border-radius: 4px;
   margin-bottom: 20px;
 }

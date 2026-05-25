@@ -148,7 +148,7 @@ watch(
 .condition-card {
   margin: 8px 0;
   border-radius: 12px;
-  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
   border-left: 3px solid #F4511E
 }
 </style>

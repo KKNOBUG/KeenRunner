@@ -1,3 +1,5 @@
+@import './autotest-theme.scss';
+
 html,
 body {
   width: 100%;
@@ -66,7 +68,7 @@ body {
   }
   &:hover {
     &::-webkit-scrollbar-thumb {
-      background: #bfbfbf;
+      background: color-mix(in srgb, var(--n-border-color, #bfbfbf) 75%, transparent);
     }
     &::-webkit-scrollbar-thumb:hover {
       background: var(--primary-color);

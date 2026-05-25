@@ -35,12 +35,10 @@
           <div class="hint-box">
             <div class="hint-title">使用说明</div>
             <div class="hint-content">
-              <p>• 脚本以函数形式作为执行入口，<code>必须符合PEP8编码规范</code>，标准声明格式：<code>def func() -> dict: ...</code></p>
-              <p>• 函数最终返回值固定要求为字典类型：<code>Dict[str, Any]</code>，如：<code>return {"name": "value", ...}</code></p>
-              <p>• 函数内部支持使用 <code>${函数名称}</code> 格式占位符调用系统内置函数，使用 <code>${变量名称}</code> 格式占位符引用上下文变量</p>
-              <p>• 函数支持调试，可实时查看执行状态、执行结果；如果脚本存在异常时主动抛出报错信息，error: ...</p>
-              <p>• 系统将自动解析占位符并执行对应逻辑，运行结果同步存入会话变量池中，供后续步骤使用</p>
-              <p>• 支持结果断言校验，可从会话变量池读取目标变量，与预设预期值完成比对核验</p>
+              <p>• 脚本以函数形式作为执行入口，<code>必须符合PEP8编码规范</code>，声明格式：<code>def func() -> dict: ...</code></p>
+              <p>• 脚本返回值固定要求为字典类型：<code>Dict[str, Any]</code>，运行结果同步存入会话变量池中，方便后续步骤使用</p>
+              <p>• 脚本支持使用 <code>${函数名称}</code> 格式占位符调用系统内置函数，使用 <code>${变量名称}</code> 格式占位符引用上下文变量</p>
+              <p>• 脚本支持针对执行结果进行断言校验，可<code>从会话变量池读取目标变量，与预设预期值完成各类型比较核验</code></p>
             </div>
           </div>
           <div class="code-editor-row">
@@ -74,77 +72,11 @@
               <span>断言</span>
             </n-badge>
           </template>
-          <n-space vertical :size="12" class="extract-validator-list">
-            <div v-for="(item, key) in form.assert_validators" :key="key" class="validator-item">
-              <n-card
-                  size="small"
-                  hoverable
-                  :class="{ 'is-item-collapsed': validatorCollapseState[key] }"
-              >
-                <template #header>
-                  <div class="extract-validator-card-header">
-                    <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
-                        item.jsonpath || ''
-                      }} )</span>
-                    <n-space>
-                      <n-button text @click="toggleValidatorCollapse(key)" size="small">
-                        <template #icon>
-                          <TheIcon
-                              :icon="validatorCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                              :size="18"/>
-                        </template>
-                      </n-button>
-                      <n-button text @click="duplicateValidator(key)" type="info" size="small">
-                        <template #icon>
-                          <TheIcon icon="material-symbols:content-copy" :size="18"/>
-                        </template>
-                      </n-button>
-                      <n-button text @click="removeValidator(key)" type="error" size="small">
-                        <template #icon>
-                          <TheIcon icon="material-symbols:delete-outline" :size="18"/>
-                        </template>
-                      </n-button>
-                    </n-space>
-                  </div>
-                </template>
-                <div v-show="!validatorCollapseState[key]">
-                  <n-form :model="item" label-width="auto" label-placement="left">
-                    <n-form-item label="断言名称">
-                      <n-input v-model:value="item.name" placeholder="请输入断言名称" clearable/>
-                    </n-form-item>
-                    <n-form-item label="断言对象">
-                      <n-select
-                          v-model:value="item.object"
-                          :options="validatorObjectOptions"
-                          placeholder="请选择断言对象"
-                      />
-                    </n-form-item>
-                    <n-form-item label="断言表达式">
-                      <n-space align="center" :wrap-item="false" style="width: 100%;">
-                        <n-input
-                            v-model:value="item.jsonpath"
-                            :placeholder="getValidatorPlaceholder(item.object)"
-                            clearable
-                            style="flex: 1;"
-                        />
-                      </n-space>
-                    </n-form-item>
-                    <n-form-item label="断言操作符">
-                      <n-select
-                          v-model:value="item.assertion"
-                          :options="assertionOptions"
-                          placeholder="请选择断言方法"
-                      />
-                    </n-form-item>
-                    <n-form-item label="断言预期值">
-                      <n-input v-model:value="item.value" placeholder="请输入预期值" clearable/>
-                    </n-form-item>
-                  </n-form>
-                </div>
-              </n-card>
-            </div>
-            <n-button type="primary" @click="addValidator" block dashed>添加断言</n-button>
-          </n-space>
+          <StepAssertPanel
+              v-model="form.assert_validators"
+              mode="python"
+              :readonly="props.readonly"
+          />
         </n-tab-pane>
       </n-tabs>
     </n-card>
@@ -205,7 +137,14 @@ import {
 } from 'naive-ui'
 import MonacoEditor from "@/components/monaco/index.vue"
 import TheIcon from "@/components/icon/TheIcon.vue"
-import { assertionOperationSelectOptions } from '@/constants/autotestAssertionOperation'
+import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
+import {
+  ASSERT_MODE_PYTHON,
+  buildAssertListFromDict,
+  countDictKeys,
+  hydrateAssertDictFromBackend,
+  normalizeBackendList,
+} from '@/utils/autotestExtractAssert'
 import api from '@/api'
 
 const props = defineProps({
@@ -228,34 +167,6 @@ const defaults = {
   assert_validators: {}
 }
 
-/** 后端 assert_validators 列表 -> 表单中的字典结构（与 HTTP 控制器一致字段：jsonpath/expr、assertion/operation、value/except_value） */
-function initValidatorsFromBackend(list) {
-  const obj = {}
-  if (!Array.isArray(list) || !list.length) return obj
-  list.forEach((item, i) => {
-    const key = String(i + 1)
-    obj[key] = {
-      name: item.name || '',
-      object: '变量池',
-      jsonpath: item.expr || '',
-      assertion: item.operation || '等于',
-      value: item.except_value != null ? String(item.except_value) : '',
-    }
-  })
-  return obj
-}
-
-/** 表单断言 -> 后端列表（含未填完的草稿，避免 emit 空数组后父组件回写把本地行清空） */
-function buildValidatorsForBackend() {
-  return Object.values(form.assert_validators || {}).map((item) => ({
-    expr: item.jsonpath || '',
-    name: item.name || '',
-    source: '变量池',
-    operation: item.assertion || '等于',
-    except_value: item.value != null ? String(item.value) : '',
-  }))
-}
-
 // 合并config和原始数据
 const mergeConfigAndOriginal = (config, original, stepName) => {
   const validatorsRaw = config.assert_validators ?? original?.assert_validators
@@ -266,8 +177,9 @@ const mergeConfigAndOriginal = (config, original, stepName) => {
     code: config.code !== undefined
         ? config.code
         : (config.script !== undefined ? config.script : (original?.code || '')),
-    assert_validators: initValidatorsFromBackend(
-        Array.isArray(validatorsRaw) ? validatorsRaw : []
+    assert_validators: hydrateAssertDictFromBackend(
+        normalizeBackendList(validatorsRaw),
+        ASSERT_MODE_PYTHON
     ),
   }
 }
@@ -277,66 +189,10 @@ const form = reactive({
   ...mergeConfigAndOriginal(props.config, props.step?.original, props.step?.name)
 })
 
-const validatorCollapseState = reactive({})
+const validatorsCount = computed(() => countDictKeys(form.assert_validators))
 
-const validatorsCount = computed(() => Object.keys(form.assert_validators || {}).length)
-
-// Python 步骤断言仅允许变量池（与后端一致）；选项保留一项避免误选 Response*
-const validatorObjectOptions = [{ label: '变量池', value: '变量池' }]
-
-function getExtractObjectLabel(value) {
-  const opt = validatorObjectOptions.find((o) => o.value === value)
-  return opt ? opt.label : value || '变量池'
-}
-
-function getValidatorPlaceholder(object) {
-  if (object === '变量池') return '请输入变量池中的变量名，如：token'
-  return '请输入变量名'
-}
-
-const assertionOptions = assertionOperationSelectOptions
-
-function getNextValidatorKey() {
-  const keys = Object.keys(form.assert_validators || {})
-      .map((k) => parseInt(k, 10))
-      .filter((k) => !Number.isNaN(k))
-  if (keys.length === 0) return '1'
-  return String(Math.max(...keys) + 1)
-}
-
-// 添加断言
-const addValidator = () => {
-  const key = getNextValidatorKey()
-  form.assert_validators[key] = {
-    name: '',
-    object: '变量池',
-    jsonpath: '',
-    assertion: '等于',
-    value: '',
-  }
-  validatorCollapseState[key] = false
-}
-
-// 删除断言
-const removeValidator = (key) => {
-  delete form.assert_validators[key]
-  delete validatorCollapseState[key]
-}
-
-// 复制断言
-const duplicateValidator = (key) => {
-  const item = form.assert_validators[key]
-  if (item) {
-    const newKey = getNextValidatorKey()
-    form.assert_validators[newKey] = {
-      ...JSON.parse(JSON.stringify(item)),
-      name: item.name ? `${item.name}_副本` : ''
-    }
-    validatorCollapseState[newKey] = validatorCollapseState[key] ?? false
-  }
-}
-function toggleValidatorCollapse(key) {
-  validatorCollapseState[key] = !validatorCollapseState[key]
+function buildValidatorsForBackend() {
+  return buildAssertListFromDict(form.assert_validators, ASSERT_MODE_PYTHON)
 }
 
 const monacoEditorOptions = {
@@ -558,7 +414,6 @@ watch(
       isExternalUpdate = true
       const merged = mergeConfigAndOriginal(config || {}, original, stepName)
       Object.assign(form, defaults, merged)
-      Object.keys(validatorCollapseState).forEach((k) => delete validatorCollapseState[k])
       // 使用 nextTick 确保在下一个 tick 重置标志
       nextTick(() => {
         isExternalUpdate = false
@@ -634,7 +489,7 @@ const handleDebug = async () => {
 .code-card {
   margin: 8px 0;
   border-radius: 12px;
-  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
   border-left: 3px solid #F4511E
 }
 
@@ -681,7 +536,7 @@ const handleDebug = async () => {
 }
 
 .hint-content code {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: var(--n-color-embedded);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: 'Fira Code', monospace;
@@ -699,60 +554,6 @@ const handleDebug = async () => {
 
 .debug-tabs :deep(.n-tab-pane) {
   padding-top: 12px;
-}
-
-.extract-validator-list {
-  width: 100%;
-}
-
-.extract-validator-list :deep(.n-space-item) {
-  width: 100%;
-}
-
-.extract-validator-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 28px;
-  line-height: 1.5;
-}
-
-.validator-item {
-  width: 100%;
-}
-
-.validator-item :deep(.n-card) {
-  border: 1px solid var(--n-border-color);
-  background-color: var(--n-color);
-}
-
-.validator-item :deep(.n-card-header) {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  box-sizing: border-box;
-  background-color: var(--n-color-embedded);
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.validator-item :deep(.n-card-header__main) {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
-  border-bottom: none;
-}
-
-.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
-  display: none;
-  padding: 0;
 }
 
 .code-editor-row {
@@ -813,7 +614,7 @@ const handleDebug = async () => {
 }
 
 .code-snippet-link:disabled {
-  color: #9ca3af;
+  color: var(--n-text-color-3);
   cursor: not-allowed;
 }
 

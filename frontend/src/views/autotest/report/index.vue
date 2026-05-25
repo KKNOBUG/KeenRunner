@@ -764,14 +764,6 @@ const rowKey = (row) => {
   width: 200px;
 }
 
-/* 顶层组头行 */
-:deep(.report-group-row) {
-  background-color: #f5f5f5;
-}
-
-/* 批次执行任务下按 batch_code 的子头行 */
-:deep(.report-batch-row) {
-  background-color: #fafafa;
-}
+/* 顶层组头行、批次行：见 styles/autotest-theme.scss .report-group-row / .report-batch-row */
 </style>
 

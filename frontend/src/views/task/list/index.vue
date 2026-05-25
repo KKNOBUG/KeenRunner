@@ -1441,7 +1441,7 @@ onMounted(() => {
 .cron-label {
   display: block;
   font-size: 14px;
-  color: #000;
+  color: var(--n-text-color);
   margin-bottom: 8px;
 }
 
@@ -1466,7 +1466,7 @@ onMounted(() => {
 
 .cron-desc-title {
   font-size: 12px;
-  color: #000;
+  color: var(--n-text-color);
   margin-bottom: 8px;
 }
 
@@ -1481,7 +1481,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   font-size: 12px;
-  color: #000;
+  color: var(--n-text-color);
 }
 
 .cron-asterisk {
@@ -1503,7 +1503,7 @@ onMounted(() => {
 
 .cron-desc {
   font-size: 12px;
-  color: #999999;
+  color: var(--n-text-color-3);
   margin-top: 8px;
   line-height: 1.4;
 }
@@ -1514,7 +1514,7 @@ onMounted(() => {
 
 .case-section .case-table-hint {
   font-size: 12px;
-  color: #999999;
+  color: var(--n-text-color-3);
   margin: 0 0 8px 0;
   line-height: 1.5;
 }
@@ -1526,11 +1526,11 @@ onMounted(() => {
 
 .cron-time-item {
   padding: 6px 0;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--n-border-color);
 }
 
 .cron-times-empty {
-  color: #999999;
+  color: var(--n-text-color-3);
 }
 
 /* 历史弹框：与日志弹框一致的表格与分页样式 */
@@ -1539,14 +1539,8 @@ onMounted(() => {
   max-height: calc(100vh - 280px);
   margin-bottom: 16px;
 }
-.history-modal-table-wrap :deep(.report-group-row) {
-  background-color: #f5f5f5;
-}
-.history-modal-table-wrap :deep(.report-batch-row) {
-  background-color: #fafafa;
-}
 .history-modal-empty {
-  color: #999;
+  color: var(--n-text-color-3);
   text-align: center;
   padding: 24px;
 }
@@ -1562,7 +1556,7 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 .log-modal-empty {
-  color: #999;
+  color: var(--n-text-color-3);
   text-align: center;
   padding: 24px;
 }
