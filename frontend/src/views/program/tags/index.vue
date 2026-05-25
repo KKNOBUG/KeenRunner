@@ -118,6 +118,7 @@ onMounted(async () => {
 
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
+  const projects = projectOptions.value
   const seqBase = (page - 1) * page_size
   return [
     { type: 'selection', fixed: 'left', width: 48 },
@@ -133,7 +134,16 @@ const columns = computed(() => {
     { title: '标签ID', key: 'tag_id', width: 80, align: 'center' },
     { title: '标签代码', key: 'tag_code', align: 'center', ellipsis: { tooltip: true } },
     { title: '标签类型', key: 'tag_type', align: 'center' },
-    { title: '所属应用', key: 'tag_project', align: 'center' },
+    {
+      title: '所属应用',
+      key: 'tag_project',
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const opt = projects.find((p) => p.value === row.tag_project)
+        return opt?.label ?? (row.tag_project != null ? String(row.tag_project) : '')
+      },
+    },
     { title: '标签大类', key: 'tag_mode', align: 'center', ellipsis: { tooltip: true } },
     { title: '标签名称', key: 'tag_name', align: 'center', ellipsis: { tooltip: true } },
     { title: '标签描述', key: 'tag_desc', align: 'center', ellipsis: { tooltip: true } },
