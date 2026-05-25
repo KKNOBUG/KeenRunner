@@ -3244,42 +3244,43 @@ const RecursiveStepChildren = defineComponent({
   overflow: hidden;
 }
 
-/* 配置卡片内容区域：允许滚动 */
+/* 步骤树 / 右侧明细：统一滚动条（默认隐藏，悬停且溢出时显示细条） */
+.step-tree-container,
 .config-card :deep(.n-card__content) {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
-}
-
-/* 步骤树容器：默认隐藏滚动条，悬停且内容溢出时出现 */
-.step-tree-container {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 0;
-  padding: 4px 0;
   scrollbar-width: none;
 }
 
-.step-tree-container:hover {
+.step-tree-container {
+  padding: 4px 0;
+}
+
+.step-tree-container:hover,
+.config-card :deep(.n-card__content):hover {
   scrollbar-width: thin;
   scrollbar-color: #c0c0c0 transparent;
 }
 
-.step-tree-container::-webkit-scrollbar {
+.step-tree-container::-webkit-scrollbar,
+.config-card :deep(.n-card__content)::-webkit-scrollbar {
   width: 0;
 }
 
-.step-tree-container:hover::-webkit-scrollbar {
+.step-tree-container:hover::-webkit-scrollbar,
+.config-card :deep(.n-card__content):hover::-webkit-scrollbar {
   width: 4px;
 }
 
-.step-tree-container:hover::-webkit-scrollbar-track {
+.step-tree-container:hover::-webkit-scrollbar-track,
+.config-card :deep(.n-card__content):hover::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.step-tree-container:hover::-webkit-scrollbar-thumb {
+.step-tree-container:hover::-webkit-scrollbar-thumb,
+.config-card :deep(.n-card__content):hover::-webkit-scrollbar-thumb {
   background: #c0c0c0;
   border-radius: 4px;
 }

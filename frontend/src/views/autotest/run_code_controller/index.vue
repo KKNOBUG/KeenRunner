@@ -74,11 +74,15 @@
               <span>断言</span>
             </n-badge>
           </template>
-          <n-space vertical :size="16">
+          <n-space vertical :size="12" class="extract-validator-list">
             <div v-for="(item, key) in form.assert_validators" :key="key" class="validator-item">
-              <n-card size="small" hoverable>
+              <n-card
+                  size="small"
+                  hoverable
+                  :class="{ 'is-item-collapsed': validatorCollapseState[key] }"
+              >
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div class="extract-validator-card-header">
                     <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
                         item.jsonpath || ''
                       }} )</span>
@@ -697,24 +701,58 @@ const handleDebug = async () => {
   padding-top: 12px;
 }
 
-.validator-card-header {
+.extract-validator-list {
+  width: 100%;
+}
+
+.extract-validator-list :deep(.n-space-item) {
+  width: 100%;
+}
+
+.extract-validator-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 28px;
+  line-height: 1.5;
 }
 
 .validator-item {
-  margin-bottom: 1px;
+  width: 100%;
 }
 
 .validator-item :deep(.n-card) {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--n-border-color);
+  background-color: var(--n-color);
 }
 
 .validator-item :deep(.n-card-header) {
-  padding: 12px 16px;
-  background-color: #fafafa;
-  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.validator-item :deep(.n-card-header__main) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
+  border-bottom: none;
+}
+
+.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
+  display: none;
+  padding: 0;
 }
 
 .code-editor-row {

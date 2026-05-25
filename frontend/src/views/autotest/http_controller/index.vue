@@ -234,11 +234,15 @@
             </n-badge>
           </template>
           <!-- 提取配置 -->
-          <n-space vertical :size="16">
+          <n-space vertical :size="12" class="extract-validator-list">
             <div v-for="(item, key) in state.form.extract_variables" :key="key" class="extract_variables-item">
-              <n-card size="small" hoverable>
+              <n-card
+                  size="small"
+                  hoverable
+                  :class="{ 'is-item-collapsed': extractCollapseState[key] }"
+              >
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div class="extract-validator-card-header">
                     <span>{{ item.name || '未命名提取' }} {{
                         getExtractObjectLabel(item.object)
                       }}{{
@@ -332,11 +336,15 @@
             </n-badge>
           </template>
           <!-- 断言配置 -->
-          <n-space vertical :size="16">
+          <n-space vertical :size="12" class="extract-validator-list">
             <div v-for="(item, key) in state.form.assert_validators" :key="key" class="validator-item">
-              <n-card size="small" hoverable>
+              <n-card
+                  size="small"
+                  hoverable
+                  :class="{ 'is-item-collapsed': validatorCollapseState[key] }"
+              >
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div class="extract-validator-card-header">
                     <span>{{ item.name || '未命名断言' }} {{ getExtractObjectLabel(item.object) }}( {{
                         item.jsonpath || ''
                       }} )</span>
@@ -2937,21 +2945,64 @@ pre {
   word-break: break-word;
 }
 
+.extract-validator-list {
+  width: 100%;
+}
+
+.extract-validator-list :deep(.n-space-item) {
+  width: 100%;
+}
+
+.extract-validator-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 14px;
+  line-height: 1.15;
+}
+
 .extract_variables-item,
 .validator-item {
-  margin-bottom: 1px;
+  width: 100%;
 }
 
 .extract_variables-item :deep(.n-card),
 .validator-item :deep(.n-card) {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--n-border-color);
+  background-color: var(--n-color);
 }
 
 .extract_variables-item :deep(.n-card-header),
 .validator-item :deep(.n-card-header) {
-  padding: 12px 16px;
-  background-color: #fafafa;
-  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.extract_variables-item :deep(.n-card-header__main),
+.validator-item :deep(.n-card-header__main) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.extract_variables-item :deep(.n-card.is-item-collapsed .n-card-header),
+.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
+  border-bottom: none;
+}
+
+.extract_variables-item :deep(.n-card.is-item-collapsed .n-card__content),
+.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
+  display: none;
+  padding: 0;
 }
 
 .log-item {

@@ -54,11 +54,15 @@
               <span>请求</span>
             </n-badge>
           </template>
-          <n-space vertical :size="16" style="margin-top: 4px;">
+          <n-space vertical :size="12" class="extract-validator-list" style="margin-top: 4px;">
             <div v-for="(item, key) in state.form.database_operates" :key="key" class="db-op-card-wrap">
-              <n-card size="small" hoverable>
+              <n-card
+                  size="small"
+                  hoverable
+                  :class="{ 'is-item-collapsed': opCollapseState[key] }"
+              >
                 <template #header>
-                  <div class="db-op-header">
+                  <div class="extract-validator-card-header db-op-header">
                     <div class="db-op-title-row">
                       <template v-if="editingDatabaseOpKey === String(key) && !props.readonly">
                         <n-input
@@ -184,11 +188,15 @@
               <span>提取</span>
             </n-badge>
           </template>
-          <n-space vertical :size="16">
+          <n-space vertical :size="12" class="extract-validator-list">
             <div v-for="(item, key) in state.form.extract_variables" :key="key" class="extract_variables-item">
-              <n-card size="small" hoverable>
+              <n-card
+                  size="small"
+                  hoverable
+                  :class="{ 'is-item-collapsed': extractCollapseState[key] }"
+              >
                 <template #header>
-                  <div class="db-op-header">
+                  <div class="extract-validator-card-header">
                     <span>{{ item.name || '未命名提取' }} · {{ item.source || '未选来源' }}{{
                         item.extractScope === '部分提取' && item.jsonpath ? ` (${item.jsonpath})` : item.extractScope === '全部提取' ? ' (全部提取)' : ''
                       }}</span>
@@ -275,11 +283,15 @@
               <span>断言</span>
             </n-badge>
           </template>
-          <n-space vertical :size="16">
+          <n-space vertical :size="12" class="extract-validator-list">
             <div v-for="(item, key) in state.form.assert_validators" :key="key" class="validator-item">
-              <n-card size="small" hoverable>
+              <n-card
+                  size="small"
+                  hoverable
+                  :class="{ 'is-item-collapsed': validatorCollapseState[key] }"
+              >
                 <template #header>
-                  <div class="db-op-header">
+                  <div class="extract-validator-card-header">
                     <span>{{ item.name || '未命名断言' }} · {{ item.source || '未选来源' }} ( {{ item.jsonpath || '' }} )</span>
                     <n-space>
                       <n-button text @click="toggleValidatorCollapse(key)" size="small">
@@ -908,9 +920,11 @@ const toggleValidatorCollapse = (key) => {
 
 .db-op-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   width: 100%;
+  min-height: 28px;
+  line-height: 1.5;
 }
 
 .db-op-title-row {
@@ -919,10 +933,14 @@ const toggleValidatorCollapse = (key) => {
   gap: 2px;
   min-width: 0;
   flex: 1;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .db-op-title-text {
+  font-size: 13px;
   font-weight: 500;
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -936,8 +954,41 @@ const toggleValidatorCollapse = (key) => {
   flex-shrink: 0;
 }
 
+.db-op-card-wrap {
+  width: 100%;
+}
+
+.db-op-card-wrap :deep(.n-card) {
+  border: 1px solid var(--n-border-color);
+  background-color: var(--n-color);
+}
+
 .db-op-card-wrap :deep(.n-card-header) {
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.db-op-card-wrap :deep(.n-card-header__main) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.db-op-card-wrap :deep(.n-card.is-item-collapsed .n-card-header) {
+  border-bottom: none;
+}
+
+.db-op-card-wrap :deep(.n-card.is-item-collapsed .n-card__content) {
+  display: none;
+  padding: 0;
 }
 
 .db-op-field-rows {
@@ -981,8 +1032,69 @@ const toggleValidatorCollapse = (key) => {
   width: 100%;
 }
 
+.extract-validator-list {
+  width: 100%;
+}
+
+.extract-validator-list :deep(.n-space-item) {
+  width: 100%;
+}
+
+.extract-validator-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 28px;
+  line-height: 1.5;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.db-op-card-wrap .extract-validator-card-header {
+  min-height: 100%;
+}
+
+.extract_variables-item,
+.validator-item {
+  width: 100%;
+}
+
+.extract_variables-item :deep(.n-card),
+.validator-item :deep(.n-card) {
+  border: 1px solid var(--n-border-color);
+  background-color: var(--n-color);
+}
+
 .extract_variables-item :deep(.n-card-header),
 .validator-item :deep(.n-card-header) {
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.extract_variables-item :deep(.n-card-header__main),
+.validator-item :deep(.n-card-header__main) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.extract_variables-item :deep(.n-card.is-item-collapsed .n-card-header),
+.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
+  border-bottom: none;
+}
+
+.extract_variables-item :deep(.n-card.is-item-collapsed .n-card__content),
+.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
+  display: none;
+  padding: 0;
 }
 </style>
