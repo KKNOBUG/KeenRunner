@@ -31,7 +31,15 @@
       "errorColor": "#D03050FF",
       "errorColorHover": "#DE576DFF",
       "errorColorPressed": "#AB1F3FFF",
-      "errorColorSuppl": "#DE576DFF"
+      "errorColorSuppl": "#DE576DFF",
+
+      "fontSize": "13px",
+      "fontSizeMini": "12px",
+      "fontSizeTiny": "12px",
+      "fontSizeSmall": "13px",
+      "fontSizeMedium": "13px",
+      "fontSizeLarge": "14px",
+      "fontSizeHuge": "15px"
     }
   }
 }

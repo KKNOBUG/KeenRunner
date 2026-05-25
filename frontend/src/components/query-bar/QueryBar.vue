@@ -82,11 +82,11 @@ const emit = defineEmits(['search', 'reset', 'create', 'delete'])
 const queryBarThemeOverrides = {
   Input: {
     heightMedium: '28px',
-    fontSizeMedium: '14px',
+    fontSizeMedium: '13px',
   },
   InternalSelection: {
     heightMedium: '28px',
-    fontSizeMedium: '14px',
+    fontSizeMedium: '13px',
   },
 }
 
