@@ -2328,7 +2328,7 @@ const restoreStashedQuoteSteps = () => {
 const getFixedBranchStepDisplayName = (step) => {
   if (!step?.type) return null
   if (step.type === 'if') {
-    return '条件分支(根据判断结果, 执行不同的路径)'
+    return '条件分支(满足条件时执行)'
   }
   if (step.type === 'loop') {
     const mode = (step.config && step.config.loop_mode) || '次数循环'
@@ -3293,8 +3293,8 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .step-count {
+  font-size: 14px;
   font-weight: 600;
-  font-size: 12px;
 }
 
 /* 下拉菜单中的图标样式 */
@@ -3494,6 +3494,7 @@ const RecursiveStepChildren = defineComponent({
 :deep(.quote-inner-steps) {
   margin: 2px 0 2px 8px;
   border-left: 2px solid #F4511E;
+  border-radius: 12px;
   padding-left: 6px;
 }
 

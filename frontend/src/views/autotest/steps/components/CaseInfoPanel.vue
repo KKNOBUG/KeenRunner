@@ -15,7 +15,10 @@
       arrow-placement="right"
       :trigger-areas="['main', 'arrow']"
   >
-    <n-collapse-item title="用例信息" name="caseInfo">
+    <n-collapse-item name="caseInfo">
+      <template #header>
+        <span class="case-info-collapse-title">用例信息</span>
+      </template>
       <template #header-extra>
         <n-space :size="8" class="case-info-header-actions" @click.stop>
           <n-button type="info" size="small" :loading="runLoading" @click="emit('run')">执行</n-button>
@@ -443,24 +446,32 @@ defineExpose({
 
 <style scoped>
 .case-info-collapse {
-  margin-bottom: 10px;
+  --n-title-font-size: 13px;
+  --n-font-size: 13px;
+  --n-title-font-weight: 400;
+  margin-bottom: 16px;
   font-size: 13px;
 }
 
+.case-info-collapse-title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
 .case-info-collapse :deep(.n-collapse-item) {
-  border: 1px solid var(--n-border-color);
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(204, 204, 204, 0.5);
+  border-left: 3px solid #F4511E;
   background: var(--n-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .case-info-collapse :deep(.n-collapse-item__header) {
   display: flex;
   align-items: center;
   padding: 10px 12px !important;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13px !important;
+  font-weight: 400;
   min-height: 40px;
   box-sizing: border-box;
 }
@@ -468,7 +479,9 @@ defineExpose({
 .case-info-collapse :deep(.n-collapse-item__header-main) {
   display: flex;
   align-items: center;
-  line-height: 1.4;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.15;
 }
 
 .case-info-collapse :deep(.n-collapse-item__header-extra) {
@@ -483,7 +496,7 @@ defineExpose({
 }
 
 .case-info-collapse :deep(.n-collapse-item__content-inner) {
-  padding: 0 12px 12px;
+  padding: 0 12px 16px;
 }
 
 .case-info-collapse :deep(.n-form-item-label) {
@@ -498,7 +511,7 @@ defineExpose({
 .case-info-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px 24px;
+  gap: 8px 24px;
 }
 
 .case-field {
@@ -536,12 +549,12 @@ defineExpose({
 }
 
 .tag-mode-selected {
-  background-color: #e3f2fd;
+  background-color: rgba(244, 81, 30, 0.1);
   font-weight: 500;
 }
 
 .tag-name-selected {
-  background-color: #e3f2fd;
+  background-color: rgba(244, 81, 30, 0.1);
   font-weight: 500;
 }
 
@@ -587,6 +600,6 @@ defineExpose({
 }
 
 :deep(.n-list-item:hover) {
-  background-color: #f5f5f5;
+  background-color: rgba(244, 81, 30, 0.1);
 }
 </style>
