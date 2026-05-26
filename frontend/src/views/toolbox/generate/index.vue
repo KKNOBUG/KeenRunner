@@ -56,12 +56,13 @@
 </template>
 
 <script>
-import {defineComponent, ref} from "vue";
+import {defineComponent, ref, onMounted, nextTick} from "vue";
 import {useMessage} from "naive-ui";
 import api from "@/api";
 import hljs from "highlight.js";
 import "highlight.js/styles/default.css";
 import AppPage from "@/components/page/AppPage.vue";
+import commonFunction from "@/utils/common/commonFunction";
 
 export default defineComponent({
   components: {AppPage},
@@ -180,15 +181,14 @@ export default defineComponent({
       }
     };
 
-    const copyResult = async () => {
-      try {
-        const jsonStr = JSON.stringify(resultData.value, null, 4);
-        await navigator.clipboard.writeText(jsonStr);
-        message.success('复制成功');
-      } catch (error) {
-        console.error('复制失败', error);
-        message.error('复制失败');
-      }
+    const copyResult = () => {
+      const jsonStr = JSON.stringify(resultData.value, null, 4);
+      commonFunction()
+          .copyText(jsonStr, "复制成功")
+          .catch((error) => {
+            console.error("复制失败", error);
+            message.error("复制失败");
+          });
     };
     return {
       model,

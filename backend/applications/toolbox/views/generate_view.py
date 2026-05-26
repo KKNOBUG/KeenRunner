@@ -63,12 +63,12 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
                 item = GENERATE.generate_datetime(fmt=key, isMicrosecond=key > 50)
                 data.setdefault(y, {}).setdefault(value, item)
         elif y == "history":
-            year = GENERATE.generate_random_number(-50, -10)
-            month = GENERATE.generate_random_number(-12, -1)
-            day = GENERATE.generate_random_number(-31, -1)
-            hour = GENERATE.generate_random_number(-60, -1)
-            minute = GENERATE.generate_random_number(-60, -1)
-            second = GENERATE.generate_random_number(-60, -1)
+            year = GENERATE.generate_random_int(-50, -10)
+            month = GENERATE.generate_random_int(-12, -1)
+            day = GENERATE.generate_random_int(-31, -1)
+            hour = GENERATE.generate_random_int(-60, -1)
+            minute = GENERATE.generate_random_int(-60, -1)
+            second = GENERATE.generate_random_int(-60, -1)
             for key, value in formats.items():
                 item = GENERATE.generate_datetime(
                     year=year, month=month, day=day,
@@ -76,12 +76,12 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
                     fmt=key, isMicrosecond=key > 50)
                 data.setdefault(y, {}).setdefault(value, item)
         elif y == "future":
-            year = GENERATE.generate_random_number(5, 50)
-            month = GENERATE.generate_random_number(1, 12)
-            day = GENERATE.generate_random_number(1, 31)
-            hour = GENERATE.generate_random_number(1, 60)
-            minute = GENERATE.generate_random_number(1, 60)
-            second = GENERATE.generate_random_number(1, 60)
+            year = GENERATE.generate_random_int(5, 50)
+            month = GENERATE.generate_random_int(1, 12)
+            day = GENERATE.generate_random_int(1, 31)
+            hour = GENERATE.generate_random_int(1, 60)
+            minute = GENERATE.generate_random_int(1, 60)
+            second = GENERATE.generate_random_int(1, 60)
             for key, value in formats.items():
                 item = GENERATE.generate_datetime(
                     year=year, month=month, day=day,
@@ -98,6 +98,6 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
         elif z == "global":
             data[z] = [GENERATE.generate_global_serial_number() for _ in range(number)]
         elif z == "random":
-            data[z] = [GENERATE.generate_string(length=GENERATE.generate_random_number(6, 30))]
+            data[z] = [GENERATE.generate_string(length=GENERATE.generate_random_int(6, 30))]
 
     return SuccessResponse(data=data)

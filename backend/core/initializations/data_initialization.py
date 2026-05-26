@@ -823,7 +823,7 @@ async def init_database_step():
                     {
                         "key": "X-random",
                         "desc": "自定义请求头参数随机数",
-                        "value": "${generate_random_number(min_=1, max_=10)}"
+                        "value": "${generate_random_int(min_=1, max_=10)}"
                     }
                 ],
                 request_body={

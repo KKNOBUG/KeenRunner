@@ -80,9 +80,9 @@ def main() -> None:
     run_case("未定义变量（部分保留）", "ok=${a}, bad=${not_exist}")
     run_case("未定义变量（部分保留）", "${a} + ${not_exist}")
 
-    # 无变量：纯 GenerateUtils 函数（generate_random_number(7,7) 恒为 7）
+    # 无变量：纯 GenerateUtils 函数（generate_random_int(7,7) 恒为 7）
     print("\n--- 纯函数占位符（不依赖变量表）---")
-    t = "${generate_random_number(min=7,max=7)}+${generate_random_number(min=3,max=3)}"
+    t = "${generate_random_int(min=7,max=7)}+${generate_random_int(min=3,max=3)}"
     print(f"  模板: {t!r}")
     out2 = AutoTestToolService.resolve_placeholders(
         t, logger_object=_log, is_core_engine=False, finished_variables=[]
