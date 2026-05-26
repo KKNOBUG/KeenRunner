@@ -146,14 +146,7 @@
                 v-if="currentStep"
                 :key="currentStep.id + (currentStep.isQuoteInner ? '-readonly' : '')"
                 :is="editorComponent"
-                :config="currentStep.config"
-                :step="currentStep"
-                :project-options="currentEditorNeedsProject ? editorProjectOptions : []"
-                :project-loading="currentEditorNeedsProject ? editorProjectLoading : false"
-                :available-variable-list="currentEditorNeedsVarAssist ? availableVariableList : []"
-                :assist-functions="currentEditorNeedsVarAssist ? assistFunctionsList : []"
-                :on-reselect="currentStep?.isQuoteInner ? undefined : handleQuoteReselect"
-                :readonly="!!currentStep?.isQuoteInner"
+                v-bind="editorComponentProps"
                 @update:config="(val) => { if (!currentStep?.isQuoteInner) updateStepConfig(currentStep.id, val) }"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
@@ -2109,6 +2102,25 @@ const currentEditorNeedsProject = computed(() => {
 const currentEditorNeedsVarAssist = computed(() => {
   const t = currentStep.value?.type
   return t === 'http' || t === 'tcp' || t === 'user_variables'
+})
+
+/** 右侧动态编辑器 props（引用步骤才传 reselectHandler，避免 HTTP 等多根节点组件透传警告） */
+const editorComponentProps = computed(() => {
+  const step = currentStep.value
+  if (!step) return {}
+  const props = {
+    config: step.config,
+    step,
+    projectOptions: currentEditorNeedsProject.value ? editorProjectOptions.value : [],
+    projectLoading: currentEditorNeedsProject.value ? editorProjectLoading.value : false,
+    availableVariableList: currentEditorNeedsVarAssist.value ? availableVariableList.value : [],
+    assistFunctions: currentEditorNeedsVarAssist.value ? assistFunctionsList.value : [],
+    readonly: !!step.isQuoteInner,
+  }
+  if (step.type === 'quote' && !step.isQuoteInner) {
+    props.reselectHandler = handleQuoteReselect
+  }
+  return props
 })
 
 /** 在根或父步骤下插入新步骤节点 */

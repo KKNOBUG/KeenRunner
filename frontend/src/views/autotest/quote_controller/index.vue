@@ -6,11 +6,11 @@
   >
     <template #header-extra>
       <n-button
-          v-if="onReselect"
+          v-if="reselectHandler"
           type="primary"
           quaternary
           size="small"
-          @click="onReselect"
+          @click="reselectHandler"
       >
         <template #icon>
           <TheIcon icon="material-symbols:refresh" :size="14"/>
@@ -139,7 +139,8 @@ async function ensureTagIdNameMap() {
 const props = defineProps({
   config: { type: Object, default: () => ({}) },
   step: { type: Object, default: () => ({}) },
-  onReselect: { type: Function, default: null },
+  /** 重新选择公共脚本（勿用 onXxx 命名，Vue 会当成事件监听器） */
+  reselectHandler: { type: Function, default: null },
   projectOptions: { type: Array, default: () => [] }
 })
 
