@@ -12,12 +12,24 @@ from functools import lru_cache
 from typing import List, Dict, Any
 from urllib.parse import quote_plus
 
-from pydantic_settings import BaseSettings
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import Self
 
 from backend.common import FileUtils, ShellUtils
 
+_BACKEND_PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+_BACKEND_PROJECT_CONF: str = os.path.join(_BACKEND_PROJECT_ROOT, ".env")
+
 
 class ProjectConfig(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=_BACKEND_PROJECT_CONF,
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
     # 项目描述
     APP_VERSION: str = "0.1.1"
     APP_TITLE: str = "KRUN - 测管平台"
@@ -46,8 +58,8 @@ class ProjectConfig(BaseSettings):
     SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
     SERVER_DELAY: int = 5
 
-    # 安全认证配置
-    AUTH_SECRET_KEY: str = "3488a63e1765035d386f05409663f55c83bfae3b3c61a932744b20ad14244dcf"  # openssl rand -hex 32
+    # 安全认证配置（须在 backend/.env 或环境变量中配置）
+    AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥，建议: openssl rand -hex 32")
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
 
@@ -70,14 +82,13 @@ class ProjectConfig(BaseSettings):
     LOGGER_COMPRESSION: str = "zip"
 
     # 项目路径相关配置
-    PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "applications"))
-    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "celery_scheduler"))
-    COMMON_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "common"))
-    CONFIGURE_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "configure"))
-    CORE_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "core"))
-    ENUMS_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "enums"))
-    OUTPUT_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "output"))
+    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "applications"))
+    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "celery_scheduler"))
+    COMMON_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "common"))
+    CONFIGURE_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "configure"))
+    CORE_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "core"))
+    ENUMS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "enums"))
+    OUTPUT_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "output"))
     OUTPUT_LOGS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "logs"))
     OUTPUT_UPLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "upload"))
     OUTPUT_DOWNLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "download"))
@@ -86,10 +97,10 @@ class ProjectConfig(BaseSettings):
     OUTPUT_JMX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "jmx"))
     OUTPUT_XLSX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
     OUTPUT_DOCS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "docs"))
-    SERVICES_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "services"))
-    STATIC_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "static"))
+    SERVICES_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "services"))
+    STATIC_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "static"))
     STATIC_IMG_DIR: str = os.path.abspath(os.path.join(STATIC_DIR, "image"))
-    MIGRATION_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "migrations"))
+    MIGRATION_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "migrations"))
 
     # # 允许访问的源（域名）列表
     CORS_ORIGINS: List[str] = [
@@ -114,12 +125,12 @@ class ProjectConfig(BaseSettings):
     # 文件上传设置
     UPLOAD_FILE_BASE_SIZE: int = 1024 * 1024  # 1MB
     UPLOAD_FILE_PEAK_SIZE: Dict[str, int] = {
-        "tiny": UPLOAD_FILE_BASE_SIZE * 32,
-        "micro": UPLOAD_FILE_BASE_SIZE * 64,
-        "small": UPLOAD_FILE_BASE_SIZE * 128,
-        "medium": UPLOAD_FILE_BASE_SIZE * 256,
-        "large": UPLOAD_FILE_BASE_SIZE * 512,
-        "huge": UPLOAD_FILE_BASE_SIZE * 1024,
+        "tiny": UPLOAD_FILE_BASE_SIZE * 16,
+        "micro": UPLOAD_FILE_BASE_SIZE * 32,
+        "small": UPLOAD_FILE_BASE_SIZE * 64,
+        "medium": UPLOAD_FILE_BASE_SIZE * 128,
+        "large": UPLOAD_FILE_BASE_SIZE * 256,
+        "huge": UPLOAD_FILE_BASE_SIZE * 512,
     }
     UPLOAD_FILE_SUFFIX: List[str] = [
         'image/jepg',
@@ -194,35 +205,82 @@ class ProjectConfig(BaseSettings):
     ]
 
     # 数据库配置
-    # DATABASE_USERNAME: str = quote("admin@usr")
-    # DATABASE_PASSWORD: str = quote("admin@Pwd123")
-    DATABASE_USERNAME: str = "root"
-    DATABASE_PASSWORD: str = "root"
-    DATABASE_HOST: str = "10.211.55.3"
-    # DATABASE_HOST: str = "43.156.105.196"
-    DATABASE_PORT: str = "3306"
-    DATABASE_NAME: str = "krun"
     DATABASE_AUTO_MIGRATION: bool = True
-    DATABASE_URL: str = f"mysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}?charset=utf8mb4&time_zone=+08:00"
-    DATABASE_CONNECTIONS: Dict[str, Any] = {
-        "default": {
-            "engine": "tortoise.backends.mysql",  # 使用mysql引擎
-            "db_url": DATABASE_URL,
-            "credentials": {
-                "host": DATABASE_HOST,  # 数据库地址
-                "port": DATABASE_PORT,  # 数据库端口
-                "user": DATABASE_USERNAME,  # 数据库账户
-                "password": DATABASE_PASSWORD,  # 数据库密码
-                "database": DATABASE_NAME,  # 数据库名称
-                "minsize": 10,  # 连接池最小连接数
-                "maxsize": 40,  # 连接池最大连接数
-                "pool_recycle": 3600,  # 定期回收连接, 避免 MySQL wait_timeout 端口后仍占用无效连接
-                "charset": "utf8mb4",  # 数据库字符编码
-                "echo": False,  # 数据库是否开启SQL语句回响
-                "autocommit": True  # 数据库是否开启SQL语句自动提交
+    DATABASE_CONNECTIONS: Dict[str, Any] = {}
+    DATABASE_URL: str = Field(default="", description="数据库地址")
+    DATABASE_HOST: str = Field(..., min_length=1, description="数据库主机")
+    DATABASE_PORT: str = Field(..., min_length=1, description="数据库端口")
+    DATABASE_NAME: str = Field(..., min_length=1, description="数据库名称")
+    DATABASE_USERNAME: str = Field(..., min_length=1, description="数据库用户名")
+    DATABASE_PASSWORD: str = Field(..., min_length=1, description="数据库密码")
+
+    # Redis 配置（仅 requirepass 时用户名留空；密码含 @/: 等会在连接 URL 中做编码）
+    REDIS_URL: str = ""
+    REDIS_HOST: str = Field(..., min_length=1, description="Redis主机")
+    REDIS_PORT: str = Field(..., min_length=1, description="Redis端口")
+    REDIS_USERNAME: str = Field(default="", description="Redis用户名")
+    REDIS_PASSWORD: str = Field(..., min_length=1, description="Redis密码")
+
+    @model_validator(mode="after")
+    def validate_env_and_assemble_urls(self) -> Self:
+        if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 64:
+            raise ValueError("AUTH_SECRET_KEY 配置为空或长度少于64位，请检查.env文件或环境变量")
+
+        for field_name in ("DATABASE_USERNAME", "DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "REDIS_HOST", "REDIS_PORT"):
+            if not getattr(self, field_name):
+                raise ValueError(f"{field_name} 配置为空，请请检查.env文件或环境变量")
+
+        return self._assemble_connection_urls()
+
+    def _assemble_connection_urls(self) -> Self:
+        db_user = quote_plus(self.DATABASE_USERNAME)
+        db_password = quote_plus(self.DATABASE_PASSWORD)
+        self.DATABASE_URL = (
+            f"mysql://{db_user}:{db_password}@{self.DATABASE_HOST}:"
+            f"{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+            f"?charset=utf8mb4&time_zone=+08:00"
+        )
+        self.DATABASE_CONNECTIONS = {
+            "default": {
+                "engine": "tortoise.backends.mysql",
+                "db_url": self.DATABASE_URL,
+                "credentials": {
+                    "host": self.DATABASE_HOST,
+                    "port": self.DATABASE_PORT,
+                    "user": self.DATABASE_USERNAME,
+                    "password": self.DATABASE_PASSWORD,
+                    "database": self.DATABASE_NAME,
+                    "minsize": 10,
+                    "maxsize": 40,
+                    "pool_recycle": 3600,
+                    "charset": "utf8mb4",
+                    "echo": False,
+                    "autocommit": True,
+                },
             }
         }
-    }
+        self.REDIS_URL = self._build_redis_url(db=0)
+        return self
+
+    @staticmethod
+    def _format_redis_url(*, username: str, password: str, host: str, port: str, db: int) -> str:
+        auth = ""
+        if username:
+            auth += quote_plus(username)
+        auth += ":"
+        if password:
+            auth += quote_plus(password)
+        auth += "@"
+        return f"redis://{auth}{host or '127.0.0.1'}:{port or '6379'}/{db}"
+
+    def _build_redis_url(self, db: int = 0) -> str:
+        return self._format_redis_url(
+            username=self.REDIS_USERNAME,
+            password=self.REDIS_PASSWORD,
+            host=self.REDIS_HOST,
+            port=self.REDIS_PORT,
+            db=db,
+        )
 
     # Aerich：是否在应用启动时执行 init_db / migrate / upgrade 指令
     # - 生产(Linux 且 SERVER_DEBUG=False)：始终执行迁移（不提供关闭选项）
@@ -235,17 +293,10 @@ class ProjectConfig(BaseSettings):
             return True
         return False
 
-    # Redis 配置（仅 requirepass 时用户名留空；密码含 @/: 等会做 URL 编码）
-    REDIS_USERNAME: str = ""
-    REDIS_PASSWORD: str = quote_plus("!qaz@wsx")
-    REDIS_HOST: str = "127.0.0.1"
-    REDIS_PORT: str = "6379"
-    REDIS_URL: str = f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
-
 
 @lru_cache(maxsize=1)
-def get_project_config():
+def get_project_config() -> ProjectConfig:
     return ProjectConfig()
 
 
-PROJECT_CONFIG = ProjectConfig()
+PROJECT_CONFIG = get_project_config()

@@ -8,7 +8,7 @@
 """
 from typing import Dict, Any
 
-DATABASES = Dict[str, Dict[str, Dict[str, Any]]] = {
+DATABASES: Dict[str, Dict[str, Dict[str, Any]]] = {
     # 无所属环境 -> 无所属单元 -> 无所属分区 -> 无分片 -> 公共数据库
     "none": {
         "none": {

@@ -16,6 +16,7 @@ backend/output/logs/*.log
 backend/output/logs/*.lock
 backend/output/logs/*.zip
 backend/migrations/models/*.py
+backend/.env
 
 frontend/.idea
 frontend/.vscode
