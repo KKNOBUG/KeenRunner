@@ -1,6 +1,6 @@
 <template>
   <router-link h-60 f-c-c to="/">
-    <icon-custom-logo text-36 color-primary></icon-custom-logo>
+    <icon-custom-logo-new text-36 color-primary></icon-custom-logo-new>
     <h2
       v-show="!appStore.collapsed"
       ml-2
