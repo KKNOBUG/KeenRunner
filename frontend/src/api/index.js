@@ -103,7 +103,6 @@ export default {
   getTagList: (data = {}) => request.post('/autotest/tag/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
   // 工具箱相关
-  runcodePython: (data = {}) => request.post('/toolbox/runcode/python', data),
   generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
 
   // ---------- autotest：用例 / 步骤 / 报告 / 任务 ----------

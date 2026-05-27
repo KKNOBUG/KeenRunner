@@ -582,7 +582,7 @@ async def init_database_menu():
                 is_hidden=False,
                 component="Layout",
                 keepalive=False,
-                redirect="/toolbox/runcode"
+                redirect="/toolbox/pythonHelpDoc"
             )
         )
         toolbox_children_menu = [
@@ -595,17 +595,6 @@ async def init_database_menu():
                 icon="vscode-icons:file-type-python",
                 is_hidden=False,
                 component="/toolbox/pythonHelpDoc",
-                keepalive=False
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="Python在线编码",
-                path="runcode",
-                order=2,
-                parent_id=toolbox_parent_menu.id,
-                icon="vscode-icons:file-type-python",
-                is_hidden=False,
-                component="/toolbox/runcode",
                 keepalive=False
             ),
             Menu(
