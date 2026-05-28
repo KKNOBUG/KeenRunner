@@ -513,7 +513,7 @@ class AutoTestToolService:
             if not expr:
                 raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
             try:
-                match = re.search(expr, response_text)
+                match = re.search(expr, response_text, re.S)
                 if match:
                     return match.group(0)
                 raise ValueError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
