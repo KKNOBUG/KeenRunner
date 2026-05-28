@@ -64,22 +64,13 @@ class ProjectConfig(BaseSettings):
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
 
     # 日志相关参数配置
-    # 文件名称前缀
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
-    # 是否开启文件名称后缀（是否增加年月日标识）
-    LOGGER_FILE_NAME_SUFFIX: bool = True
-    # 日志文件轮转频率
-    LOGGER_TIMED_ROTATING: str = "天"
-    # 保留的备份日志文件的数量，当超过超过这个数量时，最旧的备份文件将被删除，默认值为0，标识不保留备份
-    LOGGER_BACKUP_COUNT: int = 0
-    # 文件大小轮转
+    # 大小轮转："200 MB"
     # 日期轮转："1 day"、"1 week"、"1 month"
     # 时间轮转："HH:MM:SS"、"00:00"、"00:00:00"
-    LOGGER_ROTATION: str = '00:00:00'
-    # 保留30天
-    LOGGER_RETENTION: str = '30 days'
-    # 压缩格式
-    LOGGER_COMPRESSION: str = "zip"
+    LOGGER_ROTATION: str = "200 MB"
+    # 大小轮转后保留的备份文件个数（单文件多进程模式）
+    LOGGER_ROTATION_BACKUP_COUNT: int = 30
 
     # 项目路径相关配置
     APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "applications"))
