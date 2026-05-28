@@ -166,7 +166,7 @@ def register_middlewares(app: FastAPI):
 
 def register_routers(app: FastAPI) -> None:
     # 挂载静态文件
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", StaticFiles(directory=PROJECT_CONFIG.STATIC_DIR), name="static")
     app.openapi_version = PROJECT_CONFIG.APP_OPENAPI_VERSION
     swagger_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
     swagger_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL

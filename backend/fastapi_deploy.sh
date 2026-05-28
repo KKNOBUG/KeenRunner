@@ -5,7 +5,7 @@ PROJECT_ROOT="服务器上的后端项目所在目录"
 
 # 配置Gunicorn服务
 GUNICORN_APP="backend_main:app"
-GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.configuration.py"
+GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
 GUNICORN_PID_FILE="${PROJECT_ROOT}/gunicorn.pid"
 
 # 配置Celery应用路径

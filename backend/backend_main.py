@@ -79,6 +79,7 @@ if __name__ == '__main__':
         reload=PROJECT_CONFIG.SERVER_DEBUG,
         reload_delay=PROJECT_CONFIG.SERVER_DELAY,
         log_config=None,
+        log_level=None,
     )
 
     # 记录依赖：pip list --format=freeze > requirements.txt
@@ -90,3 +91,5 @@ if __name__ == '__main__':
     # echo "alias redis-server='/usr/local/bin/redis-server /usr/local/etc/redis-6.2.9/redis.conf'" >> ~/.zshrc
     # source ~/.zshrc
     # redis-server
+
+    # MacOS: gunicorn -c backend/gunicorn.conf.py backend.backend_main:app

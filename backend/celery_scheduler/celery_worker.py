@@ -93,7 +93,11 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     _async_event_loop_pool = None
     AsyncEventLoopContextIOPool.reset_process_state()
     reset_tortoise_orm_state()
-    LOGGER.debug("【Krun-Celery-Worker】worker_process_init: 已重置异步池与 Tortoise 状态")
+    # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败
+    from backend.configure.logging_config import loguru_logging
+
+    loguru_logging()
+    LOGGER.debug("【Krun-Celery-Worker】worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
 
 
 def get_async_event_loop_pool():
