@@ -17,7 +17,7 @@ from starlette.datastructures import FormData
 
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
-from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
+from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER, ROUTER_SUMMARY, ROUTER_TAGS
 from backend.services import AuthControl
 
 
@@ -121,8 +121,8 @@ async def logging_middleware(request: Request, call_next):
         except:
             pass
     request_client: str = request.client.host if request.client else "127.0.0.1"
-    request_tags: str = GLOBAL_CONFIG.ROUTER_TAGS.get(request_router or "未定义", "未定义")
-    request_summary: str = GLOBAL_CONFIG.ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
+    request_tags: str = ROUTER_TAGS.get(request_router or "未定义", "未定义")
+    request_summary: str = ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
     request_body: bytes = request_body if is_upload else original_request_body.decode("utf-8", errors="ignore")
     request_params: str = unquote(request.query_params.__str__())
 

@@ -230,9 +230,9 @@ class ProjectConfig(BaseSettings):
             if not getattr(self, field_name):
                 raise ValueError(f"{field_name} 配置为空，请请检查.env文件或环境变量")
 
-        return self._assemble_connection_urls()
+        return self.assemble_connection_urls()
 
-    def _assemble_connection_urls(self) -> Self:
+    def assemble_connection_urls(self) -> Self:
         db_user = quote_plus(self.DATABASE_USERNAME)
         db_password = quote_plus(self.DATABASE_PASSWORD)
         self.DATABASE_URL = (
@@ -259,11 +259,11 @@ class ProjectConfig(BaseSettings):
                 },
             }
         }
-        self.REDIS_URL = self._build_redis_url(db=0)
+        self.REDIS_URL = self.build_redis_url(db=0)
         return self
 
     @staticmethod
-    def _format_redis_url(*, username: str, password: str, host: str, port: str, db: int) -> str:
+    def format_redis_url(*, username: str, password: str, host: str, port: str, db: int) -> str:
         auth = ""
         if username:
             auth += quote_plus(username)
@@ -273,8 +273,8 @@ class ProjectConfig(BaseSettings):
         auth += "@"
         return f"redis://{auth}{host or '127.0.0.1'}:{port or '6379'}/{db}"
 
-    def _build_redis_url(self, db: int = 0) -> str:
-        return self._format_redis_url(
+    def build_redis_url(self, db: int = 0) -> str:
+        return self.format_redis_url(
             username=self.REDIS_USERNAME,
             password=self.REDIS_PASSWORD,
             host=self.REDIS_HOST,

@@ -23,7 +23,7 @@ from backend.core.initializations import (
 from backend.core.responses import SuccessResponse
 
 try:
-    from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG
+    from backend.configure import PROJECT_CONFIG, ROUTER_SUMMARY, ROUTER_TAGS
 except ImportError as e:
     from backend.core.exceptions import NotImplementedException
 
@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
 
     for route in app.routes:
         if isinstance(route, APIRoute):
-            GLOBAL_CONFIG.ROUTER_SUMMARY[route.path] = route.summary
-            GLOBAL_CONFIG.ROUTER_TAGS[route.path] = route.tags
+            ROUTER_SUMMARY[route.path] = route.summary
+            ROUTER_TAGS[route.path] = route.tags
 
     yield
 

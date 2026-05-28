@@ -1,4 +1,5 @@
 .git
+.env
 .idea
 .pytest_cache
 *.pyc
@@ -10,13 +11,13 @@
 venv
 __pycache__
 
+backend/.env
 backend/.idea
 backend/.vscode
 backend/output/logs/*.log
 backend/output/logs/*.lock
 backend/output/logs/*.zip
 backend/migrations/models/*.py
-backend/.env
 
 frontend/.idea
 frontend/.vscode

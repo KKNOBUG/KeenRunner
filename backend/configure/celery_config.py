@@ -10,147 +10,119 @@ import os
 from functools import lru_cache
 from typing import Dict, Any
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+from typing_extensions import Self
 
 from backend.common import FileUtils
 from backend.configure.project_config import PROJECT_CONFIG
 
 
 class CeleryConfig(BaseSettings):
-    # Celery Broker配置（Redis作为消息队列）
-    # 使用不同的Redis数据库避免冲突
-    PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "applications"))
-    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, "celery_scheduler"))
-    CELERY_BROKER_URL: str = (
-        f"redis://"
-        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ':'}"
-        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else '@'}"
-        f"{PROJECT_CONFIG.REDIS_HOST or 'localhost'}:"
-        f"{PROJECT_CONFIG.REDIS_PORT or '6379'}/1"
-    )
-
-    # Celery Result Backend配置（Redis作为结果存储）
-    # f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
-    CELERY_RESULT_BACKEND: str = (
-        f"redis://"
-        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ':'}"
-        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else '@'}"
-        f"{PROJECT_CONFIG.REDIS_HOST or 'localhost'}:"
-        f"{PROJECT_CONFIG.REDIS_PORT or '6379'}/2"
-    )
-
-    # Celery Beat调度器配置（使用Redis Beat解决多服务器单点问题）
     CELERY_BEAT_SCHEDULER: str = "redbeat.schedulers:RedBeatScheduler"
-    CELERY_REDBEAT_REDIS_URL: str = (
-        f"redis://"
-        f"{PROJECT_CONFIG.REDIS_USERNAME + ':' if PROJECT_CONFIG.REDIS_USERNAME else ':'}"
-        f"{PROJECT_CONFIG.REDIS_PASSWORD + '@' if PROJECT_CONFIG.REDIS_PASSWORD else '@'}"
-        f"{PROJECT_CONFIG.REDIS_HOST or 'localhost'}:"
-        f"{PROJECT_CONFIG.REDIS_PORT or '6379'}/3"
-    )
+    CELERY_BROKER_URL: str = ""
+    CELERY_RESULT_BACKEND: str = ""
+    CELERY_REDBEAT_REDIS_URL: str = ""
+    CELERY_CONFIG: Dict[str, Any] = {}
 
-    # Celery配置字典
-    CELERY_CONFIG: Dict[str, Any] = {
-        # 基础配置
-        "broker_url": CELERY_BROKER_URL,
-        "result_backend": CELERY_RESULT_BACKEND,
-        "timezone": "Asia/Shanghai",
-        "enable_utc": True,
-        "task_serializer": "json",
-        "accept_content": ["json"],
-        "result_serializer": "json",
-        "result_accept_content": ["json"],
+    CELERY_LOG_DIR: str = ""
+    CELERY_WORKER_LOG_FILE: str = ""
+    CELERY_BEAT_LOG_FILE: str = ""
+    CELERY_TASK_LOG_FILE: str = ""
 
-        # 任务执行配置
-        "task_acks_late": True,  # 任务完成后才确认，避免任务丢失
-        "worker_prefetch_multiplier": 1,  # 每个worker预取任务数，避免任务堆积
-        "task_reject_on_worker_lost": True,  # worker丢失时重新分配任务
+    @model_validator(mode="after")
+    def assemble_celery_settings(self) -> Self:
+        project = PROJECT_CONFIG
+        self.CELERY_BROKER_URL = project.build_redis_url(db=1)
+        self.CELERY_RESULT_BACKEND = project.build_redis_url(db=2)
+        self.CELERY_REDBEAT_REDIS_URL = project.build_redis_url(db=3)
 
-        # 结果存储配置
-        "result_expires": 3600,  # 结果过期时间（秒）
-        "result_persistent": True,  # 持久化结果
+        self.CELERY_LOG_DIR = os.path.join(project.OUTPUT_LOGS_DIR, "celery")
+        os.makedirs(self.CELERY_LOG_DIR, exist_ok=True)
+        self.CELERY_WORKER_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_worker.log")
+        self.CELERY_BEAT_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_beat.log")
+        self.CELERY_TASK_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_task.log")
 
-        "task_routes": {
-            "backend.celery_scheduler.tasks.task_autotest_case.execute_batch_cases_task": {"queue": "autotest_queue"},
-            "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {"queue": "autotest_queue"},
-            "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {"queue": "autotest_queue"},
-        },
-        "task_default_queue": "default",
-        "task_default_exchange": "default",
-        "task_default_exchange_type": "direct",
-        "task_default_routing_key": "default",
+        task_imports = FileUtils.get_all_files(
+            abspath=os.path.join(project.CELERY_SCHEDULER_DIR, "tasks"),
+            return_full_path=False,
+            return_precut_path="backend.celery_scheduler.tasks.",
+            startswith="task",
+            extension=".py",
+            exclude_startswith="__",
+            exclude_endswith="__.py",
+        )
 
-        # 并发配置（解决多进程冲突）
-        "worker_max_tasks_per_child": 1000,  # 每个worker子进程执行任务数上限，防止内存泄漏
-        "worker_disable_rate_limits": False,  # 启用速率限制
-
-        # 任务重试配置
-        "task_acks_on_failure_or_timeout": False,  # 任务失败或超时后不自动确认
-        "task_time_limit": 3600,  # 任务硬超时时间（秒）
-        "task_soft_time_limit": 3300,  # 任务软超时时间（秒）
-
-        # Beat调度器配置（使用Redis Beat解决多服务器单点问题）
-        "beat_scheduler": CELERY_BEAT_SCHEDULER,
-        "redbeat_redis_url": CELERY_REDBEAT_REDIS_URL,
-        # 锁超时与续期：长时间运行或单次 tick 较慢时，锁可能在续期前过期导致 LockNotOwnedError，故适当放大
-        "redbeat_lock_timeout": 600,  # Beat 锁超时（秒），建议大于 renewal_interval 的 1.5 倍
-        "redbeat_lock_renewal_interval": 420,  # 续期间隔（秒），在超时前完成续期
-
-        # 定时任务：每分钟扫描 AutoTestApiTaskInfo，到期则下发执行
-        "beat_schedule": {
-            "scan-autotest-tasks": {
-                "task": "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks",
-                "schedule": 60.0,  # 每 60 秒
-                "options": {"queue": "default"},
+        self.CELERY_CONFIG = {
+            "broker_url": self.CELERY_BROKER_URL,
+            "result_backend": self.CELERY_RESULT_BACKEND,
+            "timezone": "Asia/Shanghai",
+            "enable_utc": True,
+            "task_serializer": "json",
+            "accept_content": ["json"],
+            "result_serializer": "json",
+            "result_accept_content": ["json"],
+            "task_acks_late": True,
+            "worker_prefetch_multiplier": 1,
+            "task_reject_on_worker_lost": True,
+            "result_expires": 3600,
+            "result_persistent": True,
+            "task_routes": {
+                "backend.celery_scheduler.tasks.task_autotest_case.execute_batch_cases_task": {
+                    "queue": "autotest_queue"
+                },
+                "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
+                    "queue": "autotest_queue"
+                },
+                "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
+                    "queue": "autotest_queue"
+                },
             },
-        },
-
-        # 日志配置
-        "worker_log_format": "[%(asctime)s][%(levelname)s] -> [%(name)s][%(filename)s][line:%(lineno)d] -> %(message)s",
-        "worker_task_log_format": "[%(asctime)s][%(levelname)s] -> [%(name)s][%(filename)s][line:%(lineno)d] -> %(message)s",
-        "worker_log_color": False,  # 禁用日志颜色（文件日志不需要）
-
-
-        # 任务导入配置（必须导入 celery_service，否则 run_autotest_task 等任务未注册）
-        "imports": [
-            tasks
-            for tasks in FileUtils.get_all_files(
-                abspath=os.path.join(CELERY_SCHEDULER_DIR, "tasks"),
-                return_full_path=False,
-                return_precut_path="backend.celery_scheduler.tasks.",
-                startswith="task",
-                extension=".py",
-                exclude_startswith="__",
-                exclude_endswith="__.py",
-            )
-        ],
-
-        # 任务发送配置（解决多服务器冲突）
-        "task_send_sent_event": True,  # 发送任务事件
-        "task_track_started": True,  # 跟踪任务开始
-
-        # 任务结果配置
-        "task_ignore_result": False,  # 不忽略任务结果
-        "task_store_eager_result": False,  # 不存储eager模式的结果
-
-        # 安全配置
-        "worker_send_task_events": True,  # 发送任务事件
-        "broker_connection_retry_on_startup": True,  # 发送任务事件
-    }
-
-    # Celery日志文件路径
-    CELERY_LOG_DIR: str = os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery")
-    CELERY_WORKER_LOG_FILE: str = os.path.join(CELERY_LOG_DIR, "celery_worker.log")
-    CELERY_BEAT_LOG_FILE: str = os.path.join(CELERY_LOG_DIR, "celery_beat.log")
-    CELERY_TASK_LOG_FILE: str = os.path.join(CELERY_LOG_DIR, "celery_task.log")
-
-    # 确保日志目录存在
-    os.makedirs(CELERY_LOG_DIR, exist_ok=True)
+            "task_default_queue": "default",
+            "task_default_exchange": "default",
+            "task_default_exchange_type": "direct",
+            "task_default_routing_key": "default",
+            "worker_max_tasks_per_child": 1000,
+            "worker_disable_rate_limits": False,
+            "task_acks_on_failure_or_timeout": False,
+            "task_time_limit": 3600,
+            "task_soft_time_limit": 3300,
+            "beat_scheduler": self.CELERY_BEAT_SCHEDULER,
+            "redbeat_redis_url": self.CELERY_REDBEAT_REDIS_URL,
+            "redbeat_lock_timeout": 600,
+            "redbeat_lock_renewal_interval": 420,
+            "beat_schedule": {
+                "scan-autotest-tasks": {
+                    "task": (
+                        "backend.celery_scheduler.tasks.task_autotest_case"
+                        ".scan_and_dispatch_autotest_tasks"
+                    ),
+                    "schedule": 60.0,
+                    "options": {"queue": "default"},
+                },
+            },
+            "worker_log_format": (
+                "[%(asctime)s][%(levelname)s] -> [%(name)s][%(filename)s]"
+                "[line:%(lineno)d] -> %(message)s"
+            ),
+            "worker_task_log_format": (
+                "[%(asctime)s][%(levelname)s] -> [%(name)s][%(filename)s]"
+                "[line:%(lineno)d] -> %(message)s"
+            ),
+            "worker_log_color": False,
+            "imports": task_imports,
+            "task_send_sent_event": True,
+            "task_track_started": True,
+            "task_ignore_result": False,
+            "task_store_eager_result": False,
+            "worker_send_task_events": True,
+            "broker_connection_retry_on_startup": True,
+        }
+        return self
 
 
 @lru_cache(maxsize=1)
-def get_celery_config():
+def get_celery_config() -> CeleryConfig:
     return CeleryConfig()
 
 

@@ -7,14 +7,13 @@
 @DateTime: 2025/1/16 15:30
 """
 from functools import lru_cache
-from typing import Dict, Any
 
 from pydantic_settings import BaseSettings
 
 
 class GlobalConfig(BaseSettings):
-    ROUTER_SUMMARY: Dict[str, Any] = {}
-    ROUTER_TAGS: Dict[str, Any] = {}
+    """全局常量配置（日期格式等）；运行时路由元数据见 router_registry.py。"""
+
     DATE_FORMAT: str = "%Y-%m-%d"
     TIME_FORMAT: str = "%H:%M:%S"
     DATETIME_FORMAT1: str = "%Y%m%d%H%M%S"
@@ -22,7 +21,7 @@ class GlobalConfig(BaseSettings):
 
 
 @lru_cache(maxsize=1)
-def get_global_config():
+def get_global_config() -> GlobalConfig:
     return GlobalConfig()
 
 
