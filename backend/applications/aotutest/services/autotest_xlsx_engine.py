@@ -247,15 +247,6 @@ async def parse_sheet_async(df, sheet_name, requests_body_key):
     return await loop.run_in_executor(executor, parse_sheet_fast, df, sheet_name, requests_body_key)
 
 
-# async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name: str):
-#     df = pd.read_excel(save_file_name, sheet_name=0)
-#     if save_neo_name.is_file():
-#         with pd.ExcelWriter(str(save_neo_name), engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-#             df.to_excel(writer, sheet_name=sheet_name, index=False)
-#     else:
-#         with pd.ExcelWriter(str(save_neo_name), engine="openpyxl", mode="w") as writer:
-#             df.to_excel(writer, sheet_name=sheet_name, index=False)
-#     return
 async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name: str):
     source_wb = load_workbook(save_file_name)
     source_ws = source_wb[source_wb.sheetnames[0]]
@@ -316,14 +307,3 @@ async def xlsx_to_json_async(file_path: str, requests_body_key: dict, first_shee
         "valid": True,
         "data": final_data
     }
-
-
-if __name__ == "__main__":
-    # import time
-    pass
-    # print(time.time())
-    # xlsx_path = r"E:\KF5726\桌面\案例模板.xlsx"
-    # data_main = asyncio.run(xlsx_to_json_async(xlsx_path))
-    # data_main = json.dumps(data_main, ensure_ascii=False, indent=2)
-    # print(data_main)
-    # print(time.time())
