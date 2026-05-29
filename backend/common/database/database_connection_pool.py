@@ -7,14 +7,14 @@
 @DateTime: 2026/4/21 14:33
 """
 import asyncio
-import json
 import traceback
-from datetime import date, time, datetime
+from datetime import date, time, datetime, timedelta
 from decimal import Decimal
 from typing import Dict, Optional, Any, Type, Set
 
 import aiomysql
 import cx_Oracle
+import orjson
 from loguru import logger
 
 
@@ -306,9 +306,11 @@ class DBConnPoolFromConfig:
                         if cursor.description:
                             # 查询数据，返回列表
                             result = await cursor.fetchall()
-                            sql_data = json.loads(
-                                json.dumps([dict(row) for row in result], default=self.serializer)
-                            )
+                            sql_data = orjson.loads(orjson.dumps(
+                                [dict(row) for row in result],
+                                default=self.serializer,
+                                option=orjson.OPT_PASSTHROUGH_DATETIME
+                            ))
                         else:
                             await conn.commit()
                             sql_data = {"count": rowcount}
@@ -341,7 +343,11 @@ class DBConnPoolFromConfig:
                                 for i, col in enumerate(colums):
                                     row_dict[col] = row[i]
                                 result.append(row_dict)
-                            data = json.loads(json.dumps(result, default=self.serializer))
+                            data = orjson.loads(orjson.dumps(
+                                result,
+                                default=self.serializer,
+                                option=orjson.OPT_PASSTHROUGH_DATETIME,
+                            ))
                         else:
                             data = rows
                         rowcount = len(rows)
@@ -367,17 +373,22 @@ class DBConnPoolFromConfig:
 
     @staticmethod
     def serializer(obj):
-        """json序列化处理"""
+        """
+        orjson default 回调：处理 orjson 不原生支持或需自定义格式的 DB 行字段类型。
+        配合 OPT_PASSTHROUGH_DATETIME，datetime/date/time 输出为用户可读字符串。
+        """
         if isinstance(obj, Decimal):
-            return float(obj)
+            return str(obj)
+        elif isinstance(obj, datetime):
+            return obj.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(obj, date):
             return obj.strftime("%Y-%m-%d")
         elif isinstance(obj, time):
             return obj.strftime("%H:%M:%S")
-        elif isinstance(obj, datetime):
-            return obj.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(obj, bytes):
             return obj.decode('utf-8')
+        elif isinstance(obj, timedelta):
+            return str(obj)
         else:
             raise TypeError(f"数据{obj}类型[{type(obj)}]无法完成序列化")
 

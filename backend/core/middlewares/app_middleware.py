@@ -6,12 +6,12 @@
 @Module  : app_middleware.py
 @DateTime: 2025/1/17 22:29
 """
-import json
 import time
 from io import BytesIO
 from typing import Dict, Any, Optional
 from urllib.parse import unquote
 
+import orjson
 from fastapi import Request, Response
 from starlette.datastructures import FormData
 
@@ -108,7 +108,7 @@ async def logging_middleware(request: Request, call_next):
                 form_data[field_name] = field_value
 
         # 重置流的位置到开头，确保后续处理能正确读取
-        request_body = json.dumps(form_data, ensure_ascii=False).encode("utf-8")
+        request_body = orjson.dumps(form_data)
         request._stream.seek(0)
 
     # 记录请求信息
@@ -189,7 +189,7 @@ async def logging_middleware(request: Request, call_next):
             "response_elapsed": response_elapsed
         }
         if isinstance(response_body, str):
-            _response = json.loads(response_body)
+            _response = orjson.loads(response_body)
             audit_log["response_code"] = _response.get("code", "")
             audit_log["response_message"] = _response.get("message", "")[:512]
             audit_log["response_params"] = response_body

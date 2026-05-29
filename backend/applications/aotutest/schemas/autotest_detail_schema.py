@@ -6,9 +6,9 @@
 @Module  : autotest_detail_schema
 @DateTime: 2025/11/27 10:42
 """
-import json
 from typing import Optional, List, Dict, Any, Type, Union
 
+import orjson
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
@@ -141,7 +141,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         extract_variables_value: Optional[List[Dict[str, Any]]] = v.get("extract_variables")
         if extract_variables_value:
             try:
-                v["extract_variables"] = json.loads(json.dumps(extract_variables_value, ensure_ascii=False))
+                v["extract_variables"] = orjson.loads(orjson.dumps(extract_variables_value))
             except Exception as e:
                 v["extract_variables"] = None
                 executive_logger.append(f"字段[extract_variables]标准化失败, 已置空, 错误描述: {e}")
@@ -149,7 +149,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         assert_validators_value: Optional[List[Dict[str, Any]]] = v.get("assert_validators")
         if assert_validators_value:
             try:
-                v["assert_validators"] = json.loads(json.dumps(assert_validators_value, ensure_ascii=False))
+                v["assert_validators"] = orjson.loads(orjson.dumps(assert_validators_value))
             except Exception as e:
                 v["assert_validators"] = None
                 executive_logger.append(f"字段[assert_validators]标准化失败, 已置空, 错误描述: {e}")
@@ -157,7 +157,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         database_operates_value: Optional[List[Dict[str, Any]]] = v.get("database_operates")
         if database_operates_value:
             try:
-                v["database_operates"] = json.loads(json.dumps(database_operates_value, ensure_ascii=False))
+                v["database_operates"] = orjson.loads(orjson.dumps(database_operates_value))
             except Exception as e:
                 v["database_operates"] = None
                 executive_logger.append(f"字段[database_operates]标准化失败, 已置空, 错误描述: {e}")

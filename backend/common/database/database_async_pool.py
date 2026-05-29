@@ -7,11 +7,12 @@
 @DateTime: 2025/1/12 19:55
 """
 import asyncio
-import aiomysql
-import json
-from datetime import date, time, datetime
+from datetime import date, time, datetime, timedelta
 from decimal import Decimal
 from typing import Dict, Any, Optional
+
+import aiomysql
+import orjson
 
 from backend.configure.database_config import DATABASES
 
@@ -140,23 +141,23 @@ class DatabaseAsyncPool:
     @staticmethod
     def serializer(obj):
         """
-        将特定类型的对象序列化为可JSON序列化的格式
-        :param obj: 要序列化的对象
-        :return: 序列化后的对象
-        :raise ValueError: 如果对象不在预先定义的对象转换中则抛出异常
+        orjson default 回调：处理 orjson 不原生支持或需自定义格式的 DB 行字段类型。
+        配合 OPT_PASSTHROUGH_DATETIME，datetime/date/time 输出为用户可读字符串。
         """
         if isinstance(obj, Decimal):
-            return float(obj)
+            return str(obj)
+        elif isinstance(obj, datetime):
+            return obj.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(obj, date):
             return obj.strftime("%Y-%m-%d")
         elif isinstance(obj, time):
-            return obj.strftime("%H-%M-%S")
-        elif isinstance(obj, datetime):
-            return obj.strftime("%Y-%m-%d %H-%M-%S")
+            return obj.strftime("%H:%M:%S")
         elif isinstance(obj, bytes):
-            return obj.decode("utf-8")
+            return obj.decode('utf-8')
+        elif isinstance(obj, timedelta):
+            return str(obj)
         else:
-            raise ValueError(f"类型:[{type(obj)}]无法完成序列化")
+            raise TypeError(f"数据{obj}类型[{type(obj)}]无法完成序列化")
 
     async def assign_tos_execute_sql(self, env: str, tos: str, sql: str):
         """
@@ -203,11 +204,18 @@ class DatabaseAsyncPool:
                     # 使用 cursor.description 判断是否有结果集，避免对非查询语句（如INSERT/UPDATE）调用 fetchall()，防止错误
                     if cursor.description:
                         result = await cursor.fetchall()
-                        data = json.loads(json.dumps([dict(row) for row in result], default=self.serializer))
-
+                        data = orjson.loads(orjson.dumps(
+                            [dict(row) for row in result],
+                            default=self.serializer,
+                            option=orjson.OPT_PASSTHROUGH_DATETIME,
+                        ))
                     else:
                         await conn.commit()
-                        data = json.loads(json.dumps({"count": rowcount}, default=self.serializer))
+                        data = orjson.loads(orjson.dumps(
+                            {"count": rowcount},
+                            default=self.serializer,
+                            option=orjson.OPT_PASSTHROUGH_DATETIME,
+                        ))
                 return {"env": env, "tos": tos, "zone": zone, "name": name, "data": data}
         except Exception as e:
             raise RuntimeError(f"执行SQL时发生错误: {e}") from e

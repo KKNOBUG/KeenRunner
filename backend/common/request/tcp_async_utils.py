@@ -21,12 +21,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import random
 from datetime import timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
+import orjson
 from lxml import etree
 
 from backend.core.exceptions import ReqInvalidException, ResInvalidException
@@ -129,10 +129,10 @@ class AsyncTcpUtils:
             raw = await self.execute()
             if not raw:
                 return None
-            return json.loads(raw.decode(self.encoding))
+            return orjson.loads(raw)
         except ReqInvalidException:
             raise
-        except json.JSONDecodeError as e:
+        except orjson.JSONDecodeError as e:
             raise ResInvalidException(message=f"TCP响应解析失败, 响应体无法进行JSON格式处理: {e}")
         except Exception as e:
             raise ResInvalidException(message=f"TCP响应解析异常: {e}")
@@ -294,7 +294,7 @@ class AioTcpClient:
         if isinstance(data, bytes):
             return data
         if isinstance(data, dict):
-            return json.dumps(data, ensure_ascii=False).encode(encoding)
+            return orjson.dumps(data)
         return str(data).encode(encoding)
 
     def _build_payload(
@@ -534,8 +534,8 @@ class AsyncTcpConnection:
             raise ReqInvalidException(message=f"TCP服务接收正文超时({self.host}:{self.port}, bytes={length}): {e}")
         text = data.decode(self.encoding).strip()
         try:
-            return json.loads(text)
-        except json.JSONDecodeError:
+            return orjson.loads(text)
+        except orjson.JSONDecodeError:
             return text
 
     async def close(self) -> None:

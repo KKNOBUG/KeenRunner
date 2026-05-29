@@ -7,10 +7,10 @@
 @DateTime: 2025/1/13 09:17
 """
 import threading
-import json as JSON
-import requests
 from typing import Optional, Dict, Any, Union, List, Literal
 
+import orjson
+import requests
 from requests import exceptions
 
 from backend.enums import HTTPMethod
@@ -164,14 +164,14 @@ class RequestSyncUtils:
         # 3.转换上送的headers请求头信息
         if headers and isinstance(headers, str):
             try:
-                headers_to_dict = JSON.loads(headers)
+                headers_to_dict = orjson.loads(headers)
 
                 if isinstance(headers_to_dict, dict):
                     precast_headers.update(headers_to_dict)
                 else:
                     raise ValueError("字符串异常，无法转换字典类型")
 
-            except JSON.decoder.JSONDecodeError:
+            except orjson.JSONDecodeError:
                 raise ValueError("字符串异常，无法转换字典类型")
 
         elif headers and isinstance(headers, dict):
