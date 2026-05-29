@@ -6,11 +6,10 @@
 @Module  : redis_sync_pool.py
 @DateTime: 2025/1/14 15:30
 """
-import json
+import pickle
 from typing import Optional, Union, List, Any, Dict
 
 import redis
-import pickle
 from redis.exceptions import RedisError
 
 
@@ -296,8 +295,6 @@ class RedisSyncPool:
 
 
 if __name__ == "__main__":
-    import time
-
     # 创建 RedisSyncPool 实例
     redis_pool = RedisSyncPool(dbid="0")
 
