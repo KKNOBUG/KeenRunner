@@ -1,8 +1,17 @@
+# -*- coding: utf-8 -*-
+"""
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : autotest_step_engine.py
+@DateTime: 2025/11/9 11:57
+"""
 from __future__ import annotations
 
 import ast
 import asyncio
 import builtins as _builtins_module
+import orjson
 import json
 import random
 import re
@@ -660,7 +669,8 @@ class StepExecutionContext:
             )
             self.log(error_message)
             raise StepExecutionError(error_message)
-        self.log(f"【代码请求(Python)】执行完成, 返回结果: \n{json.dumps(result, ensure_ascii=False, indent=8)}")
+        result_serializer: str = orjson.dumps(result, option=orjson.OPT_INDENT_2).decode("UTF-8")
+        self.log(f"【代码请求(Python)】执行完成, 返回结果: \n{result_serializer}")
         # 对于f-string支持度不够，如下示例：
         #     id_card = '${generate_ident_card_number()}'
         #     birthday = f'${{generate_ident_card_birthday(ident_card_number={id_card})}}'
@@ -1105,7 +1115,7 @@ class BaseStepExecutor:
             response_elapsed = result.response.get("response_elapsed")
             if response_text and not response_body:
                 try:
-                    response_body = json.loads(response_text)
+                    response_body = orjson.loads(response_text)
                 except (ValueError, TypeError):
                     response_body = None
 
@@ -1775,8 +1785,8 @@ class LoopStepExecutor(BaseStepExecutor):
             elif isinstance(resolved_source, str):
                 # 尝试解析 JSON 字符串
                 try:
-                    obj = json.loads(resolved_source)
-                except (json.JSONDecodeError, ValueError):
+                    obj = orjson.loads(resolved_source)
+                except (orjson.JSONDecodeError, ValueError):
                     # 如果不是 JSON，作为普通字符串处理
                     obj = resolved_source
             else:
@@ -1956,7 +1966,7 @@ class PythonStepExecutor(BaseStepExecutor):
                     result.assert_validators.extend(validator_results)
                     assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
                     assert_failed_total: int = len(assert_failed_items)
-                    assert_failed_dumps: str = json.dumps(assert_failed_items, ensure_ascii=False, indent=8)
+                    assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                     if assert_failed_total > 0:
                         error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
                         raise StepExecutionError(error_message)
@@ -2288,7 +2298,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 try:
                     if response_type == "json":
                         body_any = await utils.json_resp()
-                        resp_text = json.dumps(body_any, ensure_ascii=False)
+                        resp_text = orjson.dumps(body_any).decode("UTF-8")
                         response_json = body_any if isinstance(body_any, (dict, list)) else None
                         resp_bytes = resp_text.encode(encoding, errors="ignore")
                     elif response_type == "xml":
@@ -2306,14 +2316,14 @@ class TcpStepExecutor(BaseStepExecutor):
                         resp_text = await utils.text_resp()
                         resp_bytes = resp_text.encode(encoding, errors="ignore")
                         try:
-                            response_json = json.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
+                            response_json = orjson.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
                         except Exception:
                             response_json = None
                 except Exception:
                     resp_bytes = await utils.bytes_resp()
                     resp_text = resp_bytes.decode(encoding, errors="ignore")
                     try:
-                        response_json = json.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
+                        response_json = orjson.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
                     except Exception:
                         response_json = None
 
@@ -2341,7 +2351,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 # 检查是否存在提取失败的项（这里暂定不允许存在失败）
                 extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
                 extract_failed_total: int = len(extract_failed_items)
-                extract_failed_dumps: str = json.dumps(extract_failed_items, ensure_ascii=False, indent=8)
+                extract_failed_dumps: str = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                 if extract_failed_total > 0:
                     error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
                     raise StepExecutionError(error_message)
@@ -2611,7 +2621,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                     })
 
             executive_ed_time: datetime = datetime.now()
-            response_text_str = json.dumps(database_operates_response, ensure_ascii=False, default=str)
+            response_text_str = orjson.dumps(database_operates_response, default=str).decode("UTF-8")
             result.extract_variables = mark_extract_variables
             result.request = {
                 "database_operates": database_operates_request,
@@ -2648,7 +2658,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 # 检查是否存在提取失败的项（这里暂定不允许存在失败）
                 extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
                 extract_failed_total: int = len(extract_failed_items)
-                extract_failed_dumps: str = json.dumps(extract_failed_items, ensure_ascii=False, indent=8)
+                extract_failed_dumps: str = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                 if extract_failed_total > 0:
                     error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
                     raise StepExecutionError(error_message)
@@ -2673,7 +2683,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 result.assert_validators.extend(validator_results)
                 assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
                 assert_failed_total: int = len(assert_failed_items)
-                assert_failed_dumps: str = json.dumps(assert_failed_items, ensure_ascii=False, indent=8)
+                assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                 if assert_failed_total > 0:
                     error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
                     raise StepExecutionError(error_message)
@@ -2869,7 +2879,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 raise StepExecutionError(f"【HTTP请求】在提取响应状态码、内容、headers、cookies时失败, 错误详情: {e}") from e
             try:
                 response_json = response.json()
-            except (ValueError, json.JSONDecodeError):
+            except (ValueError, orjson.JSONDecodeError):
                 response_json = None
             except Exception as e:
                 self.context.log(f"【HTTP请求】响应JSON解析失败: {e}, 将使用文本响应", step_code=self.step_code)
@@ -2893,7 +2903,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 # 检查是否存在提取失败的项（这里暂定不允许存在失败）
                 extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
                 extract_failed_total: int = len(extract_failed_items)
-                extract_failed_dumps: str = json.dumps(extract_failed_items, ensure_ascii=False, indent=8)
+                extract_failed_dumps: str = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                 if extract_failed_total > 0:
                     error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
                     raise StepExecutionError(error_message)
@@ -2933,7 +2943,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 result.assert_validators.extend(validator_results)
                 assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
                 assert_failed_total: int = len(assert_failed_items)
-                assert_failed_dumps: str = json.dumps(assert_failed_items, ensure_ascii=False, indent=8)
+                assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                 if assert_failed_total > 0:
                     error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
                     raise StepExecutionError(error_message)
