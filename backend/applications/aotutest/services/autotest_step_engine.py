@@ -11,7 +11,6 @@ from __future__ import annotations
 import ast
 import asyncio
 import builtins as _builtins_module
-import orjson
 import json
 import random
 import re
@@ -26,6 +25,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 from urllib.parse import quote, unquote
 
 import httpx
+import orjson
 from aiomysql import Pool
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
