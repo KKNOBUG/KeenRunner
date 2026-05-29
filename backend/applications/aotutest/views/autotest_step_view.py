@@ -6,7 +6,6 @@
 @Module  : autotest_step_view.py
 @DateTime: 2025/4/28
 """
-import json
 import time
 import traceback
 import uuid
@@ -15,6 +14,7 @@ from typing import List, Dict, Any, Optional, Set, Union
 from urllib.parse import quote
 
 import httpx
+import orjson
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
@@ -636,7 +636,7 @@ async def debug_http_request(
             # 尝试解析为JSON
             response_json = response.json()
             response_data = response_json
-        except (ValueError, json.JSONDecodeError):
+        except (ValueError, orjson.JSONDecodeError):
             response_data = response_text
 
         # 解析Cookies
@@ -843,7 +843,7 @@ async def debug_tcp_request(
         response_text: str = raw_bytes.decode("utf-8", errors="ignore")
         response_data: Optional[Union[str, Dict[str, Any]]] = response_text
         try:
-            response_json = json.loads(response_text)
+            response_json = orjson.loads(response_text)
             response_data = response_json
         except Exception:
             LOGGER.warning(f"响应体转换JSON格式失败, 保留原样")

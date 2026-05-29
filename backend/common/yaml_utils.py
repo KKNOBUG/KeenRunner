@@ -6,7 +6,7 @@
 @Module  : yaml_utils.py
 @DateTime: 2025/1/15 10:49
 """
-import json
+import orjson
 import os.path
 from typing import Dict, Any
 
@@ -21,7 +21,7 @@ class YamlUtils:
         self.config_data: dict = self.load_yaml_data()
 
     def __str__(self, *args, **kwargs):
-        return json.dumps(self.config_data, ensure_ascii=False)
+        return orjson.dumps(self.config_data).decode("UTF-8")
 
     def load_yaml_data(self) -> Dict[str, Any]:
         """

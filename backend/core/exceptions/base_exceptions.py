@@ -6,8 +6,9 @@
 @Module  : base_exceptions.py
 @DateTime: 2025/1/13 13:45
 """
-import json
 from typing import Union, Optional
+
+import orjson
 
 from backend.enums import BaseErrorEnum
 
@@ -30,9 +31,7 @@ class BaseExceptions(Exception):
             self.code = self.code or errenum.code
             self.message = self.message or errenum.value
 
-        self._error = json.dumps(
-            {"code": self.code, "message": self.message, "data": self.data}, ensure_ascii=False
-        )
+        self._error: str = orjson.dumps({"code": self.code, "message": self.message, "data": self.data}).decode("UTF-8")
 
     def __str__(self):
         return self._error

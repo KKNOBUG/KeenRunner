@@ -6,12 +6,11 @@
 @Module  : convert_utils.py
 @DateTime: 2025/1/15 14:30
 """
-import json
 import xml.etree.ElementTree as ET
-
-from typing import Dict, Any
 from datetime import datetime, timedelta
+from typing import Dict, Any
 
+import orjson
 import xmltodict
 
 
@@ -85,10 +84,10 @@ class Convert:
         """
         try:
             datagram = str(datagram).strip().strip("\n")
-            json.loads(s=datagram)
+            orjson.loads(datagram)
             return True
         # 字符串解码转json失败
-        except json.decoder.JSONDecodeError:
+        except orjson.JSONDecodeError:
             return False
         # 类型错误
         except TypeError as e:
@@ -124,7 +123,7 @@ class Convert:
             return datagram
 
         parsed_dict = xmltodict.parse(datagram, postprocessor=cls.remove_empty_tags)
-        json_string = json.loads(json.dumps(parsed_dict, ensure_ascii=False))
+        json_string = orjson.loads(orjson.dumps(parsed_dict))
         return json_string
 
     @classmethod
@@ -144,7 +143,7 @@ class Convert:
         :param datagram: 字典数据。
         :return: JSON字符串。
         """
-        return json.dumps(datagram, ensure_ascii=False)
+        return orjson.dumps(datagram).decode("UTF-8")
 
 
 if __name__ == '__main__':

@@ -7,7 +7,6 @@
 @DateTime: 2026/4/10 15:54
 """
 
-import json
 import random
 import string
 from dataclasses import dataclass
@@ -15,13 +14,14 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+import orjson
 import pandas as pd
 
-from backend.applications.aotutest.services.autotest_data_source2_crud import AUTOTEST_API_DATA_CREATE_CRUD
 # =============================
 # 数据模型
 # =============================
 from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateUpdate
+from backend.applications.aotutest.services.autotest_data_source2_crud import AUTOTEST_API_DATA_CREATE_CRUD
 
 
 @dataclass
@@ -359,7 +359,7 @@ async def generate_test_data(input_excel: str, output_excel: str, rules: List[st
         if isinstance(json_message, dict):
             base_json = json_message
         else:
-            base_json = json.loads(json_message)
+            base_json = orjson.loads(json_message)
         cases = generate_cases_np(fields, rules, base_json)
         export_excel(cases, fields, output_excel)
         # print("成功")

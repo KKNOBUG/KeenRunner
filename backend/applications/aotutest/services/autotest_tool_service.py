@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 import ast
-import json
 import re
 import traceback
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 from xml.etree import ElementTree
 
+import orjson
 from jsonpath_ng import parse as jsonpath_parse
 
 from backend.applications.aotutest.schemas.autotest_step_schema import (
@@ -153,8 +153,8 @@ class AutoTestToolService:
         """
         if isinstance(raw, str):
             try:
-                return json.loads(raw) if raw.strip() else {}
-            except (TypeError, json.JSONDecodeError):
+                return orjson.loads(raw) if raw.strip() else {}
+            except (TypeError, orjson.JSONDecodeError):
                 return raw
         return raw
 
@@ -1353,8 +1353,8 @@ class AutoTestToolServiceImpl:
 
         if isinstance(outer_value, str):
             try:
-                inner_obj = json.loads(outer_value) if outer_value.strip() else {}
-            except (TypeError, json.JSONDecodeError):
+                inner_obj = orjson.loads(outer_value) if outer_value.strip() else {}
+            except (TypeError, orjson.JSONDecodeError):
                 return
             updated_inner_json = JSONPathUtils.update(inner_obj, inner_path, json_value)
             # 回写时保持 outer 类型仍为字符串 JSON
@@ -1364,8 +1364,8 @@ class AutoTestToolServiceImpl:
         if isinstance(outer_value, dict):
             updated_inner_json = JSONPathUtils.update(outer_value, inner_path, json_value)
             try:
-                updated_inner_obj = json.loads(updated_inner_json)
-            except (TypeError, json.JSONDecodeError):
+                updated_inner_obj = orjson.loads(updated_inner_json)
+            except (TypeError, orjson.JSONDecodeError):
                 updated_inner_obj = outer_value
             # 回写时保持 outer 类型仍为 dict
             JSONPathUtils.update(datagram, outer_path, updated_inner_obj)
@@ -1414,14 +1414,14 @@ class AutoTestToolServiceImpl:
                 AutoTestToolServiceImpl.by_jsonpath_modify_inner_content(rb, json_path, json_value)
         elif isinstance(rb, str):
             try:
-                payload_dict = json.loads(rb) if rb.strip() else {}
+                payload_dict = orjson.loads(rb) if rb.strip() else {}
                 if isinstance(payload_dict, dict):
                     for json_path, json_value in path_map.items():
                         if not json_path:
                             continue
                         AutoTestToolServiceImpl.by_jsonpath_modify_inner_content(payload_dict, json_path, json_value)
                     rb = payload_dict
-            except (TypeError, json.JSONDecodeError):
+            except (TypeError, orjson.JSONDecodeError):
                 pass
         if isinstance(form_data, dict):
             for json_path, json_value in path_map.items():
@@ -1539,7 +1539,7 @@ class AutoTestToolServiceImpl:
         if value is None:
             return ""
         if isinstance(value, (dict, list)):
-            return json.dumps(value, ensure_ascii=False)
+            return orjson.dumps(value).decode("UTF-8")
         return str(value)
 
     @staticmethod
@@ -1776,8 +1776,8 @@ class AutoTestToolServiceImpl:
             if isinstance(value, str):
                 if "${" in value and value.startswith(("{", "[")):
                     try:
-                        value_json = json.loads(value)
-                    except json.JSONDecodeError:
+                        value_json = orjson.loads(value)
+                    except orjson.JSONDecodeError:
                         return value
 
                     def _treatment(_value: Dict[str, Any]) -> Dict[str, Any]:
@@ -1805,7 +1805,7 @@ class AutoTestToolServiceImpl:
                         for vid, item in enumerate(value_json):
                             if isinstance(item, dict):
                                 value_json[vid] = _treatment(item)
-                    return json.dumps(value_json, ensure_ascii=False)
+                    return orjson.dumps(value_json).decode("UTF-8")
 
                 return cls._resolve_string_placeholders(
                     content=value,

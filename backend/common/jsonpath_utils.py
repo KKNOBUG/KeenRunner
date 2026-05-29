@@ -6,10 +6,11 @@
 @Module  : jsonpath_utils.py
 @DateTime: 2025/1/15 13:36
 """
-import json
 import typing
 
-import jsonpath, jsonpath_ng
+import jsonpath
+import jsonpath_ng
+import orjson
 from jsonpath_ng import parse
 
 
@@ -39,7 +40,7 @@ class JSONPathUtils:
         """
         if isinstance(json_data, str):
             # 如果json_data是字符串，先将其解析为Python字典
-            json_data = json.loads(json_data)
+            json_data = orjson.loads(json_data)
 
         # 解析JSONPath表达式
         jsonpath_expr = parse(json_path)
@@ -77,7 +78,7 @@ class JSONPathUtils:
                 current_level[path_parts[-1]] = {}
                 current_level[path_parts[-1]][key] = value
 
-        return json.dumps(json_data, ensure_ascii=False)
+        return orjson.dumps(json_data).decode("UTF-8")
 
     @staticmethod
     def delete(json_data: typing.Union[str, dict], json_path: str) -> typing.Union[str, dict]:
@@ -89,7 +90,7 @@ class JSONPathUtils:
         """
         if isinstance(json_data, str):
             # 如果json_data是字符串，先将其解析为Python字典
-            json_data = json.loads(json_data)
+            json_data = orjson.loads(json_data)
 
         jsonpath_expr = parse(json_path)
         matches = jsonpath_expr.find(json_data)
@@ -103,7 +104,7 @@ class JSONPathUtils:
             elif isinstance(match.path, jsonpath_ng.jsonpath.Fields):
                 del match.context.value[match.path.fields[0]]
 
-        return json.dumps(json_data, ensure_ascii=False)
+        return orjson.dumps(json_data).decode("UTF-8")
 
     @staticmethod
     def update(json_data: typing.Union[str, dict], json_path: str, value: typing.Any) -> typing.Union[str, dict]:
@@ -116,7 +117,7 @@ class JSONPathUtils:
         """
         if isinstance(json_data, str):
             # 如果json_data是字符串，先将其解析为Python字典
-            json_data = json.loads(json_data)
+            json_data = orjson.loads(json_data)
 
         # 解析JSONPath表达式
         jsonpath_expr = parse(json_path)
@@ -134,7 +135,7 @@ class JSONPathUtils:
             elif isinstance(match.path, jsonpath_ng.jsonpath.Fields):
                 match.context.value[match.path.fields[0]] = value
 
-        return json.dumps(json_data, ensure_ascii=False)
+        return orjson.dumps(json_data).decode("UTF-8")
 
     @staticmethod
     def query(json_data: str or dict, json_path: str) -> str or list:
@@ -146,7 +147,7 @@ class JSONPathUtils:
         """
         if isinstance(json_data, str):
             # 如果json_data是字符串，先将其解析为Python字典
-            json_data = json.loads(json_data)
+            json_data = orjson.loads(json_data)
 
         # 执行JsonPath查询
         results = jsonpath.jsonpath(json_data, json_path)

@@ -7,7 +7,6 @@
 @DateTime: 2026/4/10 15:35
 """
 import hashlib
-import json
 import os.path
 import shutil
 import traceback
@@ -18,6 +17,7 @@ from typing import List
 from urllib.parse import quote
 
 import aiofiles.os as aos
+import orjson
 from fastapi import APIRouter, File, Form
 from fastapi import UploadFile
 from starlette.responses import StreamingResponse
@@ -38,9 +38,9 @@ autotest_data_source2 = APIRouter()
 
 
 async def replace_json_key(json_str, json_key_mapping):
-    data = json.loads(json_str)
+    data = orjson.loads(json_str)
     new_data = {json_key_mapping.get(k, k): v for k, v in data.items()}
-    new_json_str = json.dumps(new_data)
+    new_json_str = orjson.dumps(new_data).decode("UTF-8")
     return new_json_str
 
 
@@ -94,7 +94,7 @@ async def upload_file_step(
             if isinstance(base_message, dict):
                 base_json = base_message
             else:
-                base_json = json.loads(base_message)
+                base_json = orjson.loads(base_message)
             # requests_body_key = list(base_json.keys())
             requests_body_key = {"sheet1": list(base_json.keys())}
             if len(requests_body_key.get("sheet1")) != 2:
@@ -145,7 +145,7 @@ async def upload_file_steps(
 ):
     if not file.filename.endswith(".xlsx"):
         return FailureResponse(message=f"仅支持xlsx格式文件")
-    steps_data = json.loads(case_info)
+    steps_data = orjson.loads(case_info)
     case_id = steps_data.get("case").get("case_id")
     case_code = steps_data.get("case").get("case_code")
     file_hash = await calc_file_hash(file, case_id, "X")
@@ -175,7 +175,7 @@ async def upload_file_steps(
             if isinstance(base_message, dict):
                 base_json = base_message
             else:
-                base_json = json.loads(base_message)
+                base_json = orjson.loads(base_message)
             # requests_body_key = list(base_json.keys())
             requests_body_key[step_info.step_name] = list(base_json.keys())
             if len(requests_body_key) != 2:
