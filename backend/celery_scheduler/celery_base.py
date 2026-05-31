@@ -137,9 +137,14 @@ def ensure_tortoise_orm_initialized():
         # 如果数据库连接真的有问题，任务执行时会再次报错
 
 
-def get_trace_id():
-    """从 Worker 上下文获取 trace_id，用于日志定位。"""
-    return getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
+def get_span_id_for_log():
+    """从 Worker 上下文获取 span_id，用于 Celery 业务日志定位。"""
+    from backend.common.request_context import get_span_id as _get
+
+    sid = _get()
+    if sid and sid != "-":
+        return sid
+    return getattr(LOCAL_CONTEXT_VAR, "span_id", None) or ""
 
 
 def get_step_crud():
@@ -218,7 +223,7 @@ async def check_task_expired(task: Any) -> bool:
             return next_run <= now
         except Exception as e:
             logger.warning(
-                f"【Krun-Celery-Worker】<==> 【trace_id={get_trace_id()}】任务触发器Cron表达式解析失败: "
+                f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Cron表达式解析失败: "
                 f" task_id={getattr(task, 'id', None)}",
                 f"错误类型: {type(e).__name__}, "
                 f"错误描述: {e}, \n"
@@ -247,7 +252,7 @@ async def check_task_expired(task: Any) -> bool:
             return now >= target
         except Exception as e:
             logger.warning(
-                f"【Krun-Celery-Worker】<==> 【trace_id={get_trace_id()}】任务触发器Datetime表达式解析失败: "
+                f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Datetime表达式解析失败: "
                 f" task_id={task.id}",
                 f"错误类型: {type(e).__name__}, "
                 f"错误描述: {e}, \n"
@@ -261,7 +266,7 @@ async def check_task_expired(task: Any) -> bool:
 class LocalContextVar:
     """
     基于 ContextVar 的本地上下文变量类
-    用于在异步环境中传递上下文信息（如 trace_id）
+    用于在异步环境中传递上下文信息（如 trace_id / span_id）
     """
     __slots__ = ("_storage",)
 

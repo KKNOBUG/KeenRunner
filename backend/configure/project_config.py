@@ -68,7 +68,7 @@ class ProjectConfig(BaseSettings):
     # 大小轮转："200 MB"
     # 日期轮转："1 day"、"1 week"、"1 month"
     # 时间轮转："HH:MM:SS"、"00:00"、"00:00:00"
-    LOGGER_ROTATION: str = "200 MB"
+    LOGGER_ROTATION: str = "1 MB"
     # 大小轮转后保留的备份文件个数（单文件多进程模式）
     LOGGER_ROTATION_BACKUP_COUNT: int = 30
 

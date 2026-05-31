@@ -32,14 +32,18 @@ from typing import Optional
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 from loguru import logger
 
+from backend.common.request_context import get_parent_span_id, get_span_id, get_trace_id
 from backend.configure.project_config import PROJECT_CONFIG
 
 # 自定义日志格式(控制台与文件共用；文件设置colorize=False)
+# trace_id（X-Trace-ID）/ span_id（X-Span-ID）由 patcher 注入，未绑定则为 -
 LOG_FORMAT = (
     # 时间信息
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     # 日志级别，居中对齐
     "<level>{level: ^8}</level> | "
+    # 分布式追踪：TraceID（一次前端操作） + SpanID（当前入站/任务）
+    "<yellow>{extra[trace_id]}</yellow>:<yellow>{extra[span_id]}</yellow> | "
     # 进程和线程信息
     "process [<cyan>{process}</cyan>]:<cyan>{thread}</cyan> | "
     # 文件、函数和行号
@@ -47,6 +51,20 @@ LOG_FORMAT = (
     # 日志消息
     "<level>{message}</level>"
 )
+
+
+def _inject_trace_context(record: dict) -> None:
+    """Loguru patcher：每条日志自动附带 trace_id / span_id。"""
+    extra = record["extra"]
+    if not extra.get("trace_id"):
+        extra["trace_id"] = get_trace_id()
+    if not extra.get("span_id"):
+        extra["span_id"] = get_span_id()
+    parent = get_parent_span_id()
+    if parent and not extra.get("parent_span_id"):
+        extra["parent_span_id"] = parent
+
+
 # 写入 ConcurrentRotatingFileHandler 时只落纯文本 message，格式由 Loguru format= 负责
 _HANDLER_PASSTHROUGH = logging.Formatter("%(message)s")
 
@@ -241,6 +259,7 @@ def loguru_logging() -> logger:
         )
 
     wire_standard_loggers()
+    logger.configure(patcher=_inject_trace_context)
     return logger
 
 

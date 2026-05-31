@@ -1,9 +1,11 @@
 <script setup>
 import {h, onMounted, ref, resolveDirective, withDirectives, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NInput, NModal, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag, NTooltip} from 'naive-ui'
+import {NButton, NInput, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag, NTooltip} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
+import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
+import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
@@ -97,36 +99,27 @@ function getCaseCodeFromPath(path) {
   }
 }
 
-// 执行用例：先弹框选择执行环境，再以运行模式调用 execute_or_debugging
+// 执行用例：与步骤编辑页一致，拉取已保存步骤树并打开「脚本执行配置」弹窗
+const execConfigModalRef = ref(null)
+const runLoading = ref(false)
 const runningCaseId = ref(null)
-const runModalVisible = ref(false)
-const runRow = ref(null)
-const envOptions = ref([])
-const envLoading = ref(false)
-const selectedEnvName = ref(null)
+const { runSavedCase } = useAutotestSavedCaseRun(execConfigModalRef, runLoading)
 
-const loadEnvNames = async () => {
-  envLoading.value = true
-  try {
-    const res = await api.getApiEnvNames()
-    const list = res?.data ?? []
-    envOptions.value = list.map((name) => ({ label: name, value: name }))
-    if (envOptions.value.length > 0 && !selectedEnvName.value) {
-      selectedEnvName.value = envOptions.value[0].value
-    }
-  } catch (e) {
-    console.error('加载环境名称失败', e)
-    envOptions.value = []
-  } finally {
-    envLoading.value = false
+const openRunModal = async (row) => {
+  if (!row?.case_id && !row?.case_code) {
+    window.$message?.warning?.('缺少用例标识，无法执行')
+    return
   }
-}
-
-const openRunModal = (row) => {
-  runRow.value = row
-  selectedEnvName.value = null
-  runModalVisible.value = true
-  loadEnvNames()
+  runningCaseId.value = row.case_id ?? null
+  try {
+    await runSavedCase({
+      caseId: row.case_id,
+      caseCode: row.case_code,
+      projectOptions: projectOptions.value,
+    })
+  } finally {
+    runningCaseId.value = null
+  }
 }
 
 /**
@@ -175,33 +168,6 @@ const handleCopyCase = async (row) => {
     window.$message?.error?.(error?.message || error?.data?.message || '复制失败')
   } finally {
     copyLoading.value = false
-  }
-}
-
-const confirmRunCase = async () => {
-  const row = runRow.value
-  if (!row) return
-  runModalVisible.value = false
-  runningCaseId.value = row.case_id ?? null
-  try {
-    const res = await api.executeStepTree({
-      case_id: row.case_id ? Number(row.case_id) : null,
-      initial_variables: [],
-      env_name: selectedEnvName.value ?? undefined,
-    })
-    if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
-      const stats = res.data || {}
-      const msg = res.message
-      window.$message?.success?.(msg)
-      $table.value?.handleSearch?.()
-    } else {
-      window.$message?.error?.(res?.message || '执行失败')
-    }
-  } catch (error) {
-    console.error('运行用例失败', error)
-    window.$message?.error?.(error?.message || error?.data?.message || '执行失败')
-  } finally {
-    runningCaseId.value = null
   }
 }
 
@@ -522,8 +488,8 @@ const columns = computed(() => {
                 size: 'tiny',
                 quaternary: true,
                 type: 'primary',
-                loading: runningCaseId.value === (row.case_id ?? null),
-                disabled: runningCaseId.value != null,
+                loading: runLoading.value && runningCaseId.value === (row.case_id ?? null),
+                disabled: runLoading.value,
                 onClick: () => openRunModal(row),
               },
               {
@@ -771,28 +737,7 @@ const columns = computed(() => {
 
     </CrudTable>
 
-    <!-- 执行前选择环境 -->
-    <NModal
-        v-model:show="runModalVisible"
-        preset="dialog"
-        title="选择执行环境"
-        positive-text="确定执行"
-        negative-text="取消"
-        @positive-click="confirmRunCase"
-    >
-      <div style="padding: 8px 0;">
-        <div style="margin-bottom: 8px;">执行环境：</div>
-        <NSelect
-            v-model:value="selectedEnvName"
-            :options="envOptions"
-            :loading="envLoading"
-            placeholder="请选择执行环境"
-            clearable
-            filterable
-            style="width: 100%;"
-        />
-      </div>
-    </NModal>
+    <ExecConfigModal ref="execConfigModalRef" v-model:run-loading="runLoading" />
   </CommonPage>
 </template>
 

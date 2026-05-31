@@ -217,6 +217,9 @@ import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
 import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import api from "@/api";
+import { mapBackendStep, forEachStep } from './utils/stepTreeMap'
+import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
+import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
 import {useUserStore, useAutotestStore} from '@/store';
 
 const message = useMessage()
@@ -709,30 +712,13 @@ const onCaseTypeChange = ({ newType, oldType }) => {
 const runLoading = ref(false)
 const debugLoading = ref(false)
 const saveLoading = ref(false)
+const { runSavedCase } = useAutotestSavedCaseRun(execConfigModalRef, runLoading)
 
 /** 与后端 AutoTestStepTreeExecute.case_id 一致：优先路由 case_id，否则从步骤树 original 递归解析 */
 const resolveNumericCaseIdForExecuteApi = () => {
-  const toPositiveInt = (v) => {
-    if (v == null || v === '') return null
-    const n = Number(v)
-    if (!Number.isFinite(n) || n < 1) return null
-    return Math.floor(n)
-  }
-  const fromRoute = toPositiveInt(caseId.value)
+  const fromRoute = toPositiveCaseId(caseId.value)
   if (fromRoute != null) return fromRoute
-
-  const walk = (arr) => {
-    if (!Array.isArray(arr)) return null
-    for (const s of arr) {
-      const cid = s?.original?.case_id ?? s?.case_id
-      const n = toPositiveInt(cid)
-      if (n != null) return n
-      const nested = walk(s.children)
-      if (nested != null) return nested
-    }
-    return null
-  }
-  return walk(steps.value)
+  return resolveCaseIdFromSteps(steps.value, null)
 }
 
 const dragState = ref({
@@ -842,15 +828,6 @@ const findStepParent = (id, list = steps.value, parent = null) => {
   return null
 }
 
-/** 前序遍历步骤树，对每个步骤执行 fn（不包含引用步骤内加载的虚拟子步骤） */
-const forEachStep = (list, fn) => {
-  if (!list || !Array.isArray(list)) return
-  for (const step of list) {
-    fn(step)
-    if (step.children && step.children.length) forEachStep(step.children, fn)
-  }
-}
-
 /**
  * 前序遍历步骤树，对每个步骤执行 fn（可选：包含「引用公共脚本」加载的内部步骤）。
  * 说明：
@@ -903,16 +880,6 @@ const loadQuoteStepsForAllQuoteStepsAsync = async () => {
   const quoteSteps = []
   forEachStep(steps.value, (s) => {
     if (s?.type === 'quote' && s?.config?.quote_case_id) quoteSteps.push(s)
-  })
-  if (!quoteSteps.length) return
-  await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s)))
-}
-
-/** 执行模式/外部树：加载指定步骤树中的所有引用脚本步骤 */
-const loadQuoteStepsForAllQuoteStepsFromList = async (list) => {
-  const quoteSteps = []
-  forEachStep(list, (s) => {
-    if (s?.type === 'quote') quoteSteps.push(s)
   })
   if (!quoteSteps.length) return
   await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s)))
@@ -1056,210 +1023,6 @@ const availableVariableList = computed(() => {
 })
 
 const assistFunctionsList = ref([])
-
-/** 后端 step_type 中文名 → 前端 type 字符串 */
-const backendTypeToLocal = (step_type) => {
-  switch (step_type) {
-    case '用户变量':
-      return 'user_variables'
-    case 'TCP请求':
-      return 'tcp'
-    case 'HTTP请求':
-      return 'http'
-    case '代码请求(Python)':
-      return 'code'
-    case '条件分支':
-      return 'if'
-    case '等待控制':
-      return 'wait'
-    case '循环结构':
-      return 'loop'
-    case '引用公共脚本':
-      return 'quote'
-    case '数据库请求':
-      return 'database'
-    default:
-      return 'code'
-  }
-}
-
-/**
- * 将后端返回的步骤数据转换为前端使用的格式
- *
- * 数据传递流程：
- * 1. 后端 API (getStepTree) 返回完整的步骤数据，包含所有字段：
- *    - step_code, step_name, step_desc, step_type
- *    - request_method, request_url, request_header, request_body, request_params
- *    - extract_variables, validators, defined_variables
- *    - id, case_id, parent_step_id, children 等
- *
- * 2. mapBackendStep 函数将后端数据转换为前端格式：
- *    - base.id: 使用 step_code 作为唯一标识
- *    - base.type: 转换为前端类型（http/loop/code/if/wait）
- *    - base.name: 使用 step_name
- *    - base.config: 提取配置数据（根据类型不同提取不同字段）
- *    - base.original: 保留完整的原始后端数据（所有字段）
- *
- * 3. 传递给编辑器组件时：
- *    - :config="currentStep.config" - 传递配置数据
- *    - :step="currentStep" - 传递完整步骤对象（包含 original）
- *
- * 4. 编辑器组件中可以通过 props.step.original 访问所有原始数据：
- *    - props.step.original.step_name - 步骤名称
- *    - props.step.original.step_desc - 步骤描述
- *    - props.step.original.step_code - 步骤代码
- *    - props.step.original.request_method - 请求方法
- *    - 等等所有后端返回的字段
- */
-const mapBackendStep = (step) => {
-  if (!step || !step.step_type) return null
-  const localType = backendTypeToLocal(step.step_type)
-  const stepId = step.step_code || (step.step_id != null ? `step-${step.step_id}` : (step.id != null ? `step-${step.id}` : genId()))
-  const base = {
-    id: stepId,
-    type: localType,
-    name: step.step_name || step.step_type || '步骤',
-    config: {},
-    // 保留完整的原始后端步骤数据，供编辑器组件使用
-    // 这样编辑器组件可以通过 props.step.original 访问所有原始字段
-    // 注意：后端返回的 step_id 对应数据库主键，需要映射到 original.id（用于更新时传递 step_id）
-    original: {
-      ...step,
-      // 确保 id 字段被正确映射（后端返回的 step_id 对应数据库主键，用于更新时的 step_id）
-      // 后端使用 replace_fields={"id": "step_id"}，所以返回的是 step_id 而不是 id
-      id: step.step_id || step.id || null, // 数据库主键，用于更新（优先使用 step_id）
-      step_code: step.step_code || null, // 步骤代码，用于更新
-      // 确保 children 和 quote_steps 也被保留（但需要递归处理）
-      children: undefined, // 先设为 undefined，后面单独处理
-      quote_steps: step.quote_steps || []
-    }
-  }
-
-  if (localType === 'loop') {
-    base.config = {
-      loop_mode: step.loop_mode || '次数循环',
-      loop_on_error: step.loop_on_error || '继续下一次循环',
-      loop_maximums: step.loop_maximums ? Number(step.loop_maximums) : null,
-      loop_interval: step.loop_interval ? Number(step.loop_interval) : 0,
-      loop_iterable: step.loop_iterable || '',
-      loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0
-    }
-    // 条件循环：conditions 与后端 ConditionsBase 一致
-    if (step.conditions && typeof step.conditions === 'object' && !Array.isArray(step.conditions)) {
-      const condition = step.conditions
-      base.config.condition_expr = condition.condition_expr != null ? String(condition.condition_expr) : ''
-      base.config.condition_compare = condition.condition_compare || '非空'
-      base.config.condition_value = condition.condition_value != null ? String(condition.condition_value) : ''
-    } else {
-      base.config.condition_expr = ''
-      base.config.condition_compare = '非空'
-      base.config.condition_value = ''
-    }
-    base.children = []
-  } else if (localType === 'code') {
-    base.config = {
-      step_name: step.step_name || '',
-      code: step.code || '',
-      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : []
-    }
-  } else if (localType === 'tcp') {
-    // TCP：请求体仅编辑器格式化；落库为 raw + request_text；兼容历史 json 步骤
-    const argsType = (step.request_args_type || '').toString().toLowerCase()
-    const payloadStr = argsType === 'json'
-        ? JSON.stringify(step.request_body || {}, null, 2)
-        : (step.request_text || '')
-    let body_format_mode = 'xml'
-    if (!String(payloadStr).trim()) body_format_mode = 'xml'
-    else if (argsType === 'json') body_format_mode = 'json'
-    else if (/^\s*</.test(String(payloadStr))) body_format_mode = 'xml'
-    else body_format_mode = 'text'
-    base.config = {
-      step_name: step.step_name || '',
-      step_desc: step.step_desc || '',
-      request_project_id: step.request_project_id ?? null,
-      request_config_name: step.request_config_name ?? null,
-      body_format_mode,
-      request_args_type: 'raw',
-      request_payload: payloadStr,
-      request_text: step.request_text || null,
-      data: {},
-      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
-      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
-    }
-  } else if (localType === 'http') {
-    base.config = {
-      method: step.request_method || 'POST',
-      url: step.request_url || '',
-      request_args_type: step.request_args_type || 'none',
-      request_project_id: step.request_project_id ?? null,
-      request_config_name: step.request_config_name ?? null,
-      data_source_name: step.data_source_name || '',
-      data_source_desc: step.data_source_desc || '',
-      params: Array.isArray(step.request_params) ? step.request_params : [],
-      data: step.request_body || {},
-      headers: Array.isArray(step.request_header) ? step.request_header : [],
-      form_data: Array.isArray(step.request_form_data) ? step.request_form_data : [],
-      form_urlencoded: Array.isArray(step.request_form_urlencoded) ? step.request_form_urlencoded : [],
-      request_text: step.request_text || null,
-      extract: step.extract_variables || {},
-      validators: step.validators || {}
-    }
-  } else if (localType === 'if') {
-    const raw = step.conditions
-    const condition = (raw != null && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {}
-    const cond = {
-      condition_expr: condition.condition_expr != null ? String(condition.condition_expr) : '',
-      condition_compare: condition.condition_compare || '非空',
-      condition_value: condition.condition_value != null ? String(condition.condition_value) : '',
-      condition_desc: condition.condition_desc != null ? String(condition.condition_desc) : ''
-    }
-    base.config = {
-      conditions: { ...cond }
-    }
-    base.children = []
-  } else if (localType === 'wait') {
-    base.config = {
-      seconds: step.wait || 0
-    }
-  } else if (localType === 'user_variables') {
-    base.config = {
-      step_name: step.step_name || '',
-      step_desc: step.step_desc || '',
-      session_variables: Array.isArray(step.session_variables) ? step.session_variables : []
-    }
-  } else if (localType === 'quote') {
-    base.config = {
-      quote_case_id: step.quote_case_id ?? null,
-      step_name: step.step_name || (step.quote_case?.case_name || '引用公共脚本')
-    }
-  } else if (localType === 'database') {
-    const ops = Array.isArray(step.database_operates) ? step.database_operates : []
-    base.config = {
-      step_name: step.step_name || '',
-      step_desc: step.step_desc || '',
-      database_searched: !!step.database_searched,
-      database_operates: ops.length ? ops : [],
-      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
-      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : []
-    }
-  }
-
-  if (step.children && step.children.length && stepDefinitions[localType]?.allowChildren) {
-    base.children = step.children.map(mapBackendStep).filter(Boolean)
-    // 保留原始 children 数据到 original 中
-    base.original.children = step.children
-  }
-
-  if (!stepDefinitions[localType]?.allowChildren) {
-    delete base.children
-    base.original.children = step.children || []
-  } else if (!base.children) {
-    base.children = []
-    base.original.children = []
-  }
-
-  return base
-}
 
 // 将前端类型转换为后端类型
 const localTypeToBackend = (localType) => {
@@ -1954,38 +1717,17 @@ const handleSaveAll = async () => {
   }
 }
 
-/** 执行：拉取已保存步骤树，打开执行配置弹窗 */
+/** 执行：拉取已保存步骤树，打开执行配置弹窗（与用例列表「执行」共用逻辑） */
 const handleRun = async () => {
   if (!caseId.value && !caseCode.value) {
     window.$message?.warning?.('请先选择或创建测试用例')
     return
   }
-  try {
-    runLoading.value = true
-    const params = {}
-    if (caseId.value) params.case_id = caseId.value
-    if (caseCode.value) params.case_code = caseCode.value
-    const res = await api.getAutoTestStepTree(params)
-    const data = Array.isArray(res?.data) ? res.data : []
-    const execSourceSteps = data.map(mapBackendStep).filter(Boolean)
-    await loadQuoteStepsForAllQuoteStepsFromList(execSourceSteps)
-    if (resolveNumericCaseIdForExecuteApi() == null) {
-      window.$message?.warning?.('缺少用例 ID（case_id），无法执行，请先保存用例或从用例管理进入')
-      return
-    }
-    await execConfigModalRef.value?.openRun({
-      sourceSteps: execSourceSteps,
-      quoteStepsMap: { ...quoteStepsMap.value },
-      caseId: caseId.value,
-      projectOptions: editorProjectOptions.value,
-      resolveCaseId: resolveNumericCaseIdForExecuteApi,
-    })
-  } catch (e) {
-    console.error('加载已保存步骤树失败', e)
-    window.$message?.error?.(e?.message || '加载步骤树失败')
-  } finally {
-    runLoading.value = false
-  }
+  await runSavedCase({
+    caseId: caseId.value,
+    caseCode: caseCode.value,
+    projectOptions: editorProjectOptions.value,
+  })
 }
 
 /** 调试：校验当前步骤树后打开调试配置弹窗 */

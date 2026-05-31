@@ -25,6 +25,7 @@ from tortoise.exceptions import DoesNotExist
 from backend.configure import PROJECT_CONFIG, LOGGER
 from backend.core.middlewares.app_middleware import logging_middleware
 from backend.core.middlewares.auth_middleware import auth_middleware
+from backend.core.middlewares.request_context_middleware import request_context_middleware
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
@@ -157,11 +158,12 @@ def register_middlewares(app: FastAPI):
         expose_headers=PROJECT_CONFIG.CORS_EXPOSE_METHODS,
         max_age=PROJECT_CONFIG.CORS_MAX_AGE,
     )
-    # app.add_middleware(ReqResLoggerMiddleware)    # 文件上传下载偶现阻塞
     # 注册 HTTP 请求中间件
-    # 先做认证拦截，再做审计日志记录
     app.middleware('http')(auth_middleware)
+    # 先做认证拦截，再做审计日志记录
     app.middleware('http')(logging_middleware)
+    # 后做日志追溯链
+    app.middleware('http')(request_context_middleware)
 
 
 def register_routers(app: FastAPI) -> None:

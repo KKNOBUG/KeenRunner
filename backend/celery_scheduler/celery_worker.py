@@ -57,7 +57,6 @@ release 连接时就会报：Task got Future (Pool._wakeup) attached to a differ
 import asyncio
 import logging
 import traceback
-import uuid
 from abc import ABC
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -69,6 +68,12 @@ from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
 from backend.common import AsyncEventLoopContextIOPool
+from backend.common.request_context import (
+    celery_dispatch_trace_headers,
+    enter_celery_span,
+    get_span_id,
+    _extract_celery_trace_fields,
+)
 from backend.configure import LOGGER, CELERY_CONFIG
 from backend.configure.logging_config import InterceptHandler
 from .celery_base import (
@@ -113,7 +118,6 @@ def get_async_event_loop_pool():
 
 
 async def _ensure_tortoise_then_create_task_record(
-        trace_id: str,
         celery_id: str,
         celery_node: str,
         celery_trace_id: str,
@@ -128,7 +132,6 @@ async def _ensure_tortoise_then_create_task_record(
     """
     await init_tortoise_orm()
     await _create_task_record(
-        trace_id=trace_id,
         celery_id=celery_id,
         celery_node=celery_node,
         celery_trace_id=celery_trace_id,
@@ -138,7 +141,6 @@ async def _ensure_tortoise_then_create_task_record(
 
 
 async def _create_task_record(
-        trace_id: str,
         celery_id: str,
         celery_node: str,
         celery_trace_id: str,
@@ -179,11 +181,12 @@ async def _create_task_record(
         "celery_start_time": datetime.now(),
     }
     await AUTOTEST_API_RECORD_CRUD.create_record(data)
-    LOGGER.info(f"【Krun-Celery-Worker】【trace_id={trace_id}】更新执行记录成功, 已更新[celery_id={celery_id}]记录")
+    LOGGER.info(
+        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, 已更新[celery_id={celery_id}]记录"
+    )
 
 
 async def _update_task_record_on_end(
-        trace_id: str,
         celery_id: str,
         success: bool,
         result_or_error: str,
@@ -213,7 +216,9 @@ async def _update_task_record_on_end(
     }
     record = await AUTOTEST_API_RECORD_CRUD.get_by_celery_id(celery_id=celery_id)
     if not record:
-        LOGGER.error(f"【Krun-Celery-Worker】【trace_id={trace_id}】更新执行记录失败, 未找到[celery_id={celery_id}]记录")
+        LOGGER.error(
+            f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录失败, 未找到[celery_id={celery_id}]记录"
+        )
         return
     if record.celery_start_time:
         start = record.celery_start_time
@@ -222,7 +227,9 @@ async def _update_task_record_on_end(
         delta = now - start
         data["celery_duration"] = f"{delta.total_seconds():.2f}s"
     await AUTOTEST_API_RECORD_CRUD.update_record_by_celery_id(celery_id=celery_id, data=data)
-    LOGGER.info(f"【Krun-Celery-Worker】【trace_id={trace_id}】更新执行记录成功, 已更新[celery_id={celery_id}]记录")
+    LOGGER.info(
+        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, 已更新[celery_id={celery_id}]记录"
+    )
 
 
 @task_prerun.connect
@@ -235,9 +242,8 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
     try:
         # 来自 apply_async(..., __task_id=...)，随 Celery 消息传到 Worker 的 request.properties。
         task_id = task.request.properties.get("__task_id", None)
-        trace_id = task.request.headers.get("trace_id", None)
         LOGGER.info(
-            f"【Krun-Celery-Worker】【trace_id={trace_id}】任务提交完成: "
+            f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务提交完成: "
             f"task_id=[{task_id}], "
             f"task_name=[{task.name}], "
             f"celery_id=[{task.request.id}], "
@@ -257,7 +263,6 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                 celery_node_val = (task.name or "").strip() or ""
                 get_async_event_loop_pool().run(
                     _ensure_tortoise_then_create_task_record(
-                        trace_id=trace_id,
                         task_id=task_id,
                         celery_id=task.request.id,
                         celery_node=celery_node_val,
@@ -267,16 +272,15 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                 )
             except Exception as e:
                 LOGGER.error(
-                    f"【Krun-Celery-Worker】【trace_id={trace_id}】创建执行记录失败:"
+                    f"【Krun-Celery-Worker】【span_id={get_span_id()}】创建执行记录失败:"
                     f"task_id=[{task.request.id}], "
                     f"错误类型: {type(e).__name__}, "
                     f"错误描述: {e}, \n"
                     f"错误回溯: {traceback.format_exc()}"
                 )
     except Exception as e:
-        trace_id = task.request.headers.get("trace_id", None)
         LOGGER.error(
-            f"【Krun-Celery-Worker】【trace_id={trace_id}】定时任务挂载异常: "
+            f"【Krun-Celery-Worker】【span_id={get_span_id()}】定时任务挂载异常: "
             f"task_id=[{task.request.id}], "
             f"错误类型: {type(e).__name__}, "
             f"错误描述: {e}, \n"
@@ -291,16 +295,16 @@ def setup_loggers(*args, **kwargs):
 
 
 class TaskRequest(Request):
-    """自定义 Request：从 request_dict 读取 trace_id 并写入线程上下文，供链路追踪。"""
+    """自定义 Request：从消息头恢复 Trace/Span，供 task_prerun 与日志 patcher 使用。"""
 
     def __init__(self, *args, **kwargs):
         super(TaskRequest, self).__init__(*args, **kwargs)
-        self.set_trace_id()
+        self._restore_trace_context()
 
-    def set_trace_id(self):
-        """将 trace_id 写入 LOCAL_CONTEXT_VAR，与发送端保持一致。"""
-        trace_id = self.request_dict.get("trace_id", str(uuid.uuid4()))
-        LOCAL_CONTEXT_VAR.trace_id = trace_id
+    def _restore_trace_context(self):
+        """从消息头绑定追踪上下文（无 span_id 时为本任务新建）。"""
+        trace_id, span_id, parent_span_id = _extract_celery_trace_fields(self.request_dict)
+        enter_celery_span(trace_id, parent_span_id, span_id)
 
 
 def create_celery():
@@ -314,11 +318,9 @@ def create_celery():
             super().__init__(*args, **kwargs)
 
         def send_task(self, *args, **kwargs):
-            """发送任务时注入 trace_id 到 headers。"""
+            """发送任务时注入 trace_id / span_id / parent_span_id 到 headers。"""
             headers = {
-                "headers": {
-                    "trace_id": LOCAL_CONTEXT_VAR.trace_id or str(uuid.uuid4())
-                }
+                "headers": celery_dispatch_trace_headers(),
             }
             if kwargs:
                 kwargs.update(headers)
@@ -327,7 +329,7 @@ def create_celery():
             return super().send_task(*args, **kwargs)
 
     class ContextTask(Task, ABC):
-        """自定义 Task：支持异步 run、apply_async 注入 trace_id，结束时更新任务记录。"""
+        """自定义 Task：支持异步 run、apply_async 注入追踪头，结束时更新任务记录。"""
 
         Request = TaskRequest
 
@@ -336,14 +338,12 @@ def create_celery():
 
         def apply_async(self, args=None, kwargs=None, task_id=None, producer=None,
                         link=None, link_error=None, shadow=None, **options):
-            """下发时注入 trace_id、__task_id（业务任务主键），供 Worker task_prerun 写 record 用。"""
+            """下发时注入追踪头、__task_id（业务任务主键），供 Worker task_prerun 写 record 用。"""
 
             __task_id = options.get("__task_id", None)
 
             headers = {
-                "headers": {
-                    "trace_id": LOCAL_CONTEXT_VAR.trace_id or str(uuid.uuid4())
-                },
+                "headers": celery_dispatch_trace_headers(),
                 "__task_id": __task_id,
             }
 
@@ -358,13 +358,11 @@ def create_celery():
 
         def handel_task_record(self, success: bool, result_or_error: str, traceback_str: str = None):
             """在同步回调中通过事件循环池更新任务记录为 SUCCESS/FAILURE，扫描任务不更新。"""
-            trace_id = self.request.headers.get("trace_id", None)
             _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
             if self.request.id and self.name != _SCAN_TASK_NAME:
                 try:
                     get_async_event_loop_pool().run(
                         _update_task_record_on_end(
-                            trace_id=trace_id,
                             celery_id=self.request.id,
                             success=success,
                             result_or_error=result_or_error or "",
@@ -373,7 +371,7 @@ def create_celery():
                     )
                 except Exception as e:
                     LOGGER.error(
-                        f"【Krun-Celery-Worker】【trace_id={trace_id}】更新执行记录异常: "
+                        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录异常: "
                         f"task_id=[{self.request.id}], "
                         f"错误类型: {type(e).__name__}, "
                         f"错误描述: {str(e)}, \n"
@@ -382,16 +380,16 @@ def create_celery():
 
         def on_success(self, retval, task_id, args, kwargs):
             """Celery-Worker 任务执行成功时回调，更新执行记录为: SUCCESS"""
-            trace_id = self.request.headers.get("trace_id", None)
-            LOGGER.info(f"【Krun-Celery-Worker】【trace_id={trace_id}】任务执行成功: task_id=[{task_id}]")
+            LOGGER.info(
+                f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行成功: task_id=[{task_id}]"
+            )
             self.handel_task_record(True, str(retval) if retval is not None else "")
             return super(ContextTask, self).on_success(retval, task_id, args, kwargs)
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):
             """Celery-Worker 任务执行失败时回调，更新执行记录为: FAILURE"""
-            trace_id = self.request.headers.get("trace_id", None)
             LOGGER.error(
-                f"【Krun-Celery-Worker】【trace_id={trace_id}】任务执行失败: "
+                f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行失败: "
                 f"task_id=[{task_id}], "
                 f"错误类型: {type(exc).__name__}, "
                 f"错误描述: {str(exc)}, \n"
@@ -402,20 +400,23 @@ def create_celery():
 
         def __call__(self, *args, **kwargs):
             """
-            执行任务：恢复 trace_id、推请求入栈；若为 async 任务则投递到池的 loop 执行，否则直接执行。
+            执行任务：按消息头绑定 Trace/Span，推请求入栈；async 任务投递到池的 loop 执行。
             非扫描任务在 task_prerun 里已通过 _ensure_tortoise_then_create_task_record 完成 init+写记录；
             此处 ensure_tortoise_orm_initialized() 用于扫描任务或兜底，保证任务体跑前 Tortoise 可用。
             """
             try:
                 ensure_tortoise_orm_initialized()
-
-                trace_id = self.request.headers.get("trace_id", None)
-                if trace_id:
-                    LOCAL_CONTEXT_VAR.trace_id = trace_id
+                hdr = self.request.headers or {}
+                if isinstance(hdr, dict):
+                    trace_id, span_id, parent_span_id = _extract_celery_trace_fields(hdr)
                 else:
-                    LOCAL_CONTEXT_VAR.trace_id = LOCAL_CONTEXT_VAR.trace_id or str(uuid.uuid4())
+                    trace_id, span_id, parent_span_id = "", "", ""
+                if not trace_id:
+                    trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
+                enter_celery_span(trace_id, parent_span_id, span_id)
             except Exception:
-                LOCAL_CONTEXT_VAR.trace_id = LOCAL_CONTEXT_VAR.trace_id or str(uuid.uuid4())
+                trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
+                enter_celery_span(trace_id, "", "")
 
             # 推送任务到堆栈
             _task_stack.push(self)

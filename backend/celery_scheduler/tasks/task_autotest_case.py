@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.celery_scheduler.celery_base import (
     run_async,
-    get_trace_id,
+    get_span_id_for_log,
     get_step_crud,
     get_task_model,
     get_task_status_enum,
@@ -41,10 +41,10 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
     Model = get_task_model()
     Status = get_task_status_enum()
     ReportType = get_report_type_enum()
-    trace_id: str = get_trace_id()
+    span_id: str = get_span_id_for_log()
     task = await Model.get_or_none(id=task_id)
     if not task:
-        LOGGER.warning(f"【Krun-Celery-Worker】【trace_id={trace_id}】任务不存在: task_id={task_id}")
+        LOGGER.warning(f"【Krun-Celery-Worker】【span_id={span_id}】任务不存在: task_id={task_id}")
         return {"success": False, "error": "任务不存在", "task_id": task_id}
 
     task_kwargs = getattr(task, "task_kwargs", None) or {}
@@ -53,7 +53,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         task.last_execute_time = datetime.now()
         task.last_execute_state = Status.FAILURE
         await task.save(update_fields=["last_execute_time", "last_execute_state"])
-        LOGGER.warning(f"【Krun-Celery-Worker】【trace_id={trace_id}】关联用例列表为空: task_id={task_id}")
+        LOGGER.warning(f"【Krun-Celery-Worker】【span_id={span_id}】关联用例列表为空: task_id={task_id}")
         return {"success": False, "error": "关联用例列表为空", "task_id": task_id}
 
     task.last_execute_time = datetime.now()
@@ -85,7 +85,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         return {"success": True, "task_id": task_id, "result": result}
     except Exception as e:
         LOGGER.error(
-            f"【Krun-Celery-Worker】【trace_id={trace_id}】函数run_autotest_task执行异常:"
+            f"【Krun-Celery-Worker】【span_id={span_id}】函数run_autotest_task执行异常:"
             f"task_id=[{task_id}], "
             f"错误类型: {type(e).__name__}, "
             f"错误描述: {e}, \n"
@@ -102,7 +102,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
 
 async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     """扫描到期任务并逐个下发 run_autotest_task。"""
-    trace_id: str = get_trace_id()
+    span_id: str = get_span_id_for_log()
     tasks = await get_scheduled_tasks(task_type="autotest")
     dispatched = 0
     for task in tasks:
@@ -116,7 +116,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
         except Exception as e:
             task_id = getattr(task, "id", None)
             LOGGER.error(
-                f"【Krun-Celery-Worker】【trace_id={trace_id}】函数scan_and_dispatch_autotest_tasks执行异常:"
+                f"【Krun-Celery-Worker】【span_id={span_id}】函数scan_and_dispatch_autotest_tasks执行异常:"
                 f"task_id=[{task_id}], "
                 f"错误类型: {type(e).__name__}, "
                 f"错误描述: {e}, \n"
