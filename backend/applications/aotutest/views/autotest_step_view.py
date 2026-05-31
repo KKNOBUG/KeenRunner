@@ -1019,36 +1019,59 @@ async def debug_python_code(
         return FailureResponse(message=f"Python代码调试异常", data=response_data)
 
 
+def _serialize_for_celery_initial_variables(
+        items: Optional[List[StepVariablesBase]],
+) -> List[Dict[str, Any]]:
+    if not items:
+        return []
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        if hasattr(it, "model_dump"):
+            out.append(it.model_dump())
+        elif isinstance(it, dict):
+            out.append(it)
+        else:
+            out.append(dict(it))
+    return out
+
+
+def _serialize_for_celery_steps_execute_config(
+        cfg: Optional[Dict[str, StepsExecuteConfigBase]],
+) -> Optional[Dict[str, Any]]:
+    if not cfg:
+        return None
+    serialized: Dict[str, Any] = {}
+    for key, val in cfg.items():
+        if hasattr(val, "model_dump"):
+            serialized[key] = val.model_dump()
+        elif isinstance(val, dict):
+            serialized[key] = val
+        else:
+            serialized[key] = val
+    return serialized
+
+
 @autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
 async def execute_step_tree(
         request: AutoTestStepTreeExecute = Body(..., description="步骤树数据")
 ):
     """
-    执行步骤树（运行/调试）：
-    - 运行模式：只接收case_id参数，后端基于传入的case_id，查询数据库中该用例关联的完整测试步骤树数据；
-      按步骤树层级依次执行所有测试步骤，将每一步骤的执行结果（含成功/失败状态、执行日志、变量提取结果等）
-      写入指定数据库表（如 AutoTestApiDetailsInfo）；注意开启数据库事务要么全部成功，要么全部失败。
-      返回：执行结果汇总（如整体成功/失败、步骤执行数量）+ 数据库落库成功标识。
-
-    - 调试模式：只接收steps参数，不接收case_id参数，无需查询数据库用例信息，直接基于传入的steps参数
-      解析测试步骤树，按步骤树层级依次执行所有测试步骤；执行过程中记录每一步骤的执行结果（格式与运行模式一致），
-      但不写入数据库。
-      返回：完整的步骤级执行结果（含每一步的状态、日志、变量提取结果、会话变量的累积）+ 整体执行汇总。
+    按 execute_type（AutoTestReportType）分发：
+    - SYNC_EXEC：暂不处理，直接返回
+    - ASYNC_EXEC：异步执行（原运行模式，同步执行已保存步骤树）
+    - DEBUG_EXEC：调试执行（原调试模式）
+    - SCHEDULE_EXEC：定时/后台执行，提交 Celery 任务
     """
     try:
         case_id: int = request.case_id
+        execute_type: AutoTestReportType = request.execute_type
         steps: Optional[List[AutoTestStepTreeUpdateItem]] = request.steps
         initial_variables: Optional[List[StepVariablesBase]] = request.initial_variables
         steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = request.steps_execute_config
         selected_dataset_names: Optional[List[str]] = request.selected_dataset_names
 
-        # 判断运行模式还是调试模式
-        # 运行模式：只传递 case_id，不传递 steps
-        # 调试模式：传递 case_id 和 steps
-        is_run_mode = case_id is not None and (steps is None or len(steps) == 0)
-        is_debug_mode = case_id is not None and steps is not None and len(steps) > 0
-        if not is_run_mode and not is_debug_mode:
-            return BadReqResponse(message="必须提供case_id参数，运行模式不传递steps，调试模式需要传递steps")
+        if execute_type == AutoTestReportType.SYNC_EXEC:
+            return SuccessResponse(message="同步执行暂未开放", data=None, total=0)
 
         # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
@@ -1069,8 +1092,39 @@ async def execute_step_tree(
                 "children": [serialize_result(c) for c in r.children],
             }
 
-        # ========== 运行模式 ==========
-        if is_run_mode:
+        # ========== SCHEDULE_EXEC：Celery 后台执行 ==========
+        if execute_type == AutoTestReportType.SCHEDULE_EXEC:
+            try:
+                from backend.celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
+
+                celery_kwargs: Dict[str, Any] = {
+                    "case_id": case_id,
+                    "initial_variables": _serialize_for_celery_initial_variables(initial_variables),
+                    "report_type": AutoTestReportType.SCHEDULE_EXEC.value,
+                    "selected_dataset_names": list(selected_dataset_names or []),
+                    "steps_execute_config": _serialize_for_celery_steps_execute_config(steps_execute_config),
+                }
+                apply_async_result = execute_step_tree_task.apply_async(
+                    kwargs=celery_kwargs,
+                    expires=3600,
+                )
+                exec_result = {
+                    "celery_task_id": apply_async_result.task_id,
+                    "task_state": apply_async_result.state,
+                    "case_id": case_id,
+                    "execute_type": execute_type.value,
+                }
+                return SuccessResponse(
+                    message="任务已提交后台执行, 请稍候至报告中心查看结果",
+                    data=exec_result,
+                    total=1,
+                )
+            except Exception as e:
+                LOGGER.error(f"提交定时执行任务失败, case_id={case_id}, err={e}\n{traceback.format_exc()}")
+                return FailureResponse(message=f"提交后台执行失败, 异常描述: {e}")
+
+        # ========== ASYNC_EXEC：运行模式（同步执行已保存步骤树）==========
+        if execute_type == AutoTestReportType.ASYNC_EXEC:
             try:
                 # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
                 if not selected_dataset_names:
@@ -1134,8 +1188,8 @@ async def execute_step_tree(
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message=f"执行步骤过程中发生异常，事务已回滚: {str(e)}")
 
-        # ========== 调试模式 ==========
-        else:
+        # ========== DEBUG_EXEC：调试模式 ==========
+        if execute_type == AutoTestReportType.DEBUG_EXEC:
             case_info: Optional[Dict[str, Any]] = None
             if steps and getattr(steps[0], "case", None) and isinstance(steps[0].case, dict):
                 first_step: Dict[str, Any] = steps[0].case
@@ -1231,6 +1285,8 @@ async def execute_step_tree(
                 data=result_data,
                 total=total_steps
             )
+
+        return BadReqResponse(message=f"不支持的执行类型: {execute_type}")
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:

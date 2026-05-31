@@ -5,7 +5,7 @@
   - openRun(ctx)  — 使用已保存步骤树（handleRun 重新请求后端后传入）
   - openDebug(ctx) — 使用当前编辑中的 steps（handleDebug 传入 buildDebugExecutePayload）
 
-  确认后调用 api.executeStepTree，附带环境名与 steps_execute_config 映射。
+  运行确认后调用 api.executeStepTree；execute_type 由 openRun(ctx).executeType 传入（步骤编辑：异步执行；用例列表：定时执行）。
 -->
 <template>
   <n-modal
@@ -311,6 +311,7 @@
  *   - quoteStepsMap: 引用步骤内 HTTP/TCP/DB 也要参与聚合
  *   - projectOptions: 应用 id → 名称，左侧应用列表展示
  *   - resolveCaseId: () => number | null，执行/调试 payload 的 case_id
+ *   - executeType: 执行类型枚举值（异步执行 / 定时执行 等），对应后端 execute_type
  *   - ensureQuoteStepsLoaded: 仅 debug，打开前 await 加载 quoteStepsMap
  *   - buildDebugExecutePayload(step_exec_config_map, datasetPart): 调试专用请求体
  *
@@ -1010,15 +1011,23 @@ const doExecuteFromSavedTree = async (_env_name, step_exec_config_map = null) =>
           : undefined
   runLoading.value = true
   try {
+    const executeType = execCtx.value?.executeType || '异步执行'
     const payload = {
       case_id: cid,
+      execute_type: executeType,
       initial_variables: [],
       ...(configMap != null ? { steps_execute_config: configMap } : {}),
       ...getDatasetPayloadPart(),
     }
     const res = await api.executeStepTree(payload)
     if (res?.code === 200 || res?.code === 0 || res?.code === '000000') {
-      window.$message?.success?.(res?.message || '执行成功')
+      if (executeType === '定时执行') {
+        const taskId = res?.data?.celery_task_id
+        const msg = res?.message || '任务已提交后台执行'
+        window.$message?.success?.(taskId ? `${msg}（任务ID: ${taskId}）` : msg)
+      } else {
+        window.$message?.success?.(res?.message || '执行成功')
+      }
     } else {
       window.$message?.error?.(res?.message || '执行失败')
     }

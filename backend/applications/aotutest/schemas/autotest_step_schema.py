@@ -19,6 +19,7 @@ from backend.enums import (
     AutoTestLoopErrorStrategy,
     AutoTestAssertionOperation,
     AutoTestConfigNodeType,
+    AutoTestReportType,
 )
 from backend.enums import HTTPMethod
 
@@ -306,22 +307,33 @@ class AutoTestCaseRunInfo(BaseModel):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
-    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
+    case_id: int = Field(..., description="用例ID")
+    execute_type: AutoTestReportType = Field(..., description="执行类型，复用 AutoTestReportType 枚举")
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
+        None, description="步骤树数据（DEBUG_EXEC 必填；ASYNC_EXEC / SCHEDULE_EXEC 不填）"
+    )
     initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="初始变量池, 列表项为 key / value / desc")
     # 脚本执行配置：key=步骤ID(step_id) 或 @@{step_name}（当步骤未落库时），value=配置明细；空 dict 表示该步骤无配置覆盖
     # { step_id 或 @@step_name: {env_name, config_type(api|database|file), config_name, config_host, config_port, database_name} }
     steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default=None, description="脚本执行配置作用环境")
-    # 参数化驱动：运行模式可传多条数据集名称，按条数循环执行；调试模式只能传一条
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表。运行模式可选多条；调试模式仅可选一条")
+    # 参数化驱动：ASYNC_EXEC / SCHEDULE_EXEC 可传多条；DEBUG_EXEC 仅可选一条
+    selected_dataset_names: Optional[List[str]] = Field(
+        None,
+        description="选中的数据集名称列表。运行/定时模式可选多条；调试模式仅可选一条",
+    )
 
     @model_validator(mode='after')
-    def validate_mode(self):
-        # case_id 是必填的（运行模式和调试模式都需要）
-        # 运行模式：只传递 case_id，不传递 steps
-        # 调试模式：传递 case_id 和 steps
+    def validate_execute_request(self):
         if self.case_id is None:
-            raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
+            raise ValueError("必须提供 case_id")
+        has_steps = bool(self.steps)
+        et = self.execute_type
+        if et == AutoTestReportType.DEBUG_EXEC:
+            if not has_steps:
+                raise ValueError("调试执行(DEBUG_EXEC)必须传递 steps")
+        elif et in (AutoTestReportType.ASYNC_EXEC, AutoTestReportType.SCHEDULE_EXEC):
+            if has_steps:
+                raise ValueError(f"{et.value}不应传递 steps，请仅传递 case_id")
         return self
 
 

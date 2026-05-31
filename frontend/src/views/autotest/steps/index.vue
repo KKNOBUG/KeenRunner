@@ -1727,6 +1727,7 @@ const handleRun = async () => {
     caseId: caseId.value,
     caseCode: caseCode.value,
     projectOptions: editorProjectOptions.value,
+    executeType: '异步执行',
   })
 }
 
@@ -1758,6 +1759,7 @@ const handleDebug = async () => {
       const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
       return {
         case_id: resolveNumericCaseIdForExecuteApi(),
+        execute_type: '调试执行',
         steps: backendSteps,
         initial_variables: [],
         steps_execute_config: step_exec_config_map || undefined,

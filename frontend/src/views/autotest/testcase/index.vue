@@ -116,6 +116,7 @@ const openRunModal = async (row) => {
       caseId: row.case_id,
       caseCode: row.case_code,
       projectOptions: projectOptions.value,
+      executeType: '定时执行',
     })
   } finally {
     runningCaseId.value = null
