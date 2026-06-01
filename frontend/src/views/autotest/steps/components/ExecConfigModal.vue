@@ -9,6 +9,7 @@
 -->
 <template>
   <n-modal
+      v-if="!embedded"
       v-model:show="showModel"
       preset="card"
       title="脚本执行配置"
@@ -17,274 +18,7 @@
       :close-on-esc="true"
       @after-enter="onModalAfterEnter"
   >
-    <div class="exec-config-toolbar-row">
-      <div class="exec-config-toolbar-inner">
-        <n-space align="center" wrap :size="[8, 12]">
-          <span class="exec-config-global-env-label">全局环境：</span>
-          <n-select
-              v-model:value="debugGlobalEnvId"
-              :options="debugEnvOptions"
-              :loading="envLoading"
-              placeholder="全局环境"
-              clearable
-              filterable
-              style="width: 220px;"
-          />
-          <div class="exec-config-mode">
-            <n-button
-                size="small"
-                :type="debugEnvMode === 'single' ? 'primary' : 'default'"
-                @click="debugEnvMode = 'single'"
-            >
-              单环境
-            </n-button>
-            <n-button
-                size="small"
-                :type="debugEnvMode === 'multi' ? 'primary' : 'default'"
-                @click="debugEnvMode = 'multi'"
-            >
-              多环境
-            </n-button>
-          </div>
-        </n-space>
-        <n-switch
-            v-model:value="debugExecDataSourceEnabled"
-            size="large"
-            :rail-style="debugExecDataSourceRailStyle"
-            style="font-size: 12px;"
-        >
-          <template #checked>请选择数据源</template>
-          <template #unchecked>未启用数据源</template>
-        </n-switch>
-      </div>
-    </div>
-
-    <n-collapse
-        v-model:expanded-names="execConfigCollapseExpanded"
-        class="exec-config-collapse"
-        arrow-placement="right"
-    >
-      <n-collapse-item title="应用环境配置" name="env">
-        <div class="exec-config-modal">
-          <div class="exec-config-left">
-            <div class="exec-config-app-list">
-              <div
-                  v-for="app in debugApps"
-                  :key="String(app.project_id)"
-                  class="exec-config-app-item"
-                  :class="{ 'is-active': String(app.project_id) === String(debugSelectedProjectId) }"
-                  @click="debugSelectedProjectId = app.project_id"
-              >
-                <div class="exec-config-app-name">{{ app.label }}</div>
-                <div class="exec-config-app-count">{{ app.totalCount }}条配置</div>
-              </div>
-              <div v-if="debugApps.length === 0" class="exec-config-empty">
-                暂无可配置的请求步骤
-              </div>
-            </div>
-          </div>
-
-          <div class="exec-config-right">
-            <div v-if="!debugSelectedProjectId" class="exec-config-empty">请选择应用</div>
-            <template v-else>
-              <div v-if="debugApiRowsForSelected.length" class="exec-config-section">
-                <div class="exec-config-section-title">
-                  API
-                  <n-tag size="small" type="info">{{ debugApiRowsForSelected.length }}条</n-tag>
-                </div>
-                <div>
-                  <div class="exec-config-table-header">
-                    <div class="col idx">#</div>
-                    <div class="col env">环境</div>
-                    <div class="col config">配置名</div>
-                    <div class="col addr">IP/端口</div>
-                  </div>
-                  <div class="exec-config-table-body">
-                    <div v-for="(row, idx) in debugApiRowsForSelected" :key="row.key" class="exec-config-table-row">
-                      <div class="col idx">{{ idx + 1 }}</div>
-                      <div class="col env">
-                        <n-select
-                            v-model:value="row.env_id"
-                            :options="debugEnvOptions"
-                            size="small"
-                            :disabled="!debugGlobalEnvId || debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
-                            clearable
-                        />
-                      </div>
-                      <div class="col config">
-                        <n-input :value="row.request_config_name || ''" size="small" disabled placeholder="未填写配置名" />
-                      </div>
-                      <div class="col addr">
-                        <n-input
-                            :value="getRowAddrPreview(row, 'api')"
-                            size="small"
-                            disabled
-                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="debugDbRowsForSelected.length" class="exec-config-section">
-                <div class="exec-config-section-title">
-                  DataBase
-                  <n-tag size="small" type="warning">{{ debugDbRowsForSelected.length }}条</n-tag>
-                </div>
-                <div class="exec-config-table is-db">
-                  <div class="exec-config-table-header">
-                    <div class="col idx">#</div>
-                    <div class="col env">环境</div>
-                    <div class="col config">配置名</div>
-                    <div class="col config">数据库名</div>
-                    <div class="col addr">IP/端口</div>
-                  </div>
-                  <div class="exec-config-table-body">
-                    <div v-for="(row, idx) in debugDbRowsForSelected" :key="row.key" class="exec-config-table-row">
-                      <div class="col idx">{{ idx + 1 }}</div>
-                      <div class="col env">
-                        <n-select
-                            v-model:value="row.env_id"
-                            :options="debugEnvOptions"
-                            size="small"
-                            :disabled="!debugGlobalEnvId || debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
-                            clearable
-                        />
-                      </div>
-                      <div class="col config">
-                        <n-input :value="row.config_name || ''" size="small" disabled placeholder="未填写配置名" />
-                      </div>
-                      <div class="col config">
-                        <n-input
-                            :value="getDbDatabaseDisplay(row)"
-                            size="small"
-                            disabled
-                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
-                        />
-                      </div>
-                      <div class="col addr">
-                        <n-input
-                            :value="getRowAddrPreview(row, 'database')"
-                            size="small"
-                            disabled
-                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="debugFileRowsForSelected.length" class="exec-config-section">
-                <div class="exec-config-section-title">
-                  File Server
-                  <n-tag size="small" type="success">{{ debugFileRowsForSelected.length }}条</n-tag>
-                </div>
-                <div>
-                  <div class="exec-config-table-header">
-                    <div class="col idx">#</div>
-                    <div class="col env">环境</div>
-                    <div class="col config">配置名</div>
-                    <div class="col addr">IP/端口</div>
-                  </div>
-                  <div class="exec-config-table-body">
-                    <div v-for="(row, idx) in debugFileRowsForSelected" :key="row.key" class="exec-config-table-row">
-                      <div class="col idx">{{ idx + 1 }}</div>
-                      <div class="col env">
-                        <n-select
-                            v-model:value="row.env_id"
-                            :options="debugEnvOptions"
-                            size="small"
-                            :disabled="!debugGlobalEnvId || debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
-                            clearable
-                        />
-                      </div>
-                      <div class="col config">
-                        <n-input :value="row.config_name || ''" size="small" disabled placeholder="未填写配置名" />
-                      </div>
-                      <div class="col addr">
-                        <n-input
-                            :value="getRowAddrPreview(row, 'file')"
-                            size="small"
-                            disabled
-                            :placeholder="debugGlobalEnvId ? '' : '请先选择全局环境'"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </n-collapse-item>
-
-      <n-collapse-item v-if="debugExecDataSourceEnabled" title="数据驱动配置" name="dataset">
-        <div class="exec-config-dataset-wrap">
-          <div class="exec-config-dataset-table">
-            <div class="exec-config-dataset-header">
-              <div class="col check"></div>
-              <div class="col idx">#</div>
-              <div class="col name">数据驱动场景名称</div>
-            </div>
-            <div v-if="debugExecDatasetLoading" class="exec-config-dataset-empty">
-              <n-spin size="medium" description="加载数据源列表..." />
-            </div>
-            <div v-else-if="!debugExecDatasetRows.length" class="exec-config-dataset-empty">
-              <n-empty description="暂无数据, 请先上传数据源或确认用例已保存" />
-            </div>
-            <div v-else class="exec-config-dataset-body">
-              <div
-                  v-for="(row, idx) in debugExecDatasetRows"
-                  :key="row.id"
-                  class="exec-config-dataset-row"
-              >
-                <div class="col check">
-                  <n-checkbox
-                      size="small"
-                      :checked="debugExecDatasetSelectedIds.includes(row.id)"
-                      @update:checked="(v) => toggleDebugExecDatasetRow(row.id, v)"
-                  />
-                </div>
-                <div class="col idx">{{ idx + 1 }}</div>
-                <div class="col name">{{ row.name }}</div>
-              </div>
-            </div>
-          </div>
-          <div class="exec-config-dataset-footer">
-            <div class="exec-config-dataset-footer-inner">
-              <n-space :size="8">
-                <n-button
-                    size="tiny"
-                    quaternary
-                    :disabled="debugExecDatasetBatchDisabled"
-                    @click="selectAllDebugExecDatasets"
-                >
-                  全选
-                </n-button>
-                <n-button
-                    size="tiny"
-                    quaternary
-                    :disabled="debugExecDatasetBatchDisabled"
-                    @click="clearDebugExecDatasetSelection"
-                >
-                  取消全选
-                </n-button>
-              </n-space>
-              <div class="exec-config-dataset-footer-count">
-                已选 {{ debugExecDatasetSelectedCount }} 项
-                <span v-if="execConfigMode === 'debug'" class="exec-config-dataset-mode-tip">(调试模式仅可选 1 条)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </n-collapse-item>
-    </n-collapse>
-
+    <ExecConfigPanelBody />
     <template #footer>
       <n-space justify="end" size="medium">
         <n-button @click="showModel = false">取消</n-button>
@@ -298,6 +32,14 @@
       </n-space>
     </template>
   </n-modal>
+  <div v-else class="exec-config-embedded">
+    <div class="exec-config-embedded-body">
+      <ExecConfigPanelBody />
+      <div v-if="embeddedLoading" class="exec-config-embedded-loading">
+        <n-spin size="medium" />
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -317,25 +59,38 @@
  *
  * defineExpose: openRun(ctx), openDebug(ctx)
  */
-import { computed, ref, watch } from 'vue'
+import { computed, provide, reactive, ref, watch } from 'vue'
 import {
   NButton,
-  NCheckbox,
-  NCollapse,
-  NCollapseItem,
-  NEmpty,
-  NInput,
   NModal,
-  NSelect,
   NSpace,
   NSpin,
-  NSwitch,
-  NTag,
 } from 'naive-ui'
 import api from '@/api'
+import ExecConfigPanelBody from './ExecConfigPanelBody.vue'
+import { loadQuoteStepsForList, toPositiveCaseId } from '@/views/autotest/steps/utils/prepareCaseExecute'
+import { mapBackendStep } from '@/views/autotest/steps/utils/stepTreeMap'
+
+const props = defineProps({
+  embedded: { type: Boolean, default: false },
+  caseId: { type: [Number, String], default: null },
+  projectOptions: { type: Array, default: () => [] },
+  savedConfig: { type: Object, default: null },
+})
+
+const emit = defineEmits(['update:config'])
 
 const runLoading = defineModel('runLoading', { type: Boolean, default: false })
 const debugLoading = defineModel('debugLoading', { type: Boolean, default: false })
+
+const embeddedLoading = ref(false)
+/** 嵌入式：避免 init 与 emit 互相触发导致重复请求 */
+const embeddedInitCaseId = ref(null)
+let embeddedSkipConfigEmit = false
+/** 恢复 savedConfig 时跳过 watcher，由 init 末尾统一拉取数据集，避免重复请求 */
+let suppressDatasetAutoFetch = false
+/** 已加载数据集名称的 case_id，同一用例再次展开时不重复请求 */
+const debugExecDatasetLoadedCaseId = ref(null)
 
 /** 打开弹窗时由 index.vue 传入的上下文，见文件头注释 */
 const execCtx = ref(null)
@@ -567,6 +322,7 @@ const resetModalFormState = () => {
   debugExecDataSourceEnabled.value = false
   debugExecDatasetRows.value = []
   debugExecDatasetSelectedIds.value = []
+  debugExecDatasetLoadedCaseId.value = null
   debugGlobalEnvId.value = null
   debugSelectedProjectId.value = null
   debugEnvConfigDict.value = {}
@@ -678,11 +434,25 @@ const clearDebugExecDatasetSelection = () => {
   debugExecDatasetSelectedIds.value = []
 }
 
-const fetchDebugExecDatasetNames = async () => {
-  const caseId = execCtx.value?.caseId
+const resolveExecCaseId = () => {
+  const fromCtx = execCtx.value?.caseId
+  if (fromCtx != null) return toPositiveCaseId(fromCtx)
+  if (props.embedded) return toPositiveCaseId(props.caseId)
+  return null
+}
+
+const fetchDebugExecDatasetNames = async ({ force = false } = {}) => {
+  const caseId = resolveExecCaseId()
   if (!caseId) {
     debugExecDatasetRows.value = []
     window.$message?.warning?.('缺少用例 ID，无法加载数据集名称')
+    return
+  }
+  if (
+      !force
+      && debugExecDatasetLoadedCaseId.value === caseId
+      && debugExecDatasetRows.value.length > 0
+  ) {
     return
   }
   debugExecDatasetLoading.value = true
@@ -692,10 +462,12 @@ const fetchDebugExecDatasetNames = async () => {
     const res = await api.queryDatasetNames(fd)
     const names = Array.isArray(res?.data) ? res.data : []
     debugExecDatasetRows.value = names.map((name) => ({ id: String(name), name: String(name) }))
+    debugExecDatasetLoadedCaseId.value = caseId
     const nameSet = new Set(names.map(String))
     debugExecDatasetSelectedIds.value = debugExecDatasetSelectedIds.value.filter((id) => nameSet.has(String(id)))
   } catch (e) {
     debugExecDatasetRows.value = []
+    debugExecDatasetLoadedCaseId.value = null
     console.error('queryDatasetNames failed', e)
   } finally {
     debugExecDatasetLoading.value = false
@@ -739,25 +511,15 @@ const validateExecDatasetSelection = () => {
   return true
 }
 
-const debugExecDataSourceRailStyle = ({ focused, checked }) => {
-  const style = {}
-  if (checked) {
-    style.background = '#F4511E'
-    if (focused) style.boxShadow = '0 0 0 2px #d0305040'
-  } else {
-    style.background = '#2080f0'
-    if (focused) style.boxShadow = '0 0 0 2px #2080f040'
-  }
-  return style
-}
-
 watch(debugExecDataSourceEnabled, (on) => {
   if (!on) {
     debugExecDatasetSelectedIds.value = []
     debugExecDatasetRows.value = []
+    debugExecDatasetLoadedCaseId.value = null
     execConfigCollapseExpanded.value = execConfigCollapseExpanded.value.filter((n) => n !== 'dataset')
     return
   }
+  if (suppressDatasetAutoFetch) return
   if (!execConfigCollapseExpanded.value.includes('dataset')) {
     execConfigCollapseExpanded.value = [...execConfigCollapseExpanded.value, 'dataset']
   }
@@ -1039,7 +801,7 @@ const doExecuteFromSavedTree = async (_env_name, step_exec_config_map = null) =>
   }
 }
 
-const doDebug = async (env_name, step_exec_config_map = null) => {
+const doDebug = async (_env_name, step_exec_config_map = null) => {
   const buildPayload = execCtx.value?.buildDebugExecutePayload
   if (typeof buildPayload !== 'function') {
     window.$message?.error?.('调试参数未就绪')
@@ -1083,6 +845,160 @@ const confirmExecConfigAndAction = async () => {
   }
 }
 
+provide(
+    'execConfigPanel',
+    reactive({
+      debugGlobalEnvId,
+      debugEnvOptions,
+      envLoading,
+      debugEnvMode,
+      debugExecDataSourceEnabled,
+      execConfigCollapseExpanded,
+      debugApps,
+      debugSelectedProjectId,
+      debugApiRowsForSelected,
+      debugDbRowsForSelected,
+      debugFileRowsForSelected,
+      debugExecDatasetLoading,
+      debugExecDatasetRows,
+      debugExecDatasetSelectedIds,
+      debugExecDatasetBatchDisabled,
+      debugExecDatasetSelectedCount,
+      execConfigMode,
+      getRowAddrPreview,
+      getDbDatabaseDisplay,
+      toggleDebugExecDatasetRow,
+      selectAllDebugExecDatasets,
+      clearDebugExecDatasetSelection,
+    }),
+)
+
+const applySavedConfig = (cfg) => {
+  if (!cfg || typeof cfg !== 'object') return
+  if (cfg.global_env_id != null) debugGlobalEnvId.value = cfg.global_env_id
+  if (cfg.env_mode === 'multi' || cfg.env_mode === 'single') debugEnvMode.value = cfg.env_mode
+  const names = cfg.selected_dataset_names
+  if (Array.isArray(names) && names.length) {
+    debugExecDataSourceEnabled.value = true
+    debugExecDatasetSelectedIds.value = names.map(String)
+  }
+}
+
+const buildConfigPayload = () => {
+  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  const payload = {
+    steps_execute_config: buildStepExecConfigMap(env_name),
+    global_env_id: debugGlobalEnvId.value,
+    env_mode: debugEnvMode.value,
+    env_name,
+  }
+  if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length) {
+    payload.selected_dataset_names = [...debugExecDatasetSelectedIds.value]
+  }
+  return payload
+}
+
+const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) => {
+  if (!debugGlobalEnvId.value) {
+    if (!silent) window.$message?.warning?.('请选择全局环境')
+    return false
+  }
+  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  if (!env_name) {
+    if (!silent) window.$message?.warning?.('全局环境无效，请重新选择')
+    return false
+  }
+  if (!validateExecDatasetSelection()) return false
+  const missingCfg = collectExecConfigMissingRows()
+  if (missingCfg.length) {
+    if (!silent) window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, actionLabel))
+    return false
+  }
+  return true
+}
+
+const emitEmbeddedConfigIfReady = () => {
+  if (!props.embedded || embeddedLoading.value || embeddedSkipConfigEmit) return
+  if (!validateConfigPayload({ silent: true })) return
+  emit('update:config', buildConfigPayload())
+}
+
+const initEmbeddedCase = async () => {
+  const cid = toPositiveCaseId(props.caseId)
+  if (!cid) return
+  embeddedLoading.value = true
+  embeddedSkipConfigEmit = true
+  suppressDatasetAutoFetch = true
+  try {
+    const res = await api.getAutoTestStepTree({ case_id: cid })
+    const data = Array.isArray(res?.data) ? res.data : []
+    const execSourceSteps = data.map(mapBackendStep).filter(Boolean)
+    const quoteStepsMap = {}
+    await loadQuoteStepsForList(execSourceSteps, quoteStepsMap)
+    execCtx.value = {
+      sourceSteps: execSourceSteps,
+      quoteStepsMap: { ...quoteStepsMap },
+      caseId: cid,
+      projectOptions: props.projectOptions,
+      resolveCaseId: () => cid,
+      mode: 'run',
+    }
+    execConfigMode.value = 'run'
+    resetModalFormState()
+    debugRows.value = collectDebugRows(execSourceSteps, quoteStepsMap)
+    execConfigCollapseExpanded.value = ['env']
+    await loadDebugEnvEnums()
+    if (!debugSelectedProjectId.value && debugApps.value.length > 0) {
+      debugSelectedProjectId.value = debugApps.value[0].project_id
+    }
+    const project_ids = debugApps.value.map((x) => Number(x.project_id)).filter((x) => !Number.isNaN(x))
+    if (project_ids.length) await loadEnvConfigByProjects(project_ids)
+    applySavedConfig(props.savedConfig)
+    if (debugExecDataSourceEnabled.value) {
+      if (!execConfigCollapseExpanded.value.includes('dataset')) {
+        execConfigCollapseExpanded.value = [...execConfigCollapseExpanded.value, 'dataset']
+      }
+      await fetchDebugExecDatasetNames()
+    }
+  } catch (e) {
+    console.error('加载用例执行配置失败', e)
+    if (!props.embedded) return
+    window.$message?.error?.(e?.message || '加载用例步骤树失败')
+  } finally {
+    suppressDatasetAutoFetch = false
+    embeddedLoading.value = false
+    embeddedSkipConfigEmit = false
+    emitEmbeddedConfigIfReady()
+  }
+}
+
+watch(
+    () => (props.embedded ? toPositiveCaseId(props.caseId) : null),
+    (cid) => {
+      if (!props.embedded || !cid) return
+      if (embeddedInitCaseId.value === cid) return
+      embeddedInitCaseId.value = cid
+      initEmbeddedCase()
+    },
+    { immediate: true },
+)
+
+watch(debugGlobalEnvId, () => {
+  if (props.embedded) emitEmbeddedConfigIfReady()
+})
+
+watch(debugEnvMode, () => {
+  if (props.embedded) emitEmbeddedConfigIfReady()
+})
+
+watch(debugExecDataSourceEnabled, () => {
+  if (props.embedded) emitEmbeddedConfigIfReady()
+})
+
+watch(debugExecDatasetSelectedIds, () => {
+  if (props.embedded) emitEmbeddedConfigIfReady()
+})
+
 /** 父组件 index.vue：execConfigModalRef.value?.openRun / openDebug */
 defineExpose({
   openDebug,
@@ -1090,20 +1006,80 @@ defineExpose({
 })
 </script>
 
-<style scoped>
-.exec-config-toolbar-row {
-  margin-bottom: 12px;
+<style>
+.exec-config-embedded {
+  border: none;
+  border-radius: 0;
+  padding: 0 12px;
+  margin-bottom: 0;
+  background: transparent;
+  box-sizing: border-box;
+  width: 100%;
+  color: var(--n-text-color);
 }
 
-.exec-config-toolbar-inner {
+.exec-config-embedded-body {
+  position: relative;
+  width: 100%;
+}
+
+.exec-config-embedded-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  justify-content: center;
+  background: color-mix(in srgb, var(--n-color) 50%, transparent);
 }
 
-.exec-config-toolbar-inner :deep(.n-switch) {
+.exec-config-env-collapse-item :deep(.n-collapse-item__header) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.exec-config-env-collapse-item :deep(.n-collapse-item__header-extra) {
+  flex: 1;
+  min-width: 0;
+  margin-left: 12px;
+}
+
+.exec-config-env-header-extra {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  width: 100%;
+  font-size: var(--autotest-font-size);
+  font-weight: 400;
+  color: var(--n-text-color);
+}
+
+.exec-config-env-header-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.exec-config-global-env-select {
+  width: 220px;
+  max-width: 100%;
+}
+
+/* 与折叠头内「单环境/多环境」small 按钮视觉高度对齐 */
+.exec-config-global-env-select :deep(.n-base-selection) {
+  --n-height: 28px;
+  min-height: 28px;
+  font-size: var(--autotest-font-size-small);
+}
+
+.exec-config-datasource-switch {
   flex-shrink: 0;
 }
 
@@ -1111,7 +1087,7 @@ defineExpose({
   border: 1px solid var(--n-border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--n-color);
+  background: transparent;
 }
 
 .exec-config-collapse :deep(.n-collapse-item + .n-collapse-item) {
@@ -1122,8 +1098,9 @@ defineExpose({
   display: flex;
   align-items: center;
   padding: 10px 12px !important;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--autotest-font-size);
+  font-weight: 500;
+  color: var(--n-text-color);
   min-height: 40px;
   box-sizing: border-box;
 }
@@ -1132,10 +1109,17 @@ defineExpose({
   display: flex;
   align-items: center;
   line-height: 1.4;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .exec-config-collapse :deep(.n-collapse-item__content-inner) {
   padding: 0 12px 12px;
+  background: transparent !important;
+}
+
+.exec-config-collapse :deep(.n-collapse-item__content-wrapper) {
+  background: transparent !important;
 }
 
 .exec-config-collapse :deep(.n-collapse-item:not(.n-collapse-item--active) .n-collapse-item__content-wrapper) {
@@ -1173,7 +1157,7 @@ defineExpose({
   border: 1px solid var(--n-border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--n-color);
+  background: transparent;
   --exec-config-dataset-visible-rows: 5;
   --exec-config-dataset-row-height: 51px;
 }
@@ -1183,10 +1167,10 @@ defineExpose({
   grid-template-columns: 44px 72px 1fr;
   gap: 0;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: var(--autotest-font-size);
   font-weight: 600;
   color: var(--n-text-color-2);
-  background: var(--n-color-embedded);
+  background-color: var(--n-action-color, var(--n-color-embedded));
   border-bottom: 1px solid var(--n-border-color);
 }
 
@@ -1217,7 +1201,7 @@ defineExpose({
   display: grid;
   grid-template-columns: 44px 72px 1fr;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: var(--autotest-font-size);
   border-bottom: 1px solid var(--n-border-color);
 }
 
@@ -1229,7 +1213,7 @@ defineExpose({
   flex-shrink: 0;
   margin-top: 10px;
   padding-top: 10px;
-  font-size: 12px;
+  font-size: var(--autotest-font-size-mini);
   color: var(--n-text-color-3);
 }
 
@@ -1249,7 +1233,7 @@ defineExpose({
 .exec-config-dataset-mode-tip {
   margin-left: 6px;
   color: var(--n-text-color-3);
-  font-size: 12px;
+  font-size: var(--autotest-font-size-mini);
 }
 
 .exec-config-dataset-row .col.check {
@@ -1262,6 +1246,7 @@ defineExpose({
   align-items: stretch;
   min-height: 0;
   overflow: hidden;
+  background: transparent;
 }
 
 .exec-config-modal > .exec-config-left,
@@ -1277,6 +1262,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: transparent;
 }
 
 .exec-config-app-list {
@@ -1295,29 +1281,33 @@ defineExpose({
 }
 
 .exec-config-app-item:hover {
-  background: var(--n-color-hover);
+  background-color: var(--n-action-color, var(--n-color-embedded));
 }
 
 .exec-config-app-item.is-active {
-  border-color: #F45E11;
-  background: color-mix(in srgb, var(--n-primary-color) 10%, var(--n-color) 90%);
+  border-color: var(--n-border-color);
+  background-color: var(--n-action-color, var(--n-color-embedded));
 }
 
 .exec-config-app-name {
-  font-size: 13px;
+  font-size: var(--autotest-font-size);
+  color: var(--n-text-color);
+}
+
+.exec-config-app-item.is-active .exec-config-app-name {
   font-weight: 600;
 }
 
 .exec-config-app-count {
   color: var(--n-text-color-3);
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--autotest-font-size-mini);
 }
 
 .exec-config-empty {
   color: var(--n-text-color-3);
   padding: 16px 12px;
-  font-size: 12px;
+  font-size: var(--autotest-font-size-mini);
 }
 
 .exec-config-right {
@@ -1329,11 +1319,13 @@ defineExpose({
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0 0 0 14px;
+  background: transparent;
 }
 
 .exec-config-global-env-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--autotest-font-size);
+  font-weight: 400;
+  color: var(--n-text-color);
   white-space: nowrap;
 }
 
@@ -1357,7 +1349,7 @@ defineExpose({
   gap: 8px;
   margin-bottom: 8px;
   font-weight: 800;
-  font-size: 16px;
+  font-size: var(--autotest-font-size-huge);
   color: var(--n-text-color);
 }
 
@@ -1415,19 +1407,54 @@ defineExpose({
 }
 
 .exec-config-table-header {
-  background: var(--n-color-embedded);
-  font-size: 12px;
+  background-color: var(--n-action-color, var(--n-color-embedded)) !important;
+  font-size: var(--autotest-font-size-mini);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .exec-config-table-row {
-  background: var(--n-color);
+  background-color: transparent;
   border-top: 1px solid var(--n-border-color);
 }
 
 .exec-config-table-row:hover {
-  background: var(--n-color-hover);
+  background-color: var(--n-action-color, var(--n-color-embedded));
+}
+
+/* 任务弹窗嵌入式：与独立「脚本执行配置」弹窗一致，避免卡片 --n-color-target(主色) 等变量污染 */
+.exec-config-embedded .exec-config-app-item:hover,
+.exec-config-embedded .exec-config-app-item.is-active {
+  background-color: var(--n-action-color, var(--n-color-embedded)) !important;
+}
+
+.exec-config-embedded .exec-config-table-header {
+  background-color: var(--n-action-color, var(--n-color-embedded)) !important;
+}
+
+.exec-config-embedded .exec-config-table-row,
+.exec-config-embedded .exec-config-table-row:hover {
+  background-color: transparent !important;
+}
+
+/* 任务弹窗：内层折叠项取消 Naive 嵌套 margin-left:32px，与上方「全局环境」左对齐 */
+.exec-config-embedded .exec-config-collapse > .n-collapse-item {
+  margin-left: 0 !important;
+  margin-top: 0;
+  background: transparent;
+}
+
+.exec-config-embedded .exec-config-collapse > .n-collapse-item + .n-collapse-item {
+  margin-top: 12px;
+}
+
+.exec-config-embedded .exec-config-collapse {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.exec-config-section {
+  background-color: transparent;
 }
 
 .exec-config-mode {

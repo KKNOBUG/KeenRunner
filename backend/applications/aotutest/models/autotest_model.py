@@ -416,10 +416,19 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
     task_type = fields.CharField(max_length=1024, null=True, description="任务实现函数的完全限定名")
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
-    task_kwargs = fields.JSONField(default=dict, null=True, description="任务参数字典")
+    task_kwargs = fields.JSONField(
+        default=dict,
+        null=True,
+        description="任务扩展参数(case_ids、initial_variables 等)",
+    )
+    cases_execute_config = fields.JSONField(
+        default=dict,
+        null=True,
+        description="按用例ID的执行配置 {case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name}}",
+    )
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
-    task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务调度状态")
+    task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务模式(cron/interval/datetime)")
     task_interval_expr = fields.IntField(null=True, description="任务触发条件1")
     task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发条件2")
     task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发条件3")

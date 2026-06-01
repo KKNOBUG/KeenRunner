@@ -1130,6 +1130,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             report_type: AutoTestReportType,
             initial_variables: Optional[List[StepVariablesBase]] = None,
             steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = None,
+            cases_execute_config: Optional[Dict[str, Any]] = None,
             task_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """批量执行多个用例，依次调用 execute_single_case 并汇总成功/失败数与详情。
@@ -1137,7 +1138,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param case_ids: 用例主键 ID 列表。
         :param report_type: 报告类型枚举。
         :param initial_variables: 初始变量列表，每项含 key、value、desc。
-        :param steps_execute_config: 执行配置。
+        :param steps_execute_config: 全部用例共用的执行配置（兼容旧数据）。
+        :param cases_execute_config: 按 case_id 的执行配置，优先于 steps_execute_config。
         :param task_code: 任务标识代码，可选。
         :returns: 包含 total_cases、success_cases、failed_cases、results 等汇总信息的字典。
         """
@@ -1151,18 +1153,57 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"{'= ' * 20}批量执行开始{'= ' * 20}")
         LOGGER.info(f"本次批量执行的用例ID列表: {case_ids}")
         batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+        cases_cfg_map: Dict[str, Any] = cases_execute_config if isinstance(cases_execute_config, dict) else {}
+
         for case_id in case_ids:
             try:
+                case_cfg = (
+                    cases_cfg_map.get(str(case_id))
+                    or cases_cfg_map.get(case_id)
+                    or {}
+                )
+                if not isinstance(case_cfg, dict):
+                    case_cfg = {}
+                per_steps_cfg = case_cfg.get("steps_execute_config") or steps_execute_config
+                dataset_names = case_cfg.get("selected_dataset_names") or []
+                if not isinstance(dataset_names, list):
+                    dataset_names = []
+                dataset_names = [str(x) for x in dataset_names if x is not None and str(x).strip()]
+
                 # 每个用例独立开启事务执行
                 LOGGER.info(f"==========> 执行用例ID: {case_id} 开始")
-                result = await self.execute_single_case(
-                    case_id=case_id,
-                    initial_variables=initial_variables,
-                    steps_execute_config=steps_execute_config,
-                    report_type=report_type,
-                    task_code=task_code,
-                    batch_code=batch_code,
-                )
+                if dataset_names:
+                    case_results: List[Dict[str, Any]] = []
+                    case_ok = True
+                    for ds_name in dataset_names:
+                        one = await self.execute_single_case(
+                            case_id=case_id,
+                            initial_variables=initial_variables,
+                            steps_execute_config=per_steps_cfg,
+                            report_type=report_type,
+                            task_code=task_code,
+                            batch_code=batch_code,
+                            dataset_name=ds_name,
+                        )
+                        case_results.append(one)
+                        if not one.get("success", False):
+                            case_ok = False
+                    result = case_results[-1] if case_results else {
+                        "case_id": case_id,
+                        "success": False,
+                        "error": "未执行任何数据集",
+                    }
+                    result["success"] = case_ok
+                    result["dataset_runs"] = len(case_results)
+                else:
+                    result = await self.execute_single_case(
+                        case_id=case_id,
+                        initial_variables=initial_variables,
+                        steps_execute_config=per_steps_cfg,
+                        report_type=report_type,
+                        task_code=task_code,
+                        batch_code=batch_code,
+                    )
                 result["error"] = None
                 results.append(result)
                 if result.get("success", False):

@@ -19,8 +19,12 @@ class AutoTestApiTaskCreate(BaseModel):
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[str] = Field(None, max_length=255, description="任务类型")
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
-    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务参数字典")
-    task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务调度状态")
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务扩展参数(case_ids、initial_variables 等)")
+    cases_execute_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="按用例ID的执行配置，结构与脚本执行配置弹窗提交一致",
+    )
+    task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务模式")
     task_interval_expr: Optional[int] = Field(None, description="任务触发条件1(间隔)")
     task_datetime_expr: Optional[str] = Field(None, max_length=64, description="任务触发条件2(日期时间)")
     task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="任务触发条件3(Cron)")
@@ -36,10 +40,14 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[str] = Field(None, max_length=255, description="任务类型")
     task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
-    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务参数字典")
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务扩展参数(case_ids、initial_variables 等)")
+    cases_execute_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="按用例ID的执行配置，结构与脚本执行配置弹窗提交一致",
+    )
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
-    task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务调度状态")
+    task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务模式")
     task_interval_expr: Optional[int] = Field(None, description="任务触发条件1(间隔)")
     task_datetime_expr: Optional[str] = Field(None, max_length=64, description="任务触发条件2(日期时间)")
     task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="任务触发条件3(Cron)")

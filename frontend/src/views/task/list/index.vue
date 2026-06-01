@@ -2,20 +2,21 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton,
+  NCollapse,
+  NCollapseItem,
   NDataTable,
   NDatePicker,
   NDropdown,
   NDynamicTags,
   NForm,
   NFormItem,
-  NGi,
-  NGrid,
   NInput,
   NInputNumber,
   NModal,
   NPagination,
   NSelect,
   NSpace,
+  NSwitch,
   NSpin,
   NTabPane,
   NTabs,
@@ -27,6 +28,7 @@ import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 import ReportDetailDrawer from '@/components/autotest/ReportDetailDrawer.vue'
+import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
 
 import {formatDateTime, renderIcon} from '@/utils'
 import {getCronNextRunTimes} from '@/utils/common/cron'
@@ -38,12 +40,6 @@ import api from '@/api'
 dayjs.extend(customParseFormat)
 defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
 
-// 与后端 autotest_enum.py 一致
-const TASK_SCHEDULER_OPTIONS = [
-  {label: 'Crontab', value: 'cron'},
-  {label: '间隔', value: 'interval'},
-  {label: '指定时间', value: 'datetime'},
-]
 const TASK_STATUS_MAP = {
   '等待执行': '等待执行',
   '正在执行': '正在执行',
@@ -84,13 +80,9 @@ async function handleBatchDelete() {
   })
 }
 
-const {
-  handleDelete,
-} = useCRUD({
+const { handleDelete } = useCRUD({
   name: '任务',
-  doCreate: api.createApiTaskList,
   doDelete: api.deleteApiTaskList,
-  doUpdate: api.updateApiTaskList,
   refresh: () => $table.value?.handleSearch(),
 })
 
@@ -104,8 +96,19 @@ const casePage = ref(1)
 const casePageSize = ref(10)
 const caseTotal = ref(0)
 const filterCaseName = ref('')
+const filterCaseProject = ref(null)
 const filterCaseTags = ref([])
+const filterCreatedUser = ref('')
 const checkedRowKeys = ref([])
+const casesExecuteConfig = ref({})
+const caseNameCache = ref({})
+/** false=查看已选用例（开关关闭，默认）；true=查询新用例列表（开关开启，点查询后自动开启） */
+const caseQueryNewMode = ref(false)
+/** 任务已保存的 case_ids（入库），与表格勾选草稿 checkedRowKeys 区分 */
+const persistedCaseIds = ref([])
+const selectedCaseRowsCache = ref({})
+const execCollapseExpanded = ref([])
+const taskModalCollapseExpanded = ref(['cases'])
 const cronNextRunTimes = ref([])
 const cronNextRunVisible = ref(false)
 
@@ -231,7 +234,7 @@ const historyGroupLeadColumn = {
           trigger: () => h('span', { style: { fontWeight: 600 } }, shortenCode(row.task_code_display)),
           default: () => row.task_code_display,
         }),
-        h('span', { style: { color: '#999', fontSize: '12px' } }, `(共${row.report_count}条)`),
+        h('span', { style: { color: '#999', fontSize: 'var(--autotest-font-size-mini)' } }, `(共${row.report_count}条)`),
       ])
     }
     if (row._isBatchGroup) {
@@ -248,10 +251,10 @@ const historyGroupLeadColumn = {
           onClick: (e) => { e.stopPropagation(); toggleHistoryExpand(row._batchKey) },
         }, { default: () => expandIconVNode }),
         h(NTooltip, { trigger: 'hover' }, {
-          trigger: () => h('span', { style: { fontSize: '13px', fontWeight: 600 } }, shortenCode(row._batchCodeDisplay)),
+          trigger: () => h('span', { style: { fontSize: 'var(--autotest-font-size)', fontWeight: 600 } }, shortenCode(row._batchCodeDisplay)),
           default: () => row._batchCodeDisplay,
         }),
-        h('span', { style: { color: '#999', fontSize: '12px' } }, `(共${row.report_count}条)`),
+        h('span', { style: { color: '#999', fontSize: 'var(--autotest-font-size-mini)' } }, `(共${row.report_count}条)`),
       ])
     }
     const reportBatchCode = row.batch_code ?? '-'
@@ -286,7 +289,7 @@ const historyColumnsBase = [
       if (failRatio > 0) progressBarChildren.push(h('div', { style: { height: '100%', width: `${failRatio}%`, backgroundColor: '#F4511E', transition: 'width 0.3s ease', minWidth: '1px' } }))
       return h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', width: '100%' } }, [
         h('div', { style: { flex: 1, maxWidth: '100px', height: '8px', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#F4511E' } }, progressBarChildren),
-        h('span', { style: { fontSize: '14px', whiteSpace: 'nowrap', minWidth: '60px' } }, `${ratioStr}%`),
+        h('span', { style: { fontSize: 'var(--autotest-font-size-large)', whiteSpace: 'nowrap', minWidth: '60px' } }, `${ratioStr}%`),
       ])
     },
   },
@@ -507,24 +510,45 @@ const taskForm = ref({
   task_project: null,
   task_notify: null,
   task_notifier: [],
-  task_kwargs: {env_name: ''},
+  task_kwargs: {},
   task_scheduler: 'cron',
   task_interval_expr: null,
   task_datetime_expr: '',
   task_crontabs_expr: '',
 })
 
-// 右侧：仅当所属项目变化时更新标签选项，不自动请求用例列表（用例列表由用户点击「查询」触发）
-watch(() => taskForm.value.task_project, (projectId) => {
+watch(() => filterCaseProject.value, (projectId) => {
   if (projectId == null) {
-    caseListFull.value = []
-    caseTotal.value = 0
-    checkedRowKeys.value = []
     tagOptions.value = []
     return
   }
   loadTags(projectId)
-}, {immediate: false})
+}, { immediate: false })
+
+const selectedCaseIds = computed(() =>
+    (checkedRowKeys.value || [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+)
+
+watch(selectedCaseIds, (ids, prev) => {
+  const prevSet = new Set(prev || [])
+  const nextSet = new Set(ids || [])
+  const cfg = { ...casesExecuteConfig.value }
+  for (const id of prevSet) {
+    if (!nextSet.has(id)) delete cfg[String(id)]
+  }
+  casesExecuteConfig.value = cfg
+  execCollapseExpanded.value = ids.map((id) => String(id))
+})
+
+const onCaseExecConfigUpdate = (caseId, cfg) => {
+  if (caseId == null) return
+  casesExecuteConfig.value = {
+    ...casesExecuteConfig.value,
+    [String(caseId)]: cfg,
+  }
+}
 
 const tagOptionsForFilter = computed(() =>
     tagOptions.value.map(t => ({label: t.tag_name ?? t.tag_id, value: t.tag_id}))
@@ -575,7 +599,7 @@ const loadTags = async (projectId = null) => {
 }
 
 const loadCases = async () => {
-  const projectId = taskForm.value.task_project
+  const projectId = filterCaseProject.value
   if (projectId == null) {
     caseListFull.value = []
     caseTotal.value = 0
@@ -588,13 +612,19 @@ const loadCases = async () => {
       page_size: casePageSize.value,
       state: 0,
       case_project: projectId,
-      case_type: '用户脚本', // 任务仅可选用户脚本，过滤掉公共脚本
+      case_type: '用户脚本',
       case_name: filterCaseName.value || undefined,
       case_tags: filterCaseTags.value?.length ? filterCaseTags.value : undefined,
+      created_user: filterCreatedUser.value?.trim() || undefined,
     })
     if (res?.data) {
       caseListFull.value = res.data
       caseTotal.value = res.total ?? res.data.length ?? 0
+      const cache = { ...caseNameCache.value }
+      res.data.forEach((row) => {
+        if (row?.case_id != null) cache[String(row.case_id)] = row.case_name || ''
+      })
+      caseNameCache.value = cache
     } else {
       caseListFull.value = []
       caseTotal.value = 0
@@ -608,33 +638,98 @@ const loadCases = async () => {
   }
 }
 
-const onCasePageChange = (page) => {
-  casePage.value = page
-  loadCases()
+const cacheCaseRowsByIds = (list, ids) => {
+  const cache = { ...selectedCaseRowsCache.value }
+  const keySet = new Set((ids || []).map((id) => String(id)))
+  ;(list || []).forEach((row) => {
+    if (row?.case_id != null && keySet.has(String(row.case_id))) {
+      cache[String(row.case_id)] = row
+    }
+  })
+  selectedCaseRowsCache.value = cache
+  const nameCache = { ...caseNameCache.value }
+  ;(list || []).forEach((row) => {
+    if (row?.case_id != null && keySet.has(String(row.case_id))) {
+      nameCache[String(row.case_id)] = row.case_name || ''
+    }
+  })
+  caseNameCache.value = nameCache
 }
-const onCasePageSizeChange = (pageSize) => {
-  casePageSize.value = pageSize
-  casePage.value = 1
-  loadCases()
+
+watch([caseListFull, checkedRowKeys], () => {
+  cacheCaseRowsByIds(caseListFull.value, checkedRowKeys.value)
+}, { deep: true })
+
+const ensurePersistedCasesInCache = async () => {
+  const ids = (persistedCaseIds.value || [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  if (!ids.length) return
+  const missing = ids.filter((id) => !selectedCaseRowsCache.value[String(id)])
+  if (!missing.length) return
+  try {
+    caseLoading.value = true
+    const res = await api.getApiTestcaseList({
+      page: 1,
+      page_size: Math.min(Math.max(missing.length * 2, 50), 500),
+      state: 0,
+      case_type: '用户脚本',
+    })
+    const idSet = new Set(missing)
+    const rows = (Array.isArray(res?.data) ? res.data : []).filter((r) => idSet.has(Number(r.case_id)))
+    cacheCaseRowsByIds(rows, ids)
+  } catch (e) {
+    console.error('加载已入库用例失败', e)
+  } finally {
+    caseLoading.value = false
+  }
 }
+
+watch(caseQueryNewMode, async (queryNew) => {
+  if (!queryNew) await ensurePersistedCasesInCache()
+})
+
+const caseTableData = computed(() => {
+  if (caseQueryNewMode.value) return caseListFull.value
+  return (persistedCaseIds.value || [])
+      .map((id) => selectedCaseRowsCache.value[String(id)])
+      .filter(Boolean)
+})
+
 const onCaseFilter = () => {
-  if (taskForm.value.task_project == null) {
+  if (filterCaseProject.value == null) {
     window.$message?.warning?.('请先选择所属应用')
     return
   }
+  caseQueryNewMode.value = true
   casePage.value = 1
   loadCases()
 }
 
-const casePagination = computed(() => ({
-  page: casePage.value,
-  pageSize: casePageSize.value,
-  itemCount: caseTotal.value,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50],
-  onUpdatePage: onCasePageChange,
-  onUpdatePageSize: onCasePageSizeChange,
-}))
+const onCasePageChange = (page) => {
+  if (!caseQueryNewMode.value) return
+  casePage.value = page
+  loadCases()
+}
+const onCasePageSizeChange = (pageSize) => {
+  if (!caseQueryNewMode.value) return
+  casePageSize.value = pageSize
+  casePage.value = 1
+  loadCases()
+}
+
+const casePagination = computed(() => {
+  if (!caseQueryNewMode.value) return false
+  return {
+    page: casePage.value,
+    pageSize: casePageSize.value,
+    itemCount: caseTotal.value,
+    showSizePicker: true,
+    pageSizes: [10, 20, 50],
+    onUpdatePage: onCasePageChange,
+    onUpdatePageSize: onCasePageSizeChange,
+  }
+})
 
 const openAdd = () => {
   isEdit.value = false
@@ -643,7 +738,16 @@ const openAdd = () => {
   intervalValue.value = 1
   datetimePickerValue.value = null
   filterCaseName.value = ''
+  filterCaseProject.value = null
   filterCaseTags.value = []
+  filterCreatedUser.value = ''
+  casesExecuteConfig.value = {}
+  caseNameCache.value = {}
+  selectedCaseRowsCache.value = {}
+  persistedCaseIds.value = []
+  caseQueryNewMode.value = false
+  execCollapseExpanded.value = []
+  taskModalCollapseExpanded.value = ['cases']
   taskForm.value = {
     task_id: null,
     task_code: null,
@@ -653,7 +757,7 @@ const openAdd = () => {
     task_project: null,
     task_notify: null,
     task_notifier: [],
-    task_kwargs: {env_name: ''},
+    task_kwargs: {},
     task_scheduler: 'cron',
     task_interval_expr: null,
     task_datetime_expr: '',
@@ -670,11 +774,22 @@ const openEdit = async (row) => {
   isEdit.value = true
   filterCaseName.value = ''
   filterCaseTags.value = []
+  filterCreatedUser.value = ''
   try {
     const res = await api.getApiTask({task_id: row.task_id})
     const d = res?.data || {}
     const taskKwargs = d.task_kwargs && typeof d.task_kwargs === 'object' ? d.task_kwargs : {}
     const caseIds = Array.isArray(taskKwargs.case_ids) ? taskKwargs.case_ids : []
+    const rawCasesCfg = taskKwargs.cases_execute_config ?? {}
+    casesExecuteConfig.value =
+        rawCasesCfg && typeof rawCasesCfg === 'object' ? { ...rawCasesCfg } : {}
+    selectedCaseRowsCache.value = {}
+    persistedCaseIds.value = [...caseIds]
+    caseQueryNewMode.value = false
+    filterCaseProject.value = d.task_project ?? null
+    caseListFull.value = []
+    caseTotal.value = 0
+    taskModalCollapseExpanded.value = ['cases']
     taskForm.value = {
       task_id: d.task_id,
       task_code: d.task_code || null,
@@ -684,7 +799,7 @@ const openEdit = async (row) => {
       task_project: d.task_project ?? null,
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
-      task_kwargs: {...taskKwargs, case_ids: caseIds, env_name: taskKwargs.env_name ?? ''},
+      task_kwargs: { ...taskKwargs, case_ids: caseIds },
       task_scheduler: d.task_scheduler || 'cron',
       task_interval_expr: d.task_interval_expr ?? null,
       task_datetime_expr: d.task_datetime_expr || '',
@@ -700,8 +815,8 @@ const openEdit = async (row) => {
       intervalValue.value = 1
     }
     checkedRowKeys.value = [...caseIds]
-    await loadTags(d.task_project)
-    await loadCases()
+    tagOptions.value = []
+    if (caseIds.length) ensurePersistedCasesInCache()
     if (d.task_datetime_expr) {
       const t = dayjs(d.task_datetime_expr, ['YYYY-MM-DD HH:mm:ss', 'YYYY.MM.DD HH:mm:ss'], true)
       datetimePickerValue.value = t.isValid() ? t.valueOf() : null
@@ -736,33 +851,44 @@ const handleSubmit = async () => {
     window.$message?.warning?.('请输入任务名称')
     return
   }
-  if (taskForm.value.task_project == null || taskForm.value.task_project === '') {
-    window.$message?.warning?.('请选择所属项目')
+  if (!taskForm.value.task_scheduler) {
+    window.$message?.warning?.('请选择任务调度')
     return
   }
-  const caseIds = checkedRowKeys.value
-  if (caseIds.length === 0) {
+  const caseIds = selectedCaseIds.value
+  if (!caseIds.length) {
     window.$message?.warning?.('请至少勾选一个用例')
     return
   }
-  const executeEnvironment = taskForm.value.task_kwargs?.env_name?.trim?.() || ''
-  if (!executeEnvironment) {
-    window.$message?.warning?.('请在任务参数中填写执行环境')
+  const taskProjectId =
+      filterCaseProject.value ?? taskForm.value.task_project ?? null
+  if (taskProjectId == null) {
+    window.$message?.warning?.('请在用例选择中指定所属应用')
     return
+  }
+  const casesCfgPayload = {}
+  for (const cid of caseIds) {
+    const cfg = casesExecuteConfig.value[String(cid)]
+    if (!cfg?.steps_execute_config || !cfg?.global_env_id) {
+      const label = caseNameCache.value[String(cid)] || `用例 ${cid}`
+      window.$message?.warning?.(`请完善「${label}」的执行配置（全局环境与步骤配置）`)
+      return
+    }
+    casesCfgPayload[String(cid)] = cfg
   }
   modalLoading.value = true
   try {
-    // 任务参数字典：case_ids、env_name 等，后端与 Celery 从 task_kwargs 读取
     const taskKwargsPayload = {
       ...(taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object' ? taskForm.value.task_kwargs : {}),
       case_ids: caseIds,
-      env_name: executeEnvironment,
+      cases_execute_config: casesCfgPayload,
     }
+    delete taskKwargsPayload.env_name
     const payload = {
       task_name: taskForm.value.task_name.trim(),
       task_desc: taskForm.value.task_desc || null,
       task_type: taskForm.value.task_type || null,
-      task_project: taskForm.value.task_project,
+      task_project: taskProjectId,
       task_notify: Array.isArray(taskForm.value.task_notify) ? taskForm.value.task_notify : null,
       task_notifier: Array.isArray(taskForm.value.task_notifier) ? taskForm.value.task_notifier : null,
       task_kwargs: taskKwargsPayload,
@@ -779,6 +905,8 @@ const handleSubmit = async () => {
       await api.createApiTaskList(payload)
       window.$message?.success?.('新增成功')
     }
+    persistedCaseIds.value = [...caseIds]
+    caseQueryNewMode.value = false
     modalVisible.value = false
     $table.value?.handleSearch()
   } catch (error) {
@@ -870,20 +998,16 @@ const columns = [
     ellipsis: {tooltip: true},
   },
   {
-    title: '执行环境',
-    key: 'task_kwargs',
-    width: 100,
-    align: 'center',
-    ellipsis: {tooltip: true},
-    render(row) {
-      const env = row.task_kwargs?.env_name ?? ''
-      return h('span', env || '-')
-    },
-  },
-  {
     title: '任务名称',
     key: 'task_name',
-    width: 150,
+    width: 300,
+    align: 'center',
+    ellipsis: {tooltip: true},
+  },
+  {
+    title: '任务标识',
+    key: 'task_code',
+    width: 400,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -937,13 +1061,6 @@ const columns = [
     },
   },
   {
-    title: '任务标识',
-    key: 'task_code',
-    width: 200,
-    align: 'center',
-    ellipsis: {tooltip: true},
-  },
-  {
     title: '最后执行时间',
     key: 'last_execute_time',
     width: 180,
@@ -963,6 +1080,13 @@ const columns = [
     render(row) {
       return h('span', formatDateTime(row.updated_time))
     },
+  },
+  {
+    title: '创建人员',
+    key: 'created_user',
+    width: 100,
+    align: 'center',
+    ellipsis: {tooltip: true},
   },
   {
     title: '更新人员',
@@ -1028,7 +1152,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => openEdit(row),
+                    onClick: () => handleStopTask(row),
                   },
                   {
                     default: () => '停止',
@@ -1041,7 +1165,7 @@ const columns = [
                     size: 'small',
                     type: 'primary',
                     style: 'margin-right: 6px;',
-                    onClick: () => openEdit(row),
+                    onClick: () => handleStartTask(row),
                   },
                   {
                     default: () => '启动',
@@ -1137,78 +1261,35 @@ onMounted(() => {
 
     <NModal
         v-model:show="modalVisible"
-        :title="isEdit ? '编辑任务' : '新增'"
+        :title="isEdit ? '编辑任务' : '新增任务'"
         preset="card"
-        class="task-modal"
+        class="task-modal task-form-modal"
         :style="taskModalStyle"
         :loading="modalLoading"
         @close="modalVisible = false"
     >
-      <NGrid :cols="24" :x-gap="16" class="task-modal-grid">
-        <NGi :span="10" class="task-modal-left">
-          <NForm label-placement="left" label-width="100px" size="small">
-            <NFormItem label="执行环境" required>
-              <NInput
-                  v-model:value="taskForm.task_kwargs.env_name"
-                  placeholder="请输入执行环境（存入 task_kwargs）"
-                  clearable
-              />
+      <div class="task-modal-body">
+        <NForm label-placement="left" label-width="88px" size="small" class="task-config-form task-config-section">
+          <div class="task-config-layout">
+            <NFormItem label="任务名称" required class="task-config-cell task-config-cell-name">
+              <NInput v-model:value="taskForm.task_name" placeholder="请输入任务名称" clearable />
             </NFormItem>
-            <NFormItem label="任务名称" required>
-              <NInput
-                  v-model:value="taskForm.task_name"
-                  placeholder="请输入任务名"
-                  clearable
-              />
+            <NFormItem label="任务通知" class="task-config-cell task-config-cell-notify">
+              <NDynamicTags v-model:value="taskForm.task_notifier" placeholder="请输入通知人员，回车添加" />
             </NFormItem>
-            <NFormItem label="任务类型">
-              <NInput
-                  v-model:value="taskForm.task_type"
-                  placeholder="任务类型"
-                  clearable
-              />
+            <NFormItem label="任务类型" class="task-config-cell task-config-cell-type">
+              <NInput v-model:value="taskForm.task_type" placeholder="请输入任务类型" clearable />
             </NFormItem>
-            <NFormItem label="所属应用" required>
-              <NSelect
-                  v-model:value="taskForm.task_project"
-                  :options="projectOptions"
-                  :loading="projectLoading"
-                  clearable
-                  filterable
-                  placeholder="选择所属应用"
-              />
-            </NFormItem>
-            <NFormItem label="任务通知">
-              <NDynamicTags
-                  v-model:value="taskForm.task_notifier"
-                  placeholder="通知人员，回车添加"
-              />
-            </NFormItem>
-            <NFormItem label="任务描述">
-              <NInput
-                  v-model:value="taskForm.task_desc"
-                  type="textarea"
-                  placeholder="任务描述"
-                  :rows="2"
-              />
-            </NFormItem>
-            <NFormItem label="调度模式">
-              <NTabs v-model:value="schedulerTab" type="line" size="small" class="scheduler-tabs"
-                     @update:value="onSchedulerTabChange">
+            <NFormItem label="任务调度" required class="task-config-cell task-config-cell-scheduler">
+              <NTabs
+                  v-model:value="schedulerTab"
+                  type="line"
+                  size="small"
+                  class="scheduler-tabs task-config-scheduler-tabs"
+                  @update:value="onSchedulerTabChange"
+              >
                 <NTabPane name="cron" tab="Crontab">
                   <div class="cron-block">
-                    <label class="cron-label">crontab</label>
-                    <div class="cron-input-row">
-                      <NInput
-                          v-model:value="taskForm.task_crontabs_expr"
-                          placeholder="crontab表达式 例如: 11 * * * *"
-                          clearable
-                          class="cron-input"
-                      />
-                      <NButton size="small" tertiary type="primary" class="cron-view-btn" @click="showCronNextRun">
-                        查看执行时间
-                      </NButton>
-                    </div>
                     <div class="cron-desc-block">
                       <div class="cron-desc-title">Crontab表达式说明:</div>
                       <div class="cron-desc-fields">
@@ -1219,20 +1300,26 @@ onMounted(() => {
                         <div class="cron-desc-item"><span class="cron-asterisk">*</span><span>周(0-7)</span></div>
                       </div>
                     </div>
+                    <div class="cron-input-row">
+                      <NInput
+                          v-model:value="taskForm.task_crontabs_expr"
+                          placeholder="请输入 crontab 表达式，例如: 11 * * * *"
+                          clearable
+                          class="cron-input"
+                      />
+                      <NButton size="small" tertiary type="primary" class="cron-view-btn" @click="showCronNextRun">
+                        查看执行时间
+                      </NButton>
+                    </div>
                   </div>
                 </NTabPane>
                 <NTabPane name="interval" tab="Interval">
                   <div class="interval-block">
                     <NTabs v-model:value="intervalUnit" type="line" size="small" class="interval-unit-tabs">
-                      <NTabPane v-for="u in INTERVAL_UNITS" :key="u.value" :name="u.value" :tab="u.label"/>
+                      <NTabPane v-for="u in INTERVAL_UNITS" :key="u.value" :name="u.value" :tab="u.label" />
                     </NTabs>
                     <div class="interval-input-wrap">
-                      <NInputNumber
-                          v-model:value="intervalValue"
-                          :min="1"
-                          placeholder=""
-                          style="width: 100%;"
-                      />
+                      <NInputNumber v-model:value="intervalValue" :min="1" placeholder="请输入间隔数值" style="width: 100%;" />
                     </div>
                   </div>
                 </NTabPane>
@@ -1241,51 +1328,143 @@ onMounted(() => {
                       v-model:value="datetimePickerValue"
                       type="datetime"
                       clearable
+                      placeholder="请选择执行时间"
                       style="width: 100%;"
                   />
                 </NTabPane>
               </NTabs>
             </NFormItem>
-          </NForm>
-        </NGi>
-        <NGi :span="14" class="task-modal-right">
-          <div class="case-section">
-            <div class="case-toolbar">
+            <NFormItem label="任务描述" class="task-config-cell task-config-cell-desc">
               <NInput
-                  v-model:value="filterCaseName"
-                  placeholder="用例名称"
+                  v-model:value="taskForm.task_desc"
+                  type="textarea"
+                  placeholder="请输入任务描述"
                   clearable
-                  style="width: 160px;"
-                  @keyup.enter="onCaseFilter"
+                  class="task-config-desc-textarea"
               />
-              <NSelect
-                  v-model:value="filterCaseTags"
-                  :options="tagOptionsForFilter"
-                  placeholder="所属标签"
-                  clearable
-                  filterable
-                  multiple
-                  style="width: 180px;"
-              />
-              <NButton type="primary" size="small" @click="onCaseFilter">
-                查询
-              </NButton>
-            </div>
-            <p class="case-table-hint">根据左侧所属项目加载用例，可按用例名称、所属标签筛选；勾选需要的用例后点击保存。</p>
-            <NDataTable
-                v-model:checked-row-keys="checkedRowKeys"
-                :columns="caseColumns"
-                :data="caseListFull"
-                :row-key="row => row.case_id"
-                :loading="caseLoading"
-                :pagination="casePagination"
-                size="small"
-                max-height="360"
-                class="case-table"
-            />
+            </NFormItem>
           </div>
-        </NGi>
-      </NGrid>
+        </NForm>
+
+        <NCollapse
+            v-model:expanded-names="taskModalCollapseExpanded"
+            arrow-placement="right"
+            class="task-form-collapse"
+        >
+          <NCollapseItem title="用例配置" name="cases" class="task-case-collapse-item">
+            <template #header-extra>
+              <NSwitch
+                  v-model:value="caseQueryNewMode"
+                  size="small"
+                  class="task-case-view-switch"
+                  @click.stop
+              >
+                <template #checked>查询新用例</template>
+                <template #unchecked>查看已选用例</template>
+              </NSwitch>
+            </template>
+            <div class="case-section">
+              <div v-if="caseQueryNewMode" class="case-toolbar">
+                <div class="case-filter-item">
+                  <span class="case-filter-label">所属应用：</span>
+                  <NSelect
+                      v-model:value="filterCaseProject"
+                      :options="projectOptions"
+                      :loading="projectLoading"
+                      size="small"
+                      clearable
+                      filterable
+                      placeholder="请选择所属应用"
+                      class="case-filter-control"
+                  />
+                </div>
+                <div class="case-filter-item">
+                  <span class="case-filter-label">用例名称：</span>
+                  <NInput
+                      v-model:value="filterCaseName"
+                      placeholder="请输入用例名称"
+                      size="small"
+                      clearable
+                      class="case-filter-control"
+                      @keyup.enter="onCaseFilter"
+                  />
+                </div>
+                <div class="case-filter-item">
+                  <span class="case-filter-label">所属标签：</span>
+                  <NSelect
+                      v-model:value="filterCaseTags"
+                      :options="tagOptionsForFilter"
+                      placeholder="请选择所属标签"
+                      size="small"
+                      clearable
+                      filterable
+                      multiple
+                      class="case-filter-control"
+                  />
+                </div>
+                <div class="case-filter-item">
+                  <span class="case-filter-label">创建人员：</span>
+                  <NInput
+                      v-model:value="filterCreatedUser"
+                      placeholder="请输入创建人员"
+                      size="small"
+                      clearable
+                      class="case-filter-control"
+                      @keyup.enter="onCaseFilter"
+                  />
+                </div>
+                <NButton tertiary type="primary" size="small" class="case-toolbar-query-btn" @click="onCaseFilter">查询</NButton>
+              </div>
+              <p
+                  v-if="!caseQueryNewMode && !persistedCaseIds.length"
+                  class="task-case-persisted-empty"
+              >
+                暂无已入库用例；保存任务后可通过「查看已选用例」查看。
+              </p>
+              <NDataTable
+                  v-else
+                  v-model:checked-row-keys="checkedRowKeys"
+                  :columns="caseColumns"
+                  :data="caseTableData"
+                  :row-key="row => row.case_id"
+                  :loading="caseLoading"
+                  :pagination="casePagination"
+                  size="small"
+                  max-height="320"
+                  class="case-table"
+              />
+            </div>
+          </NCollapseItem>
+
+          <NCollapseItem title="执行配置" name="exec">
+            <div v-if="!selectedCaseIds.length" class="task-exec-empty">请先在「用例配置」中勾选至少一个用例</div>
+            <NCollapse
+                v-else
+                v-model:expanded-names="execCollapseExpanded"
+                class="task-exec-case-collapse"
+                arrow-placement="right"
+            >
+              <NCollapseItem
+                  v-for="cid in selectedCaseIds"
+                  :key="cid"
+                  :name="String(cid)"
+                  class="task-exec-case-item"
+                  :title="caseNameCache[String(cid)] || '未命名用例'"
+              >
+                <div class="task-exec-config-wrap">
+                  <ExecConfigModal
+                      embedded
+                      :case-id="cid"
+                      :project-options="projectOptions"
+                      :saved-config="casesExecuteConfig[String(cid)]"
+                      @update:config="(cfg) => onCaseExecConfigUpdate(cid, cfg)"
+                  />
+                </div>
+              </NCollapseItem>
+            </NCollapse>
+          </NCollapseItem>
+        </NCollapse>
+      </div>
       <template #footer>
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
           <NButton @click="modalVisible = false">取消</NButton>
@@ -1409,17 +1588,248 @@ onMounted(() => {
   padding: 20px;
 }
 
-.task-modal-grid {
-  min-height: 420px;
+.task-form-modal :deep(.n-card__content) {
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+  font-size: var(--autotest-font-size);
 }
 
-.task-modal-left {
-  border-right: 1px solid #e0e0e0;
-  padding-right: 16px;
+.task-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.task-modal-right {
-  padding-left: 8px;
+.task-config-section {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.task-form-collapse {
+  margin-top: 0;
+}
+
+/*
+ * 三行两列：整体 min-height 272px；右侧调度填满并在 Tab 内滚动
+ * 左侧任务描述 min-height 90px，可由用户拖拽增高；描述区不纵向拉伸，避免输入框下留白
+ */
+.task-config-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  column-gap: var(--task-config-field-gap);
+  row-gap: var(--task-config-field-gap);
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.task-config-form :deep(.n-form-item) {
+  margin-bottom: 0;
+}
+
+.task-config-cell {
+  margin-bottom: 0 !important;
+  min-width: 0;
+}
+
+.task-config-cell-name {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.task-config-cell-notify {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.task-config-cell-type {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.task-config-cell-scheduler {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  align-self: stretch;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
+  /* 勿在表单项根节点设 flex-direction: column，否则「任务调度」标签与 Tab 会上下换行 */
+  align-items: flex-start;
+}
+
+.task-config-cell-scheduler :deep(.n-form-item-label) {
+  padding-top: 6px;
+  flex-shrink: 0;
+}
+
+.task-config-cell-scheduler :deep(.n-form-item-blank) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-config-cell-desc {
+  grid-column: 1;
+  grid-row: 3;
+  align-self: start;
+}
+
+.task-config-cell-desc :deep(.n-form-item) {
+  align-items: flex-start;
+}
+
+.task-config-cell-desc :deep(.n-form-item-label) {
+  padding-top: 6px;
+}
+
+.task-config-cell-desc :deep(.n-form-item-blank) {
+  display: block;
+}
+
+.task-config-scheduler-tabs {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-config-scheduler-tabs :deep(.n-tabs-nav) {
+  flex-shrink: 0;
+}
+
+.task-config-scheduler-tabs :deep(.n-tabs-pane-wrapper) {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.task-config-scheduler-tabs :deep(.n-tab-pane) {
+  padding-top: 4px;
+}
+
+.cron-block,
+.interval-block {
+  min-height: 0;
+}
+
+.task-config-desc-textarea {
+  width: 100%;
+  --task-config-desc-min-height: 90px;
+}
+
+.task-config-desc-textarea :deep(.n-input),
+.task-config-desc-textarea :deep(.n-input-wrapper) {
+  min-height: var(--task-config-desc-min-height);
+}
+
+.task-config-desc-textarea :deep(.n-input__textarea-el) {
+  min-height: var(--task-config-desc-min-height);
+  /* 勿设 resize：Naive textarea 默认 resizable，会在 wrapper 上提供拖拽；此处再设会与 wrapper 各出现一个角标 */
+  resize: none;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.task-case-collapse-item :deep(.n-collapse-item__header) {
+  display: flex;
+  align-items: center;
+}
+
+.task-case-collapse-item :deep(.n-collapse-item__header-extra) {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  margin-left: 12px;
+}
+
+.task-case-view-switch {
+  flex-shrink: 0;
+}
+
+.task-case-persisted-empty {
+  font-size: var(--autotest-font-size);
+  color: var(--n-text-color-3);
+  margin: 8px 0;
+}
+
+.case-filter-item {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.case-filter-label {
+  flex-shrink: 0;
+  font-size: var(--autotest-font-size);
+  color: var(--n-text-color);
+  white-space: nowrap;
+}
+
+.case-filter-control {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 与「查询」small 按钮高度对齐 */
+.case-filter-control :deep(.n-input-wrapper),
+.case-filter-control :deep(.n-base-selection) {
+  --n-height: 28px;
+  min-height: 28px;
+  font-size: var(--autotest-font-size-small);
+}
+
+.case-toolbar-query-btn {
+  flex-shrink: 0;
+}
+
+.task-exec-empty {
+  color: var(--n-text-color-3);
+  padding: 12px 0;
+  font-size: var(--autotest-font-size);
+}
+
+.task-exec-case-collapse {
+  margin-top: 4px;
+}
+
+/* 仅作用于「每个用例」折叠项，勿用后代选择器以免污染内部 exec-config-collapse */
+.task-exec-case-collapse :deep(.task-exec-case-item.n-collapse-item) {
+  margin-bottom: 8px;
+  margin-left: 0 !important;
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.task-exec-case-collapse > :deep(.n-collapse-item) {
+  margin-left: 0 !important;
+}
+
+.task-exec-case-collapse :deep(.task-exec-case-item > .n-collapse-item__header) {
+  padding: 8px 12px !important;
+  font-weight: 500;
+}
+
+.task-exec-case-collapse :deep(.task-exec-case-item > .n-collapse-item__content-inner) {
+  padding: 0 12px 12px;
+  background-color: var(--n-card-color, var(--n-color));
+}
+
+.task-exec-case-collapse :deep(.task-exec-case-item > .n-collapse-item__content-wrapper) {
+  background-color: var(--n-card-color, var(--n-color));
+}
+
+.task-exec-config-wrap {
+  min-width: 0;
 }
 
 .case-toolbar {
@@ -1428,6 +1838,13 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .case-toolbar {
+    flex-wrap: nowrap;
+  }
 }
 
 .scheduler-tabs {
@@ -1438,18 +1855,11 @@ onMounted(() => {
   width: 100%;
 }
 
-.cron-label {
-  display: block;
-  font-size: 14px;
-  color: var(--n-text-color);
-  margin-bottom: 8px;
-}
-
 .cron-input-row {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-top: 12px;
 }
 
 .cron-input-row .cron-input {
@@ -1461,11 +1871,11 @@ onMounted(() => {
 }
 
 .cron-desc-block {
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .cron-desc-title {
-  font-size: 12px;
+  font-size: var(--autotest-font-size-mini);
   color: var(--n-text-color);
   margin-bottom: 8px;
 }
@@ -1480,12 +1890,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--autotest-font-size-mini);
   color: var(--n-text-color);
 }
 
 .cron-asterisk {
-  font-size: 14px;
+  font-size: var(--autotest-font-size-large);
   margin-bottom: 2px;
 }
 
@@ -1501,22 +1911,8 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-.cron-desc {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  margin-top: 8px;
-  line-height: 1.4;
-}
-
 .case-table {
   margin-top: 8px;
-}
-
-.case-section .case-table-hint {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  margin: 0 0 8px 0;
-  line-height: 1.5;
 }
 
 .cron-times-list {
