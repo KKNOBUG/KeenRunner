@@ -1098,7 +1098,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 230,
+    width: 90,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -1107,19 +1107,19 @@ const columns = [
           label: '日志',
           key: 'log',
           icon: renderIcon('material-symbols:description-outline', {size: 16}),
-          onClick: () => openLog(row)
+          onClick: () => openLog(row),
         },
         {
           label: '历史',
           key: 'history',
-          icon: renderIcon('material-symbols:add-task-rounded', {size: 16}),
-          onClick: () => openHistory(row)
+          icon: renderIcon('material-symbols:history', {size: 16}),
+          onClick: () => openHistory(row),
         },
         {
           label: '编辑',
           key: 'edit',
           icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-          onClick: () => openEdit(row)
+          onClick: () => openEdit(row),
         },
         {
           label: '删除',
@@ -1127,70 +1127,74 @@ const columns = [
           icon: renderIcon('material-symbols:delete-outline', {size: 16}),
           onClick: () => {
             if (window.confirm('确定删除该任务吗？')) handleDelete({task_id: row.task_id}, false)
-          }
+          },
         },
       ]
-      return h(NSpace, {size: 8, wrap: false}, {
-        default: () => [
-          h(
-              NButton,
-              {
-                size: 'small',
-                type: 'info',
-                style: 'margin-right: 6px;',
-                onClick: () => handleRunTask(row),
-              },
-              {
-                default: () => '执行',
-                icon: renderIcon('material-symbols:play-arrow', {size: 16}),
-              }
-          ),
-          row.task_enabled
-              ? h(
-                  NButton,
-                  {
-                    size: 'small',
-                    type: 'primary',
-                    style: 'margin-right: 6px;',
-                    onClick: () => handleStopTask(row),
-                  },
-                  {
-                    default: () => '停止',
-                    icon: renderIcon('material-symbols:stop-circle-outline', {size: 16}),
-                  }
-              )
-              : h(
-                  NButton,
-                  {
-                    size: 'small',
-                    type: 'primary',
-                    style: 'margin-right: 6px;',
-                    onClick: () => handleStartTask(row),
-                  },
-                  {
-                    default: () => '启动',
-                    icon: renderIcon('material-symbols:rocket-launch', {size: 16}),
-                  }
-              ),
-          h(NDropdown, {
-            trigger: 'click',
-            options: dropdownOptions.map(opt => ({label: opt.label, key: opt.key, icon: opt.icon})),
-            onSelect: (key) => dropdownOptions.find(o => o.key === key)?.onClick?.(),
-          }, {
-            default: () =>
-                h(NButton,
-                    {
-                      size: 'small',
-                      type: 'warning',
-                    },
-                    {
-                      default: () => '更多',
-                      icon: renderIcon('material-symbols:more-horiz', {size: 16}),
-                    }
-                ),
-          }),
-        ],
-      })
+      return [
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'primary',
+              onClick: () => handleRunTask(row),
+            },
+            {
+              default: () => '执行',
+              icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+            },
+        ),
+        row.task_enabled
+            ? h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'error',
+                  onClick: () => handleStopTask(row),
+                },
+                {
+                  default: () => '停止',
+                  icon: renderIcon('material-symbols:stop-circle-outline', {size: 16}),
+                },
+            )
+            : h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'success',
+                  onClick: () => handleStartTask(row),
+                },
+                {
+                  default: () => '启动',
+                  icon: renderIcon('material-symbols:play-circle-outline', {size: 16}),
+                },
+            ),
+        h(
+            NDropdown,
+            {
+              trigger: 'click',
+              options: dropdownOptions.map((opt) => ({label: opt.label, key: opt.key, icon: opt.icon})),
+              onSelect: (key) => dropdownOptions.find((o) => o.key === key)?.onClick?.(),
+            },
+            {
+              default: () =>
+                  h(
+                      NButton,
+                      {
+                        size: 'tiny',
+                        quaternary: true,
+                        type: 'default',
+                      },
+                      {
+                        default: () => '更多',
+                        icon: renderIcon('material-symbols:more-horiz', {size: 16}),
+                      },
+                  ),
+            },
+        ),
+      ]
     },
   },
 ]
@@ -1212,7 +1216,7 @@ onMounted(() => {
         :columns="columns"
         :get-data="api.getApiTaskList"
         row-key="task_id"
-        :scroll-x="2050"
+        :scroll-x="2100"
         :single-line="true"
         @query-bar-create="openAdd"
         @query-bar-delete="handleBatchDelete"
