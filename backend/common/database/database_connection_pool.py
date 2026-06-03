@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Dict, Optional, Any, Type, Set
 
 import aiomysql
-import cx_Oracle
+import oracledb
 import orjson
 from loguru import logger
 
@@ -52,7 +52,7 @@ class DBConnPoolFromConfig:
             return set()
         return set(meta.fields_map.keys())
 
-    async def _get_db_config_from_orm(self, app_id, env, config_name, db_name) -> Optional[Dict[str, Any]]:
+    async def _get_db_config_from_orm(self, app_id: int, env: str, config_name: str, db_name: str) -> Optional[Dict[str, Any]]:
         """
         通过 ORM 查询数据库连接配置。
 
@@ -215,9 +215,7 @@ class DBConnPoolFromConfig:
 
         # 使用ORM查询配置
         try:
-            config = await self._get_db_config_from_orm(
-                app_id_key, env_clean, config_clean, db_clean)
-
+            config = await self._get_db_config_from_orm(app_id_key, env_clean, config_clean, db_clean)
             if not config:
                 err_msg = (
                     f"配置表未找到记录 [app_id={app_id!r}, env={env_clean!r}, config_name={config_clean!r}, "
@@ -259,26 +257,22 @@ class DBConnPoolFromConfig:
                         autocommit=True
                     )
                 elif db_type == 'oracle':
-                    def _create_oracle_pool():
-                        return cx_Oracle.SessionPool(
-                            user=config['username'],
-                            password=config['password'],
-                            dsn=f"{config['host']}:{config['port']}/{config['database_name']}",
-                            min=1,
-                            max=100,
-                            increment=1,
-                            encoding='UTF-8'
-                        )
-
-                    # 线程池里创建，避免阻塞时间
-                    loop = asyncio.get_event_loop()
-                    pool = await loop.run_in_executor(None, _create_oracle_pool)
+                    pool = oracledb.create_pool_async(
+                        user=config["username"],
+                        password=config["password"],
+                        service_name=config["database_name"],
+                        host=config["host"],
+                        port=config["port"],
+                        min=1,
+                        max=100,
+                        increment=1
+                    )
+                else:
+                    continue
                 self._set_pool(app_id_key, env_clean, config_clean, db_clean, pool)
                 self._clear_error(app_id_key, env_clean, config_clean, db_clean)
                 self.logger.info("数据库创建连接池成功")
-
                 return True
-
             except Exception as e:
                 if retry < max_retries - 1:
                     self.logger.warning(f"连接失败，{retry + 1}/{max_retries}次重试：{str(e)}")
@@ -289,6 +283,7 @@ class DBConnPoolFromConfig:
                     self.logger.error(err_msg)
                     self._set_error(app_id_key, env_clean, config_clean, db_clean, err_msg)
                     raise ConnectionError(err_msg)
+        return False
 
     async def execute_sql(self, pool, sql: str, is_dict: bool = True):
         """根据已有的数据库连接池执行sql"""
