@@ -7,7 +7,7 @@
 @DateTime: 2025/1/18 10:48
 """
 import asyncio
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from decimal import Decimal
 from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, Set
 
@@ -94,7 +94,9 @@ class ScaffoldModel(models.Model):
 
     @classmethod
     async def __format_value(cls, value: Any):
-        if isinstance(value, datetime):
+        if isinstance(value, Decimal):
+            return str(value)
+        elif isinstance(value, datetime):
             value = value.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
         elif isinstance(value, date):
             value = value.strftime(GLOBAL_CONFIG.DATE_FORMAT)
@@ -102,9 +104,10 @@ class ScaffoldModel(models.Model):
             value = value.strftime(GLOBAL_CONFIG.TIME_FORMAT)
         elif isinstance(value, bytes):
             value = value.decode("utf-8")
-        elif isinstance(value, Decimal):
-            value = float(value)
-
+        elif isinstance(value, timedelta):
+            value = str(value)
+        else:
+            raise TypeError(f"数据[{value}]类型[{type(value)}]无法完成序列化")
         return value
 
     async def __fetch_fk_field(self, field, fk_include_fields, fk_exclude_fields):
