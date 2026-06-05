@@ -32,7 +32,7 @@ export default {
   updateRole: (data = {}) => request.post('/base/role/update', data),
   deleteRole: (params = {}) => request.delete('/base/role/delete', { params }),
   /** 批量删除：Body { role_ids?: number[] } 或 { role_codes?: string[] } */
-  deleteRoleBatch: (data = {}) => request.post('/base/role/delete', data),
+  deleteRoleBatch: (data = {}) => request.post('/base/role/deletes', data),
   updateRoleAuthorized: (data = {}) => request.post('/base/role/authorized', data),
   getRoleAuthorized: (params = {}) => request.get('/base/role/authorized', { params }),
   // 菜单相关

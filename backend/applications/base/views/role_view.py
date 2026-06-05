@@ -21,7 +21,8 @@ from backend.applications.base.schemas.role_schema import (
 from backend.applications.base.services.role_crud import ROLE_CRUD
 from backend.applications.user.models.user_model import User
 from backend.configure import LOGGER
-from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse
+from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
+from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse, ParameterResponse, NotFoundResponse
 from backend.services import DependAuth
 
 role = APIRouter()
@@ -32,24 +33,28 @@ async def create_role(
         role_in: RoleCreate,
         current_user: User = DependAuth,
 ):
-    if await ROLE_CRUD.is_exist(name=role_in.name):
-        return DataAlreadyExistsResponse(message="角色名称已经存在")
-
-    instance = await ROLE_CRUD.create_role(role_in=role_in, created_user=current_user.username)
-    data: dict = await instance.to_dict()
-    return SuccessResponse(data=data)
+    try:
+        instance = await ROLE_CRUD.create_role(role_in=role_in, created_user=current_user.username)
+        data: dict = await instance.to_dict()
+        return SuccessResponse(data=data)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=e.message)
 
 
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
-async def delete_role_one(
-        role_id: int = Query(..., description="角色ID"),
-):
-    instance = await ROLE_CRUD.remove(id=role_id)
-    data: dict = await instance.to_dict()
-    return SuccessResponse(data=data)
+async def delete_role_one(role_id: int = Query(..., description="角色ID")):
+    try:
+        instance = await ROLE_CRUD.delete_role(role_id=role_id)
+        data = await instance.to_dict()
+        return SuccessResponse(data=data)
+    except ParameterException as e:
+        return ParameterResponse(message=e.message)
+    except NotFoundException as e:
+        return NotFoundResponse(message=e.message)
+    except Exception as e:
+        return FailureResponse(message=f"新增失败，异常描述:{e}")
 
-
-@role.post("/delete", summary="批量删除角色", description="根据角色ID或代码列表删除")
+@role.post("/deletes", summary="批量删除角色", description="根据角色ID或代码列表删除")
 async def delete_roles_batch(
         body_in: RoleBatchDelete = Body(..., description="批量删除参数"),
 ):

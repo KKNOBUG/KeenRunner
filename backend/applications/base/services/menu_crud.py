@@ -58,8 +58,7 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
     async def delete_menu(self, menu_id: int, **kwargs) -> Menu:
         instance = await self.get_by_id(menu_id=menu_id, on_error=True, **kwargs)
         await instance.delete()
-        data = await instance.to_dict()
-        return data
+        return instance
 
     async def update_menu(self, menu_in: MenuUpdate) -> Menu:
         menu_id: int = menu_in.id

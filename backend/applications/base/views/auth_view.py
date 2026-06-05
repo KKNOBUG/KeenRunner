@@ -96,7 +96,7 @@ async def get_user_menu():
 @auth_secure.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
 async def get_userinfo():
     user_id = CTX_USER_ID.get()
-    user_obj = await USER_CRUD.get_or_error(id=user_id)
+    user_obj = await USER_CRUD.get_by_id(user_id=user_id, on_error=True)
     data = await user_obj.to_dict(exclude_fields=["password"])
     # 头像地址
     # data["avatar"] = f'http://172.20.10.2:8518/static/avatar/admin/20250220204648.png'
