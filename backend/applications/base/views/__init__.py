@@ -8,12 +8,12 @@
 """
 from fastapi import APIRouter
 
-from .router_view import router
+from .audit_view import audit
 from .auth_view import auth_public, auth_secure
+from .file_transfer_view import file_transfer
 from .menu_view import menu
 from .role_view import role
-from .audit_view import audit
-from .file_transfer_view import file_transfer
+from .router_view import router
 
 base_public = APIRouter()
 base_secure = APIRouter()
