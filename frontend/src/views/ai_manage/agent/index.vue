@@ -1,0 +1,10 @@
+<template>
+  <AppPage>
+    <h3>AI Manage - agent</h3>
+  </AppPage>
+</template>
+<script setup>
+import {ref} from 'vue'
+import AppPage from "@/components/page/AppPage.vue";
+import api from "@/api";
+</script>

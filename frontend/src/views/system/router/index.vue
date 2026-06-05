@@ -22,6 +22,7 @@ const vPermission = resolveDirective('permission')
 const ROUTER_REFRESH_PERM = apiPermissionKey('post', '/base/router/refresh')
 
 const checkedRowKeys = ref([])
+const refreshRouterLoading = ref(false)
 /** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
 const listPaginationMeta = ref({ page: 1, page_size: 10 })
 function onListPaginationMeta(meta) {
@@ -83,11 +84,16 @@ async function handleRefreshRouter() {
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: '此操作会根据后端 app.routes 进行路由更新，确定继续刷新 API 操作？',
+    content: '根据后端 app.routes 进行路由更新，确定继续？',
     async confirm() {
-      await api.refreshRouter()
-      $message.success('刷新完成')
-      $table.value?.handleSearch()
+      refreshRouterLoading.value = true
+      try {
+        await api.refreshRouter()
+        $message.success('刷新完成')
+        $table.value?.handleSearch()
+      } finally {
+        refreshRouterLoading.value = false
+      }
     },
   })
 }
@@ -306,8 +312,10 @@ const columns = computed(() => {
       <template #queryBarAfterActions>
         <NButton
             v-permission="'post/api/v1/router/refresh'"
+            secondary
+            type="primary"
             size="small"
-            type="warning"
+            :loading="refreshRouterLoading"
             @click="handleRefreshRouter"
         >
           <TheIcon icon="material-symbols:refresh" :size="16" class="mr-5" />刷新API
