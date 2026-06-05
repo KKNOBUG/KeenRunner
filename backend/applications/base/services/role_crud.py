@@ -67,7 +67,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
     async def create_role(self, role_in: RoleCreate, created_user: Optional[str] = None) -> Role:
         code = role_in.code
         name = role_in.name
-        instances = await self.get_by_conditions(only_one=True, code=code, name=name)
+        instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
         if instances:
             raise DataAlreadyExistsException(message=f"角色(code={code},name={name})信息已存在")
 

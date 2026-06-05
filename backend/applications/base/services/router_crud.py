@@ -15,43 +15,86 @@ from tortoise.exceptions import DoesNotExist
 from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
+from backend.configure import LOGGER
+from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
 
 class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
     def __init__(self):
         super().__init__(model=Router)
 
-    async def get_by_id(self, router_id: int) -> Optional[Router]:
-        return await self.get_or_none(id=router_id)
+    async def get_by_id(self, router_id: int, on_error: bool = True, **kwargs) -> Optional[Router]:
+        if not router_id:
+            error_message: str = "查询路由信息失败, 参数(router_id)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.get_or_none(id=router_id, **kwargs)
+        if not instance and on_error:
+            error_message: str = f"查询路由信息失败, 路由(id={router_id})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_path(self, path: str) -> Optional[List[Router]]:
-        return await self.get_by_conditions(only_one=False, path=path)
+    async def get_by_path(self, path: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        if not path:
+            error_message: str = "查询路由信息失败, 参数(username)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.model.filter(path=path, **kwargs).all()
+        if not instance and on_error:
+            error_message: str = f"查询路由信息失败, 路由(path={path})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_method(self, method: str) -> Optional[List[Router]]:
-        return await self.get_by_conditions(only_one=False, method=method)
+    async def get_by_method(self, method: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        if not method:
+            error_message: str = "查询路由信息失败, 参数(method)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.model.filter(method=method, **kwargs).all()
+        if not instance and on_error:
+            error_message: str = f"查询路由信息失败, 路由(method={method})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_summary(self, summary: str) -> Optional[List[Router]]:
-        return await self.get_by_conditions(only_one=False, summary=summary)
+    async def get_by_summary(self, summary: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        if not summary:
+            error_message: str = "查询路由信息失败, 参数(summary)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.model.filter(summary=summary, **kwargs).all()
+        if not instance and on_error:
+            error_message: str = f"查询路由信息失败, 路由(summary={summary})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_tags(self, tags: str) -> Optional[List[Router]]:
-        return await self.get_by_conditions(only_one=False, tags=tags)
+    async def get_by_tags(self, tags: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        if not tags:
+            error_message: str = "查询路由信息失败, 参数(tags)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.model.filter(tags=tags, **kwargs).all()
+        if not instance and on_error:
+            error_message: str = f"查询路由信息失败, 路由(tags={tags})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
     async def create_router(self, router_in: RouterCreate) -> Router:
         path = router_in.path
         method = router_in.method
-        instances = await self.get_by_conditions(only_one=False, path=path, method=method)
+        instances = await self.get_by_conditions(only_one=False, on_error=False, path=path, method=method)
         if instances:
             raise DataAlreadyExistsException(message=f"接口(path={path},method={method})信息已存在")
 
         instance = await self.create(router_in)
         return instance
 
-    async def delete_router(self, router_id: int) -> Router:
-        instance = await self.get_or_none(router_id)
-        if not instance:
-            raise NotFoundException(message=f"接口(id={router_id})信息不存在")
-
+    async def delete_router(self, router_id: int, **kwargs) -> Router:
+        instance = await self.get_by_id(router_id, on_error=True, **kwargs)
         await instance.delete()
         data = await instance.to_dict()
         return data

@@ -30,7 +30,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=department_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询部门信息失败, 用户(id={department_id})不存在"
+            error_message: str = f"查询部门信息失败, 部门(id={department_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -42,7 +42,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise ParameterException(message=error_message)
         instance = await self.model.filter(code=code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询部门信息失败, 用户(code={code})不存在"
+            error_message: str = f"查询部门信息失败, 部门(code={code})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -75,7 +75,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
     async def update_department(self, department_in: DepartmentUpdate, updated_user: Optional[str] = None) -> Department:
         department_id: int = department_in.id
         try:
-            instance = await self.get_by_id(id=department_id)
+            instance = await self.get_by_id(department_id=department_id)
             # 更新部门关系
             if instance.parent_id != department_in.parent_id:
                 await DeptStruct.filter(ancestor=instance.id).delete()
