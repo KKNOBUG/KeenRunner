@@ -15,27 +15,42 @@ from tortoise.expressions import Q
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.department.models.dept_model import Department, DeptStruct
 from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
+from backend.configure import LOGGER
+from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
 
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
     def __init__(self):
         super().__init__(model=Department)
 
-    async def get_by_id(self, department_id: int) -> Optional[Department]:
-        return await self.get_or_none(id=department_id)
+    async def get_by_id(self, department_id: int, on_error: bool = True, **kwargs) -> Optional[Department]:
+        if not department_id:
+            error_message: str = "查询部门信息失败, 参数(department_id)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.get_or_none(id=department_id, **kwargs)
+        if not instance and on_error:
+            error_message: str = f"查询部门信息失败, 用户(id={department_id})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
-    async def get_by_code(self, code: str) -> Optional[Department]:
-        return await self.get_by_conditions(only_one=False, on_error=False, code=code)
+    async def get_by_code(self, code: str, on_error: bool = False, **kwargs) -> Optional[Department]:
+        if not code:
+            error_message: str = "查询部门信息失败, 参数(code)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.model.filter(code=code, **kwargs).first()
+        if not instance and on_error:
+            error_message: str = f"查询部门信息失败, 用户(code={code})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
     async def get_by_name(self, name: str) -> Optional[Department]:
         return await self.get_by_conditions(only_one=False, on_error=False, name=name)
 
-    async def create_department(
-            self,
-            department_in: DepartmentCreate,
-            created_user: Optional[str] = None,
-    ) -> Department:
+    async def create_department(self, department_in: DepartmentCreate, created_user: Optional[str] = None) -> Department:
         code = department_in.code
         name = department_in.name
         instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
@@ -50,24 +65,17 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def delete_department(self, department_id: int) -> Optional[Department]:
-        instance = await self.get_or_none(department_id)
-        if not instance:
-            raise NotFoundException(message=f"部门(id={department_id})信息不存在")
-
+        instance = await self.get_by_id(department_id)
         instance.is_deleted = 1
         await instance.save()
         # 删除关系
         await DeptStruct.filter(descendant=department_id).delete()
         return instance
 
-    async def update_department(
-            self,
-            department_in: DepartmentUpdate,
-            updated_user: Optional[str] = None,
-    ) -> Department:
+    async def update_department(self, department_in: DepartmentUpdate, updated_user: Optional[str] = None) -> Department:
         department_id: int = department_in.id
         try:
-            instance = await self.get_or_error(id=department_id)
+            instance = await self.get_by_id(id=department_id)
             # 更新部门关系
             if instance.parent_id != department_in.parent_id:
                 await DeptStruct.filter(ancestor=instance.id).delete()
