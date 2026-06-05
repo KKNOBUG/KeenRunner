@@ -55,13 +55,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """初始化 CRUD，绑定模型 AutoTestApiStepInfo。"""
         super().__init__(model=AutoTestApiStepInfo)
 
-    async def get_by_id(self, step_id: int, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiStepInfo]:
+    async def get_by_id(self, step_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
         """
         根据步骤主键 ID 查询单条步骤
 
         :param step_id: 步骤主键 ID。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param is_active: 为 True 时自动添加state__not过滤条件。
+        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录。
         :returns: 步骤实例或 None。
         :raises ParameterException: 当 step_id 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
@@ -70,23 +70,20 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             error_message: str = "查询步骤信息失败, 参数(step_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"id": step_id}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.model.filter(id=step_id, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询步骤信息失败, 步骤(id={step_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, step_code: str, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiStepInfo]:
+    async def get_by_code(self, step_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
         """
         根据步骤标识代码查询单条步骤
 
         :param step_code: 步骤标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param is_active: 为 True 时自动添加state__not过滤条件。
+        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录。
         :returns: 步骤实例或 None。
         :raises ParameterException: 当 step_code 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
@@ -96,10 +93,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        kwargs: Dict[str, Any] = {"step_code": step_code}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.model.filter(step_code=step_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询步骤信息失败, 步骤(code={step_code})不存在"
             LOGGER.error(error_message)
@@ -111,7 +105,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             conditions: Dict[str, Any],
             only_one: bool = True,
             on_error: bool = False,
-            is_active: bool = True
+            **kwargs
     ) -> Optional[Union[AutoTestApiStepInfo, List[AutoTestApiStepInfo]]]:
         """
         根据条件查询步骤
@@ -119,15 +113,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param conditions: 查询条件字典。
         :param only_one: 为 True 时返回单条记录，否则返回列表。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param is_active: 为 True 时自动添加state__not过滤条件。
+        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录。
         :returns: 单条步骤、步骤列表或 None。
         :raises ParameterException: 条件非法或查询异常时。
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
         """
         try:
-            if is_active and "state__not" not in conditions:
-                conditions["state__not"] = 1
-            stmt: QuerySet = self.model.filter(**conditions)
+            stmt: QuerySet = self.model.filter(**conditions, **kwargs)
             instances = await (stmt.first() if only_one else stmt.all())
         except FieldError as e:
             error_message: str = f"查询步骤信息异常, 错误描述: {e}"
@@ -434,7 +426,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 业务层验证：如果指定了父步骤，检查父步骤是否存在
         if step_in.parent_step_id:
             parent_step_id: int = step_in.parent_step_id
-            parent_step = await self.get_by_id(step_id=parent_step_id, on_error=True)
+            parent_step = await self.get_by_id(step_id=parent_step_id, on_error=True, state__not=1)
 
             # 业务层验证：确保父步骤属于同一个用例
             if parent_step.case_id != step_in.case_id:
@@ -492,9 +484,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 业务层验证：检查步骤信息是否存在
         if step_id:
-            instance = await self.get_by_id(step_id=step_id, on_error=True)
+            instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(step_code=step_code, on_error=True)
+            instance = await self.get_by_code(step_code=step_code, on_error=True, state__not=1)
             step_id: int = instance.id
 
         update_dict: Dict[str, Any] = step_in.model_dump(
@@ -567,7 +559,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     if current_parent_id in visited:
                         break
                     visited.add(current_parent_id)
-                    parent = await self.get_by_id(step_id=current_parent_id, on_error=False)
+                    parent = await self.get_by_id(step_id=current_parent_id, on_error=False, state__not=1)
                     if not parent:
                         break
                     current_parent_id = parent.parent_step_id
@@ -575,9 +567,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 业务层验证：如果更新了引用脚本ID，检查引用公共脚本是否存在
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
             quote_case_id: int = update_dict["quote_case_id"]
-            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_query(
                 only_one=True,
-                conditions={"id": quote_case_id, "case_type": AutoTestCaseType.PUBLIC_SCRIPT.value}
+                id=quote_case_id,
+                case_type=AutoTestCaseType.PUBLIC_SCRIPT.value,
             )
             if not quote_case:
                 error_message: str = f"根据(id={quote_case_id}, case_type=公共脚本)条件检查用例信息失败, 引用公共脚本信息不存在"
@@ -607,9 +600,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """
         # 业务层验证：检查步骤信息是否存在
         if step_id:
-            instance = await self.get_by_id(step_id=step_id, on_error=True)
+            instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(step_code=step_code, on_error=True)
+            instance = await self.get_by_code(step_code=step_code, on_error=True, state__not=1)
             step_id: int = instance.id
 
         # 业务层验证：检查步骤是否拥有子步骤
@@ -749,12 +742,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             step_no: Optional[int] = step_data.step_no
             step_code: Optional[str] = step_data.step_code
             if step_id:
-                step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_id(step_id=step_id, on_error=True)
+                step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
                 step_code = step_instance.step_code
             elif step_code:
                 step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_code(
                     step_code=step_code,
-                    on_error=True
+                    on_error=True,
+                    state__not=1,
                 )
                 step_id = step_instance.id
             else:
@@ -782,6 +776,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 existing_step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_conditions(
                     only_one=True,
                     on_error=False,
+                    state__not=1,
                     conditions={"case_id": case_id, "step_no": step_no, "step_code": step_code},
                 )
                 if existing_step_instance:
@@ -799,6 +794,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     parent_step = await self.get_by_conditions(
                         only_one=True,
                         on_error=False,
+                        state__not=1,
                         conditions={"id": final_parent_step_id}
                     )
                     if not parent_step:
@@ -911,7 +907,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
                 if "parent_step_id" in update_dict and update_dict["parent_step_id"]:
                     parent_step_id: int = update_dict["parent_step_id"]
-                    parent_step = await self.get_by_id(step_id=parent_step_id, on_error=False)
+                    parent_step = await self.get_by_id(step_id=parent_step_id, on_error=False, state__not=1)
                     if not parent_step:
                         error_message: str = (
                             f"第({sid})步骤更新失败, "
@@ -966,7 +962,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         if current_parent_id in visited:
                             break
                         visited.add(current_parent_id)
-                        parent = await self.get_by_id(step_id=current_parent_id, on_error=False)
+                        parent = await self.get_by_id(step_id=current_parent_id, on_error=False, state__not=1)
                         if not parent:
                             break
                         current_parent_id = parent.parent_step_id

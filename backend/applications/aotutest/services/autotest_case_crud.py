@@ -50,7 +50,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(id=case_id, state__not=1).first()
+        instance = await self.get_or_none(id=case_id, state__not=1)
         if not instance and on_error:
             error_message: str = f"查询用例信息失败, 用例(id={case_id})不存在"
             LOGGER.error(error_message)
@@ -79,11 +79,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_conditions(
+    async def get_by_query(
             self,
-            conditions: Dict[str, Any],
+            *,
             only_one: bool = True,
-            on_error: bool = False
+            on_error: bool = False,
+            **kwargs
     ) -> Optional[Union[AutoTestApiCaseInfo, List[AutoTestApiCaseInfo]]]:
         """
         根据条件查询用例
@@ -96,7 +97,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
         """
         try:
-            stmt: QuerySet = self.model.filter(**conditions, state__not=1)
+            stmt: QuerySet = self.model.filter(state__not=1, **kwargs)
             instances = await (stmt.first() if only_one else stmt.all())
         except FieldError as e:
             error_message: str = f"查询用例信息异常, 错误描述: {e}"
@@ -108,7 +109,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
-            error_message: str = f"查询用例信息失败, 条件{conditions}不存在"
+            error_message: str = f"查询用例信息失败, 条件{kwargs}不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instances
@@ -132,7 +133,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
 
         # 业务层验证: 检查用例信息是否已经存在
-        existing_case = await self.model.filter(case_project=case_project, case_name=case_name, state__not=1).first()
+        existing_case = await self.get_by_conditions(only_one=True, case_project=case_project, case_name=case_name, state__not=1)
         if existing_case:
             error_message: str = (
                 f"根据(case_project={case_project}, case_name={case_name}, case_type={case_type})条件查询用例信息失败, "
@@ -294,9 +295,10 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             if not case_id and not case_code:
                 case_instance = None
             else:
-                case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
+                case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_query(
                     only_one=True,
-                    conditions={"id": case_id, "case_code": case_code}
+                    id=case_id,
+                    case_code=case_code,
                 )
 
             # 用例不存在，执行新增，及验证必填字段
@@ -315,9 +317,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     raise ParameterException(message=error_message)
 
                 # 业务层验证：检查应用ID和用例名称是否唯一
-                existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
+                existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_query(
                     only_one=True,
-                    conditions={"case_project": case_project, "case_name": case_name, "case_type": case_type}
+                    case_project=case_project,
+                    case_name=case_name,
+                    case_type=case_type,
                 )
                 if existing_case_instance:
                     error_message: str = (

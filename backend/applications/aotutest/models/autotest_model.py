@@ -6,8 +6,6 @@
 @Module  : autotest_model.py
 @DateTime: 2025/12/28 16:15
 """
-import datetime
-import uuid
 
 from tortoise import fields
 
@@ -16,7 +14,7 @@ from backend.applications.base.services.scaffold import (
     MaintainMixin,
     TimestampMixin,
     StateModel,
-    ReserveFields
+    ReserveFields, unique_identify
 )
 from backend.enums import (
     AutoTestCaseType,
@@ -32,17 +30,6 @@ from backend.enums import (
     AutoTestDataBaseType,
     AutoTestConfigNodeType,
 )
-
-
-def unique_identify() -> str:
-    """生成唯一标识字符串，由时间戳与 UUID 组合而成。
-
-    :returns: 格式为 ``{timestamp}-{uuid4_hex}`` 的唯一标识字符串。
-    :rtype: str
-    """
-    timestamp: int = int(datetime.datetime.now().timestamp())
-    uuid4_str: str = uuid.uuid4().hex.upper()
-    return f"{timestamp}-{uuid4_str}"
 
 
 class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
@@ -257,7 +244,8 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # 数据库相关
     # database_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr、variable_name
     database_operates = fields.JSONField(null=True, description="数据库请求操作列表(根据不同的配置进行操作数据库)")
-    database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续的数据库请求)")
+    database_searched = fields.BooleanField(null=True,
+                                            description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续的数据库请求)")
 
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 

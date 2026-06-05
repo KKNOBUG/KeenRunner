@@ -18,7 +18,7 @@ from backend.applications.base.schemas.token_schema import CredentialsSchema, JW
 from backend.applications.user.models.user_model import User
 from backend.applications.user.services.user_crud import USER_CRUD
 from backend.configure import PROJECT_CONFIG
-from backend.core.exceptions import NotFoundException, NoPermissionException
+from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException
 from backend.core.responses import SuccessResponse, NotFoundResponse
 from backend.services import CTX_USER_ID
 from backend.services import DependAuth, create_access_token
@@ -32,9 +32,13 @@ async def get_login_access_token(credentials: CredentialsSchema):
     try:
         user: User = await USER_CRUD.authenticate(credentials)
     except (NotFoundException, NoPermissionException) as e:
-        return NotFoundResponse(message=str(e.message), data=credentials.dict())
+        return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
 
-    await USER_CRUD.update_last_login(user.id)
+    try:
+        await USER_CRUD.update_last_login(user_id=user.id)
+    except (ParameterException, NotFoundException) as e:
+        return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
+
     access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     expire = datetime.now(timezone.utc) + access_token_expires
 
@@ -92,7 +96,7 @@ async def get_user_menu():
 @auth_secure.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
 async def get_userinfo():
     user_id = CTX_USER_ID.get()
-    user_obj = await USER_CRUD.get(id=user_id)
+    user_obj = await USER_CRUD.get_or_error(id=user_id)
     data = await user_obj.to_dict(exclude_fields=["password"])
     # 头像地址
     # data["avatar"] = f'http://172.20.10.2:8518/static/avatar/admin/20250220204648.png'

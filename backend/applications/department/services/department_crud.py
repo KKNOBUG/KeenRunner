@@ -23,13 +23,13 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         super().__init__(model=Department)
 
     async def get_by_id(self, department_id: int) -> Optional[Department]:
-        return await self.model.filter(id=department_id).first()
+        return await self.get_or_none(id=department_id)
 
     async def get_by_code(self, code: str) -> Optional[Department]:
-        return await self.model.filter(code=code).first()
+        return await self.get_by_conditions(only_one=False, code=code)
 
     async def get_by_name(self, name: str) -> Optional[Department]:
-        return await self.model.filter(name=name).first()
+        return await self.get_by_conditions(only_one=False, name=name)
 
     async def create_department(
             self,
@@ -38,7 +38,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
     ) -> Department:
         code = department_in.code
         name = department_in.name
-        instances = await self.model.filter(code=code, name=name).all()
+        instances = await self.get_by_conditions(only_one=True, code=code, name=name)
         if instances:
             raise DataAlreadyExistsException(message=f"部门(code={code},name={name})信息已存在")
 
@@ -50,7 +50,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def delete_department(self, department_id: int) -> Optional[Department]:
-        instance = await self.query(department_id)
+        instance = await self.get_or_none(department_id)
         if not instance:
             raise NotFoundException(message=f"部门(id={department_id})信息不存在")
 
@@ -67,7 +67,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
     ) -> Department:
         department_id: int = department_in.id
         try:
-            instance = await self.get(id=department_id)
+            instance = await self.get_or_error(id=department_id)
             # 更新部门关系
             if instance.parent_id != department_in.parent_id:
                 await DeptStruct.filter(ancestor=instance.id).delete()

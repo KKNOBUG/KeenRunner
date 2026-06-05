@@ -21,15 +21,15 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         super().__init__(model=Menu)
 
     async def get_by_id(self, menu_id: int) -> Optional[Menu]:
-        return await self.model.filter(id=menu_id).first()
+        return await self.get_or_none(id=menu_id)
 
     async def get_by_menu_path(self, path: str) -> Optional[Menu]:
-        return await self.model.filter(path=path).first()
+        return await self.get_by_conditions(only_one=False, path=path)
 
     async def create_menu(self, menu_in: MenuCreate) -> Menu:
         name = menu_in.name
         path = menu_in.path
-        instances = await self.model.filter(name=name, path=path).all()
+        instances = await self.get_by_conditions(only_one=True, name=name, path=path)
         if instances:
             raise DataAlreadyExistsException(message=f"菜单(name={name},path={path})信息已存在")
 
@@ -37,7 +37,7 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         return instance
 
     async def delete_menu(self, menu_id: int) -> Menu:
-        instance = await self.query(menu_id)
+        instance = await self.get_or_none(menu_id)
         if not instance:
             raise NotFoundException(message=f"菜单(id={menu_id})信息不存在")
 
@@ -47,10 +47,7 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     async def update_menu(self, menu_in: MenuUpdate) -> Menu:
         menu_id: int = menu_in.id
-        menu_if: dict = {
-            key: value for key, value in menu_in.dict().items()
-            if value is not None
-        }
+        menu_if: dict = menu_in.model_dump(exclude_none=True)
         try:
             instance = await self.update(id=menu_id, obj_in=menu_if)
         except DoesNotExist as e:

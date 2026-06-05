@@ -30,7 +30,7 @@ async def create_router(
     try:
         instance = await ROUTER_CRUD.create_router(router_in=router_in)
         data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=e.__str__())
     except Exception as e:
@@ -43,7 +43,7 @@ async def delete_router(
 ):
     try:
         instance = await ROUTER_CRUD.delete_router(router_id)
-        return SuccessResponse(data=instance)
+        return SuccessResponse(message="删除成功", data=instance, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
     except Exception as e:
@@ -56,7 +56,7 @@ async def update_user(
 ):
     try:
         instance = await ROUTER_CRUD.update_router(router_in)
-        return SuccessResponse(data=instance)
+        return SuccessResponse(message="更新成功", data=instance, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
     except Exception as e:
@@ -67,18 +67,16 @@ async def update_user(
 async def get_user(
         router_id: int = Query(None, description="接口ID"),
 ):
-    instance = await ROUTER_CRUD.query(id=router_id)
+    instance = await ROUTER_CRUD.get_or_none(id=router_id)
     if not instance:
         return NotFoundResponse(message=f"接口(id={router_id})信息不存在")
 
     data: dict = await instance.to_dict()
-    return SuccessResponse(data=data)
+    return SuccessResponse(message="查询成功", data=data, total=1)
 
 
 @router.post("/search", summary="查询路由列表", description="支持分页按条件查询路由列表信息（Body）")
-async def get_routers(
-        router_in: RouterSelect = Body()
-):
+async def get_routers(router_in: RouterSelect = Body()):
     page = router_in.page
     page_size = router_in.page_size
     order = router_in.order
@@ -100,13 +98,9 @@ async def get_routers(
     if tags:
         q &= Q(tags__contains=tags)
 
-    total, instances = await ROUTER_CRUD.list(
-        page=page, page_size=page_size, search=q, order=order
-    )
-    data = [
-        await obj.to_dict() for obj in instances
-    ]
-    return SuccessResponse(data=data)
+    total, instances = await ROUTER_CRUD.list(page=page, page_size=page_size, search=q, order=order)
+    data = [await obj.to_dict() for obj in instances]
+    return SuccessResponse(message="查询成功", data=data, total=total)
 
 
 @router.get("/list", summary="查询路由列表", description="支持分页按条件查询路由列表信息（Query）")
@@ -129,11 +123,11 @@ async def list_router(
         page=page, page_size=page_size, search=q, order=order
     )
     data = [await obj.to_dict() for obj in router_objs]
-    return SuccessResponse(data=data, total=total)
+    return SuccessResponse(message="查询成功", data=data, total=total)
 
 
 @router.post("/refresh", summary="刷新路由列表", description="重新获取项目中所有的APIRouter信息进行数据库更新")
 async def refresh_router(request: Request):
     app = request.app
     data = await ROUTER_CRUD.refresh_router(app=app)
-    return SuccessResponse(data=data)
+    return SuccessResponse(message="刷新成功", data=data, total=len(data))

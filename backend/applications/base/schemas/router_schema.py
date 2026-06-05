@@ -14,11 +14,11 @@ from backend.enums import HTTPMethod
 
 
 class RouterCreate(BaseModel):
-    path: str = Field(example="/base/access_token", description="路由请求路径")
-    method: HTTPMethod = Field(example="POST", description="路由请求方式")
-    summary: str = Field(example="根据用户账号和密码生成token用于身份鉴权", description="路由作用简介")
-    description: Optional[str] = Field(default=None, example="根据用户账号和密码生成token用于身份鉴权", description="路由功能描述")
-    tags: str = Field(example="用户鉴权", description="路由所属标签")
+    path: str = Field(..., description="路由请求路径")
+    method: HTTPMethod = Field(..., description="路由请求方式")
+    summary: str = Field(..., description="路由作用简介")
+    description: Optional[str] = Field(default=None, description="路由功能描述")
+    tags: str = Field(..., description="路由所属标签")
 
     def create_dict(self):
         return self.model_dump(exclude_unset=True)

@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import ScaffoldModel, Timestamp
 class Department(ScaffoldModel, TimestampMixin, MaintainMixin):
     code = fields.CharField(max_length=16, unique=True, description="部门代码")
     name = fields.CharField(max_length=64, unique=True, description="部门名称")
-    description = fields.TextField(null=True, description="部门描述")
+    description = fields.CharField(max_length=255, null=True, description="部门描述")
     is_deleted = fields.BooleanField(default=False, index=True, description="软删除标记")
     order = fields.IntField(default=0, index=True, description="排序")
     parent_id = fields.IntField(default=0, max_length=10, index=True, description="父部门ID")

@@ -11,7 +11,6 @@ import traceback
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend.applications.base.models.audit_model import Audit
 from backend.applications.base.schemas.audit_schema import AuditBatchDelete
 from backend.applications.base.services.audit_crud import AUDIT_CRUD
 from backend.configure import LOGGER
@@ -53,8 +52,8 @@ async def list_audit(
     elif end_time:
         q &= Q(created_time__lte=end_time)
 
-    audit_log_objs = await Audit.filter(q).offset((page - 1) * page_size).limit(page_size).order_by("-created_time")
-    total = await Audit.filter(q).count()
+    audit_log_objs = await AUDIT_CRUD.filter(q).offset((page - 1) * page_size).limit(page_size).order_by("-created_time")
+    total = await AUDIT_CRUD.filter(q).count()
     data = [await audit_log.to_dict() for audit_log in audit_log_objs]
     return SuccessResponse(data=data, total=total)
 

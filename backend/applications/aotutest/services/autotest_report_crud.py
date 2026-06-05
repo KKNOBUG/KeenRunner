@@ -126,10 +126,11 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         case_code: str = report_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+        await AUTOTEST_API_CASE_CRUD.get_by_query(
             only_one=True,
             on_error=True,
-            conditions={"id": case_id, "case_code": case_code}
+            id=case_id,
+            case_code=case_code,
         )
 
         try:

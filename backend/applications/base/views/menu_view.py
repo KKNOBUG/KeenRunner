@@ -77,7 +77,7 @@ async def list_menu(
 async def get_menu(
         menu_id: int = Query(..., description="菜单id"),
 ):
-    result = await MENU_CRUD.get(id=menu_id)
+    result = await MENU_CRUD.get_or_error(id=menu_id)
     return SuccessResponse(data=result)
 
 

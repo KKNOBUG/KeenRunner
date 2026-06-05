@@ -23,24 +23,24 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         super().__init__(model=Router)
 
     async def get_by_id(self, router_id: int) -> Optional[Router]:
-        return await self.model.filter(id=router_id).first()
+        return await self.get_or_none(id=router_id)
 
     async def get_by_path(self, path: str) -> Optional[List[Router]]:
-        return await self.model.filter(path=path).all()
+        return await self.get_by_conditions(only_one=False, path=path)
 
     async def get_by_method(self, method: str) -> Optional[List[Router]]:
-        return await self.model.filter(method=method).all()
+        return await self.get_by_conditions(only_one=False, method=method)
 
     async def get_by_summary(self, summary: str) -> Optional[List[Router]]:
-        return await self.model.filter(summary=summary).all()
+        return await self.get_by_conditions(only_one=False, summary=summary)
 
     async def get_by_tags(self, tags: str) -> Optional[List[Router]]:
-        return await self.model.filter(tags=tags).all()
+        return await self.get_by_conditions(only_one=False, tags=tags)
 
     async def create_router(self, router_in: RouterCreate) -> Router:
         path = router_in.path
         method = router_in.method
-        instances = await self.model.filter(path=path, method=method).all()
+        instances = await self.get_by_conditions(only_one=False, path=path, method=method)
         if instances:
             raise DataAlreadyExistsException(message=f"接口(path={path},method={method})信息已存在")
 
@@ -48,7 +48,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def delete_router(self, router_id: int) -> Router:
-        instance = await self.query(router_id)
+        instance = await self.get_or_none(router_id)
         if not instance:
             raise NotFoundException(message=f"接口(id={router_id})信息不存在")
 
@@ -58,10 +58,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
     async def update_router(self, router_in: RouterUpdate) -> Router:
         router_id: int = router_in.id
-        router_if: dict = {
-            key: value for key, value in router_in.dict().items()
-            if value is not None
-        }
+        router_if: dict = router_in.model_dump(exclude_none=True)
         try:
             instance = await self.update(id=router_id, obj_in=router_if)
         except DoesNotExist as e:
@@ -69,7 +66,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
         return instance
 
-    async def refresh_router(self, app: FastAPI) -> Optional[List[Router]]:
+    async def refresh_router(self, app: FastAPI) -> List[Router]:
         # 获取全部路由数据
         all_router_list = []
         for route in app.routes:

@@ -414,6 +414,7 @@ async def single_step_dataset_upload(
         step_instance = await AUTOTEST_API_STEP_CRUD.get_by_conditions(
             conditions={"id": step_id, "case_id": case_id, "step_code": step_code},
             on_error=True,
+            state__not=1,
         )
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))

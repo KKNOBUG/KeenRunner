@@ -11,7 +11,6 @@ import traceback
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import (
     UserCreate,
     UserUpdate,
@@ -38,10 +37,8 @@ user_secure = APIRouter()
 async def create_user(user_in: UserCreate = Body()):
     try:
         instance = await USER_CRUD.create_user(user_in=user_in)
-        data = await instance.to_dict(m2m=True, exclude_fields=["password"])
-        dept_id = data.pop("dept_id", None)
-        data["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
-        return SuccessResponse(data=data)
+        data = await instance.to_dict(exclude_fields=["password"])
+        return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=e.message)
     except Exception as e:
@@ -52,8 +49,8 @@ async def create_user(user_in: UserCreate = Body()):
 async def delete_user(user_id: int = Query(..., description="用户ID")):
     try:
         instance = await USER_CRUD.delete_user(user_id)
-        data = await instance.to_dict(m2m=True, exclude_fields=["password"])
-        return SuccessResponse(data=data)
+        data = await instance.to_dict(exclude_fields=["password"])
+        return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=e.message)
     except Exception as e:
@@ -64,7 +61,7 @@ async def delete_user(user_id: int = Query(..., description="用户ID")):
 async def delete_user_batch(user_in: UserBatchDelete = Body(..., description="用户信息")):
     try:
         deleted_ids = await USER_CRUD.delete_users(user_in=user_in)
-        deleted_num = len(deleted_ids or [])
+        deleted_num = len(deleted_ids)
         LOGGER.info(f"按id列表删除用户成功, 数量: {deleted_num}")
         return SuccessResponse(message="删除成功", data={"deleted_ids": deleted_ids}, total=deleted_num)
     except Exception as e:
@@ -74,12 +71,12 @@ async def delete_user_batch(user_in: UserBatchDelete = Body(..., description="�
 
 @user_secure.post("/update", summary="更新用户", description="根据id更新用户信息")
 async def update_user(user_in: UserUpdate = Body(..., description="用户信息")):
+    user_id: int = user_in.user_id
     try:
-        instance = await USER_CRUD.update_user(user_in)
-        data = await instance.to_dict(m2m=True, exclude_fields=["password"])
-        dept_id = data.pop("dept_id", None)
-        data["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
-        return SuccessResponse(data=data)
+        instance = await USER_CRUD.update(id=user_id, obj_in=user_in)
+        await USER_CRUD.update_roles(instance, user_in.role_ids)
+        data = await instance.to_dict(exclude_fields=["password"])
+        return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=e.message)
     except Exception as e:
@@ -88,13 +85,11 @@ async def update_user(user_in: UserUpdate = Body(..., description="用户信息"
 
 @user_secure.get("/get", summary="查询用户信息", description="根据id查询用户信息")
 async def get_user(user_id: int = Query(..., description="用户ID")):
-    instance = await USER_CRUD.get_by_id(user_id=user_id)
+    instance = await USER_CRUD.get_by_id(user_id=user_id, state__not=1)
     if not instance:
         return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
-    data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"])
-    dept_id = data.pop("dept_id", None)
-    data["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
-    return SuccessResponse(data=data)
+    data: dict = await instance.to_dict(exclude_fields=["password"])
+    return SuccessResponse(message="查询成功", data=data, total=1)
 
 
 @user_secure.get("/byUsername", summary="查询用户信息", description="根据用户名查询用户信息")
@@ -102,10 +97,8 @@ async def get_user_by_username(username: str = Query(..., description="用户名
     instance = await USER_CRUD.get_by_username(username=username)
     if not instance:
         return NotFoundResponse(message=f"用户(username={username})信息不存在")
-    data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"])
-    dept_id = data.pop("dept_id", None)
-    data["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
-    return SuccessResponse(data=data)
+    data: dict = await instance.to_dict(exclude_fields=["password"])
+    return SuccessResponse(message="查询成功", data=data, total=1)
 
 
 @user_secure.get("/list", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Query）")
@@ -143,12 +136,14 @@ async def list_user(
     if dept_id is not None:
         q &= Q(dept_id=dept_id)
     q &= Q(state=0)
-    total, user_objs = await USER_CRUD.list(page=page, page_size=page_size, order=order, search=q)
-    data = [await obj.to_dict(m2m=True, exclude_fields=["password"]) for obj in user_objs]
-    for item in data:
-        item_dept_id = item.pop("dept_id", None)
-        item["dept"] = await (await DEPT_CRUD.get(id=item_dept_id)).to_dict() if item_dept_id else {}
-    return SuccessResponse(data=data, total=total)
+    total, user_objs = await USER_CRUD.list(
+        page=page, page_size=page_size, order=order, search=q
+    )
+    data = [
+        await obj.to_dict(exclude_fields=["password"])
+        for obj in user_objs
+    ]
+    return SuccessResponse(message="查询成功", data=data, total=total)
 
 
 @user_secure.post("/search", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Body）")
@@ -187,17 +182,17 @@ async def get_users(user_in: UserSelect = Body()):
     total, instances = await USER_CRUD.list(
         page=user_in.page, page_size=user_in.page_size, search=q, order=user_in.order
     )
-    data = [await obj.to_dict(m2m=True, exclude_fields=["password"]) for obj in instances]
-    for item in data:
-        item_dept_id = item.pop("dept_id", None)
-        item["dept"] = await (await DEPT_CRUD.get(id=item_dept_id)).to_dict() if item_dept_id else {}
-    return SuccessResponse(data=data, total=total)
+    data = [
+        await obj.to_dict(exclude_fields=["password"])
+        for obj in instances
+    ]
+    return SuccessResponse(message="查询成功", data=data, total=total)
 
 
 @user_secure.post("/update_password", summary="修改密码", dependencies=[DependAuth])
 async def update_user_password(req_in: UpdatePassword):
     user_id = CTX_USER_ID.get()
-    instance = await USER_CRUD.get(user_id)
+    instance = await USER_CRUD.get_or_error(user_id)
     verified = verify_password(req_in.old_password, instance.password)
     if not verified:
         return FailureResponse(message="旧密码验证错误")
@@ -210,4 +205,4 @@ async def update_user_password(req_in: UpdatePassword):
 @user_secure.post("/reset_password", summary="重置密码")
 async def reset_password(user_id: int = Body(..., description="用户ID", embed=True)):
     data = await USER_CRUD.reset_password(user_id)
-    return SuccessResponse(data=data)
+    return SuccessResponse(message="重置密码", data=data, total=1)

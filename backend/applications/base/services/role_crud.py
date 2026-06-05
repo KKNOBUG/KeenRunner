@@ -6,13 +6,12 @@
 @Module  : role_crud.py
 @DateTime: 2025/2/19 23:08
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 from tortoise.exceptions import DoesNotExist
 
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
-from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.role_schema import (
     RoleCreate,
     RoleUpdate
@@ -26,58 +25,49 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
     def __init__(self):
         super().__init__(model=Role)
 
-    async def get_by_id(self, role_id: int, on_error: bool = False, is_active: bool = True) -> Optional[Role]:
+    async def get_by_id(self, role_id: int, on_error: bool = False, **kwargs) -> Optional[Role]:
         if not role_id:
             error_message: str = "查询角色信息失败, 参数(role_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"id": role_id}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.get_or_none(id=role_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询角色信息失败, 角色(id={role_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, role_code: str, on_error: bool = False, is_active: bool = True) -> Optional[Role]:
+    async def get_by_code(self, role_code: str, on_error: bool = False, **kwargs) -> Optional[Role]:
         if not role_code:
             error_message: str = "查询角色信息失败, 参数(role_code)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"code": role_code}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.get_by_conditions(only_one=False, code=role_code, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询角色信息失败, 角色(code={role_code})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_name(self, role_name: str, on_error: bool = False, is_active: bool = True) -> Optional[Role]:
+    async def get_by_name(self, role_name: str, on_error: bool = False, **kwargs) -> Optional[Role]:
         if not role_name:
             error_message: str = "查询角色信息失败, 参数(role_name)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"name": role_name}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.get_by_conditions(only_one=False, name=role_name, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询角色信息失败, 角色(name={role_name})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def is_exist(self, name: str) -> bool:
-        return await self.model.filter(name=name).exists()
+    async def is_exist(self, name: str, **kwargs) -> bool:
+        return await self.model.filter(name=name, **kwargs).exists()
 
     async def create_role(self, role_in: RoleCreate, created_user: Optional[str] = None) -> Role:
         code = role_in.code
         name = role_in.name
-        instances = await self.model.filter(code=code, name=name).all()
+        instances = await self.get_by_conditions(only_one=True, code=code, name=name)
         if instances:
             raise DataAlreadyExistsException(message=f"角色(code={code},name={name})信息已存在")
 
@@ -87,8 +77,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
             await instance.save(update_fields=["created_user"])
         return instance
 
-    @classmethod
-    async def update_roles(cls, role: Role, menu_ids: List[int], router_infos: List[dict]) -> None:
+    async def update_roles(self, role: Role, menu_ids: List[int], router_infos: List[dict]) -> None:
         await role.menus.clear()
         for menu_id in menu_ids:
             menu_obj = await Menu.filter(id=menu_id).first()
@@ -96,7 +85,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
         await role.routers.clear()
         for item in router_infos:
-            router_obj = await Router.filter(path=item.get("path"), method=item.get("method")).first()
+            router_obj = await self.get_by_conditions(only_one=False, path=item.get("path"), method=item.get("method"))
             await role.routers.add(router_obj)
 
     async def delete_roles(
@@ -115,7 +104,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
                     continue
         elif role_codes:
             for code in role_codes:
-                obj = await self.get_by_code(role_code=code)
+                obj = await self.get_by_code(role_code=code, state__not=1)
                 if obj:
                     try:
                         await self.remove(id=obj.id)

@@ -7,7 +7,7 @@
 @DateTime: 2025/1/18 11:36
 """
 from datetime import datetime
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, List
 
 from tortoise.exceptions import DoesNotExist
 
@@ -17,13 +17,7 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
 from backend.configure import LOGGER
-from backend.core.exceptions import (
-    NotFoundException,
-    BaseExceptions,
-    DataAlreadyExistsException,
-    ParameterException,
-    NoPermissionException,
-)
+from backend.core.exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException, ParameterException, NoPermissionException
 from backend.core.responses import ForbiddenResponse
 from backend.services import verify_password, get_password_hash
 
@@ -32,113 +26,117 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     def __init__(self):
         super().__init__(model=User)
 
-    async def get_by_id(self, user_id: int, on_error: bool = False, is_active: bool = True) -> Optional[User]:
+    async def get_by_id(self, user_id: int, on_error: bool = True, **kwargs) -> Optional[User]:
         if not user_id:
             error_message: str = "查询用户信息失败, 参数(user_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"id": user_id}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.get_or_none(id=user_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询用户信息失败, 用户(id={user_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_username(self, username: str, on_error: bool = False, is_active: bool = True) -> Optional[User]:
+    async def get_by_username(self, username: str, on_error: bool = False, **kwargs) -> Optional[User]:
         if not username:
             error_message: str = "查询用户信息失败, 参数(username)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"username": username}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.get_by_conditions(only_one=False, username=username, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询用户信息失败, 用户(username={username})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
+    async def get_by_alias(self, alias: str, on_error: bool = False, **kwargs) -> Optional[List[User]]:
+        if not alias:
+            error_message: str = "查询用户信息失败, 参数(alias)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        instance = await self.get_by_conditions(only_one=True, alias=alias, **kwargs)
+        if not instance and on_error:
+            error_message: str = f"查询用户信息失败, 用户(alias={alias})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
+
     async def authenticate(self, credentials: CredentialsSchema) -> Optional[Union[BaseExceptions, User]]:
-        user = await self.model.filter(username=credentials.username).first()
+        user = await self.get_by_conditions(only_one=False, username=credentials.username)
         if not user:
             raise NotFoundException(message="用户名不存在")
         verified = verify_password(credentials.password, user.password)
         if not verified:
             raise NotFoundException(message="用户名或密码错误")
         if user.state == 1:
-            raise NoPermissionException(message="用户已禁用")
+            raise NoPermissionException(message="用户待岗或已离职")
         return user
 
-    async def update_last_login(self, id: int) -> None:
-        user = await self.model.get(id=id)
+    async def update_last_login(self, user_id: int) -> None:
+        user = await self.get_by_id(user_id=user_id, on_error=True)
         user.last_login = datetime.now()
         await user.save()
 
     async def create_user(self, user_in: UserCreate) -> User:
+        email = user_in.email
         username = user_in.username
-        instances = await self.model.filter(username=username).all()
+        instances = await self.get_by_conditions(only_one=True, email=email, username=username)
         if instances:
-            raise DataAlreadyExistsException(message=f"用户(username={username})信息已存在")
+            raise DataAlreadyExistsException(message=f"用户(email={email},username={username})信息已存在")
 
-        role_ids = user_in.role_ids or []
-        user_dict = user_in.create_dict()
-        user_dict["password"] = get_password_hash(password=user_in.password)
-        instance = await self.create(user_dict)
-        await self.update_roles(instance, role_ids)
+        user_in.password = get_password_hash(password=user_in.password)
+        instance = await self.create(user_in)
+        await self.update_roles(instance, user_in.role_ids)
         return instance
 
-    async def delete_user(self, user_id: int) -> User:
-        instance = await self.query(user_id)
-        if not instance or instance.state != 0:
+    async def delete_user(self, user_id: int, **kwargs) -> User:
+        instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
+        if not instance:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 
         instance.state = 1
-        instance.is_active = False
+        instance.is_active = 0
         await instance.save()
         return instance
 
-    async def delete_users(self, user_in: UserBatchDelete) -> Optional[List[int]]:
+    async def delete_users(self, user_in: UserBatchDelete) -> List[int]:
         user_ids: Optional[List[int]] = user_in.user_ids
         if user_ids:
             deleted_ids = await self.model.filter(id__in=user_ids).exclude(state=1).values_list("id", flat=True)
             if deleted_ids:
-                await self.model.filter(id__in=deleted_ids).update(state=1, is_active=False)
+                await self.model.filter(id__in=deleted_ids).update(state=1)
         else:
-            deleted_ids = None
+            deleted_ids = []
         return deleted_ids
 
     async def update_user(self, user_in: UserUpdate) -> User:
-        user_id: int = user_in.user_id
-        user_dict = user_in.model_dump(exclude_unset=True, exclude_none=True)
-        role_ids = user_dict.pop("role_ids", None)
-        user_dict.pop("user_id", None)
+        user_id: int = user_in.id
+        user_if: dict = user_in.model_dump(exclude_none=True)
         try:
-            instance = await self.update(id=user_id, obj_in=user_dict)
-        except DoesNotExist:
+            instance = await self.update(id=user_id, obj_in=user_if)
+        except DoesNotExist as e:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
-        if role_ids is not None:
-            await self.update_roles(instance, role_ids)
-        return instance
+
+        data = await instance.to_dict()
+        return data
 
     @classmethod
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
         await user.roles.clear()
         for role_id in role_ids:
-            role_obj = await ROLE_CRUD.get(id=role_id)
+            role_obj = await ROLE_CRUD.get_or_error(id=role_id)
             await user.roles.add(role_obj)
 
     async def reset_password(self, user_id: int):
-        instance = await self.get(id=user_id)
+        instance = await self.get_or_error(id=user_id)
         if instance.is_superuser:
             return ForbiddenResponse(message="不允许重置超级用户密码")
 
         instance.password = get_password_hash(password="123456")
         await instance.save()
-        return await instance.to_dict(exclude_fields=["id", "password"])
+        data = await instance.to_dict(exclude_fields=["id", "password"])
+        return data
 
 
 USER_CRUD = UserCrud()

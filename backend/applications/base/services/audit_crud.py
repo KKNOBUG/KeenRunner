@@ -14,7 +14,11 @@ from backend.applications.base.models.audit_model import Audit
 class AuditCrud:
     @staticmethod
     async def delete_by_ids(audit_ids: Optional[List[int]]) -> int:
-        """按主键列表批量物理删除，一条 SQL（filter + delete）。"""
+        """
+        按主键列表批量物理删除
+        :param audit_ids: 审计日志ID列表
+        :return: 删除数量
+        """
         if not audit_ids:
             return 0
         ids = [int(x) for x in audit_ids]

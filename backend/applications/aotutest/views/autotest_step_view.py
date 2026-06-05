@@ -154,9 +154,9 @@ async def get_step(
 ):
     try:
         if step_id:
-            instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id=step_id, on_error=True)
+            instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_STEP_CRUD.get_by_code(step_code=step_code, on_error=True)
+            instance = await AUTOTEST_API_STEP_CRUD.get_by_code(step_code=step_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -449,6 +449,7 @@ async def debug_http_request(
                 env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
                     only_one=True,
                     on_error=False,
+                    state__not=1,
                     conditions={
                         "env_id": env_id,
                         "project_id": request_project_id,
@@ -787,6 +788,7 @@ async def debug_tcp_request(
             env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
                 only_one=True,
                 on_error=False,
+                state__not=1,
                 conditions={
                     "env_id": env_id,
                     "project_id": request_project_id,

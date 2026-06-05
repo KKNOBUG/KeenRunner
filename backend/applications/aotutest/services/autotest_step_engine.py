@@ -29,7 +29,6 @@ import orjson
 from aiomysql import Pool
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
-from backend.applications.aotutest.models.autotest_model import unique_identify
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
@@ -43,6 +42,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 )
 from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from backend.applications.base.services.scaffold import unique_identify
 from backend.common import AioTcpClient, TcpFrameMode
 from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
 from backend.core.exceptions import (
@@ -2053,13 +2053,11 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             self.context.executing_quote_case_id = quote_case_id
             try:
                 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-                quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+                quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_query(
                     only_one=True,
                     on_error=True,
-                    conditions={
-                        "id": quote_case_id,
-                        "case_type": AutoTestCaseType.PUBLIC_SCRIPT.value
-                    }
+                    id=quote_case_id,
+                    case_type=AutoTestCaseType.PUBLIC_SCRIPT.value,
                 )
             except (ParameterException, NotFoundException) as e:
                 raise StepExecutionError(f"【引用公共脚本】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e

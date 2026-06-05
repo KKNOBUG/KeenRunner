@@ -38,12 +38,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         super().__init__(model=AutoTestApiEnvConfigInfo)
         self.required_fields = ["config_host", "config_port", "config_username", "config_password"]
 
-    async def get_by_id(self, config_id: int, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiEnvConfigInfo]:
+    async def get_by_id(self, config_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvConfigInfo]:
         """
         根据配置主键 ID 查询
         :param config_id: 配置主键
         :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :param is_active: 为 True 时自动添加state__not过滤条件
+        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录
         :returns: 配置实例或 None
         :raises ParameterException: 当 config_id 为空时
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时
@@ -52,22 +52,19 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             error_message: str = "查询配置信息失败, 参数(config_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"id": config_id}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.model.filter(id=config_id, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询配置信息失败, 用例(id={config_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, config_code: str, on_error: bool = False, is_active: bool = True) -> Optional[AutoTestApiEnvConfigInfo]:
+    async def get_by_code(self, config_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvConfigInfo]:
         """
         根据配置标识代码查询
         :param config_code: 配置标识代码
         :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :param is_active: 为 True 时自动添加state__not过滤条件
+        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录
         :returns: 配置实例或 None
         :raises ParameterException: 当 step_code 为空时
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时
@@ -77,10 +74,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        kwargs: Dict[str, Any] = {"config_code": config_code}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).first()
+        instance = await self.model.filter(config_code=config_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询配置信息失败, 步骤(code={config_code})不存在"
             LOGGER.error(error_message)
@@ -92,22 +86,20 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             conditions: Dict[str, Any],
             only_one: bool = True,
             on_error: bool = False,
-            is_active: bool = True
+            **kwargs
     ) -> Optional[Union[AutoTestApiEnvConfigInfo, List[AutoTestApiEnvConfigInfo]]]:
         """
         根据条件查询
         :param conditions: 查询条件字典
         :param only_one: 为 True 时返回单条记录，否则返回列表
         :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :param is_active: 为 True 时自动添加state__not过滤条件
+        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录
         :returns: 单条配置、配置列表或 None
         :raises ParameterException: 条件非法或查询异常时
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时
         """
         try:
-            if is_active and "state__not" not in conditions:
-                conditions["state__not"] = 1
-            stmt: QuerySet = self.model.filter(**conditions)
+            stmt: QuerySet = self.model.filter(**conditions, **kwargs)
             instances = await (stmt.first() if only_one else stmt.all())
         except FieldError as e:
             error_message: str = f"查询配置信息异常, 错误描述: {e}"
@@ -134,10 +126,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :raises DataAlreadyExistsException: 同应用、环境下配置名重复时
         :raises DataBaseStorageException: 违反数据库约束时
         """
-        env_id: id = config_in.env_id
-        project_id: id = config_in.project_id
+        env_id: int = config_in.env_id
+        project_id: int = config_in.project_id
         config_name: str = config_in.config_name
-        config_type: AutoTestConfigNodeType = config_in.config_type.value
+        config_type: AutoTestConfigNodeType = config_in.config_type
         config_dict: Dict[str, Any] = config_in.model_dump(exclude_none=True, exclude_unset=True)
         # 业务层验证: 检查环境是否存在
         await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True)
@@ -146,11 +138,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         existing_config = await self.get_by_conditions(
             only_one=True,
             on_error=False,
-            is_active=True,
+            state__not=1,
             conditions={
                 "env_id": env_id,
                 "project_id": project_id,
-                "config_type": config_type,
+                "config_type": config_type.value,
                 "config_name": config_name,
             }
         )
@@ -204,10 +196,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         # 业务层验证：检查配置信息是否存在
         if config_id:
-            instance = await self.get_by_id(config_id=config_id, on_error=True)
+            instance = await self.get_by_id(config_id=config_id, on_error=True, state__not=1)
             config_code: str = instance.config_code
         else:
-            instance = await self.get_by_code(config_code=config_code, on_error=True)
+            instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
             config_id: int = instance.id
         update_dict = config_in.model_dump(
             exclude_none=True,
@@ -271,9 +263,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :raises DataAlreadyExistsException:
         """
         if config_id:
-            instance = await self.get_by_id(config_id=config_id, on_error=True)
+            instance = await self.get_by_id(config_id=config_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(config_code=config_code, on_error=True)
+            instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
 
         instance.state = 1
         await instance.save()

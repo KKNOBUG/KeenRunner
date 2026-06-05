@@ -19,6 +19,7 @@ from backend.applications.department.schemas.department_schema import (
 )
 from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.models.user_model import User
+from backend.configure import LOGGER
 from backend.core.exceptions import (
     DataAlreadyExistsException,
     NotFoundException,
@@ -29,7 +30,6 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     NotFoundResponse,
 )
-from backend.configure import LOGGER
 from backend.services import DependAuth
 
 dept = APIRouter()
@@ -54,9 +54,7 @@ async def create_dept(
 
 
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
-async def delete_dept_one(
-        department_id: int = Query(..., description="部门ID")
-):
+async def delete_dept_one(department_id: int = Query(..., description="部门ID")):
     try:
         instance = await DEPT_CRUD.delete_department(department_id)
         data = await instance.to_dict()
@@ -68,9 +66,7 @@ async def delete_dept_one(
 
 
 @dept.post("/delete", summary="批量删除部门", description="根据部门ID列表批量删除")
-async def delete_depts_batch(
-        body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
-):
+async def delete_depts_batch(body_in: DepartmentBatchDelete = Body(..., description="批量删除参数")):
     try:
         count = await DEPT_CRUD.delete_departments(body_in.department_ids)
         LOGGER.info(f"批量删除部门成功, 数量: {count}")
@@ -99,10 +95,8 @@ async def update_dept(
 
 
 @dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
-async def get_dept(
-        department_id: int = Query(..., description="部门ID"),
-):
-    instance = await DEPT_CRUD.query(id=department_id)
+async def get_dept(department_id: int = Query(..., description="部门ID")):
+    instance = await DEPT_CRUD.get_or_none(id=department_id)
     if not instance:
         return NotFoundResponse(message=f"部门(id={department_id})信息不存在")
 

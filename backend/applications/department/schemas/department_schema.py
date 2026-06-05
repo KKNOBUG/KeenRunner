@@ -6,30 +6,31 @@
 @Module  : department_schema.py
 @DateTime: 2025/2/3 16:27
 """
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
 class DepartmentCreate(BaseModel):
-    code: str = Field(example="DT-CS01", description="部门代码")
-    name: str = Field(example="测试一部", description="部门名称")
-    description: Optional[str] = Field(default=None, example="测试部门，测试一部", description="部门描述")
-    order: int = Field(default=0, example=0, description="排序")
-    parent_id: int = Field(default=0, example=0, description="父部门ID")
+    code: str = Field(..., description="部门代码")
+    name: str = Field(..., description="部门名称")
+    description: Optional[str] = Field(default=None, description="部门描述")
+    order: int = Field(default=0, description="排序")
+    parent_id: int = Field(default=0, description="父部门ID")
 
     def create_dict(self):
         return self.model_dump(exclude_unset=True)
 
 
 class DepartmentUpdate(BaseModel):
-    id: int
-    code: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    order: int = 0
-    parent_id: int = 0
-    updated_user: Optional[str] = None
+    id: int = Field(..., description="部门ID")
+    code: Optional[str] = Field(default=None, max_length=16, description="部门代码")
+    name: Optional[str] = Field(default=None, max_length=64, description="部门名称")
+    description: Optional[str] = Field(default=None, max_length=255, description="部门描述")
+    order: Optional[int] = Field(default=None, ge=0, description="排序")
+    parent_id: Optional[int] = Field(default=None, ge=0, description="父部门ID")
+    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
 
     def update_dict(self):
         return self.model_dump(exclude_unset=True, exclude={"id"})
@@ -42,10 +43,10 @@ class DepartmentSelect(BaseModel):
     code: Optional[str] = Field(default=None, description="部门代码（模糊）")
     name: Optional[str] = Field(default=None, description="部门名称（模糊）")
     is_deleted: Optional[bool] = Field(default=None, description="是否已删除；不传则仅查未删除")
-    created_user: Optional[str] = None
-    updated_user: Optional[str] = None
-    created_time: Optional[str] = None
-    updated_time: Optional[str] = None
+    created_user: Optional[str] = Field(default=None, max_length=16, description="创建人员")
+    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    created_time: Optional[datetime] = Field(default=None, description="创建时间")
+    updated_time: Optional[datetime] = Field(default=None, description="更新时间")
 
 
 class DepartmentBatchDelete(BaseModel):

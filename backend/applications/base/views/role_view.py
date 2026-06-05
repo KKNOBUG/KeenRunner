@@ -87,7 +87,7 @@ async def get_role_by(
         where[code] = code
     if name:
         where[name] = name
-    instances = await ROLE_CRUD.select(**where)
+    instances = await ROLE_CRUD.get_by_conditions(only_one=True, **where)
     data = [await obj.to_dict() for obj in instances]
     return SuccessResponse(data=data)
 
@@ -111,13 +111,13 @@ async def list_role(
 
 @role.get("/authorized", summary="查看角色权限")
 async def get_role_authorized(id: int = Query(..., description="角色ID")):
-    role_obj = await ROLE_CRUD.get(id=id)
+    role_obj = await ROLE_CRUD.get_or_error(id=id)
     data = await role_obj.to_dict(m2m=True)
     return SuccessResponse(data=data)
 
 
 @role.post("/authorized", summary="更新角色权限")
 async def update_role_authorized(role_in: RoleUpdateMenusRouters):
-    role_obj = await ROLE_CRUD.get(id=role_in.id)
+    role_obj = await ROLE_CRUD.get_or_none(id=role_in.id)
     await ROLE_CRUD.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
     return SuccessResponse()
