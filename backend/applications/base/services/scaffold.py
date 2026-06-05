@@ -106,8 +106,6 @@ class ScaffoldModel(models.Model):
             value = value.decode("utf-8")
         elif isinstance(value, timedelta):
             value = str(value)
-        else:
-            raise TypeError(f"数据[{value}]类型[{type(value)}]无法完成序列化")
         return value
 
     async def __fetch_fk_field(self, field, fk_include_fields, fk_exclude_fields):
