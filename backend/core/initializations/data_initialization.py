@@ -152,11 +152,10 @@ async def init_database_user():
                 email="admin@test.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="1",
-                state=2,
+                dept_id=1,
                 is_active=True,
                 is_superuser=True,
-                role_ids=["1", ]
+                role_ids=[1],
             )
         )
         await USER_CRUD.create_user(
@@ -167,11 +166,10 @@ async def init_database_user():
                 email="duanyu@test.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="6",
-                state=2,
+                dept_id=6,
                 is_active=True,
                 is_superuser=False,
-                role_ids=["2", ]
+                role_ids=[2],
             )
         )
         await USER_CRUD.create_user(
@@ -182,11 +180,10 @@ async def init_database_user():
                 email="xuzhu@test.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="7",
-                state=2,
+                dept_id=7,
                 is_active=True,
                 is_superuser=False,
-                role_ids=["2", ]
+                role_ids=[2],
             )
         )
         await USER_CRUD.create_user(
@@ -197,11 +194,10 @@ async def init_database_user():
                 email="guojing@test.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="7",
-                state=2,
+                dept_id=7,
                 is_active=True,
                 is_superuser=False,
-                role_ids=["2", ]
+                role_ids=[2],
             )
         )
         await USER_CRUD.create_user(
@@ -212,11 +208,10 @@ async def init_database_user():
                 email="xiaolongnv@dev.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="3",
-                state=2,
+                dept_id=3,
                 is_active=True,
                 is_superuser=False,
-                role_ids=["2", ]
+                role_ids=[2],
             )
         )
         await USER_CRUD.create_user(
@@ -227,11 +222,10 @@ async def init_database_user():
                 email="yangguo@dev.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="3",
-                state=2,
+                dept_id=3,
                 is_active=True,
                 is_superuser=False,
-                role_ids=["2", ]
+                role_ids=[2],
             )
         )
         await USER_CRUD.create_user(
@@ -242,11 +236,10 @@ async def init_database_user():
                 email="huangrong@dev.com",
                 phone="18888888888",
                 avatar="/static/avatar/default/20250101010101.png",
-                dept_id="4",
-                state=2,
+                dept_id=4,
                 is_active=True,
                 is_superuser=False,
-                role_ids=["2", ]
+                role_ids=[2],
             )
         )
 

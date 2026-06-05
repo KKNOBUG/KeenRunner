@@ -340,8 +340,9 @@ async function handleUpdateDisable(row) {
   })
   row.role_ids = role_ids
   row.dept_id = row.dept?.id
+  const { id, roles, dept, ...payload } = row
   try {
-    await api.updateUser(row)
+    await api.updateUser({ ...payload, user_id: id })
     $message?.success(row.is_active ? '已取消禁用该用户' : '已禁用该用户')
     $table.value?.handleSearch()
   } catch (err) {

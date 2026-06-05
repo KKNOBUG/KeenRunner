@@ -27,7 +27,6 @@ def get_password_hash(password: str) -> str:
 def generate_password() -> str:
     return pwd.genword()
 
-
 def create_access_token(*, data: JWTPayload):
     payload = data.model_dump().copy()
     encoded_jwt = jwt.encode(
@@ -36,3 +35,4 @@ def create_access_token(*, data: JWTPayload):
         algorithm=PROJECT_CONFIG.AUTH_JWT_ALGORITHM
     )
     return encoded_jwt
+

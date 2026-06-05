@@ -17,7 +17,13 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
 from backend.configure import LOGGER
-from backend.core.exceptions import NotFoundException, BaseExceptions, DataAlreadyExistsException, ParameterException, NoPermissionException
+from backend.core.exceptions import (
+    NotFoundException,
+    BaseExceptions,
+    DataAlreadyExistsException,
+    ParameterException,
+    NoPermissionException,
+)
 from backend.core.responses import ForbiddenResponse
 from backend.services import verify_password, get_password_hash
 
@@ -56,21 +62,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_alias(self, alias: str, on_error: bool = False, is_active: bool = True) -> Optional[List[User]]:
-        if not alias:
-            error_message: str = "查询用户信息失败, 参数(alias)不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        kwargs: Dict[str, Any] = {"alias": alias}
-        if is_active:
-            kwargs["state__not"] = 1
-        instance = await self.model.filter(**kwargs).all()
-        if not instance and on_error:
-            error_message: str = f"查询用户信息失败, 用户(alias={alias})不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
     async def authenticate(self, credentials: CredentialsSchema) -> Optional[Union[BaseExceptions, User]]:
         user = await self.model.filter(username=credentials.username).first()
         if not user:
@@ -79,7 +70,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if not verified:
             raise NotFoundException(message="用户名或密码错误")
         if user.state == 1:
-            raise NoPermissionException(message="用户待岗或已离职")
+            raise NoPermissionException(message="用户已禁用")
         return user
 
     async def update_last_login(self, id: int) -> None:
@@ -88,48 +79,50 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         await user.save()
 
     async def create_user(self, user_in: UserCreate) -> User:
-        email = user_in.email
         username = user_in.username
-        instances = await self.model.filter(email=email, username=username).all()
+        instances = await self.model.filter(username=username).all()
         if instances:
-            raise DataAlreadyExistsException(message=f"用户(email={email},username={username})信息已存在")
+            raise DataAlreadyExistsException(message=f"用户(username={username})信息已存在")
 
-        user_in.password = get_password_hash(password=user_in.password)
-        instance = await self.create(user_in)
-        await self.update_roles(instance, user_in.role_ids)
+        role_ids = user_in.role_ids or []
+        user_dict = user_in.create_dict()
+        user_dict["password"] = get_password_hash(password=user_in.password)
+        instance = await self.create(user_dict)
+        await self.update_roles(instance, role_ids)
         return instance
 
     async def delete_user(self, user_id: int) -> User:
         instance = await self.query(user_id)
-        if not instance:
+        if not instance or instance.state != 0:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 
         instance.state = 1
-        instance.is_active = 0
+        instance.is_active = False
         await instance.save()
         return instance
 
-    async def delete_users(self, user_in: UserBatchDelete) -> int:
+    async def delete_users(self, user_in: UserBatchDelete) -> Optional[List[int]]:
         user_ids: Optional[List[int]] = user_in.user_ids
         if user_ids:
-            count = await self.model.filter(id__in=user_ids).update(state=1)
+            deleted_ids = await self.model.filter(id__in=user_ids).exclude(state=1).values_list("id", flat=True)
+            if deleted_ids:
+                await self.model.filter(id__in=deleted_ids).update(state=1, is_active=False)
         else:
-            count = 0
-        return count
+            deleted_ids = None
+        return deleted_ids
 
     async def update_user(self, user_in: UserUpdate) -> User:
-        user_id: int = user_in.id
-        user_if: dict = {
-            key: value for key, value in user_in.items()
-            if value is not None
-        }
+        user_id: int = user_in.user_id
+        user_dict = user_in.model_dump(exclude_unset=True, exclude_none=True)
+        role_ids = user_dict.pop("role_ids", None)
+        user_dict.pop("user_id", None)
         try:
-            instance = await self.update(id=user_id, obj_in=user_if)
-        except DoesNotExist as e:
+            instance = await self.update(id=user_id, obj_in=user_dict)
+        except DoesNotExist:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
-
-        data = await instance.to_dict()
-        return data
+        if role_ids is not None:
+            await self.update_roles(instance, role_ids)
+        return instance
 
     @classmethod
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
@@ -145,8 +138,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         instance.password = get_password_hash(password="123456")
         await instance.save()
-        data = await instance.to_dict(exclude_fields=["id", "password"])
-        return data
+        return await instance.to_dict(exclude_fields=["id", "password"])
 
 
 USER_CRUD = UserCrud()

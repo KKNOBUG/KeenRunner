@@ -17,7 +17,10 @@ export default {
   getUserList: (params = {}) => request.get('/user/list', { params }),
   getUserById: (params = {}) => request.get('/user/get', { params }),
   createUser: (data = {}) => request.post('/user/create', data),
-  updateUser: (data = {}) => request.post('/user/update', data),
+  updateUser: (data = {}) => {
+    const { id, user_id, roles, dept, ...rest } = data
+    return request.post('/user/update', { ...rest, user_id: user_id ?? id })
+  },
   deleteUser: (params = {}) => request.delete(`/user/delete`, { params }),
   /** 批量删除：Body { user_ids?: number[] } */
   deleteUserBatch: (data = {}) => request.post('/user/delete', data),
