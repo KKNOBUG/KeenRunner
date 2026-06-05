@@ -21,11 +21,16 @@ from backend.applications.user.schemas.user_schema import (
 )
 from backend.applications.user.services.user_crud import USER_CRUD
 from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
+from backend.core.exceptions import (
+    DataAlreadyExistsException,
+    NotFoundException,
+    ParameterException
+)
 from backend.core.responses import (
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,
+    ParameterResponse,
     DataAlreadyExistsResponse,
 )
 from backend.services import CTX_USER_ID, DependAuth, verify_password, get_password_hash
@@ -52,14 +57,16 @@ async def delete_user(user_id: int = Query(..., description="用户ID")):
         instance = await USER_CRUD.delete_user(user_id)
         data = await instance.to_dict(exclude_fields=["password"])
         return SuccessResponse(message="删除成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=e.message)
     except NotFoundException as e:
         return NotFoundResponse(message=e.message)
     except Exception as e:
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@user_secure.post("/delete", summary="按id列表删除用户")
-async def delete_user_batch(user_in: UserBatchDelete = Body(..., description="用户信息")):
+@user_secure.post("/deletes", summary="按id列表删除用户")
+async def delete_users(user_in: UserBatchDelete = Body(..., description="用户信息")):
     try:
         deleted_ids = await USER_CRUD.delete_users(user_in=user_in)
         deleted_num = len(deleted_ids)
@@ -74,7 +81,7 @@ async def delete_user_batch(user_in: UserBatchDelete = Body(..., description="�
 async def update_user(user_in: UserUpdate = Body(..., description="用户信息")):
     user_id: int = user_in.user_id
     try:
-        instance = await USER_CRUD.update(id=user_id, obj_in=user_in)
+        instance = await USER_CRUD.update_user(user_in=user_in)
         await USER_CRUD.update_roles(instance, user_in.role_ids)
         data = await instance.to_dict(exclude_fields=["password"])
         return SuccessResponse(message="更新成功", data=data, total=1)
@@ -199,7 +206,7 @@ async def get_users(user_in: UserSelect = Body()):
     ]
     for item in data:
         dept_id = item.pop("dept_id", None)
-        item["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
+        item["dept"] = await (await DEPT_CRUD.get_or_error(id=dept_id)).to_dict() if dept_id else {}
 
     return SuccessResponse(message="查询成功", data=data, total=total)
 

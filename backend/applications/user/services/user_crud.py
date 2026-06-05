@@ -43,7 +43,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             error_message: str = "查询用户信息失败, 参数(username)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        instance = await self.get_by_conditions(only_one=False, on_error=False, username=username, **kwargs)
+        instance = await self.model.filter(username=username, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询用户信息失败, 用户(username={username})不存在"
             LOGGER.error(error_message)
@@ -55,7 +55,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             error_message: str = "查询用户信息失败, 参数(alias)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        instance = await self.get_by_conditions(only_one=True, on_error=False, alias=alias, **kwargs)
+        instance = await self.model.filter(alias=alias, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询用户信息失败, 用户(alias={alias})不存在"
             LOGGER.error(error_message)
@@ -63,7 +63,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         return instance
 
     async def authenticate(self, credentials: CredentialsSchema) -> Optional[Union[BaseExceptions, User]]:
-        user = await self.get_by_conditions(only_one=True, on_error=False, username=credentials.username)
+        user = await self.model.filter(username=credentials.username).first()
         if not user:
             raise NotFoundException(message="用户名不存在")
         verified = verify_password(credentials.password, user.password)
@@ -92,9 +92,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def delete_user(self, user_id: int, **kwargs) -> User:
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
-        if not instance:
-            raise NotFoundException(message=f"用户(id={user_id})信息不存在")
-
         instance.state = 1
         instance.is_active = 0
         await instance.save()

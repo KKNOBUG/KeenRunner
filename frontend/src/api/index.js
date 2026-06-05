@@ -23,7 +23,7 @@ export default {
   },
   deleteUser: (params = {}) => request.delete(`/user/delete`, { params }),
   /** 批量删除：Body { user_ids?: number[] } */
-  deleteUserBatch: (data = {}) => request.post('/user/delete', data),
+  deleteUserBatch: (data = {}) => request.post('/user/deletes', data),
   resetPassword: (data = {}) => request.post(`/user/reset_password`, data),
   updatePassword: (data = {}) => request.post('/user/update_password', data),
   // 角色相关
