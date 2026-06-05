@@ -6,7 +6,7 @@
 @Module  : menu_crud.py
 @DateTime: 2025/2/19 12:48
 """
-from typing import Optional
+from typing import List, Optional
 
 from tortoise.exceptions import DoesNotExist
 
@@ -15,6 +15,36 @@ from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+
+
+def _norm_menu_type(v) -> str:
+    if v is None:
+        return ""
+    if hasattr(v, "value"):
+        return str(v.value)
+    return str(v)
+
+
+def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
+    """按名称子串、类型筛选树：节点自身命中或子树有命中则保留。"""
+    if not name_kw and not type_kw:
+        return nodes
+    out = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        raw_children = node.get("children") or []
+        if isinstance(raw_children, dict):
+            raw_children = [raw_children]
+        children = _filter_menu_tree(list(raw_children), name_kw=name_kw, type_kw=type_kw)
+        nm = node.get("name") or ""
+        mt = _norm_menu_type(node.get("menu_type"))
+        name_ok = (not name_kw) or (name_kw in nm)
+        type_ok = (not type_kw) or (mt == type_kw)
+        self_ok = name_ok and type_ok
+        if self_ok or children:
+            out.append({**node, "children": children})
+    return out
 
 
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
@@ -69,6 +99,29 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
             raise NotFoundException(message=f"菜单(id={menu_id})信息不存在")
 
         return instance
+
+    async def get_menu_tree(self, name: str = "", menu_type: str = "") -> List[dict]:
+        all_menus = await self.model.all().order_by("order")
+        menu_dicts: dict[int, dict] = {}
+        for menu in all_menus:
+            menu_dicts[menu.id] = await menu.to_dict()
+            menu_dicts[menu.id]["children"] = []
+
+        roots: List[dict] = []
+        for menu in all_menus:
+            node = menu_dicts[menu.id]
+            if menu.parent_id == 0:
+                roots.append(node)
+            else:
+                parent = menu_dicts.get(menu.parent_id)
+                if parent is not None:
+                    parent["children"].append(node)
+
+        nk = name.strip() if name else ""
+        tk = menu_type.strip() if menu_type else ""
+        if nk or tk:
+            roots = _filter_menu_tree(roots, name_kw=nk, type_kw=tk)
+        return roots
 
 
 MENU_CRUD = MenuCrud()

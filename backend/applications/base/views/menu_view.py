@@ -7,9 +7,10 @@
 @DateTime: 2025/2/19 12:46
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, Query
+from tortoise.expressions import Q
 
-from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
+from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate, MenuSelect
 from backend.applications.base.services.menu_crud import MENU_CRUD
 from backend.core.exceptions import ParameterException, NotFoundException
 from backend.core.responses import NotFoundResponse, SuccessResponse, FailureResponse, ParameterResponse
@@ -17,62 +18,41 @@ from backend.core.responses import NotFoundResponse, SuccessResponse, FailureRes
 menu = APIRouter()
 
 
-def _norm_menu_type(v) -> str:
-    if v is None:
-        return ""
-    if hasattr(v, "value"):
-        return str(v.value)
-    return str(v)
-
-
-def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
-    """按名称子串、类型筛选树：节点自身命中或子树有命中则保留。"""
-    if not name_kw and not type_kw:
-        return nodes
-    out = []
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-        raw_children = node.get("children") or []
-        if isinstance(raw_children, dict):
-            raw_children = [raw_children]
-        children = _filter_menu_tree(list(raw_children), name_kw=name_kw, type_kw=type_kw)
-        nm = node.get("name") or ""
-        mt = _norm_menu_type(node.get("menu_type"))
-        name_ok = (not name_kw) or (name_kw in nm)
-        type_ok = (not type_kw) or (mt == type_kw)
-        self_ok = name_ok and type_ok
-        if self_ok or children:
-            out.append({**node, "children": children})
-    return out
-
-
 @menu.post("/list", summary="查看菜单列表")
 async def list_menu(
-        page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
-        order: list = Query(default=["id"], description="排序字段"),
         name: str = Query(default="", description="菜单名称（子串匹配）"),
         menu_type: str = Query(default="", description="菜单类型：catalog / menu"),
 ):
-    async def get_menu_with_children(menu_id: int):
-        menu = await MENU_CRUD.get_by_id(menu_id=menu_id, on_error=False)
-        if not menu:
-            return NotFoundResponse(message=f"菜单(id={menu_id})信息不存在")
-
-        menu_dict = await menu.to_dict()
-        child_menus = await MENU_CRUD.model.filter(parent_id=menu_id).order_by("order")
-        menu_dict["children"] = [await get_menu_with_children(child.id) for child in child_menus]
-        return menu_dict
-
-    parent_menus = await MENU_CRUD.model.filter(parent_id=0).order_by("order")
-    res_menu = [await get_menu_with_children(menu.id) for menu in parent_menus]
-    res_menu = [m for m in res_menu if isinstance(m, dict)]
-    nk = name.strip() if name else ""
-    tk = menu_type.strip() if menu_type else ""
-    if nk or tk:
-        res_menu = _filter_menu_tree(res_menu, name_kw=nk, type_kw=tk)
+    res_menu = await MENU_CRUD.get_menu_tree(name=name, menu_type=menu_type)
     return SuccessResponse(message="查询成功", data=res_menu, total=len(res_menu))
+
+
+@menu.post("/search", summary="查询菜单列表", description="支持分页按条件查询菜单列表信息（Body）")
+async def search_menu(menu_in: MenuSelect = Body()):
+    q = Q()
+    if menu_in.name:
+        q &= Q(name__contains=menu_in.name)
+    if menu_in.menu_type:
+        q &= Q(menu_type=menu_in.menu_type)
+    if menu_in.path:
+        q &= Q(path__contains=menu_in.path)
+    if menu_in.parent_id is not None:
+        q &= Q(parent_id=menu_in.parent_id)
+    if menu_in.is_hidden is not None:
+        q &= Q(is_hidden=menu_in.is_hidden)
+
+    total, instances = await MENU_CRUD.list(
+        page=menu_in.page, page_size=menu_in.page_size, search=q, order=menu_in.order
+    )
+    data = [await obj.to_dict() for obj in instances]
+    if data:
+        menu_ids = [item["id"] for item in data]
+        parent_ids_with_children = set(
+            await MENU_CRUD.model.filter(parent_id__in=menu_ids).values_list("parent_id", flat=True)
+        )
+        for item in data:
+            item["has_children"] = item["id"] in parent_ids_with_children
+    return SuccessResponse(message="查询成功", data=data, total=total)
 
 
 @menu.get("/get", summary="查看菜单", description="根据id查询菜单信息")

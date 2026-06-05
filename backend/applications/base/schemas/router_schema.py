@@ -13,32 +13,34 @@ from pydantic import BaseModel, Field
 from backend.enums import HTTPMethod
 
 
-class RouterCreate(BaseModel):
-    path: str = Field(..., description="路由请求路径")
-    method: HTTPMethod = Field(..., description="路由请求方式")
-    summary: str = Field(..., description="路由作用简介")
+class RouterBase(BaseModel):
+    id: Optional[int] = Field(default=None, description="路由ID")
+    path: Optional[str] = Field(default=None, max_length=255, description="路由请求路径")
+    method: Optional[HTTPMethod] = Field(default=None, description="路由请求方式")
+    summary: Optional[str] = Field(default=None, max_length=255, description="路由作用简介")
     description: Optional[str] = Field(default=None, description="路由功能描述")
-    tags: str = Field(..., description="路由所属标签")
+    tags: Optional[str] = Field(default=None, max_length=255, description="路由所属标签")
+
+
+class RouterCreate(RouterBase):
+    path: str = Field(..., max_length=255, description="路由请求路径")
+    method: HTTPMethod = Field(..., description="路由请求方式")
+    summary: str = Field(..., max_length=255, description="路由作用简介")
+    tags: str = Field(..., max_length=255, description="路由所属标签")
+    description: Optional[str] = Field(default=None, description="路由功能描述")
 
     def create_dict(self):
         return self.model_dump(exclude_unset=True)
 
 
-class RouterUpdate(BaseModel):
-    id: int
-    path: Optional[str] = None
-    method: Optional[str] = None
-    summary: Optional[str] = None
-    description: Optional[str] = None
-    tags: Optional[str] = None
+class RouterUpdate(RouterBase):
+    id: int = Field(..., description="路由ID")
+
+    def update_dict(self):
+        return self.model_dump(exclude_unset=True, exclude={"id"})
 
 
-class RouterSelect(BaseModel):
+class RouterSelect(RouterBase):
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="数据数量")
-    order: Optional[list] = Field(default=["id"], description="排序字段")
-    id: Optional[int] = None
-    path: Optional[str] = None
-    method: Optional[str] = None
-    summary: Optional[str] = None
-    tags: Optional[str] = None
+    page_size: int = Field(default=10, ge=10, description="每页数量")
+    order: Optional[list] = Field(default=[], examples=["id"], description="排序字段")

@@ -6,42 +6,46 @@
 @Module  : role_schema.py
 @DateTime: 2025/2/19 23:05
 """
-from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
-class BaseRole(BaseModel):
-    id: int
-    name: str
-    desc: str = ""
-    users: Optional[list] = []
-    menus: Optional[list] = []
-    routers: Optional[list] = []
-    created_time: Optional[datetime]
-    updated_time: Optional[datetime]
+class RoleBase(BaseModel):
+    id: Optional[int] = Field(default=None, description="角色ID")
+    code: Optional[str] = Field(default=None, max_length=16, description="角色代码")
+    name: Optional[str] = Field(default=None, max_length=64, description="角色名称")
+    description: Optional[str] = Field(default=None, description="角色描述")
 
 
-class RoleCreate(BaseModel):
-    code: str = Field(example="AD-9001", description="角色代码")
-    name: str = Field(example="管理员", description="角色名称")
-    description: str = Field(default="", example="管理员角色")
+class RoleCreate(RoleBase):
+    code: str = Field(..., max_length=16, description="角色代码")
+    name: str = Field(..., max_length=64, description="角色名称")
+    description: Optional[str] = Field(default="", description="角色描述")
+
+    def create_dict(self):
+        return self.model_dump(exclude_unset=True)
 
 
-class RoleUpdate(BaseModel):
-    id: int = Field(example=1)
-    code: str = Field(example="AD-9001")
-    name: str = Field(example="管理员")
-    description: str = Field(default="", example="管理员角色")
+class RoleUpdate(RoleBase):
+    id: int = Field(..., description="角色ID")
+
+    def update_dict(self):
+        return self.model_dump(exclude_unset=True, exclude={"id"})
+
+
+class RoleSelect(RoleBase):
+    page: int = Field(default=1, ge=1, description="页码")
+    page_size: int = Field(default=10, ge=10, description="每页数量")
+    order: Optional[list] = Field(default=[], examples=["id"], description="排序字段")
 
 
 class RoleUpdateMenusRouters(BaseModel):
-    id: int
-    menu_ids: List[int] = Field(default_factory=list)
-    router_infos: List[dict] = Field(default_factory=list)
+    id: int = Field(..., description="角色ID")
+    menu_ids: List[int] = Field(default_factory=list, description="菜单ID列表")
+    router_infos: List[dict] = Field(default_factory=list, description="路由信息列表")
 
 
 class RoleBatchDelete(BaseModel):
-    role_ids: Optional[List[int]] = Field(None, description="角色ID列表")
-    role_codes: Optional[List[str]] = Field(None, description="角色代码列表")
+    role_ids: Optional[List[int]] = Field(default=None, description="角色ID列表")
+    role_codes: Optional[List[str]] = Field(default=None, description="角色代码列表")
