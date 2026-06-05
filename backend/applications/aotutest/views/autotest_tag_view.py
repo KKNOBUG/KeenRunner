@@ -137,9 +137,9 @@ async def get_tag_info(
 ):
     try:
         if tag_id:
-            instance = await AUTOTEST_API_TAG_CRUD.get_by_id(tag_id=tag_id, on_error=True)
+            instance = await AUTOTEST_API_TAG_CRUD.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_TAG_CRUD.get_by_code(tag_code=tag_code, on_error=True)
+            instance = await AUTOTEST_API_TAG_CRUD.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",

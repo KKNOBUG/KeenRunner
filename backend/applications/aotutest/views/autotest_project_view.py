@@ -131,9 +131,9 @@ async def get_project_info(
 ):
     try:
         if project_id:
-            instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=project_id, on_error=True)
+            instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_PROJECT_CRUD.get_by_code(project_code=project_code, on_error=True)
+            instance = await AUTOTEST_API_PROJECT_CRUD.get_by_code(project_code=project_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",

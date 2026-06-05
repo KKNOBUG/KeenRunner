@@ -129,9 +129,9 @@ async def get_env_info(
 ):
     try:
         if env_id:
-            instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True)
+            instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_code(env_code=env_code, on_error=True)
+            instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_code(env_code=env_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",

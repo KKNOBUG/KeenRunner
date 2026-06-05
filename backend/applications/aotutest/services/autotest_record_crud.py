@@ -48,7 +48,8 @@ class AutoTestApiTaskRecordCrud(
         return await self.model.filter(celery_id=celery_id).first()
 
     async def create_record(self, data: Dict[str, Any]) -> AutoTestApiRecordInfo:
-        """创建一条任务执行记录，通常由 Worker task_prerun 调用。
+        """
+        创建一条任务执行记录，通常由 Worker task_prerun 调用。
 
         :param data: 记录字段字典，需符合 AutoTestApiRecordInfo 字段。
         :returns: 创建后的记录实例。
@@ -78,11 +79,9 @@ class AutoTestApiTaskRecordCrud(
         await record.save(update_fields=list(update_dict.keys()))
         return record
 
-    async def select_records(
-            self,
-            record_in: AutoTestApiRecordSelect,
-    ) -> tuple:
-        """分页按条件查询任务执行记录，支持 celery_id、task_id、时间范围等筛选。
+    async def select_records(self, record_in: AutoTestApiRecordSelect) -> tuple:
+        """
+        分页按条件查询任务执行记录，支持 celery_id、task_id、时间范围等筛选。
 
         :param record_in: 查询条件 schema（AutoTestApiRecordSelect），含分页与排序。
         :returns: (总条数, 当前页记录列表) 元组。

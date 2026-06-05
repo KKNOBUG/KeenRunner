@@ -114,9 +114,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """
         # 业务层验证：检查用例是否存在
         if case_id:
-            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
-            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_code(case_code=case_code, on_error=True)
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id: int = case_instance.id
 
         # 获取所有根步骤（没有父步骤的步骤）
@@ -170,7 +170,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})基本信息完成")
             # 获取用例信息（业务层手动查询）
             if step.case_id:
-                case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step.case_id, on_error=True)
+                case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step.case_id, on_error=True, state__not=1)
                 step_dict["case"] = await case.to_dict(
                     exclude_fields={
                         "state",
@@ -198,7 +198,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 return step_dict
 
             # 业务层验证：检查引用的公共脚本是否存在
-            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step.quote_case_id, on_error=False)
+            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step.quote_case_id, on_error=False, state__not=1)
             if not quote_case:
                 step_dict["quote_steps"] = []
                 step_dict["quote_case"] = None
@@ -384,7 +384,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 业务层验证：检查用例是否存在
         case_id: int = step_in.case_id
         step_no: int = step_in.step_no
-        await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+        await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True, state__not=1)
 
         # 业务层验证：如果指定了父步骤，检查父步骤是否存在
         if step_in.parent_step_id:
@@ -403,7 +403,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 业务层验证：如果指定了引用脚本，检查引用脚本是否存在
         if step_in.quote_case_id:
             quote_case_id: int = step_in.quote_case_id
-            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=False)
+            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=False, state__not=1)
             if not quote_case:
                 error_message: str = (
                     f"根据(case_id={quote_case_id})条件检查用例信息失败, "
@@ -479,7 +479,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 业务层验证：如果更新了用例ID，检查用例是否存在
         if "case_id" in update_dict:
             case_id: int = update_dict.get("case_id", instance.case_id)
-            await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+            await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True, state__not=1)
 
         # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
         if "parent_step_id" in update_dict:
@@ -628,13 +628,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             # 根据参数类型执行不同的删除逻辑
             if step_id is not None or step_code is not None:
                 # 单步骤删除
-                conditions = {"state__not": 1}
+                conditions: Dict[str, Any] = {"state__not": 1}
                 if step_id is not None:
                     conditions["id"] = step_id
                 if step_code is not None:
                     conditions["step_code"] = step_code
 
-                step = await self.get_by_conditions(conditions=conditions, only_one=True, on_error=True)
+                step = await self.get_by_conditions(only_one=True, on_error=True, **conditions)
                 if step:
                     LOGGER.warning("单个步骤删除: ")
                     deleted_count = await delete_step_and_children(step_instance=step)
@@ -735,7 +735,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     raise ParameterException(message=error_message)
 
                 # 业务层验证: 检查用例是否存在
-                await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step_data.case_id, on_error=True)
+                await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
 
                 # 业务层验证: 检查同一用例下步骤序号是否已存在
                 existing_step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_conditions(
@@ -859,7 +859,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 if "case_id" in update_dict:
                     case_id: int = update_dict.get("case_id", step_instance.case_id)
                     case: Optional[AutoTestApiCaseInfo] = await AUTOTEST_API_CASE_CRUD.get_by_id(
-                        case_id=case_id, on_error=False)
+                        case_id=case_id,
+                        on_error=False,
+                        state__not=1
+                    )
                     if not case:
                         error_message: str = (
                             f"第({sid})步骤更新失败, "
@@ -938,7 +941,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 # 业务层验证：如果更新了引用脚本ID，检查引用脚本是否存在
                 if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
                     quote_case_id: int = update_dict["quote_case_id"]
-                    await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=True)
+                    await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=quote_case_id, on_error=True, state__not=1)
 
                 try:
                     updated_instance = await self.update(id=step_id, obj_in=update_dict)
@@ -1003,7 +1006,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             initial_variables = []
 
         # 1. 查询用例信息
-        case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+        case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True, state__not=1)
         case_dict = await case_instance.to_dict(
             include_fields={"id", "case_code", "case_name"},
             replace_fields={"id": "case_id"}

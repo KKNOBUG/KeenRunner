@@ -117,9 +117,9 @@ async def get_task_info(
 ):
     try:
         if task_id:
-            instance = await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True)
+            instance = await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_TASK_CRUD.get_by_code(task_code=task_code, on_error=True)
+            instance = await AUTOTEST_API_TASK_CRUD.get_by_code(task_code=task_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -190,7 +190,7 @@ async def run_task_info(task_in: dict = Body(..., description="任务ID")):
         task_id = task_in.get("task_id")
         if task_id is None:
             return ParameterResponse(message="参数 task_id 不能为空")
-        await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True)
+        await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True, state__not=1)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums import AutoTestReportType
         # __task_id 会随消息传到 Worker，task_prerun 从 request.properties 取出；

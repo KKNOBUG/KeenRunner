@@ -126,7 +126,7 @@ async def get_step_detail(
 ):
     try:
         if detail_id:
-            instance = await AUTOTEST_API_DETAIL_CRUD.get_by_id(detail_id=detail_id, on_error=True)
+            instance = await AUTOTEST_API_DETAIL_CRUD.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
         else:
             instance = await AUTOTEST_API_DETAIL_CRUD.get_by_conditions(
                 only_one=True,

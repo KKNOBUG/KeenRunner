@@ -7,7 +7,7 @@
 @DateTime: 2026/4/16 10:51
 """
 import traceback
-from typing import Optional, Dict, Any, List, Union, Tuple
+from typing import Optional, Dict, Any, List, Tuple
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
@@ -81,7 +81,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             raise NotFoundException(message=error_message)
         return instance
 
-
     async def create_config(self, config_in: AutoTestApiConfigCreate) -> AutoTestApiEnvConfigInfo:
         """
         创建配置信息
@@ -98,19 +97,17 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         config_type: AutoTestConfigNodeType = config_in.config_type
         config_dict: Dict[str, Any] = config_in.model_dump(exclude_none=True, exclude_unset=True)
         # 业务层验证: 检查环境是否存在
-        await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True)
+        await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True, state__not=1)
         # 业务层验证: 检查应用是否存在
-        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=project_id, on_error=True)
+        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=project_id, on_error=True, state__not=1)
         existing_config = await self.get_by_conditions(
             only_one=True,
             on_error=False,
             state__not=1,
-            conditions={
-                "env_id": env_id,
-                "project_id": project_id,
-                "config_type": config_type.value,
-                "config_name": config_name,
-            }
+            env_id=env_id,
+            project_id=project_id,
+            config_type=config_type.value,
+            config_name=config_name,
         )
         if not existing_config:
             # 业务层验证: 根据配置类型进行检查参数是否匹配

@@ -17,13 +17,12 @@ const $table = ref(null)
 const queryItems = ref({ name: '' })
 const vPermission = resolveDirective('permission')
 
-/** QueryBar：平铺「重置、搜索、新增」，无删除 */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
   addCreate: true,
   addDelete: false,
-  actionMode: 'inline',
+  actionMode: 'dropdown',
 }
 
 function fetchDeptList(params) {

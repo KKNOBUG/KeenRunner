@@ -73,7 +73,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         """初始化 CRUD，绑定模型 AutoTestApiEnvEnumInfo。"""
         super().__init__(model=AutoTestApiEnvEnumInfo)
 
-    async def get_by_id(self, env_id: int, on_error: bool = False) -> Optional[AutoTestApiEnvEnumInfo]:
+    async def get_by_id(self, env_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvEnumInfo]:
         """
         根据环境枚举主键查询
         :param env_id: 环境枚举主键
@@ -87,14 +87,14 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(id=env_id, state__not=1).first()
+        instance = await self.get_or_none(id=env_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询环境枚举信息失败, 环境(id={env_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, env_code: str, on_error: bool = False) -> Optional[AutoTestApiEnvEnumInfo]:
+    async def get_by_code(self, env_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvEnumInfo]:
         """
         根据环境枚举标识代码查询
         :param env_code: 环境标识代码
@@ -108,14 +108,14 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(env_code=env_code, state__not=1).first()
+        instance = await self.model.filter(env_code=env_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询环境枚举信息失败, 环境(code={env_code})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_name(self, env_name: str, on_error: bool = False) -> Optional[AutoTestApiEnvEnumInfo]:
+    async def get_by_name(self, env_name: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvEnumInfo]:
         """
         根据环境枚举名称查询
         :param env_name: 环境枚举名称
@@ -129,7 +129,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(env_name=env_name, state__not=1).first()
+        instance = await self.model.filter(env_name=env_name, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询环境枚举信息失败, 环境(env_name={env_name})不存在"
             LOGGER.error(error_message)
@@ -180,10 +180,10 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         # 业务层验证：检查环境信息是否存在
         if env_id:
-            instance = await self.get_by_id(env_id=env_id, on_error=True)
+            instance = await self.get_by_id(env_id=env_id, on_error=True, state__not=1)
             env_code: str = instance.env_code
         else:
-            instance = await self.get_by_code(env_code=env_code, on_error=True)
+            instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
             env_id: int = instance.id
 
         update_dict: Dict[str, Any] = env_in.model_dump(
@@ -213,9 +213,9 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         """
         # 业务层验证：检查环境信息是否存在
         if env_id:
-            instance = await self.get_by_id(env_id=env_id, on_error=True)
+            instance = await self.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(env_code=env_code, on_error=True)
+            instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
 
         instance.state = 1
         await instance.save()

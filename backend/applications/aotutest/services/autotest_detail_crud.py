@@ -36,7 +36,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         """初始化 CRUD，绑定模型 AutoTestApiDetailInfo。"""
         super().__init__(model=AutoTestApiDetailInfo)
 
-    async def get_by_id(self, detail_id: int, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
+    async def get_by_id(self, detail_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
         """
         根据明细主键 ID 查询单条明细
 
@@ -51,14 +51,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.get_or_none(id=detail_id, state__not=1)
+        instance = await self.get_or_none(id=detail_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询明细信息失败, 明细(id={detail_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, detail_code: str, on_error: bool = False) -> Optional[AutoTestApiDetailInfo]:
+    async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
         """
         根据明细标识（report_code）查询单条明细
 
@@ -73,7 +73,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(report_code=detail_code, state__not=1).first()
+        instance = await self.model.filter(report_code=detail_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询明细信息失败, 明细(detail_code={detail_code})不存在"
             LOGGER.error(error_message)
@@ -166,7 +166,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if detail_id:
-            await self.get_by_id(detail_id=detail_id, on_error=True)
+            await self.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_conditions(
                 only_one=True,
@@ -211,7 +211,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
         # 业务层验证：检查明细信息是否存在
         if detail_id:
-            instance = await self.get_by_id(detail_id=detail_id, on_error=False)
+            instance = await self.get_by_id(detail_id=detail_id, on_error=False, state__not=1)
         else:
             instance = await self.get_by_conditions(
                 only_one=True,

@@ -1769,6 +1769,27 @@ const handleDebug = async () => {
   })
 }
 
+/**
+ * 【用例管理「复制」】从路由 case_info 加载步骤树（不请求 DB）
+ * @param {object} caseInfo - 含 is_copy、steps，及用例表单字段
+ * @returns {boolean} 是否成功按复制模式加载
+ */
+const loadStepsFromCopy = (caseInfo) => {
+  if (!caseInfo || caseInfo.is_copy !== true) return false
+
+  quoteStepsMap.value = {}
+  caseInfoPanelRef.value?.reloadFromRoute?.()
+
+  const rawSteps = Array.isArray(caseInfo.steps) ? caseInfo.steps : []
+  const mappedSteps = rawSteps.map(mapBackendStep).filter(Boolean)
+  steps.value = mappedSteps
+  selectedKeys.value = [mappedSteps[0]?.id].filter(Boolean)
+  fillQuoteStepsMapFromRawData(rawSteps, mappedSteps)
+  initializeStepExpandStates()
+  updateStepDisplayNames()
+  return true
+}
+
 const loadSteps = async () => {
   stepExpandStates.value = new Map()
   stashedQuoteStepsWhenPublic.value = []
@@ -2678,7 +2699,7 @@ watch(() => steps.value, () => {
 }, {deep: true})
 
 // 同页切换用例（仅 query 变化、组件未销毁）时需重新解析 case_info 并拉步骤树
-watch([() => caseId.value, () => caseCode.value], () => {
+watch([() => caseId.value, () => caseCode.value, () => route.query.case_info], () => {
   caseInfoPanelRef.value?.reloadFromRoute?.()
   loadSteps()
 })

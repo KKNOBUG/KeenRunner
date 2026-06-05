@@ -34,7 +34,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """初始化 CRUD，绑定模型 AutoTestApiCaseInfo。"""
         super().__init__(model=AutoTestApiCaseInfo)
 
-    async def get_by_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
+    async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
         根据用例主键 ID 查询单条用例
 
@@ -49,14 +49,14 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.get_or_none(id=case_id, state__not=1)
+        instance = await self.get_or_none(id=case_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询用例信息失败, 用例(id={case_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, case_code: str, on_error: bool = False) -> Optional[AutoTestApiCaseInfo]:
+    async def get_by_code(self, case_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
         根据用例标识代码查询单条用例
 
@@ -71,7 +71,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(case_code=case_code, state__not=1).first()
+        instance = await self.model.filter(case_code=case_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询用例信息失败, 用例(code={case_code})不存在"
             LOGGER.error(error_message)
@@ -94,13 +94,19 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         case_type: Optional[AutoTestCaseType] = case_in.case_type
 
         # 业务层验证: 检查标签是否全部存在
-        await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
+        await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         # 业务层验证: 检查用例信息是否已经存在
-        existing_case = await self.get_by_conditions(only_one=True, case_project=case_project, case_name=case_name, state__not=1)
+        existing_case = await self.get_by_conditions(
+            only_one=True,
+            on_error=False,
+            case_project=case_project,
+            case_name=case_name,
+            state__not=1
+        )
         if existing_case:
             error_message: str = (
-                f"根据(case_project={case_project}, case_name={case_name}, case_type={case_type})条件查询用例信息失败, "
+                f"根据条件(case_project={case_project}, case_name={case_name}, case_type={case_type})查询用例信息失败, "
                 f"相同应用下用例名称不允许重复"
             )
             LOGGER.error(error_message)
@@ -130,9 +136,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         # 业务层验证：检查用例信息是否存在
         if case_id:
-            instance = await self.get_by_id(case_id=case_id, on_error=True)
+            instance = await self.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(case_code=case_code, on_error=True)
+            instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id: int = instance.id
         update_dict = case_in.model_dump(
             exclude_none=True,
@@ -143,7 +149,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         # 业务层验证：检查标签是否全部存在
         if "case_tags" in update_dict:
             case_tags = update_dict.get("case_tags", instance.case_tags)
-            await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
+            await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         # 业务层验证：检查应用ID和用例名称是否唯一
         if "case_name" in update_dict or "case_project" in update_dict:
@@ -186,9 +192,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         # 业务层验证: 检查用例是否存在
         if case_id:
-            instance = await self.get_by_id(case_id=case_id, on_error=True)
+            instance = await self.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(case_code=case_code, on_error=True)
+            instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id: int = instance.id
 
         case_type: AutoTestCaseType = instance.case_type
@@ -226,7 +232,8 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise ParameterException(message=error_message) from e
 
     async def batch_update_or_create_cases(self, cases_data: List[AutoTestApiCaseUpdate]) -> Dict[str, Any]:
-        """批量新增或更新用例：无 case_id/case_code 则新增，有则更新。
+        """
+        批量新增或更新用例：无 case_id/case_code 则新增，有则更新。
 
         :param cases_data: 用例更新 schema 列表，每项需为 AutoTestApiCaseUpdate。
         :returns: 包含 created_count、updated_count、success_detail 的字典。
@@ -241,11 +248,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         success_detail: List[Dict[str, Any]] = []  # 存储处理成功的用例信息（附带输入映射）
 
         for cid, case_data in enumerate(cases_data, start=1):
-            if not isinstance(case_data, AutoTestApiCaseUpdate):
-                raise TypeRejectException(
-                    message=f"参数[case_data]必须是[AutoTestApiCaseUpdate]类型, 但得到[{type(case_data)}]类型"
-                )
-
             case_id: Optional[int] = case_data.case_id
             case_code: Optional[str] = case_data.case_code
             case_name: Optional[str] = case_data.case_name
@@ -261,6 +263,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             else:
                 case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                     only_one=True,
+                    on_error=False,
                     id=case_id,
                     case_code=case_code,
                     state__not=1
@@ -284,6 +287,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 # 业务层验证：检查应用ID和用例名称是否唯一
                 existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                     only_one=True,
+                    on_error=False,
                     case_project=case_project,
                     case_name=case_name,
                     case_type=case_type,
@@ -340,7 +344,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 # 业务层验证：检查标签是否全部存在
                 if "case_tags" in update_case_dict:
                     case_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True)
+                    await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
                 # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:

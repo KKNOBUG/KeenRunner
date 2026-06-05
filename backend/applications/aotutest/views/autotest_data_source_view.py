@@ -202,15 +202,9 @@ async def get_data_source_info(
     """定位优先级：data_source_id > data_source_code > (case+step)。"""
     try:
         if data_source_id:
-            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_id(
-                data_source_id=data_source_id,
-                on_error=True,
-            )
+            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_id(data_source_id=data_source_id, on_error=True, state__not=1)
         elif (data_source_code or "").strip():
-            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_code(
-                data_source_code=data_source_code.strip(),
-                on_error=True,
-            )
+            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_code(data_source_code=data_source_code.strip(), on_error=True, state__not=1)
         elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
             instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_step(
                 case_id=case_id,
@@ -413,6 +407,7 @@ async def single_step_dataset_upload(
     try:
         step_instance = await AUTOTEST_API_STEP_CRUD.get_by_conditions(
             on_error=True,
+            only_one=True,
             state__not=1,
             id=step_id,
             case_id=case_id,
@@ -463,7 +458,11 @@ async def single_step_dataset_upload(
         return BadReqResponse(message="解析结果为空（第 1 个 sheet 无有效数据）")
 
     try:
-        case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+        case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(
+            case_id=case_id,
+            on_error=True,
+            state__not=1
+        )
         user_id = CTX_USER_ID.get(0)
         created_user = str(user_id) if user_id else None
         instance = await AUTOTEST_DATA_SOURCE_CRUD.create_data_sources_from_parsed(
@@ -522,7 +521,11 @@ async def batch_step_dataset_upload(
             break
     if not case_code:
         try:
-            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(
+                case_id=case_id,
+                on_error=True,
+                state__not=1
+            )
             case_code = case_instance.case_code
         except (NotFoundException, ParameterException) as e:
             return ParameterResponse(message=str(e.message))

@@ -44,7 +44,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
     def __init__(self):
         super().__init__(model=AutoTestApiDataSourceInfo)
 
-    async def get_by_id(self, data_source_id: int, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
         根据数据源主键 ID 查询单条记录（排除已软删 state=1）。
 
@@ -59,14 +59,14 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(id=data_source_id, state__not=1).first()
+        instance = await self.get_or_none(id=data_source_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询数据源失败, 数据源(id={data_source_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, data_source_code: str, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_code(self, data_source_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
         根据data_source_code查询单条数据源（排除已软删）。
 
@@ -81,7 +81,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(data_source_code=data_source_code.strip(), state__not=1).first()
+        instance = await self.model.filter(data_source_code=data_source_code.strip(), **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询数据源失败, 数据源(data_source_code={data_source_code})不存在"
             LOGGER.error(error_message)
@@ -220,12 +220,14 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         if data_source_id:
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
                 data_source_id=data_source_id,
-                on_error=True
+                on_error=True,
+                state__not=1
             )
         elif (data_source_code or "").strip():
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_code(
                 data_source_code=data_source_code.strip(),
-                on_error=True
+                on_error=True,
+                state__not=1
             )
         elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_case_step(
@@ -285,12 +287,14 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         if data_source_id:
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
                 data_source_id=data_source_id,
-                on_error=True
+                on_error=True,
+                state__not=1
             )
         elif (data_source_code or "").strip():
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_code(
                 data_source_code=data_source_code.strip(),
-                on_error=True
+                on_error=True,
+                state__not=1
             )
         elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_case_step(

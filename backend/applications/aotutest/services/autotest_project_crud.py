@@ -7,11 +7,10 @@
 @DateTime: 2026/1/2 18:01
 """
 import traceback
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any, List
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiProjectInfo, AutoTestApiEnvConfigInfo
 from backend.applications.aotutest.schemas.autotest_project_schema import (
@@ -38,7 +37,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """初始化 CRUD，绑定模型 AutoTestApiProjectInfo。"""
         super().__init__(model=AutoTestApiProjectInfo)
 
-    async def get_by_id(self, project_id: int, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
+    async def get_by_id(self, project_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
         """
         根据项目主键 ID 查询单条项目
 
@@ -53,14 +52,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(id=project_id, state__not=1).first()
+        instance = await self.model.filter(id=project_id, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询应用信息失败, 应用(id={project_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, project_code: str, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
+    async def get_by_code(self, project_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
         """
         根据项目标识代码查询单条项目
 
@@ -75,14 +74,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(project_code=project_code, state__not=1).first()
+        instance = await self.model.filter(project_code=project_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询应用信息失败, 应用(code={project_code})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_name(self, project_name: str, on_error: bool = False) -> Optional[AutoTestApiProjectInfo]:
+    async def get_by_name(self, project_name: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
         """
         根据项目名称查询单条项目
 
@@ -97,7 +96,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(project_name=project_name, state__not=1).first()
+        instance = await self.model.filter(project_name=project_name, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询应用信息失败, 应用(name={project_name})不存在"
             LOGGER.error(error_message)
@@ -156,9 +155,9 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         project_code: Optional[str] = project_in.project_code
         # 业务层验证：检查应用是否存在
         if project_id:
-            instance = await self.get_by_id(project_id=project_id, on_error=True)
+            instance = await self.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(project_code=project_code, on_error=True)
+            instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
             project_id: int = instance.id
 
         update_dict: Dict[str, Any] = project_in.model_dump(
@@ -170,10 +169,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         # 业务层验证：检查应用名称是否重复
         if "project_name" in update_dict:
             project_name: str = update_dict.get("project_name", instance.project_name)
-            existing_project = await self.model.filter(
-                project_name=project_name,
-                state__not=1
-            ).exclude(id=project_id).first()
+            existing_project = await self.model.filter(project_name=project_name, state__not=1).exclude(id=project_id).first()
             if existing_project:
                 error_message: str = f"根据(project_name={project_name})条件检查应用信息失败, 应用名称不允许重复"
                 LOGGER.error(error_message)
@@ -206,9 +202,9 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if project_id:
-            instance = await self.get_by_id(project_id=project_id, on_error=True)
+            instance = await self.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(project_code=project_code, on_error=True)
+            instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
 
         pid: int = instance.id
         # 业务层验证：检查是否存在关联用例

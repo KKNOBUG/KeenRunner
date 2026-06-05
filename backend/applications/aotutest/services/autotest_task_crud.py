@@ -34,7 +34,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """初始化 CRUD，绑定模型 AutoTestApiTaskInfo。"""
         super().__init__(model=AutoTestApiTaskInfo)
 
-    async def get_by_id(self, task_id: int, on_error: bool = False) -> Optional[AutoTestApiTaskInfo]:
+    async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
         根据任务主键 ID 查询单条任务
 
@@ -48,15 +48,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             error_message: str = "查询任务信息失败, 参数(task_id)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(id=task_id, state__not=1).first()
+        instance = await self.get_or_none(id=task_id, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询任务信息失败, 任务(id={task_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, task_code: str, on_error: bool = False) -> Optional[AutoTestApiTaskInfo]:
+    async def get_by_code(self, task_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
         根据任务标识代码查询单条任务
 
@@ -70,8 +69,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             error_message: str = "查询任务信息失败, 参数(task_code)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(task_code=task_code, state__not=1).first()
+        instance = await self.model.filter(task_code=task_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询任务信息失败, 任务(code={task_code})不存在"
             LOGGER.error(error_message)
@@ -92,14 +90,10 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
         # 业务层验证：检查应用是否存在
         from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
-        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=task_project, on_error=True)
+        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=task_project, on_error=True, state__not=1)
 
         # 业务层验证：检查 (task_name, task_project) 唯一
-        existing_task = await self.model.filter(
-            task_name=task_name,
-            task_project=task_project,
-            state__not=1
-        ).first()
+        existing_task = await self.model.filter(task_name=task_name, task_project=task_project, state__not=1).first()
         if existing_task:
             error_message: str = f"任务(task_name={task_name}, task_project={task_project})已存在"
             LOGGER.error(error_message)
@@ -130,9 +124,9 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         task_id: Optional[int] = task_in.task_id
         task_code: Optional[str] = task_in.task_code
         if task_id:
-            instance = await self.get_by_id(task_id=task_id, on_error=True)
+            instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(task_code=task_code, on_error=True)
+            instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
             task_id = instance.id
 
         update_dict: Dict[str, Any] = task_in.model_dump(
@@ -177,9 +171,9 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :raises NotFoundException: 任务不存在时。
         """
         if task_id:
-            instance = await self.get_by_id(task_id=task_id, on_error=True)
+            instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(task_code=task_code, on_error=True)
+            instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
 
         instance.state = 1
         instance.task_enabled = False
@@ -194,7 +188,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :returns: 更新后的任务实例。
         :raises NotFoundException: 任务不存在时。
         """
-        instance = await self.get_by_id(task_id=task_id, on_error=True)
+        instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         instance.task_enabled = enabled
         await instance.save(update_fields=["task_enabled"])
         return instance

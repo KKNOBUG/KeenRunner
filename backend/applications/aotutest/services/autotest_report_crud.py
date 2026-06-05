@@ -35,7 +35,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """初始化 CRUD，绑定模型 AutoTestApiReportInfo。"""
         super().__init__(model=AutoTestApiReportInfo)
 
-    async def get_by_id(self, report_id: int, on_error: bool = False) -> Optional[AutoTestApiReportInfo]:
+    async def get_by_id(self, report_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiReportInfo]:
         """
         根据报告主键 ID 查询单条报告
 
@@ -50,14 +50,14 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(id=report_id, state__not=1).first()
+        instance = await self.model.filter(id=report_id, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询报告信息失败, 报告(code={report_id})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, report_code: str, on_error: bool = False) -> Optional[AutoTestApiReportInfo]:
+    async def get_by_code(self, report_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiReportInfo]:
         """
         根据报告标识代码查询单条报告
 
@@ -72,7 +72,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(report_code=report_code, state__not=1).first()
+        instance = await self.model.filter(report_code=report_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询报告信息失败, 报告(code={report_code})不存在"
             LOGGER.error(error_message)
@@ -100,7 +100,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         )
 
         try:
-            report_dict = report_in.dict(exclude_none=True, exclude_unset=True)
+            report_dict = report_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
@@ -121,9 +121,9 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         # 业务层验证：检查用例是否存在
         if report_id:
-            await self.get_by_id(report_id=report_id, on_error=True)
+            await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(report_code=report_code, on_error=True)
+            instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
             report_id: int = instance.id
 
         try:
@@ -153,9 +153,9 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """
         # 业务层验证：检查用例是否存在
         if report_id:
-            instance = await self.get_by_id(report_id=report_id, on_error=True)
+            instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
-            instance = await self.get_by_code(report_code=report_code, on_error=True)
+            instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
 
         # 业务层验证：检查报告是否存在明细信息, 如果存在则删除
         async with in_transaction():

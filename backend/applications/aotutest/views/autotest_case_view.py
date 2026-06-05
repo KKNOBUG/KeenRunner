@@ -125,9 +125,9 @@ async def get_case(
 ):
     try:
         if case_id:
-            instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+            instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_CASE_CRUD.get_by_code(case_code=case_code, on_error=True)
+            instance = await AUTOTEST_API_CASE_CRUD.get_by_code(case_code=case_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -138,10 +138,7 @@ async def get_case(
             replace_fields={"id": "case_id"}
         )
         project_id: int = data.pop("case_project")
-        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(
-            on_error=True,
-            project_id=project_id
-        )
+        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(on_error=True, project_id=project_id, state__not=1)
         data["case_project"] = await project_instance.to_dict(
             exclude_fields={
                 "state",
@@ -161,13 +158,7 @@ async def get_case(
                     "reserve_1", "reserve_2", "reserve_3"
                 },
                 replace_fields={"id": "tag_id"}
-            ) for obj in (
-                await AUTOTEST_API_TAG_CRUD.get_by_ids(
-                    tag_ids=tag_ids,
-                    on_error=True,
-                    return_obj=True
-                )
-            )
+            ) for obj in await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
         ]
         LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
@@ -226,10 +217,7 @@ async def search_cases(
                 replace_fields={"id": "case_id"}
             )
             project_id: int = serialize.pop("case_project")
-            project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(
-                on_error=True,
-                project_id=project_id
-            )
+            project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(on_error=True, project_id=project_id, state__not=1)
             serialize["case_project"] = await project_instance.to_dict(
                 exclude_fields={
                     "state",
@@ -249,13 +237,7 @@ async def search_cases(
                         "reserve_1", "reserve_2", "reserve_3"
                     },
                     replace_fields={"id": "tag_id"}
-                ) for obj in (
-                    await AUTOTEST_API_TAG_CRUD.get_by_ids(
-                        tag_ids=tag_ids,
-                        on_error=True,
-                        return_obj=True
-                    )
-                )
+                ) for obj in await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
             ]
             case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")

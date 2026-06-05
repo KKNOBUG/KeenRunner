@@ -119,9 +119,9 @@ async def get_report(
 ):
     try:
         if report_id:
-            instance = await AUTOTEST_API_REPORT_CRUD.get_by_id(report_id=report_id, on_error=True)
+            instance = await AUTOTEST_API_REPORT_CRUD.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_REPORT_CRUD.get_by_code(report_code=report_code, on_error=True)
+            instance = await AUTOTEST_API_REPORT_CRUD.get_by_code(report_code=report_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",

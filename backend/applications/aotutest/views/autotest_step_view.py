@@ -1197,7 +1197,11 @@ async def execute_step_tree(
                     "case_name": first_step.get("case_name"),
                 }
             if not case_info:
-                case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True)
+                case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_id(
+                    case_id=case_id,
+                    on_error=True,
+                    state__not=1
+                )
                 case_info = {
                     "case_id": case_id,
                     "case_code": case_instance.case_code,
