@@ -12,10 +12,8 @@ from tortoise.exceptions import DoesNotExist
 
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
-from backend.applications.base.schemas.role_schema import (
-    RoleCreate,
-    RoleUpdate
-)
+from backend.applications.base.models.router_model import Router
+from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
@@ -85,7 +83,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
         await role.routers.clear()
         for item in router_infos:
-            router_obj = await self.get_by_conditions(only_one=False, path=item.get("path"), method=item.get("method"))
+            router_obj = await Router.filter(path=item.get("path"), method=item.get("method")).first()
             await role.routers.add(router_obj)
 
     async def delete_role(self, role_id: int, **kwargs) -> Role:

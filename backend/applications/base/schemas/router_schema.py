@@ -14,7 +14,6 @@ from backend.enums import HTTPMethod
 
 
 class RouterBase(BaseModel):
-    id: Optional[int] = Field(default=None, description="路由ID")
     path: Optional[str] = Field(default=None, max_length=255, description="路由请求路径")
     method: Optional[HTTPMethod] = Field(default=None, description="路由请求方式")
     summary: Optional[str] = Field(default=None, max_length=255, description="路由作用简介")

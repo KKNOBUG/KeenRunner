@@ -36,10 +36,8 @@ export default {
   updateRoleAuthorized: (data = {}) => request.post('/base/role/authorized', data),
   getRoleAuthorized: (params = {}) => request.get('/base/role/authorized', { params }),
   // 菜单相关
-  /** 菜单树（Query：name、menu_type） */
+  /** Query 走 URL params（与后端 list_menu 的 Query 一致） */
   getMenus: (params = {}) => request.post('/base/menu/list', {}, { params }),
-  /** 菜单分页列表（平面数据），Body 同后端 MenuSelect */
-  searchMenuList: (data = {}) => request.post('/base/menu/search', { page: 1, page_size: 10, order: ['order', 'id'], ...data }),
   createMenu: (data = {}) => request.post('/base/menu/create', data),
   updateMenu: (data = {}) => request.post('/base/menu/update', data),
   deleteMenu: (params = {}) => request.delete('/base/menu/delete', { params }),

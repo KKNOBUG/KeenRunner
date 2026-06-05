@@ -46,16 +46,13 @@ const menuTypeFilterOptions = [
   { label: '菜单', value: 'menu' },
 ]
 
-function buildMenuSearch(overrides = {}) {
-  const q = queryItems.value
-  const name = (overrides.name ?? q.name)?.trim?.() ?? ''
-  const menuType = overrides.menu_type ?? q.menu_type
-  return {
-    ...overrides,
-    name: name || undefined,
-    menu_type: menuType == null || menuType === '' ? undefined : menuType,
-    order: overrides.order?.length ? overrides.order : ['order', 'id'],
-  }
+function fetchMenuList(params) {
+  const p = { ...params }
+  const nm = p.name != null ? String(p.name).trim() : ''
+  if (nm) p.name = nm
+  else delete p.name
+  if (p.menu_type == null || p.menu_type === '') delete p.menu_type
+  return api.getMenus(p)
 }
 
 // 表单初始化内容
@@ -201,7 +198,7 @@ const columns = [
                   size: 'tiny',
                   quaternary: true,
                   type: 'primary',
-                  style: `display: ${row.menu_type === 'catalog' ? '' : 'none'};`,
+                  style: `display: ${row.children && row.menu_type !== 'menu' ? '' : 'none'};`,
                   onClick: () => {
                     initForm.parent_id = row.id
                     initForm.menu_type = 'menu'
@@ -246,7 +243,7 @@ const columns = [
                             size: 'tiny',
                             quaternary: true,
                             type: 'error',
-                            style: `display: ${row.has_children ? 'none' : ''};`,
+                            style: `display: ${row.children && row.children.length > 0 ? 'none' : ''};`, //有子菜单不允许删除
                           },
                           {
                             default: () => '删除',
@@ -295,7 +292,7 @@ function handleClickAdd() {
 }
 
 async function getTreeSelect() {
-  const { data } = await api.getMenus()
+  const { data } = await api.getMenus({ page: 1, page_size: 9999 })
   const menu = { id: 0, name: '根目录', children: [] }
   menu.children = data || []
   menuOptions.value = [menu]
@@ -313,7 +310,7 @@ async function getTreeSelect() {
         :is-pagination="true"
         :remote="true"
         :columns="columns"
-        :get-data="(params) => api.searchMenuList(buildMenuSearch(params))"
+        :get-data="fetchMenuList"
         :single-line="true"
         :scroll-x="1200"
         @query-bar-create="handleClickAdd"

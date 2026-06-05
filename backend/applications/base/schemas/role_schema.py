@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 
 class RoleBase(BaseModel):
-    id: Optional[int] = Field(default=None, description="角色ID")
     code: Optional[str] = Field(default=None, max_length=16, description="角色代码")
     name: Optional[str] = Field(default=None, max_length=64, description="角色名称")
     description: Optional[str] = Field(default=None, description="角色描述")
