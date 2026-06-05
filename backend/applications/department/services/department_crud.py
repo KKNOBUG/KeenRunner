@@ -50,7 +50,20 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
     async def get_by_name(self, name: str) -> Optional[Department]:
         return await self.get_by_conditions(only_one=False, on_error=False, name=name)
 
+    async def _validate_parent_id(self, parent_id: int, *, department_id: Optional[int] = None) -> None:
+        """部门最多两级：parent_id 只能为 0 或顶级部门 id。"""
+        if parent_id == 0:
+            return
+        if department_id is not None and parent_id == department_id:
+            raise ParameterException(message="父级部门不能为自身")
+        parent = await self.get_by_id(parent_id, on_error=True)
+        if parent.is_deleted:
+            raise ParameterException(message=f"父级部门(id={parent_id})不存在或已删除")
+        if parent.parent_id != 0:
+            raise ParameterException(message="子部门不允许再添加子部门，父级只能选择顶级部门")
+
     async def create_department(self, department_in: DepartmentCreate, created_user: Optional[str] = None) -> Department:
+        await self._validate_parent_id(department_in.parent_id)
         code = department_in.code
         name = department_in.name
         instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
@@ -76,10 +89,21 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         department_id: int = department_in.id
         try:
             instance = await self.get_by_id(department_id=department_id)
-            # 更新部门关系
-            if instance.parent_id != department_in.parent_id:
+            new_parent_id = (
+                department_in.parent_id
+                if department_in.parent_id is not None
+                else instance.parent_id
+            )
+            await self._validate_parent_id(new_parent_id, department_id=department_id)
+            if new_parent_id != instance.parent_id:
+                child_count = await self.model.filter(
+                    parent_id=department_id, is_deleted=False
+                ).count()
+                if child_count > 0 and new_parent_id != 0:
+                    raise ParameterException(message="含有子部门的顶级部门不能设置为子部门")
                 await DeptStruct.filter(ancestor=instance.id).delete()
                 await DeptStruct.filter(descendant=instance.id).delete()
+                instance.parent_id = new_parent_id
                 await self.update_dept_closure(instance)
             # 更新部门信息
             update_dict = department_in.model_dump(exclude_unset=True, exclude={"id"})

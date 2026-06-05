@@ -23,12 +23,14 @@ from backend.configure import LOGGER
 from backend.core.exceptions import (
     DataAlreadyExistsException,
     NotFoundException,
+    ParameterException,
 )
 from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
     NotFoundResponse,
+    ParameterResponse,
 )
 from backend.services import DependAuth
 
@@ -49,6 +51,8 @@ async def create_dept(
         return SuccessResponse(data=data)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=e.__str__())
+    except ParameterException as e:
+        return ParameterResponse(message=e.message)
     except Exception as e:
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
@@ -90,6 +94,8 @@ async def update_dept(
         return SuccessResponse(data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=e.__str__())
+    except ParameterException as e:
+        return ParameterResponse(message=e.message)
     except Exception as e:
         return FailureResponse(message=f"更新失败，异常描述:{e}")
 

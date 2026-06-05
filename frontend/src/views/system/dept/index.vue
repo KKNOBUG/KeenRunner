@@ -7,59 +7,45 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { apiPermissionKey, renderIcon } from '@/utils'
+import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
-// import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
 
 defineOptions({ name: '部门管理' })
 
 const $table = ref(null)
-/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
-const listPaginationMeta = ref({ page: 1, page_size: 10 })
-function onListPaginationMeta(meta) {
-  listPaginationMeta.value = meta
-}
-
-const checkedRowKeys = ref([])
 const queryItems = ref({ name: '' })
 const vPermission = resolveDirective('permission')
 
+/** QueryBar：平铺「重置、搜索、新增」，无删除 */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
   addCreate: true,
-  addDelete: true,
-  actionMode: 'dropdown',
+  addDelete: false,
+  actionMode: 'inline',
 }
 
-async function handleBatchDelete() {
-  const ids = checkedRowKeys.value || []
-  if (!ids.length) {
-    $message.warning('请先勾选要删除的部门')
-    return
-  }
-  await $dialog.confirm({
-    title: '提示',
-    type: 'warning',
-    content: `确定删除选中的 ${ids.length} 个部门吗？`,
-    async confirm() {
-      await api.deleteDeptBatch({ department_ids: ids })
-      $message.success('删除成功')
-      checkedRowKeys.value = []
-      $table.value?.handleSearch?.()
-      api.getDepts().then((res) => (deptOption.value = res.data))
-    },
+function fetchDeptList(params) {
+  const p = { ...params }
+  const nm = p.name != null ? String(p.name).trim() : ''
+  if (nm) p.name = nm
+  else delete p.name
+  return api.getDepts(p).then((res) => {
+    const list = res.data || []
+    return {
+      data: list,
+      total: res.total ?? (Array.isArray(list) ? list.length : 0),
+    }
   })
 }
 
-function buildDeptSearch(overrides = {}) {
-  const q = queryItems.value
-  return {
-    ...overrides,
-    name: (overrides.name ?? q.name) || undefined,
-    order: overrides.order?.length ? overrides.order : ['id'],
-  }
+const initForm = {
+  parent_id: 0,
+  code: '',
+  name: '',
+  description: '',
+  order: 0,
 }
 
 const {
@@ -74,29 +60,29 @@ const {
   handleAdd,
 } = useCRUD({
   name: '部门',
-  initForm: {
-    parent_id: 0,
-    code: '',
-    name: '',
-    description: '',
-    order: 0,
-  },
+  initForm,
   doCreate: api.createDept,
   doUpdate: api.updateDept,
   doDelete: api.deleteDept,
   refresh: () => {
     $table.value?.handleSearch()
-    api.getDepts().then((res) => (deptOption.value = res.data))
+    getTreeSelect()
   },
 })
 
-const deptOption = ref([])
+const deptTree = ref([])
 const isDisabled = ref(false)
 
+/** 父级下拉：仅允许选择根目录或顶级部门（最多两级） */
+const parentDeptOptions = computed(() => {
+  const root = { id: 0, name: '根目录', children: [] }
+  root.children = (deptTree.value || []).map(({ id, name }) => ({ id, name }))
+  return [root]
+})
+
 onMounted(() => {
-  // 仅加载父级下拉树数据；表格列表等用户点击「搜索」后再请求
+  getTreeSelect()
   $table.value?.handleSearch()
-  api.getDepts().then((res) => (deptOption.value = res.data))
 })
 
 const deptRules = {
@@ -109,136 +95,156 @@ const deptRules = {
   ],
 }
 
-async function addDepts() {
-  isDisabled.value = false
+function handleClickAdd() {
+  isDisabled.value = true
+  initForm.parent_id = 0
   handleAdd()
 }
 
-const columns = computed(() => {
-  const { page, page_size } = listPaginationMeta.value
-  const seqBase = (page - 1) * page_size
-  return [
-    { type: 'selection', fixed: 'left', width: 48 },
-    {
-      title: '序号',
-      key: '__seq',
-      width: 64,
-      align: 'center',
-      render(_row, rowIndex) {
-        return seqBase + rowIndex + 1
-      },
+async function getTreeSelect() {
+  const { data } = await api.getDepts()
+  deptTree.value = data || []
+}
+
+const columns = [
+  {
+    title: 'ID',
+    key: 'id',
+    width: 100,
+    ellipsis: { tooltip: true },
+    align: 'center'
+  },
+  {
+    title: '部门代码',
+    key: 'code',
+    width: 100,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return h(NTag, { type: 'info' }, { default: () => row.code })
     },
-    {
-      title: '部门代码',
-      key: 'code',
-      width: 'auto',
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        return h(
-            NTag,
-            {type: 'info', style: {margin: '2px 3px'}},
-            {default: () => row.code}
-        )
-      },
+  },
+  {
+    title: '排序',
+    key: 'order',
+    width: 100,
+    ellipsis: { tooltip: true },
+    align: 'center'
+  },
+  {
+    title: '部门名称',
+    key: 'name',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return h(NTag, { type: 'info' }, { default: () => row.name })
     },
-    {
-      title: '部门名称',
-      key: 'name',
-      width: 'auto',
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        return h(
-            NTag,
-            {type: 'info', style: {margin: '2px 3px'}},
-            {default: () => row.name}
-        )
-      },
+  },
+  {
+    title: '部门描述',
+    key: 'description',
+    width: 300,
+    ellipsis: { tooltip: true },
+    align: 'center'
+  },
+  {
+    title: '创建日期',
+    key: 'created_time',
+    width: 180,
+    align: 'center',
+    render(row) {
+      return h('span', formatDateTime(row.created_time))
     },
-    {
-      title: '部门描述',
-      key: 'description',
-      align: 'center',
-      width: 'auto',
-      ellipsis: { tooltip: true },
+  },
+  {
+    title: '更新日期',
+    key: 'updated_time',
+    width: 180,
+    align: 'center',
+    render(row) {
+      return h('span', formatDateTime(row.updated_time))
     },
-    {
-      title: '创建时间',
-      key: 'created_time',
-      align: 'center',
-      width: 'auto',
-      ellipsis: { tooltip: true },
-    },
-    {
-      title: '维护时间',
-      key: 'updated_time',
-      align: 'center',
-      width: 'auto',
-      ellipsis: { tooltip: true },
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 80,
-      align: 'center',
-      fixed: 'right',
-      render(row) {
-        return [
-          withDirectives(
-              h(
-                  NButton,
-                  {
-                    size: 'tiny',
-                    quaternary: true,
-                    type: 'info',
-                    onClick: () => {
-                      if (row.parent_id === 0) {
-                        isDisabled.value = true
-                      } else {
-                        isDisabled.value = false
-                      }
-                      handleEdit(row)
-                    },
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 80,
+    align: 'center',
+    fixed: 'right',
+    render(row) {
+      return [
+        withDirectives(
+            h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'primary',
+                  style: `display: ${row.parent_id === 0 ? '' : 'none'};`,
+                  onClick: () => {
+                    initForm.parent_id = row.id
+                    isDisabled.value = true
+                    handleAdd()
                   },
-                  {
-                    default: () => '编辑',
-                    icon: renderIcon('material-symbols:edit', { size: 16 }),
-                  }
-              ),
-              [[vPermission, apiPermissionKey('post', '/dept/update')]]
-          ),
-          h(
-              NPopconfirm,
-              {
-                onPositiveClick: () => handleDelete({ department_id: row.id }, false),
-                onNegativeClick: () => {},
-              },
-              {
-                trigger: () =>
-                    withDirectives(
-                        h(
-                            NButton,
-                            {
-                              size: 'tiny',
-                              quaternary: true,
-                              type: 'error',
-                            },
-                            {
-                              default: () => '删除',
-                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                            }
-                        ),
-                        [[vPermission, apiPermissionKey('delete', '/dept/delete')]]
-                    ),
-                default: () => h('div', {}, '确定删除该部门吗?'),
-              }
-          ),
-        ]
-      },
+                },
+                { default: () => '子部门', icon: renderIcon('material-symbols:add', { size: 16 }) }
+            ),
+            [[vPermission, apiPermissionKey('post', '/dept/create')]]
+        ),
+        withDirectives(
+            h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'info',
+                  onClick: () => {
+                    if (row.parent_id === 0) {
+                      isDisabled.value = true
+                    } else {
+                      isDisabled.value = false
+                    }
+                    handleEdit(row)
+                  },
+                },
+                {
+                  default: () => '编辑',
+                  icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
+                }
+            ),
+            [[vPermission, apiPermissionKey('post', '/dept/update')]]
+        ),
+        h(
+            NPopconfirm,
+            {
+              onPositiveClick: () => handleDelete({ department_id: row.id }, false),
+            },
+            {
+              trigger: () =>
+                  withDirectives(
+                      h(
+                          NButton,
+                          {
+                            size: 'tiny',
+                            quaternary: true,
+                            type: 'error',
+                            style: `display: ${row.children && row.children.length > 0 ? 'none' : ''};`,
+                          },
+                          {
+                            default: () => '删除',
+                            icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                          }
+                      ),
+                      [[vPermission, apiPermissionKey('delete', '/dept/delete')]]
+                  ),
+              default: () => h('div', {}, '确定删除该部门吗?'),
+            }
+        ),
+      ]
     },
-  ]
-})
+  },
+]
 </script>
 
 <template>
@@ -248,25 +254,21 @@ const columns = computed(() => {
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        v-model:checked-row-keys="checkedRowKeys"
         :query-bar-props="queryBarProps"
         :is-pagination="true"
         :remote="true"
         :columns="columns"
-        :get-data="(params) => api.searchDeptList(buildDeptSearch(params))"
-        :scroll-x="1100"
+        :get-data="fetchDeptList"
+        :single-line="true"
+        :scroll-x="1200"
         row-key="id"
-        @query-bar-create="addDepts"
-        @query-bar-delete="handleBatchDelete"
-        @pagination-meta="onListPaginationMeta"
+        @query-bar-create="handleClickAdd"
     >
-      <!--   搜索狂   -->
       <template #queryBar>
         <QueryBarItem label="部门名称：">
           <NInput
               v-model:value="queryItems.name"
               clearable
-              type="text"
               placeholder="请输入部门名称"
               @keypress.enter="$table?.handleSearch()"
           />
@@ -279,7 +281,7 @@ const columns = computed(() => {
         v-model:visible="modalVisible"
         :title="modalTitle"
         :loading="modalLoading"
-        @save="handleSave"
+        @save="handleSave(getTreeSelect)"
     >
       <NForm
           ref="modalFormRef"
@@ -291,12 +293,11 @@ const columns = computed(() => {
         <NFormItem label="父级部门" path="parent_id">
           <NTreeSelect
               v-model:value="modalForm.parent_id"
-              :options="deptOption"
+              :options="parentDeptOptions"
               key-field="id"
               label-field="name"
               placeholder="请选择父级部门"
-              clearable
-              default-expand-all
+              :default-expand-all="true"
               :disabled="isDisabled"/>
         </NFormItem>
         <NFormItem label="部门代码" path="code">

@@ -90,7 +90,13 @@ const showMenuType = ref(false)
 const menuOptions = ref([])
 
 const columns = [
-  {title: 'ID', key: 'id', width: 100, ellipsis: {tooltip: true}, align: 'center'},
+  {
+    title: 'ID',
+    key: 'id',
+    width: 100,
+    ellipsis: {tooltip: true},
+    align: 'center'
+  },
   {
     title: '菜单类型',
     key: 'menu_type',
