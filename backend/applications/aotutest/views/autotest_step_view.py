@@ -450,12 +450,10 @@ async def debug_http_request(
                     only_one=True,
                     on_error=False,
                     state__not=1,
-                    conditions={
-                        "env_id": env_id,
-                        "project_id": request_project_id,
-                        "config_name": request_config_name,
-                        "config_type": AutoTestConfigNodeType.API
-                    }
+                    env_id=env_id,
+                    project_id=request_project_id,
+                    config_name=request_config_name,
+                    config_type=AutoTestConfigNodeType.API
                 )
                 if not env_config_instance:
                     return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不存在")
@@ -789,12 +787,10 @@ async def debug_tcp_request(
                 only_one=True,
                 on_error=False,
                 state__not=1,
-                conditions={
-                    "env_id": env_id,
-                    "project_id": request_project_id,
-                    "config_name": request_config_name,
-                    "config_type": AutoTestConfigNodeType.API
-                },
+                env_id=env_id,
+                project_id=request_project_id,
+                config_name=request_config_name,
+                config_type=AutoTestConfigNodeType.API
             )
             if not env_config_instance:
                 msg = f"TCP请求调试失败, 环境配置[{request_config_name}]不存在"

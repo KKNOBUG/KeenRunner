@@ -9,11 +9,10 @@
 import datetime
 import traceback
 import uuid
-from typing import Optional, List, Dict, Any, Set, Union
+from typing import Optional, List, Dict, Any, Set
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.models.autotest_model import (
@@ -99,42 +98,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
-
-    async def get_by_conditions(
-            self,
-            conditions: Dict[str, Any],
-            only_one: bool = True,
-            on_error: bool = False,
-            **kwargs
-    ) -> Optional[Union[AutoTestApiStepInfo, List[AutoTestApiStepInfo]]]:
-        """
-        根据条件查询步骤
-
-        :param conditions: 查询条件字典。
-        :param only_one: 为 True 时返回单条记录，否则返回列表。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录。
-        :returns: 单条步骤、步骤列表或 None。
-        :raises ParameterException: 条件非法或查询异常时。
-        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
-        """
-        try:
-            stmt: QuerySet = self.model.filter(**conditions, **kwargs)
-            instances = await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            error_message: str = f"查询步骤信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-        except Exception as e:
-            error_message: str = f"查询步骤信息发生未知异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-        if not instances and on_error:
-            error_message: str = f"查询步骤信息失败, 条件{conditions}不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instances
 
     async def get_by_case_id(
             self,
@@ -567,10 +530,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 业务层验证：如果更新了引用脚本ID，检查引用公共脚本是否存在
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
             quote_case_id: int = update_dict["quote_case_id"]
-            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_query(
+            quote_case = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
                 only_one=True,
+                on_error=False,
                 id=quote_case_id,
                 case_type=AutoTestCaseType.PUBLIC_SCRIPT.value,
+                state__not=1,
             )
             if not quote_case:
                 error_message: str = f"根据(id={quote_case_id}, case_type=公共脚本)条件检查用例信息失败, 引用公共脚本信息不存在"

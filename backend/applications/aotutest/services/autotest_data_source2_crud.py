@@ -215,6 +215,7 @@ class AutoTestApiDataCreateCrud(
                         id=instance.id,
                         create_status="0",
                         file_path=data_in.file_path,
+                        file_desc=data_in.file_desc
                     )
                 )
                 return instance

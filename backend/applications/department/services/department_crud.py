@@ -26,10 +26,10 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return await self.get_or_none(id=department_id)
 
     async def get_by_code(self, code: str) -> Optional[Department]:
-        return await self.get_by_conditions(only_one=False, code=code)
+        return await self.get_by_conditions(only_one=False, on_error=False, code=code)
 
     async def get_by_name(self, name: str) -> Optional[Department]:
-        return await self.get_by_conditions(only_one=False, name=name)
+        return await self.get_by_conditions(only_one=False, on_error=False, name=name)
 
     async def create_department(
             self,
@@ -38,7 +38,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
     ) -> Department:
         code = department_in.code
         name = department_in.name
-        instances = await self.get_by_conditions(only_one=True, code=code, name=name)
+        instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
         if instances:
             raise DataAlreadyExistsException(message=f"部门(code={code},name={name})信息已存在")
 

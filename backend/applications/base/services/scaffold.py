@@ -7,6 +7,7 @@
 @DateTime: 2025/1/18 10:48
 """
 import asyncio
+import traceback
 import uuid
 from datetime import datetime, date, time, timedelta
 from decimal import Decimal
@@ -20,8 +21,8 @@ from tortoise.expressions import Q
 from tortoise.models import Model
 from tortoise.queryset import QuerySet
 
-from backend.configure import GLOBAL_CONFIG
-from backend.core.exceptions import ParameterException
+from backend.configure import GLOBAL_CONFIG, LOGGER
+from backend.core.exceptions import ParameterException, NotFoundException
 
 
 def unique_identify() -> str:
@@ -243,17 +244,26 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         return await self.model.filter(id=id, **kwargs).first()
 
-    async def get_by_conditions(self, only_one: bool = True, **kwargs) -> Optional[Union[ModelType, List[ModelType]]]:
+    async def get_by_conditions(self, only_one: bool = True, on_error: bool = True, **kwargs) -> Optional[Union[ModelType, List[ModelType]]]:
         """
-        :param only_one: 为 True 时返回单条记录，否则返回列表。。
+        :param only_one: 为 True 时返回单条记录，否则返回列表。
+        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
         :param kwargs: 要获取的对象的关键字。
         :return: 与 kwargs 对应的数据库对象，如果不存在会返回None。
         """
         try:
             stmt: QuerySet = self.model.filter(**kwargs)
-            return await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            raise ParameterException(message=e.__str__()) from e
+            instances = await (stmt.first() if only_one else stmt.all())
+        except (FieldError, Exception) as e:
+            error_message: str = f"根据条件[{kwargs}]查询数据异常: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+        if not instances and on_error:
+            error_message: str = f"根据条件[{kwargs}]查询数据为空"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instances
 
     async def list(
             self,

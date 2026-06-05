@@ -81,40 +81,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_conditions(
-            self,
-            conditions: Dict[str, Any],
-            only_one: bool = True,
-            on_error: bool = False,
-            **kwargs
-    ) -> Optional[Union[AutoTestApiEnvConfigInfo, List[AutoTestApiEnvConfigInfo]]]:
-        """
-        根据条件查询
-        :param conditions: 查询条件字典
-        :param only_one: 为 True 时返回单条记录，否则返回列表
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录
-        :returns: 单条配置、配置列表或 None
-        :raises ParameterException: 条件非法或查询异常时
-        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时
-        """
-        try:
-            stmt: QuerySet = self.model.filter(**conditions, **kwargs)
-            instances = await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            error_message: str = f"查询配置信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-        except Exception as e:
-            error_message: str = f"查询配置信息发生未知异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-        if not instances and on_error:
-            error_message: str = f"查询配置信息失败, 条件{conditions}不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instances
 
     async def create_config(self, config_in: AutoTestApiConfigCreate) -> AutoTestApiEnvConfigInfo:
         """

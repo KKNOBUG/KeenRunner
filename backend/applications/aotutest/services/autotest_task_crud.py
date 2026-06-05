@@ -78,40 +78,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_conditions(
-            self,
-            conditions: Dict[str, Any],
-            only_one: bool = True,
-            on_error: bool = False
-    ) -> Optional[Union[AutoTestApiTaskInfo, List[AutoTestApiTaskInfo]]]:
-        """
-        根据条件查询任务
-
-        :param conditions: 查询条件字典。
-        :param only_one: 为 True 时返回单条记录，否则返回列表。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 单条任务、任务列表或 None。
-        :raises ParameterException: 条件非法或查询异常时。
-        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
-        """
-        try:
-            stmt: QuerySet = self.model.filter(**conditions, state__not=1)
-            instances = await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            error_message: str = f"查询任务信息异常, 错误描述: {e}"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        except Exception as e:
-            error_message: str = f"查询任务信息发生未知异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-        if not instances and on_error:
-            error_message: str = f"查询任务信息失败, 条件{conditions}不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instances
-
     async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestApiTaskInfo:
         """创建任务，校验项目存在及 (task_name, task_project) 唯一。
 

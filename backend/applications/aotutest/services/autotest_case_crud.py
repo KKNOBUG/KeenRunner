@@ -7,11 +7,10 @@
 @DateTime: 2025/4/28
 """
 import traceback
-from typing import Optional, Dict, Any, List, Set, Union
+from typing import Optional, Dict, Any, List, Set
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
@@ -78,41 +77,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
-
-    async def get_by_query(
-            self,
-            *,
-            only_one: bool = True,
-            on_error: bool = False,
-            **kwargs
-    ) -> Optional[Union[AutoTestApiCaseInfo, List[AutoTestApiCaseInfo]]]:
-        """
-        根据条件查询用例
-
-        :param conditions: 查询条件字典，键为模型字段名。
-        :param only_one: 为 True 时返回单条记录，否则返回列表。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 单条用例、用例列表或 None。
-        :raises ParameterException: 条件非法或查询异常时。
-        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
-        """
-        try:
-            stmt: QuerySet = self.model.filter(state__not=1, **kwargs)
-            instances = await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            error_message: str = f"查询用例信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-        except Exception as e:
-            error_message: str = f"查询用例信息发生未知异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-        if not instances and on_error:
-            error_message: str = f"查询用例信息失败, 条件{kwargs}不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instances
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
         """创建一条用例，校验标签存在性及同项目下用例名称唯一性。
@@ -295,10 +259,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             if not case_id and not case_code:
                 case_instance = None
             else:
-                case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_query(
+                case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                     only_one=True,
                     id=case_id,
                     case_code=case_code,
+                    state__not=1
                 )
 
             # 用例不存在，执行新增，及验证必填字段
@@ -317,11 +282,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     raise ParameterException(message=error_message)
 
                 # 业务层验证：检查应用ID和用例名称是否唯一
-                existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_query(
+                existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                     only_one=True,
                     case_project=case_project,
                     case_name=case_name,
                     case_type=case_type,
+                    state__not=1
                 )
                 if existing_case_instance:
                     error_message: str = (

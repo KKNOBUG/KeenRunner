@@ -7,11 +7,10 @@
 @DateTime: 2025/11/27 14:25
 """
 import traceback
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional
 
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiDetailInfo
 from backend.applications.aotutest.schemas.autotest_detail_schema import (
@@ -52,7 +51,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(id=detail_id, state__not=1).first()
+        instance = await self.get_or_none(id=detail_id, state__not=1)
         if not instance and on_error:
             error_message: str = f"查询明细信息失败, 明细(id={detail_id})不存在"
             LOGGER.error(error_message)
@@ -81,40 +80,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_conditions(
-            self,
-            conditions: Dict[str, Any],
-            only_one: bool = True,
-            on_error: bool = False
-    ) -> Optional[Union[AutoTestApiDetailInfo, List[AutoTestApiDetailInfo]]]:
-        """
-        根据条件查询明细
-
-        :param conditions: 查询条件字典。
-        :param only_one: 为 True 时返回单条记录，否则返回列表。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 单条明细、明细列表或 None。
-        :raises ParameterException: 条件非法或查询异常时。
-        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
-        """
-        try:
-            stmt: QuerySet = self.model.filter(**conditions, state__not=1)
-            instances = await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            error_message: str = f"查询明细信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-        except Exception as e:
-            error_message: str = f"查询明细信息发生未知异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-        if not instances and on_error:
-            error_message: str = f"查询明细信息失败, 条件{conditions}不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instances
-
     async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestApiDetailInfo:
         """创建一条执行明细，校验用例与报告存在性（可选跳过报告校验）。
 
@@ -129,11 +94,12 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_code: str = detail_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_query(
+        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
             case_code=case_code,
+            state__not=1,
         )
 
         # 业务层验证：检查报告是否存在
@@ -142,7 +108,10 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
                 only_one=True,
                 on_error=True,
-                conditions={"case_id": case_id, "case_code": case_code, "report_code": report_code}
+                case_id=case_id,
+                case_code=case_code,
+                report_code=report_code,
+                state__not=1,
             )
         try:
             report_dict = detail_in.model_dump(exclude_none=True, exclude_unset=True)
@@ -170,11 +139,12 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_code: Optional[str] = detail_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_query(
+        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
             case_code=case_code,
+            state__not=1,
         )
 
         # 业务层验证：检查报告是否存在
@@ -182,7 +152,10 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
             only_one=True,
             on_error=True,
-            conditions={"case_id": case_id, "case_code": case_code, "report_code": report_code}
+            case_id=case_id,
+            case_code=case_code,
+            report_code=report_code,
+            state__not=1,
         )
 
         # 业务层验证：更新明细传递参数
@@ -198,7 +171,9 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             instance = await self.get_by_conditions(
                 only_one=True,
                 on_error=True,
-                conditions={"report_code": report_code, "step_code": step_code},
+                report_code=report_code,
+                step_code=step_code,
+                state__not=1,
             )
             detail_id = instance.id
         try:
@@ -240,17 +215,11 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         else:
             instance = await self.get_by_conditions(
                 only_one=True,
-                on_error=False,
-                conditions={"report_code": report_code, "step_code": step_code},
+                on_error=True,
+                report_code=report_code,
+                step_code=step_code,
+                state__not=1,
             )
-        if not instance:
-            error_message: str = (
-                f"根据(detail_id={detail_id}或report_code={report_code}, step_code={step_code})条件检查失败, "
-                f"明细信息不存在"
-            )
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-
         instance.state = 1
         await instance.save()
         return instance

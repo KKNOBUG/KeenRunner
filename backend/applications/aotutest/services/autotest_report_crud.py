@@ -7,11 +7,10 @@
 @DateTime: 2025/11/27 09:34
 """
 import traceback
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiReportInfo
@@ -80,40 +79,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_conditions(
-            self,
-            conditions: Dict[str, Any],
-            only_one: bool = True,
-            on_error: bool = False
-    ) -> Optional[AutoTestApiReportInfo]:
-        """
-        根据条件查询报告
-
-        :param conditions: 查询条件字典。
-        :param only_one: 为 True 时返回单条记录，否则返回列表。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 单条报告、报告列表或 None。
-        :raises ParameterException: 条件非法或查询异常时。
-        :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
-        """
-        try:
-            stmt: QuerySet = self.model.filter(**conditions, state__not=1)
-            instances = await (stmt.first() if only_one else stmt.all())
-        except FieldError as e:
-            error_message: str = f"查询报告信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-        except Exception as e:
-            error_message: str = f"查询报告信息发生未知异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-        if not instances and on_error:
-            error_message: str = f"查询报告信息失败, 条件{conditions}不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instances
-
     async def create_report(self, report_in: AutoTestApiReportCreate) -> AutoTestApiReportInfo:
         """创建报告，校验用例存在性。
 
@@ -126,11 +91,12 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         case_code: str = report_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_query(
+        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
             case_code=case_code,
+            state__not=1,
         )
 
         try:

@@ -2053,11 +2053,12 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             self.context.executing_quote_case_id = quote_case_id
             try:
                 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-                quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_query(
+                quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
                     case_type=AutoTestCaseType.PUBLIC_SCRIPT.value,
+                    state__not=1,
                 )
             except (ParameterException, NotFoundException) as e:
                 raise StepExecutionError(f"【引用公共脚本】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
