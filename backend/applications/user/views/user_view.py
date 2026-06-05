@@ -11,6 +11,7 @@ import traceback
 from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
+from backend.applications.department.services.department_crud import DEPT_CRUD
 from backend.applications.user.schemas.user_schema import (
     UserCreate,
     UserUpdate,
@@ -88,8 +89,10 @@ async def get_user(user_id: int = Query(..., description="用户ID")):
     instance = await USER_CRUD.get_by_id(user_id=user_id, state__not=1)
     if not instance:
         return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
-    data: dict = await instance.to_dict(exclude_fields=["password"])
-    return SuccessResponse(message="查询成功", data=data, total=1)
+    data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"])
+    dept_id = data.pop("dept_id", None)
+    data["dept"] = await (await DEPT_CRUD.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+    return SuccessResponse(data=data)
 
 
 @user_secure.get("/byUsername", summary="查询用户信息", description="根据用户名查询用户信息")
@@ -140,10 +143,16 @@ async def list_user(
         page=page, page_size=page_size, order=order, search=q
     )
     data = [
-        await obj.to_dict(exclude_fields=["password"])
-        for obj in user_objs
+        await obj.to_dict(
+            m2m=True,
+            exclude_fields=["password"],
+        ) for obj in user_objs
     ]
-    return SuccessResponse(message="查询成功", data=data, total=total)
+    for item in data:
+        dept_id = item.pop("dept_id", None)
+        item["dept"] = await (await DEPT_CRUD.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+
+    return SuccessResponse(data=data, total=total)
 
 
 @user_secure.post("/search", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Body）")
@@ -183,9 +192,15 @@ async def get_users(user_in: UserSelect = Body()):
         page=user_in.page, page_size=user_in.page_size, search=q, order=user_in.order
     )
     data = [
-        await obj.to_dict(exclude_fields=["password"])
-        for obj in instances
+        await obj.to_dict(
+            m2m=True,
+            exclude_fields=["password"],
+        ) for obj in instances
     ]
+    for item in data:
+        dept_id = item.pop("dept_id", None)
+        item["dept"] = await (await DEPT_CRUD.get(id=dept_id)).to_dict() if dept_id else {}
+
     return SuccessResponse(message="查询成功", data=data, total=total)
 
 
