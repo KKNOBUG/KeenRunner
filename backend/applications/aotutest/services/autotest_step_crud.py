@@ -9,7 +9,7 @@
 import datetime
 import traceback
 import uuid
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Union
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -366,9 +366,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             stripped = strip_step_for_copy_model(root)
             steps.append(stripped.model_dump(mode="json"))
             if case_info is None and stripped.case is not None and isinstance(stripped.case, dict):
-                case_info = {**stripped.case}
-                case_info["case_id"] = None
-                case_info["case_code"] = None
+                case_info = {**stripped.case, "case_id": None, "case_code": None}
 
         return {"case": case_info or {}, "steps": steps}
 
@@ -1046,8 +1044,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise ParameterException(message=error_message)
 
         # 6. 执行用例（延后落库）：执行阶段不持事务，落库阶段单事务，保证「要么全部成功要么全部失败」且不长时间占锁
-        engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code, defer_save=True)
-        results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
+        engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code)
+        results, logs, _, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
             case=case_dict,
             steps=root_steps,
             initial_variables=merge_all_variables,
@@ -1055,38 +1053,31 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             report_type=report_type,
             dataset_name=dataset_name,
         )
-        if defer_create_report is not None:
-            try:
-                async with in_transaction():
-                    report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
-                    for detail_create in (pending_create_details or []):
-                        detail_schema = detail_create.model_copy(update={"report_code": report_instance.report_code})
-                        await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_schema)
-                    case_state = statistics.get("failed_steps", 0) == 0
-                    case_last_time = defer_create_report.case_ed_time
-                    await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
-                        case_id=case_id,
-                        case_state=case_state,
-                        case_last_time=case_last_time,
-                    ))
-            except Exception as e:
-                LOGGER.error(f"执行或调试步骤树(运行模式)时发生未知异常，错误描述: {e}\n{traceback.format_exc()}")
-
-            # 返回运行模式的简化结果
-            result_data: Dict[str, Any] = {
-                "success": statistics.get("failed_steps", 0) == 0,
-                "total_steps": statistics.get("total_steps", 0),
-                "success_steps": statistics.get("success_steps", 0),
-                "failed_steps": statistics.get("failed_steps", 0),
-                "passed_ratio": statistics.get("pass_ratio", 0.0),
-                "report_code": report_code,
-                "saved_to_database": True,
-                "case_id": case_id,
-                "case_code": case_dict.get("case_code"),
-                "case_name": case_dict.get("case_name"),
-            }
-
-            return result_data
+        async with in_transaction():
+            report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
+            for detail_create in (pending_create_details or []):
+                await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_create)
+            case_state = statistics.get("failed_steps", 0) == 0
+            case_last_time = defer_create_report.case_ed_time
+            await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
+                case_id=case_id,
+                case_state=case_state,
+                case_last_time=case_last_time,
+            ))
+        # 返回运行模式的简化结果
+        result_data: Dict[str, Any] = {
+            "success": statistics.get("failed_steps", 0) == 0,
+            "total_steps": statistics.get("total_steps", 0),
+            "success_steps": statistics.get("success_steps", 0),
+            "failed_steps": statistics.get("failed_steps", 0),
+            "passed_ratio": statistics.get("passed_ratio", 0.0),
+            "report_code": report_instance.report_code,
+            "saved_to_database": True,
+            "case_id": case_id,
+            "case_code": case_dict.get("case_code"),
+            "case_name": case_dict.get("case_name"),
+        }
+        return result_data
 
     async def batch_execute_cases(
             self,

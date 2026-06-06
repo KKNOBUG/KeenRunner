@@ -1230,7 +1230,7 @@ async def execute_step_tree(
                 debug_dataset_name: str = selected_dataset_names[0]
             else:
                 debug_dataset_name: Optional[str] = None
-            engine = AutoTestStepExecutionEngine(save_report=True, defer_save=True)
+            engine = AutoTestStepExecutionEngine(save_report=True)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
                 steps=all_root_steps,
@@ -1239,23 +1239,17 @@ async def execute_step_tree(
                 initial_variables=merged_variables,
                 dataset_name=debug_dataset_name,
             )
-            if defer_create_report is not None:
-                try:
-                    async with in_transaction():
-                        report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
-                        for detail_create in (pending_create_details or []):
-                            detail_schema = detail_create.model_copy(update={"report_code": report_instance.report_code})
-                            await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_schema)
-                        case_state: bool = statistics.get("failed_steps", 0) == 0
-                        case_last_time: str = defer_create_report.case_ed_time
-                        await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
-                            case_id=case_id,
-                            case_state=case_state,
-                            case_last_time=case_last_time,
-                        ))
-                except Exception as e:
-                    LOGGER.error(f"执行或调试步骤树(调试模式)时发生未知异常，错误描述: {e}\n{traceback.format_exc()}")
-
+            async with in_transaction():
+                report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
+                for detail_create in (pending_create_details or []):
+                    await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_create)
+                case_state: bool = statistics.get("failed_steps", 0) == 0
+                case_last_time: str = defer_create_report.case_ed_time
+                await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
+                    case_id=case_id,
+                    case_state=case_state,
+                    case_last_time=case_last_time,
+                ))
             # 7. 获取最终会话变量：merged_variables 与引擎返回的 session_variables（均为模型列表）按 key 合并
             final_m: Dict[str, StepVariablesBase] = {}
             for it in merged_variables:

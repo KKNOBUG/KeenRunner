@@ -40,6 +40,11 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
     step_pass_ratio: float = Field(default=0.0, ge=0, description="用例步骤成功率(含所有子级步骤)")
 
     report_type: AutoTestReportType = Field(..., description="报告类型")
+    report_code: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="报告标识代码；执行引擎落库时传入与明细一致的预生成 code，未传时由 ORM 默认生成",
+    )
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 

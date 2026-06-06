@@ -209,7 +209,7 @@ class StepExecutionContext:
         :param dataset_name: 参数化时传入的数据集名称，仅 HttpStepExecutor 内据此 + case_id/step_no/step_code 查表取数
         :param http_client: 可选 HTTP 客户端，不传则在__aenter__中创建
         :param initial_variables: 初始会话变量列表List[StepVariablesBase]；会经占位符解析后赋给session_variables
-        :param pending_details: 延后落库时收集明细的列表，非 None 时 _save_step_detail 只追加不写库
+        :param pending_details: save_report 时收集待落库明细的列表；非 None 时 _save_step_detail 仅追加不写库
         """
         self.case_id = case_id
         self.case_code = case_code
@@ -1090,8 +1090,7 @@ class BaseStepExecutor:
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
         """
-        将本步骤执行结果写入明细表（含响应、变量、断言、日志等）
-        若 context.pending_details 非空则仅追加到该列表，不写库（延后落库模式）
+        将本步骤执行结果序列化为明细创建体并追加到 context.pending_details，由调用方在短事务内统一落库
         :param result: 本步骤执行结果对象
         :param step_st_time_str: 步骤开始时间字符串
         :param num_cycles: 循环第几轮（非循环步骤可为 None）
@@ -1189,9 +1188,6 @@ class BaseStepExecutor:
         )
         if self.context.pending_details is not None:
             self.context.pending_details.append(detail_create)
-            return
-        from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-        await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_create)
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -3042,20 +3038,18 @@ class AutoTestStepExecutionEngine:
             save_report: bool = True,
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
-            defer_save: bool = False,
     ) -> None:
         """
         初始化执行引擎。
         :param http_client: 可选 HTTP 客户端，不传则上下文内自动创建
-        :param save_report: 是否创建并更新报告与步骤明细
+        :param save_report: 是否收集报告与步骤明细供调用方落库（执行阶段不写库，由调用方单事务写入）
         :param task_code: 任务编码，写入报告
-        :param defer_save: True 时仅收集报告/明细数据不写库，由调用方在短事务内一次性落库，保证原子性且不长时间持锁
+        :param batch_code: 批次编码，写入报告
         """
         self._http_client = http_client
         self._save_report = save_report
         self._task_code = task_code
         self._batch_code = batch_code
-        self._defer_save = defer_save
         self._report_code: Optional[str] = None
         self._pending_details: List[AutoTestApiDetailCreate] = []
 
@@ -3094,7 +3088,8 @@ class AutoTestStepExecutionEngine:
             - report_code 未保存时为 None；
             - statistics 含 total_steps、success_steps、failed_steps、passed_ratio；
             - session_variables 为执行后变量列表；
-            - 当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表，调用方需先 create_report 取得 report_code，再为明细赋 report_code 后 create_detail，最后 update_case
+            - 当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表（report_code 已统一），
+              调用方在单事务内依次 create_report、create_detail、update_case
         """
         report_code: Optional[str] = None
         case_id: int = case.get("case_id")
@@ -3105,7 +3100,7 @@ class AutoTestStepExecutionEngine:
             report_code: str = unique_identify()
             self._report_code = report_code
             self._pending_details = []
-        pending_details_arg: Optional[List[AutoTestApiDetailCreate]] = self._pending_details if (self._save_report and self._defer_save) else None
+        pending_details_arg: Optional[List[AutoTestApiDetailCreate]] = self._pending_details if self._save_report else None
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,
@@ -3158,6 +3153,7 @@ class AutoTestStepExecutionEngine:
                 defer_create_report = AutoTestApiReportCreate(
                     case_id=case_id,
                     case_code=case_code,
+                    report_code=report_code,
                     case_st_time=case_st_time_str,
                     case_ed_time=case_ed_time_str,
                     case_elapsed=case_elapsed,
