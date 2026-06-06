@@ -159,6 +159,56 @@
               </div>
             </div>
 
+            <div v-if="panel.debugRedisRowsForSelected.length" class="exec-config-section">
+              <div class="exec-config-section-title">
+                Redis
+                <n-tag size="small" type="error">{{ panel.debugRedisRowsForSelected.length }}条</n-tag>
+              </div>
+              <div class="exec-config-table is-db">
+                <div class="exec-config-table-header">
+                  <div class="col idx">#</div>
+                  <div class="col env">环境</div>
+                  <div class="col config">配置名</div>
+                  <div class="col config">库编号</div>
+                  <div class="col addr">IP/端口</div>
+                </div>
+                <div class="exec-config-table-body">
+                  <div v-for="(row, idx) in panel.debugRedisRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div class="col idx">{{ idx + 1 }}</div>
+                    <div class="col env">
+                      <n-select
+                          v-model:value="row.env_id"
+                          :options="panel.debugEnvOptions"
+                          size="small"
+                          :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
+                          placeholder="请先选择全局环境"
+                          clearable
+                      />
+                    </div>
+                    <div class="col config">
+                      <n-input :value="row.config_name || ''" size="small" disabled placeholder="未填写配置名" />
+                    </div>
+                    <div class="col config">
+                      <n-input
+                          :value="panel.getDbDatabaseDisplay(row)"
+                          size="small"
+                          disabled
+                          :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                      />
+                    </div>
+                    <div class="col addr">
+                      <n-input
+                          :value="panel.getRowAddrPreview(row, 'redis')"
+                          size="small"
+                          disabled
+                          :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div v-if="panel.debugFileRowsForSelected.length" class="exec-config-section">
               <div class="exec-config-section-title">
                 File Server

@@ -243,7 +243,7 @@ const stepDefinitions = {
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:server-api-cloud'},
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'ph:file-py'},
   database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
-  redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:database'},
+  redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:file-rs'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
 }
 
@@ -253,7 +253,7 @@ const STEP_ICON = {
   tcp: 'streamline-freehand-color:server-api-cloud',
   code: 'ph:file-py',
   database: 'ph:file-sql',
-  redis: 'ph:database',
+  redis: 'ph:file-rs',
   wait: 'gravity-ui:stopwatch',
   if: 'gravity-ui:shuffle',
   loop: 'gravity-ui:arrows-rotate-right',

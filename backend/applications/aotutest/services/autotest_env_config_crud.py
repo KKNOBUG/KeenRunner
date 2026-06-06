@@ -126,6 +126,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                     missing_fields.append("is_authorization")
                 if missing_fields:
                     raise ParameterException(message=f"配置信息类型为FILE时参数[{', '.join(missing_fields)}]不允许为空")
+            elif config_type == AutoTestConfigNodeType.REDIS.value:
+                if not config_in.config_host:
+                    raise ParameterException(message="配置信息类型为REDIS时参数[config_host]不允许为空")
 
             try:
                 instance: AutoTestApiEnvConfigInfo = await self.create(config_dict)
@@ -204,6 +207,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 missing_fields.append("is_authorization")
             if missing_fields:
                 raise ParameterException(message=f"配置信息类型为FILE时参数[{', '.join(missing_fields)}]不允许为空")
+        elif config_type == AutoTestConfigNodeType.REDIS.value:
+            if not config_in.config_host:
+                raise ParameterException(message="配置信息类型为REDIS时参数[config_host]不允许为空")
         try:
             instance = await self.update(id=config_id, obj_in=update_dict)
             return instance
@@ -287,6 +293,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         classified_config_type: Tuple[str, ...] = (
             AutoTestConfigNodeType.API.value,
             AutoTestConfigNodeType.DB.value,
+            AutoTestConfigNodeType.REDIS.value,
             AutoTestConfigNodeType.FILE.value,
         )
         env_config_instances: Optional[List[AutoTestApiEnvConfigInfo]] = await self.model.filter(

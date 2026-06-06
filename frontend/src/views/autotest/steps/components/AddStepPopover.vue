@@ -71,7 +71,7 @@ const STEP_ICON = {
   tcp: 'streamline-freehand:server-api-cloud',
   code: 'ph:file-py',
   database: 'ph:file-sql',
-  redis: 'ph:database',
+  redis: 'ph:file-rs',
   wait: 'gravity-ui:stopwatch',
   if: 'gravity-ui:shuffle',
   loop: 'gravity-ui:arrows-rotate-right',
@@ -304,7 +304,7 @@ const handleSelectItem = (item) => {
 .add-step-item-desc {
   margin-top: 5px;
   font-size: 11px;
-  color: var(--n-text-color-3);
+  color: var(--n-text-color-3, #999);
   line-height: 1.15;
   word-break: break-word;
 }

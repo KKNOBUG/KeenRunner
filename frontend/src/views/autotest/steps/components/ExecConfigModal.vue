@@ -110,7 +110,15 @@ const debugEnvConfigDict = ref({})
 const envLoading = ref(false)
 const debugEnvOptions = ref([])
 const debugEnvIdToName = ref(new Map())
-const debugRows = ref({ apiRows: [], dbRows: [], fileRows: [] })
+const debugRows = ref({ apiRows: [], dbRows: [], redisRows: [], fileRows: [] })
+
+/** database_operates / redis_operates 可为数组或「序号→行」对象 */
+const normalizeOpsList = (ops) => {
+  if (!ops) return []
+  if (Array.isArray(ops)) return ops
+  if (typeof ops === 'object') return Object.values(ops)
+  return []
+}
 
 const debugExecDatasetSelectedCount = computed(() => debugExecDatasetSelectedIds.value.length)
 
@@ -147,13 +155,9 @@ const forEachStepWithQuote = (list, fn, quoteStepsMap, { includeQuoteInner = tru
 
 /**
  * 从步骤树收集需在弹窗里配置环境的行（按应用+配置名分组）
- * HTTP/TCP → apiRows；数据库多操作 → dbRows；文件类 → fileRows
+ * HTTP/TCP → apiRows；数据库多操作 → dbRows；Redis 多操作 → redisRows；文件类 → fileRows
  */
 const collectDebugRows = (sourceSteps, quoteStepsMap) => {
-  const apiRows = []
-  const dbRows = []
-  const fileRows = []
-
   const getBackendKeyFromStep = (step) => {
     const sid = step?.original?.id
     if (sid != null) return String(sid)
@@ -176,10 +180,13 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
 
   const apiGroup = new Map()
   const dbGroup = new Map()
+  const redisGroup = new Map()
   const fileGroup = new Map()
   const apiConfigNameSetByProject = new Map()
   const dbConfigNameSetByProject = new Map()
   const dbNameSetByProject = new Map()
+  const redisConfigNameSetByProject = new Map()
+  const redisDbNameSetByProject = new Map()
   const fileConfigNameSetByProject = new Map()
 
   const pushSet = (map, k, v) => {
@@ -218,7 +225,7 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
       const cfg = step.config || {}
       const orig = step.original || {}
       const ops = cfg.database_operates ?? orig.database_operates
-      const list = Array.isArray(ops) ? ops : []
+      const list = normalizeOpsList(ops)
       list.forEach((op, idx) => {
         if (!op) return
         const project_id = op.project_id ?? null
@@ -241,6 +248,8 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
               project_id,
               config_name: cfgName || null,
               database_name: dbName || null,
+              config_bucket: 'database',
+              op_field: 'database_operates',
               env_id: null,
               targets: [],
             }),
@@ -251,23 +260,23 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
       const cfg = step.config || {}
       const orig = step.original || {}
       const ops = cfg.redis_operates ?? orig.redis_operates
-      const list = Array.isArray(ops) ? ops : []
+      const list = normalizeOpsList(ops)
       list.forEach((op, idx) => {
         if (!op) return
         const project_id = op.project_id ?? null
         if (!project_id) return
         const opCfgName = op.config_name ?? op.configName ?? null
         const opDbName = op.database_name ?? op.databaseName ?? null
-        pushSet(dbConfigNameSetByProject, project_id, opCfgName)
-        pushSet(dbNameSetByProject, project_id, opDbName)
+        pushSet(redisConfigNameSetByProject, project_id, opCfgName)
+        pushSet(redisDbNameSetByProject, project_id, opDbName)
         const backend_key = getBackendKeyFromStep(step)
         const cfgName = opCfgName != null ? String(opCfgName).trim() : ''
         const dbName = opDbName != null ? String(opDbName).trim() : ''
         const groupKey = (cfgName && dbName)
-            ? `redis:p:${project_id}|c:${cfgName}|d:${dbName}`
-            : `redis:p:${project_id}|step:${backend_key}|op:${idx}`
+            ? `p:${project_id}|c:${cfgName}|d:${dbName}`
+            : `p:${project_id}|step:${backend_key}|op:${idx}`
         addToGroup(
-            dbGroup,
+            redisGroup,
             groupKey,
             () => ({
               key: `redis:${groupKey}`,
@@ -293,6 +302,10 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
     r._configNameSeed = buildOptions(dbConfigNameSetByProject.get(String(r.project_id)))
     r._dbNameSeed = buildOptions(dbNameSetByProject.get(String(r.project_id)))
   })
+  Array.from(redisGroup.values()).forEach((r) => {
+    r._configNameSeed = buildOptions(redisConfigNameSetByProject.get(String(r.project_id)))
+    r._dbNameSeed = buildOptions(redisDbNameSetByProject.get(String(r.project_id)))
+  })
   Array.from(fileGroup.values()).forEach((r) => {
     r._configNameSeed = buildOptions(fileConfigNameSetByProject.get(String(r.project_id)))
   })
@@ -305,29 +318,33 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
   return {
     apiRows: strip([...apiGroup.values()]),
     dbRows: strip([...dbGroup.values()]),
+    redisRows: strip([...redisGroup.values()]),
     fileRows: strip([...fileGroup.values()]),
   }
 }
 
 const debugApps = computed(() => {
   const byProject = new Map()
-  const addCount = (pid, incApi = 0, incDb = 0) => {
+  const addCount = (pid, incApi = 0, incDb = 0, incRedis = 0) => {
     const k = String(pid)
-    if (!byProject.has(k)) byProject.set(k, { project_id: pid, api: 0, db: 0 })
+    if (!byProject.has(k)) byProject.set(k, { project_id: pid, api: 0, db: 0, redis: 0 })
     const item = byProject.get(k)
     item.api += incApi
     item.db += incDb
+    item.redis += incRedis
   }
-  debugRows.value.apiRows.forEach((r) => addCount(r.project_id, 1, 0))
-  debugRows.value.dbRows.forEach((r) => addCount(r.project_id, 0, 1))
-  debugRows.value.fileRows.forEach((r) => addCount(r.project_id, 1, 0))
+  debugRows.value.apiRows.forEach((r) => addCount(r.project_id, 1, 0, 0))
+  debugRows.value.dbRows.forEach((r) => addCount(r.project_id, 0, 1, 0))
+  debugRows.value.redisRows.forEach((r) => addCount(r.project_id, 0, 0, 1))
+  debugRows.value.fileRows.forEach((r) => addCount(r.project_id, 1, 0, 0))
 
   const list = Array.from(byProject.values()).map((x) => ({
     project_id: x.project_id,
     label: projectLabelMap.value.get(String(x.project_id)) || `应用${String(x.project_id)}`,
     apiCount: x.api,
     dbCount: x.db,
-    totalCount: x.api + x.db,
+    redisCount: x.redis,
+    totalCount: x.api + x.db + x.redis,
   }))
   list.sort((a, b) => String(a.project_id).localeCompare(String(b.project_id)))
   return list
@@ -343,6 +360,12 @@ const debugDbRowsForSelected = computed(() => {
   const pid = debugSelectedProjectId.value
   if (!pid) return []
   return debugRows.value.dbRows.filter((r) => String(r.project_id) === String(pid))
+})
+
+const debugRedisRowsForSelected = computed(() => {
+  const pid = debugSelectedProjectId.value
+  if (!pid) return []
+  return debugRows.value.redisRows.filter((r) => String(r.project_id) === String(pid))
 })
 
 const debugFileRowsForSelected = computed(() => {
@@ -568,6 +591,7 @@ watch(() => debugGlobalEnvId.value, (envId) => {
   }
   apply(debugRows.value.apiRows || [])
   apply(debugRows.value.dbRows || [])
+  apply(debugRows.value.redisRows || [])
   apply(debugRows.value.fileRows || [])
 })
 
@@ -605,7 +629,7 @@ const collectExecConfigMissingRows = () => {
       push('db', row, '配置名未填写')
       return
     }
-    const bucketKey = row.config_bucket || 'database'
+    const bucketKey = 'database'
     const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
     const info = bucket?.[cfgName]
     const addr = getRowAddrPreview({ ...row, config_bucket: bucketKey }, bucketKey)
@@ -616,6 +640,31 @@ const collectExecConfigMissingRows = () => {
     const dbName = info?.database_name ?? row.database_name
     if (!dbName || !String(dbName).trim()) {
       push('db', row, `${String(cfgName).trim()}(库编号未获取)`)
+    }
+  }
+
+  const checkRedisRow = (row) => {
+    const envId = getEffectiveEnvIdForRow(row)
+    if (envId == null || String(envId).trim() === '') {
+      push('redis', row, '环境未选择')
+      return
+    }
+    const cfgName = row.config_name
+    if (!cfgName || !String(cfgName).trim()) {
+      push('redis', row, '配置名未填写')
+      return
+    }
+    const bucketKey = 'redis'
+    const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
+    const info = bucket?.[cfgName]
+    const addr = getRowAddrPreview({ ...row, config_bucket: bucketKey }, bucketKey)
+    if (!addr || !String(addr).trim()) {
+      push('redis', row, `${String(cfgName).trim()}(IP/端口未获取)`)
+      return
+    }
+    const dbName = info?.database_name ?? row.database_name
+    if (!dbName || !String(dbName).trim()) {
+      push('redis', row, `${String(cfgName).trim()}(库编号未获取)`)
     }
   }
 
@@ -638,6 +687,7 @@ const collectExecConfigMissingRows = () => {
 
   ;(debugRows.value.apiRows || []).forEach(checkApiRow)
   ;(debugRows.value.dbRows || []).forEach(checkDbRow)
+  ;(debugRows.value.redisRows || []).forEach(checkRedisRow)
   ;(debugRows.value.fileRows || []).forEach(checkFileRow)
   return missing
 }
@@ -662,18 +712,40 @@ const applyDebugConfigToSteps = () => {
 
   debugRows.value.dbRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
-    const bucketKey = r.config_bucket || 'database'
+    const bucketKey = 'database'
     const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
     const cfgNm = r.config_name
     const info = cfgNm ? bucket?.[cfgNm] : null
     const resolvedDb = info?.database_name ?? r.database_name
-    const opField = r.op_field || 'database_operates'
+    const opField = 'database_operates'
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       const step = findStep(t.local_step_id)
       if (!step) return
       const cfg = step.config || {}
-      const ops = Array.isArray(cfg[opField]) ? cfg[opField] : []
+      const ops = Array.isArray(cfg[opField]) ? cfg[opField] : normalizeOpsList(cfg[opField])
+      const idx = t.op_index
+      if (idx == null || !ops[idx]) return
+      ops[idx].project_id = r.project_id ?? ops[idx].project_id
+      ops[idx].config_name = r.config_name ?? ops[idx].config_name
+      ops[idx].database_name = resolvedDb ?? ops[idx].database_name
+    })
+  })
+
+  debugRows.value.redisRows.forEach((r) => {
+    const envId = getEffectiveEnvIdForRow(r)
+    const bucketKey = 'redis'
+    const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
+    const cfgNm = r.config_name
+    const info = cfgNm ? bucket?.[cfgNm] : null
+    const resolvedDb = info?.database_name ?? r.database_name
+    const opField = 'redis_operates'
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      const step = findStep(t.local_step_id)
+      if (!step) return
+      const cfg = step.config || {}
+      const ops = Array.isArray(cfg[opField]) ? cfg[opField] : normalizeOpsList(cfg[opField])
       const idx = t.op_index
       if (idx == null || !ops[idx]) return
       ops[idx].project_id = r.project_id ?? ops[idx].project_id
@@ -701,6 +773,7 @@ const buildStepExecConfigMap = (env_name) => {
   }
   prefill(debugRows.value.apiRows || [], 'api')
   prefill(debugRows.value.dbRows || [], 'db')
+  prefill(debugRows.value.redisRows || [], 'db')
   prefill(debugRows.value.fileRows || [], 'file')
 
   debugRows.value.apiRows.forEach((r) => {
@@ -724,7 +797,29 @@ const buildStepExecConfigMap = (env_name) => {
 
   debugRows.value.dbRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
-    const bucketKey = r.config_bucket || 'database'
+    const bucketKey = 'database'
+    const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
+    const name = r.config_name
+    const info = name ? bucket?.[name] : null
+    if (!env_name || !name || !info) return
+    const targets = Array.isArray(r.targets) ? r.targets : []
+    targets.forEach((t) => {
+      const opIdx = t.op_index
+      if (opIdx == null || opIdx < 0) return
+      map[`${String(t.backend_key)}_@@${opIdx}`] = {
+        env_name,
+        config_type: bucketKey,
+        config_name: name,
+        config_host: info.config_host,
+        config_port: info.config_port,
+        database_name: info.database_name ?? r.database_name ?? null,
+      }
+    })
+  })
+
+  debugRows.value.redisRows.forEach((r) => {
+    const envId = getEffectiveEnvIdForRow(r)
+    const bucketKey = 'redis'
     const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
     const name = r.config_name
     const info = name ? bucket?.[name] : null
@@ -898,6 +993,7 @@ provide(
       debugSelectedProjectId,
       debugApiRowsForSelected,
       debugDbRowsForSelected,
+      debugRedisRowsForSelected,
       debugFileRowsForSelected,
       debugExecDatasetLoading,
       debugExecDatasetRows,

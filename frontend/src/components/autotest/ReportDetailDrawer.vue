@@ -227,13 +227,13 @@
           <NTabPane name="request" tab="请求信息" v-if="hasRequestInfo">
             <NSpace vertical :size="16">
               <NCollapse
-                  :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestFormFile', 'requestCode', 'requestDatabase']"
+                  :default-expanded-names="['requestBasic', 'requestHeaders', 'requestParams', 'requestBody', 'requestFormFile', 'requestCode', 'requestDatabase', 'requestRedis']"
                   arrow-placement="right"
               >
                 <NCollapseItem
                     title="Basic"
                     name="requestBasic"
-                    v-if="isReportHttpStep || isReportTcpStep || isReportDatabaseStep"
+                    v-if="isReportHttpStep || isReportTcpStep || isReportDatabaseStep || isReportRedisStep"
                 >
                   <!-- HTTP / TCP 共用一块 Basic：类型相关字段 + 环境名称 + 配置名称 -->
                   <div v-if="isReportHttpStep || isReportTcpStep" class="step-info-grid">
@@ -285,6 +285,22 @@
                         <NTag :type="databaseSearchedForReport === true ? 'success' : 'default'" size="small">
                           {{ databaseSearchedLabel }}
                         </NTag>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else-if="isReportRedisStep" class="step-info-grid">
+                    <div class="step-info-row">
+                      <div class="step-info-label">查到即止：</div>
+                      <div class="step-info-value">
+                        <NTag :type="redisSearchedForReport === true ? 'success' : 'default'" size="small">
+                          {{ redisSearchedLabel }}
+                        </NTag>
+                      </div>
+                    </div>
+                    <div v-if="requestEnvName !== '-'" class="step-info-row">
+                      <div class="step-info-label">环境名称：</div>
+                      <div class="step-info-value">
+                        <NText copyable style="font-size: 12px;">{{ requestEnvName }}</NText>
                       </div>
                     </div>
                   </div>
@@ -345,6 +361,13 @@
                 <NCollapseItem title="Database" name="requestDatabase" v-if="databaseOperatesForReport?.length">
                   <MonacoEditor
                       :value="formatJson(databaseOperatesForReport)"
+                      :options="monacoEditorOptions(true)"
+                      style="min-height: 500px; height: auto;"
+                  />
+                </NCollapseItem>
+                <NCollapseItem title="Redis" name="requestRedis" v-if="redisOperatesForReport?.length">
+                  <MonacoEditor
+                      :value="formatJson(redisOperatesForReport)"
                       :options="monacoEditorOptions(true)"
                       style="min-height: 500px; height: auto;"
                   />
@@ -705,10 +728,26 @@ const databaseOperatesForReport = computed(() => {
   return null
 })
 
+const redisOperatesForReport = computed(() => {
+  const d = currentDetail.value
+  if (!d) return null
+  const fromDetail = d.redis_operates
+  if (Array.isArray(fromDetail) && fromDetail.length) return fromDetail
+  if (fromDetail && typeof fromDetail === 'object') return Object.values(fromDetail)
+  return null
+})
+
 const databaseSearchedForReport = computed(() => {
   const d = currentDetail.value
   if (!d) return null
   if (d.database_searched != null) return !!d.database_searched
+  return null
+})
+
+const redisSearchedForReport = computed(() => {
+  const d = currentDetail.value
+  if (!d) return null
+  if (d.redis_searched != null) return !!d.redis_searched
   return null
 })
 
@@ -718,10 +757,17 @@ const databaseSearchedLabel = computed(() => {
   return v ? '是' : '否'
 })
 
+const redisSearchedLabel = computed(() => {
+  const v = redisSearchedForReport.value
+  if (v === null || v === undefined) return '-'
+  return v ? '是' : '否'
+})
+
 const reportStepType = computed(() => currentDetail.value?.step_type || '')
 const isReportHttpStep = computed(() => reportStepType.value === 'HTTP请求')
 const isReportTcpStep = computed(() => reportStepType.value === 'TCP请求')
 const isReportDatabaseStep = computed(() => reportStepType.value === '数据库请求')
+const isReportRedisStep = computed(() => reportStepType.value === 'Redis请求')
 const isReportPythonStep = computed(() => {
   const t = reportStepType.value
   return t === '代码请求(Python)'
@@ -820,6 +866,7 @@ const hasRequestInfo = computed(() => {
   const isRequestStep = (reportStepType.value || '').includes('请求')
   if (!isRequestStep) return false
   if (databaseOperatesForReport.value?.length) return true
+  if (redisOperatesForReport.value?.length) return true
   const hasRequestData =
       (requestMethod.value && requestMethod.value !== '-') ||
       (requestUrl.value && requestUrl.value !== '-') ||
