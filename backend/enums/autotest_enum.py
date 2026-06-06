@@ -41,6 +41,7 @@ class AutoTestStepType(StringEnum):
     HTTP = "HTTP请求"
     PYTHON = "代码请求(Python)"
     DATABASE = "数据库请求"
+    REDIS = "Redis请求"
     QUOTE = "引用公共脚本"
 
 
@@ -112,4 +113,5 @@ class AutoTestDataBaseType(StringEnum):
 class AutoTestConfigNodeType(StringEnum):
     API = "api"
     DB = "database"
+    REDIS = "redis"
     FILE = "file"

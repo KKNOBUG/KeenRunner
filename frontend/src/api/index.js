@@ -146,6 +146,7 @@ export default {
   httpRequestDebugging: (data = {}) => request.post('/autotest/step/http_debugging', data),
   tcpRequestDebugging: (data = {}) => request.post('/autotest/step/tcp_debugging', data),
   pythonCodeDebugging: (data = {}) => request.post('/autotest/step/python_code_debugging', data),
+  redisRequestDebugging: (data = {}) => request.post('/autotest/step/redis_debugging', data),
   executeStepTree: (data = {}) => request.post('/autotest/step/execute_or_debugging', data),
   // 报告相关
   getApiReportList: (data = {}) => request.post('/autotest/report/search', data),

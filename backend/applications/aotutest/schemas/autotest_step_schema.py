@@ -38,6 +38,17 @@ class DataBaseOperates(BaseModel):
     desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
 
 
+class RedisOperates(BaseModel):
+    name: str = Field(..., max_length=128, description="Redis操作名称")
+    expr: str = Field(..., max_length=4096, description="Redis命令(支持多行)")
+    project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
+    project_name: str = Field(..., max_length=128, description="所属应用名称")
+    variable_name: str = Field(..., max_length=128, description="存储变量名称")
+    config_name: str = Field(..., max_length=128, description="所属环境配置名称")
+    database_name: str = Field(..., max_length=128, description="Redis库编号")
+    desc: Optional[str] = Field(None, max_length=2048, description="Redis操作描述")
+
+
 class ConditionsBase(BaseModel):
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
@@ -128,6 +139,24 @@ class AutoTestApiStepDbBase(BaseModel):
         )
 
 
+class AutoTestApiStepRedisBase(BaseModel):
+    redis_operates: Optional[List[RedisOperates]] = Field(None, description="Redis请求操作列表")
+    redis_searched: Optional[bool] = Field(None, description="Redis请求查到即止开关")
+
+    @field_validator("redis_operates", mode="before")
+    @classmethod
+    def normalize_redis_operates(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return list(v.values()) if v else []
+        if isinstance(v, list):
+            return v
+        raise ValueError(
+            f"redis_operates 必须为 null、单条对象或对象数组，当前类型: {type(v).__name__}"
+        )
+
+
 class AutoTestApiStepVarBase(BaseModel):
     session_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(所有步骤持续累积), 列表项为 key / value / desc")
     defined_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="定义变量, 列表项为 key / value / desc")
@@ -171,7 +200,7 @@ class AutoTestApiStepVarBase(BaseModel):
         return v
 
 
-class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepVarBase):
+class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepRedisBase, AutoTestApiStepVarBase):
     model_config = ConfigDict(extra="ignore")
 
     step_id: Optional[int] = Field(None, description="步骤ID(更新必填, 新增不填)")
@@ -297,6 +326,17 @@ class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
     step_name: str = Field(..., max_length=255, description="步骤名称")
     code: str = Field(..., description="执行代码(Python)")
+
+
+class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase):
+    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    step_name: str = Field(..., max_length=255, description="步骤名称")
+
+    @model_validator(mode="after")
+    def validate_redis_debug_request(self):
+        if not self.redis_operates:
+            raise ValueError("redis_operates 至少包含一条 Redis 操作配置")
+        return self
 
 
 class AutoTestCaseRunInfo(BaseModel):

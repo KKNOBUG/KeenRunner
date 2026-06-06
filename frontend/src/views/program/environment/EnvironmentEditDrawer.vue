@@ -97,6 +97,50 @@
             </CrudTable>
           </NTabPane>
 
+          <NTabPane name="redis" tab="Redis配置" display-directive="show">
+            <CrudTable
+                ref="redisTableRef"
+                v-model:query-items="tabQuery.redis"
+                v-model:checked-row-keys="checkedKeysRedis"
+                :query-bar-props="envDrawerQueryBarProps"
+                :is-pagination="true"
+                :columns="redisInfraColumns"
+                :get-data="getRedisConfigData"
+                :single-line="true"
+                :scroll-x="1248"
+                row-key="config_id"
+                @query-bar-create="openCreateRedisConfig"
+                @query-bar-delete="() => handleDrawerBatchDelete('redis')"
+                @pagination-meta="(m) => onDrawerPaginationMeta('redis', m)"
+            >
+              <template #queryBar>
+                <QueryBarItem label="应用名称：" :label-width="90">
+                  <NSelect
+                      v-model:value="tabQuery.redis.project_id"
+                      :options="projectSelectOptions"
+                      clearable
+                      filterable
+                      placeholder="应用名称"
+                  />
+                </QueryBarItem>
+                <QueryBarItem label="配置名称：" :label-width="90">
+                  <NInput
+                      v-model:value="tabQuery.redis.config_name"
+                      clearable
+                      placeholder="请输入配置名称"
+                  />
+                </QueryBarItem>
+                <QueryBarItem label="主机地址：" :label-width="90">
+                  <NInput
+                      v-model:value="tabQuery.redis.config_host"
+                      clearable
+                      placeholder="请输入主机地址"
+                  />
+                </QueryBarItem>
+              </template>
+            </CrudTable>
+          </NTabPane>
+
           <NTabPane name="file" tab="文件服务器配置" display-directive="show">
             <CrudTable
                 ref="fileTableRef"
@@ -191,7 +235,7 @@
 
   <!-- 基础设施配置 Modal -->
   <NModal v-model:show="infraModalShow" preset="card" style="width: 900px"
-          :title="infraModalMode === 'edit' ? '编辑配置' : '新增配置'">
+          :title="infraModalTitle">
     <NForm ref="infraFormRef" :model="infraForm" label-placement="left" label-align="left" :label-width="100">
       <div class="infra-grid">
         <NFormItem label="应用名称" path="project_id"
@@ -208,20 +252,24 @@
                    :options="[{ label: 'mysql', value: 'mysql' }, { label: 'oracle', value: 'oracle' }, { label: 'tdsql', value: 'tdsql' }]"
                    clearable/>
         </NFormItem>
+        <NFormItem v-if="isInfraRedis" label="库编号" path="database_name"
+                   :rule="{ required: true, message: '请输入库编号', trigger: ['input', 'blur'] }">
+          <NInput v-model:value="infraForm.database_name" placeholder="0"/>
+        </NFormItem>
         <NFormItem label="主机地址" path="config_host"
                    :rule="{ required: true, message: '请输入主机地址', trigger: ['input', 'blur'] }">
           <NInput v-model:value="infraForm.config_host"/>
         </NFormItem>
         <NFormItem label="主机端口" path="config_port"
-                   :rule="{ required: isInfraDatabase, message: '数据库配置必须输入主机端口', trigger: ['input', 'blur'] }">
-          <NInput v-model:value="infraForm.config_port"/>
+                   :rule="{ required: isInfraDatabase || isInfraRedis, message: isInfraRedis ? 'Redis配置必须输入主机端口' : '数据库配置必须输入主机端口', trigger: ['input', 'blur'] }">
+          <NInput v-model:value="infraForm.config_port" :placeholder="isInfraRedis ? '6379' : ''"/>
         </NFormItem>
-        <NFormItem label="主机账号" path="config_username"
+        <NFormItem v-if="isInfraDatabase || isInfraRedis" label="主机账号" path="config_username"
                    :rule="{ required: isInfraDatabase, message: '数据库配置必须输入主机账号', trigger: ['input', 'blur'] }">
           <NInput v-model:value="infraForm.config_username"/>
         </NFormItem>
-        <NFormItem label="主机密码" path="config_password"
-                   :rule="{ required: isInfraDatabase, message: '数据库配置必须输入主机密码', trigger: ['input', 'blur'] }">
+        <NFormItem v-if="isInfraDatabase || isInfraRedis" label="主机密码" path="config_password"
+                   :rule="{ required: isInfraDatabase || isInfraRedis, message: isInfraRedis ? 'Redis配置必须输入主机密码' : '数据库配置必须输入主机密码', trigger: ['input', 'blur'] }">
           <NInput v-model:value="infraForm.config_password" type="password" show-password-on="click"/>
         </NFormItem>
         <NFormItem v-if="isInfraDatabase" path="config_group"
@@ -241,7 +289,7 @@
           </template>
           <NInput v-model:value="infraForm.config_group"/>
         </NFormItem>
-        <NFormItem v-if="!isInfraDatabase" label="是否免密" path="is_authorization">
+        <NFormItem v-if="!isInfraDatabase && !isInfraRedis" label="是否免密" path="is_authorization">
           <NCheckbox v-model:checked="infraForm.is_authorization">免密/无需认证</NCheckbox>
         </NFormItem>
         <NFormItem label="额外参数" path="config_params_json" class="full-row">
@@ -325,15 +373,17 @@ const projectSelectOptions = ref([])
 // CrudTable 引用
 const appTableRef = ref(null)
 const databaseTableRef = ref(null)
+const redisTableRef = ref(null)
 const fileTableRef = ref(null)
 
 const checkedKeysApp = ref([])
 const checkedKeysDatabase = ref([])
+const checkedKeysRedis = ref([])
 const checkedKeysFile = ref([])
 
 async function handleDrawerBatchDelete(tabKey) {
-  const map = { app: checkedKeysApp, database: checkedKeysDatabase, file: checkedKeysFile }
-  const refMap = { app: appTableRef, database: databaseTableRef, file: fileTableRef }
+  const map = { app: checkedKeysApp, database: checkedKeysDatabase, redis: checkedKeysRedis, file: checkedKeysFile }
+  const refMap = { app: appTableRef, database: databaseTableRef, redis: redisTableRef, file: fileTableRef }
   const keys = map[tabKey]?.value || []
   if (!keys.length) {
     window.$message?.warning?.('请先勾选要删除的配置')
@@ -356,6 +406,7 @@ async function handleDrawerBatchDelete(tabKey) {
 const tabQuery = reactive({
   app: {project_id: null, config_name: '', config_host: '', created_user: ''},
   database: {project_id: null, config_name: '', config_host: '', config_group: ''},
+  redis: {project_id: null, config_name: '', config_host: ''},
   file: {project_id: null, config_name: '', config_host: '', is_authorization: null},
 })
 
@@ -406,6 +457,22 @@ async function getDatabaseConfigData(params) {
   return {data: res?.data || [], total: res?.total || 0}
 }
 
+async function getRedisConfigData(params) {
+  if (!currentEnvId.value) return {data: [], total: 0}
+  const payload = {
+    env_id: currentEnvId.value,
+    config_type: 'redis',
+    page: params.page,
+    page_size: params.page_size,
+    state: 0,
+    project_id: params.project_id || undefined,
+    config_name: params.config_name || undefined,
+    config_host: params.config_host || undefined,
+  }
+  const res = await api.searchEnvConfig(payload)
+  return {data: res?.data || [], total: res?.total || 0}
+}
+
 async function getFileConfigData(params) {
   if (!currentEnvId.value) return {data: [], total: 0}
   const payload = {
@@ -440,6 +507,7 @@ function getCurrentTableRef() {
   const tabMap = {
     app: appTableRef,
     database: databaseTableRef,
+    redis: redisTableRef,
     file: fileTableRef
   }
   return tabMap[activeTab.value]?.value
@@ -448,6 +516,7 @@ function getCurrentTableRef() {
 const drawerPagination = reactive({
   app: { page: 1, page_size: 10 },
   database: { page: 1, page_size: 10 },
+  redis: { page: 1, page_size: 10 },
   file: { page: 1, page_size: 10 },
 })
 
@@ -474,6 +543,15 @@ const INFRA_BODY_COLUMNS = [
   { title: '主机地址', key: 'config_host', align: 'center', ellipsis: { tooltip: true } },
   { title: '主机端口', key: 'config_port', align: 'center', width: 100 },
   { title: '分组编号', key: 'config_group', align: 'center', ellipsis: { tooltip: true } },
+  { title: '更新时间', key: 'updated_time', align: 'center', width: 180, ellipsis: { tooltip: true } },
+]
+
+const REDIS_BODY_COLUMNS = [
+  { title: '应用名称', key: 'project_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '配置名称', key: 'config_name', align: 'center', ellipsis: { tooltip: true } },
+  { title: '主机地址', key: 'config_host', align: 'center', ellipsis: { tooltip: true } },
+  { title: '主机端口', key: 'config_port', align: 'center', width: 100 },
+  { title: '库编号', key: 'database_name', align: 'center', width: 100 },
   { title: '更新时间', key: 'updated_time', align: 'center', width: 180, ellipsis: { tooltip: true } },
 ]
 
@@ -548,7 +626,7 @@ const appColumns = computed(() => {
   ]
 })
 
-function buildInfraColumnsComputed(metaKey) {
+function buildInfraColumnsComputed(metaKey, bodyColumns = INFRA_BODY_COLUMNS) {
   return computed(() => {
     const { page, page_size } = drawerPagination[metaKey]
     const seqBase = (page - 1) * page_size
@@ -563,7 +641,7 @@ function buildInfraColumnsComputed(metaKey) {
           return seqBase + rowIndex + 1
         },
       },
-      ...INFRA_BODY_COLUMNS,
+      ...bodyColumns,
       {
         title: '操作',
         key: 'actions',
@@ -622,6 +700,7 @@ function buildInfraColumnsComputed(metaKey) {
 }
 
 const databaseInfraColumns = buildInfraColumnsComputed('database')
+const redisInfraColumns = buildInfraColumnsComputed('redis', REDIS_BODY_COLUMNS)
 const fileInfraColumns = buildInfraColumnsComputed('file')
 
 function closeDrawer() {
@@ -784,6 +863,13 @@ const infraModalMode = ref('create')
 const infraModalSaving = ref(false)
 const infraType = ref('database')
 const isInfraDatabase = computed(() => infraType.value === 'database')
+const isInfraRedis = computed(() => infraType.value === 'redis')
+const infraModalTitle = computed(() => {
+  const action = infraModalMode.value === 'edit' ? '编辑' : '新增'
+  if (isInfraRedis.value) return `${action}Redis配置`
+  if (isInfraDatabase.value) return `${action}数据库配置`
+  return `${action}文件服务器配置`
+})
 const infraFormRef = ref(null)
 const infraForm = reactive({
   config_id: undefined,
@@ -827,6 +913,31 @@ async function openCreateDatabaseConfig() {
   nextTick(() => infraFormRef.value?.restoreValidation?.())
 }
 
+async function openCreateRedisConfig() {
+  if (!currentEnvId.value) return window.$message?.warning?.('请先保存环境基础信息')
+  await loadProjectOptions()
+  infraType.value = 'redis'
+  infraModalMode.value = 'create'
+  Object.assign(infraForm, {
+    config_id: undefined,
+    config_code: '',
+    project_id: envForm.project_id,
+    config_name: '',
+    config_desc: '',
+    config_host: '',
+    config_port: '6379',
+    config_group: '',
+    config_params_json: '',
+    config_username: '',
+    config_password: '',
+    database_name: '0',
+    database_type: undefined,
+    is_authorization: false,
+  })
+  infraModalShow.value = true
+  nextTick(() => infraFormRef.value?.restoreValidation?.())
+}
+
 async function openCreateFileConfig() {
   if (!currentEnvId.value) return window.$message?.warning?.('请先保存环境基础信息')
   await loadProjectOptions()
@@ -854,7 +965,8 @@ async function openCreateFileConfig() {
 
 function openEditInfraConfig(row) {
   loadProjectOptions()
-  infraType.value = row?.config_type === 'file' ? 'file' : 'database'
+  const type = row?.config_type
+  infraType.value = type === 'file' ? 'file' : type === 'redis' ? 'redis' : 'database'
   infraModalMode.value = 'edit'
   Object.assign(infraForm, {
     config_id: row.config_id,
@@ -901,9 +1013,13 @@ async function submitInfraConfig() {
       config_params: paramsObj,
       config_username: infraForm.config_username || undefined,
       config_password: infraForm.config_password || undefined,
-      database_name: isInfraDatabase.value ? (infraForm.database_name || undefined) : undefined,
+      database_name: isInfraDatabase.value || isInfraRedis.value
+          ? (infraForm.database_name || undefined)
+          : undefined,
       database_type: isInfraDatabase.value ? (infraForm.database_type || undefined) : undefined,
-      is_authorization: isInfraDatabase.value ? undefined : Boolean(infraForm.is_authorization),
+      is_authorization: isInfraDatabase.value || isInfraRedis.value
+          ? undefined
+          : Boolean(infraForm.is_authorization),
     }
     if (infraModalMode.value === 'edit') {
       await api.updateEnvConfig({
@@ -930,6 +1046,7 @@ watch(() => props.show, async (v) => {
     infraModalShow.value = false
     checkedKeysApp.value = []
     checkedKeysDatabase.value = []
+    checkedKeysRedis.value = []
     checkedKeysFile.value = []
     return
   }
@@ -940,6 +1057,7 @@ watch(() => props.show, async (v) => {
   // 各 NTabPane 使用 display-directive=show，子表不卸载；此处各拉一次，切换 Tab 不应重复请求
   appTableRef.value?.handleSearch()
   databaseTableRef.value?.handleSearch()
+  redisTableRef.value?.handleSearch()
   fileTableRef.value?.handleSearch()
 })
 </script>

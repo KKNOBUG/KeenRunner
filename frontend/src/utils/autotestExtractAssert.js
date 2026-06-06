@@ -4,11 +4,15 @@ import { assertionOperationSelectOptions } from '@/constants/autotestAssertionOp
 export const EXTRACT_MODE_RESPONSE = 'response'
 /** 提取：数据库步骤，来源为请求中的 variable_name */
 export const EXTRACT_MODE_DATABASE = 'database'
+/** 提取：Redis 步骤，来源为请求中的 variable_name */
+export const EXTRACT_MODE_REDIS = 'redis'
 
 /** 断言：HTTP/TCP 响应 + 变量池 */
 export const ASSERT_MODE_RESPONSE = 'response'
 /** 断言：数据库步骤，来源为 variable_name */
 export const ASSERT_MODE_DATABASE = 'database'
+/** 断言：Redis 步骤，来源为 variable_name */
+export const ASSERT_MODE_REDIS = 'redis'
 /** 断言：Python 代码步骤，仅变量池 */
 export const ASSERT_MODE_PYTHON = 'python'
 
@@ -28,10 +32,22 @@ export const RESPONSE_ASSERT_OBJECT_OPTIONS = [
 export const PYTHON_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
 
 export const DB_JSONPATH_PLACEHOLDER =
-  '如 $.sql_data[0].列名 或 $.sql_count（相对该 variable_name 对应执行结果项）'
+    '如 $.sql_data[0].列名 或 $.sql_count（相对该 variable_name 对应执行结果项）'
+
+export const REDIS_JSONPATH_PLACEHOLDER =
+    '如 $.[0] 或 $.[1][0]（相对该 variable_name 对应 redis_data 命令结果列表）'
 
 export const DB_SOURCE_HINT =
-  '与执行结果列表中该 variable_name 对应项匹配；JSONPath 写在该项对象上，例如 $.sql_data[0].列名、$.sql_count。'
+    '与执行结果列表中该 variable_name 对应项匹配；JSONPath 写在该项对象上，例如 $.sql_data[0].列名、$.sql_count。'
+
+export const REDIS_SOURCE_HINT =
+    '与执行结果列表中该 variable_name 对应项匹配；JSONPath 相对 redis_data，例如 $.[0] 表示第一条命令返回值。'
+
+export const isVariableNameExtractMode = (mode) =>
+    mode === EXTRACT_MODE_DATABASE || mode === EXTRACT_MODE_REDIS
+
+export const isVariableNameAssertMode = (mode) =>
+    mode === ASSERT_MODE_DATABASE || mode === ASSERT_MODE_REDIS
 
 export const assertionOptions = assertionOperationSelectOptions
 
@@ -64,9 +80,9 @@ export function resolveDatabaseSourceVar(item) {
 
 export function getExtractObjectLabel(value) {
   const option =
-    RESPONSE_EXTRACT_OBJECT_OPTIONS.find((opt) => opt.value === value)
-    || RESPONSE_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
-    || PYTHON_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+      RESPONSE_EXTRACT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+      || RESPONSE_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+      || PYTHON_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
   return option ? option.label : value || ''
 }
 
@@ -83,6 +99,7 @@ export function getExtractPlaceholder(object) {
 
 export function getAssertPlaceholder(object, assertMode) {
   if (assertMode === ASSERT_MODE_DATABASE) return DB_JSONPATH_PLACEHOLDER
+  if (assertMode === ASSERT_MODE_REDIS) return REDIS_JSONPATH_PLACEHOLDER
   if (object === '变量池' || assertMode === ASSERT_MODE_PYTHON) {
     return '请输入变量池中的变量名，如：token'
   }
@@ -90,7 +107,7 @@ export function getAssertPlaceholder(object, assertMode) {
 }
 
 export function createEmptyExtractItem(extractMode, defaultSource = null) {
-  if (extractMode === EXTRACT_MODE_DATABASE) {
+  if (isVariableNameExtractMode(extractMode)) {
     return {
       name: '',
       source: defaultSource ?? null,
@@ -111,7 +128,7 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
 }
 
 export function createEmptyAssertItem(assertMode, defaultSource = null) {
-  if (assertMode === ASSERT_MODE_DATABASE) {
+  if (isVariableNameAssertMode(assertMode)) {
     return {
       name: '',
       source: defaultSource ?? null,
@@ -145,7 +162,7 @@ export function hydrateExtractDictFromBackend(list, extractMode) {
   const rows = normalizeBackendList(list)
   rows.forEach((item, index) => {
     const key = String(index + 1)
-    if (extractMode === EXTRACT_MODE_DATABASE) {
+    if (isVariableNameExtractMode(extractMode)) {
       dict[key] = {
         name: item.name || '',
         source: resolveDatabaseSourceVar(item),
@@ -173,7 +190,7 @@ export function hydrateAssertDictFromBackend(list, assertMode) {
   const rows = normalizeBackendList(list)
   rows.forEach((item, index) => {
     const key = String(index + 1)
-    if (assertMode === ASSERT_MODE_DATABASE) {
+    if (isVariableNameAssertMode(assertMode)) {
       dict[key] = {
         name: item.name || '',
         source: resolveDatabaseSourceVar(item),
@@ -206,30 +223,30 @@ export function hydrateAssertDictFromBackend(list, assertMode) {
 
 export function formatExtractCardTitle(item, extractMode) {
   const name = item?.name || '未命名提取'
-  if (extractMode === EXTRACT_MODE_DATABASE) {
+  if (isVariableNameExtractMode(extractMode)) {
     const src = item?.source || '未选来源'
     const path =
-      item?.extractScope === '部分提取' && item?.jsonpath
-        ? ` (${item.jsonpath})`
-        : item?.extractScope === '全部提取'
-          ? ' (全部提取)'
-          : ''
+        item?.extractScope === '部分提取' && item?.jsonpath
+            ? ` (${item.jsonpath})`
+            : item?.extractScope === '全部提取'
+                ? ' (全部提取)'
+                : ''
     return `${name} · ${src}${path}`
   }
   const objLabel = getExtractObjectLabel(item?.object)
   const path =
-    item?.extractScope === '部分提取' && item?.jsonpath
-      ? `( ${item.jsonpath} )`
-      : item?.extractScope === '全部提取'
-        ? '( 全部提取 )'
-        : ''
+      item?.extractScope === '部分提取' && item?.jsonpath
+          ? `( ${item.jsonpath} )`
+          : item?.extractScope === '全部提取'
+              ? '( 全部提取 )'
+              : ''
   return `${name} ${objLabel}${path ? ` ${path}` : ''}`
 }
 
 export function formatAssertCardTitle(item, assertMode) {
   const name = item?.name || '未命名断言'
   const expr = item?.jsonpath || ''
-  if (assertMode === ASSERT_MODE_DATABASE) {
+  if (isVariableNameAssertMode(assertMode)) {
     return `${name} · ${item?.source || '未选来源'} ( ${expr} )`
   }
   const objLabel = getExtractObjectLabel(item?.object)
@@ -237,7 +254,7 @@ export function formatAssertCardTitle(item, assertMode) {
 }
 
 export function buildExtractListFromDict(dict, extractMode) {
-  if (extractMode === EXTRACT_MODE_DATABASE) {
+  if (isVariableNameExtractMode(extractMode)) {
     return Object.values(dict || {})
         .map((item) => ({
           expr: item.jsonpath || '',
@@ -245,9 +262,9 @@ export function buildExtractListFromDict(dict, extractMode) {
           scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
           source: String(item.source ?? '').trim(),
           index:
-            item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
-              ? Number(item.extractIndex)
-              : null,
+              item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
+                  ? Number(item.extractIndex)
+                  : null,
         }))
         .filter((item) => {
           const n = String(item.name ?? '').trim()
@@ -264,17 +281,17 @@ export function buildExtractListFromDict(dict, extractMode) {
         scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
         source: item.object || 'Response Json',
         index:
-          item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
-            ? Number(item.extractIndex)
-            : null,
+            item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
+                ? Number(item.extractIndex)
+                : null,
       }))
       .filter(
-        (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
+          (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
       )
 }
 
 export function buildAssertListFromDict(dict, assertMode) {
-  if (assertMode === ASSERT_MODE_DATABASE) {
+  if (isVariableNameAssertMode(assertMode)) {
     return Object.values(dict || {})
         .map((item) => ({
           expr: item.jsonpath || '',
@@ -284,10 +301,10 @@ export function buildAssertListFromDict(dict, assertMode) {
           except_value: item.value != null ? String(item.value) : '',
         }))
         .filter(
-          (item) =>
-            String(item.name ?? '').trim() !== ''
-            && String(item.source ?? '').trim() !== ''
-            && String(item.expr ?? '').trim() !== ''
+            (item) =>
+                String(item.name ?? '').trim() !== ''
+                && String(item.source ?? '').trim() !== ''
+                && String(item.expr ?? '').trim() !== ''
         )
   }
   if (assertMode === ASSERT_MODE_PYTHON) {
@@ -308,6 +325,6 @@ export function buildAssertListFromDict(dict, assertMode) {
         except_value: item.value != null ? String(item.value) : '',
       }))
       .filter(
-        (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
+          (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
       )
 }

@@ -247,6 +247,41 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
             { local_step_id: step.id, backend_key, op_index: idx },
         )
       })
+    } else if (step.type === 'redis') {
+      const cfg = step.config || {}
+      const orig = step.original || {}
+      const ops = cfg.redis_operates ?? orig.redis_operates
+      const list = Array.isArray(ops) ? ops : []
+      list.forEach((op, idx) => {
+        if (!op) return
+        const project_id = op.project_id ?? null
+        if (!project_id) return
+        const opCfgName = op.config_name ?? op.configName ?? null
+        const opDbName = op.database_name ?? op.databaseName ?? null
+        pushSet(dbConfigNameSetByProject, project_id, opCfgName)
+        pushSet(dbNameSetByProject, project_id, opDbName)
+        const backend_key = getBackendKeyFromStep(step)
+        const cfgName = opCfgName != null ? String(opCfgName).trim() : ''
+        const dbName = opDbName != null ? String(opDbName).trim() : ''
+        const groupKey = (cfgName && dbName)
+            ? `redis:p:${project_id}|c:${cfgName}|d:${dbName}`
+            : `redis:p:${project_id}|step:${backend_key}|op:${idx}`
+        addToGroup(
+            dbGroup,
+            groupKey,
+            () => ({
+              key: `redis:${groupKey}`,
+              project_id,
+              config_name: cfgName || null,
+              database_name: dbName || null,
+              config_bucket: 'redis',
+              op_field: 'redis_operates',
+              env_id: null,
+              targets: [],
+            }),
+            { local_step_id: step.id, backend_key, op_index: idx },
+        )
+      })
     }
   }, quoteStepsMap)
 
@@ -409,7 +444,8 @@ const getBucket = (row, configType) => {
 const getDbDatabaseDisplay = (row) => {
   const envId = getEffectiveEnvIdForRow(row)
   if (envId == null) return ''
-  const bucket = getBucket({ ...row, env_id: envId }, 'database')
+  const bucketKey = row.config_bucket || 'database'
+  const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
   const cfgName = row.config_name
   const info = cfgName ? bucket?.[cfgName] : null
   const fromEnv = info?.database_name
@@ -569,16 +605,17 @@ const collectExecConfigMissingRows = () => {
       push('db', row, '配置名未填写')
       return
     }
-    const bucket = getBucket({ ...row, env_id: envId }, 'database')
+    const bucketKey = row.config_bucket || 'database'
+    const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
     const info = bucket?.[cfgName]
-    const addr = getRowAddrPreview(row, 'database')
+    const addr = getRowAddrPreview({ ...row, config_bucket: bucketKey }, bucketKey)
     if (!addr || !String(addr).trim()) {
       push('db', row, `${String(cfgName).trim()}(IP/端口未获取)`)
       return
     }
     const dbName = info?.database_name ?? row.database_name
     if (!dbName || !String(dbName).trim()) {
-      push('db', row, `${String(cfgName).trim()}(数据库名未获取)`)
+      push('db', row, `${String(cfgName).trim()}(库编号未获取)`)
     }
   }
 
@@ -625,16 +662,18 @@ const applyDebugConfigToSteps = () => {
 
   debugRows.value.dbRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
-    const bucket = getBucket({ ...r, env_id: envId }, 'database')
+    const bucketKey = r.config_bucket || 'database'
+    const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
     const cfgNm = r.config_name
     const info = cfgNm ? bucket?.[cfgNm] : null
     const resolvedDb = info?.database_name ?? r.database_name
+    const opField = r.op_field || 'database_operates'
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       const step = findStep(t.local_step_id)
       if (!step) return
       const cfg = step.config || {}
-      const ops = Array.isArray(cfg.database_operates) ? cfg.database_operates : []
+      const ops = Array.isArray(cfg[opField]) ? cfg[opField] : []
       const idx = t.op_index
       if (idx == null || !ops[idx]) return
       ops[idx].project_id = r.project_id ?? ops[idx].project_id
@@ -685,7 +724,8 @@ const buildStepExecConfigMap = (env_name) => {
 
   debugRows.value.dbRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
-    const bucket = getBucket({ ...r, env_id: envId }, 'database')
+    const bucketKey = r.config_bucket || 'database'
+    const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
     const name = r.config_name
     const info = name ? bucket?.[name] : null
     if (!env_name || !name || !info) return
@@ -695,7 +735,7 @@ const buildStepExecConfigMap = (env_name) => {
       if (opIdx == null || opIdx < 0) return
       map[`${String(t.backend_key)}_@@${opIdx}`] = {
         env_name,
-        config_type: 'database',
+        config_type: bucketKey,
         config_name: name,
         config_host: info.config_host,
         config_port: info.config_port,

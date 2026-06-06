@@ -11,6 +11,7 @@ const stepDefinitions = {
   http: { allowChildren: false },
   code: { allowChildren: false },
   database: { allowChildren: false },
+  redis: { allowChildren: false },
   quote: { allowChildren: false },
 }
 
@@ -37,6 +38,8 @@ const backendTypeToLocal = (step_type) => {
       return 'quote'
     case '数据库请求':
       return 'database'
+    case 'Redis请求':
+      return 'redis'
     default:
       return 'code'
   }
@@ -56,8 +59,8 @@ export function mapBackendStep(step) {
   if (!step || !step.step_type) return null
   const localType = backendTypeToLocal(step.step_type)
   const stepId =
-    step.step_code ||
-    (step.step_id != null ? `step-${step.step_id}` : step.id != null ? `step-${step.id}` : genId())
+      step.step_code ||
+      (step.step_id != null ? `step-${step.step_id}` : step.id != null ? `step-${step.id}` : genId())
   const base = {
     id: stepId,
     type: localType,
@@ -101,7 +104,7 @@ export function mapBackendStep(step) {
   } else if (localType === 'tcp') {
     const argsType = (step.request_args_type || '').toString().toLowerCase()
     const payloadStr =
-      argsType === 'json' ? JSON.stringify(step.request_body || {}, null, 2) : step.request_text || ''
+        argsType === 'json' ? JSON.stringify(step.request_body || {}, null, 2) : step.request_text || ''
     let body_format_mode = 'xml'
     if (!String(payloadStr).trim()) body_format_mode = 'xml'
     else if (argsType === 'json') body_format_mode = 'json'
@@ -170,6 +173,16 @@ export function mapBackendStep(step) {
       step_desc: step.step_desc || '',
       database_searched: !!step.database_searched,
       database_operates: ops.length ? ops : [],
+      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
+      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
+    }
+  } else if (localType === 'redis') {
+    const ops = Array.isArray(step.redis_operates) ? step.redis_operates : []
+    base.config = {
+      step_name: step.step_name || '',
+      step_desc: step.step_desc || '',
+      redis_searched: !!step.redis_searched,
+      redis_operates: ops.length ? ops : [],
       extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
     }

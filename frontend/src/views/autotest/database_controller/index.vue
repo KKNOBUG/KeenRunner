@@ -111,10 +111,9 @@
                     </n-space>
                   </div>
                 </template>
-                <div v-show="!opCollapseState[key]">
+                <div v-show="!opCollapseState[key]" class="db-op-body">
                   <n-form :model="item" label-width="96px" label-placement="left">
                     <div class="db-op-field-rows">
-                      <!-- 第一行：所属应用 30% / 配置名称 40% / 数据库名 30% -->
                       <div class="db-op-field-row db-op-field-row--cols3">
                         <n-form-item label="所属应用" required class="db-op-fi-fill">
                           <n-select
@@ -152,24 +151,18 @@
                           />
                         </n-form-item>
                       </div>
-                      <!-- 第二行：存储变量 30%、请求描述 70% -->
-                      <div class="db-op-field-row db-op-field-row--var-desc">
+                      <div class="db-op-field-row db-op-field-row--op-desc">
                         <n-form-item label="存储变量" required class="db-op-fi-fill">
                           <n-input v-model:value="item.variable_name" placeholder="写入变量池的变量名" clearable :disabled="props.readonly"/>
                         </n-form-item>
-                        <n-form-item label="请求描述" class="db-op-fi-fill">
-                          <n-input v-model:value="item.desc" placeholder="可选，说明本操作用途" clearable :disabled="props.readonly"/>
-                        </n-form-item>
-                      </div>
-                      <!-- 第三行：SQL语句 -->
-                      <div class="db-op-field-row db-op-field-row--full">
                         <n-form-item label="SQL语句" required class="db-op-fi-fill">
                           <n-input
                               v-model:value="item.expr"
                               type="textarea"
                               placeholder="支持表名/字段中使用 ${变量名}"
-                              :autosize="{ minRows: 4, maxRows: 18 }"
+                              :autosize="{ minRows: 1, maxRows: 18 }"
                               :disabled="props.readonly"
+                              class="db-op-expr-textarea"
                           />
                         </n-form-item>
                       </div>
@@ -684,9 +677,17 @@ const duplicateOp = (key) => {
   border-bottom: none;
 }
 
+.db-op-card-wrap :deep(.n-card__content) {
+  padding: 12px 16px;
+}
+
 .db-op-card-wrap :deep(.n-card.is-item-collapsed .n-card__content) {
   display: none;
   padding: 0;
+}
+
+.db-op-body :deep(.n-form-item) {
+  margin-bottom: 0;
 }
 
 .db-op-field-rows {
@@ -699,7 +700,6 @@ const duplicateOp = (key) => {
   width: 100%;
 }
 
-/* 第一行：所属应用 30% / 配置名称 40% / 数据库名 30% */
 .db-op-field-row--cols3 {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 3fr);
@@ -707,27 +707,27 @@ const duplicateOp = (key) => {
   align-items: start;
 }
 
-/* 第二行：存储变量 30%、请求描述 70%（与「所属应用」列宽比例一致） */
-.db-op-field-row--var-desc {
+/* 第二行：存储变量 30%、SQL语句 70% */
+.db-op-field-row--op-desc {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
   gap: 12px;
   align-items: start;
 }
 
-.db-op-field-row--full {
-  min-width: 0;
-}
-
 .db-op-field-row--cols3 :deep(.n-form-item),
-.db-op-field-row--var-desc :deep(.n-form-item),
-.db-op-field-row--full :deep(.n-form-item) {
+.db-op-field-row--op-desc :deep(.n-form-item) {
   min-width: 0;
 }
 
 .db-op-fi-fill :deep(.n-input),
 .db-op-fi-fill :deep(.n-select) {
   width: 100%;
+}
+
+.db-op-expr-textarea :deep(textarea) {
+  resize: vertical;
+  min-height: 34px;
 }
 
 .extract-validator-list {

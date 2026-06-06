@@ -2,9 +2,9 @@
   <n-space vertical :size="8" class="extract-validator-list">
     <div v-for="(item, key) in model" :key="key" class="validator-item">
       <n-card
-        size="small"
-        hoverable
-        :class="{ 'is-item-collapsed': collapseState[key] }"
+          size="small"
+          hoverable
+          :class="{ 'is-item-collapsed': collapseState[key] }"
       >
         <template #header>
           <div class="extract-validator-card-header">
@@ -13,8 +13,8 @@
               <n-button text size="small" :disabled="readonly" @click="toggleCollapse(key)">
                 <template #icon>
                   <TheIcon
-                    :icon="collapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                    :size="18"
+                      :icon="collapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                      :size="18"
                   />
                 </template>
               </n-button>
@@ -33,70 +33,70 @@
         </template>
         <div v-show="!collapseState[key]">
           <n-form
-            :model="item"
-            label-width="auto"
-            label-placement="left"
-            size="small"
-            class="step-ev-form"
+              :model="item"
+              label-width="auto"
+              label-placement="left"
+              size="small"
+              class="step-ev-form"
           >
             <n-form-item label="断言名称">
               <n-input
-                v-model:value="item.name"
-                placeholder="请输入断言名称"
-                clearable
-                :disabled="readonly"
+                  v-model:value="item.name"
+                  placeholder="请输入断言名称"
+                  clearable
+                  :disabled="readonly"
               />
             </n-form-item>
 
-            <n-form-item v-if="isDatabase" label="断言来源">
+            <n-form-item v-if="isVariableSource" label="断言来源">
               <n-select
-                v-model:value="item.source"
-                :options="sourceOptions"
-                placeholder="选择「请求」中的存储变量名（variable_name）"
-                filterable
-                clearable
-                :disabled="readonly || !sourceOptions.length"
+                  v-model:value="item.source"
+                  :options="sourceOptions"
+                  placeholder="选择「请求」中的存储变量名（variable_name）"
+                  filterable
+                  clearable
+                  :disabled="readonly || !sourceOptions.length"
               />
             </n-form-item>
             <n-form-item v-else-if="!isPython" label="断言对象">
               <n-select
-                v-model:value="item.object"
-                :options="RESPONSE_ASSERT_OBJECT_OPTIONS"
-                placeholder="请选择断言对象"
-                :disabled="readonly"
+                  v-model:value="item.object"
+                  :options="RESPONSE_ASSERT_OBJECT_OPTIONS"
+                  placeholder="请选择断言对象"
+                  :disabled="readonly"
               />
             </n-form-item>
             <n-form-item v-else label="断言对象">
               <n-select
-                v-model:value="item.object"
-                :options="PYTHON_ASSERT_OBJECT_OPTIONS"
-                placeholder="变量池"
-                :disabled="readonly"
+                  v-model:value="item.object"
+                  :options="PYTHON_ASSERT_OBJECT_OPTIONS"
+                  placeholder="变量池"
+                  :disabled="readonly"
               />
             </n-form-item>
 
-            <n-form-item :label="isDatabase ? '断言表达式' : '断言表达式'">
+            <n-form-item :label="isVariableSource ? '断言表达式' : '断言表达式'">
               <n-input
-                v-model:value="item.jsonpath"
-                :placeholder="exprPlaceholder(item)"
-                clearable
-                :disabled="readonly"
+                  v-model:value="item.jsonpath"
+                  :placeholder="exprPlaceholder(item)"
+                  clearable
+                  :disabled="readonly"
               />
             </n-form-item>
             <n-form-item label="断言操作符">
               <n-select
-                v-model:value="item.assertion"
-                :options="assertionOptions"
-                placeholder="请选择断言方法"
-                :disabled="readonly"
+                  v-model:value="item.assertion"
+                  :options="assertionOptions"
+                  placeholder="请选择断言方法"
+                  :disabled="readonly"
               />
             </n-form-item>
             <n-form-item label="断言预期值">
               <n-input
-                v-model:value="item.value"
-                placeholder="请输入预期值"
-                clearable
-                :disabled="readonly"
+                  v-model:value="item.value"
+                  placeholder="请输入预期值"
+                  clearable
+                  :disabled="readonly"
               />
             </n-form-item>
           </n-form>
@@ -123,21 +123,23 @@ import {
   assertionOptions,
   ASSERT_MODE_DATABASE,
   ASSERT_MODE_PYTHON,
+  ASSERT_MODE_REDIS,
   ASSERT_MODE_RESPONSE,
   createEmptyAssertItem,
   formatAssertCardTitle,
   getAssertPlaceholder,
   getNextDictKey,
+  isVariableNameAssertMode,
   PYTHON_ASSERT_OBJECT_OPTIONS,
   RESPONSE_ASSERT_OBJECT_OPTIONS,
 } from '@/utils/autotestExtractAssert'
 
 const props = defineProps({
-  /** response | database | python */
+  /** response | database | redis | python */
   mode: {
     type: String,
     default: ASSERT_MODE_RESPONSE,
-    validator: (v) => [ASSERT_MODE_RESPONSE, ASSERT_MODE_DATABASE, ASSERT_MODE_PYTHON].includes(v),
+    validator: (v) => [ASSERT_MODE_RESPONSE, ASSERT_MODE_DATABASE, ASSERT_MODE_REDIS, ASSERT_MODE_PYTHON].includes(v),
   },
   readonly: { type: Boolean, default: false },
   sourceOptions: { type: Array, default: () => [] },
@@ -146,7 +148,7 @@ const props = defineProps({
 const model = defineModel({ type: Object, default: () => ({}) })
 
 const assertMode = computed(() => props.mode)
-const isDatabase = computed(() => props.mode === ASSERT_MODE_DATABASE)
+const isVariableSource = computed(() => isVariableNameAssertMode(props.mode))
 const isPython = computed(() => props.mode === ASSERT_MODE_PYTHON)
 
 const collapseState = reactive({})
@@ -164,12 +166,12 @@ function syncCollapseKeys() {
 watch(model, syncCollapseKeys, { deep: true, immediate: true })
 
 function defaultSource() {
-  if (!isDatabase.value) return null
+  if (!isVariableSource.value) return null
   return props.sourceOptions[0]?.value ?? null
 }
 
 function exprPlaceholder(item) {
-  if (isDatabase.value) return getAssertPlaceholder(null, ASSERT_MODE_DATABASE)
+  if (isVariableSource.value) return getAssertPlaceholder(null, props.mode)
   return getAssertPlaceholder(item?.object, props.mode)
 }
 

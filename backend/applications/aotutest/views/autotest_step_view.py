@@ -32,6 +32,8 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestTcpDebugRequest,
     AutoTestStepTreeExecute,
     AutoTestPythonCodeDebugRequest,
+    AutoTestRedisDebugRequest,
+    RedisOperates,
     StepVariablesBase,
     StepExtractVariableItem,
     StepAssertValidatorItem,
@@ -39,11 +41,14 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 )
 from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
 from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
+from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
+from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
+from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -1015,6 +1020,333 @@ async def debug_python_code(
         }
         LOGGER.error(f"【Python代码调试】异常: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"Python代码调试异常", data=response_data)
+
+
+def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
+    if not command_results:
+        return False
+    for result in command_results:
+        if result is None:
+            continue
+        if isinstance(result, (list, tuple, dict)) and len(result) == 0:
+            continue
+        if isinstance(result, str) and not str(result).strip():
+            continue
+        return True
+    return False
+
+
+@autotest_step.post("/redis_debugging", summary="API自动化测试-Redis请求调试")
+async def debug_redis_request(
+        step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据")
+):
+    try:
+        env_id: int = step_data.env_id
+        step_name: str = step_data.step_name
+        redis_operates: List[RedisOperates] = step_data.redis_operates or []
+        redis_searched: bool = bool(step_data.redis_searched)
+        session_variables: List[StepVariablesBase] = step_data.session_variables or []
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
+        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
+
+        merge_all_variables: Dict[str, Any] = {}
+        for item in defined_variables:
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
+        for item in session_variables:
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
+        initial_var_models: List[StepVariablesBase] = [
+            StepVariablesBase(key=k, value=v, desc="") for k, v in merge_all_variables.items()
+        ]
+
+        debugging_logs: List[str] = []
+
+        def append_debugging_log(message: str) -> None:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
+
+        env_instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=False, state__not=1)
+        if not env_instance:
+            msg = f"Redis请求调试失败, 环境ID[{env_id}]不存在"
+            append_debugging_log(message=msg)
+            return NotFoundResponse(message=msg)
+        env_name: str = str(env_instance.env_name or "").strip()
+        if not env_name:
+            return FailureResponse(message="Redis请求调试失败, 环境名称为空")
+
+        append_debugging_log(
+            message=f"Redis请求调试开始: \n\t"
+                    f"环境ID: {env_id}\n\t"
+                    f"环境名称: {env_name}\n\t"
+                    f"操作条数: {len(redis_operates)}\n\t"
+                    f"查到即止: {redis_searched}"
+        )
+        append_debugging_log(message="【参数替换】开始: ")
+
+        finished_variables = AutoTestToolService.resolve_placeholders(
+            value=initial_var_models,
+            logger_object=append_debugging_log,
+            finished_variables={}
+        )
+
+        pool_manager = get_app_redis_pool()
+        redis_operates_request: List[Dict[str, Any]] = []
+        redis_operates_response: List[Dict[str, Any]] = []
+        mark_extract_variables: List[Dict[str, Any]] = []
+        start_time = time.time()
+
+        for redis_idx, redis_operate in enumerate(redis_operates):
+            operate_no: str = f"第{redis_idx + 1}条Redis配置"
+            config_host: Optional[str] = None
+            config_port: Optional[str] = None
+            operate_name: str = redis_operate.name
+            operate_expr: str = redis_operate.expr
+            operate_project_id: Optional[int] = redis_operate.project_id
+            operate_project_name: str = redis_operate.project_name
+            operate_variable_name: str = redis_operate.variable_name
+            operate_config_name: str = redis_operate.config_name
+            operate_database_name: str = redis_operate.database_name
+            operate_desc: Optional[str] = redis_operate.desc
+            operate_result_count: str = f"{operate_variable_name}_count"
+
+            try:
+                operate_expr = AutoTestToolService.resolve_placeholders(
+                    value=operate_expr,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
+                operate_config_name = AutoTestToolService.resolve_placeholders(
+                    value=operate_config_name,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
+                operate_project_name = AutoTestToolService.resolve_placeholders(
+                    value=operate_project_name,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
+                operate_database_name = AutoTestToolService.resolve_placeholders(
+                    value=operate_database_name,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
+                operate_variable_name = AutoTestToolService.resolve_placeholders(
+                    value=operate_variable_name,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
+                operate_result_count = f"{operate_variable_name}_count"
+
+                if not operate_project_id and operate_project_name.strip():
+                    project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(
+                        operate_project_name.strip(), on_error=False
+                    )
+                    if not project_instance:
+                        msg = f"{operate_no}：应用(project_name={operate_project_name!r})不存在"
+                        append_debugging_log(message=msg)
+                        return NotFoundResponse(message=msg)
+                    operate_project_id = project_instance.id
+                if not operate_project_id:
+                    return FailureResponse(message=f"{operate_no}：参数[project_id]不能为空")
+                if not operate_config_name:
+                    return FailureResponse(message=f"{operate_no}：参数[config_name]不能为空")
+                if not operate_database_name:
+                    return FailureResponse(message=f"{operate_no}：参数[database_name]不能为空")
+                if not operate_expr:
+                    return FailureResponse(message=f"{operate_no}：参数[expr]不能为空")
+                if not operate_variable_name:
+                    return FailureResponse(message=f"{operate_no}：参数[variable_name]不能为空")
+
+                env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
+                    only_one=True,
+                    on_error=False,
+                    state__not=1,
+                    env_id=env_id,
+                    project_id=operate_project_id,
+                    config_name=operate_config_name,
+                    config_type=AutoTestConfigNodeType.REDIS
+                )
+                if not env_config_instance:
+                    msg = f"{operate_no}：环境配置[{operate_config_name}]不存在"
+                    append_debugging_log(message=msg)
+                    return NotFoundResponse(message=msg)
+                config_host = env_config_instance.config_host
+                config_port = env_config_instance.config_port
+                if env_config_instance.database_name:
+                    operate_database_name = str(env_config_instance.database_name).strip()
+
+                append_debugging_log(
+                    message=f"{operate_no}：解析配置成功(host={config_host}, port={config_port}, db={operate_database_name})"
+                )
+
+                redis_client = await pool_manager.get_or_create_client(
+                    app_id=str(operate_project_id),
+                    env=env_name,
+                    config_name=operate_config_name,
+                    db_name=operate_database_name,
+                )
+                expr_executive_result: Dict[str, Any] = await pool_manager.execute_commands(
+                    client=redis_client,
+                    expr=operate_expr,
+                )
+                redis_data: Optional[List[Any]] = expr_executive_result.get("redis_data")
+                redis_count: Optional[int] = expr_executive_result.get("redis_count")
+
+                mark_extract_variables.append({
+                    "index": redis_idx,
+                    "name": operate_variable_name,
+                    "source": "Redis请求",
+                    "scope": "ALL",
+                    "expr": "Redis命令",
+                    "extract_value": redis_data,
+                    "success": True,
+                    "error": "",
+                })
+                mark_extract_variables.append({
+                    "index": redis_idx,
+                    "name": operate_result_count,
+                    "source": "Redis请求",
+                    "scope": "ALL",
+                    "expr": "Redis命令",
+                    "extract_value": redis_count,
+                    "success": True,
+                    "error": "",
+                })
+                append_debugging_log(
+                    message=f"{operate_no}：已自动写入变量池 variable_name={operate_variable_name}, "
+                            f"{operate_result_count}={redis_count}"
+                )
+
+                redis_operates_request.append({
+                    "index": redis_idx,
+                    "name": operate_name,
+                    "env_name": env_name,
+                    "expr": operate_expr,
+                    "project_id": operate_project_id,
+                    "project_name": operate_project_name,
+                    "variable_name": [operate_variable_name, operate_result_count],
+                    "config_name": operate_config_name,
+                    "database_name": operate_database_name,
+                    "desc": operate_desc,
+                })
+                redis_operates_response.append({
+                    "index": redis_idx,
+                    "name": operate_name,
+                    "variable_name": [operate_variable_name, operate_result_count],
+                    "redis_meta": {
+                        "env_name": env_name,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "config_host": config_host,
+                        "config_port": config_port,
+                    },
+                    "redis_data": redis_data,
+                    "redis_count": redis_count,
+                })
+                append_debugging_log(message=f"{operate_no}：执行完成, 命令数={redis_count}")
+
+                if redis_searched and _has_effective_redis_result(redis_data):
+                    append_debugging_log(
+                        message=f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令"
+                    )
+                    break
+            except Exception as e:
+                error_message: str = f"{operate_no}：执行失败, {e}"
+                append_debugging_log(message=error_message)
+                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                redis_operates_request.append({
+                    "index": redis_idx,
+                    "name": operate_name,
+                    "env_name": env_name,
+                    "expr": operate_expr,
+                    "project_id": operate_project_id,
+                    "project_name": operate_project_name,
+                    "variable_name": [operate_variable_name, operate_result_count],
+                    "config_name": operate_config_name,
+                    "database_name": operate_database_name,
+                    "desc": operate_desc,
+                })
+                redis_operates_response.append({
+                    "index": redis_idx,
+                    "name": operate_name,
+                    "variable_name": [operate_variable_name, operate_result_count],
+                    "redis_meta": {
+                        "env_name": env_name,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "config_host": config_host,
+                        "config_port": config_port,
+                    },
+                    "redis_data": None,
+                    "redis_count": None,
+                    "error": error_message,
+                })
+                return FailureResponse(message=error_message, data={"logs": debugging_logs})
+
+        duration = int((time.time() - start_time) * 1000)
+        response_text_str = orjson.dumps(redis_operates_response, default=str).decode("UTF-8")
+        append_debugging_log(message=f"Redis请求调试完成: 耗时: {duration}ms")
+
+        for extract_item in mark_extract_variables:
+            if isinstance(extract_item, dict) and extract_item.get("success") and extract_item.get("name") is not None:
+                merge_all_variables[extract_item["name"]] = extract_item.get("extract_value")
+                finished_variables.append(
+                    StepVariablesBase(key=str(extract_item["name"]), value=extract_item.get("extract_value"), desc="")
+                )
+
+        extract_data, extract_results = AutoTestToolService.run_extract_variables(
+            extract_variables=extract_variables,
+            response_text=response_text_str,
+            response_json=redis_operates_response,
+            response_headers=None,
+            response_cookies=None,
+            session_variables_lookup=merge_all_variables,
+            log_callback=lambda message: append_debugging_log(message=message),
+        )
+        extract_results = mark_extract_variables + (extract_results or [])
+        for extract_key, extract_value in extract_data.items():
+            finished_variables.append(StepVariablesBase(key=extract_key, value=extract_value, desc=""))
+        validator_results = AutoTestToolService.run_assert_validators(
+            assert_validators=assert_validators,
+            response_text=response_text_str,
+            response_json=redis_operates_response,
+            response_headers=None,
+            response_cookies=None,
+            session_variables_lookup=merge_all_variables,
+            log_callback=lambda message: append_debugging_log(message=message),
+            finished_variables=finished_variables,
+            is_core_engine=False,
+        )
+
+        size = len(response_text_str.encode("utf-8"))
+        size_str = f"{size / 1024:.2f}KB" if size > 1024 else f"{size}B"
+        result_data = {
+            "status": None,
+            "headers": {},
+            "cookies": {},
+            "data": redis_operates_response,
+            "duration": duration,
+            "size": size_str,
+            "extract_results": extract_results,
+            "validator_results": validator_results,
+            "logs": debugging_logs,
+            "request_info": {
+                "request_env_name": env_name,
+                "redis_operates": redis_operates_request,
+                "redis_searched": redis_searched,
+            }
+        }
+        LOGGER.info(f"Redis请求调试完成: 耗时: {duration}ms")
+        return SuccessResponse(message="Redis调试请求成功", data=result_data)
+    except Exception as e:
+        LOGGER.error(f"Redis请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"Redis请求调试失败，异常描述: {e}")
 
 
 def _serialize_for_celery_initial_variables(

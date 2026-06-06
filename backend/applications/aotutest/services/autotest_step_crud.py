@@ -303,6 +303,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                             project_ids.add(int(project_id))
                         except Exception:
                             pass
+            elif st_e == AutoTestStepType.REDIS:
+                for redis_operate in step.redis_operates or []:
+                    project_id = redis_operate.project_id
+                    if project_id:
+                        try:
+                            project_ids.add(int(project_id))
+                        except Exception:
+                            pass
             for child in step.children or []:
                 recursive_require_project_ids(child)
             for quote_step in step.quote_steps or []:

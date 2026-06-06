@@ -559,17 +559,25 @@ class AutoTestToolService:
             except Exception as e:
                 raise ValueError(str(e) or f"【{operation_type}】变量池 JSONPath匹配失败: {expr}") from e
 
-        # 数据库请求步骤：source 为「请求」里配置的 variable_name；response_json 为 List[Dict]，每项含 variable_name、sql_data、sql_count 等
+        # 数据库/Redis 请求步骤：source 为「请求」里配置的 variable_name；response_json 为 List[Dict]
         source_strip: str = (source or "").strip()
         if source_strip and isinstance(response_json, list) and response_json:
-            all_database_operates_response_safe: bool = all(
-                isinstance(db_operate_resp, dict) and ("variable_name" in db_operate_resp or "sql_data" in db_operate_resp)
-                for db_operate_resp in response_json
+            all_operates_response_safe: bool = all(
+                isinstance(op_resp, dict) and (
+                    "variable_name" in op_resp or "sql_data" in op_resp or "redis_data" in op_resp
+                )
+                for op_resp in response_json
             )
-            expr_executive_data: Optional[Dict[str, Any]] = None
-            for db_operate_resp in response_json:
-                if isinstance(db_operate_resp, dict) and source_strip in db_operate_resp.get("variable_name", []):
-                    expr_executive_data = db_operate_resp["sql_data"]
+            expr_executive_data: Optional[Any] = None
+            is_redis_response: bool = any(
+                isinstance(op_resp, dict) and "redis_data" in op_resp for op_resp in response_json
+            )
+            for op_resp in response_json:
+                if isinstance(op_resp, dict) and source_strip in op_resp.get("variable_name", []):
+                    if "redis_data" in op_resp:
+                        expr_executive_data = op_resp["redis_data"]
+                    else:
+                        expr_executive_data = op_resp.get("sql_data")
                     break
             if expr_executive_data is not None:
                 if range_type == "all":
@@ -593,10 +601,11 @@ class AutoTestToolService:
                     except (ValueError, TypeError) as e:
                         raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
                 return extract_value
-            if all_database_operates_response_safe:
+            if all_operates_response_safe:
+                step_label = "Redis具体操作" if is_redis_response else "数据库具体操作"
                 raise ValueError(
                     f"【{operation_type}】未找到存储变量[{source_strip}]对应的执行结果, "
-                    f"请与「数据库具体操作」中的 variable_name 一致"
+                    f"请与「{step_label}」中的 variable_name 一致"
                 )
 
         raise ValueError(f"【{operation_type}】数据源源类型 {source} 不被支持")

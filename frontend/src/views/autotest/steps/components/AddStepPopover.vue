@@ -71,6 +71,7 @@ const STEP_ICON = {
   tcp: 'streamline-freehand:server-api-cloud',
   code: 'ph:file-py',
   database: 'ph:file-sql',
+  redis: 'ph:database',
   wait: 'gravity-ui:stopwatch',
   if: 'gravity-ui:shuffle',
   loop: 'gravity-ui:arrows-rotate-right',
@@ -84,6 +85,7 @@ const STEP_ICON_CLASS = {
   tcp: 'icon-tcp',
   code: 'icon-code',
   database: 'icon-database',
+  redis: 'icon-redis',
   wait: 'icon-wait',
   if: 'icon-if',
   loop: 'icon-loop',
@@ -113,6 +115,7 @@ const buildItem = (key, { label, desc, iconName, disabled } = {}) => {
     tcp: 'TCP请求',
     code: '代码请求(Python)',
     database: '数据库请求',
+    redis: 'Redis请求',
     wait: '等待控制',
     if: '条件分支',
     loop: '循环结构',
@@ -150,6 +153,9 @@ const menuSections = computed(() => {
         }),
         buildItem('database', {
           desc: '执行 SQL 语句，验证数据状态与完整性',
+        }),
+        buildItem('redis', {
+          desc: '执行Redis命令操作以验证数据完整性',
         }),
       ],
     },
@@ -269,7 +275,8 @@ const handleSelectItem = (item) => {
 }
 
 .add-step-item-icon.icon-code,
-.add-step-item-icon.icon-database {
+.add-step-item-icon.icon-database,
+.add-step-item-icon.icon-redis {
   color: #BA55D3;
 }
 

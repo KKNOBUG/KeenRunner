@@ -32,6 +32,18 @@ class DataBaseOperates(BaseModel):
     desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
 
 
+class RedisOperates(BaseModel):
+    index: int = Field(..., ge=0, description="Redis操作序号")
+    name: str = Field(..., max_length=128, description="Redis操作名称")
+    env_name: str = Field(..., max_length=128, description="Redis操作环境名称")
+    expr: str = Field(..., max_length=4096, description="Redis命令")
+    project_id: int = Field(..., ge=1, description="所属应用ID")
+    project_name: str = Field(..., max_length=128, description="所属应用名称")
+    config_name: str = Field(..., max_length=128, description="所属环境配置名称")
+    database_name: str = Field(..., max_length=128, description="Redis库编号")
+    desc: Optional[str] = Field(None, max_length=2048, description="Redis操作描述")
+
+
 class ConditionsBase(BaseModel):
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
@@ -84,6 +96,7 @@ class AutoTestApiDetailVarBase(BaseModel):
     )
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="本次执行数据库操作明细快照(解析后的数据库请求操作列表)")
+    redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="本次执行Redis操作明细快照")
     step_exec_logger: Optional[List[str]] = Field(default=None, description="步骤执行日志(字符串列表)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
@@ -100,6 +113,17 @@ class AutoTestApiDetailVarBase(BaseModel):
     @field_validator('database_operates', mode='before')
     @classmethod
     def normalize_database_operates(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
+
+    @field_validator('redis_operates', mode='before')
+    @classmethod
+    def normalize_redis_operates(cls, v):
         if v is None:
             return None
         if isinstance(v, dict):
@@ -191,6 +215,7 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_on_error: Optional[Any] = Field(default=None, description="本次执行循环错误策略")
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
     database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
+    redis_searched: Optional[bool] = Field(default=None, description="本次执行是否启用Redis查到即止")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中

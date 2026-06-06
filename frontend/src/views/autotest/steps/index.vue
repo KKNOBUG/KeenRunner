@@ -212,6 +212,7 @@ import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
 import ApiTcpEditor from "@/views/autotest/tcp_controller/index.vue";
 import ApiDatabaseEditor from "@/views/autotest/database_controller/index.vue";
+import ApiRedisEditor from "@/views/autotest/redis_controller/index.vue";
 import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
@@ -242,6 +243,7 @@ const stepDefinitions = {
   http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:server-api-cloud'},
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'ph:file-py'},
   database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
+  redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:database'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
 }
 
@@ -251,6 +253,7 @@ const STEP_ICON = {
   tcp: 'streamline-freehand-color:server-api-cloud',
   code: 'ph:file-py',
   database: 'ph:file-sql',
+  redis: 'ph:database',
   wait: 'gravity-ui:stopwatch',
   if: 'gravity-ui:shuffle',
   loop: 'gravity-ui:arrows-rotate-right',
@@ -262,6 +265,7 @@ const editorMap = {
   tcp: ApiTcpEditor,
   http: ApiHttpEditor,
   database: ApiDatabaseEditor,
+  redis: ApiRedisEditor,
   if: ApiIfEditor,
   wait: ApiWaitEditor,
   user_variables: ApiUserVariablesEditor,
@@ -991,6 +995,11 @@ const collectVariableNamesFromStep = (step) => {
       if (x && x.variable_name) names.push(String(x.variable_name).trim())
     })
   }
+  const redisOps = cfg.redis_operates ?? orig.redis_operates
+  const redisList = !redisOps ? [] : Array.isArray(redisOps) ? redisOps : Object.values(redisOps)
+  redisList.forEach((x) => {
+    if (x && x.variable_name) names.push(String(x.variable_name).trim())
+  })
   return names
 }
 
@@ -1035,7 +1044,8 @@ const localTypeToBackend = (localType) => {
     'loop': '循环结构',
     'wait': '等待控制',
     'quote': '引用公共脚本',
-    'database': '数据库请求'
+    'database': '数据库请求',
+    'redis': 'Redis请求'
   }
   return typeMap[localType] || '代码请求(Python)'
 }
@@ -1296,6 +1306,26 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     } else {
       backendStep.assert_validators = null
     }
+  } else if (step.type === 'redis') {
+    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
+    backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
+    backendStep.redis_searched = !!(config.redis_searched ?? original.redis_searched)
+    const ops = config.redis_operates ?? original.redis_operates
+    backendStep.redis_operates = Array.isArray(ops) ? ops : null
+    if (config.extract_variables !== undefined) {
+      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
+    } else if (original.extract_variables != null) {
+      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
+    } else {
+      backendStep.extract_variables = null
+    }
+    if (config.assert_validators !== undefined) {
+      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
+    } else if (original.assert_validators != null) {
+      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
+    } else {
+      backendStep.assert_validators = null
+    }
   }
 
   // 处理子步骤（递归处理）
@@ -1352,8 +1382,8 @@ const hasEmptyKeyInList = (list) => {
   return list.some((item) => item != null && String(item.key ?? '').trim() === '' && String(item.value ?? '').trim() !== '')
 }
 
-/** 与 database_controller 一致：database_operates 可为数组或「序号→行」对象 */
-const normalizeDatabaseOperatesList = (ops) => {
+/** 与 database_controller 一致：database_operates / redis_operates 可为数组或「序号→行」对象 */
+const normalizeOperatesList = (ops) => {
   if (ops == null) return []
   if (Array.isArray(ops)) return ops
   if (typeof ops === 'object') {
@@ -1362,6 +1392,9 @@ const normalizeDatabaseOperatesList = (ops) => {
   }
   return []
 }
+
+const normalizeDatabaseOperatesList = normalizeOperatesList
+const normalizeRedisOperatesList = normalizeOperatesList
 
 /** 校验数据库步骤配置完整性 */
 const validateDatabaseSteps = (stepList) => {
@@ -1444,6 +1477,93 @@ const validateDatabaseSteps = (stepList) => {
     }
     if (step.children && step.children.length > 0) {
       const child = validateDatabaseSteps(step.children)
+      if (!child.valid) return child
+    }
+  }
+  return {valid: true}
+}
+
+/** 校验 Redis 步骤配置完整性 */
+const validateRedisSteps = (stepList) => {
+  for (const step of stepList) {
+    if (step.type === 'redis') {
+      const config = step.config || {}
+      const original = step.original || {}
+      const rawOps = config.redis_operates ?? original.redis_operates
+      const stepName = step.name || original.step_name || '未命名步骤'
+
+      if (rawOps != null && typeof rawOps !== 'object') {
+        return {valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开步骤编辑或删除后添加`}
+      }
+
+      const list = normalizeRedisOperatesList(rawOps)
+      if (!list.length) {
+        return {
+          valid: false,
+          message: `步骤：${stepName}：请至少添加一条Redis操作`
+        }
+      }
+
+      for (let i = 0; i < list.length; i++) {
+        const o = list[i] || {}
+        const idxLabel = `第${i + 1}条`
+        const pid = o.project_id
+        const hasApp =
+            String(o.project_name ?? '').trim() !== ''
+            || (pid != null && pid !== '' && String(pid).trim() !== '')
+        if (!hasApp) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择所属应用`
+          }
+        }
+        if (!String(o.config_name ?? '').trim()) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写配置名称`
+          }
+        }
+        if (!String(o.database_name ?? '').trim()) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写库编号`
+          }
+        }
+        if (!String(o.expr ?? '').trim()) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写Redis命令`
+          }
+        }
+        if (!String(o.variable_name ?? '').trim()) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写存储变量`
+          }
+        }
+        const opDisplayName = String(o.name ?? '').trim()
+        if (!opDisplayName) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写操作名称`
+          }
+        }
+      }
+
+      const firstNameIndex = new Map()
+      for (let j = 0; j < list.length; j++) {
+        const nm = String((list[j] || {}).name ?? '').trim()
+        if (firstNameIndex.has(nm)) {
+          return {
+            valid: false,
+            message: `步骤：${stepName}，操作名称不允许重复，请修改后再保存或调试`
+          }
+        }
+        firstNameIndex.set(nm, j)
+      }
+    }
+    if (step.children && step.children.length > 0) {
+      const child = validateRedisSteps(step.children)
       if (!child.valid) return child
     }
   }
@@ -1629,6 +1749,12 @@ const handleSaveAll = async () => {
       return
     }
 
+    const redisValidation = validateRedisSteps(steps.value)
+    if (!redisValidation.valid) {
+      window.$message?.error?.(redisValidation.message)
+      return
+    }
+
     // 键值对去空校验：存在 Key 为空的项时不允许保存
     const emptyKeyValidation = validateEmptyKeyInSteps(steps.value)
     if (!emptyKeyValidation.valid) {
@@ -1746,6 +1872,11 @@ const handleDebug = async () => {
     window.$message?.error?.(dbValidation.message)
     return
   }
+  const redisValidation = validateRedisSteps(steps.value)
+  if (!redisValidation.valid) {
+    window.$message?.error?.(redisValidation.message)
+    return
+  }
   await execConfigModalRef.value?.openDebug({
     sourceSteps: steps.value,
     quoteStepsMap: { ...quoteStepsMap.value },
@@ -1861,7 +1992,7 @@ const editorComponent = computed(() => {
 
 const currentEditorNeedsProject = computed(() => {
   const t = currentStep.value?.type
-  return t === 'http' || t === 'tcp' || t === 'database' || t === 'quote'
+  return t === 'http' || t === 'tcp' || t === 'database' || t === 'redis' || t === 'quote'
 })
 
 const currentEditorNeedsVarAssist = computed(() => {
@@ -1910,7 +2041,16 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
                         extract_variables: [],
                         assert_validators: []
                       }
-                      : {}
+                      : type === 'redis'
+                          ? {
+                            step_name: 'Redis请求',
+                            step_desc: '',
+                            redis_searched: false,
+                            redis_operates: [],
+                            extract_variables: [],
+                            assert_validators: []
+                          }
+                          : {}
   const defaultName = type === 'loop'
       ? '循环结构(次数循环)'
       : type === 'wait'
@@ -1919,9 +2059,11 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
               ? '用户定义变量'
               : type === 'database'
                   ? '数据库请求'
-                  : type === 'quote' && extraConfig?.step_name
-                      ? extraConfig.step_name
-                      : `${def.label}`
+                  : type === 'redis'
+                      ? 'Redis请求'
+                      : type === 'quote' && extraConfig?.step_name
+                          ? extraConfig.step_name
+                          : `${def.label}`
   const config = extraConfig ? {...defaultConfig, ...extraConfig} : defaultConfig
   const newStep = {
     id: genId(),
@@ -2137,6 +2279,10 @@ const getStepNameAsWillPersist = (step) => {
     const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
     return String(v ?? '').trim()
   }
+  if (step.type === 'redis') {
+    const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
+    return String(v ?? '').trim()
+  }
 
   return String(step.name || original.step_name || '').trim()
 }
@@ -2316,6 +2462,12 @@ const updateStepConfig = (id, config) => {
       } else if (!String(step.name || '').trim()) {
         step.name = '数据库请求'
       }
+    } else if (step.type === 'redis') {
+      if (config.step_name !== undefined && String(config.step_name).trim()) {
+        step.name = String(config.step_name).trim()
+      } else if (!String(step.name || '').trim()) {
+        step.name = 'Redis请求'
+      }
     } else if (step.type === 'quote' || step.type === 'quote_public_script') {
       if (config.step_name !== undefined && config.step_name !== null) {
         step.name = String(config.step_name).trim() || '引用公共脚本'
@@ -2343,6 +2495,7 @@ const getStepIconClass = (type) => {
     if: 'icon-if',
     wait: 'icon-wait',
     database: 'icon-database',
+    redis: 'icon-redis',
     user_variables: 'icon-user_variables',
     quote: 'icon-quote',
     quote_public_script: 'icon-quote',
@@ -3226,6 +3379,10 @@ const RecursiveStepChildren = defineComponent({
 }
 
 :deep(.step-icon.icon-database) {
+  color: #BA55D3;
+}
+
+:deep(.step-icon.icon-redis) {
   color: #BA55D3;
 }
 

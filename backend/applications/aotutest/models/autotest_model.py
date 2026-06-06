@@ -247,6 +247,12 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     database_searched = fields.BooleanField(null=True,
                                             description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续的数据库请求)")
 
+    # Redis相关
+    # redis_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr
+    redis_operates = fields.JSONField(null=True, description="Redis请求操作列表")
+    redis_searched = fields.BooleanField(null=True,
+                                         description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续Redis请求)")
+
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -362,6 +368,8 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     # 数据源相关
     database_operates = fields.JSONField(null=True, description="数据库请求操作列表(快照)")
     database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(快照)")
+    redis_operates = fields.JSONField(null=True, description="Redis请求操作列表(快照)")
+    redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(快照)")
     # 变量相关
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")

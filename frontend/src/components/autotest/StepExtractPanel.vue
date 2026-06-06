@@ -2,9 +2,9 @@
   <n-space vertical :size="8" class="extract-validator-list">
     <div v-for="(item, key) in model" :key="key" class="extract_variables-item">
       <n-card
-        size="small"
-        hoverable
-        :class="{ 'is-item-collapsed': collapseState[key] }"
+          size="small"
+          hoverable
+          :class="{ 'is-item-collapsed': collapseState[key] }"
       >
         <template #header>
           <div class="extract-validator-card-header">
@@ -13,8 +13,8 @@
               <n-button text size="small" :disabled="readonly" @click="toggleCollapse(key)">
                 <template #icon>
                   <TheIcon
-                    :icon="collapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                    :size="18"
+                      :icon="collapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                      :size="18"
                   />
                 </template>
               </n-button>
@@ -33,49 +33,49 @@
         </template>
         <div v-show="!collapseState[key]">
           <n-form
-            :model="item"
-            label-width="auto"
-            label-placement="left"
-            size="small"
-            class="step-ev-form"
+              :model="item"
+              label-width="auto"
+              label-placement="left"
+              size="small"
+              class="step-ev-form"
           >
             <n-form-item label="提取名称">
               <n-input
-                v-model:value="item.name"
-                placeholder="请输入提取名称"
-                clearable
-                :disabled="readonly"
+                  v-model:value="item.name"
+                  placeholder="请输入提取名称"
+                  clearable
+                  :disabled="readonly"
               />
             </n-form-item>
 
-            <n-form-item v-if="isDatabase" label="提取来源">
+            <n-form-item v-if="isVariableSource" label="提取来源">
               <n-space vertical :size="4" style="width: 100%;">
                 <n-select
-                  v-model:value="item.source"
-                  :options="sourceOptions"
-                  placeholder="选择「请求」中配置的存储变量名（variable_name）"
-                  filterable
-                  clearable
-                  :disabled="readonly || !sourceOptions.length"
+                    v-model:value="item.source"
+                    :options="sourceOptions"
+                    placeholder="选择「请求」中配置的存储变量名（variable_name）"
+                    filterable
+                    clearable
+                    :disabled="readonly || !sourceOptions.length"
                 />
-                <span class="autotest-hint-text">{{ DB_SOURCE_HINT }}</span>
+                <span class="autotest-hint-text">{{ sourceHint }}</span>
               </n-space>
             </n-form-item>
             <n-form-item v-else label="提取对象">
               <n-select
-                v-model:value="item.object"
-                :options="RESPONSE_EXTRACT_OBJECT_OPTIONS"
-                placeholder="请选择提取对象"
-                :disabled="readonly"
+                  v-model:value="item.object"
+                  :options="RESPONSE_EXTRACT_OBJECT_OPTIONS"
+                  placeholder="请选择提取对象"
+                  :disabled="readonly"
               />
             </n-form-item>
 
             <n-form-item label="提取范围">
               <n-space align="center" :wrap-item="false">
                 <n-radio-group
-                  v-model:value="item.extractScope"
-                  name="extractScope"
-                  :disabled="readonly"
+                    v-model:value="item.extractScope"
+                    name="extractScope"
+                    :disabled="readonly"
                 >
                   <n-space>
                     <n-radio value="部分提取">部分提取</n-radio>
@@ -85,15 +85,15 @@
                 <n-tooltip trigger="hover">
                   <template #trigger>
                     <TheIcon
-                      icon="material-symbols:help-outline"
-                      :size="18"
-                      style="cursor: help; margin-left: 8px;"
+                        icon="material-symbols:help-outline"
+                        :size="18"
+                        style="cursor: help; margin-left: 8px;"
                     />
                   </template>
                   {{
-                    isDatabase
-                      ? '部分提取需填写 JSONPath（相对所选来源对应的那条执行结果对象）；全部提取取该对象整项（含 sql_data、sql_count 等）'
-                      : '选择提取范围：部分提取需要指定JSONPath/XPath等表达式，全部提取将提取整个响应内容'
+                    isVariableSource
+                        ? variableScopeHint
+                        : '选择提取范围：部分提取需要指定JSONPath/XPath等表达式，全部提取将提取整个响应内容'
                   }}
                 </n-tooltip>
               </n-space>
@@ -102,13 +102,13 @@
             <n-form-item v-if="item.extractScope === '部分提取'" label="提取路径">
               <n-space align="center" :wrap-item="false" style="width: 100%;">
                 <n-input
-                  v-model:value="item.jsonpath"
-                  :placeholder="pathPlaceholder(item)"
-                  clearable
-                  style="flex: 1;"
-                  :disabled="readonly"
+                    v-model:value="item.jsonpath"
+                    :placeholder="pathPlaceholder(item)"
+                    clearable
+                    style="flex: 1;"
+                    :disabled="readonly"
                 />
-                <template v-if="!isDatabase">
+                <template v-if="!isVariableSource">
                   <n-button text type="primary" :disabled="readonly" @click="onContinueExtract(key)">
                     继续提取
                     <template #icon>
@@ -118,13 +118,13 @@
                 </template>
                 <n-switch v-model:value="item.continueExtract" size="small" :disabled="readonly" />
                 <n-input-number
-                  v-model:value="item.extractIndex"
-                  :min="0"
-                  size="small"
-                  :style="{ width: isDatabase ? '88px' : '80px' }"
-                  :disabled="readonly"
+                    v-model:value="item.extractIndex"
+                    :min="0"
+                    size="small"
+                    :style="{ width: isVariableSource ? '88px' : '80px' }"
+                    :disabled="readonly"
                 />
-                <n-tooltip v-if="!isDatabase" trigger="hover">
+                <n-tooltip v-if="!isVariableSource" trigger="hover">
                   <template #trigger>
                     <TheIcon icon="material-symbols:help-outline" :size="18" style="cursor: help;" />
                   </template>
@@ -162,19 +162,23 @@ import {
   DB_JSONPATH_PLACEHOLDER,
   DB_SOURCE_HINT,
   EXTRACT_MODE_DATABASE,
+  EXTRACT_MODE_REDIS,
   EXTRACT_MODE_RESPONSE,
   formatExtractCardTitle,
   getExtractPlaceholder,
   getNextDictKey,
+  isVariableNameExtractMode,
+  REDIS_JSONPATH_PLACEHOLDER,
+  REDIS_SOURCE_HINT,
   RESPONSE_EXTRACT_OBJECT_OPTIONS,
 } from '@/utils/autotestExtractAssert'
 
 const props = defineProps({
-  /** response | database */
+  /** response | database | redis */
   mode: {
     type: String,
     default: EXTRACT_MODE_RESPONSE,
-    validator: (v) => [EXTRACT_MODE_RESPONSE, EXTRACT_MODE_DATABASE].includes(v),
+    validator: (v) => [EXTRACT_MODE_RESPONSE, EXTRACT_MODE_DATABASE, EXTRACT_MODE_REDIS].includes(v),
   },
   readonly: { type: Boolean, default: false },
   /** database 模式：请求 Tab 中的 variable_name 选项 */
@@ -184,7 +188,15 @@ const props = defineProps({
 const model = defineModel({ type: Object, default: () => ({}) })
 
 const extractMode = computed(() => props.mode)
-const isDatabase = computed(() => props.mode === EXTRACT_MODE_DATABASE)
+const isVariableSource = computed(() => isVariableNameExtractMode(props.mode))
+const sourceHint = computed(() =>
+    props.mode === EXTRACT_MODE_REDIS ? REDIS_SOURCE_HINT : DB_SOURCE_HINT
+)
+const variableScopeHint = computed(() =>
+    props.mode === EXTRACT_MODE_REDIS
+        ? '部分提取需填写 JSONPath（相对所选 variable_name 的 redis_data）；全部提取取该 redis_data 整项'
+        : '部分提取需填写 JSONPath（相对所选来源对应的那条执行结果对象）；全部提取取该对象整项（含 sql_data、sql_count 等）'
+)
 
 const collapseState = reactive({})
 
@@ -201,12 +213,13 @@ function syncCollapseKeys() {
 watch(model, syncCollapseKeys, { deep: true, immediate: true })
 
 function defaultSource() {
-  if (!isDatabase.value) return null
+  if (!isVariableSource.value) return null
   return props.sourceOptions[0]?.value ?? null
 }
 
 function pathPlaceholder(item) {
-  if (isDatabase.value) return DB_JSONPATH_PLACEHOLDER
+  if (props.mode === EXTRACT_MODE_REDIS) return REDIS_JSONPATH_PLACEHOLDER
+  if (props.mode === EXTRACT_MODE_DATABASE) return DB_JSONPATH_PLACEHOLDER
   return getExtractPlaceholder(item?.object)
 }
 

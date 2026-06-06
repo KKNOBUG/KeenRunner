@@ -35,6 +35,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     ConditionsBase,
     DataBaseOperates,
+    RedisOperates,
     StepAssertValidatorItem,
     StepVariablesBase,
     StepsExecuteConfigBase,
@@ -44,6 +45,7 @@ from backend.applications.aotutest.services.autotest_project_crud import AUTOTES
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import unique_identify
 from backend.common import AioTcpClient, TcpFrameMode
+from backend.common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
 from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
 from backend.core.exceptions import (
     NotFoundException,
@@ -1184,6 +1186,8 @@ class BaseStepExecutor:
             conditions=actual_request.get("conditions"),
             database_operates=actual_request.get("database_operates"),
             database_searched=actual_request.get("database_searched"),
+            redis_operates=actual_request.get("redis_operates"),
+            redis_searched=actual_request.get("redis_searched"),
             # 数据源相关
             dataset_name=dataset_name if have_data_driven else None,
             dataset_snapshot=dataset_snapshot if have_data_driven else None,
@@ -2714,6 +2718,333 @@ class DataBaseStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
+class RedisStepExecutor(BaseStepExecutor):
+    """
+    Redis 请求步骤：按环境配置连接 Redis，顺序执行多条命令，解析占位符；支持查到即止
+    """
+
+    @staticmethod
+    def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
+        if not command_results:
+            return False
+        for result in command_results:
+            if result is None:
+                continue
+            if isinstance(result, (list, tuple, dict)) and len(result) == 0:
+                continue
+            if isinstance(result, str) and not str(result).strip():
+                continue
+            return True
+        return False
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        try:
+            merge_operates_env_name: Optional[str] = None
+            redis_operates: Optional[List[RedisOperates]] = self.step.redis_operates
+            if redis_operates is None:
+                raise StepExecutionError("【Redis请求】参数[redis_operates]不能为空")
+            if not isinstance(redis_operates, list):
+                raise StepExecutionError("【Redis请求】参数[redis_operates]必须是列表类型")
+            if not redis_operates:
+                raise StepExecutionError("【Redis请求】参数[redis_operates]至少有一条Redis操作配置")
+
+            redis_operates_request: List[Dict[str, Any]] = []
+            redis_operates_response: List[Dict[str, Any]] = []
+            mark_extract_variables: List[Dict[str, Any]] = []
+            pool_manager: RedisConnPoolFromConfig = get_app_redis_pool()
+            redis_searched: bool = bool(self.step.redis_searched)
+            executive_st_time: datetime = datetime.now()
+
+            for redis_idx, redis_operate in enumerate(redis_operates):
+                env_name: Optional[str] = None
+                config_host: Optional[str] = None
+                config_port: Optional[str] = None
+                operate_no: str = f"第{redis_idx + 1}条Redis配置"
+                if not isinstance(redis_operate, RedisOperates):
+                    raise StepExecutionError(
+                        f"【Redis请求】{operate_no}配置类型非法: \n\t"
+                        f"预期类型: RedisOperates\n\t"
+                        f"实际类型: {type(redis_operate).__name__}"
+                    )
+                current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+                    database_operates_index=redis_idx
+                )
+                if current_op_execute_cfg and current_op_execute_cfg.config_type == AutoTestConfigNodeType.REDIS:
+                    env_name = str(current_op_execute_cfg.env_name or "").strip()
+                    config_host = current_op_execute_cfg.config_host
+                    config_port = current_op_execute_cfg.config_port
+                    config_name: str = current_op_execute_cfg.config_name
+                    database_name: str = current_op_execute_cfg.database_name or redis_operate.database_name
+                    redis_operate.config_name = config_name
+                    redis_operate.database_name = database_name
+                    request_config_name: Optional[str] = self.step.request_config_name
+                    if request_config_name:
+                        self.step.request_config_name += f", ({redis_idx}){redis_operate.config_name}"
+                    else:
+                        self.step.request_config_name = f"({redis_idx}){redis_operate.config_name}"
+                    if merge_operates_env_name:
+                        merge_operates_env_name += f", ({redis_idx}){env_name}"
+                    else:
+                        merge_operates_env_name = f"({redis_idx}){env_name}"
+
+                if not any((env_name, config_host, config_port)):
+                    raise StepExecutionError(f"【Redis请求】{operate_no}：执行配置异常, 存在未明确项")
+
+                operate_name: str = redis_operate.name
+                operate_expr: str = redis_operate.expr
+                operate_project_id: int = redis_operate.project_id
+                operate_project_name: str = redis_operate.project_name
+                operate_variable_name: str = redis_operate.variable_name
+                operate_config_name: str = redis_operate.config_name
+                operate_database_name: str = redis_operate.database_name
+                operate_desc: Optional[str] = redis_operate.desc
+                operate_result_count: str = f"{operate_variable_name}_count"
+                try:
+                    operate_expr = self.context.resolve_placeholders(
+                        variables=operate_expr,
+                        step_code=self.step_code
+                    )
+                    operate_config_name = self.context.resolve_placeholders(
+                        variables=operate_config_name,
+                        step_code=self.step_code
+                    )
+                    operate_project_name = self.context.resolve_placeholders(
+                        variables=operate_project_name,
+                        step_code=self.step_code
+                    )
+                    operate_database_name = self.context.resolve_placeholders(
+                        variables=operate_database_name,
+                        step_code=self.step_code
+                    )
+                    operate_variable_name = self.context.resolve_placeholders(
+                        variables=operate_variable_name,
+                        step_code=self.step_code
+                    )
+                    operate_result_count = f"{operate_variable_name}_count"
+                    if not operate_project_id and operate_project_name.strip():
+                        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(
+                            operate_project_name.strip(), on_error=False
+                        )
+                        if not project_instance:
+                            raise StepExecutionError(
+                                f"【Redis请求】{operate_no}：应用(project_name={operate_project_name!r})不存在"
+                            )
+                        operate_project_id = project_instance.id
+                    if not operate_project_id:
+                        raise StepExecutionError(f"【Redis请求】{operate_no}：参数[project_id]不能为空")
+                    if not operate_config_name:
+                        raise StepExecutionError(f"【Redis请求】{operate_no}：参数[config_name]不能为空")
+                    if not operate_database_name:
+                        raise StepExecutionError(f"【Redis请求】{operate_no}：参数[database_name]不能为空")
+                    if not operate_expr:
+                        raise StepExecutionError(f"【Redis请求】{operate_no}：参数[expr]不能为空")
+                    if not operate_variable_name:
+                        raise StepExecutionError(f"【Redis请求】{operate_no}：参数[variable_name]不能为空")
+
+                    redis_client = await pool_manager.get_or_create_client(
+                        app_id=str(operate_project_id),
+                        env=str(env_name).strip(),
+                        config_name=operate_config_name,
+                        db_name=operate_database_name,
+                    )
+                    expr_executive_result: Dict[str, Any] = await pool_manager.execute_commands(
+                        client=redis_client,
+                        expr=operate_expr,
+                    )
+                    redis_data: Optional[List[Any]] = expr_executive_result.get("redis_data")
+                    redis_count: Optional[int] = expr_executive_result.get("redis_count")
+
+                    mark_extract_variables.append({
+                        "index": redis_idx,
+                        "name": operate_variable_name,
+                        "source": "Redis请求",
+                        "scope": "ALL",
+                        "expr": "Redis命令",
+                        "extract_value": redis_data,
+                        "success": True,
+                        "error": "",
+                    })
+                    mark_extract_variables.append({
+                        "index": redis_idx,
+                        "name": operate_result_count,
+                        "source": "Redis请求",
+                        "scope": "ALL",
+                        "expr": "Redis命令",
+                        "extract_value": redis_count,
+                        "success": True,
+                        "error": "",
+                    })
+                    self.context.log(
+                        f"【Redis请求】{operate_no}：已自动写入变量池 "
+                        f"variable_name={operate_variable_name}, {operate_result_count}={redis_count}",
+                        step_code=self.step_code,
+                    )
+                    redis_operates_request.append({
+                        "index": redis_idx,
+                        "name": operate_name,
+                        "env_name": env_name,
+                        "expr": operate_expr,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "desc": operate_desc,
+                    })
+                    redis_operates_response.append({
+                        "index": redis_idx,
+                        "name": operate_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "redis_meta": {
+                            "env_name": env_name,
+                            "project_id": operate_project_id,
+                            "project_name": operate_project_name,
+                            "config_name": operate_config_name,
+                            "database_name": operate_database_name,
+                            "config_host": config_host,
+                            "config_port": config_port,
+                        },
+                        "redis_data": redis_data,
+                        "redis_count": redis_count,
+                    })
+                    if redis_searched and self._has_effective_redis_result(redis_data):
+                        self.context.log(
+                            f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令",
+                            step_code=self.step_code,
+                        )
+                        break
+                except StepExecutionError:
+                    raise
+                except Exception as e:
+                    result.success = False
+                    result.error = AutoTestToolService.format_step_error_message(
+                        step=self.step,
+                        exception=e,
+                        is_child_step=False,
+                        offset_message=operate_no
+                    )
+                    self.context.log(result.error, step_code=self.step_code)
+                    redis_operates_request.append({
+                        "index": redis_idx,
+                        "name": operate_name,
+                        "env_name": env_name,
+                        "expr": operate_expr,
+                        "project_id": operate_project_id,
+                        "project_name": operate_project_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "config_name": operate_config_name,
+                        "database_name": operate_database_name,
+                        "desc": operate_desc,
+                    })
+                    redis_operates_response.append({
+                        "index": redis_idx,
+                        "name": operate_name,
+                        "variable_name": [operate_variable_name, operate_result_count],
+                        "redis_meta": {
+                            "env_name": env_name,
+                            "project_id": operate_project_id,
+                            "project_name": operate_project_name,
+                            "config_name": operate_config_name,
+                            "database_name": operate_database_name,
+                            "config_host": config_host,
+                            "config_port": config_port,
+                        },
+                        "redis_data": None,
+                        "redis_count": None,
+                        "error": f"{operate_no}: {e}",
+                    })
+
+            executive_ed_time: datetime = datetime.now()
+            response_text_str = orjson.dumps(redis_operates_response, default=str).decode("UTF-8")
+            result.extract_variables = mark_extract_variables
+            result.request = {
+                "redis_operates": redis_operates_request,
+                "redis_searched": redis_searched,
+                "request_args_type": AutoTestReqArgsType.RAW,
+                "request_env_name": merge_operates_env_name,
+            }
+            result.response = {
+                "response_body": redis_operates_response,
+                "response_text": response_text_str,
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+            }
+
+            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
+            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+            for extract_item in mark_extract_variables:
+                if isinstance(extract_item, dict) and extract_item.get("success") and extract_item.get("name") is not None:
+                    session_lookup_map[extract_item["name"]] = extract_item.get("extract_value")
+
+            try:
+                extract_variables: Optional[List[Dict[str, Any]]] = self.step.extract_variables
+                if extract_variables and not isinstance(extract_variables, list):
+                    raise StepExecutionError("【Redis请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
+                _, extract_results_list = AutoTestToolService.run_extract_variables(
+                    extract_variables=extract_variables,
+                    response_text=response_text_str,
+                    response_json=redis_operates_response,
+                    response_headers=None,
+                    response_cookies=None,
+                    session_variables_lookup=session_lookup_map,
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                )
+                result.extract_variables.extend(extract_results_list)
+                extract_failed_items: List[Dict[str, Any]] = [
+                    valid for valid in extract_results_list if not valid.get("success", True)
+                ]
+                if extract_failed_items:
+                    extract_failed_dumps: str = orjson.dumps(
+                        extract_failed_items, option=orjson.OPT_INDENT_2
+                    ).decode("UTF-8")
+                    raise StepExecutionError(
+                        f"【变量提取】共计{len(extract_failed_items)}个提取失败: \n{extract_failed_dumps}"
+                    )
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                error_message: str = f"【Redis请求】在运行变量提取时发生异常, 错误详情: {e}"
+                self.context.log(error_message, step_code=self.step_code)
+                raise StepExecutionError(error_message) from e
+
+            try:
+                assert_rules = self.step.assert_validators
+                validator_results = AutoTestToolService.run_assert_validators(
+                    assert_validators=assert_rules,
+                    response_text=response_text_str,
+                    response_json=redis_operates_response,
+                    response_headers=None,
+                    response_cookies=None,
+                    session_variables_lookup=session_lookup_map,
+                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                    finished_variables=self.context,
+                    is_core_engine=True,
+                )
+                result.assert_validators.extend(validator_results)
+                assert_failed_items: List[Dict[str, Any]] = [
+                    valid for valid in validator_results if not valid.get("success", True)
+                ]
+                if assert_failed_items:
+                    assert_failed_dumps: str = orjson.dumps(
+                        assert_failed_items, option=orjson.OPT_INDENT_2
+                    ).decode("UTF-8")
+                    raise StepExecutionError(
+                        f"【断言验证】共计{len(assert_failed_items)}个断言失败: \n{assert_failed_dumps}"
+                    )
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                err = f"【Redis请求】断言验证异常: {e}"
+                self.context.log(err, step_code=self.step_code)
+                raise StepExecutionError(err) from e
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
+
+
 class HttpStepExecutor(BaseStepExecutor):
     """
     HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。
@@ -3007,6 +3338,7 @@ class StepExecutorFactory:
         AutoTestStepType.HTTP: HttpStepExecutor,
         AutoTestStepType.PYTHON: PythonStepExecutor,
         AutoTestStepType.DATABASE: DataBaseStepExecutor,
+        AutoTestStepType.REDIS: RedisStepExecutor,
         AutoTestStepType.LOOP: LoopStepExecutor,
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,

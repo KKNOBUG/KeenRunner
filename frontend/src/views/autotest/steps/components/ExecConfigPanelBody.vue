@@ -148,7 +148,7 @@
                     </div>
                     <div class="col addr">
                       <n-input
-                          :value="panel.getRowAddrPreview(row, 'database')"
+                          :value="panel.getRowAddrPreview(row, row.config_bucket || 'database')"
                           size="small"
                           disabled
                           :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
