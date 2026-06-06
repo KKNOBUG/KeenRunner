@@ -58,6 +58,7 @@ from backend.enums import (
     AutoTestReqArgsType,
     AutoTestConfigNodeType, HTTPMethod
 )
+from backend.configure import LOGGER
 from backend.services import CTX_USER_ID
 
 # 1.匹配裸的占位符，如: ${xxx}
@@ -1031,7 +1032,7 @@ class BaseStepExecutor:
         self.context.defined_variables = self.context.resolve_placeholders(
             variables=step_defined_variables,
             step_code=self.step_code
-        )
+        ) or []
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -1070,22 +1071,34 @@ class BaseStepExecutor:
                 try:
                     await self._save_step_detail(result, step_st_time_str, num_cycles)
                 except Exception as e:
-                    # 保存步骤明细失败不应该影响执行流程
-                    error_message: str = (
-                        f"保存步骤明细执行失败: \n\t"
-                        f"用例ID: {self.case_id}\n\t"
+                    # 明细收集失败不中断后续步骤；标记本步失败并记录可排障上下文
+                    detail_fail_prefix: str = "[明细收集失败]"
+                    detail_fail_message: str = (
+                        f"{detail_fail_prefix}\n\t"
+                        f"报告标识: {self.context.report_code}\n\t"
+                        f"用例ID: {self.context.case_id}\n\t"
+                        f"用例标识: {self.context.case_code}\n\t"
                         f"步骤ID: {self.step_id}\n\t"
                         f"步骤序号: {self.step_no}\n\t"
                         f"步骤标识: {self.step_code}\n\t"
                         f"步骤名称: {self.step_name}\n\t"
                         f"步骤类型: {self.step_type}\n\t"
+                        f"循环轮次: {num_cycles}\n\t"
+                        f"步骤执行结果: {'成功' if result.success else '失败'}\n\t"
                         f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
-                        f"错误描述: {e}\n\t"
                         f"错误类型: {type(e).__name__}\n\t"
-                        f"错误回溯: {traceback.format_exc()}"
+                        f"错误描述: {e}"
                     )
-                    print(error_message)
-                    self.context.log(error_message, step_code=self.step_code)
+                    result.success = False
+                    if result.error:
+                        result.error = f"{result.error}\n{detail_fail_message}"
+                    else:
+                        result.error = detail_fail_message
+                    self.context.log(detail_fail_message, step_code=self.step_code)
+                    LOGGER.error(
+                        f"{detail_fail_message}\n"
+                        f"错误回溯:\n{traceback.format_exc()}"
+                    )
         return result
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
@@ -2353,7 +2366,9 @@ class TcpStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                self.context.log(f"【TCP请求】变量提取失败: {e}", step_code=self.step_code)
+                error_message: str = f"【TCP请求】在运行变量提取时发生异常, 错误详情: {e}"
+                self.context.log(error_message, step_code=self.step_code)
+                raise StepExecutionError(error_message) from e
 
             try:
                 assert_validators = self.step.assert_validators
@@ -2660,7 +2675,9 @@ class DataBaseStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                self.context.log(f"【数据库请求】变量提取失败: {e}", step_code=self.step_code)
+                error_message: str = f"【数据库请求】在运行变量提取时发生异常, 错误详情: {e}"
+                self.context.log(error_message, step_code=self.step_code)
+                raise StepExecutionError(error_message) from e
 
             try:
                 assert_rules = self.step.assert_validators
@@ -2905,9 +2922,9 @@ class HttpStepExecutor(BaseStepExecutor):
             except StepExecutionError:
                 raise
             except Exception as e:
-                # 变量提取失败不影响请求成功, 只记录错误
-                error_message: str = f"【HTTP请求】变量提取失败: {e}"
+                error_message: str = f"【HTTP请求】在运行变量提取时发生异常, 错误详情: {e}"
                 self.context.log(error_message, step_code=self.step_code)
+                raise StepExecutionError(error_message) from e
 
             try:
                 assert_validators = self.step.assert_validators
