@@ -22,8 +22,8 @@ from tortoise.models import Model
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
-from configure import GLOBAL_CONFIG, LOGGER
-from core.exceptions import ParameterException, NotFoundException
+from backend.configure import GLOBAL_CONFIG, LOGGER
+from backend.core.exceptions import ParameterException, NotFoundException
 
 
 def unique_identify() -> str:
