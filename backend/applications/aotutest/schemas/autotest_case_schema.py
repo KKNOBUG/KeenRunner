@@ -6,7 +6,7 @@
 @Module  : autotest_case_schema.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,7 @@ class AutoTestApiCaseCreate(BaseModel):
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
     session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiCaseBase(BaseModel):
@@ -42,7 +42,7 @@ class AutoTestApiCaseBase(BaseModel):
 
 class AutoTestApiCaseUpdate(AutoTestApiCaseBase):
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiCaseSelect(AutoTestApiCaseBase):
@@ -51,6 +51,6 @@ class AutoTestApiCaseSelect(AutoTestApiCaseBase):
     order: List[str] = Field(default=["-created_time"], description="排序字段")
 
     exclude_case_id: Optional[int] = Field(None, description="排除的用例ID（复制时排除自己）")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

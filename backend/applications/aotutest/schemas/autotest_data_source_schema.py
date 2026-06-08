@@ -6,7 +6,7 @@
 @Module  : autotest_data_source_schema.py
 @DateTime: 2026/3/6
 """
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 from pydantic import BaseModel, Field
 
@@ -33,13 +33,13 @@ class AutoTestDataSourceCreate(AutoTestDataSourceBase):
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     step_id: int = Field(..., ge=1, description="步骤ID")
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
     data_source_id: Optional[int] = Field(None, ge=1, description="主键ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动文件标识代码")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestDataSourceSelect(BaseModel):

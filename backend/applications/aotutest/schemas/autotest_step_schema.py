@@ -6,7 +6,7 @@
 @Module  : autotest_step_schema.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, List, Dict, Any, Type
+from typing import Optional, List, Dict, Any, Type, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -251,11 +251,11 @@ class AutoTestApiStepCreate(AutoTestApiStepBase):
     step_no: int = Field(..., ge=1, description="步骤序号")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     step_type: AutoTestStepType = Field(..., description="步骤所属类型")
-    created_user: Optional[UpperStr] = Field(None, description="创建人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, description="创建人员")
 
 
 class AutoTestApiStepUpdate(AutoTestApiStepBase):
-    updated_user: Optional[UpperStr] = Field(None, description="更新人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, description="更新人员")
 
 
 class AutoTestApiStepSelect(BaseModel):
@@ -271,8 +271,8 @@ class AutoTestApiStepSelect(BaseModel):
     case_id: Optional[int] = Field(None, description="用例ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
     quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
-    created_user: Optional[UpperStr] = Field(None, description="创建人员")
-    updated_user: Optional[UpperStr] = Field(None, description="更新人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, description="创建人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
 

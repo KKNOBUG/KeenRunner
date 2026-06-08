@@ -233,7 +233,7 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
     step_type: AutoTestStepType = Field(..., description="步骤类型")
     step_state: bool = Field(..., description="步骤执行状态")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
@@ -244,7 +244,7 @@ class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiDetailSelect(BaseModel):
@@ -264,6 +264,6 @@ class AutoTestApiDetailSelect(BaseModel):
     step_state: Optional[bool] = Field(None, description="步骤执行状态(True:成功, False:失败)")
 
     detail_id: Optional[int] = Field(None, description="明细ID")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

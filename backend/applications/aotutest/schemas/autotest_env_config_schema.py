@@ -6,7 +6,7 @@
 @Module  : autotest_config_schema
 @DateTime: 2026/4/16 10:19
 """
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 from pydantic import BaseModel, Field
 
@@ -39,13 +39,13 @@ class AutoTestApiConfigCreate(AutoTestApiConfigBase):
     config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
     config_name: str = Field(..., description="配置名称")
     config_host: str = Field(..., max_length=128, description="数据库/服务器主机地址")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiConfigUpdate(AutoTestApiConfigBase):
     config_id: Optional[int] = Field(None, ge=1, description="配置主键ID")
     config_code: Optional[str] = Field(None, max_length=64, description="配置标识代码")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiConfigDelete(BaseModel):
@@ -60,8 +60,8 @@ class AutoTestApiConfigSelect(AutoTestApiConfigBase):
 
     config_id: Optional[int] = Field(None, ge=1, description="配置主键ID")
     config_code: Optional[str] = Field(None, max_length=64, description="配置标识代码")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
