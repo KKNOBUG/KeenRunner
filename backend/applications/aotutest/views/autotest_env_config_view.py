@@ -10,9 +10,10 @@ import asyncio
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
@@ -20,9 +21,6 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigDelete,
     AutoTestEnvConfigQueryByProjectsIn,
 )
-from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -42,9 +40,12 @@ autotest_env_config = APIRouter()
 
 
 @autotest_env_config.post("/create", summary="API自动化测试-新增环境配置")
-async def create_env_config(config_in: AutoTestApiConfigCreate = Body(..., description="环境配置")):
+async def create_env_config(
+        config_in: AutoTestApiConfigCreate = Body(..., description="环境配置"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_ENV_CONFIG_CRUD.create_config(config_in=config_in)
+        instance = await services.env_config_curd.create_config(config_in=config_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -69,9 +70,10 @@ async def create_env_config(config_in: AutoTestApiConfigCreate = Body(..., descr
 async def delete_env_config(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_ENV_CONFIG_CRUD.delete_config(config_id=config_id, config_code=config_code)
+        instance = await services.env_config_curd.delete_config(config_id=config_id, config_code=config_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -93,9 +95,10 @@ async def delete_env_config(
 @autotest_env_config.post("/delete", summary="API自动化测试-按id或code列表删除环境")
 async def delete_env_config_batch(
         config_in: AutoTestApiConfigDelete = Body(..., description="环境配置信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        count = await AUTOTEST_API_ENV_CONFIG_CRUD.delete_configs(config_in=config_in)
+        count = await services.env_config_curd.delete_configs(config_in=config_in)
         LOGGER.info(f"按id或code列表删除环境配置成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
@@ -104,9 +107,12 @@ async def delete_env_config_batch(
 
 
 @autotest_env_config.post("/update", summary="API自动化测试-按id或code更新环境配置")
-async def update_env_config(config_in: AutoTestApiConfigUpdate = Body(..., description="环境配置")):
+async def update_env_config(
+        config_in: AutoTestApiConfigUpdate = Body(..., description="环境配置"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_ENV_CONFIG_CRUD.update_config(config_in=config_in)
+        instance = await services.env_config_curd.update_config(config_in=config_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -131,12 +137,13 @@ async def update_env_config(config_in: AutoTestApiConfigUpdate = Body(..., descr
 async def get_env_info(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if config_id:
-            instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_id(config_id=config_id, on_error=True, state__not=1)
+            instance = await services.env_config_curd.get_by_id(config_id=config_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_code(config_code=config_code, on_error=True, state__not=1)
+            instance = await services.env_config_curd.get_by_code(config_code=config_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -156,7 +163,10 @@ async def get_env_info(
 
 
 @autotest_env_config.post("/search", summary="API自动化测试-按条件查询环境配置")
-async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., description="查询条件")):
+async def search_env_info(
+        config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
         q = Q()
         if config_in.config_id:
@@ -178,7 +188,7 @@ async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., descrip
         if config_in.updated_user:
             q &= Q(updated_user__iexact=config_in.updated_user)
         q &= Q(state=config_in.state)
-        total, instances = await AUTOTEST_API_ENV_CONFIG_CRUD.select_config(
+        total, instances = await services.env_config_curd.select_config(
             search=q,
             page=config_in.page,
             page_size=config_in.page_size,
@@ -189,7 +199,7 @@ async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., descrip
         project_name_map = {}
         if unique_project_ids:
             project_name_map = dict(
-                await AUTOTEST_API_PROJECT_CRUD.model.filter(
+                await services.project_curd.model.filter(
                     id__in=unique_project_ids,
                     state__not=1
                 ).values_list("id", "project_name")
@@ -199,7 +209,7 @@ async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., descrip
         env_name_map = {}
         if unique_env_ids:
             env_name_map = dict(
-                await AUTOTEST_API_ENV_ENUM_CRUD.model.filter(
+                await services.env_enum_curd.model.filter(
                     id__in=unique_env_ids,
                     state__not=1
                 ).values_list("id", "env_name")
@@ -233,13 +243,14 @@ async def search_env_info(config_in: AutoTestApiConfigSelect = Body(..., descrip
 @autotest_env_config.post("/query", summary="API自动化测试-按应用列表查询环境配置并分类")
 async def query_classify_env_config(
         body: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     返回结构：project_id -> env_id -> config_type(api/database/file) -> config_name ->
     {config_host, config_port, database_name}。
     """
     try:
-        data = await AUTOTEST_API_ENV_CONFIG_CRUD.query_classified_by_project_ids(
+        data = await services.env_config_curd.query_classified_by_project_ids(
             project_ids=body.project_ids,
         )
         total_configs: int = sum(
@@ -264,10 +275,11 @@ async def get_unique_env_config_name_list(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
         config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型，可选"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         config_type_val = config_type.value if config_type is not None else None
-        data = await AUTOTEST_API_ENV_CONFIG_CRUD.list_distinct_config_names(
+        data = await services.env_config_curd.list_distinct_config_names(
             project_id=project_id,
             env_id=env_id,
             config_type=config_type_val,

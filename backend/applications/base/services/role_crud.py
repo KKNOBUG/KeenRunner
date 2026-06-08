@@ -101,7 +101,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         if role_ids:
             for rid in role_ids:
                 try:
-                    await self.remove(id=int(rid))
+                    await self.remove_or_error(id=int(rid))
                     n += 1
                 except (DoesNotExist, Exception):
                     continue
@@ -110,11 +110,10 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
                 obj = await self.get_by_code(role_code=code, state__not=1)
                 if obj:
                     try:
-                        await self.remove(id=obj.id)
+                        await self.remove_or_error(id=obj.id)
                         n += 1
                     except Exception:
                         continue
         return n
 
 
-ROLE_CRUD = RoleCrud()

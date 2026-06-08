@@ -17,8 +17,8 @@ from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
     AutoTestApiDetailUpdate
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -94,7 +94,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_code: str = detail_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+        await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
@@ -105,7 +105,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         # 业务层验证：检查报告是否存在
         if not skip_report_check:
             report_code: str = detail_in.report_code
-            await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
+            await AutoTestApiReportCrud().get_by_conditions(
                 only_one=True,
                 on_error=True,
                 case_id=case_id,
@@ -139,7 +139,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_code: Optional[str] = detail_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+        await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
@@ -149,7 +149,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
         # 业务层验证：检查报告是否存在
         report_code = detail_in.report_code
-        await AUTOTEST_API_REPORT_CRUD.get_by_conditions(
+        await AutoTestApiReportCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             case_id=case_id,
@@ -240,6 +240,3 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             error_message: str = f"查询明细信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_DETAIL_CRUD = AutoTestApiDetailCrud()

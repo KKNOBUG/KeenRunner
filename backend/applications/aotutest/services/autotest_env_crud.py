@@ -253,6 +253,3 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             error_message: str = f"查询环境枚举信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_ENV_ENUM_CRUD = AutoTestApiEnvEnumCrud()

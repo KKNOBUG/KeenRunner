@@ -15,10 +15,11 @@ from urllib.parse import quote
 
 import httpx
 import orjson
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
@@ -39,17 +40,10 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepAssertValidatorItem,
     StepsExecuteConfigBase,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
-from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
-from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.applications.aotutest.services.autotest_env_config_crud import AUTOTEST_API_ENV_CONFIG_CRUD
-from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
+from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -75,10 +69,11 @@ autotest_step = APIRouter()
 
 @autotest_step.post("/create", summary="API自动化测试-新增步骤")
 async def create_step(
-        step_in: AutoTestApiStepCreate = Body(..., description="步骤信息")
+        step_in: AutoTestApiStepCreate = Body(..., description="步骤信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_STEP_CRUD.create_step(step_in)
+        instance = await services.step_curd.create_step(step_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -103,9 +98,10 @@ async def create_step(
 async def delete_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_STEP_CRUD.delete_step(step_id=step_id, step_code=step_code)
+        instance = await services.step_curd.delete_step(step_id=step_id, step_code=step_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -128,10 +124,11 @@ async def delete_step(
 
 @autotest_step.post("/update", summary="API自动化测试-按id或code更新步骤")
 async def update_step(
-        step_in: AutoTestApiStepUpdate = Body(..., description="步骤信息")
+        step_in: AutoTestApiStepUpdate = Body(..., description="步骤信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_STEP_CRUD.update_step(step_in)
+        instance = await services.step_curd.update_step(step_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -156,12 +153,13 @@ async def update_step(
 async def get_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if step_id:
-            instance = await AUTOTEST_API_STEP_CRUD.get_by_id(step_id=step_id, on_error=True, state__not=1)
+            instance = await services.step_curd.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_STEP_CRUD.get_by_code(step_code=step_code, on_error=True, state__not=1)
+            instance = await services.step_curd.get_by_code(step_code=step_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -182,7 +180,8 @@ async def get_step(
 
 @autotest_step.post("/search", summary="API自动化测试-按条件查询步骤")
 async def search_steps(
-        step_in: AutoTestApiStepSelect = Body(..., description="查询条件")
+        step_in: AutoTestApiStepSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -204,7 +203,7 @@ async def search_steps(
         if step_in.quote_case_id:
             q &= Q(quote_case_id=step_in.quote_case_id)
         q &= Q(state=step_in.state)
-        total, instances = await AUTOTEST_API_STEP_CRUD.select_steps(
+        total, instances = await services.step_curd.select_steps(
             search=q,
             page=step_in.page,
             page_size=step_in.page_size,
@@ -234,9 +233,10 @@ async def search_steps(
 async def get_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        load = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id, case_code=case_code)
+        load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
         LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {load.step_counter.model_dump()}")
         if load.root_steps:
             data = [s.model_dump(mode="json") for s in load.root_steps]
@@ -257,6 +257,7 @@ async def get_step_tree(
 async def copy_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     复制指定用例的步骤树，返回 { case, steps }，不包含 step_id、step_code 等更新必填项。
@@ -268,7 +269,7 @@ async def copy_step_tree(
     try:
         if not case_id and not case_code:
             return BadReqResponse(message="必须提供 case_id 或 case_code 参数")
-        copy_data = await AUTOTEST_API_STEP_CRUD.get_copy_tree(case_id=case_id, case_code=case_code)
+        copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code)
         LOGGER.info("复制用例步骤树成功")
         return SuccessResponse(message="复制成功", data=copy_data)
     except (NotFoundException, ParameterException) as e:
@@ -280,7 +281,8 @@ async def copy_step_tree(
 
 @autotest_step.post("/update_or_create_tree", summary="API自动化测试-更新用例级步骤树")
 async def batch_update_steps_tree(
-        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)")
+        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     批量更新测试用例和步骤信息
@@ -320,7 +322,7 @@ async def batch_update_steps_tree(
                 # 2.1 处理用例信息
                 cases_data: List[AutoTestApiCaseUpdate] = [case_data]
                 if cases_data:
-                    case_result: Dict[str, Any] = await AUTOTEST_API_CASE_CRUD.batch_update_or_create_cases(cases_data)
+                    case_result: Dict[str, Any] = await services.case_curd.batch_update_or_create_cases(cases_data)
                     created_case_count: int = case_result['created_count']
                     updated_case_count: int = case_result['updated_count']
                     success_case_detail: List[Dict[str, Any]] = case_result['success_detail']
@@ -347,7 +349,7 @@ async def batch_update_steps_tree(
 
                             recursive_update_case_id(steps_data, successful_case_id)
                 # 2.2 批量更新/新增步骤信息（递归处理）
-                step_result: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.batch_update_or_create_steps(steps_data)
+                step_result: Dict[str, Any] = await services.step_curd.batch_update_or_create_steps(steps_data)
                 deleted_step_count: int = 0
                 created_step_count: int = step_result['created_count']
                 updated_step_count: int = step_result['updated_count']
@@ -356,7 +358,7 @@ async def batch_update_steps_tree(
                 # 2.3 删除多余步骤
                 if process_step_count:
                     for case_id, step_codes in process_step_count.items():
-                        actual_step_codes = await AUTOTEST_API_STEP_CRUD.model.filter(
+                        actual_step_codes = await services.step_curd.model.filter(
                             case_id=case_id, state__not=1
                         ).values_list("step_code", flat=True)
                         missing_step_codes: set = set(actual_step_codes) - step_codes
@@ -366,12 +368,12 @@ async def batch_update_steps_tree(
                                 f"删除更新后多余步骤: "
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
-                            await AUTOTEST_API_STEP_CRUD.model.filter(step_code__in=missing_step_codes).delete()
+                            await services.step_curd.model.filter(step_code__in=missing_step_codes).delete()
                 # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
                     if successful_case_id:
-                        deleted_step_count = await AUTOTEST_API_STEP_CRUD.delete_steps_recursive(
+                        deleted_step_count = await services.step_curd.delete_steps_recursive(
                             case_id=successful_case_id
                         )
                         if deleted_step_count > 0:
@@ -411,7 +413,8 @@ async def batch_update_steps_tree(
 
 @autotest_step.post("/http_debugging", summary="API自动化测试-HTTP请求调试")
 async def debug_http_request(
-        step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据")
+        step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
@@ -451,7 +454,7 @@ async def debug_http_request(
         # 处理请求主机域名
         if request_url and not request_url.lower().startswith("http"):
             try:
-                env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
+                env_config_instance = await services.env_config_curd.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     state__not=1,
@@ -727,7 +730,8 @@ async def debug_http_request(
 
 @autotest_step.post("/tcp_debugging", summary="API自动化测试-TCP请求调试")
 async def debug_tcp_request(
-        step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据")
+        step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         env_id: int = step_data.env_id
@@ -788,7 +792,7 @@ async def debug_tcp_request(
         host: str = ""
         port: Optional[str] = None
         try:
-            env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
+            env_config_instance = await services.env_config_curd.get_by_conditions(
                 only_one=True,
                 on_error=False,
                 state__not=1,
@@ -906,7 +910,8 @@ async def debug_tcp_request(
 
 @autotest_step.post("/python_code_debugging", summary="API自动化测试-Python代码调试")
 async def debug_python_code(
-        step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据")
+        step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     调试Python代码执行接口
@@ -1038,7 +1043,8 @@ def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
 
 @autotest_step.post("/redis_debugging", summary="API自动化测试-Redis请求调试")
 async def debug_redis_request(
-        step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据")
+        step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         env_id: int = step_data.env_id
@@ -1067,7 +1073,7 @@ async def debug_redis_request(
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
-        env_instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=False, state__not=1)
+        env_instance = await services.env_enum_curd.get_by_id(env_id=env_id, on_error=False, state__not=1)
         if not env_instance:
             msg = f"Redis请求调试失败, 环境ID[{env_id}]不存在"
             append_debugging_log(message=msg)
@@ -1140,7 +1146,7 @@ async def debug_redis_request(
                 operate_result_count = f"{operate_variable_name}_count"
 
                 if not operate_project_id and operate_project_name.strip():
-                    project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(
+                    project_instance = await services.project_curd.get_by_name(
                         operate_project_name.strip(), on_error=False
                     )
                     if not project_instance:
@@ -1159,7 +1165,7 @@ async def debug_redis_request(
                 if not operate_variable_name:
                     return FailureResponse(message=f"{operate_no}：参数[variable_name]不能为空")
 
-                env_config_instance = await AUTOTEST_API_ENV_CONFIG_CRUD.get_by_conditions(
+                env_config_instance = await services.env_config_curd.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     state__not=1,
@@ -1383,7 +1389,8 @@ def _serialize_for_celery_steps_execute_config(
 
 @autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
 async def execute_step_tree(
-        request: AutoTestStepTreeExecute = Body(..., description="步骤树数据")
+        request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     按 execute_type（AutoTestReportType）分发：
@@ -1459,7 +1466,7 @@ async def execute_step_tree(
                 # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
                 if not selected_dataset_names:
                     # 普通单次执行（无选中数据集）
-                    result_data: Dict[str, Any] = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+                    result_data: Dict[str, Any] = await services.step_curd.execute_single_case(
                         case_id=case_id,
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
@@ -1479,7 +1486,7 @@ async def execute_step_tree(
                 parameterized_execute_results: List[Dict[str, Any]] = []
                 batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                 for dataset_name in selected_dataset_names:
-                    single_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+                    single_data = await services.step_curd.execute_single_case(
                         case_id=case_id,
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables or [],
@@ -1529,7 +1536,7 @@ async def execute_step_tree(
                     "case_name": first_step.get("case_name"),
                 }
             if not case_info:
-                case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_id(
+                case_instance: AutoTestApiCaseInfo = await services.case_curd.get_by_id(
                     case_id=case_id,
                     on_error=True,
                     state__not=1
@@ -1572,12 +1579,12 @@ async def execute_step_tree(
                 dataset_name=debug_dataset_name,
             )
             async with in_transaction():
-                report_instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in=defer_create_report)
+                report_instance = await services.report_curd.create_report(report_in=defer_create_report)
                 for detail_create in (pending_create_details or []):
-                    await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in=detail_create)
+                    await services.detail_curd.create_detail(detail_in=detail_create)
                 case_state: bool = statistics.get("failed_steps", 0) == 0
                 case_last_time: str = defer_create_report.case_ed_time
-                await AUTOTEST_API_CASE_CRUD.update_case(AutoTestApiCaseUpdate(
+                await services.case_curd.update_case(AutoTestApiCaseUpdate(
                     case_id=case_id,
                     case_state=case_state,
                     case_last_time=case_last_time,
@@ -1624,7 +1631,8 @@ async def execute_step_tree(
 
 @autotest_step.post("/batch_execute", summary="API自动化测试-批量执行用例")
 async def batch_execute_cases_endpoint(
-        request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数")
+        request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         case_ids = request.case_ids
@@ -1652,10 +1660,9 @@ async def batch_execute_cases_endpoint(
         # }
 
         # 异步执行
-        exec_result = await AUTOTEST_API_STEP_CRUD.batch_execute_cases(
+        exec_result = await services.step_curd.batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables,
-            env_name=env_name,
             report_type=AutoTestReportType.ASYNC_EXEC,
         )
         return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)

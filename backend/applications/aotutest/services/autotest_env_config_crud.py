@@ -19,8 +19,8 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigUpdate,
     AutoTestApiConfigDelete
 )
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
+from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -97,9 +97,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         config_type: AutoTestConfigNodeType = config_in.config_type
         config_dict: Dict[str, Any] = config_in.model_dump(exclude_none=True, exclude_unset=True)
         # 业务层验证: 检查环境是否存在
-        await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True, state__not=1)
+        await AutoTestApiEnvEnumCrud().get_by_id(env_id=env_id, on_error=True, state__not=1)
         # 业务层验证: 检查应用是否存在
-        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=project_id, on_error=True, state__not=1)
+        await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
         existing_config = await self.get_by_conditions(
             only_one=True,
             on_error=False,
@@ -340,6 +340,3 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             stmt = stmt.filter(config_type=config_type)
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
-
-
-AUTOTEST_API_ENV_CONFIG_CRUD = AutoTestApiEnvConfigCrud()

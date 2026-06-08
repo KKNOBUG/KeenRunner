@@ -9,17 +9,16 @@
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_record_schema import AutoTestApiRecordSelect
 from backend.applications.aotutest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
     AutoTestApiTaskSelect,
     AutoTestApiTaskUpdate,
 )
-from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
-from backend.applications.aotutest.services.autotest_task_crud import AUTOTEST_API_TASK_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -38,9 +37,12 @@ autotest_task = APIRouter()
 
 
 @autotest_task.post("/create", summary="API自动化测试-新增任务")
-async def create_task_info(task_in: AutoTestApiTaskCreate = Body(..., description="任务信息")):
+async def create_task_info(
+        task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_TASK_CRUD.create_task(task_in=task_in)
+        instance = await services.task_curd.create_task(task_in=task_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -65,9 +67,10 @@ async def create_task_info(task_in: AutoTestApiTaskCreate = Body(..., descriptio
 async def delete_task_info(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_TASK_CRUD.delete_task(task_id=task_id, task_code=task_code)
+        instance = await services.task_curd.delete_task(task_id=task_id, task_code=task_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -87,9 +90,12 @@ async def delete_task_info(
 
 
 @autotest_task.post("/update", summary="API自动化测试-按id或code更新任务")
-async def update_task_info(task_in: AutoTestApiTaskUpdate = Body(..., description="任务信息")):
+async def update_task_info(
+        task_in: AutoTestApiTaskUpdate = Body(..., description="任务信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_TASK_CRUD.update_task(task_in=task_in)
+        instance = await services.task_curd.update_task(task_in=task_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -114,12 +120,13 @@ async def update_task_info(task_in: AutoTestApiTaskUpdate = Body(..., descriptio
 async def get_task_info(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if task_id:
-            instance = await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True, state__not=1)
+            instance = await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_TASK_CRUD.get_by_code(task_code=task_code, on_error=True, state__not=1)
+            instance = await services.task_curd.get_by_code(task_code=task_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -140,7 +147,8 @@ async def get_task_info(
 
 @autotest_task.post("/search", summary="API自动化测试-按条件查询任务")
 async def search_tasks_info(
-        task_in: AutoTestApiTaskSelect = Body(..., description="查询条件")
+        task_in: AutoTestApiTaskSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -157,7 +165,7 @@ async def search_tasks_info(
         if task_in.updated_user:
             q &= Q(updated_user__iexact=task_in.updated_user)
         q &= Q(state=task_in.state)
-        total, instances = await AUTOTEST_API_TASK_CRUD.select_tasks(
+        total, instances = await services.task_curd.select_tasks(
             search=q,
             page=task_in.page,
             page_size=task_in.page_size,
@@ -184,13 +192,16 @@ async def search_tasks_info(
 
 
 @autotest_task.post("/run", summary="API自动化测试-立即执行任务")
-async def run_task_info(task_in: dict = Body(..., description="任务ID")):
+async def run_task_info(
+        task_in: dict = Body(..., description="任务ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     """立即执行指定任务（下发 Celery 异步执行）。"""
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
             return ParameterResponse(message="参数 task_id 不能为空")
-        await AUTOTEST_API_TASK_CRUD.get_by_id(task_id=task_id, on_error=True, state__not=1)
+        await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums import AutoTestReportType
         # __task_id 会随消息传到 Worker，task_prerun 从 request.properties 取出；
@@ -213,13 +224,16 @@ async def run_task_info(task_in: dict = Body(..., description="任务ID")):
 
 
 @autotest_task.post("/start", summary="API自动化测试-启动任务（启用调度）")
-async def start_task_info(task_in: dict = Body(..., description="任务ID")):
+async def start_task_info(
+        task_in: dict = Body(..., description="任务ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     """将任务设为启用，使其被定时扫描并按时执行。"""
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
             return ParameterResponse(message="参数 task_id 不能为空")
-        instance = await AUTOTEST_API_TASK_CRUD.set_task_enabled(task_id=task_id, enabled=True)
+        instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=True)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -239,13 +253,16 @@ async def start_task_info(task_in: dict = Body(..., description="任务ID")):
 
 
 @autotest_task.post("/stop", summary="API自动化测试-停止任务（关闭调度）")
-async def stop_task_info(task_in: dict = Body(..., description="任务ID")):
+async def stop_task_info(
+        task_in: dict = Body(..., description="任务ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     """将任务设为未启动（task_enabled=False），不再被定时扫描执行。"""
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
             return ParameterResponse(message="参数 task_id 不能为空")
-        instance = await AUTOTEST_API_TASK_CRUD.set_task_enabled(task_id=task_id, enabled=False)
+        instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=False)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -265,10 +282,13 @@ async def stop_task_info(task_in: dict = Body(..., description="任务ID")):
 
 
 @autotest_task.post("/record/search", summary="API自动化测试-任务执行记录查询")
-async def search_task_records(record_in: AutoTestApiRecordSelect = Body(..., description="查询条件")):
+async def search_task_records(
+        record_in: AutoTestApiRecordSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     """按条件分页查询任务执行记录（Celery 调度任务ID、任务信息ID、任务名称、状态、调度方式、开始/结束时间等）。"""
     try:
-        total, instances = await AUTOTEST_API_RECORD_CRUD.select_records(record_in=record_in)
+        total, instances = await services.record_curd.select_records(record_in=record_in)
         data = [
             await obj.to_dict(
                 exclude_fields={"created_time", "updated_time"},

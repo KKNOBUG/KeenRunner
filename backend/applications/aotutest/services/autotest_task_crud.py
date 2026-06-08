@@ -7,16 +7,15 @@
 @DateTime: 2026/1/31 12:42
 """
 import traceback
-from typing import Optional, Dict, Any, List
-from typing import Union
+from typing import Optional, Dict, Any
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
 from backend.applications.aotutest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -89,8 +88,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         task_project: int = task_in.task_project
 
         # 业务层验证：检查应用是否存在
-        from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
-        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=task_project, on_error=True, state__not=1)
+        await AutoTestApiProjectCrud().get_by_id(project_id=task_project, on_error=True, state__not=1)
 
         # 业务层验证：检查 (task_name, task_project) 唯一
         existing_task = await self.model.filter(task_name=task_name, task_project=task_project, state__not=1).first()
@@ -209,6 +207,3 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             error_message: str = f"查询任务信息失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_TASK_CRUD = AutoTestApiTaskCrud()

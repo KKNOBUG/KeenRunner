@@ -15,26 +15,23 @@ from typing import Optional, List, Dict, Any
 from urllib.parse import quote
 
 import pandas as pd
-from fastapi import APIRouter, UploadFile, File, Form, Body, Query
+from fastapi import APIRouter, UploadFile, File, Form, Body, Query, Depends
 from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
 from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceCreate,
     AutoTestDataSourceUpdate,
     AutoTestDataSourceSelect,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_data_source_crud import AUTOTEST_DATA_SOURCE_CRUD
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     _dataframe_to_matrix,
     parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
     parse_xlsx_to_parsed_data_async,
 )
-from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-from backend.services.file_transfer import FileTransfer
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import (
     NotFoundException,
@@ -53,6 +50,7 @@ from backend.core.responses import (
 )
 from backend.enums import AutoTestStepType
 from backend.services import CTX_USER_ID
+from backend.services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
 
@@ -84,7 +82,8 @@ async def _sync_step_data_source_meta(
 ) -> None:
     """上传数据源后，同步回写步骤上的数据源元信息，供前端步骤编辑页直接回显。"""
     try:
-        await AUTOTEST_API_STEP_CRUD.model.filter(
+        services: AutoTestApiServices = await get_autotest_api_services()
+        await services.step_curd.model.filter(
             case_id=case_id,
             step_code=step_code,
             state=0,
@@ -98,7 +97,8 @@ async def _sync_step_data_source_meta(
 
 async def _get_case_root_steps_async(case_id: int) -> List[Dict[str, Any]]:
     """获取用例根步骤列表（按 step_no 排序）。"""
-    load = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=case_id)
+    services: AutoTestApiServices = await get_autotest_api_services()
+    load = await services.step_curd.get_by_case_id(case_id=case_id)
     root_models = list(load.root_steps)
     root_steps = [s.model_dump(mode="json") for s in root_models if s.step_no is not None]
     root_steps.sort(key=lambda x: (x.get("step_no") or 0))
@@ -113,9 +113,10 @@ async def _get_case_root_steps_async(case_id: int) -> List[Dict[str, Any]]:
 @autotest_data_source.post("/create", summary="API自动化测试-新增数据源")
 async def create_data_source_info(
         data_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_DATA_SOURCE_CRUD.create_data_source(data_source_in=data_in)
+        instance = await services.data_source_curd.create_data_source(data_source_in=data_in)
         data = await _serialize_data_source(instance)
         LOGGER.info(f"新增数据源成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
@@ -136,9 +137,10 @@ async def delete_data_source_info(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_DATA_SOURCE_CRUD.delete_data_source(
+        instance = await services.data_source_curd.delete_data_source(
             data_source_id=data_source_id,
             data_source_code=data_source_code,
             case_id=case_id,
@@ -159,6 +161,7 @@ async def delete_data_source_info(
 @autotest_data_source.post("/update", summary="API自动化测试-更新数据源")
 async def update_data_source_info(
         data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         effective = data_in
@@ -177,7 +180,7 @@ async def update_data_source_info(
                     "updated_user": updated_user,
                 }
             )
-        instance = await AUTOTEST_DATA_SOURCE_CRUD.update_data_source(data_source_in=effective)
+        instance = await services.data_source_curd.update_data_source(data_source_in=effective)
         data = await _serialize_data_source(instance)
         LOGGER.info(f"更新数据源成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
@@ -198,15 +201,16 @@ async def get_data_source_info(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """定位优先级：data_source_id > data_source_code > (case+step)。"""
     try:
         if data_source_id:
-            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_id(data_source_id=data_source_id, on_error=True, state__not=1)
+            instance = await services.data_source_curd.get_by_id(data_source_id=data_source_id, on_error=True, state__not=1)
         elif (data_source_code or "").strip():
-            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_code(data_source_code=data_source_code.strip(), on_error=True, state__not=1)
+            instance = await services.data_source_curd.get_by_code(data_source_code=data_source_code.strip(), on_error=True, state__not=1)
         elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
-            instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_step(
+            instance = await services.data_source_curd.get_by_case_step(
                 case_id=case_id,
                 case_code=case_code,
                 step_id=step_id,
@@ -233,9 +237,10 @@ async def get_data_source_info(
 
 @autotest_data_source.post(path="/query_dataset_names", summary="API自动化测试-案例数据场景查询")
 async def query_case_name(
-        case_id: str = Form(..., title="案例ID")
+        case_id: int = Form(..., title="案例ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_id(case_id=case_id)
+    instance = await services.data_source_curd.get_by_case_id(case_id=case_id)
     if not instance:
         return FailureResponse(message="ID对应场景不存在")
 
@@ -245,6 +250,7 @@ async def query_case_name(
 @autotest_data_source.post("/search", summary="API自动化测试-按条件分页查询数据源")
 async def search_data_source_info(
         sel_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -266,7 +272,7 @@ async def search_data_source_info(
             q &= Q(file_path__icontains=sel_in.file_path)
         q &= Q(state=sel_in.state)
 
-        total, instances = await AUTOTEST_DATA_SOURCE_CRUD.select_data_sources(
+        total, instances = await services.data_source_curd.select_data_sources(
             search=q,
             page=sel_in.page,
             page_size=sel_in.page_size,
@@ -290,10 +296,12 @@ async def get_data_source_by_case_step(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+
 ):
     """未传 step 条件时返回该用例下数据源列表；传入 step 条件时返回单条。"""
     try:
-        result = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_step(
+        result = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
             case_code=case_code,
             step_id=step_id,
@@ -317,10 +325,11 @@ async def export_data_source_xlsx(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
         step_code: str = Query(..., description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """从数据库 dataframe 字段导出 xlsx（不依赖前端当前表格状态）。"""
     try:
-        instance = await AUTOTEST_DATA_SOURCE_CRUD.get_by_case_step(
+        instance = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
             step_id=step_id,
             step_code=step_code,
@@ -360,9 +369,10 @@ async def get_dataset_scenario_info(
         case_id: int = Query(..., description="用例ID"),
         step_code: str = Query(..., description="步骤标识代码"),
         dataset_name: str = Query(..., description="数据集/场景名称"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        scenario = await AUTOTEST_DATA_SOURCE_CRUD.get_dataset_scenario(
+        scenario = await services.data_source_curd.get_dataset_scenario(
             case_id=case_id,
             step_code=step_code,
             dataset_name=dataset_name,
@@ -400,12 +410,13 @@ async def single_step_dataset_upload(
         step_code: str = Form(..., description="步骤标识代码"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件描述"),
         file: UploadFile = File(..., description="单步骤数据驱动文件(仅支持.xlsx后缀, 单步骤模式仅读取第1个sheet页)"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     if not file.filename.endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
     try:
-        step_instance = await AUTOTEST_API_STEP_CRUD.get_by_conditions(
+        step_instance = await services.step_curd.get_by_conditions(
             on_error=True,
             only_one=True,
             state__not=1,
@@ -458,14 +469,14 @@ async def single_step_dataset_upload(
         return BadReqResponse(message="解析结果为空（第 1 个 sheet 无有效数据）")
 
     try:
-        case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(
+        case_instance = await services.case_curd.get_by_id(
             case_id=case_id,
             on_error=True,
             state__not=1
         )
         user_id = CTX_USER_ID.get(0)
         created_user = str(user_id) if user_id else None
-        instance = await AUTOTEST_DATA_SOURCE_CRUD.create_data_sources_from_parsed(
+        instance = await services.data_source_curd.create_data_sources_from_parsed(
             case_id=case_id,
             case_code=case_instance.case_code,
             step_id=int(step_id),
@@ -503,6 +514,7 @@ async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
         file: UploadFile = File(..., description="xlsx 文件（所有 sheet 均为数据集，按 sheet 顺序对应根步骤）"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     if not case_id:
         return ParameterResponse(message="case_id 不能为空")
@@ -521,7 +533,7 @@ async def batch_step_dataset_upload(
             break
     if not case_code:
         try:
-            case_instance = await AUTOTEST_API_CASE_CRUD.get_by_id(
+            case_instance = await services.case_curd.get_by_id(
                 case_id=case_id,
                 on_error=True,
                 state__not=1
@@ -595,7 +607,7 @@ async def batch_step_dataset_upload(
             if not step_id:
                 LOGGER.warning(f"多步骤数据集上传跳过：未获取到 step_id，step_code={step_code}")
                 continue
-            instance = await AUTOTEST_DATA_SOURCE_CRUD.create_data_sources_from_parsed(
+            instance = await services.data_source_curd.create_data_sources_from_parsed(
                 case_id=case_id,
                 case_code=case_code or "",
                 step_id=int(step_id),

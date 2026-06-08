@@ -179,7 +179,7 @@ def register_routers(app: FastAPI) -> None:
     redoc_modules["redoc_favicon_url"] = "/static/redoc/favicon.png"
 
     # 导入路由蓝图
-    from backend.applications.base.views import base_public, base_secure
+    from backend.applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
     from backend.applications.department.views.department_view import dept
     from backend.applications.user.views.user_view import user_public, user_secure
     from backend.applications.toolbox.views import toolbox
@@ -187,33 +187,14 @@ def register_routers(app: FastAPI) -> None:
 
     # 挂在路由蓝图
     app.include_router(router=base_public, prefix="/base", tags=["基础服务"])
-    app.include_router(
-        router=base_secure,
-        prefix="/base",
-        tags=["基础服务"],
-        dependencies=[DependPermission],
-    )
+    app.include_router(router=base_secure, prefix="/base", tags=["基础服务"], dependencies=[DependPermission])
+    app.include_router(router=router_secure, prefix="/base", tags=["基础服务-路由模块"], dependencies=[DependPermission])
+    app.include_router(router=menu_secure, prefix="/base", tags=["基础服务-菜单模块"], dependencies=[DependPermission])
+    app.include_router(router=role_secure, prefix="/base", tags=["基础服务-角色模块"], dependencies=[DependPermission])
+    app.include_router(router=audit_secure, prefix="/base", tags=["基础服务-审计模块"], dependencies=[DependPermission])
+    app.include_router(router=file_secure, prefix="/base", tags=["基础服务-文件传输"], dependencies=[DependPermission])
     app.include_router(router=user_public, prefix="/user", tags=["用户服务"])
-    app.include_router(
-        router=user_secure,
-        prefix="/user",
-        tags=["用户服务"],
-        dependencies=[DependPermission],
-    )
-    app.include_router(
-        router=dept,
-        prefix="/dept",
-        tags=["部门服务"],
-        dependencies=[DependPermission],
-    )
-    app.include_router(
-        router=toolbox,
-        prefix="/toolbox",
-        tags=["工具箱服务"],
-        dependencies=[DependPermission],
-    )
-    app.include_router(
-        router=autotest,
-        prefix="/autotest",
-        dependencies=[DependPermission],
-    )
+    app.include_router(router=user_secure, prefix="/user", tags=["用户服务"], dependencies=[DependPermission])
+    app.include_router(router=dept, prefix="/dept", tags=["部门服务"], dependencies=[DependPermission])
+    app.include_router(router=toolbox, prefix="/toolbox", tags=["工具箱服务"], dependencies=[DependPermission])
+    app.include_router(router=autotest, prefix="/autotest", dependencies=[DependPermission])

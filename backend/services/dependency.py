@@ -31,6 +31,11 @@ class AuthControl:
             user = await User.filter(id=user_id, state__not=1, is_active=True).first()
             if not user:
                 raise HTTPException(status_code=401, detail="请求服务鉴权失败, 用户状态异常, 请联系管理员后重试")
+
+            token_version = decode_data.get("token_version", 0)
+            if token_version != user.token_version:
+                raise HTTPException(status_code=401, detail="请求服务鉴权已过期, 请重新登录获取有效 Token 后进行访问")
+
             CTX_USER_ID.set(int(user_id))
             return user
         except jwt.DecodeError:

@@ -10,14 +10,15 @@ import asyncio
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_report_schema import (
-    AutoTestApiReportCreate, AutoTestApiReportSelect, AutoTestApiReportUpdate
+    AutoTestApiReportCreate,
+    AutoTestApiReportSelect,
+    AutoTestApiReportUpdate
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_report_crud import AUTOTEST_API_REPORT_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     DataAlreadyExistsException,
@@ -37,10 +38,11 @@ autotest_report = APIRouter()
 
 @autotest_report.post("/create", summary="API自动化测试-新增报告")
 async def create_report(
-        report_in: AutoTestApiReportCreate = Body(..., description="报告信息")
+        report_in: AutoTestApiReportCreate = Body(..., description="报告信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_REPORT_CRUD.create_report(report_in)
+        instance = await services.report_curd.create_report(report_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -64,10 +66,11 @@ async def create_report(
 @autotest_report.delete("/delete", summary="API自动化测试-按id或code删除报告")
 async def delete_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
-        report_code: Optional[str] = Query(None, description="报告代码")
+        report_code: Optional[str] = Query(None, description="报告代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_REPORT_CRUD.delete_report(report_id=report_id, report_code=report_code)
+        instance = await services.report_curd.delete_report(report_id=report_id, report_code=report_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -88,10 +91,11 @@ async def delete_report(
 
 @autotest_report.post("/update", summary="API自动化测试-按id或code更新报告")
 async def update_report(
-        report_in: AutoTestApiReportUpdate = Body(..., description="报告信息")
+        report_in: AutoTestApiReportUpdate = Body(..., description="报告信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_REPORT_CRUD.update_report(report_in)
+        instance = await services.report_curd.update_report(report_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -116,12 +120,13 @@ async def update_report(
 async def get_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if report_id:
-            instance = await AUTOTEST_API_REPORT_CRUD.get_by_id(report_id=report_id, on_error=True, state__not=1)
+            instance = await services.report_curd.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_REPORT_CRUD.get_by_code(report_code=report_code, on_error=True, state__not=1)
+            instance = await services.report_curd.get_by_code(report_code=report_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -142,7 +147,8 @@ async def get_report(
 
 @autotest_report.post("/search", summary="API自动化测试-按条件查询报告")
 async def search_reports(
-        report_in: AutoTestApiReportSelect = Body(..., description="查询条件")
+        report_in: AutoTestApiReportSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -180,7 +186,7 @@ async def search_reports(
                 date_to = f"{date_to} 23:59:59"
             q &= Q(case_st_time__lte=date_to)
         q &= Q(state=report_in.state)
-        total, instances = await AUTOTEST_API_REPORT_CRUD.select_reports(
+        total, instances = await services.report_curd.select_reports(
             search=q,
             page=report_in.page,
             page_size=report_in.page_size,
@@ -193,7 +199,7 @@ async def search_reports(
         case_name_map = {}
         if unique_case_ids:
             case_name_map = dict(
-                await AUTOTEST_API_CASE_CRUD.model.filter(
+                await services.case_curd.model.filter(
                     id__in=unique_case_ids,
                     state__not=1
                 ).values_list("id", "case_name")

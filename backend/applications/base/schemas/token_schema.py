@@ -51,4 +51,5 @@ class JWTPayload(TokenBase):
     username: str = Field(..., max_length=32, description="用户账号")
     state: int = Field(..., description="用户状态")
     is_superuser: bool = Field(..., description="是否为超级管理员")
+    token_version: int = Field(default=0, description="Token版本号")
     exp: datetime = Field(..., description="令牌过期时间")

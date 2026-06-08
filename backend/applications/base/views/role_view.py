@@ -8,17 +8,18 @@
 """
 import traceback
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends
 from fastapi.params import Query, Form
 from tortoise.expressions import Q
 
+from backend.applications.base.dependencies import get_role_crud
 from backend.applications.base.schemas.role_schema import (
     RoleCreate,
     RoleUpdate,
     RoleUpdateMenusRouters,
     RoleBatchDelete,
 )
-from backend.applications.base.services.role_crud import ROLE_CRUD
+from backend.applications.base.services.role_crud import RoleCrud
 from backend.applications.user.models.user_model import User
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
@@ -32,9 +33,10 @@ role = APIRouter()
 async def create_role(
         role_in: RoleCreate,
         current_user: User = DependAuth,
+        role_crud: RoleCrud = Depends(get_role_crud),
 ):
     try:
-        instance = await ROLE_CRUD.create_role(role_in=role_in, created_user=current_user.username)
+        instance = await role_crud.create_role(role_in=role_in, created_user=current_user.username)
         data: dict = await instance.to_dict()
         return SuccessResponse(data=data)
     except DataAlreadyExistsException as e:
@@ -42,9 +44,12 @@ async def create_role(
 
 
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
-async def delete_role_one(role_id: int = Query(..., description="角色ID")):
+async def delete_role_one(
+        role_id: int = Query(..., description="角色ID"),
+        role_crud: RoleCrud = Depends(get_role_crud),
+):
     try:
-        instance = await ROLE_CRUD.delete_role(role_id=role_id)
+        instance = await role_crud.delete_role(role_id=role_id)
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except ParameterException as e:
@@ -54,12 +59,14 @@ async def delete_role_one(role_id: int = Query(..., description="角色ID")):
     except Exception as e:
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
+
 @role.post("/deletes", summary="批量删除角色", description="根据角色ID或代码列表删除")
 async def delete_roles_batch(
         body_in: RoleBatchDelete = Body(..., description="批量删除参数"),
+        role_crud: RoleCrud = Depends(get_role_crud),
 ):
     try:
-        count = await ROLE_CRUD.delete_roles(
+        count = await role_crud.delete_roles(
             role_ids=body_in.role_ids,
             role_codes=body_in.role_codes,
         )
@@ -74,10 +81,11 @@ async def delete_roles_batch(
 async def update_role(
         role_in: RoleUpdate,
         current_user: User = DependAuth,
+        role_crud: RoleCrud = Depends(get_role_crud),
 ):
     update_dict = role_in.model_dump(exclude_unset=True, exclude={"id"})
     update_dict["updated_user"] = current_user.username
-    instance = await ROLE_CRUD.update(id=role_in.id, obj_in=update_dict)
+    instance = await role_crud.update(id=role_in.id, obj_in=update_dict)
     data: dict = await instance.to_dict()
     return SuccessResponse(data=data)
 
@@ -86,13 +94,14 @@ async def update_role(
 async def get_role_by(
         code: str = Form(default=None, description="角色名称"),
         name: str = Form(default=None, description="角色代码"),
+        role_crud: RoleCrud = Depends(get_role_crud),
 ):
     where: dict = {}
     if code:
         where[code] = code
     if name:
         where[name] = name
-    instances = await ROLE_CRUD.get_by_conditions(only_one=True, **where)
+    instances = await role_crud.get_by_conditions(only_one=True, **where)
     data = [await obj.to_dict() for obj in instances]
     return SuccessResponse(data=data)
 
@@ -103,11 +112,12 @@ async def list_role(
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
         name: str = Query(default="", description="角色名称，用于查询"),
+        role_crud: RoleCrud = Depends(get_role_crud),
 ):
     q = Q()
     if name:
         q = Q(name__contains=name)
-    total, role_objs = await ROLE_CRUD.list(
+    total, role_objs = await role_crud.list(
         page=page, page_size=page_size, search=q, order=order
     )
     data = [await obj.to_dict() for obj in role_objs]
@@ -115,14 +125,20 @@ async def list_role(
 
 
 @role.get("/authorized", summary="查看角色权限")
-async def get_role_authorized(id: int = Query(..., description="角色ID")):
-    role_obj = await ROLE_CRUD.get_or_error(id=id)
+async def get_role_authorized(
+        id: int = Query(..., description="角色ID"),
+        role_crud: RoleCrud = Depends(get_role_crud),
+):
+    role_obj = await role_crud.get_or_error(id=id)
     data = await role_obj.to_dict(m2m=True)
     return SuccessResponse(data=data)
 
 
 @role.post("/authorized", summary="更新角色权限")
-async def update_role_authorized(role_in: RoleUpdateMenusRouters):
-    role_obj = await ROLE_CRUD.get_or_none(id=role_in.id)
-    await ROLE_CRUD.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
+async def update_role_authorized(
+        role_in: RoleUpdateMenusRouters,
+        role_crud: RoleCrud = Depends(get_role_crud),
+):
+    role_obj = await role_crud.get_or_none(id=role_in.id)
+    await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
     return SuccessResponse()

@@ -9,16 +9,15 @@
 import traceback
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
     AutoTestApiDetailUpdate,
     AutoTestApiDetailSelect
 )
-from backend.applications.aotutest.services.autotest_detail_crud import AUTOTEST_API_DETAIL_CRUD
-from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -38,10 +37,11 @@ autotest_detail = APIRouter()
 
 @autotest_detail.post("/create", summary="API自动化测试-新增明细")
 async def create_step_detail(
-        detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息")
+        detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.create_detail(detail_in)
+        instance = await services.detail_curd.create_detail(detail_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -66,10 +66,11 @@ async def create_step_detail(
 async def delete_report(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        report_code: Optional[str] = Query(None, description="报告标识代码")
+        report_code: Optional[str] = Query(None, description="报告标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.delete_detail(
+        instance = await services.detail_curd.delete_detail(
             detail_id=detail_id,
             step_code=step_code,
             report_code=report_code
@@ -94,10 +95,11 @@ async def delete_report(
 
 @autotest_detail.post("/update", summary="API自动化测试-按id或code更新明细")
 async def update_report(
-        detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息")
+        detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_DETAIL_CRUD.update_detail(detail_in)
+        instance = await services.detail_curd.update_detail(detail_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -123,12 +125,13 @@ async def get_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if detail_id:
-            instance = await AUTOTEST_API_DETAIL_CRUD.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
+            instance = await services.detail_curd.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_DETAIL_CRUD.get_by_conditions(
+            instance = await services.detail_curd.get_by_conditions(
                 only_one=True,
                 on_error=True,
                 conditions={"step_code": step_code, "report_code": report_code}
@@ -153,7 +156,8 @@ async def get_step_detail(
 
 @autotest_detail.post("/search", summary="API自动化测试-按条件查询明细")
 async def search_step_details(
-        detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件")
+        detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -180,7 +184,7 @@ async def search_step_details(
         if detail_in.updated_user:
             q &= Q(updated_user__iexact=detail_in.updated_user)
         q &= Q(state=detail_in.state)
-        total, instances = await AUTOTEST_API_DETAIL_CRUD.select_details(
+        total, instances = await services.detail_curd.select_details(
             search=q,
             page=detail_in.page,
             page_size=detail_in.page_size,

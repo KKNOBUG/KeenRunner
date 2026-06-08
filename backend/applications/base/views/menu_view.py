@@ -7,10 +7,11 @@
 @DateTime: 2025/2/19 12:46
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 
+from backend.applications.base.dependencies import get_menu_crud
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
-from backend.applications.base.services.menu_crud import MENU_CRUD
+from backend.applications.base.services.menu_crud import MenuCrud
 from backend.core.exceptions import ParameterException, NotFoundException
 from backend.core.responses import NotFoundResponse, SuccessResponse, FailureResponse, ParameterResponse
 
@@ -49,23 +50,21 @@ def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
 
 @menu.post("/list", summary="查看菜单列表")
 async def list_menu(
-        page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
-        order: list = Query(default=["id"], description="排序字段"),
         name: str = Query(default="", description="菜单名称（子串匹配）"),
         menu_type: str = Query(default="", description="菜单类型：catalog / menu"),
+        menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     async def get_menu_with_children(menu_id: int):
-        menu = await MENU_CRUD.get_by_id(menu_id=menu_id, on_error=False)
+        menu = await menu_crud.get_by_id(menu_id=menu_id, on_error=False)
         if not menu:
             return NotFoundResponse(message=f"菜单(id={menu_id})信息不存在")
 
         menu_dict = await menu.to_dict()
-        child_menus = await MENU_CRUD.model.filter(parent_id=menu_id).order_by("order")
+        child_menus = await menu_crud.model.filter(parent_id=menu_id).order_by("order")
         menu_dict["children"] = [await get_menu_with_children(child.id) for child in child_menus]
         return menu_dict
 
-    parent_menus = await MENU_CRUD.model.filter(parent_id=0).order_by("order")
+    parent_menus = await menu_crud.model.filter(parent_id=0).order_by("order")
     res_menu = [await get_menu_with_children(menu.id) for menu in parent_menus]
     res_menu = [m for m in res_menu if isinstance(m, dict)]
     nk = name.strip() if name else ""
@@ -76,9 +75,12 @@ async def list_menu(
 
 
 @menu.get("/get", summary="查看菜单", description="根据id查询菜单信息")
-async def get_menu(menu_id: int = Query(..., description="菜单id")):
+async def get_menu(
+        menu_id: int = Query(..., description="菜单id"),
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
     try:
-        result = await MENU_CRUD.get_by_id(menu_id=menu_id, on_error=True)
+        result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)
         return SuccessResponse(message="查询成功", data=result, total=1)
     except ParameterException as e:
         return ParameterResponse(message=e.message)
@@ -89,9 +91,13 @@ async def get_menu(menu_id: int = Query(..., description="菜单id")):
 
 
 @menu.post("/create", summary="创建菜单")
-async def create_menu(menu_in: MenuCreate):
+async def create_menu(
+        menu_in: MenuCreate,
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
     try:
-        data = await MENU_CRUD.create_menu(menu_in=menu_in)
+        instance = await menu_crud.create_menu(menu_in=menu_in)
+        data = await instance.to_dict()
         return SuccessResponse(message="新增成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=e.message)
@@ -102,9 +108,13 @@ async def create_menu(menu_in: MenuCreate):
 
 
 @menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
-async def update_menu(menu_in: MenuUpdate):
+async def update_menu(
+        menu_in: MenuUpdate,
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
     try:
-        data = await MENU_CRUD.update_menu(menu_in=menu_in)
+        instance = await menu_crud.update_menu(menu_in=menu_in)
+        data = await instance.to_dict()
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=e.message)
@@ -113,12 +123,15 @@ async def update_menu(menu_in: MenuUpdate):
 
 
 @menu.delete("/delete", summary="删除菜单", description="根据id删除菜单信息")
-async def delete_menu(id: int = Query(..., description="菜单id")):
-    child_menu_count = await MENU_CRUD.model.filter(parent_id=id).count()
+async def delete_menu(
+        id: int = Query(..., description="菜单id"),
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
+    child_menu_count = await menu_crud.model.filter(parent_id=id).count()
     if child_menu_count > 0:
         return FailureResponse(message="不能删除带有子菜单的菜单")
     try:
-        instance = await MENU_CRUD.delete_menu(menu_id=id)
+        instance = await menu_crud.delete_menu(menu_id=id)
         data = await instance.to_dict()
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:

@@ -22,6 +22,7 @@ class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
     is_active = fields.BooleanField(default=True, index=True, description="是否激活")
     is_superuser = fields.BooleanField(default=False, index=True, description="是否为超级管理员")
     last_login = fields.DatetimeField(null=True, index=True, description="最后一次登陆时间")
+    token_version = fields.IntField(default=0, description="Token版本号，用于吊销用户所有Token")
     address = fields.CharField(max_length=255, null=True, description="用户住址")
     gender = fields.SmallIntField(default=0, description="用户性别: 0未知 1男 2女")
     user_type = fields.SmallIntField(default=0, description="用户类型：0xx 1xx 2xx")

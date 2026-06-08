@@ -9,18 +9,15 @@
 import traceback
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_case_schema import (
     AutoTestApiCaseCreate,
     AutoTestApiCaseSelect,
     AutoTestApiCaseUpdate
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
-from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -41,10 +38,11 @@ autotest_case = APIRouter()
 
 @autotest_case.post("/create", summary="API自动化测试-新增用例")
 async def create_case(
-        case_in: AutoTestApiCaseCreate = Body(..., description="用例信息")
+        case_in: AutoTestApiCaseCreate = Body(..., description="用例信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_CASE_CRUD.create_case(case_in)
+        instance = await services.case_curd.create_case(case_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -69,9 +67,10 @@ async def create_case(
 async def delete_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_CASE_CRUD.delete_case(case_id=case_id, case_code=case_code)
+        instance = await services.case_curd.delete_case(case_id=case_id, case_code=case_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -94,10 +93,11 @@ async def delete_case(
 
 @autotest_case.post("/update", summary="API自动化测试-按id或code更新除用例")
 async def update_case(
-        case_in: AutoTestApiCaseUpdate = Body(..., description="用例信息")
+        case_in: AutoTestApiCaseUpdate = Body(..., description="用例信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_CASE_CRUD.update_case(case_in)
+        instance = await services.case_curd.update_case(case_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -122,12 +122,13 @@ async def update_case(
 async def get_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if case_id:
-            instance = await AUTOTEST_API_CASE_CRUD.get_by_id(case_id=case_id, on_error=True, state__not=1)
+            instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_CASE_CRUD.get_by_code(case_code=case_code, on_error=True, state__not=1)
+            instance = await services.case_curd.get_by_code(case_code=case_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -138,7 +139,7 @@ async def get_case(
             replace_fields={"id": "case_id"}
         )
         project_id: int = data.pop("case_project")
-        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(on_error=True, project_id=project_id, state__not=1)
+        project_instance = await services.project_curd.get_by_id(on_error=True, project_id=project_id, state__not=1)
         data["case_project"] = await project_instance.to_dict(
             exclude_fields={
                 "state",
@@ -158,7 +159,7 @@ async def get_case(
                     "reserve_1", "reserve_2", "reserve_3"
                 },
                 replace_fields={"id": "tag_id"}
-            ) for obj in await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
+            ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
         ]
         LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
@@ -171,7 +172,8 @@ async def get_case(
 
 @autotest_case.post("/search", summary="API自动化测试-按条件查询用例")
 async def search_cases(
-        case_in: AutoTestApiCaseSelect = Body(..., description="查询条件")
+        case_in: AutoTestApiCaseSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -201,7 +203,7 @@ async def search_cases(
         if case_in.updated_user:
             q &= Q(updated_user__iexact=case_in.updated_user)
         q &= Q(state=case_in.state)
-        total, instances = await AUTOTEST_API_CASE_CRUD.select_cases(
+        total, instances = await services.case_curd.select_cases(
             search=q,
             page=case_in.page,
             page_size=case_in.page_size,
@@ -217,7 +219,7 @@ async def search_cases(
                 replace_fields={"id": "case_id"}
             )
             project_id: int = serialize.pop("case_project")
-            project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(on_error=True, project_id=project_id, state__not=1)
+            project_instance = await services.project_curd.get_by_id(on_error=True, project_id=project_id, state__not=1)
             serialize["case_project"] = await project_instance.to_dict(
                 exclude_fields={
                     "state",
@@ -237,7 +239,7 @@ async def search_cases(
                         "reserve_1", "reserve_2", "reserve_3"
                     },
                     replace_fields={"id": "tag_id"}
-                ) for obj in await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
+                ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
             ]
             case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
@@ -253,6 +255,7 @@ async def search_cases(
 async def get_request_step_project_ids(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     从步骤树中提取以下步骤类型所选择的应用ID并去重返回：
@@ -263,7 +266,7 @@ async def get_request_step_project_ids(
     同时递归遍历 children 与 quote_steps（引用公共脚本展开后的步骤）。
     """
     try:
-        project_ids: List[int] = await AUTOTEST_API_STEP_CRUD.get_request_step_project_ids(
+        project_ids: List[int] = await services.step_curd.get_request_step_project_ids(
             case_id=case_id,
             case_code=case_code,
         )

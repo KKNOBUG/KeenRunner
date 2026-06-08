@@ -18,8 +18,8 @@ from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectUpdate,
     AutoTestApiProjectDelete,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -208,7 +208,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         pid: int = instance.id
         # 业务层验证：检查是否存在关联用例
-        cases_count = await AUTOTEST_API_CASE_CRUD.model.filter(case_project=pid, state__not=1).count()
+        cases_count = await AutoTestApiCaseCrud().model.filter(case_project=pid, state__not=1).count()
         if cases_count > 0:
             msg = f"应用(name={instance.project_name})下存在{cases_count}个用例, 无法删除，请先解除关联"
             LOGGER.error(msg)
@@ -223,7 +223,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
         # 业务层验证：检查是否存在关联标签
-        tag_count = await AUTOTEST_API_TAG_CRUD.model.filter(tag_project=pid, state__not=1).count()
+        tag_count = await AutoTestApiTagCrud().model.filter(tag_project=pid, state__not=1).count()
         if tag_count > 0:
             msg = f"应用(name={instance.project_name})下存在{tag_count}个标签, 无法删除，请先解除关联"
             LOGGER.error(msg)
@@ -265,6 +265,3 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             error_message: str = f"查询应用信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_PROJECT_CRUD = AutoTestApiProjectCrud()

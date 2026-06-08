@@ -8,16 +8,17 @@
 """
 import traceback
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.department.dependencies import get_dept_crud
 from backend.applications.department.schemas.department_schema import (
     DepartmentCreate,
     DepartmentUpdate,
     DepartmentSelect,
     DepartmentBatchDelete,
 )
-from backend.applications.department.services.department_crud import DEPT_CRUD
+from backend.applications.department.services.department_crud import DepartmentCrud
 from backend.applications.user.models.user_model import User
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -41,9 +42,10 @@ dept = APIRouter()
 async def create_dept(
         department_in: DepartmentCreate = Body(),
         current_user: User = DependAuth,
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     try:
-        instance = await DEPT_CRUD.create_department(
+        instance = await dept_crud.create_department(
             department_in=department_in,
             created_user=current_user.username,
         )
@@ -58,9 +60,12 @@ async def create_dept(
 
 
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
-async def delete_dept_one(department_id: int = Query(..., description="部门ID")):
+async def delete_dept_one(
+        department_id: int = Query(..., description="部门ID"),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
+):
     try:
-        instance = await DEPT_CRUD.delete_department(department_id)
+        instance = await dept_crud.delete_department(department_id)
         data = await instance.to_dict()
         return SuccessResponse(data=data)
     except NotFoundException as e:
@@ -70,9 +75,12 @@ async def delete_dept_one(department_id: int = Query(..., description="部门ID"
 
 
 @dept.post("/delete", summary="批量删除部门", description="根据部门ID列表批量删除")
-async def delete_depts_batch(body_in: DepartmentBatchDelete = Body(..., description="批量删除参数")):
+async def delete_depts_batch(
+        body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
+):
     try:
-        count = await DEPT_CRUD.delete_departments(body_in.department_ids)
+        count = await dept_crud.delete_departments(body_in.department_ids)
         LOGGER.info(f"批量删除部门成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
@@ -84,9 +92,10 @@ async def delete_depts_batch(body_in: DepartmentBatchDelete = Body(..., descript
 async def update_dept(
         department_in: DepartmentUpdate = Body(..., description="部门信息"),
         current_user: User = DependAuth,
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     try:
-        instance = await DEPT_CRUD.update_department(
+        instance = await dept_crud.update_department(
             department_in=department_in,
             updated_user=current_user.username,
         )
@@ -101,8 +110,11 @@ async def update_dept(
 
 
 @dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
-async def get_dept(department_id: int = Query(..., description="部门ID")):
-    instance = await DEPT_CRUD.get_or_none(id=department_id)
+async def get_dept(
+        department_id: int = Query(..., description="部门ID"),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
+):
+    instance = await dept_crud.get_or_none(id=department_id)
     if not instance:
         return NotFoundResponse(message=f"部门(id={department_id})信息不存在")
 
@@ -113,14 +125,16 @@ async def get_dept(department_id: int = Query(..., description="部门ID")):
 @dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
 async def list_dept(
         name: str = Query(default=None, description="部门名称"),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
-    dept_tree = await DEPT_CRUD.get_dept_tree(name)
+    dept_tree = await dept_crud.get_dept_tree(name)
     return SuccessResponse(data=dept_tree)
 
 
 @dept.post("/search", summary="查询部门列表", description="支持分页按条件查询部门列表信息（Body）")
 async def search_dept(
-        department_in: DepartmentSelect = Body()
+        department_in: DepartmentSelect = Body(),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     page = department_in.page
     page_size = department_in.page_size
@@ -145,7 +159,7 @@ async def search_dept(
     if updated_user:
         q &= Q(updated_user__contains=updated_user)
 
-    total, instances = await DEPT_CRUD.list(
+    total, instances = await dept_crud.list(
         page=page, page_size=page_size, search=q, order=order
     )
     data = [

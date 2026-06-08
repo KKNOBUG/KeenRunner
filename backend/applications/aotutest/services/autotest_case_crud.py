@@ -14,13 +14,12 @@ from tortoise.expressions import Q
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
-from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
+from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
-    TypeRejectException,
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
@@ -94,7 +93,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         case_type: Optional[AutoTestCaseType] = case_in.case_type
 
         # 业务层验证: 检查标签是否全部存在
-        await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+        await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         # 业务层验证: 检查用例信息是否已经存在
         existing_case = await self.get_by_conditions(
@@ -149,7 +148,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         # 业务层验证：检查标签是否全部存在
         if "case_tags" in update_dict:
             case_tags = update_dict.get("case_tags", instance.case_tags)
-            await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+            await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         # 业务层验证：检查应用ID和用例名称是否唯一
         if "case_name" in update_dict or "case_project" in update_dict:
@@ -344,7 +343,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 # 业务层验证：检查标签是否全部存在
                 if "case_tags" in update_case_dict:
                     case_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    await AUTOTEST_API_TAG_CRUD.get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+                    await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
                 # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
@@ -382,6 +381,3 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             "updated_count": updated_count,
             "success_detail": success_detail
         }
-
-
-AUTOTEST_API_CASE_CRUD = AutoTestApiCaseCrud()

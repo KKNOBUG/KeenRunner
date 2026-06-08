@@ -9,14 +9,15 @@
 from datetime import timedelta, datetime, timezone
 from typing import List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
+from backend.applications.user.dependencies import get_user_crud
 from backend.applications.user.models.user_model import User
-from backend.applications.user.services.user_crud import USER_CRUD
+from backend.applications.user.services.user_crud import UserCrud
 from backend.configure import PROJECT_CONFIG
 from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException
 from backend.core.responses import SuccessResponse, NotFoundResponse
@@ -28,14 +29,17 @@ auth_secure = APIRouter()
 
 
 @auth_public.post("/access_token", summary="用户鉴权", description="验证用户密码和状态并生成令牌")
-async def get_login_access_token(credentials: CredentialsSchema):
+async def get_login_access_token(
+        credentials: CredentialsSchema,
+        user_crud: UserCrud = Depends(get_user_crud),
+):
     try:
-        user: User = await USER_CRUD.authenticate(credentials)
+        user: User = await user_crud.authenticate(credentials)
     except (NotFoundException, NoPermissionException) as e:
         return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
 
     try:
-        await USER_CRUD.update_last_login(user_id=user.id)
+        await user_crud.update_last_login(user_id=user.id)
     except (ParameterException, NotFoundException) as e:
         return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
 
@@ -49,8 +53,10 @@ async def get_login_access_token(credentials: CredentialsSchema):
                 username=user.username,
                 state=user.state,
                 is_superuser=user.is_superuser,
+                token_version=user.token_version,
                 exp=expire,
-            )
+            ),
+            token_version=user.token_version,
         ),
         username=user.username,
         alias=user.alias,
@@ -94,9 +100,11 @@ async def get_user_menu():
 
 
 @auth_secure.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
-async def get_userinfo():
+async def get_userinfo(
+        user_crud: UserCrud = Depends(get_user_crud),
+):
     user_id = CTX_USER_ID.get()
-    user_obj = await USER_CRUD.get_by_id(user_id=user_id, on_error=True)
+    user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
     data = await user_obj.to_dict(exclude_fields=["password"])
     # 头像地址
     # data["avatar"] = f'http://172.20.10.2:8518/static/avatar/admin/20250220204648.png'

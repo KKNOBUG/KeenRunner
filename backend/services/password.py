@@ -27,8 +27,9 @@ def get_password_hash(password: str) -> str:
 def generate_password() -> str:
     return pwd.genword()
 
-def create_access_token(*, data: JWTPayload):
+def create_access_token(*, data: JWTPayload, token_version: int = 0):
     payload = data.model_dump().copy()
+    payload["token_version"] = token_version
     encoded_jwt = jwt.encode(
         payload,
         PROJECT_CONFIG.AUTH_SECRET_KEY,

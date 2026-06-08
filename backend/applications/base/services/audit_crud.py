@@ -142,4 +142,4 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         return count
 
 
-AUDIT_CRUD = AuditCrud()
+

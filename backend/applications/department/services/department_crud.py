@@ -172,6 +172,3 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             except NotFoundException:
                 continue
         return n
-
-
-DEPT_CRUD = DepartmentCrud()

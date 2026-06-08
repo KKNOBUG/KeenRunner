@@ -9,16 +9,16 @@
 import traceback
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvSelect,
     AutoTestApiEnvDelete
 )
-from backend.applications.aotutest.services.autotest_env_crud import AUTOTEST_API_ENV_ENUM_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -37,9 +37,12 @@ autotest_env = APIRouter()
 
 
 @autotest_env.post("/create", summary="API自动化测试-新增环境")
-async def create_env_info(env_in: AutoTestApiEnvCreate = Body(..., description="环境信息")):
+async def create_env_info(
+        env_in: AutoTestApiEnvCreate = Body(..., description="环境信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_ENV_ENUM_CRUD.create_env(env_in=env_in)
+        instance = await services.env_enum_curd.create_env(env_in=env_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -64,9 +67,10 @@ async def create_env_info(env_in: AutoTestApiEnvCreate = Body(..., description="
 async def delete_env_info(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_ENV_ENUM_CRUD.delete_env(env_id=env_id, env_code=env_code)
+        instance = await services.env_enum_curd.delete_env(env_id=env_id, env_code=env_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -88,9 +92,10 @@ async def delete_env_info(
 @autotest_env.post("/delete", summary="API自动化测试-按id或code列表删除环境")
 async def delete_env_batch(
         env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        count = await AUTOTEST_API_ENV_ENUM_CRUD.delete_envs(env_in=env_in)
+        count = await services.env_enum_curd.delete_envs(env_in=env_in)
         LOGGER.info(f"按id或code列表删除环境成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
@@ -99,9 +104,12 @@ async def delete_env_batch(
 
 
 @autotest_env.post("/update", summary="API自动化测试-按id或code更新环境")
-async def update_env_info(env_in: AutoTestApiEnvUpdate = Body(..., description="环境信息")):
+async def update_env_info(
+        env_in: AutoTestApiEnvUpdate = Body(..., description="环境信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_ENV_ENUM_CRUD.update_env(env_in=env_in)
+        instance = await services.env_enum_curd.update_env(env_in=env_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -126,12 +134,13 @@ async def update_env_info(env_in: AutoTestApiEnvUpdate = Body(..., description="
 async def get_env_info(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if env_id:
-            instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_id(env_id=env_id, on_error=True, state__not=1)
+            instance = await services.env_enum_curd.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_ENV_ENUM_CRUD.get_by_code(env_code=env_code, on_error=True, state__not=1)
+            instance = await services.env_enum_curd.get_by_code(env_code=env_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -151,9 +160,11 @@ async def get_env_info(
 
 
 @autotest_env.get("/get_names", summary="API自动化测试-查询环境名称(去重)")
-async def get_env_name_list():
+async def get_env_name_list(
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        names: List[str] = await AUTOTEST_API_ENV_ENUM_CRUD.model.filter(state__not=1).distinct().values_list("env_name", flat=True)
+        names: List[str] = await services.env_enum_curd.model.filter(state__not=1).distinct().values_list("env_name", flat=True)
         LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except (NotFoundException, ParameterException) as e:
@@ -164,7 +175,10 @@ async def get_env_name_list():
 
 
 @autotest_env.post("/search", summary="API自动化测试-按条件查询环境")
-async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="查询条件")):
+async def search_env_info(
+        env_in: AutoTestApiEnvSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
         q = Q()
         if env_in.env_id:
@@ -178,7 +192,7 @@ async def search_env_info(env_in: AutoTestApiEnvSelect = Body(..., description="
         if env_in.updated_user:
             q &= Q(updated_user__iexact=env_in.updated_user)
         q &= Q(state=env_in.state)
-        total, instances = await AUTOTEST_API_ENV_ENUM_CRUD.select_envs(
+        total, instances = await services.env_enum_curd.select_envs(
             search=q,
             page=env_in.page,
             page_size=env_in.page_size,

@@ -9,16 +9,16 @@
 import traceback
 from typing import Optional, List
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
     AutoTestApiProjectSelect,
     AutoTestApiProjectDelete,
 )
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -37,9 +37,12 @@ autotest_project = APIRouter()
 
 
 @autotest_project.post("/create", summary="API自动化测试-新增应用")
-async def create_project_info(project_in: AutoTestApiProjectCreate = Body(..., description="应用信息")):
+async def create_project_info(
+        project_in: AutoTestApiProjectCreate = Body(..., description="应用信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_PROJECT_CRUD.create_project(project_in=project_in)
+        instance = await services.project_curd.create_project(project_in=project_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -64,9 +67,10 @@ async def create_project_info(project_in: AutoTestApiProjectCreate = Body(..., d
 async def delete_project_info(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_PROJECT_CRUD.delete_project(project_id=project_id, project_code=project_code)
+        instance = await services.project_curd.delete_project(project_id=project_id, project_code=project_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -90,9 +94,10 @@ async def delete_project_info(
 @autotest_project.post("/delete", summary="API自动化测试-按id或code列表删除项目")
 async def delete_projects_batch(
         project_in: AutoTestApiProjectDelete = Body(..., description="项目信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        count = await AUTOTEST_API_PROJECT_CRUD.delete_projects(project_in=project_in)
+        count = await services.project_curd.delete_projects(project_in=project_in)
         LOGGER.info(f"按id或code列表删除项目成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
@@ -101,9 +106,12 @@ async def delete_projects_batch(
 
 
 @autotest_project.post("/update", summary="API自动化测试-按id或code更新应用")
-async def update_project_info(project_in: AutoTestApiProjectUpdate = Body(..., description="应用信息")):
+async def update_project_info(
+        project_in: AutoTestApiProjectUpdate = Body(..., description="应用信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_PROJECT_CRUD.update_project(project_in=project_in)
+        instance = await services.project_curd.update_project(project_in=project_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -128,12 +136,13 @@ async def update_project_info(project_in: AutoTestApiProjectUpdate = Body(..., d
 async def get_project_info(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if project_id:
-            instance = await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=project_id, on_error=True, state__not=1)
+            instance = await services.project_curd.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_PROJECT_CRUD.get_by_code(project_code=project_code, on_error=True, state__not=1)
+            instance = await services.project_curd.get_by_code(project_code=project_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -153,9 +162,11 @@ async def get_project_info(
 
 
 @autotest_project.get("/get_names", summary="API自动化测试-查询应用名称(去重)")
-async def get_env_name_list():
+async def get_env_name_list(
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        names: List[str] = await AUTOTEST_API_PROJECT_CRUD.model.filter(state__not=1).distinct().values_list("project_name", flat=True)
+        names: List[str] = await services.project_curd.model.filter(state__not=1).distinct().values_list("project_name", flat=True)
         LOGGER.info(f"查询应用名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except (NotFoundException, ParameterException) as e:
@@ -166,7 +177,10 @@ async def get_env_name_list():
 
 
 @autotest_project.post("/search", summary="API自动化测试-按条件查询应用")
-async def search_project_info(project_in: AutoTestApiProjectSelect = Body(..., description="查询条件")):
+async def search_project_info(
+        project_in: AutoTestApiProjectSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
         q = Q()
         if project_in.project_id:
@@ -188,7 +202,7 @@ async def search_project_info(project_in: AutoTestApiProjectSelect = Body(..., d
         if project_in.updated_user:
             q &= Q(updated_user__contains=project_in.updated_user)
         q &= Q(state=project_in.state)
-        total, instances = await AUTOTEST_API_PROJECT_CRUD.select_projects(
+        total, instances = await services.project_curd.select_projects(
             search=q,
             page=project_in.page,
             page_size=project_in.page_size,

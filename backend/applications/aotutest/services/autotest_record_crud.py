@@ -137,6 +137,3 @@ class AutoTestApiTaskRecordCrud(
             error_message: str = f"查询任务执行记录异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_RECORD_CRUD = AutoTestApiTaskRecordCrud()

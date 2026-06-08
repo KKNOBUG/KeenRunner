@@ -9,16 +9,16 @@
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_tag_schema import (
     AutoTestApiTagCreate,
     AutoTestApiTagSelect,
     AutoTestApiTagUpdate,
     AutoTestApiTagDelete,
 )
-from backend.applications.aotutest.services.autotest_tag_crud import AUTOTEST_API_TAG_CRUD
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -39,9 +39,12 @@ autotest_tag = APIRouter()
 
 
 @autotest_tag.post("/create", summary="API自动化测试-新增标签")
-async def create_tag_info(tag_in: AutoTestApiTagCreate = Body(..., description="标签信息")):
+async def create_tag_info(
+        tag_in: AutoTestApiTagCreate = Body(..., description="标签信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_TAG_CRUD.create_tag(tag_in=tag_in)
+        instance = await services.tag_curd.create_tag(tag_in=tag_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -66,9 +69,10 @@ async def create_tag_info(tag_in: AutoTestApiTagCreate = Body(..., description="
 async def delete_tag_info(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        instance = await AUTOTEST_API_TAG_CRUD.delete_tag(tag_id=tag_id, tag_code=tag_code)
+        instance = await services.tag_curd.delete_tag(tag_id=tag_id, tag_code=tag_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -92,9 +96,10 @@ async def delete_tag_info(
 @autotest_tag.post("/delete", summary="API自动化测试-按id或code列表删除标签")
 async def delete_tag_batch(
         tag_in: AutoTestApiTagDelete = Body(..., description="标签信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
-        count = await AUTOTEST_API_TAG_CRUD.delete_tags(tag_in=tag_in)
+        count = await services.tag_curd.delete_tags(tag_in=tag_in)
         LOGGER.info(f"按id或code列表删除标签成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
@@ -103,9 +108,12 @@ async def delete_tag_batch(
 
 
 @autotest_tag.post("/update", summary="API自动化测试-按id或code更新标签")
-async def update_tag_info(tag_in: AutoTestApiTagUpdate = Body(..., description="标签信息")):
+async def update_tag_info(
+        tag_in: AutoTestApiTagUpdate = Body(..., description="标签信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
     try:
-        instance = await AUTOTEST_API_TAG_CRUD.update_tag(tag_in=tag_in)
+        instance = await services.tag_curd.update_tag(tag_in=tag_in)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -134,12 +142,13 @@ async def update_tag_info(tag_in: AutoTestApiTagUpdate = Body(..., description="
 async def get_tag_info(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         if tag_id:
-            instance = await AUTOTEST_API_TAG_CRUD.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
+            instance = await services.tag_curd.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
         else:
-            instance = await AUTOTEST_API_TAG_CRUD.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
+            instance = await services.tag_curd.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -162,7 +171,8 @@ async def get_tag_info(
 
 @autotest_tag.post("/search", summary="API自动化测试-按条件查询标签")
 async def search_tags_info(
-        tag_in: AutoTestApiTagSelect = Body(..., description="查询条件")
+        tag_in: AutoTestApiTagSelect = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     try:
         q = Q()
@@ -183,7 +193,7 @@ async def search_tags_info(
         if tag_in.updated_user:
             q &= Q(updated_user__iexact=tag_in.updated_user)
         q &= Q(state=tag_in.state)
-        total, instances = await AUTOTEST_API_TAG_CRUD.select_tags(
+        total, instances = await services.tag_curd.select_tags(
             search=q,
             page=tag_in.page,
             page_size=tag_in.page_size,

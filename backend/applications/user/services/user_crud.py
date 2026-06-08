@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, Union, List
 
 from tortoise.exceptions import DoesNotExist
+from tortoise.expressions import F
 
 from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.base.services.role_crud import ROLE_CRUD
@@ -100,6 +101,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
         instance.state = 1
         instance.is_active = 0
+        instance.token_version += 1  # 吊销用户所有Token
         await instance.save()
         return instance
 
@@ -108,7 +110,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if user_ids:
             deleted_ids = await self.model.filter(id__in=user_ids).exclude(state=1).values_list("id", flat=True)
             if deleted_ids:
-                await self.model.filter(id__in=deleted_ids).update(state=1)
+                await self.model.filter(id__in=deleted_ids).update(state=1, token_version=F('token_version') + 1)
         else:
             deleted_ids = []
         return deleted_ids
@@ -121,8 +123,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         except DoesNotExist as e:
             raise NotFoundException(message=f"用户(id={user_id})信息不存在")
 
-        data = await instance.to_dict()
-        return data
+        return instance
 
     @classmethod
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
@@ -137,9 +138,33 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             return ForbiddenResponse(message="不允许重置超级用户密码")
 
         instance.password = get_password_hash(password="123456")
+        instance.token_version += 1  # 吊销用户所有Token
         await instance.save()
         data = await instance.to_dict(exclude_fields=["id", "password"])
         return data
 
+    async def update_password(self, user_id: int, new_password: str) -> User:
+        """
+        用户修改密码：更新密码并吊销所有Token
 
-USER_CRUD = UserCrud()
+        :param user_id: 用户ID
+        :param new_password: 新密码（明文）
+        :return: 更新后的用户实例
+        """
+        instance = await self.get_by_id(user_id=user_id, on_error=True)
+        instance.password = get_password_hash(password=new_password)
+        instance.token_version += 1  # 吊销用户所有Token
+        await instance.save()
+        return instance
+
+    async def logout(self, user_id: int) -> User:
+        """
+        用户主动登出：吊销所有Token
+
+        :param user_id: 用户ID
+        :return: 更新后的用户实例
+        """
+        instance = await self.get_by_id(user_id=user_id, on_error=True)
+        instance.token_version += 1  # 吊销用户所有Token
+        await instance.save()
+        return instance

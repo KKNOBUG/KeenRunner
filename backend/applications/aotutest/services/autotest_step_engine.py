@@ -28,6 +28,7 @@ import httpx
 import orjson
 from aiomysql import Pool
 
+from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
@@ -41,12 +42,12 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
     prepare_step_tree_item_for_execution,
 )
-from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import unique_identify
 from backend.common import AioTcpClient, TcpFrameMode
 from backend.common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
 from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
+from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
@@ -60,7 +61,6 @@ from backend.enums import (
     AutoTestReqArgsType,
     AutoTestConfigNodeType, HTTPMethod
 )
-from backend.configure import LOGGER
 from backend.services import CTX_USER_ID
 
 # 1.匹配裸的占位符，如: ${xxx}
@@ -977,6 +977,10 @@ class BaseStepExecutor:
             list(self.step.children or []) + list(self.step.quote_steps or []),
             key=lambda item: (item.step_no or 0),
         )
+
+    @classmethod
+    async def get_services(cls) -> AutoTestApiServices:
+        return await get_autotest_api_services()
 
     def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:
         """
@@ -2508,7 +2512,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         step_code=self.step_code
                     )
                     if not operate_project_id and operate_project_name.strip():
-                        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(operate_project_name.strip(), on_error=False)
+                        project_instance = await (await self.get_services()).project_curd.get_by_name(operate_project_name.strip(), on_error=False)
                         if not project_instance:
                             raise StepExecutionError(f"【数据库请求】{operate_no}：应用(project_name={operate_project_name!r})不存在")
                         operate_project_id = project_instance.id
@@ -2822,7 +2826,7 @@ class RedisStepExecutor(BaseStepExecutor):
                     )
                     operate_result_count = f"{operate_variable_name}_count"
                     if not operate_project_id and operate_project_name.strip():
-                        project_instance = await AUTOTEST_API_PROJECT_CRUD.get_by_name(
+                        project_instance = await (await self.get_services()).project_curd.get_by_name(
                             operate_project_name.strip(), on_error=False
                         )
                         if not project_instance:

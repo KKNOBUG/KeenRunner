@@ -96,8 +96,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
     async def delete_router(self, router_id: int, **kwargs) -> Router:
         instance = await self.get_by_id(router_id, on_error=True, **kwargs)
         await instance.delete()
-        data = await instance.to_dict()
-        return data
+        return instance
 
     async def update_router(self, router_in: RouterUpdate) -> Router:
         router_id: int = router_in.id
@@ -141,4 +140,3 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return await self.model.all()
 
 
-ROUTER_CRUD = RouterCrud()

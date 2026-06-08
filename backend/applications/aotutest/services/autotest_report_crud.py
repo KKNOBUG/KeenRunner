@@ -18,7 +18,7 @@ from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
     AutoTestApiReportUpdate
 )
-from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -91,7 +91,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         case_code: str = report_in.case_code
 
         # 业务层验证：检查用例是否存在
-        await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+        await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
@@ -184,6 +184,3 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             error_message: str = f"查询报告信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_REPORT_CRUD = AutoTestApiReportCrud()

@@ -18,6 +18,8 @@ from backend.applications.aotutest.schemas.autotest_tag_schema import (
     AutoTestApiTagUpdate,
     AutoTestApiTagDelete,
 )
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -119,8 +121,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         tag_project: int = tag_in.tag_project
 
         # 业务层验证：检查应用是否存在
-        from backend.applications.aotutest.services.autotest_project_crud import AUTOTEST_API_PROJECT_CRUD
-        await AUTOTEST_API_PROJECT_CRUD.get_by_id(project_id=tag_project, on_error=True, state__not=1)
+        await AutoTestApiProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
         # 业务层验证：同应用下相同类型、大类及名称仅可存在一个状态为启用的标签信息
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
         existing_tag = await self.model.filter(tag_type=tag_type, tag_mode=tag_mode, tag_name=tag_name).first()
@@ -205,8 +206,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         else:
             instance = await self.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
 
-        from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-        cases_count = await AUTOTEST_API_CASE_CRUD.model.filter(case_tags__contains=[tag_id], state__not=1).count()
+        cases_count = await AutoTestApiCaseCrud().model.filter(case_tags__contains=[tag_id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 标签(id={instance.id})被{cases_count}个用例关联"
             LOGGER.error(error_message)
@@ -248,6 +248,3 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             error_message: str = f"查询标签信息失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-
-AUTOTEST_API_TAG_CRUD = AutoTestApiTagCrud()

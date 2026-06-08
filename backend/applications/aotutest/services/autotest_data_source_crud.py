@@ -11,7 +11,6 @@ from typing import Optional, Dict, Any, List, Union
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
-from tortoise.queryset import QuerySet
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
 from backend.applications.aotutest.schemas.autotest_data_source_schema import (
@@ -462,6 +461,3 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         if not case_id:
             raise ParameterException(message="参数(case_id)不允许为空")
         return await self.model.filter(case_id=case_id, state=state).order_by("-updated_time", "step_id", "step_code").all()
-
-
-AUTOTEST_DATA_SOURCE_CRUD = AutoTestDataSourceCrud()

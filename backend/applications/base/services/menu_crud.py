@@ -71,4 +71,3 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         return instance
 
 
-MENU_CRUD = MenuCrud()
