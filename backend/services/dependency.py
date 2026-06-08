@@ -28,9 +28,9 @@ class AuthControl:
                 algorithms=PROJECT_CONFIG.AUTH_JWT_ALGORITHM
             )
             user_id = decode_data.get("user_id")
-            user = await User.filter(id=user_id).first()
+            user = await User.filter(id=user_id, state__not=1, is_active=True).first()
             if not user:
-                raise HTTPException(status_code=401, detail="请求服务鉴权失败")
+                raise HTTPException(status_code=401, detail="请求服务鉴权失败, 用户状态异常, 请联系管理员后重试")
             CTX_USER_ID.set(int(user_id))
             return user
         except jwt.DecodeError:
