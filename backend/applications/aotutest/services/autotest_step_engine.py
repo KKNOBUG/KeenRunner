@@ -31,7 +31,6 @@ from aiomysql import Pool
 if TYPE_CHECKING:
     from backend.applications.aotutest.dependencies import AutoTestApiServices
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
@@ -2069,11 +2068,12 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
                 raise StepExecutionError("【引用公共脚本】缺少必要配置: quote_case_id")
+
+            database_crud_services = await self.get_services()
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
             self.context.executing_quote_case_id = quote_case_id
             try:
-                from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-                quote_case_instance: AutoTestApiCaseInfo = await AutoTestApiCaseCrud().get_by_conditions(
+                quote_case_instance = await database_crud_services.case_curd.get_by_conditions(
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
@@ -2091,8 +2091,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             )
             quote_case_name: str = quote_case_dict["case_name"]
             try:
-                from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-                load = await AutoTestApiStepCrud().get_by_case_id(case_id=quote_case_id)
+                load = await database_crud_services.step_curd.get_by_case_id(case_id=quote_case_id)
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(
@@ -2515,7 +2514,8 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         step_code=self.step_code
                     )
                     if not operate_project_id and operate_project_name.strip():
-                        project_instance = await (await self.get_services()).project_curd.get_by_name(operate_project_name.strip(), on_error=False)
+                        database_crud_services = await self.get_services()
+                        project_instance = await database_crud_services.project_curd.get_by_name(operate_project_name.strip(), on_error=False)
                         if not project_instance:
                             raise StepExecutionError(f"【数据库请求】{operate_no}：应用(project_name={operate_project_name!r})不存在")
                         operate_project_id = project_instance.id
@@ -2829,9 +2829,8 @@ class RedisStepExecutor(BaseStepExecutor):
                     )
                     operate_result_count = f"{operate_variable_name}_count"
                     if not operate_project_id and operate_project_name.strip():
-                        project_instance = await (await self.get_services()).project_curd.get_by_name(
-                            operate_project_name.strip(), on_error=False
-                        )
+                        database_crud_services = await self.get_services()
+                        project_instance = await database_crud_services.project_curd.get_by_name(operate_project_name.strip(), on_error=False)
                         if not project_instance:
                             raise StepExecutionError(
                                 f"【Redis请求】{operate_no}：应用(project_name={operate_project_name!r})不存在"
