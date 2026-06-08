@@ -147,6 +147,7 @@ async def list_user(
         is_superuser: bool = Query(default=None, description="是否为超级管理员"),
         dept_id: int = Query(default=None, description="部门ID"),
         user_crud: UserCrud = Depends(get_user_crud),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     q = Q()
     if username:
@@ -179,7 +180,7 @@ async def list_user(
     ]
     for item in data:
         dept_id = item.pop("dept_id", None)
-        item["dept"] = await (await DEPT_CRUD.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+        item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
 
     return SuccessResponse(data=data, total=total)
 
@@ -188,6 +189,7 @@ async def list_user(
 async def get_users(
         user_in: UserSelect = Body(),
         user_crud: UserCrud = Depends(get_user_crud),
+        dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     q = Q()
     if user_in.username:
@@ -231,7 +233,7 @@ async def get_users(
     ]
     for item in data:
         dept_id = item.pop("dept_id", None)
-        item["dept"] = await (await DEPT_CRUD.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+        item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
 
     return SuccessResponse(message="查询成功", data=data, total=total)
 

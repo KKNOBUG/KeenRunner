@@ -156,7 +156,7 @@ async def _create_task_record(
     :param celery_task_name: Celery 任务完全限定名，用于判断是否从业务任务表取 task_name/case_ids
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-    from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
+    from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
     from backend.enums import AutoTestTaskStatus, AutoTestTaskScheduler
     task_name: Optional[str] = None
     task_kwargs: Dict[str, Any] = {}
@@ -180,7 +180,7 @@ async def _create_task_record(
         "celery_scheduler": celery_scheduler,
         "celery_start_time": datetime.now(),
     }
-    await AUTOTEST_API_RECORD_CRUD.create_record(data)
+    await AutoTestApiTaskRecordCrud().create_record(data)
     LOGGER.info(
         f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, 已更新[celery_id={celery_id}]记录"
     )
@@ -202,7 +202,7 @@ async def _update_task_record_on_end(
     """
     if not celery_id:
         return
-    from backend.applications.aotutest.services.autotest_record_crud import AUTOTEST_API_RECORD_CRUD
+    from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
     from backend.enums import AutoTestTaskStatus
 
     now = datetime.now()
@@ -214,7 +214,8 @@ async def _update_task_record_on_end(
         "task_summary": summary,
         "task_error": None if success else (traceback_str or summary),
     }
-    record = await AUTOTEST_API_RECORD_CRUD.get_by_celery_id(celery_id=celery_id)
+    record_crud = AutoTestApiTaskRecordCrud()
+    record = await record_crud.get_by_celery_id(celery_id=celery_id)
     if not record:
         LOGGER.error(
             f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录失败, 未找到[celery_id={celery_id}]记录"
@@ -226,7 +227,7 @@ async def _update_task_record_on_end(
             start = start.replace(tzinfo=None)
         delta = now - start
         data["celery_duration"] = f"{delta.total_seconds():.2f}s"
-    await AUTOTEST_API_RECORD_CRUD.update_record_by_celery_id(celery_id=celery_id, data=data)
+    await record_crud.update_record_by_celery_id(celery_id=celery_id, data=data)
     LOGGER.info(
         f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, 已更新[celery_id={celery_id}]记录"
     )

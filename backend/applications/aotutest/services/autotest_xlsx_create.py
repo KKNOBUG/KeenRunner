@@ -21,7 +21,7 @@ import pandas as pd
 # 数据模型
 # =============================
 from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateUpdate
-from backend.applications.aotutest.services.autotest_data_source2_crud import AUTOTEST_API_DATA_CREATE_CRUD
+from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestApiDataCreateCrud
 
 
 @dataclass
@@ -336,7 +336,8 @@ def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: 
 
 async def generate_test_data(input_excel: str, output_excel: str, rules: List[str], json_message: Union[str, dict],
                              create_id: int):
-    await AUTOTEST_API_DATA_CREATE_CRUD.update_data_create(
+    data_create_crud = AutoTestApiDataCreateCrud()
+    await data_create_crud.update_data_create(
         data_in=(
             AutoTestApiDataCreateUpdate(
                 id=create_id,
@@ -363,7 +364,7 @@ async def generate_test_data(input_excel: str, output_excel: str, rules: List[st
         cases = generate_cases_np(fields, rules, base_json)
         export_excel(cases, fields, output_excel)
         # print("成功")
-        await AUTOTEST_API_DATA_CREATE_CRUD.update_data_create(
+        await data_create_crud.update_data_create(
             data_in=(
                 AutoTestApiDataCreateUpdate(
                     id=create_id,
@@ -373,8 +374,7 @@ async def generate_test_data(input_excel: str, output_excel: str, rules: List[st
             )
         )
     except Exception as e:
-        #     print(e)
-        await AUTOTEST_API_DATA_CREATE_CRUD.update_data_create(
+        await data_create_crud.update_data_create(
             data_in=(
                 AutoTestApiDataCreateUpdate(
                     id=create_id,

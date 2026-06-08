@@ -13,7 +13,7 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import F
 
 from backend.applications.base.schemas.token_schema import CredentialsSchema
-from backend.applications.base.services.role_crud import ROLE_CRUD
+from backend.applications.base.services.role_crud import RoleCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
@@ -129,7 +129,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
         await user.roles.clear()
         for role_id in role_ids:
-            role_obj = await ROLE_CRUD.get_or_error(id=role_id)
+            role_obj = await RoleCrud().get_or_error(id=role_id)
             await user.roles.add(role_obj)
 
     async def reset_password(self, user_id: int):

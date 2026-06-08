@@ -148,8 +148,8 @@ def get_span_id_for_log():
 
 
 def get_step_crud():
-    from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-    return AUTOTEST_API_STEP_CRUD
+    from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+    return AutoTestApiStepCrud
 
 
 def get_task_model():

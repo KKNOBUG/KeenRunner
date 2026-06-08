@@ -21,14 +21,16 @@ import types
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from urllib.parse import quote, unquote
 
 import httpx
 import orjson
 from aiomysql import Pool
 
-from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+if TYPE_CHECKING:
+    from backend.applications.aotutest.dependencies import AutoTestApiServices
+
 from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
@@ -980,6 +982,7 @@ class BaseStepExecutor:
 
     @classmethod
     async def get_services(cls) -> AutoTestApiServices:
+        from backend.applications.aotutest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
     def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:
@@ -2069,8 +2072,8 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
             self.context.executing_quote_case_id = quote_case_id
             try:
-                from backend.applications.aotutest.services.autotest_case_crud import AUTOTEST_API_CASE_CRUD
-                quote_case_instance: AutoTestApiCaseInfo = await AUTOTEST_API_CASE_CRUD.get_by_conditions(
+                from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+                quote_case_instance: AutoTestApiCaseInfo = await AutoTestApiCaseCrud().get_by_conditions(
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
@@ -2088,8 +2091,8 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             )
             quote_case_name: str = quote_case_dict["case_name"]
             try:
-                from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
-                load = await AUTOTEST_API_STEP_CRUD.get_by_case_id(case_id=quote_case_id)
+                from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+                load = await AutoTestApiStepCrud().get_by_case_id(case_id=quote_case_id)
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(

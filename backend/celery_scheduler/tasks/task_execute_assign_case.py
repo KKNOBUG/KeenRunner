@@ -5,10 +5,6 @@
 @Project : Krun
 @Module  : task_execute_assign_case.py
 @DateTime: 2026/3/20
-
-在 Celery Worker 后台执行单用例步骤树（SCHEDULE_EXEC 等）：
-- 调用 AUTOTEST_API_STEP_CRUD.execute_single_case 写入报告/明细
-- 支持 steps_execute_config、参数化 selected_dataset_names
 """
 
 from __future__ import annotations
@@ -16,7 +12,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from backend.applications.aotutest.services.autotest_step_crud import AUTOTEST_API_STEP_CRUD
+from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
 from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
 from backend.configure import LOGGER
@@ -49,14 +45,13 @@ async def _execute_step_tree_impl(
         selected_dataset_names = []
     initial_variables = _normalize_initial_variables(initial_variables)
 
-    exec_report_type = report_type or AutoTestReportType.SCHEDULE_EXEC
-
+    step_crud = AutoTestApiStepCrud()
     if not selected_dataset_names:
-        result = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+        result = await step_crud.execute_single_case(
             case_id=case_id,
             initial_variables=initial_variables,
             steps_execute_config=steps_execute_config,
-            report_type=exec_report_type,
+            report_type=report_type,
             batch_code=batch_code,
             dataset_name=None,
         )
@@ -76,11 +71,11 @@ async def _execute_step_tree_impl(
 
     parameterized_execute_results: List[Dict[str, Any]] = []
     for dataset_name in selected_dataset_names:
-        single_data = await AUTOTEST_API_STEP_CRUD.execute_single_case(
+        single_data = await step_crud.execute_single_case(
             case_id=case_id,
             initial_variables=initial_variables,
             steps_execute_config=steps_execute_config,
-            report_type=exec_report_type,
+            report_type=report_type,
             batch_code=batch_code,
             dataset_name=dataset_name,
         )
