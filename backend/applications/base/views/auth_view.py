@@ -9,7 +9,7 @@
 from datetime import timedelta, datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
@@ -22,15 +22,15 @@ from backend.configure import PROJECT_CONFIG
 from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException
 from backend.core.responses import SuccessResponse, NotFoundResponse
 from backend.services import CTX_USER_ID
-from backend.services import DependAuth, create_access_token
+from backend.services import create_access_token
 
 auth_public = APIRouter()
 auth_secure = APIRouter()
 
 
-@auth_public.post("/access_token", summary="用户鉴权", description="验证用户密码和状态并生成令牌")
+@auth_public.post("/access_token", summary="用户鉴权-验证用户密码和状态并生成令牌")
 async def get_login_access_token(
-        credentials: CredentialsSchema,
+        credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     try:
@@ -71,7 +71,7 @@ async def get_login_access_token(
     return SuccessResponse(data=data.model_dump())
 
 
-@auth_secure.post("/usermenu", summary="查看用户菜单", dependencies=[DependAuth])
+@auth_secure.post("/usermenu", summary="用户鉴权-查看当前用户菜单")
 async def get_user_menu():
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
@@ -99,7 +99,7 @@ async def get_user_menu():
     return SuccessResponse(data=res)
 
 
-@auth_secure.post("/userinfo", summary="查看用户信息", dependencies=[DependAuth])
+@auth_secure.post("/userinfo", summary="用户鉴权-查看当前用户信息")
 async def get_userinfo(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -111,7 +111,7 @@ async def get_userinfo(
     return SuccessResponse(data=data)
 
 
-@auth_secure.post("/getUserRouters", summary="查看用户路由", dependencies=[DependAuth])
+@auth_secure.post("/getUserRouters", summary="用户鉴权-查看当前用户路由")
 async def get_user_router():
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
