@@ -151,6 +151,7 @@ class InterceptHandler(logging.Handler):
     """
 
     EXCLUDED_LOGGERS = frozenset({
+        "asyncmy",
         "aiomysql",
         "asyncio",
         "tortoise",
