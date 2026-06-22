@@ -104,8 +104,8 @@ def _safe_user_code_import(
     """
     if level != 0:
         raise ImportError("代码请求(Python)步骤中不允许使用相对路径导入模块")
-    root = name.partition(".")[0]
 
+    root = name.partition(".")[0]
     if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
         allowed = "、".join(sorted(_USER_CODE_ALLOWED_IMPORT_ROOTS))
         raise ImportError(f"代码请求(Python)步骤中不允许导入[{name!r}]模块, 仅允许: {allowed}")
@@ -248,7 +248,7 @@ class StepExecutionContext:
                 self._http_client = await self._exit_stack.enter_async_context(client)
             return self
         except Exception as e:
-            error_message: str = f"异步上下文管理器创建HTTP客户端连接失败: \n\t错误描述: {e}"
+            error_message: str = f"异步上下文管理器: 创建HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
             raise StepExecutionError(error_message) from e
 
