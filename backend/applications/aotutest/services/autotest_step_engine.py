@@ -41,7 +41,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepAssertValidatorItem,
     StepVariablesBase,
     StepsExecuteConfigBase,
-    prepare_step_tree_item_for_execution,
+    prepare_step_tree_item_for_execution, StepExtractVariableItem,
 )
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import unique_identify
@@ -2249,7 +2249,6 @@ class TcpStepExecutor(BaseStepExecutor):
             )
 
             request_args_type_raw = self.step.request_args_type
-            payload: Any = None
             if request_args_type_raw is None:
                 payload = request_text if request_text not in (None, "") else request_body
             elif request_args_type_raw == AutoTestReqArgsType.RAW:
@@ -2402,19 +2401,23 @@ class TcpStepExecutor(BaseStepExecutor):
                     response_headers=result.response.get("response_header") if result.response else None,
                     response_cookies=None,
                     session_variables_lookup=session_lookup_map,
-                    compare_fail_message="断言失败",
                     finished_variables=self.context,
                     is_core_engine=True,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
-                result.assert_validators = validator_results
-                if any(item.get("success") is False for item in validator_results if isinstance(item, dict)):
-                    raise StepExecutionError("【TCP请求】断言失败")
+                result.assert_validators.extend(validator_results)
+                assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
+                assert_failed_total: int = len(assert_failed_items)
+                assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
+                if assert_failed_total > 0:
+                    error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
+                    raise StepExecutionError(error_message)
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(f"【TCP请求】断言验证失败: {e}") from e
-
+                error_message: str = f"【断言验证】在运行断言检查时发生异常, 错误详情: {e}"
+                self.context.log(error_message, step_code=self.step_code)
+                raise StepExecutionError(error_message) from e
         except StepExecutionError:
             raise
         except Exception as e:
@@ -2663,7 +2666,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                     session_lookup_map[extract_item["name"]] = extract_item.get("extract_value")
 
             try:
-                extract_variables: Optional[List[Dict[str, Any]]] = self.step.extract_variables
+                extract_variables: Optional[List[StepExtractVariableItem]] = self.step.extract_variables
                 if extract_variables and not isinstance(extract_variables, list):
                     raise StepExecutionError("【数据库请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
                 _, extract_results_list = AutoTestToolService.run_extract_variables(
@@ -2982,7 +2985,7 @@ class RedisStepExecutor(BaseStepExecutor):
                     session_lookup_map[extract_item["name"]] = extract_item.get("extract_value")
 
             try:
-                extract_variables: Optional[List[Dict[str, Any]]] = self.step.extract_variables
+                extract_variables: Optional[List[StepExtractVariableItem]] = self.step.extract_variables
                 if extract_variables and not isinstance(extract_variables, list):
                     raise StepExecutionError("【Redis请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
                 _, extract_results_list = AutoTestToolService.run_extract_variables(
