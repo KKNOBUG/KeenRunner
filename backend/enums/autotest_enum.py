@@ -99,6 +99,7 @@ class AutoTestReqArgsType(StringEnum):
     RAW = "raw"
     NONE = "none"
     JSON = "json"
+    XML = "xml"
     PARAMS = "params"
     FORM_DATA = "form-data"
     X_WWW_FORM_URLENCODED = "x-www-form-urlencoded"

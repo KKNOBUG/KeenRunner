@@ -12,7 +12,7 @@ import ast
 import re
 import traceback
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 from xml.etree import ElementTree
 
 import orjson
@@ -26,6 +26,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 )
 from backend.common import JSONPathUtils
 from backend.common.generate_utils import GenerateUtils
+from backend.common.xpath_utils import XPathUtils
 from backend.enums.autotest_enum import AutoTestAssertionOperation
 
 
@@ -123,6 +124,45 @@ class AutoTestToolService:
             "form_data": form_data,
             "urlencoded": urlencoded,
         }
+
+    @staticmethod
+    def replace_xml_datagram(
+            *,
+            body_map: Optional[Dict[str, Any]] = None,
+            request_text: Optional[str] = None,
+    ) -> str:
+        """
+        数据驱动报文替换（XML）：按 XPath 将 body_map 中的键值对替换到 XML 报文中。
+
+        XPath 表达式规则与 ``extract_from_source`` 的 "response xml" 分支保持一致：
+        - 使用 ``ElementTree.findall(expr)`` 进行匹配；
+        - 多匹配时默认替换最后一个匹配元素的 text；如需精确指定，请在 XPath 中携带索引
+          （例如 ``.//item[1]``）；
+        - 匹配不到时跳过，不抛异常。
+
+        :param head_map: 请求头替换映射（TCP 无请求头概念，当前忽略，仅保持与 replace_json_datagram 一致）。
+        :param body_map: XPath -> 值的映射；路径写法与变量提取/断言中的 XPath 一致。
+        :param request_text: XML 报文字符串。
+        :returns: 替换后的 XML 字符串。
+        :raises ValueError: 报文不是有效 XML 格式或 XPath 执行失败时抛出。
+        """
+        if not request_text:
+            return request_text
+
+        body_map = body_map or {}
+        for xpath_expr, xpath_value in body_map.items():
+            if not xpath_expr:
+                continue
+            try:
+                request_text = XPathUtils.update(request_text, xpath_expr, xpath_value)
+            except ElementTree.ParseError as e:
+                raise ValueError(f"【XML报文替换】请求报文不是有效的XML格式, 错误描述: {e}") from e
+            except ValueError:
+                raise
+            except Exception as e:
+                raise ValueError(f"【XML报文替换】XPath表达式[{xpath_expr}]执行失败, 错误: {e}") from e
+
+        return request_text
 
     @staticmethod
     def acquire_dataset_payload(step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:

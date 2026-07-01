@@ -2229,15 +2229,23 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.try_acquire_step_dataset(step_struct):
-                out = AutoTestToolService.replace_json_datagram(
-                    head_map=step_struct.get("head") or {},
-                    body_map=step_struct.get("body") or {},
-                    request_headers=None,
-                    request_body=request_body,
-                    form_data=None,
-                    urlencoded=None,
-                )
-                request_body = out["request_body"]
+                # TCP 步骤根据报文类型选择替换方式：xml 用 XPath，其它用 JSONPath
+                if self.step.request_args_type == AutoTestReqArgsType.XML:
+                    xml_source = request_text or (request_body if isinstance(request_body, str) else None)
+                    request_text = AutoTestToolService.replace_xml_datagram(
+                        body_map=step_struct.get("body") or {},
+                        request_text=xml_source,
+                    )
+                else:
+                    out = AutoTestToolService.replace_json_datagram(
+                        head_map=step_struct.get("head") or {},
+                        body_map=step_struct.get("body") or {},
+                        request_headers=None,
+                        request_body=request_body,
+                        form_data=None,
+                        urlencoded=None,
+                    )
+                    request_body = out["request_body"]
 
             request_body = self.context.resolve_placeholders(
                 variables=request_body,
@@ -2255,6 +2263,8 @@ class TcpStepExecutor(BaseStepExecutor):
                 payload = request_text
             elif request_args_type_raw == AutoTestReqArgsType.JSON:
                 payload = request_body
+            elif request_args_type_raw == AutoTestReqArgsType.XML:
+                payload = request_text
             else:
                 payload = request_text if request_text not in (None, "") else request_body
 
