@@ -76,8 +76,8 @@ if __name__ == '__main__':
         app=PROJECT_CONFIG.SERVER_APP,
         host=PROJECT_CONFIG.SERVER_HOST,
         port=PROJECT_CONFIG.SERVER_PORT,
-        reload=PROJECT_CONFIG.SERVER_DEBUG,
-        reload_delay=PROJECT_CONFIG.SERVER_DELAY,
+        # reload=PROJECT_CONFIG.SERVER_DEBUG,
+        # reload_delay=PROJECT_CONFIG.SERVER_DELAY,
         log_config=None,
         log_level=None,
     )

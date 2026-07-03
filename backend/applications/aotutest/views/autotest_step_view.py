@@ -411,6 +411,79 @@ async def batch_update_steps_tree(
         return FailureResponse(message=f"更新用例及步骤树异常", data=str(e))
 
 
+@autotest_step.post("/validate_tree", summary="API自动化测试-校验步骤树JSON合法性")
+async def validate_step_tree(
+        steps: List[AutoTestStepTreeUpdateItem] = Body(..., description="待校验的步骤树根步骤列表"),
+        deep_validate: bool = Query(True, description="是否做深度校验（执行器字段+变量引用链）"),
+):
+    """
+    校验步骤树JSON的静态合法性（不执行、不保存），供AI智能体生成步骤树后做前置校验。
+
+    四层校验：
+    1. Pydantic 模型校验（请求体自动完成，到此处已通过）
+    2. 树结构校验（自循环引用、仅LOOP/IF可含子步骤）—— validate_step_tree_structure
+    3. 执行器字段校验（各 step_type 的必填字段组合）—— validate_executor_fields
+    4. 变量引用链校验（${var} 引用是否有对应产出）—— validate_variable_flow
+
+    :param steps: 步骤树根步骤列表
+    :param deep_validate: 是否执行第3、4层校验
+    :return: 校验结果，含 is_valid、各层错误明细、摘要
+    """
+    try:
+        # 第2层：树结构校验
+        is_valid_structure, structure_error = AutoTestToolService.validate_step_tree_structure(steps)
+
+        field_errors: List[Dict[str, Any]] = []
+        variable_errors: List[Dict[str, Any]] = []
+        if deep_validate:
+            # 第3层：执行器字段校验
+            field_errors = AutoTestToolService.validate_executor_fields(steps)
+            # 第4层：变量引用链校验
+            variable_errors = AutoTestToolService.validate_variable_flow(steps)
+
+        is_valid: bool = is_valid_structure and not field_errors and not variable_errors
+
+        # 摘要
+        def _count_steps(items: List[AutoTestStepTreeUpdateItem]) -> int:
+            total: int = 0
+            for s in items:
+                total += 1
+                total += _count_steps(s.children or [])
+                total += _count_steps(s.quote_steps or [])
+            return total
+
+        step_types: List[str] = []
+
+        def _collect_types(items: List[AutoTestStepTreeUpdateItem]) -> None:
+            for s in items:
+                step_types.append(str(s.step_type) if s.step_type else "N/A")
+                _collect_types(s.children or [])
+                _collect_types(s.quote_steps or [])
+
+        _collect_types(steps)
+        has_container: bool = any(
+            str(s.step_type) in (str(AutoTestStepType.LOOP), str(AutoTestStepType.IF))
+            for s in steps
+        )
+
+        result_data: Dict[str, Any] = {
+            "is_valid": is_valid,
+            "structure_errors": structure_error if not is_valid_structure else None,
+            "field_errors": field_errors,
+            "variable_errors": variable_errors,
+            "summary": {
+                "total_steps": _count_steps(steps),
+                "step_types": step_types,
+                "has_container": has_container,
+            },
+        }
+        message: str = "步骤树校验通过" if is_valid else "步骤树校验未通过"
+        return SuccessResponse(message=message, data=result_data)
+    except Exception as e:
+        LOGGER.error(f"校验步骤树异常，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"校验步骤树异常, 异常描述: {e}")
+
+
 @autotest_step.post("/http_debugging", summary="API自动化测试-HTTP请求调试")
 async def debug_http_request(
         step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),

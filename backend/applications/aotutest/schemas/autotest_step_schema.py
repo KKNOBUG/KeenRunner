@@ -352,10 +352,10 @@ class AutoTestStepTreeExecute(BaseModel):
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
         None, description="步骤树数据（DEBUG_EXEC 必填；ASYNC_EXEC / SCHEDULE_EXEC 不填）"
     )
-    initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="初始变量池, 列表项为 key / value / desc")
+    initial_variables: Optional[List[StepVariablesBase]] = Field(default_factory=list, description="初始变量池, 列表项为 key / value / desc")
     # 脚本执行配置：key=步骤ID(step_id) 或 @@{step_name}（当步骤未落库时），value=配置明细；空 dict 表示该步骤无配置覆盖
     # { step_id 或 @@step_name: {env_name, config_type(api|database|file), config_name, config_host, config_port, database_name} }
-    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default=None, description="脚本执行配置作用环境")
+    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default_factory=dict, description="脚本执行配置作用环境")
     # 参数化驱动：ASYNC_EXEC / SCHEDULE_EXEC 可传多条；DEBUG_EXEC 仅可选一条
     selected_dataset_names: Optional[List[str]] = Field(
         None,

@@ -1,0 +1,467 @@
+# -*- coding: utf-8 -*-
+"""
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : xpath_utils
+"""
+from typing import Any, Optional, Union
+from xml.etree import ElementTree
+
+
+class XPathUtils:
+    """
+    利用 XPath 对 XML 数据进行增删改查工具类。
+
+    1. 执行 XPath 新增并返回结果；
+    2. 执行 XPath 删除并返回结果；
+    3. 执行 XPath 更新并返回结果；
+    4. 执行 XPath 查询并返回结果。
+
+    约定：
+    - XPath 表达式遵循 ElementTree 支持的有限 XPath 语法；
+    - 多匹配时默认操作最后一个匹配元素，与 ``AutoTestToolService.extract_from_source``
+      的 "response xml" 分支保持一致；如需精确指定请使用索引，如 ``.//item[1]``；
+    - 未匹配到元素时，``update`` 不修改原数据并返回原字符串；``query`` 返回 ``None``；
+      ``delete`` 不修改原数据并返回原字符串；``add`` 沿路径创建元素。
+    """
+
+    @staticmethod
+    def _parse(xml_data: Union[str, ElementTree.Element]) -> ElementTree.Element:
+        """
+        将 XML 字符串或元素解析为 ElementTree 元素。
+
+        :param xml_data: XML 字符串或 ElementTree 元素。
+        :return: ElementTree 元素。
+        :raises ValueError: 输入为无效 XML 字符串时抛出。
+        """
+        if isinstance(xml_data, str):
+            return ElementTree.fromstring(xml_data.encode("utf-8"))
+        return xml_data
+
+    @classmethod
+    def _find_parent(
+            cls,
+            root: ElementTree.Element,
+            target: ElementTree.Element,
+    ) -> Optional[ElementTree.Element]:
+        """
+        在 root 子树中查找 target 的直接父元素。
+
+        :param root: 搜索起点元素。
+        :param target: 目标子元素。
+        :return: 目标元素的父元素；根节点本身或未找到时返回 None。
+        """
+        for elem in root.iter():
+            for child in elem:
+                if child is target:
+                    return elem
+        return None
+
+    @classmethod
+    def add(
+            cls,
+            xml_data: Union[str, ElementTree.Element],
+            xpath: str,
+            value: Any,
+            tag: Optional[str] = None,
+    ) -> str:
+        """
+        执行 XPath 新增并返回 XML 字符串。
+
+        行为（与 ``JSONPathUtils.add`` 对齐）：
+        1. XPath 存在且定位元素有同名子元素列表 → 末尾追加同名子元素（对应 JSON list.append）；
+        2. XPath 存在且定位元素为父容器（有不同名子元素）→ 创建 ``<tag>value</tag>`` 子元素（对应 dict[key]=value）；
+        3. XPath 存在且定位元素为叶子（仅 text）→ 追加同名兄弟元素（对应 str -> [str, value]）；
+        4. XPath 不存在 → 沿路径逐级创建元素，末级写入 value（对应 JSON 创建路径）。
+
+        :param xml_data: 待新增的 XML 字符串或 ElementTree 元素。
+        :param xpath: XPath 表达式，定位目标父元素或路径。
+        :param value: 新数据；会被转换为字符串写入新元素 text。
+        :param tag: 新子元素标签名；不提供时按上述规则推导。
+        :return: 新增后的 XML 字符串。
+        :raises ValueError: 输入为无效 XML 格式时抛出。
+        """
+        if not xpath:
+            if isinstance(xml_data, str):
+                return xml_data
+            return ElementTree.tostring(xml_data, encoding="unicode")
+
+        root = cls._parse(xml_data)
+        elements = root.findall(xpath)
+
+        if not elements:
+            # 情况4：XPath 不存在，沿路径创建元素
+            cls._create_path(root, xpath, value, tag)
+            return ElementTree.tostring(root, encoding="unicode")
+
+        target = elements[-1]
+        children = list(target)
+
+        # 推导新元素标签名
+        if tag:
+            new_tag = tag
+        elif children:
+            new_tag = children[-1].tag
+        else:
+            new_tag = target.tag
+
+        if not children and not tag:
+            # 情况3：叶子节点且无显式 tag → 追加同名兄弟元素
+            parent = cls._find_parent(root, target)
+            append_to = parent if parent is not None else target
+            new_element = ElementTree.Element(new_tag)
+            new_element.text = str(value) if value is not None else ""
+            append_to.append(new_element)
+        else:
+            # 情况1/2：作为子元素追加
+            new_element = ElementTree.SubElement(target, new_tag)
+            new_element.text = str(value) if value is not None else ""
+
+        return ElementTree.tostring(root, encoding="unicode")
+
+    @classmethod
+    def _create_path(
+            cls,
+            root: ElementTree.Element,
+            xpath: str,
+            value: Any,
+            tag: Optional[str] = None,
+    ) -> None:
+        """
+        沿 xpath 逐级创建元素，末级写入 value。
+
+        仅支持以 ``/`` 分隔的简单路径（如 ``./a/b/c`` 或 ``a/b/c``）；
+        含 ``//``、谓词等复杂语法的路径不创建，直接忽略。
+
+        :param root: 根元素，原地修改。
+        :param xpath: XPath 表达式。
+        :param value: 末级写入值。
+        :param tag: 末级新增子元素标签名；不提供时设置末级元素 text。
+        """
+        path = xpath.strip()
+        if path.startswith("./"):
+            path = path[2:]
+        if path.startswith("/"):
+            path = path[1:]
+        # 仅处理简单分段路径；含 // 或谓词则不创建
+        if "//" in path or "[" in path:
+            return
+        parts = [p for p in path.split("/") if p]
+        if not parts:
+            return
+
+        current = root
+        for part in parts:
+            child = current.find(part)
+            if child is None:
+                child = ElementTree.SubElement(current, part)
+            current = child
+
+        if tag:
+            new_element = ElementTree.SubElement(current, tag)
+            new_element.text = str(value) if value is not None else ""
+        else:
+            current.text = str(value) if value is not None else ""
+
+    @classmethod
+    def delete(
+            cls,
+            xml_data: Union[str, ElementTree.Element],
+            xpath: str,
+    ) -> str:
+        """
+        执行 XPath 删除并返回 XML 字符串。
+
+        删除所有匹配元素（从其父元素中移除）；未匹配到时返回原字符串。
+
+        :param xml_data: 待删除的 XML 字符串或 ElementTree 元素。
+        :param xpath: XPath 表达式。
+        :return: 删除后的 XML 字符串。
+        :raises ValueError: 输入为无效 XML 格式时抛出。
+        """
+        if not xpath:
+            if isinstance(xml_data, str):
+                return xml_data
+            return ElementTree.tostring(xml_data, encoding="unicode")
+
+        root = cls._parse(xml_data)
+        elements = root.findall(xpath)
+        if not elements:
+            if isinstance(xml_data, str):
+                return xml_data
+            return ElementTree.tostring(root, encoding="unicode")
+
+        for elem in elements:
+            parent = cls._find_parent(root, elem)
+            if parent is not None:
+                parent.remove(elem)
+
+        return ElementTree.tostring(root, encoding="unicode")
+
+    @classmethod
+    def update(
+            cls,
+            xml_data: Union[str, ElementTree.Element],
+            xpath: str,
+            value: Any,
+    ) -> str:
+        """
+        执行 XPath 更新并返回 XML 字符串。
+
+        匹配到多个元素时，仅更新最后一个；未匹配到时返回原字符串。
+
+        :param xml_data: 待更新的 XML 字符串或 ElementTree 元素。
+        :param xpath: XPath 表达式。
+        :param value: 新值；会被转换为字符串写入匹配元素的 text。
+        :return: 更新后的 XML 字符串。
+        :raises ValueError: 输入为无效 XML 格式时抛出。
+        """
+        if not xpath:
+            if isinstance(xml_data, str):
+                return xml_data
+            return ElementTree.tostring(xml_data, encoding="unicode")
+
+        root = cls._parse(xml_data)
+        elements = root.findall(xpath)
+        if not elements:
+            if isinstance(xml_data, str):
+                return xml_data
+            return ElementTree.tostring(root, encoding="unicode")
+
+        target_element = elements[-1]
+        target_element.text = str(value) if value is not None else ""
+        return ElementTree.tostring(root, encoding="unicode")
+
+    @classmethod
+    def query(
+            cls,
+            xml_data: Union[str, ElementTree.Element],
+            xpath: str,
+    ) -> Optional[Any]:
+        """
+        执行 XPath 查询并返回结果。
+
+        匹配到多个元素时，仅返回最后一个元素的 text；若该元素无 text 则返回该元素的
+        XML 字符串。未匹配到时返回 ``None``。
+
+        :param xml_data: 待查询的 XML 字符串或 ElementTree 元素。
+        :param xpath: XPath 表达式。
+        :return: 最后一个匹配元素的 text 或 XML 字符串；未匹配到时返回 ``None``。
+        :raises ValueError: 输入为无效 XML 格式时抛出。
+        """
+        if not xpath:
+            return None
+
+        root = cls._parse(xml_data)
+        elements = root.findall(xpath)
+        if not elements:
+            return None
+
+        element = elements[-1]
+        return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+
+
+if __name__ == '__main__':
+    mock_xml = """
+    <root>
+        <user>zhangsan</user>
+        <information>
+            <name>张三</name>
+            <age>18</age>
+            <phone>18100001234</phone>
+            <email>zhangsan@test.com</email>
+            <address>上海市浦东新区</address>
+        </information>
+        <hobby>
+            <item>唱</item>
+            <item>跳</item>
+            <item>Rap</item>
+            <item>篮球</item>
+            <item>嘻嘻哈哈</item>
+        </hobby>
+        <cars>
+            <car>
+                <brand>奔驰</brand>
+                <price>255555.0</price>
+            </car>
+            <car>
+                <brand>宝马</brand>
+                <price>288888.0</price>
+            </car>
+            <car>
+                <brand>奥迪</brand>
+                <price>300000.0</price>
+            </car>
+        </cars>
+        <mobile>
+            <中国电信>10000</中国电信>
+            <中国移动>10086</中国移动>
+            <中国联通>10010</中国联通>
+        </mobile>
+    </root>
+    """
+
+    # print("=" * 100)
+    # print("【XPathUtils.update 场景】")
+    # print("=" * 100)
+    #
+    # print("[1] 普通节点更新: ./user")
+    # print(XPathUtils.update(mock_xml, "./user", "lisi"))
+    # print("-" * 100)
+    #
+    # print("[2] 嵌套节点更新: ./information/name")
+    # print(XPathUtils.update(mock_xml, "./information/name", "里斯"))
+    # print("-" * 100)
+    #
+    # print("[3] 嵌套节点更新: ./information/email")
+    # print(XPathUtils.update(mock_xml, "./information/email", "lisi@test.com"))
+    # print("-" * 100)
+    #
+    # print("[4] 索引精确更新第5个hobby: ./hobby/item[5]")
+    # print(XPathUtils.update(mock_xml, "./hobby/item[5]", "x"))
+    # print("-" * 100)
+    #
+    # print("[5] 索引精确更新第1个car的brand: ./cars/car[1]/brand")
+    # print(XPathUtils.update(mock_xml, "./cars/car[1]/brand", "保时捷"))
+    # print("-" * 100)
+    #
+    # print("[6] 索引精确更新第3个car的price: ./cars/car[3]/price")
+    # print(XPathUtils.update(mock_xml, "./cars/car[3]/price", "500000.0"))
+    # print("-" * 100)
+    #
+    # print("[7] 多匹配默认更新最后一个: .//item")
+    # print(XPathUtils.update(mock_xml, ".//item", "x"))
+    # print("-" * 100)
+    #
+    # print("[8] 多匹配默认更新最后一个car的brand: .//brand")
+    # print(XPathUtils.update(mock_xml, ".//brand", "大众"))
+    # print("-" * 100)
+    #
+    # print("[9] 中文节点更新: ./mobile/中国移动")
+    # print(XPathUtils.update(mock_xml, "./mobile/中国移动", "10087"))
+    # print("-" * 100)
+    #
+    # print("[10] 未匹配节点不修改原数据: ./nonexistent")
+    # print(XPathUtils.update(mock_xml, "./nonexistent", "x"))
+    # print("-" * 100)
+    #
+    # print("[11] 空XPath返回原数据: 空字符串")
+    # print(XPathUtils.update(mock_xml, "", "x"))
+    # print("-" * 100)
+    #
+    # print("[12] 数值类型写入: ./information/age")
+    # print(XPathUtils.update(mock_xml, "./information/age", 20))
+    # print("-" * 100)
+    #
+    # print("[13] None值写入空字符串: ./information/age")
+    # print(XPathUtils.update(mock_xml, "./information/age", None))
+    # print("-" * 100)
+    #
+    # print("=" * 100)
+    # print("【XPathUtils.query 场景】")
+    # print("=" * 100)
+    #
+    # print("[14] 普通节点查询: ./user")
+    # print(XPathUtils.query(mock_xml, "./user"))
+    # print("-" * 100)
+    #
+    # print("[15] 嵌套节点查询: ./information/address")
+    # print(XPathUtils.query(mock_xml, "./information/address"))
+    # print("-" * 100)
+    #
+    # print("[16] 索引精确查询第2个car的brand: ./cars/car[2]/brand")
+    # print(XPathUtils.query(mock_xml, "./cars/car[2]/brand"))
+    # print("-" * 100)
+    #
+    # print("[17] 多匹配默认查询最后一个: .//item")
+    # print(XPathUtils.query(mock_xml, ".//item"))
+    # print("-" * 100)
+    #
+    # print("[18] 多匹配默认查询最后一个car的price: .//price")
+    # print(XPathUtils.query(mock_xml, ".//price"))
+    # print("-" * 100)
+    #
+    # print("[19] 中文节点查询: ./mobile/中国联通")
+    # print(XPathUtils.query(mock_xml, "./mobile/中国联通"))
+    # print("-" * 100)
+    #
+    # print("[20] 未匹配节点查询返回None: ./nonexistent")
+    # print(XPathUtils.query(mock_xml, "./nonexistent"))
+    # print("-" * 100)
+    #
+    # print("[21] 空XPath查询返回None: 空字符串")
+    # print(XPathUtils.query(mock_xml, ""))
+    # print("-" * 100)
+
+    print("=" * 100)
+    print("【XPathUtils.add 场景】")
+    print("=" * 100)
+
+    print("[22] 在hobby下追加同名子元素(无tag): ./hobby")
+    print(XPathUtils.add(mock_xml, "./hobby", "游戏"))
+    print("-" * 100)
+
+    print("[23] 在mobile下追加指定tag子元素: ./mobile, tag=中国铁通")
+    print(XPathUtils.add(mock_xml, "./mobile", "10050", tag="中国铁通"))
+    print("-" * 100)
+
+    print("[24] 在cars下追加同名car子元素(无tag): ./cars")
+    print(XPathUtils.add(mock_xml, "./cars", "newcar"))
+    print("-" * 100)
+
+    print("[25] 在information下追加指定tag子元素: ./information, tag=gender")
+    print(XPathUtils.add(mock_xml, "./information", "男", tag="gender"))
+    print("-" * 100)
+
+    print("[26] 叶子节点无tag追加同名兄弟: ./user")
+    print(XPathUtils.add(mock_xml, "./user", "lisi"))
+    print("-" * 100)
+
+    print("[27] XPath不存在沿路径创建: ./new/element, tag=value")
+    print(XPathUtils.add(mock_xml, "./new/element", "x", tag="value"))
+    print("-" * 100)
+
+    print("[28] XPath不存在沿路径创建(无tag): ./new/leaf")
+    print(XPathUtils.add(mock_xml, "./new/leaf", "x"))
+    print("-" * 100)
+
+    print("[29] 空XPath返回原数据: 空字符串")
+    print(XPathUtils.add(mock_xml, "", "x"))
+    print("-" * 100)
+
+    print("=" * 100)
+    print("【XPathUtils.delete 场景】")
+    print("=" * 100)
+
+    print("[30] 删除普通节点: ./user")
+    print(XPathUtils.delete(mock_xml, "./user"))
+    print("-" * 100)
+
+    print("[31] 删除嵌套节点: ./information/email")
+    print(XPathUtils.delete(mock_xml, "./information/email"))
+    print("-" * 100)
+
+    print("[32] 索引精确删除第1个car: ./cars/car[1]")
+    print(XPathUtils.delete(mock_xml, "./cars/car[1]"))
+    print("-" * 100)
+
+    print("[33] 删除所有同名节点: .//item")
+    print(XPathUtils.delete(mock_xml, ".//item"))
+    print("-" * 100)
+
+    print("[34] 删除所有car的brand: .//brand")
+    print(XPathUtils.delete(mock_xml, ".//brand"))
+    print("-" * 100)
+
+    print("[35] 删除中文节点: ./mobile/中国联通")
+    print(XPathUtils.delete(mock_xml, "./mobile/中国联通"))
+    print("-" * 100)
+
+    print("[36] 未匹配节点不修改原数据: ./nonexistent")
+    print(XPathUtils.delete(mock_xml, "./nonexistent"))
+    print("-" * 100)
+
+    print("[37] 空XPath返回原数据: 空字符串")
+    print(XPathUtils.delete(mock_xml, ""))
+    print("-" * 100)
