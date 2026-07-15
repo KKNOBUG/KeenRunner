@@ -1,0 +1,88 @@
+# -*- coding: utf-8 -*-
+"""
+提取/断言与占位符解析共用的上下文抽象。
+
+提供 ExchangeContext（请求/响应快照）、VariableResolver 协议及列表变量适配器，
+用于消除 is_core_engine 布尔分支与参数爆炸。
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Protocol, Sequence
+
+from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
+
+
+class VariableResolver(Protocol):
+    """变量解析协议：按名称返回已定义变量的值。"""
+
+    def get_variable(self, name: str) -> Any:
+        """
+        按变量名取值。
+
+        :param name: 变量名（占位符 ${name} 中的 name）
+        :return: 变量值
+        :raises KeyError: 变量未定义或不存在时
+        """
+        ...
+
+
+@dataclass
+class ExchangeContext:
+    """一次请求/响应快照，供提取与断言管线使用。"""
+
+    response_text: Optional[str] = None
+    response_json: Optional[Any] = None
+    response_headers: Optional[Dict[str, Any]] = None
+    response_cookies: Optional[Dict[str, Any]] = None
+    request_text: Optional[str] = None
+    request_json: Optional[Any] = None
+    request_headers: Optional[Dict[str, Any]] = None
+    request_cookies: Optional[Dict[str, Any]] = None
+    session_lookup: Optional[Dict[str, Any]] = None
+
+
+class ListVariableResolver:
+    """调试视图等场景：从 StepVariablesBase 列表按 key 取值。"""
+
+    def __init__(self, variables: Optional[Sequence[StepVariablesBase]]) -> None:
+        """
+        :param variables: 变量列表；可为 None（视为空列表）
+        """
+        self._variables = variables
+
+    def get_variable(self, name: str) -> Any:
+        """
+        从列表中按 key 取值。
+
+        :param name: 变量名
+        :return: 对应 value
+        :raises KeyError: 未找到或值为空定义时
+        """
+        from backend.applications.aotutest.services.autotest_runtime.util_kv import KvUtils
+
+        resolved = KvUtils.get_value_from_list(self._variables, name)
+        if resolved is None:
+            raise KeyError(f"必须是已经存在且有值的变量: {name!r}")
+        return resolved
+
+
+def coerce_variable_resolver(
+        *,
+        finished_variables: Optional[Any],
+        is_core_engine: bool,
+) -> Optional[Any]:
+    """
+    将历史 (is_core_engine, finished_variables) 转为可 get_variable 的对象。
+
+    引擎上下文原样返回；列表路径包装为 ListVariableResolver。
+
+    :param finished_variables: 引擎上下文或变量列表；None 表示无变量源
+    :param is_core_engine: True 时视为已实现 get_variable 的引擎上下文
+    :return: VariableResolver 兼容对象；无变量源时返回 None
+    """
+    if finished_variables is None:
+        return None
+    if is_core_engine:
+        return finished_variables
+    return ListVariableResolver(finished_variables)

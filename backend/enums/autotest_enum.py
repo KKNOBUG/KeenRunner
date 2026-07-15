@@ -65,7 +65,7 @@ class AutoTestLoopErrorStrategy(StringEnum):
 class AutoTestAssertionOperation(StringEnum):
     """
     断言 / 条件分支 / 条件循环中 ``conditions.condition_compare`` 的合法取值，
-    与 ``AutoTestToolServiceImpl.compare_assertion`` 支持集一致；新增比较方式时在此扩展成员即可。
+    与 ``AutoTestToolService.compare_assertion`` 支持集一致；新增比较方式时在此扩展成员即可。
     """
     EQUAL = "等于"
     NOT_EQUAL = "不等于"

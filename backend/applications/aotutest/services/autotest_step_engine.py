@@ -10,11 +10,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
-import builtins as _builtins_module
-import json
-import random
 import re
-import string
 import time
 import traceback
 import types
@@ -43,6 +39,14 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
     prepare_step_tree_item_for_execution, StepExtractVariableItem,
 )
+from backend.applications.aotutest.services.autotest_runtime.sandbox import (
+    RE_PLACEHOLDER,
+    RE_QUOTED_CONCAT,
+    RE_QUOTED_PLACEHOLDER,
+    USER_CODE_ALLOWED_IMPORT_ROOTS,
+    USER_CODE_EXTRA_BUILTINS,
+    safe_user_code_import,
+)
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import unique_identify
 from backend.common import AioTcpClient, TcpFrameMode
@@ -63,53 +67,6 @@ from backend.enums import (
     AutoTestConfigNodeType, HTTPMethod
 )
 from backend.services import CTX_USER_ID
-
-# 1.匹配裸的占位符，如: ${xxx}
-_RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
-# 2.匹配同一引号包裹的占位符，如: "${var}"
-_RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
-# 3.匹配同一引号内的拼接，如: "prefix_${var}_suffix"
-_RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
-
-# 用户 Python 步骤：允许的 import 根名 → 预注入 builtins（单一配置；扩展时只改此处）
-# 注：datetime 预绑定为 datetime 类（兼容直接写 datetime.now()）；import datetime 仍得到标准库模块
-_USER_CODE_EXTRA_BUILTINS: Dict[str, Any] = {
-    "random": random,
-    "time": time,
-    "datetime": datetime,
-    "timedelta": timedelta,
-    "string": string,
-    "json": json,
-}
-_USER_CODE_ALLOWED_IMPORT_ROOTS = frozenset(_USER_CODE_EXTRA_BUILTINS.keys())
-_builtin_import = _builtins_module.__import__
-
-
-def _safe_user_code_import(
-        name: str,
-        globals: Optional[Dict[str, Any]] = None,
-        locals: Optional[Dict[str, Any]] = None,
-        fromlist: Tuple[Any, ...] = (),
-        level: int = 0,
-) -> Any:
-    """
-    供run_python_code函数中的exec使用的__import__时仅加载白名单根模块，禁止相对导入
-
-    :param name: 模块名
-    :param globals: 全局命名空间
-    :param locals: 局部命名空间
-    :param fromlist: from ... import的子模块列表
-    :param level: 相对导入层级，非 0 则拒绝。
-    :return: 导入的模块对象。
-    """
-    if level != 0:
-        raise ImportError("代码请求(Python)步骤中不允许使用相对路径导入模块")
-
-    root = name.partition(".")[0]
-    if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
-        allowed = "、".join(sorted(_USER_CODE_ALLOWED_IMPORT_ROOTS))
-        raise ImportError(f"代码请求(Python)步骤中不允许导入[{name!r}]模块, 仅允许: {allowed}")
-    return _builtin_import(name, globals, locals, fromlist, level)
 
 
 class StepExecutionError(Exception):
@@ -535,7 +492,7 @@ class StepExecutionContext:
     ) -> Dict[str, Any]:
         """
         在受限内置与 namespace 下执行 code，支持单函数定义或 result 变量
-        import/from 仅允许 _USER_CODE_EXTRA_BUILTINS 中的根名；其余模块不可导入；另可使用 safe_globals 中其它内置名及 namespace 变量
+        import/from 仅允许 USER_CODE_EXTRA_BUILTINS 中的根名；其余模块不可导入；另可使用 safe_globals 中其它内置名及 namespace 变量
         :param code: Python 代码字符串，可为单行或多行
         :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过 __builtins__ 注入
         :param step_result: 可选；传入时写入其 request，记录实际执行代码快照（当前以规范化后的 code 为主）
@@ -557,7 +514,7 @@ class StepExecutionContext:
             raise
         safe_globals = {
             "__builtins__": {
-                "__import__": _safe_user_code_import,
+                "__import__": safe_user_code_import,
                 # 基础类型
                 "bool": bool,
                 "bytes": bytes,
@@ -605,7 +562,7 @@ class StepExecutionContext:
                 # 输出/调试
                 "print": print,
                 "repr": repr,
-                **_USER_CODE_EXTRA_BUILTINS,
+                **USER_CODE_EXTRA_BUILTINS,
             }
         }
         local_context: Dict[str, Any] = {}
@@ -700,9 +657,9 @@ class StepExecutionContext:
     @staticmethod
     def _validate_user_python_restricted(source: str) -> None:
         """
-        import/from 仅允许 _USER_CODE_EXTRA_BUILTINS 中的根名（与 _safe_user_code_import 一致）；语法错误留给 exec。
+        import/from 仅允许 USER_CODE_EXTRA_BUILTINS 中的根名（与 safe_user_code_import 一致）；语法错误留给 exec。
         """
-        allowed_cn = "、".join(sorted(_USER_CODE_ALLOWED_IMPORT_ROOTS))
+        allowed_cn = "、".join(sorted(USER_CODE_ALLOWED_IMPORT_ROOTS))
         try:
             tree = ast.parse(source)
         except SyntaxError:
@@ -711,7 +668,7 @@ class StepExecutionContext:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     root = alias.name.split(".", 1)[0]
-                    if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
+                    if root not in USER_CODE_ALLOWED_IMPORT_ROOTS:
                         error_message = (
                             "【代码请求(Python)】安全限制(仅允许导入预期定义的标准库模块): \n\t"
                             f"允许依赖: {allowed_cn}\n\t"
@@ -732,7 +689,7 @@ class StepExecutionContext:
                     )
                     raise StepExecutionError(error_message)
                 root = node.module.split(".", 1)[0]
-                if root not in _USER_CODE_ALLOWED_IMPORT_ROOTS:
+                if root not in USER_CODE_ALLOWED_IMPORT_ROOTS:
                     error_message = (
                         "【代码请求(Python)】安全限制(仅允许从以下模块 from 导入): \n\t"
                         f"允许依赖: {allowed_cn}\n\t"
@@ -832,7 +789,6 @@ class StepExecutionContext:
             """
             替换引号内完整占位符 '${var}' 为合法 Python 字面量。
             """
-            quote_char = match.group(1)
             var_name = match.group(2)
             if not var_name:
                 self.log("【代码请求(Python)】占位符解析失败: \n\t不允许引用空白符, 保留原值")
@@ -862,7 +818,7 @@ class StepExecutionContext:
                 return repr(var_value)
 
         # 先处理字符串字面量中的占位符（如 '${var}' 或 "${var}"）
-        code = _RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
+        code = RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
 
         def replace_string_concat_placeholder(match: re.Match[str]) -> str:
             """
@@ -890,7 +846,7 @@ class StepExecutionContext:
 
         # 处理字符串拼接中的占位符；循环直到无匹配，避免 "a_${x}_${y}" 中后一个占位符被误当代码逻辑用 repr 产生多余引号
         while True:
-            new_code = _RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
+            new_code = RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
             if new_code == code:
                 break
             code = new_code
@@ -924,7 +880,7 @@ class StepExecutionContext:
 
         try:
             # 处理代码逻辑中的占位符，如 if ${var} == 1:
-            resolved_code = _RE_PLACEHOLDER.sub(replace_code_placeholder, code)
+            resolved_code = RE_PLACEHOLDER.sub(replace_code_placeholder, code)
             return resolved_code
         except Exception as e:
             error_message: str = (
@@ -1027,6 +983,62 @@ class BaseStepExecutor:
             except Exception:
                 return None
         return None
+
+    def apply_extract_and_assert(
+            self,
+            result: StepExecutionResult,
+            *,
+            step_label: str,
+            response_text: Optional[str] = None,
+            response_json: Optional[Any] = None,
+            response_headers: Optional[Dict[str, Any]] = None,
+            response_cookies: Optional[Dict[str, Any]] = None,
+            request_text: Optional[str] = None,
+            request_json: Optional[Any] = None,
+            request_headers: Optional[Dict[str, Any]] = None,
+            request_cookies: Optional[Dict[str, Any]] = None,
+            extract_variables: Optional[Any] = None,
+            assert_validators: Optional[Any] = None,
+            step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
+            session_lookup_extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        统一变量提取 + 断言：构建变量池查找表，调用工具管线，失败转为 StepExecutionError。
+        """
+        session_lookup = AutoTestToolService.build_session_lookup(
+            self.context.defined_variables,
+            self.context.session_variables,
+        )
+        if session_lookup_extra:
+            session_lookup.update(session_lookup_extra)
+        try:
+            extract_results, assert_results = AutoTestToolService.run_extract_and_assert(
+                extract_variables=extract_variables if extract_variables is not None else self.step.extract_variables,
+                assert_validators=assert_validators if assert_validators is not None else self.step.assert_validators,
+                response_text=response_text,
+                response_json=response_json,
+                response_headers=response_headers,
+                response_cookies=response_cookies,
+                request_text=request_text,
+                request_json=request_json,
+                request_headers=request_headers,
+                request_cookies=request_cookies,
+                session_variables_lookup=session_lookup,
+                log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
+                finished_variables=self.context,
+                is_core_engine=True,
+                step_struct=step_struct,
+            )
+            result.extract_variables.extend(extract_results)
+            result.assert_validators.extend(assert_results)
+        except ValueError as e:
+            raise StepExecutionError(str(e)) from e
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            error_message = f"【{step_label}】在运行变量提取或断言时发生异常, 错误详情: {e}"
+            self.context.log(error_message, step_code=self.step_code)
+            raise StepExecutionError(error_message) from e
 
     async def execute(self) -> StepExecutionResult:
         """
@@ -1983,35 +1995,14 @@ class PythonStepExecutor(BaseStepExecutor):
                     if source not in {"session_variables", "变量池"}:
                         raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
 
-                # 变量池快照：defined -> session -> 本步执行结果（后者优先级最高），支持 session/source 的 JSONPath 断言
-                python_session_lookup: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
-                python_session_lookup.update(AutoTestToolService.list_to_dict(self.context.session_variables))
-                python_session_lookup.update(executive_result or {})
-                try:
-                    validator_results = AutoTestToolService.run_assert_validators(
-                        assert_validators=assert_validators,
-                        response_text=None,
-                        response_json=None,
-                        response_headers=None,
-                        response_cookies=None,
-                        session_variables_lookup=python_session_lookup,
-                        log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                        finished_variables=self.context,
-                        is_core_engine=True,
-                    )
-                    result.assert_validators.extend(validator_results)
-                    assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
-                    assert_failed_total: int = len(assert_failed_items)
-                    assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                    if assert_failed_total > 0:
-                        error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
-                        raise StepExecutionError(error_message)
-                except StepExecutionError:
-                    raise
-                except Exception as e:
-                    error_message: str = f"【断言验证】在运行断言检查时发生异常, 错误详情: {e}"
-                    self.context.log(error_message, step_code=self.step_code)
-                    raise StepExecutionError(error_message) from e
+                # 变量池快照：defined -> session -> 本步执行结果（后者优先级最高）
+                self.apply_extract_and_assert(
+                    result,
+                    step_label="代码请求(Python)",
+                    extract_variables=[],
+                    assert_validators=assert_validators,
+                    session_lookup_extra=executive_result or {},
+                )
         except StepExecutionError:
             raise
         except Exception as e:
@@ -2245,7 +2236,7 @@ class TcpStepExecutor(BaseStepExecutor):
 
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
-            if AutoTestToolService.try_acquire_step_dataset(step_struct):
+            if AutoTestToolService.has_dataset_payload(step_struct):
                 # TCP 步骤根据报文类型选择替换方式：xml 用 XPath，其它用 JSONPath
                 if self.step.request_args_type == AutoTestReqArgsType.XML:
                     xml_source = request_text or (request_body if isinstance(request_body, str) else None)
@@ -2384,8 +2375,6 @@ class TcpStepExecutor(BaseStepExecutor):
                 "response_bytes": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
             }
 
-            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
-            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
             request_json_for_extract = request_body if isinstance(request_body, (dict, list)) else None
             if request_json_for_extract is None and isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
                 try:
@@ -2397,79 +2386,15 @@ class TcpStepExecutor(BaseStepExecutor):
             request_text_for_extract = request_text if request_text not in (None, "") else (
                 payload if isinstance(payload, str) else None
             )
-            try:
-                extract_variables = self.step.extract_variables
-                _, extract_results_list = AutoTestToolService.run_extract_variables(
-                    extract_variables=extract_variables,
-                    response_text=result.response.get("response_text") if result.response else None,
-                    response_json=response_json,
-                    response_headers=None,
-                    response_cookies=None,
-                    request_text=request_text_for_extract,
-                    request_json=request_json_for_extract,
-                    request_headers=None,
-                    request_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                )
-                result.extract_variables.extend(extract_results_list)
-                # 检查是否存在提取失败的项（这里暂定不允许存在失败）
-                extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
-                extract_failed_total: int = len(extract_failed_items)
-                extract_failed_dumps: str = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                if extract_failed_total > 0:
-                    error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
-                    raise StepExecutionError(error_message)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                error_message: str = f"【TCP请求】在运行变量提取时发生异常, 错误详情: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                raise StepExecutionError(error_message) from e
-
-            try:
-                assert_validators = self.step.assert_validators
-                validator_results = AutoTestToolService.run_assert_validators(
-                    assert_validators=assert_validators,
-                    response_text=result.response.get("response_text") if result.response else None,
-                    response_json=response_json,
-                    response_headers=None,
-                    response_cookies=None,
-                    request_text=request_text_for_extract,
-                    request_json=request_json_for_extract,
-                    request_headers=None,
-                    request_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                    finished_variables=self.context,
-                    is_core_engine=True,
-                )
-                # 参数化驱动：assert_head（响应头键）、assert_body（响应 JSONPath）
-                AutoTestToolService.append_assert_validators(
-                    step_struct=step_struct,
-                    validator_results=validator_results,
-                    response_text=result.response.get("response_text") if result.response else None,
-                    response_json=response_json,
-                    response_headers=result.response.get("response_header") if result.response else None,
-                    response_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    finished_variables=self.context,
-                    is_core_engine=True,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                )
-                result.assert_validators.extend(validator_results)
-                assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
-                assert_failed_total: int = len(assert_failed_items)
-                assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                if assert_failed_total > 0:
-                    error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
-                    raise StepExecutionError(error_message)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                error_message: str = f"【断言验证】在运行断言检查时发生异常, 错误详情: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                raise StepExecutionError(error_message) from e
+            self.apply_extract_and_assert(
+                result,
+                step_label="TCP请求",
+                response_text=result.response.get("response_text") if result.response else None,
+                response_json=response_json,
+                request_text=request_text_for_extract,
+                request_json=request_json_for_extract,
+                step_struct=step_struct,
+            )
         except StepExecutionError:
             raise
         except Exception as e:
@@ -2711,66 +2636,22 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
             }
 
-            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
-            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+            session_lookup_extra: Dict[str, Any] = {}
             for extract_item in mark_extract_variables:
                 if isinstance(extract_item, dict) and extract_item.get("success") and extract_item.get("name") is not None:
-                    session_lookup_map[extract_item["name"]] = extract_item.get("extract_value")
+                    session_lookup_extra[extract_item["name"]] = extract_item.get("extract_value")
 
-            try:
-                extract_variables: Optional[List[StepExtractVariableItem]] = self.step.extract_variables
-                if extract_variables and not isinstance(extract_variables, list):
-                    raise StepExecutionError("【数据库请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
-                _, extract_results_list = AutoTestToolService.run_extract_variables(
-                    extract_variables=extract_variables,
-                    response_text=response_text_str,
-                    response_json=database_operates_response,
-                    response_headers=None,
-                    response_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                )
-                result.extract_variables.extend(extract_results_list)
-                # 检查是否存在提取失败的项（这里暂定不允许存在失败）
-                extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
-                extract_failed_total: int = len(extract_failed_items)
-                extract_failed_dumps: str = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                if extract_failed_total > 0:
-                    error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
-                    raise StepExecutionError(error_message)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                error_message: str = f"【数据库请求】在运行变量提取时发生异常, 错误详情: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                raise StepExecutionError(error_message) from e
-
-            try:
-                assert_rules = self.step.assert_validators
-                validator_results = AutoTestToolService.run_assert_validators(
-                    assert_validators=assert_rules,
-                    response_text=response_text_str,
-                    response_json=database_operates_response,
-                    response_headers=None,
-                    response_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                    finished_variables=self.context,
-                    is_core_engine=True,
-                )
-                result.assert_validators.extend(validator_results)
-                assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
-                assert_failed_total: int = len(assert_failed_items)
-                assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                if assert_failed_total > 0:
-                    error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
-                    raise StepExecutionError(error_message)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                err = f"【数据库请求】断言验证异常: {e}"
-                self.context.log(err, step_code=self.step_code)
-                raise StepExecutionError(err) from e
+            extract_variables: Optional[List[StepExtractVariableItem]] = self.step.extract_variables
+            if extract_variables and not isinstance(extract_variables, list):
+                raise StepExecutionError("【数据库请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
+            self.apply_extract_and_assert(
+                result,
+                step_label="数据库请求",
+                response_text=response_text_str,
+                response_json=database_operates_response,
+                extract_variables=extract_variables,
+                session_lookup_extra=session_lookup_extra,
+            )
         except StepExecutionError:
             raise
         except Exception as e:
@@ -3030,73 +2911,22 @@ class RedisStepExecutor(BaseStepExecutor):
                 "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
             }
 
-            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
-            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+            session_lookup_extra: Dict[str, Any] = {}
             for extract_item in mark_extract_variables:
                 if isinstance(extract_item, dict) and extract_item.get("success") and extract_item.get("name") is not None:
-                    session_lookup_map[extract_item["name"]] = extract_item.get("extract_value")
+                    session_lookup_extra[extract_item["name"]] = extract_item.get("extract_value")
 
-            try:
-                extract_variables: Optional[List[StepExtractVariableItem]] = self.step.extract_variables
-                if extract_variables and not isinstance(extract_variables, list):
-                    raise StepExecutionError("【Redis请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
-                _, extract_results_list = AutoTestToolService.run_extract_variables(
-                    extract_variables=extract_variables,
-                    response_text=response_text_str,
-                    response_json=redis_operates_response,
-                    response_headers=None,
-                    response_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                )
-                result.extract_variables.extend(extract_results_list)
-                extract_failed_items: List[Dict[str, Any]] = [
-                    valid for valid in extract_results_list if not valid.get("success", True)
-                ]
-                if extract_failed_items:
-                    extract_failed_dumps: str = orjson.dumps(
-                        extract_failed_items, option=orjson.OPT_INDENT_2
-                    ).decode("UTF-8")
-                    raise StepExecutionError(
-                        f"【变量提取】共计{len(extract_failed_items)}个提取失败: \n{extract_failed_dumps}"
-                    )
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                error_message: str = f"【Redis请求】在运行变量提取时发生异常, 错误详情: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                raise StepExecutionError(error_message) from e
-
-            try:
-                assert_rules = self.step.assert_validators
-                validator_results = AutoTestToolService.run_assert_validators(
-                    assert_validators=assert_rules,
-                    response_text=response_text_str,
-                    response_json=redis_operates_response,
-                    response_headers=None,
-                    response_cookies=None,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                    finished_variables=self.context,
-                    is_core_engine=True,
-                )
-                result.assert_validators.extend(validator_results)
-                assert_failed_items: List[Dict[str, Any]] = [
-                    valid for valid in validator_results if not valid.get("success", True)
-                ]
-                if assert_failed_items:
-                    assert_failed_dumps: str = orjson.dumps(
-                        assert_failed_items, option=orjson.OPT_INDENT_2
-                    ).decode("UTF-8")
-                    raise StepExecutionError(
-                        f"【断言验证】共计{len(assert_failed_items)}个断言失败: \n{assert_failed_dumps}"
-                    )
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                err = f"【Redis请求】断言验证异常: {e}"
-                self.context.log(err, step_code=self.step_code)
-                raise StepExecutionError(err) from e
+            extract_variables: Optional[List[StepExtractVariableItem]] = self.step.extract_variables
+            if extract_variables and not isinstance(extract_variables, list):
+                raise StepExecutionError("【Redis请求】参数[extract_variables]必须是[List[Dict[str, Any]]]类型")
+            self.apply_extract_and_assert(
+                result,
+                step_label="Redis请求",
+                response_text=response_text_str,
+                response_json=redis_operates_response,
+                extract_variables=extract_variables,
+                session_lookup_extra=session_lookup_extra,
+            )
         except StepExecutionError:
             raise
         except Exception as e:
@@ -3175,7 +3005,7 @@ class HttpStepExecutor(BaseStepExecutor):
             request_text: Optional[str] = self.step.request_text
 
             # 2）数据驱动：先 JSONPath 替换报文（head 写请求头后与 body 一并写入 body/form/urlencoded），再占位符
-            if AutoTestToolService.try_acquire_step_dataset(step_struct):
+            if AutoTestToolService.has_dataset_payload(step_struct):
                 out = AutoTestToolService.replace_json_datagram(
                     head_map=step_struct.get("head") or {},
                     body_map=step_struct.get("body") or {},
@@ -3289,89 +3119,26 @@ class HttpStepExecutor(BaseStepExecutor):
                 self.context.log(f"【HTTP请求】响应JSON解析失败: {e}, 将使用文本响应", step_code=self.step_code)
                 response_json = None
 
-            session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
-            session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
             request_json_for_extract = json_payload if isinstance(json_payload, (dict, list)) else None
             if request_json_for_extract is None and isinstance(request_body, (dict, list)):
                 request_json_for_extract = request_body
             request_text_for_extract = request_text if request_text not in (None, "") else (
                 data_payload if isinstance(data_payload, str) else None
             )
-            request_cookies_for_extract = AutoTestToolService.parse_cookie_header(request_header)
-            try:
-                extract_variables = self.step.extract_variables
-                extract_variables_dict, extract_results_list = AutoTestToolService.run_extract_variables(
-                    extract_variables=extract_variables,
-                    response_text=result.response.get("response_text") if result.response else None,
-                    response_json=response_json,
-                    response_headers=result.response.get("response_header") if result.response else None,
-                    response_cookies=result.response.get("response_cookie") if result.response else None,
-                    request_text=request_text_for_extract,
-                    request_json=request_json_for_extract,
-                    request_headers=request_header,
-                    request_cookies=request_cookies_for_extract,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                )
-                # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
-                result.extract_variables.extend(extract_results_list)
-                # 检查是否存在提取失败的项（这里暂定不允许存在失败）
-                extract_failed_items: List[Dict[str, Any]] = [valid for valid in extract_results_list if not valid.get("success", True)]
-                extract_failed_total: int = len(extract_failed_items)
-                extract_failed_dumps: str = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                if extract_failed_total > 0:
-                    error_message: str = f"【变量提取】共计{extract_failed_total}个提取失败: \n{extract_failed_dumps}"
-                    raise StepExecutionError(error_message)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                error_message: str = f"【HTTP请求】在运行变量提取时发生异常, 错误详情: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                raise StepExecutionError(error_message) from e
-
-            try:
-                assert_validators = self.step.assert_validators
-                validator_results = AutoTestToolService.run_assert_validators(
-                    assert_validators=assert_validators,
-                    response_text=result.response.get("response_text") if result.response else None,
-                    response_json=response_json,
-                    response_headers=result.response.get("response_header") if result.response else None,
-                    response_cookies=result.response.get("response_cookie") if result.response else None,
-                    request_text=request_text_for_extract,
-                    request_json=request_json_for_extract,
-                    request_headers=request_header,
-                    request_cookies=request_cookies_for_extract,
-                    session_variables_lookup=session_lookup_map,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                    finished_variables=self.context,
-                    is_core_engine=True,
-                )
-                # 参数化驱动：assert_head（响应头键名）、assert_body（响应 JSONPath）
-                AutoTestToolService.append_assert_validators(
-                    step_struct=step_struct,
-                    validator_results=validator_results,
-                    response_text=result.response.get("response_text") if result.response else None,
-                    response_json=response_json,
-                    response_headers=result.response.get("response_header") if result.response else None,
-                    response_cookies=result.response.get("response_cookie") if result.response else None,
-                    session_variables_lookup=session_lookup_map,
-                    finished_variables=self.context,
-                    is_core_engine=True,
-                    log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
-                )
-                result.assert_validators.extend(validator_results)
-                assert_failed_items: List[Dict[str, Any]] = [valid for valid in validator_results if not valid.get("success", True)]
-                assert_failed_total: int = len(assert_failed_items)
-                assert_failed_dumps: str = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
-                if assert_failed_total > 0:
-                    error_message: str = f"【断言验证】共计{assert_failed_total}个断言失败: \n{assert_failed_dumps}"
-                    raise StepExecutionError(error_message)
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                error_message: str = f"【断言验证】在运行断言检查时发生异常, 错误详情: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                raise StepExecutionError(error_message) from e
+            # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
+            self.apply_extract_and_assert(
+                result,
+                step_label="HTTP请求",
+                response_text=result.response.get("response_text") if result.response else None,
+                response_json=response_json,
+                response_headers=result.response.get("response_header") if result.response else None,
+                response_cookies=result.response.get("response_cookie") if result.response else None,
+                request_text=request_text_for_extract,
+                request_json=request_json_for_extract,
+                request_headers=request_header,
+                request_cookies=AutoTestToolService.parse_cookie_header(request_header),
+                step_struct=step_struct,
+            )
         except StepExecutionError:
             raise
         except Exception as e:
@@ -3440,8 +3207,6 @@ class StepExecutorFactory:
             else:
                 step_type = AutoTestStepType(str(raw_type).strip())
             executor_cls = cls.EXECUTOR_MAP.get(step_type, DefaultStepExecutor)
-            if executor_cls is None:
-                raise StepExecutionError(f"未找到步骤类型 {step_type} 对应的执行器")
             try:
                 return executor_cls(step, context)
             except Exception as exc:

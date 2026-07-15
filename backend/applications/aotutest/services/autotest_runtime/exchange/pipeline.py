@@ -1,0 +1,132 @@
+# -*- coding: utf-8 -*-
+"""
+引擎侧统一提取 + 断言编排入口。
+
+先跑变量提取，再跑断言；可选追加数据驱动 assert_head/assert_body；
+``raise_on_failure=True`` 时任一项失败即抛出 ValueError。
+"""
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
+import orjson
+
+from backend.applications.aotutest.schemas.autotest_step_schema import (
+    StepAssertValidatorItem,
+    StepExtractVariableItem,
+)
+from backend.applications.aotutest.services.autotest_runtime.exchange.assert_pipeline import AssertPipeline
+from backend.applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline
+
+
+class ExtractAssertPipeline:
+    """串联 ExtractPipeline 与 AssertPipeline，供步骤引擎一次调用。"""
+
+    @classmethod
+    def run_extract_and_assert(
+            cls,
+            *,
+            extract_variables: Optional[Sequence[StepExtractVariableItem]] = None,
+            assert_validators: Optional[Sequence[StepAssertValidatorItem]] = None,
+            response_text: Optional[str] = None,
+            response_json: Optional[Union[list, dict]] = None,
+            response_headers: Optional[Dict[str, Any]] = None,
+            response_cookies: Optional[Dict[str, Any]] = None,
+            request_text: Optional[str] = None,
+            request_json: Optional[Union[list, dict]] = None,
+            request_headers: Optional[Dict[str, Any]] = None,
+            request_cookies: Optional[Dict[str, Any]] = None,
+            session_variables_lookup: Optional[Dict[str, Any]] = None,
+            log_callback: Optional[Callable[[str], None]] = None,
+            finished_variables: Optional[Any] = None,
+            is_core_engine: bool = True,
+            step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
+            raise_on_failure: bool = True,
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        统一执行变量提取与断言验证（引擎主路径）。
+
+        处理顺序：
+        1. ``ExtractPipeline.run_extract_variables``
+        2. 若 ``raise_on_failure`` 且存在 ``success=False`` 的提取项 → 抛出 ValueError
+        3. ``AssertPipeline.run_assert_validators``
+        4. 若 ``step_struct is not None`` → ``append_assert_validators`` 追加数据驱动断言
+        5. 若 ``raise_on_failure`` 且存在失败断言 → 抛出 ValueError
+
+        :param extract_variables: 提取规则；None 视为空列表
+        :param assert_validators: 断言规则；None 视为空列表
+        :param response_text: 响应正文（Text/XML 提取与断言）
+        :param response_json: 响应 JSON，或 DB/Redis 步骤的操作结果列表
+        :param response_headers: 响应头
+        :param response_cookies: 响应 Cookie
+        :param request_text: 请求正文
+        :param request_json: 请求 JSON
+        :param request_headers: 请求头；未传 request_cookies 时可用于解析 Cookie
+        :param request_cookies: 请求 Cookie；优先于从请求头解析
+        :param session_variables_lookup: 变量池字典（session_variables / 变量池 source）
+        :param log_callback: 可选日志回调 ``(str) -> None``
+        :param finished_variables: 断言期望值占位符解析上下文；引擎传 StepExecutionContext
+        :param is_core_engine: True 时 finished_variables 需提供 ``get_variable``；
+            False 时按 StepVariablesBase 列表解析（调试视图）
+        :param step_struct: 数据驱动结构；非 None 时追加 assert_head / assert_body
+            （即使内部各块为空也会进入追加逻辑，仅在结构非法时直接跳过）
+        :param raise_on_failure: True 时提取或断言存在失败项即抛 ValueError（文案与历史引擎一致）；
+            False 时仅返回结果列表，由调用方自行判断
+        :return: ``(extract_results_list, assert_results_list)``，元素为结果 dict
+            （含 name/source/expr/success/error 等字段）
+        :raises ValueError: ``raise_on_failure=True`` 且存在失败的提取或断言时
+        :raises TypeError: 提取/断言规则列表或子项类型非法时（由下游管线抛出）
+        """
+        _, extract_results_list = ExtractPipeline.run_extract_variables(
+            extract_variables=extract_variables or [],
+            response_text=response_text,
+            response_json=response_json,
+            response_headers=response_headers,
+            response_cookies=response_cookies,
+            request_text=request_text,
+            request_json=request_json,
+            request_headers=request_headers,
+            request_cookies=request_cookies,
+            session_variables_lookup=session_variables_lookup,
+            log_callback=log_callback,
+        )
+        if raise_on_failure:
+            extract_failed_items = [item for item in extract_results_list if not item.get("success", True)]
+            if extract_failed_items:
+                dumps = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
+                raise ValueError(f"【变量提取】共计{len(extract_failed_items)}个提取失败: \n{dumps}")
+
+        validator_results = AssertPipeline.run_assert_validators(
+            assert_validators=assert_validators or [],
+            response_text=response_text,
+            response_json=response_json,
+            response_headers=response_headers,
+            response_cookies=response_cookies,
+            request_text=request_text,
+            request_json=request_json,
+            request_headers=request_headers,
+            request_cookies=request_cookies,
+            session_variables_lookup=session_variables_lookup,
+            log_callback=log_callback,
+            finished_variables=finished_variables,
+            is_core_engine=is_core_engine,
+        )
+        if step_struct is not None:
+            AssertPipeline.append_assert_validators(
+                step_struct=step_struct,
+                validator_results=validator_results,
+                response_text=response_text,
+                response_json=response_json,
+                response_headers=response_headers,
+                response_cookies=response_cookies,
+                session_variables_lookup=session_variables_lookup,
+                finished_variables=finished_variables,
+                is_core_engine=is_core_engine,
+                log_callback=log_callback,
+            )
+        if raise_on_failure:
+            assert_failed_items = [item for item in validator_results if not item.get("success", True)]
+            if assert_failed_items:
+                dumps = orjson.dumps(assert_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
+                raise ValueError(f"【断言验证】共计{len(assert_failed_items)}个断言失败: \n{dumps}")
+        return extract_results_list, validator_results
