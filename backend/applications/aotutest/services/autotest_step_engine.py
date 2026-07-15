@@ -283,6 +283,23 @@ class StepExecutionContext:
             finished_variables=self
         )
 
+    def resolve_xml_placeholders(self, xml_text: str, step_code: Optional[str] = None) -> str:
+        """
+        解析 XML 报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）
+
+        :param xml_text: XML 报文字符串
+        :param step_code: 日志归属的步骤标识，未传则使用当前步骤
+        :return: 解析后的 XML 字符串；xml_text 为空时原样返回
+        """
+        if not xml_text:
+            return xml_text
+        return AutoTestToolService.resolve_xml_placeholders(
+            xml_text=xml_text,
+            logger_object=lambda msg: self.log(msg, step_code=step_code),
+            is_core_engine=True,
+            finished_variables=self,
+        )
+
     @property
     def http_client(self) -> HttpClientProtocol:
         """
@@ -2251,10 +2268,16 @@ class TcpStepExecutor(BaseStepExecutor):
                 variables=request_body,
                 step_code=self.step_code
             )
-            request_text = self.context.resolve_placeholders(
-                variables=request_text,
-                step_code=self.step_code
-            )
+            if self.step.request_args_type == AutoTestReqArgsType.XML and request_text:
+                request_text = self.context.resolve_xml_placeholders(
+                    xml_text=request_text,
+                    step_code=self.step_code,
+                )
+            else:
+                request_text = self.context.resolve_placeholders(
+                    variables=request_text,
+                    step_code=self.step_code
+                )
 
             request_args_type_raw = self.step.request_args_type
             if request_args_type_raw is None:
@@ -2363,6 +2386,17 @@ class TcpStepExecutor(BaseStepExecutor):
 
             session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
             session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+            request_json_for_extract = request_body if isinstance(request_body, (dict, list)) else None
+            if request_json_for_extract is None and isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
+                try:
+                    parsed_request = orjson.loads(request_text)
+                    if isinstance(parsed_request, (dict, list)):
+                        request_json_for_extract = parsed_request
+                except Exception:
+                    request_json_for_extract = None
+            request_text_for_extract = request_text if request_text not in (None, "") else (
+                payload if isinstance(payload, str) else None
+            )
             try:
                 extract_variables = self.step.extract_variables
                 _, extract_results_list = AutoTestToolService.run_extract_variables(
@@ -2371,6 +2405,10 @@ class TcpStepExecutor(BaseStepExecutor):
                     response_json=response_json,
                     response_headers=None,
                     response_cookies=None,
+                    request_text=request_text_for_extract,
+                    request_json=request_json_for_extract,
+                    request_headers=None,
+                    request_cookies=None,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
@@ -2397,6 +2435,10 @@ class TcpStepExecutor(BaseStepExecutor):
                     response_json=response_json,
                     response_headers=None,
                     response_cookies=None,
+                    request_text=request_text_for_extract,
+                    request_json=request_json_for_extract,
+                    request_headers=None,
+                    request_cookies=None,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                     finished_variables=self.context,
@@ -3249,6 +3291,13 @@ class HttpStepExecutor(BaseStepExecutor):
 
             session_lookup_map: Dict[str, Any] = AutoTestToolService.list_to_dict(self.context.defined_variables)
             session_lookup_map.update(AutoTestToolService.list_to_dict(self.context.session_variables))
+            request_json_for_extract = json_payload if isinstance(json_payload, (dict, list)) else None
+            if request_json_for_extract is None and isinstance(request_body, (dict, list)):
+                request_json_for_extract = request_body
+            request_text_for_extract = request_text if request_text not in (None, "") else (
+                data_payload if isinstance(data_payload, str) else None
+            )
+            request_cookies_for_extract = AutoTestToolService.parse_cookie_header(request_header)
             try:
                 extract_variables = self.step.extract_variables
                 extract_variables_dict, extract_results_list = AutoTestToolService.run_extract_variables(
@@ -3257,6 +3306,10 @@ class HttpStepExecutor(BaseStepExecutor):
                     response_json=response_json,
                     response_headers=result.response.get("response_header") if result.response else None,
                     response_cookies=result.response.get("response_cookie") if result.response else None,
+                    request_text=request_text_for_extract,
+                    request_json=request_json_for_extract,
+                    request_headers=request_header,
+                    request_cookies=request_cookies_for_extract,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 )
@@ -3284,6 +3337,10 @@ class HttpStepExecutor(BaseStepExecutor):
                     response_json=response_json,
                     response_headers=result.response.get("response_header") if result.response else None,
                     response_cookies=result.response.get("response_cookie") if result.response else None,
+                    request_text=request_text_for_extract,
+                    request_json=request_json_for_extract,
+                    request_headers=request_header,
+                    request_cookies=request_cookies_for_extract,
                     session_variables_lookup=session_lookup_map,
                     log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                     finished_variables=self.context,

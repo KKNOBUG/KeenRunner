@@ -221,7 +221,8 @@ import api from "@/api";
 import { mapBackendStep, forEachStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
 import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
-import {useUserStore, useAutotestStore} from '@/store';
+import {useUserStore, useAutotestStore} from '@/store'
+import { validateAssertList, validateExtractList } from '@/utils/autotestExtractAssert';
 
 const message = useMessage()
 /** 统一错误提示：优先全局 $message，否则 naive useMessage */
@@ -1632,6 +1633,36 @@ const validateHttpTcpStepsRequired = (stepList) => {
   return walk(stepList)
 }
 
+// 递归校验步骤树中提取/断言配置是否完整（禁止不完整项被静默丢弃后仍提示保存成功）
+const resolveStepListField = (config, original, key) => {
+  // 与 convertStepToBackend 一致：config 显式赋值（含 null）优先，未编辑过才回退 original
+  if (config[key] !== undefined) {
+    return Array.isArray(config[key]) ? config[key] : []
+  }
+  return Array.isArray(original[key]) ? original[key] : []
+}
+
+const validateExtractAssertInSteps = (stepList) => {
+  for (const step of stepList) {
+    const config = step.config || {}
+    const original = step.original || {}
+    const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
+    const extractResult = validateExtractList(resolveStepListField(config, original, 'extract_variables'))
+    if (!extractResult.valid) {
+      return { valid: false, message: `步骤：${stepName}，${extractResult.message}` }
+    }
+    const assertResult = validateAssertList(resolveStepListField(config, original, 'assert_validators'))
+    if (!assertResult.valid) {
+      return { valid: false, message: `步骤：${stepName}，${assertResult.message}` }
+    }
+    if (step.children && step.children.length > 0) {
+      const childResult = validateExtractAssertInSteps(step.children)
+      if (!childResult.valid) return childResult
+    }
+  }
+  return { valid: true }
+}
+
 // 递归校验步骤树中是否存在“键为空”的键值对（请求头/请求体/变量/用户变量等），若存在则不允许保存
 const validateEmptyKeyInSteps = (stepList) => {
   for (const step of stepList) {
@@ -1715,6 +1746,9 @@ const handleSaveAll = async () => {
   }
   saveLoading.value = true
   try {
+    // 等待步骤编辑器将表单防抖同步到 step.config（约 300ms），避免校验/落库读到过期提取断言配置
+    await new Promise((resolve) => setTimeout(resolve, 320))
+
     // 用例信息必填项校验
     const caseValidation = caseInfoPanelRef.value?.validateCaseForm?.() ?? { valid: false, message: '用例信息未就绪' }
     if (!caseValidation.valid) {
@@ -1761,6 +1795,12 @@ const handleSaveAll = async () => {
       window.$message?.error?.(
           `步骤：${emptyKeyValidation.stepName}，${emptyKeyValidation.listName}存在键为空的项，请填写或删除后再保存`
       )
+      return
+    }
+
+    const extractAssertValidation = validateExtractAssertInSteps(steps.value)
+    if (!extractAssertValidation.valid) {
+      notifyError(extractAssertValidation.message)
       return
     }
 

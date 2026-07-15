@@ -17,6 +17,11 @@ export const ASSERT_MODE_REDIS = 'redis'
 export const ASSERT_MODE_PYTHON = 'python'
 
 export const RESPONSE_EXTRACT_OBJECT_OPTIONS = [
+  { label: 'Request Json', value: 'Request Json' },
+  { label: 'Request Text', value: 'Request Text' },
+  { label: 'Request XML', value: 'Request XML' },
+  { label: 'Request Header', value: 'Request Header' },
+  { label: 'Request Cookie', value: 'Request Cookie' },
   { label: 'Response Json', value: 'Response Json' },
   { label: 'Response Text', value: 'Response Text' },
   { label: 'Response XML', value: 'Response XML' },
@@ -88,11 +93,16 @@ export function getExtractObjectLabel(value) {
 
 export function getExtractPlaceholder(object) {
   const placeholderMap = {
+    'Request Json': '请输入JSONPath表达式，如：$.data.name',
+    'Request Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
+    'Request XML': '请输入XPath表达式，如：/store/book[1]/title',
+    'Request Header': '请输入JSONPath表达式，如：$.Content-Type',
+    'Request Cookie': '请输入JSONPath表达式，如：$.Auth',
     'Response Json': '请输入JSONPath表达式，如：$.data.name',
     'Response Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
     'Response XML': '请输入XPath表达式，如：/store/book[1]/title',
-    'Response Header': '请输入 Header 名称，如：Content-Type',
-    'Response Cookie': '请输入 Cookie 名称，如：Auth',
+    'Response Header': '请输入JSONPath表达式，如：$.Content-Type',
+    'Response Cookie': '请输入JSONPath表达式，如：$.Auth',
   }
   return placeholderMap[object] || '请输入表达式'
 }
@@ -254,58 +264,41 @@ export function formatAssertCardTitle(item, assertMode) {
 }
 
 export function buildExtractListFromDict(dict, extractMode) {
+  // 不做静默过滤：不完整配置原样带出，由 validateExtractList 在保存/调试时拦截并提示
   if (isVariableNameExtractMode(extractMode)) {
-    return Object.values(dict || {})
-        .map((item) => ({
-          expr: item.jsonpath || '',
-          name: item.name || '',
-          scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
-          source: String(item.source ?? '').trim(),
-          index:
-              item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
-                  ? Number(item.extractIndex)
-                  : null,
-        }))
-        .filter((item) => {
-          const n = String(item.name ?? '').trim()
-          const src = String(item.source ?? '').trim()
-          if (!n || !src) return false
-          if (item.scope === 'ALL') return true
-          return String(item.expr ?? '').trim() !== ''
-        })
+    return Object.values(dict || {}).map((item) => ({
+      expr: item.jsonpath || '',
+      name: item.name || '',
+      scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+      source: String(item.source ?? '').trim(),
+      index:
+          item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
+              ? Number(item.extractIndex)
+              : null,
+    }))
   }
-  return Object.values(dict || {})
-      .map((item) => ({
-        expr: item.jsonpath || '',
-        name: item.name || '',
-        scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
-        source: item.object || 'Response Json',
-        index:
-            item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
-                ? Number(item.extractIndex)
-                : null,
-      }))
-      .filter(
-          (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
-      )
+  return Object.values(dict || {}).map((item) => ({
+    expr: item.jsonpath || '',
+    name: item.name || '',
+    scope: item.extractScope === '全部提取' ? 'ALL' : 'SOME',
+    source: item.object || 'Response Json',
+    index:
+        item.extractIndex !== undefined && item.extractIndex !== null && item.extractIndex !== ''
+            ? Number(item.extractIndex)
+            : null,
+  }))
 }
 
 export function buildAssertListFromDict(dict, assertMode) {
+  // 不做静默过滤：不完整配置原样带出，由 validateAssertList 在保存/调试时拦截并提示
   if (isVariableNameAssertMode(assertMode)) {
-    return Object.values(dict || {})
-        .map((item) => ({
-          expr: item.jsonpath || '',
-          name: item.name || '',
-          source: String(item.source ?? '').trim(),
-          operation: item.assertion || '等于',
-          except_value: item.value != null ? String(item.value) : '',
-        }))
-        .filter(
-            (item) =>
-                String(item.name ?? '').trim() !== ''
-                && String(item.source ?? '').trim() !== ''
-                && String(item.expr ?? '').trim() !== ''
-        )
+    return Object.values(dict || {}).map((item) => ({
+      expr: item.jsonpath || '',
+      name: item.name || '',
+      source: String(item.source ?? '').trim(),
+      operation: item.assertion || '等于',
+      except_value: item.value != null ? String(item.value) : '',
+    }))
   }
   if (assertMode === ASSERT_MODE_PYTHON) {
     return Object.values(dict || {}).map((item) => ({
@@ -316,15 +309,88 @@ export function buildAssertListFromDict(dict, assertMode) {
       except_value: item.value != null ? String(item.value) : '',
     }))
   }
-  return Object.values(dict || {})
-      .map((item) => ({
-        expr: item.jsonpath || '',
-        name: item.name || '',
-        source: item.object || 'Response Json',
-        operation: item.assertion || '等于',
-        except_value: item.value != null ? String(item.value) : '',
-      }))
-      .filter(
-          (item) => String(item.name ?? '').trim() !== '' && String(item.expr ?? '').trim() !== ''
-      )
+  return Object.values(dict || {}).map((item) => ({
+    expr: item.jsonpath || '',
+    name: item.name || '',
+    source: item.object || 'Response Json',
+    operation: item.assertion || '等于',
+    except_value: item.value != null ? String(item.value) : '',
+  }))
+}
+
+/**
+ * 校验提取配置列表（后端数组形态）。
+ * 部分提取时提取路径必填；全部提取允许路径为空。
+ */
+export function validateExtractList(list) {
+  if (!Array.isArray(list) || list.length === 0) {
+    return { valid: true }
+  }
+  for (let i = 0; i < list.length; i += 1) {
+    const item = list[i] || {}
+    const name = String(item.name ?? '').trim()
+    const expr = String(item.expr ?? '').trim()
+    const source = String(item.source ?? '').trim()
+    const scope = String(item.scope ?? 'SOME').trim().toUpperCase()
+    const label = name || `第${i + 1}项`
+    if (!name) {
+      return {
+        valid: false,
+        message: `提取配置「${label}」名称不能为空，请填写或删除该配置`,
+      }
+    }
+    if (!source) {
+      return {
+        valid: false,
+        message: `提取配置「${name}」未选择提取对象/来源，请选择或删除该配置`,
+      }
+    }
+    if (scope !== 'ALL' && !expr) {
+      return {
+        valid: false,
+        message: `提取配置「${name}」为部分提取时提取路径不能为空，请填写、改为全部提取，或删除该配置`,
+      }
+    }
+  }
+  return { valid: true }
+}
+
+/** 校验断言配置列表（后端数组形态） */
+export function validateAssertList(list) {
+  if (!Array.isArray(list) || list.length === 0) {
+    return { valid: true }
+  }
+  for (let i = 0; i < list.length; i += 1) {
+    const item = list[i] || {}
+    const name = String(item.name ?? '').trim()
+    const expr = String(item.expr ?? '').trim()
+    const source = String(item.source ?? '').trim()
+    const operation = String(item.operation ?? '').trim()
+    const label = name || `第${i + 1}项`
+    if (!name) {
+      return {
+        valid: false,
+        message: `断言配置「${label}」名称不能为空，请填写或删除该配置`,
+      }
+    }
+    if (!source) {
+      return {
+        valid: false,
+        message: `断言配置「${name}」未选择断言对象/来源，请选择或删除该配置`,
+      }
+    }
+    if (!expr) {
+      return {
+        valid: false,
+        message: `断言配置「${name}」断言表达式不能为空，请填写或删除该配置`,
+      }
+    }
+    if (!operation) {
+      return {
+        valid: false,
+        message: `断言配置「${name}」未选择断言方式，请选择或删除该配置`,
+      }
+    }
+  }
+  return { valid: true }
 }

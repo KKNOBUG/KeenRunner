@@ -225,6 +225,8 @@ import {
   hydrateAssertDictFromBackend,
   hydrateExtractDictFromBackend,
   normalizeBackendList,
+  validateAssertList,
+  validateExtractList,
 } from '@/utils/autotestExtractAssert'
 
 const props = defineProps({
@@ -585,6 +587,17 @@ const debugging = async () => {
 }
 
 const doDebugRequest = async (env_id) => {
+  const extractCheck = validateExtractList(buildExtractForBackend())
+  if (!extractCheck.valid) {
+    window.$message?.error?.(extractCheck.message)
+    return
+  }
+  const assertCheck = validateAssertList(buildValidatorsForBackend())
+  if (!assertCheck.valid) {
+    window.$message?.error?.(assertCheck.message)
+    return
+  }
+
   debugLoading.value = true
   response.value = null
   try {

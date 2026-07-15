@@ -159,7 +159,8 @@ function syncCollapseKeys() {
     if (!keys.has(k)) delete collapseState[k]
   })
   keys.forEach((k) => {
-    if (collapseState[k] === undefined) collapseState[k] = false
+    // 默认折叠；用户主动展开后会保留在 collapseState 中
+    if (collapseState[k] === undefined) collapseState[k] = true
   })
 }
 
@@ -194,7 +195,7 @@ function duplicateItem(key) {
     ...JSON.parse(JSON.stringify(item)),
     name: item.name ? `${item.name}_副本` : '',
   }
-  collapseState[newKey] = collapseState[key] ?? false
+  collapseState[newKey] = collapseState[key] ?? true
 }
 
 function toggleCollapse(key) {

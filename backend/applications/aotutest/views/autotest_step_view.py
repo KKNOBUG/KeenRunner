@@ -730,12 +730,23 @@ async def debug_http_request(
         size_str = f"{response_size / 1024:.2f}KB" if response_size > 1024 else f"{response_size}B"
 
         # 处理数据提取（使用与步骤引擎共用的工具方法）
+        request_json_for_extract = json_payload if isinstance(json_payload, (dict, list)) else None
+        if request_json_for_extract is None and isinstance(request_body, (dict, list)):
+            request_json_for_extract = request_body
+        request_text_for_extract = request_text if request_text not in (None, "") else (
+            data_payload if isinstance(data_payload, str) else None
+        )
+        request_cookies_for_extract = AutoTestToolService.parse_cookie_header(headers)
         extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
             response_json=response_json,
             response_headers=response_headers,
             response_cookies=response_cookies,
+            request_text=request_text_for_extract,
+            request_json=request_json_for_extract,
+            request_headers=headers,
+            request_cookies=request_cookies_for_extract,
             session_variables_lookup=merged_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
         )
@@ -748,6 +759,10 @@ async def debug_http_request(
             response_json=response_json,
             response_headers=response_headers,
             response_cookies=response_cookies,
+            request_text=request_text_for_extract,
+            request_json=request_json_for_extract,
+            request_headers=headers,
+            request_cookies=request_cookies_for_extract,
             session_variables_lookup=merged_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
             finished_variables=finished_variables,
@@ -854,11 +869,18 @@ async def debug_tcp_request(
             finished_variables={}
         )
         if request_text is not None:
-            request_text = AutoTestToolService.resolve_placeholders(
-                value=request_text,
-                logger_object=append_debugging_log,
-                finished_variables=finished_variables
-            )
+            if request_args_type == AutoTestReqArgsType.XML:
+                request_text = AutoTestToolService.resolve_xml_placeholders(
+                    xml_text=request_text,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables,
+                )
+            else:
+                request_text = AutoTestToolService.resolve_placeholders(
+                    value=request_text,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
         append_debugging_log(message="【参数替换】结束")
 
         # 按 env_id + 应用 + 配置名解析 host/port（与 HTTP 调试一致，不使用 request_url/request_port）
@@ -930,12 +952,24 @@ async def debug_tcp_request(
             response_json = None
 
         # 变量提取 / 断言（同 HTTP 调试）
+        request_json_for_extract: Optional[Union[list, dict]] = None
+        if isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
+            try:
+                parsed_request = orjson.loads(request_text)
+                if isinstance(parsed_request, (dict, list)):
+                    request_json_for_extract = parsed_request
+            except Exception:
+                request_json_for_extract = None
         extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
             response_json=response_json,
             response_headers=None,
             response_cookies=None,
+            request_text=request_text,
+            request_json=request_json_for_extract,
+            request_headers=None,
+            request_cookies=None,
             session_variables_lookup=merge_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
         )
@@ -947,6 +981,10 @@ async def debug_tcp_request(
             response_json=response_json,
             response_headers=None,
             response_cookies=None,
+            request_text=request_text,
+            request_json=request_json_for_extract,
+            request_headers=None,
+            request_cookies=None,
             session_variables_lookup=merge_all_variables,
             log_callback=lambda message: append_debugging_log(message=message),
             finished_variables=finished_variables,

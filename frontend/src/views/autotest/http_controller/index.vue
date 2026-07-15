@@ -645,6 +645,8 @@ import {
   hydrateAssertDictFromBackend,
   hydrateExtractDictFromBackend,
   normalizeBackendList,
+  validateAssertList,
+  validateExtractList,
 } from '@/utils/autotestExtractAssert'
 import {useUserStore} from '@/store';
 import {useRoute} from 'vue-router'
@@ -2094,6 +2096,17 @@ const debugging = async () => {
 }
 
 const doDebugRequest = async (env_id) => {
+  const extractCheck = validateExtractList(buildExtractForBackend())
+  if (!extractCheck.valid) {
+    $message.error(extractCheck.message)
+    return
+  }
+  const assertCheck = validateAssertList(buildValidatorsForBackend())
+  if (!assertCheck.valid) {
+    $message.error(assertCheck.message)
+    return
+  }
+
   const userStore = useUserStore()
   const currentUser = userStore.username
   debugLoading.value = true
@@ -2218,6 +2231,11 @@ const extractColumns = [
     width: 120,
     render: (row) => {
       const sourceMap = {
+        'Request Json': 'Request Json',
+        'Request Text': 'Request Text',
+        'Request XML': 'Request XML',
+        'Request Header': 'Request Header',
+        'Request Cookie': 'Request Cookie',
         'Response Json': 'Response Json',
         'Response Text': 'Response Text',
         'Response XML': 'Response XML',
@@ -2289,6 +2307,11 @@ const validatorColumns = [
     width: 120,
     render: (row) => {
       const sourceMap = {
+        'Request Json': 'requestJson',
+        'Request Text': 'requestText',
+        'Request XML': 'requestXml',
+        'Request Header': 'requestHeader',
+        'Request Cookie': 'requestCookie',
         'Response Json': 'responseJson',
         'Response Text': 'responseText',
         'Response XML': 'responseXml',

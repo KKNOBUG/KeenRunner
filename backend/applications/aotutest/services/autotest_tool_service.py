@@ -454,6 +454,171 @@ class AutoTestToolService:
         return AutoTestToolServiceImpl.compare_assertion(actual=actual, operation=operation, expected=expected)
 
     @classmethod
+    @staticmethod
+    def parse_cookie_header(headers: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """从请求头 Cookie 字段解析 name -> value 字典。"""
+        if not headers or not isinstance(headers, dict):
+            return {}
+        cookie_raw: Optional[Any] = None
+        for key, value in headers.items():
+            if str(key).lower() == "cookie":
+                cookie_raw = value
+                break
+        if cookie_raw is None:
+            return {}
+        if isinstance(cookie_raw, dict):
+            return {str(k): "" if v is None else str(v) for k, v in cookie_raw.items()}
+        cookie_text = str(cookie_raw).strip()
+        if not cookie_text:
+            return {}
+        parsed: Dict[str, str] = {}
+        for part in cookie_text.split(";"):
+            part = part.strip()
+            if not part or "=" not in part:
+                continue
+            name, _, value = part.partition("=")
+            name = name.strip()
+            if name:
+                parsed[name] = value.strip()
+        return parsed
+
+    @classmethod
+    def _normalize_extract_source(cls, source: Optional[str]) -> str:
+        """统一提取来源别名（兼容 Header/Headers、Cookie/Cookies 单复数）。"""
+        source_strip_lower: str = (source or "").strip().lower()
+        aliases = {
+            "response header": "response headers",
+            "response cookie": "response cookies",
+            "request header": "request headers",
+            "request cookie": "request cookies",
+        }
+        return aliases.get(source_strip_lower, source_strip_lower)
+
+    @classmethod
+    def _extract_json_payload(
+            cls,
+            *,
+            data: Optional[Union[list, dict]],
+            expr: Optional[str],
+            range_type: str,
+            index: Optional[Any],
+            operation_type: str,
+            empty_message: str,
+    ) -> Any:
+        if data is None:
+            raise ValueError(empty_message)
+        if range_type == "all":
+            return data
+        if not expr:
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
+        try:
+            extract_value = AutoTestToolServiceImpl.resolve_json_path(data=data, expr=expr)
+        except Exception as e:
+            raise ValueError(str(e)) from e
+        if isinstance(extract_value, list) and index is not None:
+            try:
+                index_int = int(index)
+                if index_int < len(extract_value):
+                    return extract_value[index_int]
+                raise ValueError(
+                    f"【{operation_type}】数组越界, "
+                    f"给定索引[{index_int}]不可大于数组长度[{len(extract_value)}]"
+                )
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
+        return extract_value
+
+    @classmethod
+    def _extract_xml_payload(
+            cls,
+            *,
+            text: Optional[str],
+            expr: Optional[str],
+            range_type: str,
+            index: Optional[Any],
+            operation_type: str,
+            empty_message: str,
+            invalid_xml_message: str,
+    ) -> Any:
+        if not text:
+            raise ValueError(empty_message)
+        if range_type == "all":
+            return text
+        if not expr:
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
+        try:
+            xml_root = ElementTree.fromstring(text)
+            elements = xml_root.findall(expr)
+            if not elements:
+                raise ValueError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
+            if index is not None:
+                try:
+                    index_int = int(index)
+                    if index_int < len(elements):
+                        element = elements[index_int]
+                        return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+                    raise ValueError(
+                        f"【{operation_type}】数组越界, "
+                        f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
+                    )
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
+            element = elements[-1]
+            return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+        except ElementTree.ParseError as e:
+            raise ValueError(f"{invalid_xml_message}, 错误描述: {e}") from e
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误: {e}") from e
+
+    @classmethod
+    def _extract_text_payload(
+            cls,
+            *,
+            text: Optional[str],
+            expr: Optional[str],
+            range_type: str,
+            operation_type: str,
+            empty_message: str,
+    ) -> Any:
+        if not text:
+            raise ValueError(empty_message)
+        if range_type == "all":
+            return text
+        if not expr:
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
+        try:
+            match = re.search(expr, text, re.S)
+            if match:
+                return match.group(0)
+            raise ValueError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
+        except re.error as e:
+            raise ValueError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
+
+    @classmethod
+    def _extract_mapping_payload(
+            cls,
+            *,
+            data: Optional[Dict[str, Any]],
+            expr: Optional[str],
+            range_type: str,
+            operation_type: str,
+            empty_message: str,
+            miss_message: str,
+    ) -> Any:
+        if not data:
+            raise ValueError(empty_message)
+        if range_type == "all":
+            return data
+        if not expr:
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
+        try:
+            return AutoTestToolServiceImpl.resolve_json_path(data=data, expr=expr)
+        except Exception as e:
+            raise ValueError(str(e) or miss_message) from e
+
+    @classmethod
     def extract_from_source(
             cls,
             *,
@@ -465,13 +630,17 @@ class AutoTestToolService:
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
+            request_text: Optional[str] = None,
+            request_json: Optional[Union[list, dict]] = None,
+            request_headers: Optional[Dict[str, Any]] = None,
+            request_cookies: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             operation_type: str = "变量提取",
     ) -> Any:
         """
         从 source 指定来源中按 expr 与 range 提取单个值供 HTTP 调试与步骤引擎共用
 
-        :param source: 来源类型, 如: response json、response xml、response text、response headers、response cookies、session_variables、变量池；
+        :param source: 来源类型, 如: response/request json、xml、text、headers、cookies、session_variables、变量池；
         数据库步骤可为 variable_name（与响应列表项匹配）
         :param expr: 提取表达式(JSONPath/XPath/正则), SOME 模式必填
         :param range_type: "ALL" 或 "SOME", 默认 "SOME"
@@ -480,109 +649,120 @@ class AutoTestToolService:
         :param response_json: 响应 JSON
         :param response_headers: 响应头
         :param response_cookies: 响应 Cookie
+        :param request_text: 请求正文
+        :param request_json: 请求 JSON
+        :param request_headers: 请求头
+        :param request_cookies: 请求 Cookie
         :param session_variables_lookup: 变量池字典（Dict[str, Any]），按 JSONPath 取值
         :param operation_type: 错误信息前缀, 如 "变量提取"、"断言验证"
         :return: 提取得到的值
         :raises ValueError: 提取失败时, 携带可读错误信息
         """
         range_type: str = (range_type or "SOME").strip().lower()
-        source_strip_lower: str = (source or "").strip().lower()
+        source_strip_lower: str = cls._normalize_extract_source(source)
+        resolved_request_cookies = request_cookies
+        if resolved_request_cookies is None and request_headers:
+            resolved_request_cookies = cls.parse_cookie_header(request_headers)
 
         if source_strip_lower == "response json":
-            if response_json is None:
-                raise ValueError(f"【{operation_type}】响应内容不是有效的JSON数据")
-            if range_type == "all":
-                return response_json
-            if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
-            try:
-                extract_value = AutoTestToolServiceImpl.resolve_json_path(data=response_json, expr=expr)
-            except Exception as e:
-                raise ValueError(str(e)) from e
-            if isinstance(extract_value, list) and index is not None:
-                try:
-                    index_int = int(index)
-                    if index_int < len(extract_value):
-                        return extract_value[index_int]
-                    raise ValueError(
-                        f"【{operation_type}】数组越界, "
-                        f"给定索引[{index_int}]不可大于数组长度[{len(extract_value)}]"
-                    )
-                except (ValueError, TypeError) as e:
-                    raise ValueError(f"【{operation_type}】参数[index]必须是类型, 错误描述: {e}") from e
-            return extract_value
+            return cls._extract_json_payload(
+                data=response_json,
+                expr=expr,
+                range_type=range_type,
+                index=index,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】响应内容不是有效的JSON数据",
+            )
+
+        if source_strip_lower == "request json":
+            return cls._extract_json_payload(
+                data=request_json,
+                expr=expr,
+                range_type=range_type,
+                index=index,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】请求内容不是有效的JSON数据",
+            )
 
         if source_strip_lower == "response xml":
-            if not response_text:
-                raise ValueError(f"【{operation_type}】响应内容不是有效的XML数据")
-            if range_type == "all":
-                return response_text
-            if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
-            try:
-                response_xml = ElementTree.fromstring(response_text)
-                elements = response_xml.findall(expr)
-                if not elements:
-                    raise ValueError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
-                if index is not None:
-                    try:
-                        index_int = int(index)
-                        if index_int < len(elements):
-                            element = elements[index_int]
-                            return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
-                        raise ValueError(
-                            f"【{operation_type}】数组越界, "
-                            f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
-                        )
-                    except (ValueError, TypeError) as e:
-                        raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
-                element = elements[-1]
-                return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
-            except ElementTree.ParseError as e:
-                raise ValueError(f"【{operation_type}】响应内容不是有效的XML格式, 错误描述: {e}") from e
-            except ValueError:
-                raise
-            except Exception as e:
-                raise ValueError(f"【{operation_type}】XPath表达式[{expr}]执行失败, 错误: {e}") from e
+            return cls._extract_xml_payload(
+                text=response_text,
+                expr=expr,
+                range_type=range_type,
+                index=index,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】响应内容不是有效的XML数据",
+                invalid_xml_message=f"【{operation_type}】响应内容不是有效的XML格式",
+            )
+
+        if source_strip_lower == "request xml":
+            return cls._extract_xml_payload(
+                text=request_text,
+                expr=expr,
+                range_type=range_type,
+                index=index,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】请求内容不是有效的XML数据",
+                invalid_xml_message=f"【{operation_type}】请求内容不是有效的XML格式",
+            )
 
         if source_strip_lower == "response text":
-            if not response_text:
-                raise ValueError(f"【{operation_type}】响应内容不是有效的Text数据")
-            if range_type == "all":
-                return response_text
-            if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
-            try:
-                match = re.search(expr, response_text, re.S)
-                if match:
-                    return match.group(0)
-                raise ValueError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
-            except re.error as e:
-                raise ValueError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
+            return cls._extract_text_payload(
+                text=response_text,
+                expr=expr,
+                range_type=range_type,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】响应内容不是有效的Text数据",
+            )
+
+        if source_strip_lower == "request text":
+            return cls._extract_text_payload(
+                text=request_text,
+                expr=expr,
+                range_type=range_type,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】请求内容不是有效的Text数据",
+            )
 
         if source_strip_lower == "response headers":
-            if not response_headers:
-                raise ValueError(f"【{operation_type}】响应 Headers 为空")
-            if range_type == "all":
-                return response_headers
-            if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
-            try:
-                return AutoTestToolServiceImpl.resolve_json_path(data=response_headers, expr=expr)
-            except Exception as e:
-                raise ValueError(str(e) or f"【{operation_type}】响应 Headers JSONPath匹配失败: {expr}") from e
+            return cls._extract_mapping_payload(
+                data=response_headers,
+                expr=expr,
+                range_type=range_type,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】响应 Headers 为空",
+                miss_message=f"【{operation_type}】响应 Headers JSONPath匹配失败: {expr}",
+            )
+
+        if source_strip_lower == "request headers":
+            return cls._extract_mapping_payload(
+                data=request_headers,
+                expr=expr,
+                range_type=range_type,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】请求 Headers 为空",
+                miss_message=f"【{operation_type}】请求 Headers JSONPath匹配失败: {expr}",
+            )
 
         if source_strip_lower == "response cookies":
-            if not response_cookies:
-                raise ValueError(f"【{operation_type}】响应 Cookies 为空")
-            if range_type == "all":
-                return response_cookies
-            if not expr:
-                raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
-            try:
-                return AutoTestToolServiceImpl.resolve_json_path(data=response_cookies, expr=expr)
-            except Exception as e:
-                raise ValueError(str(e) or f"【{operation_type}】响应 Cookies JSONPath匹配失败: {expr}") from e
+            return cls._extract_mapping_payload(
+                data=response_cookies,
+                expr=expr,
+                range_type=range_type,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】响应 Cookies 为空",
+                miss_message=f"【{operation_type}】响应 Cookies JSONPath匹配失败: {expr}",
+            )
+
+        if source_strip_lower == "request cookies":
+            return cls._extract_mapping_payload(
+                data=resolved_request_cookies,
+                expr=expr,
+                range_type=range_type,
+                operation_type=operation_type,
+                empty_message=f"【{operation_type}】请求 Cookies 为空",
+                miss_message=f"【{operation_type}】请求 Cookies JSONPath匹配失败: {expr}",
+            )
 
         if source_strip_lower in ("session_variables", "变量池"):
             if not expr:
@@ -620,27 +800,14 @@ class AutoTestToolService:
                         expr_executive_data = op_resp.get("sql_data")
                     break
             if expr_executive_data is not None:
-                if range_type == "all":
-                    return expr_executive_data
-                if not expr:
-                    raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
-                try:
-                    extract_value = AutoTestToolServiceImpl.resolve_json_path(data=expr_executive_data, expr=expr)
-                except Exception as e:
-                    raise ValueError(str(e)) from e
-
-                if isinstance(extract_value, list) and index is not None:
-                    try:
-                        index_int = int(index)
-                        if index_int < len(extract_value):
-                            return extract_value[index_int]
-                        raise ValueError(
-                            f"【{operation_type}】数组越界, "
-                            f"给定索引[{index_int}]不可大于数组长度[{len(extract_value)}]"
-                        )
-                    except (ValueError, TypeError) as e:
-                        raise ValueError(f"【{operation_type}】参数[index]必须是整数类型, 错误描述: {e}") from e
-                return extract_value
+                return cls._extract_json_payload(
+                    data=expr_executive_data,
+                    expr=expr,
+                    range_type=range_type,
+                    index=index,
+                    operation_type=operation_type,
+                    empty_message=f"【{operation_type}】未找到可提取的执行结果数据",
+                )
             if all_operates_response_safe:
                 step_label = "Redis具体操作" if is_redis_response else "数据库具体操作"
                 raise ValueError(
@@ -659,17 +826,25 @@ class AutoTestToolService:
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
+            request_text: Optional[str] = None,
+            request_json: Optional[Union[list, dict]] = None,
+            request_headers: Optional[Dict[str, Any]] = None,
+            request_cookies: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        按 StepExtractVariableItem 列表从响应/变量池中提取变量。
+        按 StepExtractVariableItem 列表从请求/响应/变量池中提取变量。
 
         :param extract_variables: 提取规则列表
         :param response_text: 响应正文
         :param response_json: 响应 JSON 或数据库步骤的响应列表
         :param response_headers: 响应头
         :param response_cookies: 响应 Cookie
+        :param request_text: 请求正文
+        :param request_json: 请求 JSON
+        :param request_headers: 请求头
+        :param request_cookies: 请求 Cookie
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调
         :return: (name -> value 字典, 逐项结果列表)
@@ -692,11 +867,12 @@ class AutoTestToolService:
             source = extract_config.source
             range_type = extract_config.scope
             index = extract_config.index
-            if not name or not expr or not source:
+            scope_is_all = str(range_type or "").strip().upper() == "ALL"
+            if not name or not source or (not scope_is_all and not expr):
                 if log_callback:
                     log_callback(
                         f"【变量提取】表达式子项解析无效(跳过提取): \n\t"
-                        f"参数[name, expr, source]是必须的, 如需继续提取可添加[scope, index]参数"
+                        f"参数[name, source]是必须的, SOME 模式还需[expr], 如需继续提取可添加[scope, index]参数"
                     )
                 continue
             error_message: str = ""
@@ -711,6 +887,10 @@ class AutoTestToolService:
                     response_json=response_json,
                     response_headers=response_headers,
                     response_cookies=response_cookies,
+                    request_text=request_text,
+                    request_json=request_json,
+                    request_headers=request_headers,
+                    request_cookies=request_cookies,
                     session_variables_lookup=session_variables_lookup,
                     operation_type="变量提取",
                 )
@@ -761,6 +941,10 @@ class AutoTestToolService:
             response_json: Optional[Union[list, dict]] = None,
             response_headers: Optional[Dict[str, Any]] = None,
             response_cookies: Optional[Dict[str, Any]] = None,
+            request_text: Optional[str] = None,
+            request_json: Optional[Union[list, dict]] = None,
+            request_headers: Optional[Dict[str, Any]] = None,
+            request_cookies: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
             finished_variables: Optional[Any] = None,
@@ -774,6 +958,10 @@ class AutoTestToolService:
         :param response_json: 响应 JSON
         :param response_headers: 响应头
         :param response_cookies: 响应 Cookie
+        :param request_text: 请求正文
+        :param request_json: 请求 JSON
+        :param request_headers: 请求头
+        :param request_cookies: 请求 Cookie
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调
         :param finished_variables: 非空时对 except_value 先做占位符解析
@@ -817,6 +1005,10 @@ class AutoTestToolService:
                     response_json=response_json,
                     response_headers=response_headers,
                     response_cookies=response_cookies,
+                    request_text=request_text,
+                    request_json=request_json,
+                    request_headers=request_headers,
+                    request_cookies=request_cookies,
                     session_variables_lookup=session_variables_lookup,
                     operation_type="断言验证",
                 )
@@ -1315,6 +1507,32 @@ class AutoTestToolService:
         """
         return AutoTestToolServiceImpl.resolve_placeholders(
             value,
+            logger_object,
+            is_core_engine=is_core_engine,
+            finished_variables=finished_variables,
+        )
+
+    @classmethod
+    def resolve_xml_placeholders(
+            cls,
+            xml_text: str,
+            logger_object: Callable,
+            is_core_engine: bool = False,
+            finished_variables: Optional[Any] = None,
+    ) -> str:
+        """
+        解析 XML 报文中元素文本、tail 与属性内的 ${...} 占位符（含算术表达式）
+
+        无效 XML 或解析异常时回退为整串 resolve_placeholders，与历史行为兼容。
+
+        :param xml_text: XML 报文字符串
+        :param logger_object: 日志回调 (str) -> None
+        :param is_core_engine: 是否由步骤引擎调用
+        :param finished_variables: 引擎上下文或变量列表
+        :return: 占位符替换后的 XML 字符串
+        """
+        return AutoTestToolServiceImpl.resolve_xml_placeholders(
+            xml_text,
             logger_object,
             is_core_engine=is_core_engine,
             finished_variables=finished_variables,
@@ -2092,6 +2310,124 @@ class AutoTestToolServiceImpl:
             regularly_slots=regularly_slots,
             to_string=cls._formatter_resolved_placeholders
         )
+
+    @classmethod
+    def _resolve_xml_string_segment(
+            cls,
+            segment: Optional[str],
+            logger_object: Callable,
+            is_core_engine: bool,
+            finished_variables: Optional[Any],
+    ) -> Optional[str]:
+        """
+        对 XML 文本片段（元素 text/tail 或属性值）解析占位符。
+
+        :param segment: 待处理文本；None 时原样返回。
+        :return: 解析后的文本。
+        """
+        if segment is None or "${" not in segment:
+            return segment
+        return cls._resolve_string_placeholders(
+            content=segment,
+            logger_object=logger_object,
+            is_core_engine=is_core_engine,
+            finished_variables=finished_variables,
+        )
+
+    @classmethod
+    def _resolve_xml_element_placeholders(
+            cls,
+            element: ElementTree.Element,
+            logger_object: Callable,
+            is_core_engine: bool,
+            finished_variables: Optional[Any],
+    ) -> None:
+        """
+        原地解析单个元素及其子树中的占位符（text、attrib、子元素 tail）。
+
+        :param element: 当前 XML 元素节点。
+        :return: None
+        """
+        element.text = cls._resolve_xml_string_segment(
+            segment=element.text,
+            logger_object=logger_object,
+            is_core_engine=is_core_engine,
+            finished_variables=finished_variables,
+        )
+        for attr_key, attr_value in list(element.attrib.items()):
+            if attr_value and "${" in attr_value:
+                element.attrib[attr_key] = cls._resolve_xml_string_segment(
+                    segment=attr_value,
+                    logger_object=logger_object,
+                    is_core_engine=is_core_engine,
+                    finished_variables=finished_variables,
+                )
+        for child in element:
+            cls._resolve_xml_element_placeholders(
+                element=child,
+                logger_object=logger_object,
+                is_core_engine=is_core_engine,
+                finished_variables=finished_variables,
+            )
+            child.tail = cls._resolve_xml_string_segment(
+                segment=child.tail,
+                logger_object=logger_object,
+                is_core_engine=is_core_engine,
+                finished_variables=finished_variables,
+            )
+
+    @classmethod
+    def resolve_xml_placeholders(
+            cls,
+            xml_text: str,
+            logger_object: Callable,
+            is_core_engine: bool = False,
+            finished_variables: Optional[Any] = None,
+    ) -> str:
+        """
+        解析 XML 报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）。
+
+        按元素 text / tail / attrib 粒度调用 _resolve_string_placeholders，与 JSON 字段级行为对齐。
+        无效 XML 时回退为整串 _resolve_string_placeholders。
+
+        :param xml_text: XML 报文字符串
+        :param logger_object: 日志回调, 签名为 (str) -> None
+        :param is_core_engine: True 时 finished_variables 提供 get_variable
+        :param finished_variables: 核心引擎上下文或变量列表
+        :return: 占位符替换后的 XML 字符串
+        """
+        if not xml_text or not isinstance(xml_text, str):
+            return xml_text
+        if "${" not in xml_text:
+            return xml_text
+        try:
+            root = ElementTree.fromstring(xml_text.encode("utf-8"))
+            cls._resolve_xml_element_placeholders(
+                element=root,
+                logger_object=logger_object,
+                is_core_engine=is_core_engine,
+                finished_variables=finished_variables,
+            )
+            return ElementTree.tostring(root, encoding="unicode")
+        except ElementTree.ParseError:
+            logger_object(
+                "【参数替换】XML 报文解析失败, 回退为整串占位符替换"
+            )
+            return cls._resolve_string_placeholders(
+                content=xml_text,
+                logger_object=logger_object,
+                is_core_engine=is_core_engine,
+                finished_variables=finished_variables,
+            )
+        except Exception as e:
+            logger_object(
+                f"【参数替换】解析 XML 占位符时发生异常: \n\t"
+                f"错误描述: {e}\n\t"
+                f"错误类型: {type(e).__name__}\n\t"
+                f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
+                f"错误回溯: {traceback.format_exc()}"
+            )
+            return xml_text
 
     @classmethod
     def resolve_placeholders(cls, value: Any, logger_object: Callable, is_core_engine: bool = False, finished_variables: Optional[Any] = None) -> Any:

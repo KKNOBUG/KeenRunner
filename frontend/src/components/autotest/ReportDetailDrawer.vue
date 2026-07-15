@@ -648,7 +648,18 @@ const reportExtractColumns = [
     title: '提取来源',
     key: 'source',
     render: (row) => {
-      const map = { 'Response Json': 'Response Json', 'Response Text': 'Response Text', 'Response XML': 'Response XML', 'Response Header': 'Response Header', 'Response Cookie': 'Response Cookie' }
+      const map = {
+        'Request Json': 'Request Json',
+        'Request Text': 'Request Text',
+        'Request XML': 'Request XML',
+        'Request Header': 'Request Header',
+        'Request Cookie': 'Request Cookie',
+        'Response Json': 'Response Json',
+        'Response Text': 'Response Text',
+        'Response XML': 'Response XML',
+        'Response Header': 'Response Header',
+        'Response Cookie': 'Response Cookie',
+      }
       return map[row.source] || row.source
     },
   },
@@ -681,7 +692,19 @@ const reportValidatorColumns = [
     title: '断言对象',
     key: 'source',
     render: (row) => {
-      const map = { 'Response Json': 'responseJson', 'Response Text': 'responseText', 'Response XML': 'responseXml', 'Response Header': 'responseHeader', 'Response Cookie': 'responseCookie', '变量池': '变量池' }
+      const map = {
+        'Request Json': 'requestJson',
+        'Request Text': 'requestText',
+        'Request XML': 'requestXml',
+        'Request Header': 'requestHeader',
+        'Request Cookie': 'requestCookie',
+        'Response Json': 'responseJson',
+        'Response Text': 'responseText',
+        'Response XML': 'responseXml',
+        'Response Header': 'responseHeader',
+        'Response Cookie': 'responseCookie',
+        '变量池': '变量池',
+      }
       return map[row.source] || row.source
     },
   },

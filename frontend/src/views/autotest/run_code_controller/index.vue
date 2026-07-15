@@ -144,6 +144,7 @@ import {
   countDictKeys,
   hydrateAssertDictFromBackend,
   normalizeBackendList,
+  validateAssertList,
 } from '@/utils/autotestExtractAssert'
 import api from '@/api'
 
@@ -442,6 +443,11 @@ watch(
 const handleDebug = async () => {
   if (!form.code || !form.code.trim()) {
     window.$message?.warning?.('请输入要调试的Python代码')
+    return
+  }
+  const assertCheck = validateAssertList(buildValidatorsForBackend())
+  if (!assertCheck.valid) {
+    window.$message?.error?.(assertCheck.message)
     return
   }
 

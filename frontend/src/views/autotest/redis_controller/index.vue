@@ -392,6 +392,8 @@ import {
   hydrateAssertDictFromBackend,
   hydrateExtractDictFromBackend,
   normalizeBackendList,
+  validateAssertList,
+  validateExtractList,
 } from '@/utils/autotestExtractAssert'
 
 const props = defineProps({
@@ -971,6 +973,19 @@ const debugging = () => {
 }
 
 const doDebugRequest = async (env_id) => {
+  const ev = buildExtractForBackend()
+  const av = buildValidatorsForBackend()
+  const extractCheck = validateExtractList(ev)
+  if (!extractCheck.valid) {
+    window.$message?.error?.(extractCheck.message)
+    return
+  }
+  const assertCheck = validateAssertList(av)
+  if (!assertCheck.valid) {
+    window.$message?.error?.(assertCheck.message)
+    return
+  }
+
   debugLoading.value = true
   response.value = null
   try {
@@ -982,11 +997,9 @@ const doDebugRequest = async (env_id) => {
       redis_searched: !!cfg.redis_searched,
       redis_operates: cfg.redis_operates || []
     }
-    const ev = buildExtractForBackend()
     if (ev.length > 0) {
       debugPayload.extract_variables = ev
     }
-    const av = buildValidatorsForBackend()
     if (av.length > 0) {
       debugPayload.assert_validators = av
     }
