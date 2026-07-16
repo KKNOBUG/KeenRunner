@@ -7,11 +7,11 @@
 @DateTime: 2026/1/31 12:42
 """
 import traceback
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.exceptions import FieldError
-from tortoise.expressions import Q
+from tortoise.expressions import Q, RawSQL
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
 from backend.applications.aotutest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
@@ -26,12 +26,66 @@ from backend.core.exceptions import (
 )
 
 
+def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
+    """从 cases_execute_config 汇总去重后的环境 ID 列表。
+
+    优先取每个用例的 global_env_id；若步骤配置中带有 env_id 一并纳入。
+    """
+    if not isinstance(cases_execute_config, dict):
+        return []
+    env_ids: set = set()
+    for case_cfg in cases_execute_config.values():
+        if not isinstance(case_cfg, dict):
+            continue
+        global_env_id = case_cfg.get("global_env_id")
+        if global_env_id is not None:
+            try:
+                env_ids.add(int(global_env_id))
+            except (TypeError, ValueError):
+                pass
+        steps_cfg = case_cfg.get("steps_execute_config") or {}
+        if not isinstance(steps_cfg, dict):
+            continue
+        for step_cfg in steps_cfg.values():
+            if not isinstance(step_cfg, dict):
+                continue
+            step_env_id = step_cfg.get("env_id")
+            if step_env_id is not None:
+                try:
+                    env_ids.add(int(step_env_id))
+                except (TypeError, ValueError):
+                    pass
+    return sorted(env_ids)
+
+
+def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """解析任务中的用例执行配置：顶层字段优先，否则回退到 task_kwargs。"""
+    cases_cfg = task_dict.get("cases_execute_config")
+    if isinstance(cases_cfg, dict) and cases_cfg:
+        return cases_cfg
+    kwargs = task_dict.get("task_kwargs")
+    if isinstance(kwargs, dict):
+        nested = kwargs.get("cases_execute_config")
+        if isinstance(nested, dict):
+            return nested
+    return cases_cfg if isinstance(cases_cfg, dict) else None
+
+
 class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
     """自动化测试任务的 CRUD 服务，负责任务的增删改查及调度开关。"""
 
     def __init__(self):
         """初始化 CRUD，绑定模型 AutoTestApiTaskInfo。"""
         super().__init__(model=AutoTestApiTaskInfo)
+
+    @staticmethod
+    def _apply_related_env_ids(task_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """根据 cases_execute_config / task_kwargs 同步汇总 related_cases_env_id。"""
+        cases_cfg = resolve_cases_execute_config(task_dict)
+        if cases_cfg is not None:
+            task_dict["cases_execute_config"] = cases_cfg
+            task_dict["related_cases_env_id"] = extract_related_cases_env_ids(cases_cfg)
+        return task_dict
 
     async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
@@ -103,6 +157,10 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
                 task_dict["task_scheduler"] = task_dict["task_scheduler"].value
             if "last_execute_state" in task_dict and task_dict["last_execute_state"] is not None:
                 task_dict["last_execute_state"] = task_dict["last_execute_state"].value
+            # 新增时同步写入更新人，便于列表「更新人员」展示
+            if task_dict.get("created_user") and not task_dict.get("updated_user"):
+                task_dict["updated_user"] = task_dict["created_user"]
+            task_dict = self._apply_related_env_ids(task_dict)
             instance = await self.create(task_dict)
             return instance
         except IntegrityError as e:
@@ -136,6 +194,18 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             update_dict["task_scheduler"] = update_dict["task_scheduler"].value
         if "last_execute_state" in update_dict and update_dict["last_execute_state"] is not None:
             update_dict["last_execute_state"] = update_dict["last_execute_state"].value
+        # 汇总涉及环境：优先用本次提交的配置，否则回退到库中已有配置
+        merged_for_env = {
+            "task_kwargs": update_dict.get("task_kwargs", instance.task_kwargs),
+            "cases_execute_config": update_dict.get(
+                "cases_execute_config", instance.cases_execute_config
+            ),
+        }
+        cases_cfg = resolve_cases_execute_config(merged_for_env)
+        if cases_cfg is not None:
+            if "task_kwargs" in update_dict or "cases_execute_config" in update_dict:
+                update_dict["cases_execute_config"] = cases_cfg
+            update_dict["related_cases_env_id"] = extract_related_cases_env_ids(cases_cfg)
         task_name = update_dict.get("task_name", instance.task_name)
         task_project = update_dict.get("task_project", instance.task_project)
         existing_task = await self.model.filter(
@@ -194,6 +264,8 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
     async def select_tasks(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """分页查询任务列表。
 
+        默认按最后执行时间倒序，未执行过的任务（last_execute_time 为空）排在后面。
+
         :param search: Tortoise Q 查询条件。
         :param page: 页码。
         :param page_size: 每页条数。
@@ -202,6 +274,22 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :raises ParameterException: 查询条件非法导致 FieldError 时。
         """
         try:
+            order = order or ["-last_execute_time"]
+            # 按执行时间排序时：有执行记录优先（NULL 置后），再按时间倒序
+            if order == ["-last_execute_time"] or (
+                len(order) == 1 and order[0] == "-last_execute_time"
+            ):
+                query = self.model.filter(search)
+                total = await query.count()
+                instances = await (
+                    query.annotate(
+                        _exec_null=RawSQL("`last_execute_time` IS NULL")
+                    )
+                    .order_by("_exec_null", "-last_execute_time", "-id")
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
+                return total, list(instances)
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
             error_message: str = f"查询任务信息失败, 错误描述: {e}"

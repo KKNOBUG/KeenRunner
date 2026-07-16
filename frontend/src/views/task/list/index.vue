@@ -35,10 +35,13 @@ import {getCronNextRunTimes} from '@/utils/common/cron'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import { useCRUD } from '@/composables'
+import { useUserStore } from '@/store'
 import api from '@/api'
 
 dayjs.extend(customParseFormat)
 defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
+
+const userStore = useUserStore()
 
 const TASK_STATUS_MAP = {
   '等待执行': '等待执行',
@@ -49,6 +52,12 @@ const TASK_STATUS_MAP = {
 
 const $table = ref(null)
 const queryItems = ref({})
+
+/** 列表分页元数据（用于序号列） */
+const listPaginationMeta = ref({ page: 1, page_size: 10 })
+const onPaginationMeta = (meta) => {
+  listPaginationMeta.value = meta
+}
 
 /** 任务表多选（与弹窗内用例勾选的 checkedRowKeys 区分） */
 const taskTableCheckedRowKeys = ref([])
@@ -88,6 +97,8 @@ const { handleDelete } = useCRUD({
 
 const projectOptions = ref([])
 const projectLoading = ref(false)
+const envOptions = ref([])
+const envLoading = ref(false)
 const tagOptions = ref([])
 const tagLoading = ref(false)
 const caseListFull = ref([])
@@ -575,6 +586,76 @@ const loadProjects = async () => {
   }
 }
 
+/** 执行环境下拉：无应用时全量环境；有应用时仅该应用下已配置的环境（去重） */
+const loadEnvOptions = async (projectId = null) => {
+  try {
+    envLoading.value = true
+    const allRes = await api.getEnvList({ page: 1, page_size: 9999, state: 0 })
+    const allEnvs = Array.isArray(allRes?.data) ? allRes.data : []
+    let list = allEnvs
+    if (projectId != null) {
+      const cfgRes = await api.searchEnvConfig({
+        page: 1,
+        page_size: 9999,
+        state: 0,
+        project_id: projectId,
+      })
+      const envIdSet = new Set(
+          (Array.isArray(cfgRes?.data) ? cfgRes.data : [])
+              .map((row) => Number(row.env_id))
+              .filter((id) => Number.isFinite(id) && id > 0)
+      )
+      list = allEnvs.filter((row) => envIdSet.has(Number(row.env_id)))
+    }
+    envOptions.value = list.map((item) => ({
+      label: item.env_name,
+      value: item.env_id,
+    }))
+    // 当前选中环境不在新选项中时清空
+    const cur = queryItems.value.env_id
+    if (cur != null && !envOptions.value.some((o) => o.value === cur)) {
+      queryItems.value.env_id = null
+    }
+  } catch (error) {
+    console.error('加载环境列表失败:', error)
+    envOptions.value = []
+  } finally {
+    envLoading.value = false
+  }
+}
+
+// 执行时间范围（按 last_execute_time 筛选）
+const dateRange = ref(null)
+const formatDateForQuery = (ts) => {
+  if (ts == null) return null
+  const d = new Date(ts)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+const handleDateRangeChange = (value) => {
+  if (value == null) {
+    queryItems.value.date_from = null
+    queryItems.value.date_to = null
+  } else {
+    queryItems.value.date_from = formatDateForQuery(value[0])
+    queryItems.value.date_to = formatDateForQuery(value[1])
+  }
+}
+
+watch(
+    () => queryItems.value.task_project,
+    (projectId) => {
+      loadEnvOptions(projectId ?? null)
+    }
+)
+
+watch(
+    () => [queryItems.value.date_from, queryItems.value.date_to],
+    ([from, to]) => {
+      if (from == null && to == null) dateRange.value = null
+    }
+)
+
 const loadTags = async (projectId = null) => {
   try {
     tagLoading.value = true
@@ -897,11 +978,14 @@ const handleSubmit = async () => {
       task_datetime_expr: taskForm.value.task_scheduler === 'datetime' ? (datetimePickerValue.value ? dayjs(datetimePickerValue.value).format('YYYY-MM-DD HH:mm:ss') : null) : null,
       task_crontabs_expr: taskForm.value.task_scheduler === 'cron' ? taskForm.value.task_crontabs_expr || null : null,
     }
+    const currentUser = userStore.username || ''
     if (isEdit.value) {
       payload.task_id = taskForm.value.task_id
+      if (currentUser) payload.updated_user = currentUser
       await api.updateApiTaskList(payload)
       window.$message?.success?.('更新成功')
     } else {
+      if (currentUser) payload.created_user = currentUser
       await api.createApiTaskList(payload)
       window.$message?.success?.('新增成功')
     }
@@ -988,26 +1072,56 @@ const secondsToInterval = (totalSeconds) => {
   return {value: s, unit: 'seconds'}
 }
 
-const columns = [
+const formatSchedulerExpr = (row) => {
+  const mode = row.task_scheduler
+  if (mode === 'cron') return row.task_crontabs_expr || '-'
+  if (mode === 'datetime') return row.task_datetime_expr || '-'
+  if (mode === 'interval') {
+    const sec = row.task_interval_expr
+    if (sec == null || sec === '') return '-'
+    const { value, unit } = secondsToInterval(sec)
+    const unitLabel = { days: '天', hours: '小时', minutes: '分钟', seconds: '秒' }[unit] || unit
+    return `每 ${value} ${unitLabel}`
+  }
+  return '-'
+}
+
+const columns = computed(() => {
+  const { page, page_size } = listPaginationMeta.value
+  const seqBase = (page - 1) * page_size
+  return [
   { type: 'selection', fixed: 'left', width: 48 },
   {
-    title: '任务ID',
-    key: 'task_id',
-    width: 90,
+    title: '序号',
+    key: '__seq',
+    width: 64,
     align: 'center',
-    ellipsis: {tooltip: true},
+    fixed: 'left',
+    render(_row, rowIndex) {
+      return seqBase + rowIndex + 1
+    },
   },
   {
     title: '任务名称',
     key: 'task_name',
-    width: 300,
+    width: 180,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
+    title: '任务描述',
+    key: 'task_desc',
+    width: 160,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      return h('span', row.task_desc || '-')
+    },
+  },
+  {
     title: '任务标识',
     key: 'task_code',
-    width: 400,
+    width: 220,
     align: 'center',
     ellipsis: {tooltip: true},
   },
@@ -1039,6 +1153,16 @@ const columns = [
     },
   },
   {
+    title: '任务调度',
+    key: 'task_scheduler_expr',
+    width: 160,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      return h('span', formatSchedulerExpr(row))
+    },
+  },
+  {
     title: '关联用例数',
     key: 'task_kwargs',
     width: 100,
@@ -1050,7 +1174,19 @@ const columns = [
     },
   },
   {
-    title: '最后执行状态',
+    title: '最后执行时间',
+    key: 'last_execute_time',
+    width: 170,
+    align: 'center',
+    render(row) {
+      const val = row.last_execute_time
+      if (val == null || val === '') return h('span', '-')
+      const formatted = formatDateTime(val)
+      return h('span', formatted || '-')
+    },
+  },
+  {
+    title: '最后执行结果',
     key: 'last_execute_state',
     width: 110,
     align: 'center',
@@ -1061,24 +1197,22 @@ const columns = [
     },
   },
   {
-    title: '最后执行时间',
-    key: 'last_execute_time',
-    width: 180,
+    title: '更新人员',
+    key: 'updated_user',
+    width: 100,
     align: 'center',
+    ellipsis: {tooltip: true},
     render(row) {
-      const val = row.last_execute_time
-      if (val == null || val === '') return h('span', '-')
-      const formatted = formatDateTime(val)
-      return h('span', formatted || '-')
+      return h('span', row.updated_user || '-')
     },
   },
   {
     title: '最后更新时间',
     key: 'updated_time',
-    width: 180,
+    width: 170,
     align: 'center',
     render(row) {
-      return h('span', formatDateTime(row.updated_time))
+      return h('span', formatDateTime(row.updated_time) || '-')
     },
   },
   {
@@ -1087,13 +1221,18 @@ const columns = [
     width: 100,
     align: 'center',
     ellipsis: {tooltip: true},
+    render(row) {
+      return h('span', row.created_user || '-')
+    },
   },
   {
-    title: '更新人员',
-    key: 'updated_user',
-    width: 100,
+    title: '创建时间',
+    key: 'created_time',
+    width: 170,
     align: 'center',
-    ellipsis: {tooltip: true},
+    render(row) {
+      return h('span', formatDateTime(row.created_time) || '-')
+    },
   },
   {
     title: '操作',
@@ -1198,9 +1337,11 @@ const columns = [
     },
   },
 ]
+})
 
 onMounted(() => {
   loadProjects()
+  loadEnvOptions(null)
 })
 </script>
 
@@ -1216,10 +1357,11 @@ onMounted(() => {
         :columns="columns"
         :get-data="api.getApiTaskList"
         row-key="task_id"
-        :scroll-x="2100"
+        :scroll-x="2600"
         :single-line="true"
         @query-bar-create="openAdd"
         @query-bar-delete="handleBatchDelete"
+        @pagination-meta="onPaginationMeta"
     >
       <template #queryBar>
         <QueryBarItem label="任务名称：">
@@ -1242,22 +1384,35 @@ onMounted(() => {
               class="query-input"
           />
         </QueryBarItem>
-        <QueryBarItem label="创建人员：">
+        <QueryBarItem label="维护人员：">
           <NInput
-              v-model:value="queryItems.created_user"
+              v-model:value="queryItems.updated_user"
               clearable
-              placeholder="请输入创建人员"
+              placeholder="请输入维护人员"
               class="query-input"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="更新人员：">
-          <NInput
-              v-model:value="queryItems.updated_user"
+        <QueryBarItem label="执行时间：">
+          <NDatePicker
+              v-model:value="dateRange"
+              type="daterange"
               clearable
-              placeholder="请输入更新人员"
+              class="query-input query-date-range"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              @update:value="handleDateRangeChange"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="执行环境：">
+          <NSelect
+              v-model:value="queryItems.env_id"
+              :options="envOptions"
+              :loading="envLoading"
+              clearable
+              filterable
+              placeholder="请选择执行环境"
               class="query-input"
-              @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
       </template>
@@ -1573,6 +1728,10 @@ onMounted(() => {
 <style scoped>
 .query-input {
   width: 200px;
+}
+
+.query-date-range {
+  width: 280px;
 }
 
 /* 弹窗卡片：居中，左右各 15% 留白（70% 宽度） */

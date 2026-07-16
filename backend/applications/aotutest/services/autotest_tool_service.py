@@ -51,7 +51,7 @@ class AutoTestToolService:
     实现按领域拆分至 autotest_runtime；本类仅转发，保持公开方法名与签名不变。
     """
 
-    # --- util / kv ---
+    # --- 数据的平铺和分组转换 / 日志收集 ---
     list_to_dict = KvUtils.list_to_dict
     convert_list_to_dict_for_http = KvUtils.convert_list_to_dict_for_http
     get_value_from_list = KvUtils.get_value_from_list

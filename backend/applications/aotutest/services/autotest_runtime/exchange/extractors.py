@@ -14,6 +14,7 @@ from jsonpath_ng import parse as jsonpath_parse
 
 from backend.applications.aotutest.services.autotest_runtime.context import ExchangeContext
 from backend.applications.aotutest.services.autotest_runtime.util_kv import KvUtils
+from backend.common.xpath_utils import XPathUtils
 
 
 class Extractors:
@@ -110,7 +111,8 @@ class Extractors:
             raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
         try:
             xml_root = ElementTree.fromstring(text)
-            elements = xml_root.findall(expr)
+            # 兼容默认命名空间：无 xmlns 走原路径，有 xmlns 时自动回退 {*} 匹配
+            elements = XPathUtils.findall(xml_root, expr)
             if not elements:
                 raise ValueError(f"【{operation_type}】XPath表达式[{expr}]未匹配到元素")
             if index is not None:

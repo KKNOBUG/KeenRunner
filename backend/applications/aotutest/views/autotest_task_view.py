@@ -164,6 +164,18 @@ async def search_tasks_info(
             q &= Q(created_user__iexact=task_in.created_user)
         if task_in.updated_user:
             q &= Q(updated_user__iexact=task_in.updated_user)
+        if task_in.env_id:
+            q &= Q(related_cases_env_id__contains=[task_in.env_id])
+        if task_in.date_from:
+            date_from = task_in.date_from.strip()
+            if len(date_from) == 10:
+                date_from = f"{date_from} 00:00:00"
+            q &= Q(last_execute_time__gte=date_from)
+        if task_in.date_to:
+            date_to = task_in.date_to.strip()
+            if len(date_to) == 10:
+                date_to = f"{date_to} 23:59:59"
+            q &= Q(last_execute_time__lte=date_to)
         q &= Q(state=task_in.state)
         total, instances = await services.task_curd.select_tasks(
             search=q,
@@ -175,8 +187,6 @@ async def search_tasks_info(
             await obj.to_dict(
                 exclude_fields={
                     "state",
-                    "created_user", "created_time",
-                    "updated_user", "updated_time",
                     "reserve_1", "reserve_2", "reserve_3"
                 },
                 replace_fields={"id": "task_id"}

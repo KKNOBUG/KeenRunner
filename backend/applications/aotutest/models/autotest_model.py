@@ -422,6 +422,11 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         null=True,
         description="按用例ID的执行配置 {case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name}}",
     )
+    related_cases_env_id = fields.JSONField(
+        default=list,
+        null=True,
+        description="任务涉及的环境ID列表(去重，由 cases_execute_config 汇总)",
+    )
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务模式(cron/interval/datetime)")
@@ -440,7 +445,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
             ("task_name", "task_project"),
             ("task_project", "state", "updated_time"),
         )
-        ordering = ["-updated_time"]
+        ordering = ["-last_execute_time", "-updated_time"]
 
     def __str__(self):
         """返回任务名称。"""

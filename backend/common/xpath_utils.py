@@ -5,7 +5,7 @@
 @Project : Krun
 @Module  : xpath_utils
 """
-from typing import Any, Optional, Union
+from typing import Any, List, Optional, Union
 from xml.etree import ElementTree
 
 
@@ -20,10 +20,12 @@ class XPathUtils:
 
     约定：
     - XPath 表达式遵循 ElementTree 支持的有限 XPath 语法；
-    - 多匹配时默认操作最后一个匹配元素，与 ``AutoTestToolService.extract_from_source``
-      的 "response xml" 分支保持一致；如需精确指定请使用索引，如 ``.//item[1]``；
+    - 多匹配时默认操作最后一个匹配元素，与提取侧 "response xml" 分支保持一致；
+      如需精确指定请使用索引，如 ``.//item[1]``；
     - 未匹配到元素时，``update`` 不修改原数据并返回原字符串；``query`` 返回 ``None``；
       ``delete`` 不修改原数据并返回原字符串；``add`` 沿路径创建元素。
+    - 默认命名空间（xmlns=...）下，无前缀路径如 ``./Head/SvcCd`` 会自动按
+      ``./{*}Head/{*}SvcCd`` 回退匹配；无命名空间的 XML 仍优先走原始路径。
     """
 
     @staticmethod
@@ -38,6 +40,118 @@ class XPathUtils:
         if isinstance(xml_data, str):
             return ElementTree.fromstring(xml_data.encode("utf-8"))
         return xml_data
+
+    @staticmethod
+    def _local_name(tag: str) -> str:
+        """取元素标签本地名（去掉 Clark 命名空间）。"""
+        if tag and "}" in tag:
+            return tag.rsplit("}", 1)[-1]
+        return tag or ""
+
+    @staticmethod
+    def _tag_in_parent_ns(parent: ElementTree.Element, local_name: str) -> str:
+        """按父节点命名空间生成子标签；父无命名空间则返回本地名。"""
+        parent_tag = parent.tag or ""
+        if "}" in parent_tag:
+            ns = parent_tag.split("}", 1)[0][1:]
+            return f"{{{ns}}}{local_name}"
+        return local_name
+
+    @classmethod
+    def _rewrite_segment_ns_agnostic(cls, segment: str) -> str:
+        """
+        将单个路径段中的无前缀元素名改写为 ``{*}Name``。
+
+        保留 ``.`` / ``..`` / ``*`` / 属性 ``@...`` / 已含 ``{...}`` 的 Clark 名；
+        ``prefix:local`` 仅保留 local 再加 ``{*}``。
+        """
+        if not segment or segment in (".", "..", "*"):
+            return segment
+        if segment.startswith("@") or segment.startswith("{"):
+            return segment
+        if "[" in segment:
+            name, rest = segment.split("[", 1)
+            predicate = "[" + rest
+        else:
+            name, predicate = segment, ""
+        if not name or name in (".", "..", "*"):
+            return segment
+        if name.startswith("{"):
+            return segment
+        if ":" in name:
+            name = name.split(":", 1)[-1]
+        return "{*}" + name + predicate
+
+    @classmethod
+    def namespace_agnostic_xpath(cls, xpath: str) -> str:
+        """
+        将无命名空间前缀的 XPath 改写为 ElementTree 可匹配任意命名空间的形式。
+
+        例：``./Head/SvcCd`` → ``./{*}Head/{*}SvcCd``；已含 ``{`` 的表达式原样返回。
+        """
+        if not xpath or "{" in xpath:
+            return xpath
+        parts: List[str] = []
+        i = 0
+        n = len(xpath)
+        while i < n:
+            if xpath.startswith("//", i):
+                parts.append("//")
+                i += 2
+                continue
+            if xpath[i] == "/":
+                parts.append("/")
+                i += 1
+                continue
+            j = i
+            while j < n and xpath[j] != "/":
+                j += 1
+            parts.append(cls._rewrite_segment_ns_agnostic(xpath[i:j]))
+            i = j
+        return "".join(parts)
+
+    @classmethod
+    def findall(cls, root: ElementTree.Element, xpath: str) -> List[ElementTree.Element]:
+        """
+        命名空间兼容的 ``findall``。
+
+        先按原表达式匹配；无结果且表达式可改写时，再按 ``{*}`` 通配命名空间匹配。
+        这样无 xmlns 的报文与带默认命名空间的报文都能用 ``./Head/SvcCd`` 这类路径。
+        """
+        if not xpath:
+            return []
+        try:
+            elements = root.findall(xpath)
+        except (SyntaxError, TypeError):
+            elements = []
+        if elements:
+            return list(elements)
+        alt = cls.namespace_agnostic_xpath(xpath)
+        if not alt or alt == xpath:
+            return list(elements) if elements else []
+        try:
+            return list(root.findall(alt))
+        except (SyntaxError, TypeError):
+            return []
+
+    @classmethod
+    def find_child(cls, parent: ElementTree.Element, name: str) -> Optional[ElementTree.Element]:
+        """在直接子节点中按本地名查找（兼容有/无命名空间）。"""
+        if not name:
+            return None
+        child = parent.find(name)
+        if child is not None:
+            return child
+        if name.startswith("{") or name.startswith("@"):
+            return None
+        local = name.split(":", 1)[-1] if ":" in name else name
+        child = parent.find("{*}" + local)
+        if child is not None:
+            return child
+        for elem in parent:
+            if cls._local_name(elem.tag) == local:
+                return elem
+        return None
 
     @classmethod
     def _find_parent(
@@ -88,7 +202,7 @@ class XPathUtils:
             return ElementTree.tostring(xml_data, encoding="unicode")
 
         root = cls._parse(xml_data)
-        elements = root.findall(xpath)
+        elements = cls.findall(root, xpath)
 
         if not elements:
             # 情况4：XPath 不存在，沿路径创建元素
@@ -98,19 +212,21 @@ class XPathUtils:
         target = elements[-1]
         children = list(target)
 
-        # 推导新元素标签名
+        # 推导新元素标签名（本地名）
         if tag:
-            new_tag = tag
+            new_local = cls._local_name(tag)
         elif children:
-            new_tag = children[-1].tag
+            new_local = cls._local_name(children[-1].tag)
         else:
-            new_tag = target.tag
+            new_local = cls._local_name(target.tag)
+        new_tag = cls._tag_in_parent_ns(target, new_local)
 
         if not children and not tag:
             # 情况3：叶子节点且无显式 tag → 追加同名兄弟元素
             parent = cls._find_parent(root, target)
             append_to = parent if parent is not None else target
-            new_element = ElementTree.Element(new_tag)
+            sibling_tag = cls._tag_in_parent_ns(append_to, new_local)
+            new_element = ElementTree.Element(sibling_tag)
             new_element.text = str(value) if value is not None else ""
             append_to.append(new_element)
         else:
@@ -153,13 +269,20 @@ class XPathUtils:
 
         current = root
         for part in parts:
-            child = current.find(part)
+            if part.startswith("{"):
+                local = cls._local_name(part)
+            elif ":" in part:
+                local = part.split(":", 1)[-1]
+            else:
+                local = cls._local_name(part)
+            child = cls.find_child(current, local)
             if child is None:
-                child = ElementTree.SubElement(current, part)
+                child = ElementTree.SubElement(current, cls._tag_in_parent_ns(current, local))
             current = child
 
         if tag:
-            new_element = ElementTree.SubElement(current, tag)
+            new_local = cls._local_name(tag)
+            new_element = ElementTree.SubElement(current, cls._tag_in_parent_ns(current, new_local))
             new_element.text = str(value) if value is not None else ""
         else:
             current.text = str(value) if value is not None else ""
@@ -186,7 +309,7 @@ class XPathUtils:
             return ElementTree.tostring(xml_data, encoding="unicode")
 
         root = cls._parse(xml_data)
-        elements = root.findall(xpath)
+        elements = cls.findall(root, xpath)
         if not elements:
             if isinstance(xml_data, str):
                 return xml_data
@@ -223,7 +346,7 @@ class XPathUtils:
             return ElementTree.tostring(xml_data, encoding="unicode")
 
         root = cls._parse(xml_data)
-        elements = root.findall(xpath)
+        elements = cls.findall(root, xpath)
         if not elements:
             if isinstance(xml_data, str):
                 return xml_data
@@ -254,7 +377,7 @@ class XPathUtils:
             return None
 
         root = cls._parse(xml_data)
-        elements = root.findall(xpath)
+        elements = cls.findall(root, xpath)
         if not elements:
             return None
 
@@ -394,74 +517,128 @@ if __name__ == '__main__':
     # print(XPathUtils.query(mock_xml, ""))
     # print("-" * 100)
 
-    print("=" * 100)
-    print("【XPathUtils.add 场景】")
-    print("=" * 100)
+    # print("=" * 100)
+    # print("【XPathUtils.add 场景】")
+    # print("=" * 100)
+    #
+    # print("[22] 在hobby下追加同名子元素(无tag): ./hobby")
+    # print(XPathUtils.add(mock_xml, "./hobby", "游戏"))
+    # print("-" * 100)
+    #
+    # print("[23] 在mobile下追加指定tag子元素: ./mobile, tag=中国铁通")
+    # print(XPathUtils.add(mock_xml, "./mobile", "10050", tag="中国铁通"))
+    # print("-" * 100)
+    #
+    # print("[24] 在cars下追加同名car子元素(无tag): ./cars")
+    # print(XPathUtils.add(mock_xml, "./cars", "newcar"))
+    # print("-" * 100)
+    #
+    # print("[25] 在information下追加指定tag子元素: ./information, tag=gender")
+    # print(XPathUtils.add(mock_xml, "./information", "男", tag="gender"))
+    # print("-" * 100)
+    #
+    # print("[26] 叶子节点无tag追加同名兄弟: ./user")
+    # print(XPathUtils.add(mock_xml, "./user", "lisi"))
+    # print("-" * 100)
+    #
+    # print("[27] XPath不存在沿路径创建: ./new/element, tag=value")
+    # print(XPathUtils.add(mock_xml, "./new/element", "x", tag="value"))
+    # print("-" * 100)
+    #
+    # print("[28] XPath不存在沿路径创建(无tag): ./new/leaf")
+    # print(XPathUtils.add(mock_xml, "./new/leaf", "x"))
+    # print("-" * 100)
+    #
+    # print("[29] 空XPath返回原数据: 空字符串")
+    # print(XPathUtils.add(mock_xml, "", "x"))
+    # print("-" * 100)
+    #
+    # print("=" * 100)
+    # print("【XPathUtils.delete 场景】")
+    # print("=" * 100)
+    #
+    # print("[30] 删除普通节点: ./user")
+    # print(XPathUtils.delete(mock_xml, "./user"))
+    # print("-" * 100)
+    #
+    # print("[31] 删除嵌套节点: ./information/email")
+    # print(XPathUtils.delete(mock_xml, "./information/email"))
+    # print("-" * 100)
+    #
+    # print("[32] 索引精确删除第1个car: ./cars/car[1]")
+    # print(XPathUtils.delete(mock_xml, "./cars/car[1]"))
+    # print("-" * 100)
+    #
+    # print("[33] 删除所有同名节点: .//item")
+    # print(XPathUtils.delete(mock_xml, ".//item"))
+    # print("-" * 100)
+    #
+    # print("[34] 删除所有car的brand: .//brand")
+    # print(XPathUtils.delete(mock_xml, ".//brand"))
+    # print("-" * 100)
+    #
+    # print("[35] 删除中文节点: ./mobile/中国联通")
+    # print(XPathUtils.delete(mock_xml, "./mobile/中国联通"))
+    # print("-" * 100)
+    #
+    # print("[36] 未匹配节点不修改原数据: ./nonexistent")
+    # print(XPathUtils.delete(mock_xml, "./nonexistent"))
+    # print("-" * 100)
+    #
+    # print("[37] 空XPath返回原数据: 空字符串")
+    # print(XPathUtils.delete(mock_xml, ""))
+    # print("-" * 100)
 
-    print("[22] 在hobby下追加同名子元素(无tag): ./hobby")
-    print(XPathUtils.add(mock_xml, "./hobby", "游戏"))
-    print("-" * 100)
 
-    print("[23] 在mobile下追加指定tag子元素: ./mobile, tag=中国铁通")
-    print(XPathUtils.add(mock_xml, "./mobile", "10050", tag="中国铁通"))
-    print("-" * 100)
+    mock_xml2 = """<BOSFXIII xmlns="http://www.bankofshanghai.com/BOSFX/2017/07">
+    <Head>
+        <SvcCd>1630029</SvcCd>
+        <ScnCd>08</ScnCd>
+        <CnlTxnCd>CUPS354</CnlTxnCd>
+        <CnsmrSrlNo>${消费方}</CnsmrSrlNo>
+        <CnsmrSvcNo>10.240.119.111</CnsmrSvcNo>
+        <CnsmrSysId>CUTP</CnsmrSysId>
+        <CnsmrTxnCd>CUPS354</CnsmrTxnCd>
+        <GlblSrlNo>${流水号}</GlblSrlNo>
+        <InstId/>
+        <InttCnlCd>C13</InttCnlCd>
+        <MAC/>
+        <MsgVerNo>3.0</MsgVerNo>
+        <OrgnlCnsmrSvcNo>10.240.119.111</OrgnlCnsmrSvcNo>
+        <OrgnlCnsmrSysId>CUTP</OrgnlCnsmrSysId>
+        <SvcVerNo>1.0</SvcVerNo>
+        <SysRsrvFlgStr/>
+        <SysRsrvStr/>
+        <TxnDt>${date}</TxnDt>
+        <TxnTm>${time}</TxnTm>
+        <UsrNo/>
+    </Head>
+    <Body>
+        <MsgTp>0106</MsgTp>
+        <srteElmtVal>C+3137496900</srteElmtVal>
+        <AcctNo>6250990266685052</AcctNo>
+        <TxnDealCd>502200</TxnDealCd>
+        <SysTrcNo>223066</SysTrcNo>
+        <LclTxnTm>083006</LclTxnTm>
+        <LclTxnDt>0629</LclTxnDt>
+        <CrdVldDt>3305</CrdVldDt>
+        <ClearDate>0225</ClearDate>
+        <MrchTp>5411</MrchTp>
+        <SvcPntInptMdCd>012</SvcPntInptMdCd>
+        <POSCdtnCd>00</POSCdtnCd>
+        <CrdAcptIndCd>315310018000111</CrdAcptIndCd>
+        <CrdAcptNmAdr>测试银联云闪付分期结果查询</CrdAcptNmAdr>
+        <IdntNo>2026060121800201077469817796</IdntNo>
+        <AgngQualfSrlNo>03199315960001</AgngQualfSrlNo>
+        <SysCnlInd>CNL</SysCnlInd>
+        <BnkInnrCnlNo>020</BnkInnrCnlNo>
+        <ExtrnlMrchNo>000</ExtrnlMrchNo>
+        <DealMdNo>000</DealMdNo>
+        <channelNumber>C13</channelNumber>
+        <operatorNumber>1234</operatorNumber>
+        <branchInstNumber>3001144</branchInstNumber>
+    </Body>
+</BOSFXIII>"""
 
-    print("[24] 在cars下追加同名car子元素(无tag): ./cars")
-    print(XPathUtils.add(mock_xml, "./cars", "newcar"))
-    print("-" * 100)
-
-    print("[25] 在information下追加指定tag子元素: ./information, tag=gender")
-    print(XPathUtils.add(mock_xml, "./information", "男", tag="gender"))
-    print("-" * 100)
-
-    print("[26] 叶子节点无tag追加同名兄弟: ./user")
-    print(XPathUtils.add(mock_xml, "./user", "lisi"))
-    print("-" * 100)
-
-    print("[27] XPath不存在沿路径创建: ./new/element, tag=value")
-    print(XPathUtils.add(mock_xml, "./new/element", "x", tag="value"))
-    print("-" * 100)
-
-    print("[28] XPath不存在沿路径创建(无tag): ./new/leaf")
-    print(XPathUtils.add(mock_xml, "./new/leaf", "x"))
-    print("-" * 100)
-
-    print("[29] 空XPath返回原数据: 空字符串")
-    print(XPathUtils.add(mock_xml, "", "x"))
-    print("-" * 100)
-
-    print("=" * 100)
-    print("【XPathUtils.delete 场景】")
-    print("=" * 100)
-
-    print("[30] 删除普通节点: ./user")
-    print(XPathUtils.delete(mock_xml, "./user"))
-    print("-" * 100)
-
-    print("[31] 删除嵌套节点: ./information/email")
-    print(XPathUtils.delete(mock_xml, "./information/email"))
-    print("-" * 100)
-
-    print("[32] 索引精确删除第1个car: ./cars/car[1]")
-    print(XPathUtils.delete(mock_xml, "./cars/car[1]"))
-    print("-" * 100)
-
-    print("[33] 删除所有同名节点: .//item")
-    print(XPathUtils.delete(mock_xml, ".//item"))
-    print("-" * 100)
-
-    print("[34] 删除所有car的brand: .//brand")
-    print(XPathUtils.delete(mock_xml, ".//brand"))
-    print("-" * 100)
-
-    print("[35] 删除中文节点: ./mobile/中国联通")
-    print(XPathUtils.delete(mock_xml, "./mobile/中国联通"))
-    print("-" * 100)
-
-    print("[36] 未匹配节点不修改原数据: ./nonexistent")
-    print(XPathUtils.delete(mock_xml, "./nonexistent"))
-    print("-" * 100)
-
-    print("[37] 空XPath返回原数据: 空字符串")
-    print(XPathUtils.delete(mock_xml, ""))
+    print(XPathUtils.query(mock_xml2, "./Head/SvcCd"))
     print("-" * 100)
