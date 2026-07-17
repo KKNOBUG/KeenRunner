@@ -58,6 +58,9 @@
  *   - buildDebugExecutePayload(step_exec_config_map, datasetPart): 调试专用请求体
  *
  * defineExpose: openRun(ctx), openDebug(ctx)
+ *
+ * 嵌入式（任务向导）：传 caseIds + savedConfigs，聚合多脚本步骤环境行，
+ * 统一全局环境与数据源开关，通过 update:configs 回传 { [caseId]: config }
  */
 import { computed, provide, reactive, ref, watch } from 'vue'
 import {
@@ -74,23 +77,38 @@ import { mapBackendStep } from '@/views/autotest/steps/utils/stepTreeMap'
 const props = defineProps({
   embedded: { type: Boolean, default: false },
   caseId: { type: [Number, String], default: null },
+  /** 嵌入式多脚本：聚合所有用例的步骤环境行，统一全局环境与数据源开关 */
+  caseIds: { type: Array, default: () => [] },
   projectOptions: { type: Array, default: () => [] },
   savedConfig: { type: Object, default: null },
+  /** 多脚本回填：{ [caseId]: config } */
+  savedConfigs: { type: Object, default: null },
 })
 
-const emit = defineEmits(['update:config'])
+const emit = defineEmits(['update:config', 'update:configs'])
 
 const runLoading = defineModel('runLoading', { type: Boolean, default: false })
 const debugLoading = defineModel('debugLoading', { type: Boolean, default: false })
 
 const embeddedLoading = ref(false)
-/** 嵌入式：避免 init 与 emit 互相触发导致重复请求 */
+/** 嵌入式：避免 init 与 emit 互相触发导致重复请求（值为 caseId 或 caseIds 拼接） */
 const embeddedInitCaseId = ref(null)
 let embeddedSkipConfigEmit = false
 /** 恢复 savedConfig 时跳过 watcher，由 init 末尾统一拉取数据集，避免重复请求 */
 let suppressDatasetAutoFetch = false
-/** 已加载数据集名称的 case_id，同一用例再次展开时不重复请求 */
+/** 已加载数据集名称的 case_id（或多脚本 key），同一 key 再次展开时不重复请求 */
 const debugExecDatasetLoadedCaseId = ref(null)
+
+const resolveEmbeddedCaseIds = () => {
+  const fromArr = (Array.isArray(props.caseIds) ? props.caseIds : [])
+    .map((x) => toPositiveCaseId(x))
+    .filter(Boolean)
+  if (fromArr.length) return [...new Set(fromArr)]
+  const one = toPositiveCaseId(props.caseId)
+  return one ? [one] : []
+}
+
+const isAggregatedEmbedded = computed(() => props.embedded && resolveEmbeddedCaseIds().length > 0 && Array.isArray(props.caseIds) && props.caseIds.length > 0)
 
 /** 打开弹窗时由 index.vue 传入的上下文，见文件头注释 */
 const execCtx = ref(null)
@@ -102,6 +120,8 @@ const debugExecDataSourceEnabled = ref(false)
 const debugExecDatasetRows = ref([])
 const debugExecDatasetSelectedIds = ref([])
 const debugExecDatasetLoading = ref(false)
+/** 任务向导：各脚本各自的数据源名称列表 { [caseId]: string[] } */
+const debugExecDatasetNamesByCase = ref({})
 const debugEnvMode = ref('single')
 const debugGlobalEnvId = ref(null)
 const debugSelectedProjectId = ref(null)
@@ -157,7 +177,7 @@ const forEachStepWithQuote = (list, fn, quoteStepsMap, { includeQuoteInner = tru
  * 从步骤树收集需在弹窗里配置环境的行（按应用+配置名分组）
  * HTTP/TCP → apiRows；数据库多操作 → dbRows；Redis 多操作 → redisRows；文件类 → fileRows
  */
-const collectDebugRows = (sourceSteps, quoteStepsMap) => {
+const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
   const getBackendKeyFromStep = (step) => {
     const sid = step?.original?.id
     if (sid != null) return String(sid)
@@ -165,11 +185,17 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
     return `@@${String(n).trim() || '未命名步骤'}`
   }
 
+  const makeTarget = (partial) => {
+    const t = { ...partial }
+    if (caseId != null) t.case_id = caseId
+    return t
+  }
+
   const addToGroup = (map, groupKey, rowFactory, target) => {
     if (!map.has(groupKey)) map.set(groupKey, rowFactory())
     const row = map.get(groupKey)
     row.targets = row.targets || []
-    const tkey = `${target.backend_key}#${target.local_step_id}#${target.op_index ?? ''}`
+    const tkey = `${target.backend_key}#${target.local_step_id}#${target.op_index ?? ''}#${target.case_id ?? ''}`
     if (!row._targetKeySet) row._targetKeySet = new Set()
     if (!row._targetKeySet.has(tkey)) {
       row._targetKeySet.add(tkey)
@@ -219,7 +245,7 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
             env_id: null,
             targets: [],
           }),
-          { local_step_id: step.id, backend_key },
+          makeTarget({ local_step_id: step.id, backend_key }),
       )
     } else if (step.type === 'database') {
       const cfg = step.config || {}
@@ -253,7 +279,7 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
               env_id: null,
               targets: [],
             }),
-            { local_step_id: step.id, backend_key, op_index: idx },
+            makeTarget({ local_step_id: step.id, backend_key, op_index: idx }),
         )
       })
     } else if (step.type === 'redis') {
@@ -288,7 +314,7 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
               env_id: null,
               targets: [],
             }),
-            { local_step_id: step.id, backend_key, op_index: idx },
+            makeTarget({ local_step_id: step.id, backend_key, op_index: idx }),
         )
       })
     }
@@ -320,6 +346,55 @@ const collectDebugRows = (sourceSteps, quoteStepsMap) => {
     dbRows: strip([...dbGroup.values()]),
     redisRows: strip([...redisGroup.values()]),
     fileRows: strip([...fileGroup.values()]),
+  }
+}
+
+/** 多脚本：按 row.key 合并聚合行，targets 带 case_id */
+const mergeDebugRowBags = (bags) => {
+  const mergeSeed = (a, b) => {
+    if (!b?.length) return a || []
+    const m = new Map((a || []).map((o) => [String(o.value), o]))
+    b.forEach((o) => m.set(String(o.value), o))
+    return [...m.values()]
+  }
+  const mergeKind = (lists) => {
+    const map = new Map()
+    for (const list of lists) {
+      for (const row of list || []) {
+        if (!row?.key) continue
+        if (!map.has(row.key)) {
+          map.set(row.key, {
+            ...row,
+            targets: [...(row.targets || [])],
+            _configNameSeed: [...(row._configNameSeed || [])],
+            _dbNameSeed: [...(row._dbNameSeed || [])],
+          })
+          continue
+        }
+        const existing = map.get(row.key)
+        const seen = new Set(
+          (existing.targets || []).map(
+            (t) => `${t.backend_key}#${t.local_step_id}#${t.op_index ?? ''}#${t.case_id ?? ''}`,
+          ),
+        )
+        for (const t of row.targets || []) {
+          const tkey = `${t.backend_key}#${t.local_step_id}#${t.op_index ?? ''}#${t.case_id ?? ''}`
+          if (!seen.has(tkey)) {
+            seen.add(tkey)
+            existing.targets.push(t)
+          }
+        }
+        existing._configNameSeed = mergeSeed(existing._configNameSeed, row._configNameSeed)
+        existing._dbNameSeed = mergeSeed(existing._dbNameSeed, row._dbNameSeed)
+      }
+    }
+    return [...map.values()]
+  }
+  return {
+    apiRows: mergeKind(bags.map((b) => b.apiRows)),
+    dbRows: mergeKind(bags.map((b) => b.dbRows)),
+    redisRows: mergeKind(bags.map((b) => b.redisRows)),
+    fileRows: mergeKind(bags.map((b) => b.fileRows)),
   }
 }
 
@@ -380,6 +455,7 @@ const resetModalFormState = () => {
   debugExecDataSourceEnabled.value = false
   debugExecDatasetRows.value = []
   debugExecDatasetSelectedIds.value = []
+  debugExecDatasetNamesByCase.value = {}
   debugExecDatasetLoadedCaseId.value = null
   debugGlobalEnvId.value = null
   debugSelectedProjectId.value = null
@@ -496,40 +572,94 @@ const clearDebugExecDatasetSelection = () => {
 const resolveExecCaseId = () => {
   const fromCtx = execCtx.value?.caseId
   if (fromCtx != null) return toPositiveCaseId(fromCtx)
-  if (props.embedded) return toPositiveCaseId(props.caseId)
+  if (props.embedded) {
+    const ids = resolveEmbeddedCaseIds()
+    if (ids.length === 1) return ids[0]
+    return toPositiveCaseId(props.caseId)
+  }
   return null
 }
 
 const fetchDebugExecDatasetNames = async ({ force = false } = {}) => {
-  const caseId = resolveExecCaseId()
-  if (!caseId) {
+  const ids = props.embedded ? resolveEmbeddedCaseIds() : (() => {
+    const one = resolveExecCaseId()
+    return one ? [one] : []
+  })()
+  if (!ids.length) {
     debugExecDatasetRows.value = []
+    debugExecDatasetNamesByCase.value = {}
     window.$message?.warning?.('缺少用例 ID，无法加载数据集名称')
     return
   }
+  const cacheKey = ids.join(',')
+  const autoAll = isAggregatedEmbedded.value
   if (
       !force
-      && debugExecDatasetLoadedCaseId.value === caseId
-      && debugExecDatasetRows.value.length > 0
+      && debugExecDatasetLoadedCaseId.value === cacheKey
+      && (autoAll
+          ? Object.keys(debugExecDatasetNamesByCase.value).length > 0
+          : debugExecDatasetRows.value.length > 0)
   ) {
+    if (autoAll) {
+      const union = new Set()
+      Object.values(debugExecDatasetNamesByCase.value).forEach((names) => {
+        ;(names || []).forEach((n) => union.add(String(n)))
+      })
+      debugExecDatasetSelectedIds.value = [...union]
+      debugExecDatasetRows.value = [...union].map((name) => ({ id: String(name), name: String(name) }))
+    }
     return
   }
   debugExecDatasetLoading.value = true
   try {
-    const fd = new FormData()
-    fd.append('case_id', String(caseId))
-    const res = await api.queryDatasetNames(fd)
-    const names = Array.isArray(res?.data) ? res.data : []
-    debugExecDatasetRows.value = names.map((name) => ({ id: String(name), name: String(name) }))
-    debugExecDatasetLoadedCaseId.value = caseId
-    const nameSet = new Set(names.map(String))
-    debugExecDatasetSelectedIds.value = debugExecDatasetSelectedIds.value.filter((id) => nameSet.has(String(id)))
+    const results = await Promise.all(
+      ids.map(async (cid) => {
+        const fd = new FormData()
+        fd.append('case_id', String(cid))
+        const res = await api.queryDatasetNames(fd)
+        const names = Array.isArray(res?.data) ? res.data.map(String) : []
+        return { cid, names }
+      }),
+    )
+    const byCase = {}
+    results.forEach(({ cid, names }) => {
+      byCase[String(cid)] = names
+    })
+    debugExecDatasetNamesByCase.value = byCase
+
+    let nameList
+    if (autoAll) {
+      // 任务向导：开启即自动纳入各脚本全部数据源（按脚本分别下发）
+      const union = new Set()
+      results.forEach(({ names }) => names.forEach((n) => union.add(n)))
+      nameList = [...union]
+      debugExecDatasetSelectedIds.value = nameList.map(String)
+    } else if (results.length === 1) {
+      nameList = results[0].names
+      const nameSet = new Set(nameList.map(String))
+      debugExecDatasetSelectedIds.value = debugExecDatasetSelectedIds.value.filter((id) => nameSet.has(String(id)))
+    } else {
+      // 多脚本手工选择模式：仅展示交集
+      let inter = null
+      for (const { names } of results) {
+        const set = new Set(names)
+        if (inter == null) inter = set
+        else inter = new Set([...inter].filter((n) => set.has(n)))
+      }
+      nameList = [...(inter || [])]
+      const nameSet = new Set(nameList.map(String))
+      debugExecDatasetSelectedIds.value = debugExecDatasetSelectedIds.value.filter((id) => nameSet.has(String(id)))
+    }
+    debugExecDatasetRows.value = nameList.map((name) => ({ id: String(name), name: String(name) }))
+    debugExecDatasetLoadedCaseId.value = cacheKey
   } catch (e) {
     debugExecDatasetRows.value = []
+    debugExecDatasetNamesByCase.value = {}
     debugExecDatasetLoadedCaseId.value = null
     console.error('queryDatasetNames failed', e)
   } finally {
     debugExecDatasetLoading.value = false
+    if (props.embedded) emitEmbeddedConfigIfReady()
   }
 }
 
@@ -547,24 +677,39 @@ const toggleDebugExecDatasetRow = (rowId, checked) => {
   }
 }
 
-const validateExecDatasetSelection = () => {
+const validateExecDatasetSelection = (silent = false) => {
   if (!debugExecDataSourceEnabled.value) return true
   if (debugExecDatasetLoading.value) {
-    window.$message?.warning?.('数据集列表加载中，请稍候')
+    if (!silent) window.$message?.warning?.('数据集列表加载中，请稍候')
     return false
   }
+  // 任务向导：开启后自动纳入全部数据源，无需手工勾选
+  if (isAggregatedEmbedded.value) {
+    const any = Object.values(debugExecDatasetNamesByCase.value || {}).some(
+      (names) => Array.isArray(names) && names.length > 0,
+    )
+    if (!any) {
+      if (!silent) {
+        window.$message?.warning?.('所选脚本暂无可用数据源，请先上传数据源或关闭数据源开关')
+      }
+      return false
+    }
+    return true
+  }
   if (!debugExecDatasetRows.value.length) {
-    window.$message?.warning?.('当前用例暂无可用数据集，请先上传数据源或关闭「请选择数据源」')
+    if (!silent) {
+      window.$message?.warning?.('当前用例暂无可用数据集，请先上传数据源或关闭「请选择数据源」')
+    }
     return false
   }
   const n = debugExecDatasetSelectedIds.value.length
   if (execConfigMode.value === 'debug') {
     if (n !== 1) {
-      window.$message?.warning?.('调试模式下必须且仅能选择一个数据集')
+      if (!silent) window.$message?.warning?.('调试模式下必须且仅能选择一个数据集')
       return false
     }
   } else if (n < 1) {
-    window.$message?.warning?.('请至少勾选一个数据集，或关闭「请选择数据源」')
+    if (!silent) window.$message?.warning?.('请至少勾选一个数据集，或关闭「请选择数据源」')
     return false
   }
   return true
@@ -574,15 +719,16 @@ watch(debugExecDataSourceEnabled, (on) => {
   if (!on) {
     debugExecDatasetSelectedIds.value = []
     debugExecDatasetRows.value = []
+    debugExecDatasetNamesByCase.value = {}
     debugExecDatasetLoadedCaseId.value = null
     execConfigCollapseExpanded.value = execConfigCollapseExpanded.value.filter((n) => n !== 'dataset')
     return
   }
   if (suppressDatasetAutoFetch) return
-  if (!execConfigCollapseExpanded.value.includes('dataset')) {
+  if (!isAggregatedEmbedded.value && !execConfigCollapseExpanded.value.includes('dataset')) {
     execConfigCollapseExpanded.value = [...execConfigCollapseExpanded.value, 'dataset']
   }
-  fetchDebugExecDatasetNames()
+  fetchDebugExecDatasetNames({ force: true })
 })
 
 watch(() => debugGlobalEnvId.value, (envId) => {
@@ -755,13 +901,19 @@ const applyDebugConfigToSteps = () => {
   })
 }
 
-/** 根据弹窗表格与环境配置字典，生成后端 steps_execute_config 对象 */
-const buildStepExecConfigMap = (env_name) => {
+/** 根据弹窗表格与环境配置字典，生成后端 steps_execute_config 对象；caseIdFilter 用于多脚本拆分 */
+const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
   const map = {}
+  const targetBelongs = (t) => {
+    if (caseIdFilter == null) return true
+    if (t.case_id == null) return true
+    return Number(t.case_id) === Number(caseIdFilter)
+  }
   const prefill = (rows, mode) => {
     rows.forEach((r) => {
       const targets = Array.isArray(r.targets) ? r.targets : []
       targets.forEach((t) => {
+        if (!targetBelongs(t)) return
         const bk = String(t.backend_key)
         if (mode === 'db' && t.op_index != null && t.op_index >= 0) {
           map[`${bk}_@@${t.op_index}`] = {}
@@ -784,6 +936,7 @@ const buildStepExecConfigMap = (env_name) => {
     if (!env_name || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
+      if (!targetBelongs(t)) return
       map[String(t.backend_key)] = {
         env_name,
         config_type: 'api',
@@ -804,6 +957,7 @@ const buildStepExecConfigMap = (env_name) => {
     if (!env_name || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
+      if (!targetBelongs(t)) return
       const opIdx = t.op_index
       if (opIdx == null || opIdx < 0) return
       map[`${String(t.backend_key)}_@@${opIdx}`] = {
@@ -826,6 +980,7 @@ const buildStepExecConfigMap = (env_name) => {
     if (!env_name || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
+      if (!targetBelongs(t)) return
       const opIdx = t.op_index
       if (opIdx == null || opIdx < 0) return
       map[`${String(t.backend_key)}_@@${opIdx}`] = {
@@ -847,6 +1002,7 @@ const buildStepExecConfigMap = (env_name) => {
     if (!env_name || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
+      if (!targetBelongs(t)) return
       map[String(t.backend_key)] = {
         env_name,
         config_type: 'file',
@@ -983,6 +1139,7 @@ const confirmExecConfigAndAction = async () => {
 provide(
     'execConfigPanel',
     reactive({
+      taskWizardLayout: isAggregatedEmbedded,
       debugGlobalEnvId,
       debugEnvOptions,
       envLoading,
@@ -1020,6 +1177,23 @@ const applySavedConfig = (cfg) => {
   }
 }
 
+const pickSavedConfigForCases = (ids) => {
+  const map = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : null
+  if (map) {
+    for (const cid of ids) {
+      const cfg = map[String(cid)]
+      if (cfg && typeof cfg === 'object' && (cfg.global_env_id != null || cfg.env_mode || Array.isArray(cfg.selected_dataset_names))) {
+        return cfg
+      }
+    }
+    for (const cid of ids) {
+      if (map[String(cid)]) return map[String(cid)]
+    }
+  }
+  if (ids.length === 1 && props.savedConfig) return props.savedConfig
+  return props.savedConfig
+}
+
 const buildConfigPayload = () => {
   const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
   const payload = {
@@ -1034,6 +1208,32 @@ const buildConfigPayload = () => {
   return payload
 }
 
+/** 多脚本：共享全局环境；数据源按脚本自动纳入各自全部数据集 */
+const buildConfigsPayload = () => {
+  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  const ids = resolveEmbeddedCaseIds()
+  const shared = {
+    global_env_id: debugGlobalEnvId.value,
+    env_mode: debugEnvMode.value,
+    env_name,
+  }
+  const out = {}
+  for (const cid of ids) {
+    const cfg = {
+      ...shared,
+      steps_execute_config: buildStepExecConfigMap(env_name, cid),
+    }
+    if (debugExecDataSourceEnabled.value) {
+      const names = debugExecDatasetNamesByCase.value[String(cid)] || []
+      if (names.length) {
+        cfg.selected_dataset_names = [...names]
+      }
+    }
+    out[String(cid)] = cfg
+  }
+  return out
+}
+
 const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) => {
   if (!debugGlobalEnvId.value) {
     if (!silent) window.$message?.warning?.('请选择全局环境')
@@ -1044,7 +1244,7 @@ const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) 
     if (!silent) window.$message?.warning?.('全局环境无效，请重新选择')
     return false
   }
-  if (!validateExecDatasetSelection()) return false
+  if (!validateExecDatasetSelection(silent)) return false
   const missingCfg = collectExecConfigMissingRows()
   if (missingCfg.length) {
     if (!silent) window.$message?.error?.(formatExecConfigMissingMessage(missingCfg, actionLabel))
@@ -1056,32 +1256,42 @@ const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) 
 const emitEmbeddedConfigIfReady = () => {
   if (!props.embedded || embeddedLoading.value || embeddedSkipConfigEmit) return
   if (!validateConfigPayload({ silent: true })) return
-  emit('update:config', buildConfigPayload())
+  if (isAggregatedEmbedded.value) {
+    emit('update:configs', buildConfigsPayload())
+  } else {
+    emit('update:config', buildConfigPayload())
+  }
 }
 
-const initEmbeddedCase = async () => {
-  const cid = toPositiveCaseId(props.caseId)
-  if (!cid) return
+const initEmbeddedCases = async () => {
+  const ids = resolveEmbeddedCaseIds()
+  if (!ids.length) return
   embeddedLoading.value = true
   embeddedSkipConfigEmit = true
   suppressDatasetAutoFetch = true
   try {
-    const res = await api.getAutoTestStepTree({ case_id: cid })
-    const data = Array.isArray(res?.data) ? res.data : []
-    const execSourceSteps = data.map(mapBackendStep).filter(Boolean)
-    const quoteStepsMap = {}
-    await loadQuoteStepsForList(execSourceSteps, quoteStepsMap)
+    const bags = []
+    const quoteStepsMapAll = {}
+    for (const cid of ids) {
+      const res = await api.getAutoTestStepTree({ case_id: cid })
+      const data = Array.isArray(res?.data) ? res.data : []
+      const execSourceSteps = data.map(mapBackendStep).filter(Boolean)
+      const quoteStepsMap = {}
+      await loadQuoteStepsForList(execSourceSteps, quoteStepsMap)
+      Object.assign(quoteStepsMapAll, quoteStepsMap)
+      bags.push(collectDebugRows(execSourceSteps, quoteStepsMap, cid))
+    }
     execCtx.value = {
-      sourceSteps: execSourceSteps,
-      quoteStepsMap: { ...quoteStepsMap },
-      caseId: cid,
+      sourceSteps: [],
+      quoteStepsMap: { ...quoteStepsMapAll },
+      caseId: ids[0],
       projectOptions: props.projectOptions,
-      resolveCaseId: () => cid,
+      resolveCaseId: () => ids[0],
       mode: 'run',
     }
     execConfigMode.value = 'run'
     resetModalFormState()
-    debugRows.value = collectDebugRows(execSourceSteps, quoteStepsMap)
+    debugRows.value = bags.length === 1 ? bags[0] : mergeDebugRowBags(bags)
     execConfigCollapseExpanded.value = ['env']
     await loadDebugEnvEnums()
     if (!debugSelectedProjectId.value && debugApps.value.length > 0) {
@@ -1089,12 +1299,12 @@ const initEmbeddedCase = async () => {
     }
     const project_ids = debugApps.value.map((x) => Number(x.project_id)).filter((x) => !Number.isNaN(x))
     if (project_ids.length) await loadEnvConfigByProjects(project_ids)
-    applySavedConfig(props.savedConfig)
+    applySavedConfig(pickSavedConfigForCases(ids))
     if (debugExecDataSourceEnabled.value) {
-      if (!execConfigCollapseExpanded.value.includes('dataset')) {
+      if (!isAggregatedEmbedded.value && !execConfigCollapseExpanded.value.includes('dataset')) {
         execConfigCollapseExpanded.value = [...execConfigCollapseExpanded.value, 'dataset']
       }
-      await fetchDebugExecDatasetNames()
+      await fetchDebugExecDatasetNames({ force: true })
     }
   } catch (e) {
     console.error('加载用例执行配置失败', e)
@@ -1109,15 +1319,15 @@ const initEmbeddedCase = async () => {
 }
 
 watch(
-    () => (props.embedded ? toPositiveCaseId(props.caseId) : null),
-    (cid) => {
-      if (!props.embedded || !cid) return
-      if (embeddedInitCaseId.value === cid) return
-      embeddedInitCaseId.value = cid
-      initEmbeddedCase()
+    () => (props.embedded ? resolveEmbeddedCaseIds().join(',') : null),
+    (key) => {
+      if (!props.embedded || !key) return
+      if (embeddedInitCaseId.value === key) return
+      embeddedInitCaseId.value = key
+      initEmbeddedCases()
     },
     { immediate: true },
-)
+  )
 
 watch(debugGlobalEnvId, () => {
   if (props.embedded) emitEmbeddedConfigIfReady()

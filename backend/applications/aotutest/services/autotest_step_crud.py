@@ -1137,24 +1137,43 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     dataset_names = []
                 dataset_names = [str(x) for x in dataset_names if x is not None and str(x).strip()]
 
+                raw_exec_count = case_cfg.get("execute_count", 1)
+                try:
+                    execute_count = int(raw_exec_count)
+                except (TypeError, ValueError):
+                    execute_count = 1
+                execute_count = max(1, min(execute_count, 9999))
+
                 # 每个用例独立开启事务执行
-                LOGGER.info(f"==========> 执行用例ID: {case_id} 开始")
+                # 有数据源时：总次数 = 执行次数 * 数据源数量；无数据源时：按执行次数循环
+                LOGGER.info(
+                    f"==========> 执行用例ID: {case_id} 开始 "
+                    f"(execute_count={execute_count}, datasets={len(dataset_names)})"
+                )
                 if dataset_names:
                     case_results: List[Dict[str, Any]] = []
                     case_ok = True
-                    for ds_name in dataset_names:
-                        one = await self.execute_single_case(
-                            case_id=case_id,
-                            initial_variables=initial_variables,
-                            steps_execute_config=per_steps_cfg,
-                            report_type=report_type,
-                            task_code=task_code,
-                            batch_code=batch_code,
-                            dataset_name=ds_name,
-                        )
-                        case_results.append(one)
-                        if not one.get("success", False):
-                            case_ok = False
+                    total_runs = execute_count * len(dataset_names)
+                    run_idx = 0
+                    for _ in range(execute_count):
+                        for ds_name in dataset_names:
+                            run_idx += 1
+                            one = await self.execute_single_case(
+                                case_id=case_id,
+                                initial_variables=initial_variables,
+                                steps_execute_config=per_steps_cfg,
+                                report_type=report_type,
+                                task_code=task_code,
+                                batch_code=batch_code,
+                                dataset_name=ds_name,
+                            )
+                            case_results.append(one)
+                            if not one.get("success", False):
+                                case_ok = False
+                            LOGGER.info(
+                                f"用例ID: {case_id} 第 {run_idx}/{total_runs} 次执行完成 "
+                                f"(dataset={ds_name}), success={one.get('success', False)}"
+                            )
                     result = case_results[-1] if case_results else {
                         "case_id": case_id,
                         "success": False,
@@ -1162,6 +1181,33 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     }
                     result["success"] = case_ok
                     result["dataset_runs"] = len(case_results)
+                    result["execute_runs"] = len(case_results)
+                elif execute_count > 1:
+                    case_results = []
+                    case_ok = True
+                    for run_idx in range(execute_count):
+                        one = await self.execute_single_case(
+                            case_id=case_id,
+                            initial_variables=initial_variables,
+                            steps_execute_config=per_steps_cfg,
+                            report_type=report_type,
+                            task_code=task_code,
+                            batch_code=batch_code,
+                        )
+                        case_results.append(one)
+                        if not one.get("success", False):
+                            case_ok = False
+                        LOGGER.info(
+                            f"用例ID: {case_id} 第 {run_idx + 1}/{execute_count} 次执行完成, "
+                            f"success={one.get('success', False)}"
+                        )
+                    result = case_results[-1] if case_results else {
+                        "case_id": case_id,
+                        "success": False,
+                        "error": "未执行任何次数",
+                    }
+                    result["success"] = case_ok
+                    result["execute_runs"] = len(case_results)
                 else:
                     result = await self.execute_single_case(
                         case_id=case_id,

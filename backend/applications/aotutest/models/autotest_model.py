@@ -420,7 +420,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     cases_execute_config = fields.JSONField(
         default=dict,
         null=True,
-        description="按用例ID的执行配置 {case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name}}",
+        description="按用例ID的执行配置 {case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name, execute_count}}",
     )
     related_cases_env_id = fields.JSONField(
         default=list,
