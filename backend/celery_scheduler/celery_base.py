@@ -208,6 +208,17 @@ async def check_task_expired(task: Any) -> bool:
     # 统一为 naive datetime 比较
     if last_run and getattr(last_run, "tzinfo", None):
         last_run = last_run.replace(tzinfo=None) if last_run.tzinfo else last_run
+    if isinstance(last_run, str):
+        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+            try:
+                last_run = datetime.strptime(last_run[:26], fmt) if "." in last_run else datetime.strptime(last_run[:19], "%Y-%m-%d %H:%M:%S")
+                break
+            except ValueError:
+                continue
+        else:
+            last_run = None
+
+    task_id = getattr(task, "id", None)
 
     if scheduler_str == "cron":
         expr = (getattr(task, "task_crontabs_expr", None) or "").strip()
@@ -215,18 +226,19 @@ async def check_task_expired(task: Any) -> bool:
             return False
         try:
             from croniter import croniter
-            # 轮询调度（Beat 每分钟扫一次）：不能用「从 now 算 get_next」——那会永远落在未来。
-            # 正确做法：看「当前时刻之前最近一次 cron 触发点」是否晚于 last_execute_time。
-            # 例：* * * * *，15:59:03 扫描 → prev=15:59:00；若上次执行早于该点则应下发。
+            # 轮询调度：当前时刻之前最近一次 cron 点晚于 last_run 则应触发
             it = croniter(expr, now)
             prev_run = it.get_prev(datetime)
-            if last_run is None:
-                return True
-            return last_run < prev_run
+            due = True if last_run is None else (last_run < prev_run)
+            logger.debug(
+                f"【Krun-Celery-Worker】cron到期判断 task_id={task_id} expr={expr} "
+                f"now={now} prev={prev_run} last_run={last_run} due={due}"
+            )
+            return due
         except Exception as e:
             logger.warning(
                 f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Cron表达式解析失败: "
-                f" task_id={getattr(task, 'id', None)}",
+                f" task_id={task_id}",
                 f"错误类型: {type(e).__name__}, "
                 f"错误描述: {e}, \n"
                 f"错误回溯: {traceback.format_exc()}"
@@ -248,10 +260,20 @@ async def check_task_expired(task: Any) -> bool:
         if not expr:
             return False
         try:
-            target = datetime.strptime(expr, "%Y-%m-%d %H:%M:%S")
+            target = datetime.strptime(expr[:19], "%Y-%m-%d %H:%M:%S")
+            # 一次性：已在目标时刻之后执行过则不再触发
             if last_run and last_run >= target:
+                logger.debug(
+                    f"【Krun-Celery-Worker】datetime已消费 task_id={task_id} "
+                    f"target={target} last_run={last_run}"
+                )
                 return False
-            return now >= target
+            due = now >= target
+            logger.debug(
+                f"【Krun-Celery-Worker】datetime到期判断 task_id={task_id} "
+                f"target={target} now={now} last_run={last_run} due={due}"
+            )
+            return due
         except Exception as e:
             logger.warning(
                 f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Datetime表达式解析失败: "

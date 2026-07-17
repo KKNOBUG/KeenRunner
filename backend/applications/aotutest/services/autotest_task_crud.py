@@ -249,16 +249,38 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         return instance
 
     async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:
-        """设置任务是否启动调度（仅修改 task_enabled 字段）。
+        """设置任务是否启动调度。
 
-        :param task_id: 任务主键 ID。
-        :param enabled: 是否启用调度，默认 True。
-        :returns: 更新后的任务实例。
-        :raises NotFoundException: 任务不存在时。
+        启用时：若为「执行 1 次」落库的 datetime 模式且仍保留 crontab，
+        则按 crontab 重算下一次触发时间，避免旧 target 已被 last_execute_time 消费后永远不再触发。
         """
+        from datetime import datetime
+
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         instance.task_enabled = enabled
-        await instance.save(update_fields=["task_enabled"])
+        update_fields = ["task_enabled"]
+
+        if enabled:
+            scheduler = getattr(instance.task_scheduler, "value", None) or instance.task_scheduler
+            scheduler_str = str(scheduler or "").strip().lower()
+            crontab = (instance.task_crontabs_expr or "").strip()
+            if scheduler_str == "datetime" and crontab:
+                try:
+                    from croniter import croniter
+                    now = datetime.now()
+                    next_dt = croniter(crontab, now).get_next(datetime)
+                    instance.task_datetime_expr = next_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    update_fields.append("task_datetime_expr")
+                    LOGGER.info(
+                        f"启动任务时刷新一次性触发时间: task_id={task_id}, "
+                        f"crontab={crontab}, next={instance.task_datetime_expr}"
+                    )
+                except Exception as e:
+                    LOGGER.warning(
+                        f"启动任务时刷新 datetime 触发点失败: task_id={task_id}, error={e}"
+                    )
+
+        await instance.save(update_fields=update_fields)
         return instance
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: list) -> tuple:

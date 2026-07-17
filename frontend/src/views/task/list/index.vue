@@ -417,10 +417,21 @@ const columns = computed(() => {
     key: 'last_execute_state',
     width: 110,
     align: 'center',
-    ellipsis: {tooltip: true},
     render(row) {
       const v = row.last_execute_state
-      return h('span', v ? (TASK_STATUS_MAP[v] || v) : '-')
+      if (v == null || v === '') return h('span', '-')
+      const label = TASK_STATUS_MAP[v] || v
+      const typeMap = {
+        等待执行: 'default',
+        正在执行: 'warning',
+        成功: 'success',
+        失败: 'error',
+      }
+      return h(
+        NTag,
+        { type: typeMap[label] || 'default', size: 'small', round: true },
+        { default: () => label },
+      )
     },
   },
     {

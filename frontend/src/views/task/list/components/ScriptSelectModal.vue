@@ -55,10 +55,6 @@ const caseAttrOptions = [
   { label: '正用例', value: '正用例' },
   { label: '反用例', value: '反用例' },
 ]
-const caseTypeOptions = [
-  { label: '公共脚本', value: '公共脚本' },
-  { label: '用户脚本', value: '用户脚本' },
-]
 
 const isExpanded = computed(() => expandedNames.value.includes('add'))
 
@@ -306,7 +302,11 @@ function onTableDataChange(data) {
 }
 
 async function getData(params) {
-  return api.getApiTestcaseList(params)
+  // 任务仅允许添加用户脚本，查询条件固定，不提供用例类型筛选
+  return api.getApiTestcaseList({
+    ...params,
+    case_type: '用户脚本',
+  })
 }
 
 function onCheckedKeysUpdate(keys) {
@@ -410,15 +410,6 @@ defineExpose({ collapse })
               :options="caseAttrOptions"
               clearable
               placeholder="请选择用例属性"
-              class="query-input"
-            />
-          </QueryBarItem>
-          <QueryBarItem label="用例类型：">
-            <NSelect
-              v-model:value="queryItems.case_type"
-              :options="caseTypeOptions"
-              clearable
-              placeholder="请选择用例类型"
               class="query-input"
             />
           </QueryBarItem>

@@ -115,12 +115,27 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     dispatched = 0
     for task in tasks:
         try:
-            if await check_task_expired(task):
+            due = await check_task_expired(task)
+            if due:
                 run_autotest_task.apply_async(
                     args=[task.id],
                     __task_id=task.id,
                 )
                 dispatched += 1
+                LOGGER.info(
+                    f"【Krun-Celery-Worker】【span_id={span_id}】扫描下发任务: "
+                    f"task_id={task.id}, scheduler={getattr(task, 'task_scheduler', None)}, "
+                    f"crontab={getattr(task, 'task_crontabs_expr', None)}, "
+                    f"datetime={getattr(task, 'task_datetime_expr', None)}"
+                )
+            else:
+                LOGGER.info(
+                    f"【Krun-Celery-Worker】【span_id={span_id}】扫描未到期: "
+                    f"task_id={task.id}, scheduler={getattr(task, 'task_scheduler', None)}, "
+                    f"crontab={getattr(task, 'task_crontabs_expr', None)}, "
+                    f"datetime={getattr(task, 'task_datetime_expr', None)}, "
+                    f"last_execute_time={getattr(task, 'last_execute_time', None)}"
+                )
         except Exception as e:
             task_id = getattr(task, "id", None)
             LOGGER.error(

@@ -2,7 +2,8 @@
 /**
  * Crontab 可视化生成器
  * 秒/分：-1～59；时：-1～23；日：0～31；月：0～12；周：0～7
- * runMode: once → datetime 提交；repeat → cron 提交
+ * runMode: once → datetime 一次性提交；repeat → cron 周期提交
+ * 「执行 1 次」≠ 每分钟 cron，而是把「最近一次」固化为 datetime，触发后自动停止。
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { NInput, NInputNumber, NPopover, NRadio, NRadioGroup, NSlider } from 'naive-ui'
@@ -414,8 +415,8 @@ if (props.modelValue?.trim()) {
           class="cron-run-mode"
           @update:value="onRunModeChange"
         >
-          <NRadio value="once">执行 1 次</NRadio>
-          <NRadio value="repeat">执行 N 次</NRadio>
+          <NRadio value="once">执行 1 次（按最近一次时间点触发后停止）</NRadio>
+          <NRadio value="repeat">执行 N 次（按 Crontab 周期重复）</NRadio>
         </NRadioGroup>
         <NPopover
           v-model:show="examplesPopoverShow"

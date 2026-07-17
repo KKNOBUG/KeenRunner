@@ -16,7 +16,6 @@ import {
   NDrawerContent,
   NModal,
   NPagination,
-  NSpace,
   NSpin,
   NTag,
 } from 'naive-ui'
@@ -338,8 +337,7 @@ function openScriptDrawer(batchRow) {
   scriptGroups.value = groups
   // 默认全部展开，便于一眼看清
   expandedScriptNames.value = groups.map((g) => g._key)
-  const timeLabel = batchRow?.execute_time && batchRow.execute_time !== '-' ? batchRow.execute_time : ''
-  scriptDrawerTitle.value = timeLabel ? `脚本执行信息（${timeLabel}）` : '脚本执行信息'
+  scriptDrawerTitle.value = '脚本执行信息'
   scriptDrawerVisible.value = true
   detailDrawerVisible.value = false
   detailReportRow.value = null
@@ -558,7 +556,7 @@ const batchColumns = computed(() => [
   {
     title: '执行时间',
     key: 'execute_time',
-    width: 170,
+    width: 210,
     align: 'center',
     ellipsis: { tooltip: true },
   },
@@ -606,7 +604,7 @@ const modalStyle = {
 <template>
   <NModal
     v-model:show="modalVisible"
-    :title="historyTaskName ? `执行历史（${historyTaskName}）` : '执行历史'"
+    :title="'执行历史'"
     preset="card"
     class="task-history-modal"
     :style="modalStyle"
@@ -672,20 +670,6 @@ const modalStyle = {
               </div>
             </template>
             <NCard size="small" :bordered="false" class="script-run-card">
-              <div v-if="group.cfg_dataset_names.length" class="dataset-plan">
-                <span class="dataset-plan-label">配置数据源：</span>
-                <NSpace :size="6" wrap>
-                  <NTag
-                    v-for="ds in group.cfg_dataset_names"
-                    :key="ds"
-                    size="small"
-                    type="warning"
-                    :bordered="false"
-                  >
-                    {{ ds }}
-                  </NTag>
-                </NSpace>
-              </div>
               <NDataTable
                 :columns="runColumns"
                 :data="group.runs"
@@ -783,19 +767,6 @@ const modalStyle = {
 }
 .script-run-card {
   background: transparent;
-}
-.dataset-plan {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-.dataset-plan-label {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  line-height: 22px;
-  flex-shrink: 0;
 }
 </style>
 
