@@ -149,7 +149,7 @@ def get_span_id_for_log():
 
 def get_step_crud():
     from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-    return AutoTestApiStepCrud
+    return AutoTestApiStepCrud()
 
 
 def get_task_model():
@@ -215,12 +215,14 @@ async def check_task_expired(task: Any) -> bool:
             return False
         try:
             from croniter import croniter
-            base = last_run or now
-            if getattr(base, "tzinfo", None):
-                base = base.replace(tzinfo=None)
-            it = croniter(expr, base)
-            next_run = it.get_next(datetime)
-            return next_run <= now
+            # 轮询调度（Beat 每分钟扫一次）：不能用「从 now 算 get_next」——那会永远落在未来。
+            # 正确做法：看「当前时刻之前最近一次 cron 触发点」是否晚于 last_execute_time。
+            # 例：* * * * *，15:59:03 扫描 → prev=15:59:00；若上次执行早于该点则应下发。
+            it = croniter(expr, now)
+            prev_run = it.get_prev(datetime)
+            if last_run is None:
+                return True
+            return last_run < prev_run
         except Exception as e:
             logger.warning(
                 f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Cron表达式解析失败: "

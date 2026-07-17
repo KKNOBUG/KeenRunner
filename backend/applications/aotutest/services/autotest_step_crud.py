@@ -1237,6 +1237,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.info(f"==========> 执行用例ID: {case_id} 结束")
         LOGGER.info(f"{'= ' * 20}批量执行结束{'= ' * 20}")
         return {
+            "batch_code": batch_code,
             "total_cases": total_cases,
             "success_cases": success_cases,
             "failed_cases": failed_cases,

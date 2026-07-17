@@ -84,7 +84,13 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         if get_scheduler_value(getattr(task, "task_scheduler", None)) == "datetime":
             task.task_enabled = False
             await task.save(update_fields=["task_enabled"])
-        return {"success": True, "task_id": task_id, "result": result}
+        batch_code = result.get("batch_code") if isinstance(result, dict) else None
+        return {
+            "success": True,
+            "task_id": task_id,
+            "batch_code": batch_code,
+            "result": result,
+        }
     except Exception as e:
         LOGGER.error(
             f"【Krun-Celery-Worker】【span_id={span_id}】函数run_autotest_task执行异常:"

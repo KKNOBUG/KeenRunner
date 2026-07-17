@@ -21,6 +21,7 @@ dependencies = [
     "atlastk==0.13.3",
     "attrs==25.3.0",
     "celery>=5.4.0",
+    "celery-redbeat>=2.4.1",
     "certifi==2025.4.26",
     "cffi==1.17.1",
     "charset-normalizer==3.4.1",

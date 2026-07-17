@@ -293,6 +293,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
     task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
+    dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次执行使用的数据集/场景名称(参数化)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:

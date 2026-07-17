@@ -384,7 +384,16 @@ def create_celery():
             LOGGER.info(
                 f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行成功: task_id=[{task_id}]"
             )
-            self.handel_task_record(True, str(retval) if retval is not None else "")
+            # 字典结果落库为 JSON，便于历史页按 batch_code 关联脚本报告
+            if isinstance(retval, dict):
+                try:
+                    import json
+                    summary = json.dumps(retval, ensure_ascii=False, default=str)
+                except Exception:
+                    summary = str(retval)
+            else:
+                summary = str(retval) if retval is not None else ""
+            self.handel_task_record(True, summary)
             return super(ContextTask, self).on_success(retval, task_id, args, kwargs)
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):

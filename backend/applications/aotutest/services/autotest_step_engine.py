@@ -3356,6 +3356,7 @@ class AutoTestStepExecutionEngine:
                     created_user=user_name,
                     task_code=self._task_code,
                     batch_code=self._batch_code,
+                    dataset_name=(dataset_name or None),
                 )
                 pending_create_details = list(self._pending_details)
 
