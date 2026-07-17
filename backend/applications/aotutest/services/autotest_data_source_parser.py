@@ -10,16 +10,53 @@
 xlsx 约定：无表头(header=None)；第 0 行第 2 列起为场景名；第 1 列为行标签（head/body/assert 及字段名）；Head/Body 行值为 KV 文本可解析。
 """
 import asyncio
+import math
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Tuple, Union
 
+import numpy as np
 import pandas as pd
 
 from backend.configure import LOGGER
 
 _executor = ThreadPoolExecutor(max_workers=4)
+
+
+def json_safe_value(value: Any) -> Any:
+    """将单元格/字段值转为 JSON 可序列化类型；NaN/Inf/NaT → None。"""
+    if value is None:
+        return None
+    try:
+        if value is pd.NA or value is pd.NaT:
+            return None
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, (np.bool_,)):
+        return bool(value)
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
+    if isinstance(value, np.ndarray):
+        return [json_safe_value(v) for v in value.tolist()]
+    if isinstance(value, dict):
+        return {str(k): json_safe_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe_value(v) for v in value]
+    return value
+
+
+def json_safe_obj(obj: Any) -> Any:
+    """递归清洗任意嵌套结构，保证可被标准 JSON 序列化。"""
+    return json_safe_value(obj)
 
 
 def parse_kv_string(text: str) -> Dict[str, str]:
@@ -100,7 +137,10 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
                 key = first_col[r]
                 value = data_values[r, col_idx]
                 if key and pd.notna(value):
-                    record[section][str(key).strip()] = value
+                    safe_val = json_safe_value(value)
+                    if safe_val is None and not isinstance(value, str):
+                        continue
+                    record[section][str(key).strip()] = safe_val
                     has_data = True
 
         if has_data:
@@ -128,12 +168,16 @@ def _cell_is_blank(value: Any) -> bool:
 
 
 def _dataframe_to_matrix(df: pd.DataFrame) -> Union[List[Any], object]:
-    """将 DataFrame 转为二维矩阵（NaN/NaT 置为 None），剔除子项全为空白(None/NaN/空串)的行。"""
+    """将 DataFrame 转为二维矩阵（NaN/NaT/Inf 置为 None），剔除子项全为空白(None/NaN/空串)的行。"""
     if df is None or df.empty:
         return []
     safe_df = df.where(pd.notna(df), None)
-    rows: List[List[Any]] = safe_df.values.tolist()
-    return [row for row in rows if not all(_cell_is_blank(c) for c in row)]
+    rows: List[List[Any]] = []
+    for row in safe_df.values.tolist():
+        cleaned = [json_safe_value(c) for c in row]
+        if not all(_cell_is_blank(c) for c in cleaned):
+            rows.append(cleaned)
+    return rows
 
 
 async def _excel_to_json_async(file_path: str) -> Dict[str, Dict[str, Dict[str, Any]]]:

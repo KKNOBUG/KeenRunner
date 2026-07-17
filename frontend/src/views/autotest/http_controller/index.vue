@@ -1289,7 +1289,7 @@ const downloadApiDocTemplate = () => $message.info('后端暂未实现：下载�
 const dataSourceImportFileInputRef = ref(null)
 const dataSourceImportLoading = ref(false)
 
-/** 单步骤数据集导入：需步骤已入库；确认后选择 xlsx，上传成功将覆盖服务端该步骤数据源。 */
+/** 单步骤数据集导入：需步骤已入库；先选文件，再确认后上传（避免确认框被文件选择器卡住无法关闭）。 */
 const dataSourceImport = () => {
   if (props.readonly) return
   const caseId = route.query.case_id ? Number(route.query.case_id) : null
@@ -1300,20 +1300,10 @@ const dataSourceImport = () => {
     $message.warning('当前步骤尚未保存入库，请先保存步骤树后再进行数据导入')
     return
   }
-  $dialog.confirm({
-    title: '导入确认',
-    type: 'warning',
-    content:
-        '上传成功后将覆盖本步骤在服务器端已保存的数据源及缓存，数据预览将以导入文件为准。是否继续？',
-    confirm() {
-      nextTick(() => {
-        dataSourceImportFileInputRef.value?.click()
-      })
-    },
-  })
+  dataSourceImportFileInputRef.value?.click()
 }
 
-const onDataSourceImportFileChange = async (ev) => {
+const onDataSourceImportFileChange = (ev) => {
   const input = ev.target
   const file = input?.files?.[0]
   if (input) input.value = ''
@@ -1330,25 +1320,35 @@ const onDataSourceImportFileChange = async (ev) => {
     $message.warning('缺少步骤上下文，请先保存步骤树后再试')
     return
   }
-  if (dataSourceImportLoading.value) return
-  try {
-    dataSourceImportLoading.value = true
-    const formData = new FormData()
-    formData.append('case_id', String(caseId))
-    formData.append('step_id', String(stepId))
-    formData.append('step_code', stepCode)
-    formData.append('file', file)
-    const res = await api.uploadSingleStepDataset(formData)
-    const info = res?.data || {}
-    if (info.file_name != null) state.form.data_source_name = String(info.file_name)
-    if (info.file_desc != null) state.form.data_source_desc = String(info.file_desc || '')
-    await loadStepDataframePreview()
-    $message.success(res?.message || '导入成功')
-  } catch (_) {
-    /* 错误信息由 http 拦截器统一提示 */
-  } finally {
-    dataSourceImportLoading.value = false
-  }
+  $dialog.confirm({
+    title: '导入确认',
+    type: 'warning',
+    content:
+        '上传成功后将覆盖本步骤在服务器端已保存的数据源及缓存，数据预览将以导入文件为准。是否继续？',
+    async confirm() {
+      if (dataSourceImportLoading.value) return false
+      try {
+        dataSourceImportLoading.value = true
+        const formData = new FormData()
+        formData.append('case_id', String(caseId))
+        formData.append('step_id', String(stepId))
+        formData.append('step_code', stepCode)
+        formData.append('file', file)
+        const res = await api.uploadSingleStepDataset(formData)
+        const info = res?.data || {}
+        if (info.file_name != null) state.form.data_source_name = String(info.file_name)
+        if (info.file_desc != null) state.form.data_source_desc = String(info.file_desc || '')
+        await loadStepDataframePreview()
+        $message.success(res?.message || '导入成功')
+        return true
+      } catch (_) {
+        /* 错误信息由 http 拦截器统一提示 */
+        return false
+      } finally {
+        dataSourceImportLoading.value = false
+      }
+    },
+  })
 }
 /** 导出数据：基于后端 dataframe 导出 xlsx（不依赖当前前端表格编辑态）。 */
 const dataSourceExportLoading = ref(false)
