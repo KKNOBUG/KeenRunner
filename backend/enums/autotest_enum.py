@@ -83,9 +83,16 @@ class AutoTestAssertionOperation(StringEnum):
 
 
 class AutoTestTaskScheduler(StringEnum):
+    """任务执行记录等处仍可能引用；任务表已不再使用 interval/datetime 模式。"""
     CRON = "cron"
     INTERVAL = "interval"
     DATETIME = "datetime"
+
+
+class AutoTestTaskPeriodicSwitch(StringEnum):
+    """任务周期表达式：配合 crontab 控制调度触发次数（字段 task_periodic_expr）。"""
+    ONLY_ONCE = "执行1次"
+    INFINITY = "执行N次"
 
 
 class AutoTestTaskStatus(StringEnum):

@@ -153,8 +153,8 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
         try:
             task_dict: Dict[str, Any] = task_in.model_dump(exclude_none=True, exclude_unset=True)
-            if "task_scheduler" in task_dict and task_dict["task_scheduler"] is not None:
-                task_dict["task_scheduler"] = task_dict["task_scheduler"].value
+            if "task_periodic_expr" in task_dict and task_dict["task_periodic_expr"] is not None:
+                task_dict["task_periodic_expr"] = task_dict["task_periodic_expr"].value
             if "last_execute_state" in task_dict and task_dict["last_execute_state"] is not None:
                 task_dict["last_execute_state"] = task_dict["last_execute_state"].value
             # 新增时同步写入更新人，便于列表「更新人员」展示
@@ -190,8 +190,8 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             exclude_unset=True,
             exclude={"task_id", "task_code"}
         )
-        if "task_scheduler" in update_dict and update_dict["task_scheduler"] is not None:
-            update_dict["task_scheduler"] = update_dict["task_scheduler"].value
+        if "task_periodic_expr" in update_dict and update_dict["task_periodic_expr"] is not None:
+            update_dict["task_periodic_expr"] = update_dict["task_periodic_expr"].value
         if "last_execute_state" in update_dict and update_dict["last_execute_state"] is not None:
             update_dict["last_execute_state"] = update_dict["last_execute_state"].value
         # 汇总涉及环境：优先用本次提交的配置，否则回退到库中已有配置
@@ -249,38 +249,10 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         return instance
 
     async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:
-        """设置任务是否启动调度。
-
-        启用时：若为「执行 1 次」落库的 datetime 模式且仍保留 crontab，
-        则按 crontab 重算下一次触发时间，避免旧 target 已被 last_execute_time 消费后永远不再触发。
-        """
-        from datetime import datetime
-
+        """设置任务是否启动调度（仅切换 task_enabled，触发完全依赖 crontab）。"""
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         instance.task_enabled = enabled
-        update_fields = ["task_enabled"]
-
-        if enabled:
-            scheduler = getattr(instance.task_scheduler, "value", None) or instance.task_scheduler
-            scheduler_str = str(scheduler or "").strip().lower()
-            crontab = (instance.task_crontabs_expr or "").strip()
-            if scheduler_str == "datetime" and crontab:
-                try:
-                    from croniter import croniter
-                    now = datetime.now()
-                    next_dt = croniter(crontab, now).get_next(datetime)
-                    instance.task_datetime_expr = next_dt.strftime("%Y-%m-%d %H:%M:%S")
-                    update_fields.append("task_datetime_expr")
-                    LOGGER.info(
-                        f"启动任务时刷新一次性触发时间: task_id={task_id}, "
-                        f"crontab={crontab}, next={instance.task_datetime_expr}"
-                    )
-                except Exception as e:
-                    LOGGER.warning(
-                        f"启动任务时刷新 datetime 触发点失败: task_id={task_id}, error={e}"
-                    )
-
-        await instance.save(update_fields=update_fields)
+        await instance.save(update_fields=["task_enabled"])
         return instance
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: list) -> tuple:

@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestTaskScheduler, AutoTestTaskStatus
+from backend.enums import AutoTestTaskPeriodicSwitch, AutoTestTaskStatus
 
 
 class AutoTestApiTaskCreate(BaseModel):
@@ -24,10 +24,11 @@ class AutoTestApiTaskCreate(BaseModel):
         None,
         description="按用例ID的执行配置，结构与脚本执行配置弹窗提交一致",
     )
-    task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务模式")
-    task_interval_expr: Optional[int] = Field(None, description="任务触发条件1(间隔)")
-    task_datetime_expr: Optional[str] = Field(None, max_length=64, description="任务触发条件2(日期时间)")
-    task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="任务触发条件3(Cron)")
+    task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="Cron 触发表达式")
+    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(
+        AutoTestTaskPeriodicSwitch.INFINITY,
+        description="周期表达式(执行1次/执行N次)",
+    )
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(False, description="是否启动调度(True/False)")
@@ -48,10 +49,11 @@ class AutoTestApiTaskUpdate(BaseModel):
     )
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
-    task_scheduler: Optional[AutoTestTaskScheduler] = Field(None, description="任务模式")
-    task_interval_expr: Optional[int] = Field(None, description="任务触发条件1(间隔)")
-    task_datetime_expr: Optional[str] = Field(None, max_length=64, description="任务触发条件2(日期时间)")
-    task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="任务触发条件3(Cron)")
+    task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="Cron 触发表达式")
+    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(
+        None,
+        description="周期表达式(执行1次/执行N次)",
+    )
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")

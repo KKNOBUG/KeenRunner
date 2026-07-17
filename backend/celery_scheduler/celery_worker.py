@@ -167,8 +167,8 @@ async def _create_task_record(
         if task_instance:
             task_name = getattr(task_instance, "task_name", None)
             task_kwargs = getattr(task_instance, "task_kwargs", None) or {}
-            celery_scheduler = AutoTestTaskScheduler(task_instance.task_scheduler) if isinstance(
-                task_instance.task_scheduler, str) else task_instance.task_scheduler
+            # 任务表已移除 task_scheduler，统一 Cron 触发，执行记录记为 cron
+            celery_scheduler = AutoTestTaskScheduler.CRON
     data: Dict[str, Any] = {
         "task_id": task_id,
         "task_name": task_name,

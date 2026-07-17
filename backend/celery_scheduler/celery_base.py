@@ -167,40 +167,44 @@ def get_report_type_enum():
     return AutoTestReportType
 
 
-def get_scheduler_value(scheduler: Any) -> Optional[str]:
-    """将调度类型枚举或字符串转为小写字符串（cron/interval/datetime）。"""
-    if scheduler is None:
+def get_enum_str(value: Any) -> Optional[str]:
+    """将枚举或字符串转为去空白后的字符串。"""
+    if value is None:
         return None
-    if hasattr(scheduler, "value"):
-        return (scheduler.value or "").strip().lower() or None
-    return str(scheduler).strip().lower() or None
+    if hasattr(value, "value"):
+        return (value.value or "").strip() or None
+    return str(value).strip() or None
 
 
 async def get_scheduled_tasks(task_type: str) -> List[Any]:
     """
-    拉取未删除、已启用且配置了调度的任务列表，按 task_type 过滤，避免非自动化任务被下发到 run_autotest_task。
+    拉取未删除、已启用且配置了 Cron 表达式的任务列表，按 task_type 过滤。
 
-    :param task_type: 任务类型。
-    传 "autotest"（默认）时只返回自动化测试任务
+    :param task_type: 任务类型。传 "autotest" 时只返回自动化测试任务。
     """
     if not task_type:
         return []
     Model = get_task_model()
-    q = Q(state=0) & Q(task_enabled=True) & ~Q(task_scheduler__isnull=True) & Q(task_type=task_type)
+    q = (
+        Q(state=0)
+        & Q(task_enabled=True)
+        & Q(task_type=task_type)
+        & ~Q(task_crontabs_expr__isnull=True)
+        & ~Q(task_crontabs_expr="")
+    )
     tasks = await Model.filter(q).all()
     return list(tasks)
 
 
 async def check_task_expired(task: Any) -> bool:
     """
-    判断任务是否已到执行时间。
+    判断任务是否已到执行时间（仅基于 task_crontabs_expr）。
 
-    :param task: 任务模型实例（含 task_scheduler、cron/interval/datetime 表达式等）
+    :param task: 任务模型实例
     :return: 是否到期
     """
-    scheduler = getattr(task, "task_scheduler", None)
-    scheduler_str = get_scheduler_value(scheduler)
-    if not scheduler_str:
+    expr = (getattr(task, "task_crontabs_expr", None) or "").strip()
+    if not expr:
         return False
 
     now = datetime.now()
@@ -219,72 +223,26 @@ async def check_task_expired(task: Any) -> bool:
             last_run = None
 
     task_id = getattr(task, "id", None)
-
-    if scheduler_str == "cron":
-        expr = (getattr(task, "task_crontabs_expr", None) or "").strip()
-        if not expr:
-            return False
-        try:
-            from croniter import croniter
-            # 轮询调度：当前时刻之前最近一次 cron 点晚于 last_run 则应触发
-            it = croniter(expr, now)
-            prev_run = it.get_prev(datetime)
-            due = True if last_run is None else (last_run < prev_run)
-            logger.debug(
-                f"【Krun-Celery-Worker】cron到期判断 task_id={task_id} expr={expr} "
-                f"now={now} prev={prev_run} last_run={last_run} due={due}"
-            )
-            return due
-        except Exception as e:
-            logger.warning(
-                f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Cron表达式解析失败: "
-                f" task_id={task_id}",
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}, \n"
-                f"错误回溯: {traceback.format_exc()}"
-            )
-            return False
-
-    if scheduler_str == "interval":
-        seconds = getattr(task, "task_interval_expr", None) or 0
-        if seconds <= 0:
-            return False
-        if not last_run:
-            return True
-        diff = now - last_run
-        delta = diff.total_seconds() if hasattr(diff, "total_seconds") else diff.seconds
-        return delta >= seconds
-
-    if scheduler_str == "datetime":
-        expr = (task.task_datetime_expr or "").strip()
-        if not expr:
-            return False
-        try:
-            target = datetime.strptime(expr[:19], "%Y-%m-%d %H:%M:%S")
-            # 一次性：已在目标时刻之后执行过则不再触发
-            if last_run and last_run >= target:
-                logger.debug(
-                    f"【Krun-Celery-Worker】datetime已消费 task_id={task_id} "
-                    f"target={target} last_run={last_run}"
-                )
-                return False
-            due = now >= target
-            logger.debug(
-                f"【Krun-Celery-Worker】datetime到期判断 task_id={task_id} "
-                f"target={target} now={now} last_run={last_run} due={due}"
-            )
-            return due
-        except Exception as e:
-            logger.warning(
-                f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Datetime表达式解析失败: "
-                f" task_id={task.id}",
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}, \n"
-                f"错误回溯: {traceback.format_exc()}"
-            )
-            return False
-
-    return False
+    try:
+        from croniter import croniter
+        # 轮询调度：当前时刻之前最近一次 cron 点晚于 last_run 则应触发
+        it = croniter(expr, now)
+        prev_run = it.get_prev(datetime)
+        due = True if last_run is None else (last_run < prev_run)
+        logger.debug(
+            f"【Krun-Celery-Worker】cron到期判断 task_id={task_id} expr={expr} "
+            f"now={now} prev={prev_run} last_run={last_run} due={due}"
+        )
+        return due
+    except Exception as e:
+        logger.warning(
+            f"【Krun-Celery-Worker】<==> 【span_id={get_span_id_for_log()}】任务触发器Cron表达式解析失败: "
+            f" task_id={task_id}",
+            f"错误类型: {type(e).__name__}, "
+            f"错误描述: {e}, \n"
+            f"错误回溯: {traceback.format_exc()}"
+        )
+        return False
 
 
 class LocalContextVar:

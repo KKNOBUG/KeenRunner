@@ -61,10 +61,8 @@ function createEmptyForm() {
     task_notify: null,
     task_notifier: [],
     task_kwargs: {},
-    task_scheduler: 'cron',
-    task_interval_expr: null,
-    task_datetime_expr: '',
     task_crontabs_expr: '',
+    task_periodic_expr: '执行1次',
   }
 }
 
@@ -90,14 +88,8 @@ watch(currentStep, (step) => {
 function onCronGeneratorChange(result) {
   if (!result?.ok) return
   taskForm.value.task_crontabs_expr = result.task_crontabs_expr || ''
-  if (result.scheduler === 'datetime') {
-    taskForm.value.task_scheduler = 'datetime'
-    taskForm.value.task_datetime_expr = result.task_datetime_expr || ''
-    taskForm.value.task_interval_expr = null
-  } else {
-    taskForm.value.task_scheduler = 'cron'
-    taskForm.value.task_datetime_expr = ''
-    taskForm.value.task_interval_expr = null
+  if (result.task_periodic_expr) {
+    taskForm.value.task_periodic_expr = result.task_periodic_expr
   }
   if (result.runMode) cronRunMode.value = result.runMode
 }
@@ -146,14 +138,8 @@ async function validateStep0() {
   const resolved = cronGeneratorRef.value?.resolveSchedule?.()
   if (resolved?.ok) {
     taskForm.value.task_crontabs_expr = resolved.task_crontabs_expr || ''
-    if (resolved.scheduler === 'datetime') {
-      taskForm.value.task_scheduler = 'datetime'
-      taskForm.value.task_datetime_expr = resolved.task_datetime_expr || ''
-      taskForm.value.task_interval_expr = null
-    } else {
-      taskForm.value.task_scheduler = 'cron'
-      taskForm.value.task_datetime_expr = ''
-      taskForm.value.task_interval_expr = null
+    if (resolved.task_periodic_expr) {
+      taskForm.value.task_periodic_expr = resolved.task_periodic_expr
     }
     if (resolved.runMode) cronRunMode.value = resolved.runMode
     return true
@@ -277,18 +263,19 @@ async function loadTaskDetail(taskId) {
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
       task_kwargs: { ...taskKwargs, case_ids: caseIds },
-      task_scheduler: d.task_scheduler || 'cron',
-      task_interval_expr: d.task_interval_expr ?? null,
-      task_datetime_expr: d.task_datetime_expr || '',
       task_crontabs_expr: d.task_crontabs_expr || '',
+      task_periodic_expr: d.task_periodic_expr || '执行N次',
     }
 
-    if (d.task_scheduler === 'datetime') {
+    if (d.task_periodic_expr === '执行1次') {
       cronRunMode.value = 'once'
-    } else if (d.task_scheduler === 'cron') {
+    } else if (d.task_periodic_expr === '执行N次') {
       cronRunMode.value = 'repeat'
     } else {
-      cronRunMode.value = 'once'
+      // 兼容旧数据：曾用 datetime 表示执行1次
+      cronRunMode.value = d.task_scheduler === 'datetime' ? 'once' : 'repeat'
+      taskForm.value.task_periodic_expr =
+        cronRunMode.value === 'once' ? '执行1次' : '执行N次'
     }
     if (d.task_crontabs_expr) {
       await nextTick()
@@ -383,7 +370,6 @@ async function handleSubmit() {
 
   modalLoading.value = true
   try {
-    const scheduler = taskForm.value.task_scheduler
     const taskKwargsPayload = {
       ...(taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object'
         ? taskForm.value.task_kwargs
@@ -402,11 +388,8 @@ async function handleSubmit() {
       task_notifier: Array.isArray(taskForm.value.task_notifier) ? taskForm.value.task_notifier : null,
       task_kwargs: taskKwargsPayload,
       cases_execute_config: casesCfgPayload,
-      task_scheduler: scheduler || null,
-      task_interval_expr: null,
-      task_datetime_expr:
-        scheduler === 'datetime' ? taskForm.value.task_datetime_expr || null : null,
       task_crontabs_expr: taskForm.value.task_crontabs_expr || null,
+      task_periodic_expr: taskForm.value.task_periodic_expr || '执行N次',
     }
 
     const currentUser = userStore.username || ''

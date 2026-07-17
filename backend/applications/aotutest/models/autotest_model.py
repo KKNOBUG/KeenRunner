@@ -26,6 +26,7 @@ from backend.enums import (
     AutoTestLoopErrorStrategy,
     AutoTestTaskStatus,
     AutoTestTaskScheduler,
+    AutoTestTaskPeriodicSwitch,
     AutoTestReqArgsType,
     AutoTestDataBaseType,
     AutoTestConfigNodeType,
@@ -430,10 +431,13 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     )
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
-    task_scheduler = fields.CharEnumField(AutoTestTaskScheduler, default=None, null=True, description="任务模式(cron/interval/datetime)")
-    task_interval_expr = fields.IntField(null=True, description="任务触发条件1")
-    task_datetime_expr = fields.CharField(max_length=64, null=True, description="任务触发条件2")
-    task_crontabs_expr = fields.CharField(max_length=255, null=True, description="任务触发条件3")
+    task_crontabs_expr = fields.CharField(max_length=255, null=True, description="Cron 触发表达式")
+    task_periodic_expr = fields.CharEnumField(
+        AutoTestTaskPeriodicSwitch,
+        default=AutoTestTaskPeriodicSwitch.INFINITY,
+        null=True,
+        description="周期表达式(执行1次/执行N次)",
+    )
     task_notify = fields.JSONField(default=None, null=True, description="任务执行明细反馈")
     task_notifier = fields.JSONField(default=None, null=True, description="任务执行通知人员")
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")

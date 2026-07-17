@@ -2,8 +2,8 @@
 /**
  * Crontab 可视化生成器
  * 秒/分：-1～59；时：-1～23；日：0～31；月：0～12；周：0～7
- * runMode: once → datetime 一次性提交；repeat → cron 周期提交
- * 「执行 1 次」≠ 每分钟 cron，而是把「最近一次」固化为 datetime，触发后自动停止。
+ * runMode: once → task_periodic_expr=执行1次；repeat → 执行N次
+ * 触发一律落库为 crontab；「执行 1 次」由扫描触发后自动关闭调度。
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { NInput, NInputNumber, NPopover, NRadio, NRadioGroup, NSlider } from 'naive-ui'
@@ -164,17 +164,17 @@ function buildScheduleResult() {
       ok: !!dt,
       error: dt ? null : '无法计算最近一次执行时间',
       runMode: 'once',
-      scheduler: 'datetime',
       task_crontabs_expr: crontab,
-      task_datetime_expr: dt,
+      task_periodic_expr: '执行1次',
+      next_run_time: dt,
     }
   }
   return {
     ok: true,
     runMode: 'repeat',
-    scheduler: 'cron',
     task_crontabs_expr: crontab,
-    task_datetime_expr: null,
+    task_periodic_expr: '执行N次',
+    next_run_time: null,
   }
 }
 
