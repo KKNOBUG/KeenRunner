@@ -154,27 +154,25 @@ def parse_sheet_fast(df: pd.DataFrame, sheet_name, requests_body_key):
     first_col = values[1:, 0]
     data_values = values[1:, 1:]
 
-    sections = {"head": [], "body": [], "assert-head": [], "assert-body": []}
+    sections = {"head": [], "body": [], "assert_head": [], "assert_body": []}
     sections_row_index = {"head": None, "body": None}
     current_section = None
+    _label_map = {
+        "head": "head",
+        "body": "body",
+        "assert_head": "assert_head",
+        "assert_body": "assert_body",
+    }
 
     for i, cell in enumerate(first_col):
         if not isinstance(cell, str):
             continue
-        text = cell.strip()
-        if text == "Head":
-            current_section = "head"
-            sections_row_index["head"] = i
-            continue
-        elif text == "Body":
-            current_section = "body"
-            sections_row_index["body"] = i
-            continue
-        elif text == "响应报文校验-Head":
-            current_section = "assert-head"
-            continue
-        elif text == "响应报文校验-Body":
-            current_section = "assert-body"
+        text = cell.strip().lower()
+        section_key = _label_map.get(text)
+        if section_key is not None:
+            current_section = section_key
+            if section_key in ("head", "body"):
+                sections_row_index[section_key] = i
             continue
         if current_section:
             sections[current_section].append(i)
@@ -188,7 +186,7 @@ def parse_sheet_fast(df: pd.DataFrame, sheet_name, requests_body_key):
         if pd.isna(scene_name):
             continue
 
-        record = {"head": {}, "body": {}, "assert-head": {}, "assert-body": {}}
+        record = {"head": {}, "body": {}, "assert_head": {}, "assert_body": {}}
         for section in ("head", "body"):
             row_idx = sections_row_index.get(section)
             if row_idx is None:

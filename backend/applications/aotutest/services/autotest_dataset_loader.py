@@ -3,25 +3,21 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from backend.applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
+
+
 class DatasetLoader:
-    @staticmethod
-    def _acquire_dataset_payload(step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    @classmethod
+    def _acquire_dataset_payload(cls, step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """
         将数据源单行场景 dict 规范为步骤内使用的结构。
 
-        :param step_data: 含head、body、assert-head、assert-body的原始场景
-        :return: 键为head、body、assert_head、assert_body的字典
+        固定键名：head、body、assert_head、assert_body；缺省键补为空对象 {}。
+
+        :param step_data: 原始场景 dict
+        :return: 键为 head、body、assert_head、assert_body 的字典
         """
-        head = step_data.get("head") or {}
-        body = step_data.get("body") or {}
-        assert_head = step_data.get("assert-head") or {}
-        assert_body = step_data.get("assert-body") or {}
-        return {
-            "head": head,
-            "body": body,
-            "assert_head": assert_head,
-            "assert_body": assert_body,
-        }
+        return normalize_dataset_record(step_data)
 
     @staticmethod
     def has_dataset_payload(step_struct: Optional[Dict[str, Any]]) -> bool:

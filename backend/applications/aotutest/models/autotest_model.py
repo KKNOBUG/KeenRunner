@@ -494,7 +494,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     file_hash = fields.CharField(max_length=255, description="数据驱动文件哈希代码")
     file_path = fields.CharField(max_length=1024, description="数据驱动文件存储路径")
     file_desc = fields.CharField(max_length=2048, null=True, description="数据驱动文件场景描述")
-    # 存储格式：{"场景1": {"head":..., "body":..., "assert":... }, ... }
+    # 存储格式：{"场景1": {"head":..., "body":..., "assert_head":..., "assert_body":... }, ... }
     dataset = fields.JSONField(description="数据驱动文件解析后的数据(该步骤×所有场景)")
     # 数据集名称列表，如 ["场景1", "场景2", "场景3", ...]，便于前端多选
     dataset_names = fields.JSONField(default=list, description="数据驱动文件解析后的场景名称列表")

@@ -984,7 +984,7 @@ const buildPreviewColumnsByRows = (rows) => {
 const dataSourcePreviewScrollX = computed(() => {
   const PREVIEW_FIXED_COL_WIDTH = 20 + 20 + 50
   const PREVIEW_COL_ADD_WIDTH = 32
-  const MIN_DYNAMIC_COL_WIDTH = 150
+  const MIN_DYNAMIC_COL_WIDTH = 100
   const colSet = new Set()
   ;(dataSource.previewRows || []).forEach((row) => {
     Object.keys(row || {}).forEach((k) => {
@@ -993,7 +993,7 @@ const dataSourcePreviewScrollX = computed(() => {
   })
   const n = colSet.size
   const content = PREVIEW_FIXED_COL_WIDTH + n * MIN_DYNAMIC_COL_WIDTH + PREVIEW_COL_ADD_WIDTH
-  return Math.max(content, 2000)
+  return Math.max(content, 1500)
 })
 
 const buildBlankPreviewRow = () => {
@@ -1063,7 +1063,7 @@ const dataSourcePreviewColumns = computed(() => [
   {
     type: "selection",
     fixed: "left",
-    width: 20,
+    width: 25,
     align: 'center',
     disabled: (row) => isProtectedPreviewRow(row)
   },
@@ -1071,7 +1071,7 @@ const dataSourcePreviewColumns = computed(() => [
     title: '#',
     key: '__rowNo',
     align: 'center',
-    width: 50,
+    width: 25,
     fixed: 'left',
     render: (row) => String(row.__rowNo ?? '')
   },
@@ -1079,7 +1079,7 @@ const dataSourcePreviewColumns = computed(() => [
     title: '',
     key: '__rowAdd',
     align: 'center',
-    width: 20,
+    width: 25,
     fixed: 'left',
     render: (row) => h(
         'div',
@@ -1118,7 +1118,7 @@ const dataSourcePreviewColumns = computed(() => [
         ),
     key: '__colAdd',
     align: 'center',
-    width: 32,
+    width: 25,
     fixed: 'right',
     render: () =>
         h('div', {

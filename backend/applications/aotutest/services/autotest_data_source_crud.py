@@ -361,7 +361,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_id: 用例主键。
         :param step_code: 步骤标识代码。
         :param dataset_name: 场景/数据集名称。
-        :returns: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典（亦可能含旧字段 assert）；无数据时返回 None。
+        :returns: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典；无数据时返回 None。
         """
         if not (dataset_name or "").strip():
             return None
@@ -440,6 +440,14 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         if not parsed_data:
             raise ParameterException(message="参数 parsed_data 不能为空")
 
+        from backend.applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
+
+        # 每个场景强制补齐 head/body/assert_head/assert_body 四键
+        normalized_dataset = {
+            str(scene_name): normalize_dataset_record(scene_data if isinstance(scene_data, dict) else {})
+            for scene_name, scene_data in parsed_data.items()
+        }
+
         existing = await self.get_by_case_step(
             case_id=case_id,
             step_id=step_id,
@@ -460,7 +468,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                     file_hash=file_hash,
                     file_desc=file_desc,
                     cache_key=cache_key,
-                    dataset=parsed_data,
+                    dataset=normalized_dataset,
                     dataset_names=dataset_names if dataset_names is not None else (existing.dataset_names or []),
                     dataframe=dataframe if dataframe is not None else (existing.dataframe or []),
                     updated_user=created_user,
@@ -478,7 +486,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 file_hash=file_hash or "",
                 file_desc=file_desc,
                 cache_key=cache_key,
-                dataset=parsed_data,
+                dataset=normalized_dataset,
                 dataset_names=dataset_names or [],
                 dataframe=dataframe or [],
                 created_user=created_user,

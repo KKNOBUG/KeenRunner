@@ -6,15 +6,17 @@
 @Module  : autotest_data_source_parser.py
 @DateTime: 2026/3/6
 参数化驱动：将 xlsx 解析为约定 JSON 结构。
-输出格式：{ "step_code"(sheet名): { "场景1": { "head": {...}, "body": {...}, "assert": {...} }, ... }, ... }
-xlsx 约定：无表头(header=None)；第 0 行第 2 列起为场景名；第 1 列为行标签（head/body/assert 及字段名）；Head/Body 行值为 KV 文本可解析。
+输出格式：{ "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }
+xlsx 约定：无表头(header=None)；第 0 行第 2 列起为场景名；第 1 列为分区标签，固定四种：
+HEAD（请求头参数）、BODY（请求体参数）、ASSERT_HEAD（响应头断言）、ASSERT_BODY（响应体断言）。
+文件中某分区可缺省（表示不做对应操作）；落库时四个键始终补齐，缺省分区值为空对象 {}。
 """
 import asyncio
 import math
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -79,8 +81,39 @@ def parse_kv_string(text: str) -> Dict[str, str]:
     return result
 
 
+# 落库固定四键；Excel 分区标签（不区分大小写）→ 落库键
+_SECTION_LABEL_TO_KEY = {
+    "head": "head",
+    "body": "body",
+    "assert_head": "assert_head",
+    "assert_body": "assert_body",
+}
+_DATASET_SECTION_KEYS = ("head", "body", "assert_head", "assert_body")
+
+
+def empty_dataset_record() -> Dict[str, Dict[str, Any]]:
+    """返回始终含四键的空场景结构。"""
+    return {k: {} for k in _DATASET_SECTION_KEYS}
+
+
+def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """
+    规范化单场景结构：仅保留 head/body/assert_head/assert_body，缺失键补 {}。
+    """
+    src = step_data if isinstance(step_data, dict) else {}
+    out = empty_dataset_record()
+    for key in _DATASET_SECTION_KEYS:
+        val = src.get(key)
+        out[key] = dict(val) if isinstance(val, dict) else {}
+    return out
+
+
 def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
-    """单 sheet 解析：首行第 2 列起为场景名，首列为 head/body/assert 及字段，返回 { 场景名: { head, body, assert } }。"""
+    """
+    单 sheet 解析：返回 { 场景名: { head, body, assert_head, assert_body } }。
+    分区标签仅识别 HEAD / BODY / ASSERT_HEAD / ASSERT_BODY（大小写不敏感）；
+    某分区在文件中不存在时，落库仍保留该键且值为 {}。
+    """
     values = df.values
     if values.size == 0:
         return {}
@@ -89,7 +122,8 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     first_col = values[1:, 0]
     data_values = values[1:, 1:]
 
-    sections: Dict[str, List[int]] = {"head": [], "body": [], "assert": []}
+    sections: Dict[str, List[int]] = {k: [] for k in _DATASET_SECTION_KEYS}
+    # HEAD/BODY 标签行自身可能带 KV 文本块
     section_row_index: Dict[str, Any] = {"head": None, "body": None}
     current_section = None
 
@@ -97,16 +131,11 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         if not isinstance(cell, str):
             continue
         text = cell.strip().lower()
-        if text == "head":
-            current_section = "head"
-            section_row_index["head"] = i
-            continue
-        if text == "body":
-            current_section = "body"
-            section_row_index["body"] = i
-            continue
-        if text in ("响应报文校验", "assert"):
-            current_section = "assert"
+        section_key = _SECTION_LABEL_TO_KEY.get(text)
+        if section_key is not None:
+            current_section = section_key
+            if section_key in ("head", "body"):
+                section_row_index[section_key] = i
             continue
         if current_section:
             sections[current_section].append(i)
@@ -119,7 +148,7 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         if pd.isna(scene_name) or not str(scene_name).strip():
             continue
         scene_name = str(scene_name).strip()
-        record: Dict[str, Any] = {"head": {}, "body": {}, "assert": {}}
+        record = empty_dataset_record()
         has_data = False
 
         for section in ("head", "body"):
@@ -144,6 +173,7 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
                     has_data = True
 
         if has_data:
+            # 即使某分区无字段，四键已由 empty_dataset_record 补齐
             result[scene_name] = record
 
     return result
@@ -218,7 +248,7 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
 
     :param file_path: xlsx 文件路径。
     :return: (step_data, dataset_names, dataframe)。step_data 为单 sheet 解析结果：
-             { "场景1": { "head": {...}, "body": {...}, "assert": {...} }, ... }
+             { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }
              dataset_names 为该 sheet 中的场景名称列表（已排序）；
              dataframe 为该 sheet 原始二维矩阵（NaN 已转为 None）。
     :raises FileNotFoundError: 文件不存在。
@@ -243,7 +273,7 @@ async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any
 
     :param file_path: xlsx 文件路径。
     :return: (parsed_data, dataset_names)。parsed_data 结构：
-             { "sheet_name_or_step_code": { "场景1": { "head": {...}, "body": {...}, "assert": {...} }, ... }, ... }
+             { "sheet_name_or_step_code": { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }, ... }
              dataset_names 为所有 sheet 中出现的去重排序后的场景名称列表。
     :raises FileNotFoundError: 文件不存在。
     :raises ValueError: 解析失败。
