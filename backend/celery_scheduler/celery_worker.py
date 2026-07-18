@@ -248,11 +248,14 @@ async def _update_task_record_on_end(
         traceback_str: str = None,
         batch_code: str = None,
 ):
-    """将执行记录更新为终态；task_summary 保存完整响应对象。"""
+    """将执行记录更新为终态；task_summary 保存完整响应对象。更新前先确保 Tortoise 可用。"""
     if not celery_id:
         return
     from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
     from backend.enums import AutoTestTaskStatus
+
+    # 长任务后连接可能失效；与 create 一样先 init/探活，避免终态写库失败导致永远「正在执行」
+    await init_tortoise_orm()
 
     now = datetime.now()
     status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE
@@ -285,7 +288,8 @@ async def _update_task_record_on_end(
         data["celery_duration"] = f"{delta.total_seconds():.2f}s"
     await record_crud.update_record_by_celery_id(celery_id=celery_id, data=data)
     LOGGER.info(
-        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, celery_id={celery_id}"
+        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, "
+        f"celery_id={celery_id}, status={status_enum}"
     )
 
 
@@ -442,17 +446,23 @@ def create_celery():
                     )
 
         def on_success(self, retval, task_id, args, kwargs):
-            """任务成功：完整响应写入 task_summary（对象），并回写 batch_code。"""
+            """
+            Celery 任务体未抛异常时回调。
+            注意：业务侧可能 return {"success": False}（流程跑完但业务失败/早退），
+            此时记录状态应按失败落库，不能一律标「成功」。
+            """
+            pipeline_ok = not (isinstance(retval, dict) and retval.get("success") is False)
             LOGGER.info(
-                f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行成功: task_id=[{task_id}]"
+                f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务体结束: "
+                f"task_id=[{task_id}], pipeline_ok={pipeline_ok}"
             )
             batch_code = retval.get("batch_code") if isinstance(retval, dict) else None
             summary = retval if retval is not None else {"success": True}
-            self.handel_task_record(True, summary, batch_code=batch_code)
+            self.handel_task_record(pipeline_ok, summary, batch_code=batch_code)
             return super(ContextTask, self).on_success(retval, task_id, args, kwargs)
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):
-            """任务失败：完整错误对象写入 task_summary，堆栈写入 task_error。"""
+            """任务抛异常：完整错误写入 task_summary，堆栈写入 task_error，状态=失败。"""
             LOGGER.error(
                 f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行失败: "
                 f"task_id=[{task_id}], "

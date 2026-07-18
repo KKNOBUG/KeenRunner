@@ -44,6 +44,8 @@ async def _run_autotest_task_impl(
     执行单个自动化任务。
     - 手动「执行」：ASYNC_EXEC，不因「执行1次」关闭调度
     - 扫描触发：SCHEDULE_EXEC；若 task_periodic_expr=执行1次，执行后关闭调度
+    - 返回 success：表示任务体是否无异常跑完（非用例业务全通过）
+    - 业务成败写入 last_execute_state（列表「最后执行结果」），并体现在 summary.all_success
     """
     span_id = get_span_id_for_log()
     task = await AutoTestApiTaskInfo.get_or_none(id=task_id)
@@ -90,12 +92,8 @@ async def _run_autotest_task_impl(
             LOGGER.info(
                 f"【Krun-Celery-Worker】【span_id={span_id}】执行1次任务已关闭调度: task_id={task_id}"
             )
-        return {
-            "success": True,
-            "task_id": task_id,
-            "batch_code": result.get("batch_code") if isinstance(result, dict) else None,
-            "result": result,
-        }
+        # success=True：任务体未抛异常、流程跑完（业务是否全通过看 summary / last_execute_state）
+        return {"success": True, "task_id": task_id, **result}
     except Exception as e:
         LOGGER.error(
             f"【Krun-Celery-Worker】【span_id={span_id}】run_autotest_task 异常: "
@@ -107,7 +105,8 @@ async def _run_autotest_task_impl(
         if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _is_only_once(task):
             task.task_enabled = False
             await task.save(update_fields=["task_enabled"])
-        return {"success": False, "error": str(e), "task_id": task_id}
+        # 重新抛出，让 Celery on_failure 将执行记录从「正在执行」更新为「失败」
+        raise
 
 
 async def _scan_and_dispatch_impl() -> Dict[str, Any]:

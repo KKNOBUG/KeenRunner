@@ -91,12 +91,29 @@
         </QueryBarItem>
       </template>
     </CrudTable>
+
+    <NModal
+      v-model:show="jsonModalShow"
+      preset="card"
+      :title="jsonModalTitle"
+      :mask-closable="true"
+      :close-on-esc="true"
+      style="width: min(720px, 92vw)"
+      @update:show="(v) => { if (!v) closeJsonModal() }"
+    >
+      <pre class="json-modal-pre">{{ jsonModalContent }}</pre>
+      <template #footer>
+        <div class="json-modal-footer">
+          <NButton size="small" type="primary" @click="copyJsonContent">复制</NButton>
+        </div>
+      </template>
+    </NModal>
   </CommonPage>
 </template>
 
 <script setup>
 import { h, ref } from 'vue'
-import { NInput, NPopover, NSelect, NTag } from 'naive-ui'
+import { NButton, NInput, NModal, NSelect, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -109,6 +126,10 @@ defineOptions({ name: '执行记录' })
 
 const $table = ref(null)
 const queryItems = ref({})
+
+const jsonModalShow = ref(false)
+const jsonModalTitle = ref('')
+const jsonModalContent = ref('')
 
 const celeryStatusOptions = [
   { label: '等待执行', value: '等待执行' },
@@ -148,24 +169,59 @@ const formatJsonBrief = (val, maxLen = 48) => {
   return s.length > maxLen ? `${s.slice(0, maxLen)}...` : s
 }
 
-const renderJsonCell = (val, emptyText = '-') => {
+const openJsonModal = (title, val) => {
   const pretty = toPrettyJson(val)
-  if (!pretty) return h('span', emptyText)
+  if (!pretty) {
+    window.$message?.warning?.('暂无内容')
+    return
+  }
+  jsonModalTitle.value = title
+  jsonModalContent.value = pretty
+  jsonModalShow.value = true
+}
+
+const closeJsonModal = () => {
+  jsonModalShow.value = false
+  jsonModalTitle.value = ''
+  jsonModalContent.value = ''
+}
+
+const copyJsonContent = async () => {
+  const text = jsonModalContent.value || ''
+  if (!text) {
+    window.$message?.warning?.('暂无内容可复制')
+    return
+  }
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    window.$message?.success?.('已复制到剪贴板')
+  } catch (e) {
+    window.$message?.error?.('复制失败，请手动选择复制')
+  }
+}
+
+const renderJsonCell = (title, val) => {
+  const pretty = toPrettyJson(val)
+  if (!pretty) return h('span', '-')
   return h(
-    NPopover,
-    { trigger: 'click', placement: 'left', style: { maxWidth: '640px' } },
+    'span',
     {
-      trigger: () =>
-        h(
-          'span',
-          {
-            class: 'json-cell-trigger',
-            title: '点击查看完整内容',
-          },
-          formatJsonBrief(val),
-        ),
-      default: () => h('pre', { class: 'json-cell-pre' }, pretty),
+      class: 'json-cell-trigger',
+      title: '点击查看完整内容',
+      onClick: () => openJsonModal(title, val),
     },
+    formatJsonBrief(val),
   )
 }
 
@@ -213,7 +269,7 @@ const columns = [
     width: 220,
     ellipsis: { tooltip: true },
     render(row) {
-      return renderJsonCell(row.exec_snapshot)
+      return renderJsonCell('执行参数', row.exec_snapshot)
     },
   },
   {
@@ -222,7 +278,7 @@ const columns = [
     width: 240,
     ellipsis: { tooltip: true },
     render(row) {
-      return renderJsonCell(row.task_summary)
+      return renderJsonCell('执行结果', row.task_summary)
     },
   },
   {
@@ -278,6 +334,22 @@ const columns = [
 .query-input {
   width: 200px;
 }
+.json-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.json-modal-pre {
+  margin: 0;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f7f8fa;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+  line-height: 1.45;
+}
 </style>
 
 <style>
@@ -285,14 +357,5 @@ const columns = [
   color: #2080f0;
   cursor: pointer;
   word-break: break-all;
-}
-.json-cell-pre {
-  margin: 0;
-  max-height: 420px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 12px;
-  line-height: 1.45;
 }
 </style>
