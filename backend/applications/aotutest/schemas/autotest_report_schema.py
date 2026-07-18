@@ -62,11 +62,14 @@ class AutoTestApiReportSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, description="用例标识代码")
+    case_name: Optional[str] = Field(None, description="用例名称（模糊匹配）")
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
     report_type: Optional[AutoTestReportType] = Field(None, description="报告类型")
     task_code: Optional[str] = Field(None, description="任务标识代码")
     batch_code: Optional[str] = Field(None, description="批次标识代码")
+    # True：仅用例页执行/调试产生的报告（无 task_code），排除任务调度
+    exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")
 
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")

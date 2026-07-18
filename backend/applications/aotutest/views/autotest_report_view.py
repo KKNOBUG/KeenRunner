@@ -156,14 +156,26 @@ async def search_reports(
             q &= Q(case_id=report_in.case_id)
         if report_in.case_code:
             q &= Q(case_code=report_in.case_code)
+        if report_in.case_name:
+            # 报告表无 case_name，先按用例名称查出 case_id 再过滤
+            matched_case_ids = await services.case_curd.model.filter(
+                case_name__contains=report_in.case_name.strip(),
+                state__not=1,
+            ).values_list("id", flat=True)
+            if not matched_case_ids:
+                return SuccessResponse(message="查询成功", data=[], total=0)
+            q &= Q(case_id__in=list(matched_case_ids))
         if report_in.report_id:
             q &= Q(id=report_in.report_id)
         if report_in.report_code:
-            q &= Q(report_code=report_in.report_code)
+            q &= Q(report_code__contains=report_in.report_code)
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
         if report_in.task_code:
             q &= Q(task_code__contains=report_in.task_code)
+        if report_in.exclude_task_code:
+            # 用例执行历史：排除任务调度产生的报告（task_code 为空或未设置）
+            q &= Q(task_code__isnull=True) | Q(task_code="")
         if report_in.batch_code:
             q &= Q(batch_code__contains=report_in.batch_code)
         if report_in.case_state is not None:
