@@ -88,6 +88,10 @@ _async_event_loop_pool = None
 _SCAN_TASK_NAME = (
     "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 )
+# setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
+_celery_logfile_sink_id = None
+_celery_console_sink_id = None
+_LOG_PREFIX = "【Celery-Worker】"
 
 
 @worker_process_init.connect
@@ -106,7 +110,8 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     from backend.configure.logging_config import loguru_logging
 
     loguru_logging()
-    LOGGER.debug("【Krun-Celery-Worker】worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
+    _ensure_celery_logfile_sink_after_fork()
+    LOGGER.debug(f"{_LOG_PREFIX}worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
 
 
 def get_async_event_loop_pool():
@@ -237,7 +242,11 @@ async def _create_task_record(
             })
     await AutoTestApiTaskRecordCrud().create_record(data)
     LOGGER.info(
-        f"【Krun-Celery-Worker】【span_id={get_span_id()}】创建执行记录成功, celery_id={celery_id}"
+        f"{_LOG_PREFIX}【span_id={get_span_id()}】创建执行记录成功: "
+        f"celery_id={celery_id}, task_id={task_id}, "
+        f"task_code={data.get('task_code')}, task_name={data.get('task_name')}, "
+        f"celery_node={celery_node}, trigger_type={getattr(trigger_type, 'value', trigger_type)}, "
+        f"report_type={getattr(report_type, 'value', report_type)}"
     )
 
 
@@ -277,7 +286,7 @@ async def _update_task_record_on_end(
     record = await record_crud.get_by_celery_id(celery_id=celery_id)
     if not record:
         LOGGER.error(
-            f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录失败, 未找到[celery_id={celery_id}]记录"
+            f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录失败, 未找到[celery_id={celery_id}]记录"
         )
         return
     if record.celery_start_time:
@@ -288,8 +297,9 @@ async def _update_task_record_on_end(
         data["celery_duration"] = f"{delta.total_seconds():.2f}s"
     await record_crud.update_record_by_celery_id(celery_id=celery_id, data=data)
     LOGGER.info(
-        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, "
-        f"celery_id={celery_id}, status={status_enum}"
+        f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录成功: "
+        f"celery_id={celery_id}, status={getattr(status_enum, 'value', status_enum)}, "
+        f"batch_code={batch_code}, duration={data.get('celery_duration')}"
     )
 
 
@@ -303,11 +313,15 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
     try:
         # 来自 apply_async(..., __task_id=...)，随 Celery 消息传到 Worker 的 request.properties。
         task_id = task.request.properties.get("__task_id", None)
+        req_args = getattr(task.request, "args", None) or ()
+        req_kwargs = getattr(task.request, "kwargs", None) or {}
         LOGGER.info(
-            f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务提交完成: "
+            f"{_LOG_PREFIX}【span_id={get_span_id()}】任务即将执行: "
             f"task_id=[{task_id}], "
             f"task_name=[{task.name}], "
             f"celery_id=[{task.request.id}], "
+            f"args={req_args}, "
+            f"kwargs={req_kwargs}"
         )
         if task.name == _SCAN_TASK_NAME:
             ensure_tortoise_orm_initialized()
@@ -333,16 +347,16 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                 )
             except Exception as e:
                 LOGGER.error(
-                    f"【Krun-Celery-Worker】【span_id={get_span_id()}】创建执行记录失败:"
-                    f"task_id=[{task.request.id}], "
+                    f"{_LOG_PREFIX}【span_id={get_span_id()}】创建执行记录失败: "
+                    f"celery_id=[{task.request.id}], task_id=[{task_id}], "
                     f"错误类型: {type(e).__name__}, "
                     f"错误描述: {e}, \n"
                     f"错误回溯: {traceback.format_exc()}"
                 )
     except Exception as e:
         LOGGER.error(
-            f"【Krun-Celery-Worker】【span_id={get_span_id()}】定时任务挂载异常: "
-            f"task_id=[{task.request.id}], "
+            f"{_LOG_PREFIX}【span_id={get_span_id()}】定时任务挂载异常: "
+            f"celery_id=[{getattr(getattr(task, 'request', None), 'id', None)}], "
             f"错误类型: {type(e).__name__}, "
             f"错误描述: {e}, \n"
             f"错误回溯: {traceback.format_exc()}"
@@ -350,9 +364,103 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
 
 
 @setup_logging.connect
-def setup_loggers(*args, **kwargs):
-    """统一配置 Celery 日志格式。"""
-    logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO)
+def setup_loggers(loglevel=None, logfile=None, **kwargs):
+    """
+    接管 Celery 日志：stdlib → InterceptHandler → Loguru。
+
+    连接 setup_logging 后 Celery 不会再自己写 --logfile，因此本函数负责：
+    1) 挂载 celery 专用文件 sink（--logfile / CELERY_LOGFILE / 本地默认路径）
+    2) 前台启动时挂载控制台 sink，避免本地命令行看不到日志
+    """
+    global _celery_logfile_sink_id, _celery_console_sink_id
+    import os
+    import sys
+
+    from loguru import logger as loguru_logger
+
+    from backend.configure.logging_config import LOG_FORMAT
+    from backend.configure.project_config import PROJECT_CONFIG
+
+    level = loglevel if isinstance(loglevel, int) else logging.INFO
+    try:
+        logging.basicConfig(handlers=[InterceptHandler()], level=level, force=True)
+    except TypeError:
+        root = logging.getLogger()
+        root.handlers = [InterceptHandler()]
+        root.setLevel(level)
+
+    def _detect_celery_role() -> str:
+        joined = " ".join(sys.argv).lower()
+        # 匹配 `celery ... beat` / `... beat -l`
+        tokens = [t.lower() for t in sys.argv]
+        if "beat" in tokens:
+            return "beat"
+        if "beat" in joined and "worker" not in tokens:
+            return "beat"
+        return "worker"
+
+    def _default_celery_logfile() -> str:
+        role = _detect_celery_role()
+        name = "celery_beat.log" if role == "beat" else "celery_worker.log"
+        log_dir = os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs")
+        return os.path.join(log_dir, name)
+
+    target = (
+        (logfile or "").strip()
+        or (os.environ.get("CELERY_LOGFILE") or "").strip()
+        or _default_celery_logfile()
+    )
+
+    if target:
+        log_dir = os.path.dirname(target)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        if _celery_logfile_sink_id is not None:
+            try:
+                loguru_logger.remove(_celery_logfile_sink_id)
+            except ValueError:
+                pass
+            _celery_logfile_sink_id = None
+        _celery_logfile_sink_id = loguru_logger.add(
+            target,
+            level="INFO",
+            format=LOG_FORMAT,
+            encoding="utf-8",
+            enqueue=True,
+            backtrace=True,
+            diagnose=False,
+            colorize=False,
+            rotation="200 MB",
+            retention=10,
+        )
+        os.environ["CELERY_LOGFILE"] = target
+        LOGGER.info(f"{_LOG_PREFIX}Celery 日志已写入文件: {target}")
+
+    # 本地前台（非 --detach）保证终端可见
+    is_detached = "--detach" in sys.argv or "-D" in sys.argv
+    if not is_detached and sys.stderr and getattr(sys.stderr, "isatty", lambda: False)():
+        if _celery_console_sink_id is not None:
+            try:
+                loguru_logger.remove(_celery_console_sink_id)
+            except ValueError:
+                pass
+            _celery_console_sink_id = None
+        _celery_console_sink_id = loguru_logger.add(
+            sys.stderr,
+            level="INFO",
+            format=LOG_FORMAT,
+            enqueue=True,
+            backtrace=True,
+            colorize=True,
+            diagnose=bool(PROJECT_CONFIG.SERVER_DEBUG),
+        )
+
+
+def _ensure_celery_logfile_sink_after_fork():
+    """prefork 子进程里 loguru_logging() 会 remove 全部 sink，需重建 celery 文件/控制台 sink。"""
+    import os
+
+    setup_loggers(logfile=os.environ.get("CELERY_LOGFILE") or None)
 
 
 class TaskRequest(Request):
@@ -438,8 +546,8 @@ def create_celery():
                     )
                 except Exception as e:
                     LOGGER.error(
-                        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录异常: "
-                        f"task_id=[{self.request.id}], "
+                        f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录异常: "
+                        f"celery_id=[{self.request.id}], "
                         f"错误类型: {type(e).__name__}, "
                         f"错误描述: {str(e)}, \n"
                         f"错误回溯: {traceback.format_exc()}"
@@ -452,9 +560,18 @@ def create_celery():
             此时记录状态应按失败落库，不能一律标「成功」。
             """
             pipeline_ok = not (isinstance(retval, dict) and retval.get("success") is False)
+            summary_bits = ""
+            if isinstance(retval, dict):
+                summary_bits = (
+                    f", batch_code={retval.get('batch_code')}, "
+                    f"execute_count={retval.get('execute_count')}, "
+                    f"success_count={retval.get('success_count')}, "
+                    f"failed_count={retval.get('failed_count')}, "
+                    f"passed_ratio={retval.get('passed_ratio')}"
+                )
             LOGGER.info(
-                f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务体结束: "
-                f"task_id=[{task_id}], pipeline_ok={pipeline_ok}"
+                f"{_LOG_PREFIX}【span_id={get_span_id()}】任务体结束: "
+                f"celery_id=[{task_id}], pipeline_ok={pipeline_ok}{summary_bits}"
             )
             batch_code = retval.get("batch_code") if isinstance(retval, dict) else None
             summary = retval if retval is not None else {"success": True}
@@ -464,8 +581,8 @@ def create_celery():
         def on_failure(self, exc, task_id, args, kwargs, einfo):
             """任务抛异常：完整错误写入 task_summary，堆栈写入 task_error，状态=失败。"""
             LOGGER.error(
-                f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行失败: "
-                f"task_id=[{task_id}], "
+                f"{_LOG_PREFIX}【span_id={get_span_id()}】任务执行失败: "
+                f"celery_id=[{task_id}], args={args}, kwargs={kwargs}, "
                 f"错误类型: {type(exc).__name__}, "
                 f"错误描述: {str(exc)}, \n"
                 f"错误回溯: {einfo.traceback}"
@@ -519,19 +636,20 @@ def create_celery():
                 _task_stack.pop()
 
     # 创建 Celery 实例
-    _celery_: Celery = NewCelery("Krun-Celery-Worker", task_cls=ContextTask)
+    _celery_: Celery = NewCelery("Celery-Worker", task_cls=ContextTask)
     _celery_.config_from_object(CELERY_CONFIG.CELERY_CONFIG)
     return _celery_
 
 
 celery = create_celery()
 
-# ========== 启动命令（在项目根目录 Krun_副本_new 下执行，且保证 PYTHONPATH 含 backend 所在目录）==========
-# Worker（消费 default + autotest_queue）：
-#   Windows（单线程）：celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue --pool=solo -l INFO
-#   Linux：          celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
-# Beat（定时下发 scan_and_dispatch_autotest_tasks，必须单独起一个进程）：
+# ========== 启动命令（在仓库根目录执行，保证 PYTHONPATH 可 import backend）==========
+# Worker：
+#   celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
+# Beat：
 #   celery -A backend.celery_scheduler.celery_worker beat -l INFO
+# 日志默认写入：backend/output/logs/celery_logs/celery_worker.log | celery_beat.log
+# 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 
 if __name__ == '__main__':
     import sys

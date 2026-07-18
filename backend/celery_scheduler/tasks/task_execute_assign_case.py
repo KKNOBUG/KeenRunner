@@ -133,7 +133,12 @@ def execute_step_tree_task(
         elif isinstance(report_type, AutoTestReportType):
             rt = report_type
 
-        return run_async(
+        LOGGER.info(
+            f"【Celery-Worker】开始执行步骤树任务: case_id={case_id}, report_type={getattr(rt, 'value', rt)}, "
+            f"batch_code={batch_code}, dataset_count={len(selected_dataset_names or [])}, "
+            f"has_steps_execute_config={bool(steps_execute_config)}"
+        )
+        result = run_async(
             _execute_step_tree_impl(
                 case_id=case_id,
                 initial_variables=initial_variables,
@@ -143,6 +148,17 @@ def execute_step_tree_task(
                 steps_execute_config=steps_execute_config,
             )
         )
+        LOGGER.info(
+            f"【Celery-Worker】步骤树任务完成: case_id={case_id}, "
+            f"batch_code={result.get('batch_code') if isinstance(result, dict) else batch_code}, "
+            f"execute_count={result.get('execute_count') if isinstance(result, dict) else None}, "
+            f"success_count={result.get('success_count') if isinstance(result, dict) else None}, "
+            f"failed_count={result.get('failed_count') if isinstance(result, dict) else None}"
+        )
+        return result
     except Exception as e:
-        LOGGER.error(f"Celery 执行步骤树失败, case_id={case_id}, err={e}")
+        LOGGER.error(
+            f"【Celery-Worker】执行步骤树失败: case_id={case_id}, batch_code={batch_code}, "
+            f"错误类型={type(e).__name__}, 错误描述={e}"
+        )
         raise

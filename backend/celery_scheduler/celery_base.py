@@ -59,7 +59,7 @@ async def init_tortoise_orm() -> None:
                         await conn.execute_query("SELECT 1")
                         return
                     except Exception:
-                        LOGGER.warning("数据库连接已断开，将重新初始化")
+                        LOGGER.warning("【Celery-Worker】数据库连接已断开，将重新初始化")
                         _tortoise_orm_initialized = False
                         try:
                             await Tortoise.close_connections()
@@ -68,7 +68,9 @@ async def init_tortoise_orm() -> None:
                 else:
                     _tortoise_orm_initialized = False
             except Exception as e:
-                LOGGER.warning(f"数据库连接检查失败，将重新初始化: {str(e)}")
+                LOGGER.warning(
+                    f"【Celery-Worker】【span_id={get_span_id_for_log()}】数据库连接检查失败，将重新初始化: {str(e)}"
+                )
                 _tortoise_orm_initialized = False
                 try:
                     await Tortoise.close_connections()
@@ -90,12 +92,12 @@ async def init_tortoise_orm() -> None:
         try:
             await Tortoise.init(config=config)
             _tortoise_orm_initialized = True
-            LOGGER.info("Tortoise ORM 数据库连接初始化成功")
+            LOGGER.info("【Celery-Worker】Tortoise ORM 数据库连接初始化成功")
         except DBConnectionError as e:
-            LOGGER.error(f"数据库连接失败: {str(e)}")
+            LOGGER.error(f"【Celery-Worker】数据库连接失败: {str(e)}")
             raise RuntimeError(f"数据库连接失败, 请检查主机地址是否可达: {str(e)}")
         except Exception as e:
-            LOGGER.error(f"数据库初始化失败: {str(e)}")
+            LOGGER.error(f"【Celery-Worker】数据库初始化失败: {str(e)}")
             raise
 
 
@@ -109,7 +111,7 @@ def ensure_tortoise_orm_initialized() -> None:
     try:
         AsyncEventLoopContextIOPool.run_in_pool(init_tortoise_orm())
     except Exception as e:
-        LOGGER.error(f"确保数据库初始化失败: {str(e)}")
+        LOGGER.error(f"【Celery-Worker】确保数据库初始化失败: {str(e)}")
 
 
 def get_span_id_for_log() -> str:
@@ -175,13 +177,13 @@ def check_task_expired(task: Any) -> bool:
         prev_run = croniter(expr, now).get_prev(datetime)
         due = True if last_run is None else (last_run < prev_run)
         LOGGER.debug(
-            f"【Krun-Celery-Worker】cron到期判断 task_id={task_id} expr={expr} "
+            f"【Celery-Worker】cron到期判断 task_id={task_id} expr={expr} "
             f"now={now} prev={prev_run} last_run={last_run} due={due}"
         )
         return due
     except Exception as e:
         LOGGER.warning(
-            f"【Krun-Celery-Worker】【span_id={get_span_id_for_log()}】Cron 解析失败: "
+            f"【Celery-Worker】【span_id={get_span_id_for_log()}】Cron 解析失败: "
             f"task_id={task_id}, 错误类型: {type(e).__name__}, 错误描述: {e}\n"
             f"{traceback.format_exc()}"
         )
