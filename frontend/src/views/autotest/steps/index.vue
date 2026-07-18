@@ -12,7 +12,11 @@
     />
     <div class="page-container">
       <div class="steps-split-layout">
-        <div class="left-column" :style="{ width: `${leftPanelWidth}px` }">
+        <div
+            v-show="!leftPanelCollapsed"
+            class="left-column"
+            :style="{ width: `${leftPanelWidth}px` }"
+        >
           <n-card size="small" hoverable class="step-card">
             <template #header>
               <div class="step-header">
@@ -136,10 +140,14 @@
           </n-card>
         </div>
         <div
+            v-show="!leftPanelCollapsed"
             class="steps-split-resizer"
-            title="拖动调整步骤树宽度"
+            title="拖动调整步骤树宽度，双击折叠"
             @mousedown="startResizeLeftPanel"
-        />
+            @dblclick.prevent="collapseLeftPanel"
+        >
+          <TheIcon icon="mdi:drag-vertical" :size="16" />
+        </div>
         <div class="right-column steps-split-main">
           <n-card size="small" hoverable class="config-card">
             <component
@@ -152,6 +160,15 @@
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
           </n-card>
         </div>
+        <button
+            v-if="leftPanelCollapsed"
+            type="button"
+            class="steps-split-expand"
+            title="展开步骤树"
+            @click="expandLeftPanel"
+        >
+          <TheIcon icon="line-md:chevron-right" :size="16" />
+        </button>
       </div>
     </div>
 
@@ -299,6 +316,8 @@ const LEFT_PANEL_WIDTH_MIN = 200
 const LEFT_PANEL_WIDTH_MAX = 600
 
 const leftPanelWidth = ref(LEFT_PANEL_WIDTH_DEFAULT)
+/** 步骤树是否折叠（双击分隔条折叠，左侧边缘按钮恢复） */
+const leftPanelCollapsed = ref(false)
 
 function clampLeftPanelWidth(width) {
   return Math.min(LEFT_PANEL_WIDTH_MAX, Math.max(LEFT_PANEL_WIDTH_MIN, width))
@@ -343,12 +362,23 @@ function stopResizeLeftPanel() {
 
 function startResizeLeftPanel(event) {
   if (event.button !== 0) return
+  // 双击折叠时忽略第二次 mousedown 触发的拖拽
+  if (event.detail > 1) return
   resizeLeftPanelStartX = event.clientX
   resizeLeftPanelStartWidth = leftPanelWidth.value
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
   document.addEventListener('mousemove', onResizeLeftPanelMove)
   document.addEventListener('mouseup', stopResizeLeftPanel)
+}
+
+function collapseLeftPanel() {
+  stopResizeLeftPanel()
+  leftPanelCollapsed.value = true
+}
+
+function expandLeftPanel() {
+  leftPanelCollapsed.value = false
 }
 
 /** 右侧步骤编辑器使用的「所属应用」选项（来自 CaseInfoPanel） */
@@ -3140,6 +3170,7 @@ const RecursiveStepChildren = defineComponent({
 
 
 .steps-split-layout {
+  position: relative;
   display: flex;
   flex: 1;
   align-items: stretch;
@@ -3153,7 +3184,39 @@ const RecursiveStepChildren = defineComponent({
   width: 3px;
   margin: 0 3px;
   cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
+  user-select: none;
+  color: var(--n-text-color-3, #F4511E);
+}
+
+/* 折叠后：不占布局宽度，浮在左侧边缘中间 */
+.steps-split-expand {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  z-index: 5;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--n-text-color-3, #999) 12%, transparent);
+  color: var(--n-text-color-3, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.steps-split-expand:hover {
+  color: var(--n-primary-color, #F4511E);
+  background: color-mix(in srgb, var(--n-primary-color, #F4511E) 14%, transparent);
 }
 
 /* 左侧列：步骤树统一字号与字重 */

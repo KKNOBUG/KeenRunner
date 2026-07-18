@@ -33,6 +33,57 @@
           class="case-info-form"
       >
         <div class="case-info-fields">
+          <div class="case-field case-field-name">
+            <n-form-item label="用例名称" path="case_name" required :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_name"
+                  size="small"
+                  placeholder="请输入用例名称"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field case-field-desc">
+            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_desc"
+                  size="small"
+                  type="textarea"
+                  :resizable="false"
+                  :autosize="{ minRows: 1, maxRows: 1 }"
+                  placeholder="请输入用例描述"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field">
+            <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_type"
+                  :options="caseTypeOptions"
+                  clearable
+                  placeholder="请选择用例类型"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field">
+            <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
+              <n-select
+                  v-model:value="caseForm.case_attr"
+                  :options="caseAttrOptions"
+                  clearable
+                  placeholder="请选择用例属性"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
           <div class="case-field">
             <n-form-item label="所属应用" path="case_project" required :show-feedback="false">
               <n-select
@@ -43,17 +94,6 @@
                   filterable
                   placeholder="所属应用"
                   size="small"
-                  class="case-field-input"
-              />
-            </n-form-item>
-          </div>
-
-          <div class="case-field">
-            <n-form-item label="用例名称" path="case_name" required :show-feedback="false">
-              <n-input
-                  v-model:value="caseForm.case_name"
-                  size="small"
-                  placeholder="请输入用例名称"
                   class="case-field-input"
               />
             </n-form-item>
@@ -116,43 +156,6 @@
                   </div>
                 </template>
               </n-popover>
-            </n-form-item>
-          </div>
-
-          <div class="case-field">
-            <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
-              <n-select
-                  v-model:value="caseForm.case_attr"
-                  :options="caseAttrOptions"
-                  clearable
-                  placeholder="请选择用例属性"
-                  size="small"
-                  class="case-field-input"
-              />
-            </n-form-item>
-          </div>
-
-          <div class="case-field">
-            <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
-              <n-select
-                  v-model:value="caseForm.case_type"
-                  :options="caseTypeOptions"
-                  clearable
-                  placeholder="请选择用例类型"
-                  size="small"
-                  class="case-field-input"
-              />
-            </n-form-item>
-          </div>
-
-          <div class="case-field case-field-full">
-            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
-              <n-input
-                  v-model:value="caseForm.case_desc"
-                  size="small"
-                  type="textarea"
-                  placeholder="请输入用例描述"
-              />
             </n-form-item>
           </div>
         </div>
@@ -510,20 +513,30 @@ defineExpose({
 
 .case-info-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 8px 24px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px 16px;
 }
 
 .case-field {
   min-width: 0;
+  grid-column: span 3;
 }
 
 .case-field :deep(.n-form-item) {
   width: 100%;
 }
 
-.case-field-full {
-  grid-column: 1 / -1;
+/* 第一行：名称与第二行「用例类型」同宽（1/4），描述占剩余 3/4 */
+.case-field-name {
+  grid-column: span 3;
+}
+
+.case-field-desc {
+  grid-column: span 9;
+}
+
+.case-field-desc :deep(textarea) {
+  resize: none;
 }
 
 .case-field-input {
@@ -538,13 +551,12 @@ defineExpose({
 @media (max-width: 768px) {
   .case-info-fields {
     grid-template-columns: 1fr;
-    gap: 10px;
   }
-}
 
-@media (min-width: 1200px) {
-  .case-info-fields {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .case-field,
+  .case-field-name,
+  .case-field-desc {
+    grid-column: 1 / -1;
   }
 }
 

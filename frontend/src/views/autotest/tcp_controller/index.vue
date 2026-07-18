@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['http-card', { 'is-collapsed': requestCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['tcp-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>
@@ -650,7 +650,7 @@ const doDebugRequest = async (env_id) => {
 
 <style scoped>
 /* 与 HTTP 请求步骤「Request」卡片一致 */
-.http-card {
+.tcp-card {
   margin: 8px 0;
   border-radius: 12px;
   box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
@@ -687,7 +687,7 @@ const doDebugRequest = async (env_id) => {
   font-size: 12px;
 }
 
-.http-card.is-collapsed :deep(.n-card__content) {
+.tcp-card.is-collapsed :deep(.n-card__content) {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
