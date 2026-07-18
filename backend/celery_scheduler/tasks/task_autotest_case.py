@@ -187,6 +187,12 @@ def scan_and_dispatch_autotest_tasks():
 
 
 @celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task")
-def run_autotest_task(task_id: int, report_type: Optional[AutoTestReportType] = None):
+def run_autotest_task(
+        task_id: int,
+        report_type: Optional[AutoTestReportType] = None,
+        created_user: Optional[str] = None,
+):
     """执行单个自动化任务（扫描或 API 触发）；执行记录由 Worker 信号维护。"""
+    # created_user 随 kwargs 传到 Worker，供 task_prerun 写入执行记录；此处不参与业务执行
+    _ = created_user
     return run_async(_run_autotest_task_impl(task_id, report_type=report_type))

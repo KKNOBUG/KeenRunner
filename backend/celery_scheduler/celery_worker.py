@@ -134,6 +134,7 @@ async def _ensure_tortoise_then_create_task_record(
         celery_task_name: str,
         trigger_type=None,
         report_type=None,
+        created_user=None,
 ):
     """同一协程内先 init Tortoise 再写执行记录，保证同 loop。"""
     await init_tortoise_orm()
@@ -145,6 +146,7 @@ async def _ensure_tortoise_then_create_task_record(
         celery_task_name=celery_task_name,
         trigger_type=trigger_type,
         report_type=report_type,
+        created_user=created_user,
     )
 
 
@@ -190,13 +192,23 @@ async def _create_task_record(
         celery_task_name: str,
         trigger_type=None,
         report_type=None,
+        created_user=None,
 ):
     """创建任务执行观测记录（RUNNING），并写入完整执行入参快照。"""
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
     from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
     from backend.enums import AutoTestTaskStatus
 
+    def _normalize_username(raw: Any) -> Optional[str]:
+        if raw is None:
+            return None
+        name = str(raw).strip()
+        if not name:
+            return None
+        return name.upper()[:16]
+
     report_val = getattr(report_type, "value", report_type)
+    username = _normalize_username(created_user)
     data: Dict[str, Any] = {
         "task_id": task_id,
         "celery_id": celery_id,
@@ -218,6 +230,12 @@ async def _create_task_record(
             if not cases_cfg and isinstance(kwargs, dict):
                 cases_cfg = kwargs.get("cases_execute_config") or {}
             periodic = getattr(task_instance, "task_periodic_expr", None)
+            # Worker 无登录上下文：优先用触发方传入的用户；否则回退任务创建人
+            if not username:
+                username = _normalize_username(
+                    getattr(task_instance, "created_user", None)
+                    or getattr(task_instance, "updated_user", None)
+                )
             data.update({
                 "task_code": getattr(task_instance, "task_code", None),
                 "task_name": getattr(task_instance, "task_name", None),
@@ -240,13 +258,16 @@ async def _create_task_record(
                     "task_enabled": getattr(task_instance, "task_enabled", None),
                 }),
             })
+    if username:
+        data["created_user"] = username
     await AutoTestApiTaskRecordCrud().create_record(data)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={get_span_id()}】创建执行记录成功: "
         f"celery_id={celery_id}, task_id={task_id}, "
         f"task_code={data.get('task_code')}, task_name={data.get('task_name')}, "
+        f"created_user={data.get('created_user')}, "
         f"celery_node={celery_node}, trigger_type={getattr(trigger_type, 'value', trigger_type)}, "
-        f"report_type={getattr(report_type, 'value', report_type)}"
+        f"report_type={report_val}"
     )
 
 
@@ -343,6 +364,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                         celery_task_name=task.name,
                         trigger_type=trigger_type,
                         report_type=report_type,
+                        created_user=req_kwargs.get("created_user"),
                     )
                 )
             except Exception as e:

@@ -56,6 +56,14 @@ class AutoTestApiTaskRecordCrud(
             k: v for k, v in data.items()
             if hasattr(record, k) and (v is not None or k in allow_none_keys)
         }
+        # Worker 更新终态时无 HTTP 用户上下文：优先入参，其次沿用创建人
+        if not update_dict.get("updated_user"):
+            from backend.services.ctx import get_current_username
+            username = get_current_username() or (
+                str(record.created_user).strip() if record.created_user else None
+            )
+            if username:
+                update_dict["updated_user"] = username.upper()[:16]
         for key, value in update_dict.items():
             setattr(record, key, value)
         await record.save(update_fields=list(update_dict.keys()))

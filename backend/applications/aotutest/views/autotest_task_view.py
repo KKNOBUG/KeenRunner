@@ -214,12 +214,15 @@ async def run_task_info(
         await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums import AutoTestReportType
+        from backend.services.ctx import get_current_username
         # __task_id 会随消息传到 Worker，task_prerun 从 request.properties 取出；
         # 只有传了 __task_id，Worker 端 _create_task_record 才会查任务表并写入 record 的 task_id/task_name。
+        # created_user 写入执行记录（Worker 无 HTTP 鉴权上下文）。
         run_autotest_task.apply_async(
             kwargs={
                 "task_id": task_id,
                 "report_type": AutoTestReportType.ASYNC_EXEC,
+                "created_user": get_current_username(),
             },
             queue="autotest_queue",
             __task_id=task_id
