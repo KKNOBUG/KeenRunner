@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['http-card', { 'is-collapsed': requestCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', 'http-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>
@@ -22,7 +22,9 @@
           :rules="rules"
           :model="state.form"
           label-placement="left"
+          class="step-editor-form"
           label-width="80px"
+          size="small"
           ref="formRef"
       >
         <!-- 第一行：请求方式20% + 请求地址（与调试同栏无缝）；第二行：步骤名称、所属应用、配置名称 -->
@@ -54,7 +56,7 @@
                       class="request-toolbar-input-fill"
                       :disabled="props.readonly"
                   />
-                  <n-button type="primary" size="medium" class="http-debug-btn" @click="debugging" :loading="debugLoading">
+                  <n-button type="primary" size="small" class="http-debug-btn" @click="debugging" :loading="debugLoading">
                     调试
                   </n-button>
                 </div>
@@ -254,7 +256,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['http-card', { 'is-collapsed': dataSourceCollapsed }]"
+      :class="['step-editor-card', 'http-card', { 'is-collapsed': dataSourceCollapsed }]"
   >
     <template #header>
       <div class="card-header-row">
@@ -368,7 +370,6 @@
 
               <n-data-table
                   :row-key="dataSourceGeneratedRowKey"
-                  @update:checked-row-keys="dataSourceGeneratedHandleCheck"
                   :columns="dataSourceGeneratedColumns"
                   :data="dataSource.generatedRows"
                   :bordered="false"
@@ -406,7 +407,7 @@
       v-if="response || debugLoading"
       :bordered="false"
       style="width: 100%; margin-top: 8px;"
-      :class="['http-card', { 'is-collapsed': responseCardCollapsed }]"
+      :class="['step-editor-card', 'http-card', { 'is-collapsed': responseCardCollapsed }]"
       ref="debugResultRef"
   >
     <template #header>
@@ -622,7 +623,6 @@ import {
   NSelect,
   NSpace,
   NSpin,
-  NSwitch,
   NTabPane,
   NTabs,
   NTag,
@@ -739,9 +739,6 @@ const dataSourceTipText = computed(() => {
 
 const ts = () => new Date().toISOString().slice(0, 19).replace('T', ' ')
 const dataSource = reactive({
-  docs: [],
-  latestDocName: '',
-  stepDataFileName: '',
   apiDocFileName: '',
   validationPoints: [],
   previewRows: [],
@@ -752,54 +749,24 @@ const dataSource = reactive({
   ]
 })
 
-const dataSourceDocColumns = [
-  {title: '文档名称', key: 'name'},
-  {title: '状态', key: 'status', width: 120},
-  {title: '耗时', key: 'duration', width: 100},
-  {title: '提交时间', key: 'submittedAt', width: 160},
-  {title: '完成时间', key: 'finishedAt', width: 160}
-]
-
 const dataSourceEditModalVisible = ref(false)
-const dataSourceEditForm = reactive({rowKey: null, type: 'preview', cells: []})
+const dataSourceEditForm = reactive({rowKey: null, type: 'generated', cells: []})
 const previewEditingCell = reactive({
   rowKey: null,
   colKey: '',
   originalValue: ''
 })
 
+/** DataSource「数据生成」行编辑（当前仅占位打开弹窗，字段编辑后续接入） */
 const openDataSourceEdit = (type, row) => {
   dataSourceEditForm.rowKey = row?.__rowKey ?? row?.id ?? null
   dataSourceEditForm.type = type
-  if (type === 'preview') {
-    const cells = Object.keys(row || {})
-        .filter((k) => k.startsWith('c_'))
-        .sort((a, b) => Number(a.slice(2)) - Number(b.slice(2)))
-        .map((k) => ({
-          key: k,
-          label: `列${Number(k.slice(2)) || k}`,
-          value: row?.[k] == null ? '' : String(row[k]),
-        }))
-    dataSourceEditForm.cells = cells
-  } else {
-    dataSourceEditForm.cells = []
-  }
+  dataSourceEditForm.cells = []
   dataSourceEditModalVisible.value = true
 }
 
 const confirmDataSourceEdit = () => {
-  const list = dataSourceEditForm.type === 'generated' ? dataSource.generatedRows : dataSource.previewRows
-  const idx = list.findIndex((x) => (x.__rowKey || x.id) === dataSourceEditForm.rowKey)
-  if (idx >= 0) {
-    if (dataSourceEditForm.type === 'preview') {
-      const patched = {...list[idx]}
-      dataSourceEditForm.cells.forEach((cell) => {
-        patched[cell.key] = cell.value
-      })
-      list[idx] = patched
-    }
-    $message.success('已更新')
-  }
+  $message.success('已更新')
   dataSourceEditModalVisible.value = false
 }
 
@@ -1222,8 +1189,6 @@ const dataSourceGeneratedColumns = [
   }
 ]
 
-const dataSourceGeneratedKeysRef = ref([]);
-
 /**
  * DataSource「数据生成」表格行主键。
  * @param {object} row
@@ -1231,14 +1196,6 @@ const dataSourceGeneratedKeysRef = ref([]);
  */
 function dataSourceGeneratedRowKey(row) {
   return row.id;
-}
-
-/**
- * DataSource「数据生成」表格勾选行变更。
- * @param {string[]} rowKeys
- */
-function dataSourceGeneratedHandleCheck(rowKeys) {
-  dataSourceGeneratedKeysRef.value = rowKeys;
 }
 
 /**
@@ -2380,12 +2337,7 @@ const validatorColumns = [
 </script>
 
 <style scoped>
-.http-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E
-}
+/* 卡片壳见 styles/autotest-theme.scss .step-editor-card */
 
 .http-request-rows {
   display: flex;
@@ -2463,39 +2415,10 @@ const validatorColumns = [
   flex-shrink: 0;
 }
 
-.panel-title {
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-}
+/* .panel-title 见 .step-editor-card */
 
 .card-header-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 24px;
   padding-right: 220px; /* 预留右侧 actions 空间，避免标题过长被遮挡 */
-}
-
-.card-header-actions {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.collapse-tiny-btn :deep(.n-button__content) {
-  font-size: 12px;
-}
-
-.http-card.is-collapsed :deep(.n-card__content) {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
 }
 
 .data-source-content {
@@ -2539,13 +2462,6 @@ const validatorColumns = [
   white-space: nowrap;
 }
 
-.key-value-editor .key-value-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 100px;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
 .json-editor {
   font-family: 'Fira Code', monospace;
   font-size: 14px;
@@ -2565,87 +2481,6 @@ const validatorColumns = [
 .response-code {
   max-height: 400px; /* 限制代码块高度 */
   overflow: auto; /* 添加滚动条 */
-}
-
-pre {
-  background-color: var(--autotest-pre-bg-color);
-  color: var(--autotest-pre-text-color);
-  padding: 10px;
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.extract-validator-list {
-  width: 100%;
-}
-
-.extract-validator-list :deep(.n-space-item) {
-  width: 100%;
-}
-
-.extract-validator-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 14px;
-  line-height: 1.15;
-}
-
-.extract_variables-item,
-.validator-item {
-  width: 100%;
-}
-
-.extract_variables-item :deep(.n-card),
-.validator-item :deep(.n-card) {
-  border: 1px solid var(--n-border-color);
-  background-color: var(--n-color);
-}
-
-.extract_variables-item :deep(.n-card-header),
-.validator-item :deep(.n-card-header) {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  box-sizing: border-box;
-  background-color: var(--n-color-embedded);
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.extract_variables-item :deep(.n-card-header__main),
-.validator-item :deep(.n-card-header__main) {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.extract_variables-item :deep(.n-card.is-item-collapsed .n-card-header),
-.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
-  border-bottom: none;
-}
-
-.extract_variables-item :deep(.n-card.is-item-collapsed .n-card__content),
-.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
-  display: none;
-  padding: 0;
-}
-
-.log-item {
-  background-color: var(--pre-bg-color);
-  color: var(--pre-text-color);
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .debug-loading {

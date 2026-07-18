@@ -13,11 +13,107 @@
   --autotest-font-size-medium: var(--font-size-medium);
   --autotest-font-size-large: var(--font-size-large);
   --autotest-font-size-huge: var(--font-size-huge);
+
+  /*
+   * 步骤编辑器（右侧子页）设计令牌
+   * 基准：左侧步骤树 .left-column = 13px / 400
+   */
+  --step-editor-font-size: 13px;
+  --step-editor-title-size: 13px;
+  --step-editor-meta-size: 12px;
+  --step-editor-accent: #f4511e;
+  --step-editor-card-radius: 12px;
+  --step-editor-card-margin: 8px 0;
+  --step-editor-card-shadow: 0 0 15px color-mix(in srgb, var(--n-border-color) 45%, transparent);
+  --step-editor-gap: 8px;
 }
 
-/* 步骤/控制器面板卡片阴影（各控制器 .http-card 共用） */
-.http-card {
-  box-shadow: 0 0 12px color-mix(in srgb, var(--n-border-color) 50%, transparent);
+/* ========== 步骤编辑器：统一卡片壳 ========== */
+.step-editor-card {
+  width: 100%;
+  margin: var(--step-editor-card-margin);
+  border-radius: var(--step-editor-card-radius);
+  box-shadow: var(--step-editor-card-shadow);
+  border-left: 3px solid var(--step-editor-accent);
+  font-size: var(--step-editor-font-size);
+  font-weight: 400;
+  color: var(--n-text-color);
+}
+
+.step-editor-card .panel-title {
+  font-weight: 600;
+  font-size: var(--step-editor-title-size);
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
+
+.step-editor-card .panel-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.step-editor-card .panel-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
+}
+
+.step-editor-card .card-header-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 24px;
+}
+
+.step-editor-card .card-header-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-editor-card .collapse-tiny-btn .n-button__content {
+  font-size: var(--step-editor-meta-size);
+}
+
+.step-editor-card.is-collapsed > .n-card__content {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* 表单：标签/控件跟步骤树同字号 */
+.step-editor-form,
+.step-editor-card .n-form {
+  font-size: var(--step-editor-font-size);
+}
+
+.step-editor-form .n-form-item-label,
+.step-editor-card .n-form-item-label {
+  font-size: var(--step-editor-font-size) !important;
+  white-space: nowrap;
+}
+
+.step-editor-form .n-input,
+.step-editor-form .n-base-selection,
+.step-editor-form .n-input-number,
+.step-editor-card .n-input,
+.step-editor-card .n-base-selection,
+.step-editor-card .n-input-number {
+  font-size: var(--step-editor-font-size);
+}
+
+.step-editor-hint {
+  font-size: var(--step-editor-meta-size);
+  color: var(--n-text-color-3);
+  line-height: 1.5;
 }
 
 /* 工具类 */

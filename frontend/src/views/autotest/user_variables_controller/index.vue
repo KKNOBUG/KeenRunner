@@ -1,10 +1,14 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" class="user-variables-card">
+  <n-card :bordered="false" class="step-editor-card user-variables-card">
+    <template #header>
+      <div class="panel-title">用户变量</div>
+    </template>
     <n-form
-        ref="formRef"
+        class="step-editor-form"
         :rules="formRules"
         label-placement="left"
         label-width="80px"
+        size="small"
         :model="form"
     >
       <n-form-item label="步骤名称" path="step_name" required>
@@ -12,7 +16,6 @@
             v-model:value="form.step_name"
             placeholder="请输入步骤名称"
             clearable
-            style="width: 100%;"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -22,7 +25,8 @@
             v-model:value="form.step_desc"
             placeholder="请输入步骤描述"
             clearable
-            style="width: 100%; min-height: 4rem;"
+            :resizable="false"
+            :autosize="{ minRows: 1, maxRows: 3 }"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -41,7 +45,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, nextTick } from 'vue'
+import { reactive, watch, nextTick } from 'vue'
 import { NForm, NFormItem, NInput, NCard } from 'naive-ui'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
 
@@ -66,7 +70,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:config'])
-const formRef = ref(null)
 
 const formRules = {
   step_name: [
@@ -80,7 +83,7 @@ const defaults = {
   session_variables: []
 }
 
-// 标准化为后端格式 key, value, desc
+/** 标准化为 KeyValueEditor / 后端格式：key, value, desc */
 const normalizeSessionVariables = (list) => {
   if (!Array.isArray(list)) return []
   return list.map(item => ({
@@ -90,15 +93,6 @@ const normalizeSessionVariables = (list) => {
   }))
 }
 
-// 初始化时同时设置 description 供 KeyValueEditor 描述列显示
-const initSessionVariables = (list) => {
-  return normalizeSessionVariables(list).map(item => ({
-    ...item,
-    description: item.desc
-  }))
-}
-
-// 与 run_code_controller 一致：合并 config / original，stepName 作为 step_name 回退
 const mergeConfigAndOriginal = (config, original, stepName) => {
   const raw = config.session_variables ?? original?.session_variables ?? defaults.session_variables
   return {
@@ -106,7 +100,7 @@ const mergeConfigAndOriginal = (config, original, stepName) => {
         ? config.step_name
         : (original?.step_name ?? stepName ?? defaults.step_name),
     step_desc: config.step_desc !== undefined ? config.step_desc : (original?.step_desc ?? defaults.step_desc),
-    session_variables: initSessionVariables(raw)
+    session_variables: normalizeSessionVariables(raw)
   }
 }
 
@@ -140,7 +134,7 @@ watch(
 watch(
     () => [form.step_name, form.step_desc, form.session_variables],
     () => {
-      if (isExternalUpdate) return
+      if (isExternalUpdate || props.readonly) return
       emit('update:config', {
         step_name: form.step_name ?? '',
         step_desc: form.step_desc ?? '',
@@ -152,21 +146,8 @@ watch(
 </script>
 
 <style scoped>
-.user-variables-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E;
-}
-
 .variables-section {
-  margin-top: 16px;
-}
-
-.section-label {
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: var(--n-text-color-2);
+  margin-top: 12px;
 }
 </style>
 

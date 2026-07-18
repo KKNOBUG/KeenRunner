@@ -1,6 +1,15 @@
 <template>
-  <n-card :bordered="false" size="medium" style="width: 100%;" class="wait-card">
-    <n-form label-placement="left" label-width="100px" :model="form">
+  <n-card :bordered="false" class="step-editor-card wait-card">
+    <template #header>
+      <div class="panel-title">等待控制</div>
+    </template>
+    <n-form
+        class="step-editor-form"
+        label-placement="left"
+        label-width="80px"
+        size="small"
+        :model="form"
+    >
       <n-form-item label="等待时间">
         <n-input-number
             v-model:value="form.seconds"
@@ -8,7 +17,7 @@
             :precision="2"
             suffix="秒"
             placeholder="请输入等待时间（秒）"
-            style="width: 30%;"
+            style="width: 240px;"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -38,70 +47,44 @@ const defaults = {
   seconds: 2
 }
 
-// 合并config和原始数据
-const mergeConfigAndOriginal = (config, original) => {
-  return {
-    seconds: config.seconds !== undefined
-        ? Number(config.seconds)
-        : (original?.wait ? Number(original.wait) : defaults.seconds)
-  }
-}
+const mergeConfigAndOriginal = (config, original) => ({
+  seconds: config.seconds !== undefined
+      ? Number(config.seconds)
+      : (original?.wait ? Number(original.wait) : defaults.seconds)
+})
 
 const form = reactive({
   ...defaults,
   ...mergeConfigAndOriginal(props.config, props.step?.original)
 })
 
-// 标记是否正在从外部更新，避免循环触发
 let isExternalUpdate = false
 
-// 监听props变化，更新表单
+/** 仅在步骤切换时从 props 灌入，避免 config 回写与输入抢值 */
 watch(
-    () => [props.step?.id, props.config, props.step?.original],
-    ([stepId, config, original]) => {
-      // 当步骤变化时，重新初始化表单
+    () => props.step?.id,
+    () => {
       isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(config || {}, original)
+      const merged = mergeConfigAndOriginal(props.config || {}, props.step?.original)
       Object.assign(form, defaults, merged)
-      // 使用 nextTick 确保在下一个 tick 重置标志
       nextTick(() => {
         isExternalUpdate = false
       })
     },
-    {deep: true, immediate: true}
+    {immediate: true}
 )
 
-// 监听表单变化，发送更新
-// 使用防抖，避免频繁触发
 let emitTimer = null
 watch(
     () => form.seconds,
     () => {
-      // 如果正在从外部更新，不触发 emit
-      if (isExternalUpdate) return
-
-      // 清除之前的定时器
-      if (emitTimer) {
-        clearTimeout(emitTimer)
-      }
-
-      // 使用防抖，延迟发送更新
+      if (isExternalUpdate || props.readonly) return
+      if (emitTimer) clearTimeout(emitTimer)
       emitTimer = setTimeout(() => {
         emit('update:config', {
           seconds: form.seconds || 0
         })
-      }, 300) // 300ms 防抖延迟
-    },
-    {deep: true}
+      }, 300)
+    }
 )
 </script>
-
-<style scoped>
-.wait-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E;
-}
-
-</style>

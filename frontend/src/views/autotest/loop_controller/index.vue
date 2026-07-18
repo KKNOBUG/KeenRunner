@@ -1,6 +1,9 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" class="loop-card">
-    <n-form label-placement="left" label-width="135px" :model="form">
+  <n-card :bordered="false" class="step-editor-card loop-card">
+    <template #header>
+      <div class="panel-title">循环结构</div>
+    </template>
+    <n-form class="step-editor-form" label-placement="left" label-width="110px" size="small" :model="form">
       <n-form-item label="循环模式" required>
         <n-radio-group v-model:value="form.loop_mode" name="loop-mode" :disabled="props.readonly">
           <n-space>
@@ -17,7 +20,6 @@
             v-model:value="form.loop_on_error"
             :options="errorStrategyOptions"
             placeholder="请选择错误处理策略"
-            style="width: 80%;"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -29,12 +31,11 @@
                 v-model:value="form.loop_maximums"
                 :min="1"
                 placeholder="请输入最大循环次数, 最多循环100次"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
+            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -43,7 +44,6 @@
                 :precision="2"
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -54,15 +54,14 @@
             <n-input
                 v-model:value="form.loop_iterable"
                 placeholder="变量名或可迭代的数据对象, 例如: ${list} 或 [1, 2, 3, 4, 5]"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
+            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
           </n-form-item>
           <n-form-item label="循环数据变量">
-            <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value" style="width: 80%;" />
+            <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value"  />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -71,7 +70,6 @@
                 :precision="2"
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -82,18 +80,17 @@
             <n-input
                 v-model:value="form.loop_iterable"
                 placeholder="变量名或字典对象，例如: ${dict} 或 {key1: value1, key2: value2}"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
+            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
           </n-form-item>
           <n-form-item label="循环键名变量">
-            <n-input :value="LOOP_KEY_NAME" disabled placeholder="loop_key" style="width: 80%;" />
+            <n-input :value="LOOP_KEY_NAME" disabled placeholder="loop_key"  />
           </n-form-item>
           <n-form-item label="循环数据变量">
-            <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value" style="width: 80%;" />
+            <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value"  />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -102,7 +99,6 @@
                 :precision="2"
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -113,16 +109,14 @@
             <n-input
                 v-model:value="form.condition_expr"
                 placeholder="变量名, 例如: ${count} 或 ${status}"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="条件比较符" required>
             <n-select
                 v-model:value="form.condition_compare"
-                :options="operatorOptions"
+                :options="assertionOperationSelectOptions"
                 placeholder="请选择条件比较符"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -130,12 +124,11 @@
             <n-input
                 v-model:value="form.condition_value"
                 placeholder="字符串或变量, 例如: 3 或 ${target}"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index" style="width: 80%;" />
+            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -144,7 +137,6 @@
                 :precision="2"
                 suffix="秒"
                 placeholder="请输入循环间隔时间（秒）"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -155,7 +147,6 @@
                 :precision="2"
                 suffix="秒"
                 placeholder="0 表示不超时, 最大循环时间: 300"
-                style="width: 80%;"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -167,7 +158,7 @@
 
 <script setup>
 import { reactive, watch, nextTick } from 'vue'
-import { NAlert, NForm, NFormItem, NInput, NInputNumber, NRadio, NRadioGroup, NSpace, NCard, NSelect } from 'naive-ui'
+import { NForm, NFormItem, NInput, NInputNumber, NRadio, NRadioGroup, NSpace, NCard, NSelect } from 'naive-ui'
 import {
   assertionOperationSelectOptions,
   DEFAULT_ASSERTION_OPERATION,
@@ -198,8 +189,6 @@ const errorStrategyOptions = [
   { label: '停止整个用例执行', value: '停止整个用例执行' }
 ]
 
-const operatorOptions = assertionOperationSelectOptions
-
 const normalizeLoopMode = (m) => m || '次数循环'
 
 const parseCondition = (c) => {
@@ -217,32 +206,6 @@ const parseCondition = (c) => {
   }
 }
 
-const initFormFromOriginal = (original) => {
-  if (!original) return {}
-
-  const formData = {
-    loop_mode: normalizeLoopMode(original.loop_mode),
-    loop_on_error: original.loop_on_error || '中断循环',
-    loop_maximums: original.loop_maximums ? Number(original.loop_maximums) : 5,
-    loop_interval: original.loop_interval ? Number(original.loop_interval) : 1,
-    loop_iterable: original.loop_iterable || '',
-    loop_timeout: original.loop_timeout ? Number(original.loop_timeout) : 120
-  }
-
-  if (original.conditions) {
-    const condition = parseCondition(original.conditions)
-    formData.condition_expr = condition.condition_expr
-    formData.condition_compare = condition.condition_compare
-    formData.condition_value = condition.condition_value
-  } else {
-    formData.condition_expr = ''
-    formData.condition_compare = DEFAULT_ASSERTION_OPERATION
-    formData.condition_value = ''
-  }
-
-  return formData
-}
-
 const mergeConfigAndOriginal = (config, original) => {
   const merged = {
     loop_mode: normalizeLoopMode(config.loop_mode || original?.loop_mode),
@@ -253,7 +216,12 @@ const mergeConfigAndOriginal = (config, original) => {
     loop_timeout: config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original?.loop_timeout ? Number(original.loop_timeout) : 0)
   }
 
-  if (
+  const fromConfigDict = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
+      ? config.conditions
+      : null
+  if (fromConfigDict) {
+    Object.assign(merged, parseCondition(fromConfigDict))
+  } else if (
       config.condition_expr !== undefined ||
       config.condition_compare !== undefined ||
       config.condition_value !== undefined
@@ -262,10 +230,7 @@ const mergeConfigAndOriginal = (config, original) => {
     merged.condition_compare = config.condition_compare || DEFAULT_ASSERTION_OPERATION
     merged.condition_value = config.condition_value != null ? String(config.condition_value) : ''
   } else if (original?.conditions) {
-    const condition = parseCondition(original.conditions)
-    merged.condition_expr = condition.condition_expr
-    merged.condition_compare = condition.condition_compare
-    merged.condition_value = condition.condition_value
+    Object.assign(merged, parseCondition(original.conditions))
   } else {
     merged.condition_expr = ''
     merged.condition_compare = DEFAULT_ASSERTION_OPERATION
@@ -287,80 +252,22 @@ const defaults = {
   condition_value: ''
 }
 
-const initialData = {
+const form = reactive({
   ...defaults,
   ...mergeConfigAndOriginal(props.config, props.step?.original)
-}
-
-initialData.condition_expr = initialData.condition_expr ?? ''
-initialData.condition_compare = initialData.condition_compare ?? DEFAULT_ASSERTION_OPERATION
-initialData.condition_value = initialData.condition_value ?? ''
-
-const form = reactive(initialData)
+})
 
 let isExternalUpdate = false
-let lastConfigRef = null
 
+/** 仅在步骤切换时从 props 灌入，避免 config 回写与输入抢值 */
 watch(
-    () => [props.step?.id, props.config, props.step?.original],
-    ([stepId, config, original]) => {
-      const configStr = JSON.stringify(config || {})
-      if (lastConfigRef === configStr && lastConfigRef !== null) {
-        return
-      }
-      lastConfigRef = configStr
-
+    () => props.step?.id,
+    () => {
       isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(config || {}, original)
-      const updatedData = { ...defaults, ...merged }
-
-      updatedData.condition_expr = updatedData.condition_expr ?? ''
-      updatedData.condition_compare = updatedData.condition_compare ?? DEFAULT_ASSERTION_OPERATION
-      updatedData.condition_value = updatedData.condition_value ?? ''
-
-      Object.keys(updatedData).forEach(key => {
-        if ((key === 'condition_expr' || key === 'condition_value') &&
-            form[key] && form[key].trim() !== '' &&
-            form[key] !== updatedData[key] &&
-            updatedData[key] === '') {
-          return
-        }
-        if (form[key] !== updatedData[key]) {
-          form[key] = updatedData[key]
-        }
-      })
-
-      if (form.condition_expr === undefined || form.condition_expr === null) {
-        form.condition_expr = ''
-      }
-      if (form.condition_compare === undefined || form.condition_compare === null) {
-        form.condition_compare = DEFAULT_ASSERTION_OPERATION
-      }
-      if (form.condition_value === undefined || form.condition_value === null) {
-        form.condition_value = ''
-      }
-
+      Object.assign(form, defaults, mergeConfigAndOriginal(props.config || {}, props.step?.original))
       nextTick(() => {
         isExternalUpdate = false
       })
-    },
-    { deep: true, immediate: true }
-)
-
-watch(
-    () => form.loop_mode,
-    (newMode) => {
-      if (newMode === '条件循环') {
-        if (typeof form.condition_expr !== 'string') {
-          form.condition_expr = form.condition_expr ?? ''
-        }
-        if (typeof form.condition_compare !== 'string') {
-          form.condition_compare = form.condition_compare ?? DEFAULT_ASSERTION_OPERATION
-        }
-        if (typeof form.condition_value !== 'string') {
-          form.condition_value = form.condition_value ?? ''
-        }
-      }
     },
     { immediate: true }
 )
@@ -379,11 +286,8 @@ watch(
       form.condition_value
     ],
     () => {
-      if (isExternalUpdate) return
-
-      if (emitTimer) {
-        clearTimeout(emitTimer)
-      }
+      if (isExternalUpdate || props.readonly) return
+      if (emitTimer) clearTimeout(emitTimer)
 
       emitTimer = setTimeout(() => {
         const config = {
@@ -394,38 +298,24 @@ watch(
 
         if (form.loop_mode === '次数循环') {
           config.loop_maximums = form.loop_maximums
-        } else if (form.loop_mode === '列表循环') {
-          config.loop_iterable = form.loop_iterable
-        } else if (form.loop_mode === '字典循环') {
+        } else if (form.loop_mode === '列表循环' || form.loop_mode === '字典循环') {
           config.loop_iterable = form.loop_iterable
         } else if (form.loop_mode === '条件循环') {
-          const conditionObj = {
+          config.conditions = {
             condition_expr: form.condition_expr || '',
             condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
             condition_value: form.condition_value || ''
           }
-          config.condition_expr = conditionObj.condition_expr
-          config.condition_compare = conditionObj.condition_compare
-          config.condition_value = conditionObj.condition_value
-          config.conditions = { ...conditionObj }
           config.loop_timeout = form.loop_timeout || 120
         }
 
         emit('update:config', config)
       }, 300)
-    },
-    { deep: true }
+    }
 )
 </script>
 
 <style scoped>
-.loop-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E
-}
-
 :deep(.n-radio-group) {
   padding: 4px 0;
 }

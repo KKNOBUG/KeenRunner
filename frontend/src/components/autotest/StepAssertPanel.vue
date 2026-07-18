@@ -8,16 +8,21 @@
       >
         <template #header>
           <div class="extract-validator-card-header">
-            <span>{{ formatAssertCardTitle(item, assertMode) }}</span>
-            <n-space>
-              <n-button text size="small" :disabled="readonly" @click="toggleCollapse(key)">
-                <template #icon>
-                  <TheIcon
-                      :icon="collapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                      :size="18"
-                  />
-                </template>
-              </n-button>
+            <div
+                class="extract-validator-title-wrap"
+                role="button"
+                tabindex="0"
+                @click="toggleCollapse(key)"
+                @keydown.enter.prevent="toggleCollapse(key)"
+            >
+              <TheIcon
+                  class="extract-validator-collapse-icon"
+                  :icon="collapseState[key] ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+                  :size="20"
+              />
+              <span class="extract-validator-title">{{ formatAssertCardTitle(item, mode) }}</span>
+            </div>
+            <n-space @click.stop>
               <n-button text type="info" size="small" :disabled="readonly" @click="duplicateItem(key)">
                 <template #icon>
                   <TheIcon icon="material-symbols:content-copy" :size="18" />
@@ -75,7 +80,7 @@
               />
             </n-form-item>
 
-            <n-form-item :label="isVariableSource ? '断言表达式' : '断言表达式'">
+            <n-form-item label="断言表达式">
               <n-input
                   v-model:value="item.jsonpath"
                   :placeholder="exprPlaceholder(item)"
@@ -147,7 +152,6 @@ const props = defineProps({
 
 const model = defineModel({ type: Object, default: () => ({}) })
 
-const assertMode = computed(() => props.mode)
 const isVariableSource = computed(() => isVariableNameAssertMode(props.mode))
 const isPython = computed(() => props.mode === ASSERT_MODE_PYTHON)
 
@@ -201,13 +205,6 @@ function duplicateItem(key) {
 function toggleCollapse(key) {
   collapseState[key] = !collapseState[key]
 }
-
-defineExpose({
-  resetCollapse() {
-    Object.keys(collapseState).forEach((k) => delete collapseState[k])
-    syncCollapseKeys()
-  },
-})
 </script>
 
 <style scoped lang="scss">

@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['http-card', { 'is-collapsed': mainCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', 'db-card', { 'is-collapsed': mainCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>
@@ -27,7 +27,7 @@
     </template>
 
     <n-collapse-transition :show="!mainCardCollapsed">
-      <n-form :model="state.form" label-placement="left" label-width="88px">
+      <n-form class="step-editor-form" :model="state.form" label-placement="left" label-width="80px" size="small">
         <n-form-item label="步骤名称" path="step_name" required>
           <n-input
               v-model:value="state.form.step_name"
@@ -112,7 +112,7 @@
                   </div>
                 </template>
                 <div v-show="!opCollapseState[key]" class="db-op-body">
-                  <n-form :model="item" label-width="96px" label-placement="left">
+                  <n-form class="step-editor-form" :model="item" label-width="80px" label-placement="left" size="small">
                     <div class="db-op-field-rows">
                       <div class="db-op-field-row db-op-field-row--cols3">
                         <n-form-item label="所属应用" required class="db-op-fi-fill">
@@ -217,9 +217,6 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NInputNumber,
-  NRadio,
-  NRadioGroup,
   NSpace,
   NSwitch,
   NSelect,
@@ -562,51 +559,19 @@ const duplicateOp = (key) => {
 </script>
 
 <style scoped>
-.http-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-}
+/* 卡片壳 / 标题 / 折叠见 .step-editor-card */
 
 .card-header-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 24px;
   padding-right: 220px;
 }
 
 .card-header-actions {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
   gap: 12px;
 }
 
 .db-stop-label {
-  font-size: 13px;
+  font-size: var(--step-editor-font-size, 13px);
   color: var(--n-text-color-2);
-}
-
-.collapse-tiny-btn :deep(.n-button__content) {
-  font-size: 12px;
-}
-
-.http-card.is-collapsed :deep(.n-card__content) {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
 }
 
 .db-op-header {
@@ -751,48 +716,5 @@ const duplicateOp = (key) => {
 
 .db-op-card-wrap .extract-validator-card-header {
   min-height: 100%;
-}
-
-.extract_variables-item,
-.validator-item {
-  width: 100%;
-}
-
-.extract_variables-item :deep(.n-card),
-.validator-item :deep(.n-card) {
-  border: 1px solid var(--n-border-color);
-  background-color: var(--n-color);
-}
-
-.extract_variables-item :deep(.n-card-header),
-.validator-item :deep(.n-card-header) {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  box-sizing: border-box;
-  background-color: var(--n-color-embedded);
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.extract_variables-item :deep(.n-card-header__main),
-.validator-item :deep(.n-card-header__main) {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.extract_variables-item :deep(.n-card.is-item-collapsed .n-card-header),
-.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
-  border-bottom: none;
-}
-
-.extract_variables-item :deep(.n-card.is-item-collapsed .n-card__content),
-.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
-  display: none;
-  padding: 0;
 }
 </style>

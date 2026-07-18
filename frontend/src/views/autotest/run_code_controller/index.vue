@@ -1,11 +1,26 @@
 <template>
   <div class="code-container">
-    <!-- 合并后的 Card：步骤名称、使用说明、调试按钮和代码编辑器 -->
-    <n-card :bordered="true" style="width: 100%;" class="code-card">
-      <!-- 顶部操作栏 -->
+    <n-card :bordered="false" class="step-editor-card code-card">
+      <template #header>
+        <div class="card-header-row">
+          <div class="panel-title">Python 代码</div>
+          <div class="card-header-actions">
+            <n-button
+                v-if="!props.readonly"
+                type="primary"
+                size="small"
+                :loading="debugLoading"
+                @click="handleDebug"
+            >
+              调试
+            </n-button>
+          </div>
+        </div>
+      </template>
+
       <div class="top-bar">
-        <div class="python-logo">
-          <svg viewBox="0 0 128 128" width="32" height="32">
+        <div class="python-logo" aria-hidden="true">
+          <svg viewBox="0 0 128 128" width="28" height="28">
             <linearGradient id="python-gradient-a" gradientUnits="userSpaceOnUse" x1="70.252" y1="1237.476" x2="170.659" y2="1151.089" gradientTransform="matrix(.563 0 0 -.568 -29.215 707.817)">
               <stop offset="0" stop-color="#5A9FD4"/>
               <stop offset="1" stop-color="#306998"/>
@@ -18,21 +33,21 @@
             <path fill="url(#python-gradient-b)" d="M91.682 28.38v10.966c0 8.5-7.208 15.655-15.426 15.655H51.591c-6.756 0-12.346 5.783-12.346 12.549v23.515c0 6.691 5.818 10.628 12.346 12.547 7.816 2.297 15.312 2.713 24.665 0 6.845-1.522 12.346-5.75 12.346-12.547v-9.412H63.938v-3.138h37.012c7.176 0 9.852-5.005 12.348-12.519 2.578-7.735 2.467-15.174 0-25.096-1.774-7.145-5.161-12.521-12.348-12.521H91.682zm28.11 88.33c-2.561 0-4.634 2.097-4.634 4.692 0 2.602 2.074 4.719 4.634 4.719 2.55 0 4.633-2.117 4.633-4.719 0-2.595-2.083-4.692-4.633-4.692z" transform="translate(0 10.26)"/>
           </svg>
         </div>
-        <n-input
-            v-model:value="form.step_name"
-            placeholder="代码请求(Python)"
-            class="step-name-input"
-            :disabled="props.readonly"
-        />
-        <n-button v-if="!props.readonly" strong secondary type="primary" :loading="debugLoading" @click="handleDebug">
-          调试
-        </n-button>
+        <n-form class="step-editor-form code-name-form" label-placement="left" label-width="80px" size="small">
+          <n-form-item label="步骤名称" :show-feedback="false">
+            <n-input
+                v-model:value="form.step_name"
+                placeholder="代码请求(Python)"
+                class="step-name-input"
+                :disabled="props.readonly"
+            />
+          </n-form-item>
+        </n-form>
       </div>
 
       <n-tabs type="line" animated class="code-tabs">
         <n-tab-pane name="code" tab="代码">
-          <!-- 使用说明（仅 Code 页） -->
-          <div class="hint-box">
+          <div class="hint-box step-editor-hint">
             <div class="hint-title">使用说明</div>
             <div class="hint-content">
               <p>• 脚本以函数形式作为执行入口，<code>必须符合PEP8编码规范</code>，声明格式：<code>def func() -> dict: ...</code></p>
@@ -81,13 +96,14 @@
       </n-tabs>
     </n-card>
 
-    <!-- 调试响应结果 Card -->
     <n-card
         v-if="debugResponse"
-        :bordered="true"
-        style="width: 100%; margin-top: 16px;"
-        class="response-card"
+        :bordered="false"
+        class="step-editor-card response-card"
     >
+      <template #header>
+        <div class="panel-title">Response</div>
+      </template>
       <n-tabs type="line" animated class="debug-tabs">
         <n-tab-pane name="result" tab="结果">
           <monaco-editor
@@ -129,14 +145,11 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NSelect,
-  NSpace,
   NTabPane,
   NTag,
   NTabs,
 } from 'naive-ui'
 import MonacoEditor from "@/components/monaco/index.vue"
-import TheIcon from "@/components/icon/TheIcon.vue"
 import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
 import {
   ASSERT_MODE_PYTHON,
@@ -328,16 +341,6 @@ const codeEditorRef = ref(null)
 const debugLoading = ref(false)
 const debugResponse = ref(null)
 
-// 格式化调试响应为 JSON 字符串
-const debugResponseText = computed(() => {
-  if (!debugResponse.value) return ''
-  try {
-    return JSON.stringify(debugResponse.value, null, 2)
-  } catch (e) {
-    return String(debugResponse.value)
-  }
-})
-
 // 后端调试接口：data = { result: Dict, assert_validators: List }；兼容旧版本直接返回 Dict
 const debugResultData = computed(() => {
   const d = debugResponse.value
@@ -407,28 +410,29 @@ const debugValidatorColumns = [
 // 标记是否正在从外部更新，避免循环触发
 let isExternalUpdate = false
 
-// 监听props变化，更新表单
+/** 仅在步骤切换时从 props 灌入，避免 config 回写与输入抢值 */
 watch(
-    () => [props.step?.id, props.config, props.step?.original, props.step?.name],
-    ([stepId, config, original, stepName]) => {
-      // 当步骤变化时，重新初始化表单
+    () => props.step?.id,
+    () => {
       isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(config || {}, original, stepName)
+      const merged = mergeConfigAndOriginal(
+          props.config || {},
+          props.step?.original,
+          props.step?.name
+      )
       Object.assign(form, defaults, merged)
-      // 使用 nextTick 确保在下一个 tick 重置标志
       nextTick(() => {
         isExternalUpdate = false
       })
     },
-    { deep: true, immediate: true }
+    { immediate: true }
 )
 
 // 监听表单变化，发送更新
 watch(
     () => [form.step_name, form.code, form.assert_validators],
     () => {
-      // 如果正在从外部更新，不触发 emit
-      if (isExternalUpdate) return
+      if (isExternalUpdate || props.readonly) return
 
       emit('update:config', {
         step_name: form.step_name || '',
@@ -459,22 +463,17 @@ const handleDebug = async () => {
       step_name: form.step_name || '代码请求(Python)',
       code: form.code,
       request_args_type: 'raw',
-      // 后端要求为 List[Dict[str, Any]]，此处调试模式先传空数组
       defined_variables: [],
       session_variables: [],
       assert_validators: buildValidatorsForBackend(),
     }
 
     const response = await api.pythonCodeDebugging(requestData)
-    console.log("response")
-    console.log(response)
-    console.log("response")
     if (response.code === '000000' && response.data) {
       debugResponse.value = response.data
       window.$message?.success?.(response.message || '代码调试成功')
     } else {
       debugResponse.value = response.data
-      console.log(debugResponse)
       window.$message?.error?.(response.message || '代码调试失败')
     }
   } catch (error) {
@@ -490,20 +489,19 @@ const handleDebug = async () => {
 .code-container {
   display: flex;
   flex-direction: column;
+  gap: var(--step-editor-gap, 8px);
+  font-size: var(--step-editor-font-size, 13px);
 }
 
-.code-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E
+.card-header-row {
+  padding-right: 88px;
 }
 
 .top-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .python-logo {
@@ -511,30 +509,39 @@ const handleDebug = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
+}
+
+.code-name-form {
+  flex: 1;
+  min-width: 0;
+}
+
+.code-name-form :deep(.n-form-item) {
+  margin-bottom: 0;
 }
 
 .step-name-input {
-  flex: 1;
+  width: 100%;
 }
 
 .hint-box {
-  background-color: rgba(244, 81, 30, 0.15);
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 16px;
+  background-color: color-mix(in srgb, var(--step-editor-accent, #f4511e) 12%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
 }
 
 .hint-title {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-size: var(--step-editor-font-size, 13px);
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 .hint-content {
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--step-editor-meta-size, 12px);
+  line-height: 1.5;
 }
 
 .hint-content p {
@@ -543,21 +550,18 @@ const handleDebug = async () => {
 
 .hint-content code {
   background-color: var(--n-color-embedded);
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 3px;
   font-family: 'Fira Code', monospace;
-  font-size: 14px;
-  color: #F4511E;
+  font-size: var(--step-editor-meta-size, 12px);
+  color: var(--step-editor-accent, #f4511e);
 }
 
 .code-tabs {
   margin-top: 4px;
 }
 
-.code-tabs :deep(.n-tab-pane) {
-  padding-top: 12px;
-}
-
+.code-tabs :deep(.n-tab-pane),
 .debug-tabs :deep(.n-tab-pane) {
   padding-top: 12px;
 }
@@ -580,15 +584,15 @@ const handleDebug = async () => {
   max-width: 15%;
   min-width: 0;
   padding: 2px 4px 8px 8px;
-  border-left: 1px solid #999;
+  border-left: 1px solid var(--n-border-color);
   box-sizing: border-box;
   line-height: 1.2;
 }
 
 .code-snippets-title {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 12px;
+  font-size: var(--step-editor-font-size, 13px);
+  font-weight: 600;
+  margin-bottom: 10px;
 }
 
 .code-snippets-list {
@@ -598,7 +602,7 @@ const handleDebug = async () => {
 }
 
 .code-snippets-list li + li {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .code-snippet-link {
@@ -608,14 +612,14 @@ const handleDebug = async () => {
   border: none;
   background: none;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--step-editor-meta-size, 12px);
   line-height: 1.4;
-  color: #2080f0;
+  color: var(--n-primary-color, #2080f0);
   cursor: pointer;
 }
 
 .code-snippet-link:hover:not(:disabled) {
-  color: #F4511E;
+  color: var(--step-editor-accent, #f4511e);
   text-decoration: underline;
 }
 
@@ -624,19 +628,10 @@ const handleDebug = async () => {
   cursor: not-allowed;
 }
 
-.code-editor {
-  font-family: 'Fira Code', monospace;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.response-card {
-  border-left: 4px solid #F4511E;
-}
-
+.code-editor,
 .response-editor {
   font-family: 'Fira Code', monospace;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
 }
 </style>

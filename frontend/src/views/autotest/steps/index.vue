@@ -392,7 +392,7 @@ const editorProjectLoading = computed(() => {
 })
 
 /** 当前用例是否为「公共脚本」（禁用树内「引用公共脚本」入口） */
-const isPublicScriptCase = computed(() => caseInfoPanelRef.value?.getCaseForm?.()?.case_type === '公共脚本')
+const isPublicScriptCase = computed(() => caseInfoPanelRef.value?.caseForm?.case_type === '公共脚本')
 
 
 const scriptDrawerMode = ref('quote')
@@ -1139,7 +1139,7 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     parent_step_id: parentStepId,
     quote_case_id: original.quote_case_id || null,
     // case_type 从用例信息中获取，必填字段（新增步骤时）
-    case_type: (caseInfoPanelRef.value?.getCaseForm?.()?.case_type) || original.case_type || '用户脚本'
+    case_type: (caseInfoPanelRef.value?.caseForm?.case_type) || original.case_type || '用户脚本'
   }
 
   // 只有更新时才传递 step_id 和 step_code（两个都必须存在）
@@ -2067,7 +2067,7 @@ const currentEditorNeedsProject = computed(() => {
 
 const currentEditorNeedsVarAssist = computed(() => {
   const t = currentStep.value?.type
-  return t === 'http' || t === 'tcp' || t === 'user_variables'
+  return t === 'http' || t === 'user_variables'
 })
 
 /** 右侧动态编辑器 props（引用步骤才传 reselectHandler，避免 HTTP 等多根节点组件透传警告） */
@@ -3276,6 +3276,7 @@ const RecursiveStepChildren = defineComponent({
   max-height: 100%;
   overflow: hidden;
   min-height: 0;
+  font-size: var(--step-editor-font-size, 13px);
 }
 
 /* 步骤树 / 右侧明细：统一滚动条（默认隐藏，悬停且溢出时显示细条） */

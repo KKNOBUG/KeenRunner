@@ -10,10 +10,32 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   width: 100%;
   min-height: 24px;
   line-height: 1.35;
   font-size: 13px;
+}
+
+.extract-validator-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.extract-validator-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
+}
+
+.extract-validator-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .extract_variables-item,

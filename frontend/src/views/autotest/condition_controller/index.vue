@@ -1,20 +1,27 @@
 <template>
-  <n-card :bordered="false" size="medium" style="width: 100%;" class="condition-card">
-    <n-form label-placement="left" label-width="100px" :model="form">
+  <n-card :bordered="false" class="step-editor-card condition-card">
+    <template #header>
+      <div class="panel-title">条件分支</div>
+    </template>
+    <n-form
+        class="step-editor-form"
+        label-placement="left"
+        label-width="110px"
+        size="small"
+        :model="form"
+    >
       <n-form-item label="条件表达式" required>
         <n-input
             v-model:value="form.condition_expr"
             placeholder="变量名称或自定义表达式，例如: ${var} 或 具体数据"
-            style="width: 80%;"
             :disabled="props.readonly"
         />
       </n-form-item>
       <n-form-item label="条件比较符" required>
         <n-select
             v-model:value="form.condition_compare"
-            :options="operatorOptions"
+            :options="assertionOperationSelectOptions"
             placeholder="请选择条件比较符"
-            style="width: 80%;"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -22,7 +29,6 @@
         <n-input
             v-model:value="form.condition_value"
             placeholder="变量名称或自定义比较值，例如: ${target} 或 具体数据 (非空/为空操作时可不填)"
-            style="width: 80%;"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -30,7 +36,6 @@
         <n-input
             v-model:value="form.condition_desc"
             placeholder="请输入备注"
-            style="width: 80%;"
             :disabled="props.readonly"
         />
       </n-form-item>
@@ -59,8 +64,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:config'])
-
-const operatorOptions = assertionOperationSelectOptions
 
 const emptyConditionFields = () => ({
   condition_expr: '',
@@ -143,12 +146,3 @@ watch(
     }
 )
 </script>
-
-<style scoped>
-.condition-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E
-}
-</style>

@@ -6,7 +6,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
+      :class="['step-editor-card', 'case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
   >
     <template #header>
       <div class="card-header-row">
@@ -52,7 +52,8 @@
           :model="readonlyForm"
           label-placement="left"
           label-width="80px"
-          class="case-info-form"
+          size="small"
+          class="step-editor-form case-info-form"
       >
         <div class="case-info-fields">
           <div class="case-field case-field-name">
@@ -241,7 +242,7 @@ const formatTagsSync = (qc) => {
 }
 
 watch(
-    () => [quoteCasePayload.value, props.projectOptions],
+    () => quoteCasePayload.value,
     async () => {
       const qc = quoteCasePayload.value
       if (!qc) {
@@ -275,66 +276,14 @@ watch(
 </script>
 
 <style scoped>
-/* 与 CaseInfoPanel 卡片壳一致 */
-.case-info-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E;
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-}
-
-.panel-title-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  user-select: none;
-  min-width: 0;
-}
-
-.panel-collapse-icon {
-  flex-shrink: 0;
-  color: var(--n-text-color-3, #999);
-}
+/* 卡片壳 / 标题 / 折叠见 styles/autotest-theme.scss .step-editor-card */
 
 .card-header-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 24px;
   padding-right: 140px;
-}
-
-.card-header-actions {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.case-info-card.is-collapsed :deep(.n-card__content) {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
 }
 
 .case-info-form {
   width: 100%;
-  font-size: 13px;
-}
-
-.case-info-form :deep(.n-form-item-label) {
-  font-size: 13px;
 }
 
 .case-info-fields {
@@ -350,10 +299,6 @@ watch(
 
 .case-field :deep(.n-form-item) {
   width: 100%;
-}
-
-.case-field-name {
-  grid-column: span 3;
 }
 
 .case-field-desc {
@@ -378,7 +323,6 @@ watch(
   }
 
   .case-field,
-  .case-field-name,
   .case-field-desc {
     grid-column: 1 / -1;
   }

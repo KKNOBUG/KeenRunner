@@ -8,7 +8,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
+      :class="['step-editor-card', 'case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
   >
     <template #header>
       <div class="card-header-row">
@@ -39,9 +39,10 @@
     <n-collapse-transition :show="!caseInfoCollapsed">
       <n-form
           :model="caseForm"
+          class="step-editor-form case-info-form"
           label-placement="left"
           label-width="80px"
-          class="case-info-form"
+          size="small"
       >
         <div class="case-info-fields">
           <div class="case-field case-field-name">
@@ -181,7 +182,7 @@
  *
  * defineProps: runLoading / debugLoading / saveLoading
  * defineEmits: run / debug / save / case-type-change
- * defineExpose: caseForm, getCaseForm, getCasePayload, validateCaseForm,
+ * defineExpose: caseForm, getCasePayload, validateCaseForm,
  *               hydrateFromStepTree, reloadFromRoute, projectOptions, projectLoading
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -381,7 +382,7 @@ const hydrateFromStepTree = (data) => {
   if (firstStepCase) {
     caseForm.case_project = firstStepCase.case_project || ''
     caseForm.case_name = firstStepCase.case_name || ''
-    caseForm.case_tags = firstStepCase.case_tags ?? (Array.isArray(firstStepCase.case_tags) ? firstStepCase.case_tags : [])
+    caseForm.case_tags = firstStepCase.case_tags ?? []
     caseForm.case_desc = firstStepCase.case_desc || ''
     caseForm.case_attr = firstStepCase.case_attr || ''
     caseForm.case_type = firstStepCase.case_type || ''
@@ -437,7 +438,6 @@ onMounted(() => {
 
 defineExpose({
   caseForm,
-  getCaseForm: () => caseForm,
   getCasePayload,
   validateCaseForm,
   hydrateFromStepTree,
@@ -448,70 +448,22 @@ defineExpose({
 </script>
 
 <style scoped>
-/* 与步骤子页 tcp-card / http-card 同一套卡片壳 */
+/* 卡片壳 / 标题 / 折叠见 styles/autotest-theme.scss .step-editor-card */
+
 .case-info-card {
-  margin: 8px 0 16px;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E;
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-}
-
-.panel-title-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  user-select: none;
-  min-width: 0;
-}
-
-.panel-collapse-icon {
-  flex-shrink: 0;
-  color: var(--n-text-color-3, #999);
+  margin-bottom: 16px;
 }
 
 .card-header-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 24px;
   padding-right: 220px;
 }
 
-.card-header-actions {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.case-info-card.is-collapsed :deep(.n-card__content) {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-}
-
 .case-info-header-actions :deep(.n-button) {
-  font-size: 13px;
+  font-size: var(--step-editor-font-size, 13px);
 }
 
 .case-info-form {
   width: 100%;
-  font-size: 13px;
-}
-
-.case-info-form :deep(.n-form-item-label) {
-  font-size: 13px;
 }
 
 .case-info-fields {
@@ -527,10 +479,6 @@ defineExpose({
 
 .case-field :deep(.n-form-item) {
   width: 100%;
-}
-
-.case-field-name {
-  grid-column: span 3;
 }
 
 .case-field-desc {
@@ -556,7 +504,6 @@ defineExpose({
   }
 
   .case-field,
-  .case-field-name,
   .case-field-desc {
     grid-column: 1 / -1;
   }

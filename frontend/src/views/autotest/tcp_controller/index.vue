@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['tcp-card', { 'is-collapsed': requestCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', 'tcp-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>
@@ -22,7 +22,9 @@
           :model="state.form"
           :rules="rules"
           label-placement="left"
+          class="step-editor-form"
           label-width="80px"
+          size="small"
           ref="formRef"
       >
         <!-- 前两列：步骤名称、所属应用；第三列：配置名称 + 调试同表单项内 flex 并排，避免末列与 n-select 垂直错位 -->
@@ -64,7 +66,7 @@
               <n-button
                   v-if="!props.readonly"
                   type="primary"
-                  size="medium"
+                  size="small"
                   class="tcp-debug-btn"
                   @click="debugging"
                   :loading="debugLoading"
@@ -131,7 +133,12 @@
     </n-collapse-transition>
   </n-card>
 
-  <n-card v-if="response || debugLoading" :bordered="false" style="width: 100%; margin-top: 12px;">
+  <n-card
+      v-if="response || debugLoading"
+      :bordered="false"
+      class="step-editor-card tcp-card"
+      style="width: 100%;"
+  >
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Response</div>
@@ -234,8 +241,6 @@ const props = defineProps({
   step: { type: Object, default: () => ({}) },
   projectOptions: { type: Array, default: () => [] },
   projectLoading: { type: Boolean, default: false },
-  availableVariableList: { type: Array, default: () => [] },
-  assistFunctions: { type: Array, default: () => [] },
   readonly: { type: Boolean, default: false }
 })
 const emit = defineEmits(['update:config'])
@@ -649,47 +654,10 @@ const doDebugRequest = async (env_id) => {
 </script>
 
 <style scoped>
-/* 与 HTTP 请求步骤「Request」卡片一致 */
-.tcp-card {
-  margin: 8px 0;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E;
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-}
+/* 卡片壳 / 标题 / 折叠见 .step-editor-card */
 
 .card-header-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 24px;
   padding-right: 220px;
-}
-
-.card-header-actions {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.collapse-tiny-btn :deep(.n-button__content) {
-  font-size: 12px;
-}
-
-.tcp-card.is-collapsed :deep(.n-card__content) {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
 }
 
 .hint {
@@ -770,66 +738,6 @@ const doDebugRequest = async (env_id) => {
 .json-editor :deep(.monaco-editor) {
   min-height: 90px;
   height: auto !important;
-}
-
-.extract-validator-list {
-  width: 100%;
-}
-
-.extract-validator-list :deep(.n-space-item) {
-  width: 100%;
-}
-
-.extract-validator-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 28px;
-  line-height: 1.5;
-}
-
-.extract_variables-item,
-.validator-item {
-  width: 100%;
-}
-
-.extract_variables-item :deep(.n-card),
-.validator-item :deep(.n-card) {
-  border: 1px solid var(--n-border-color);
-  background-color: var(--n-color);
-}
-
-.extract_variables-item :deep(.n-card-header),
-.validator-item :deep(.n-card-header) {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  box-sizing: border-box;
-  background-color: var(--n-color-embedded);
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.extract_variables-item :deep(.n-card-header__main),
-.validator-item :deep(.n-card-header__main) {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.extract_variables-item :deep(.n-card.is-item-collapsed .n-card-header),
-.validator-item :deep(.n-card.is-item-collapsed .n-card-header) {
-  border-bottom: none;
-}
-
-.extract_variables-item :deep(.n-card.is-item-collapsed .n-card__content),
-.validator-item :deep(.n-card.is-item-collapsed .n-card__content) {
-  display: none;
-  padding: 0;
 }
 </style>
 
