@@ -265,14 +265,14 @@ const batchColumns = computed(() => [
   {
     title: '序号',
     key: '_index',
-    width: 64,
+    width: 50,
     align: 'center',
     render: (_, index) => (pagination.page - 1) * pagination.pageSize + index + 1,
   },
   {
     title: '用例ID',
     key: 'case_id',
-    width: 80,
+    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -282,7 +282,7 @@ const batchColumns = computed(() => [
   {
     title: '用例名称',
     key: 'case_name',
-    width: 160,
+    width: 300,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -302,7 +302,7 @@ const batchColumns = computed(() => [
   {
     title: '执行结果',
     key: 'execute_result',
-    width: 90,
+    width: 100,
     align: 'center',
     render(row) {
       if (row.report_count <= 0) return h('span', '-')
@@ -312,14 +312,14 @@ const batchColumns = computed(() => [
   {
     title: '执行人员',
     key: 'created_user',
-    width: 90,
+    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '执行时间',
     key: 'execute_time',
-    width: 170,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', row.execute_time ? formatDateTime(row.execute_time) : '-')
@@ -328,13 +328,13 @@ const batchColumns = computed(() => [
   {
     title: '执行耗时',
     key: 'elapsed_display',
-    width: 90,
+    width: 100,
     align: 'center',
   },
   {
     title: '批次标识',
     key: 'batch_code',
-    width: 280,
+    width: 400,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -344,7 +344,7 @@ const batchColumns = computed(() => [
   {
     title: '报告标识',
     key: 'report_code',
-    width: 280,
+    width: 400,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -354,7 +354,7 @@ const batchColumns = computed(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 160,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -364,11 +364,12 @@ const batchColumns = computed(() => [
           NButton,
           {
             size: 'small',
-            type: 'primary',
+            type: 'info',
+            quaternary: true,
             onClick: () => openBatchDetail(row),
           },
           {
-            default: () => (multi ? '查看报告' : '查看详情'),
+            default: () => (multi ? '报告' : '详情'),
             icon: renderIcon(
               multi
                 ? 'material-symbols:list-alt-outline'
@@ -414,13 +415,13 @@ const datasetColumns = [
   {
     title: '序号',
     key: 'run_index',
-    width: 56,
+    width: 50,
     align: 'center',
   },
   {
     title: '数据源',
     key: 'dataset_display',
-    width: 140,
+    width: 200,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -433,7 +434,7 @@ const datasetColumns = [
   {
     title: '执行结果',
     key: 'case_state',
-    width: 90,
+    width: 100,
     align: 'center',
     render(row) {
       if (
@@ -450,7 +451,7 @@ const datasetColumns = [
   {
     title: '执行人员',
     key: 'created_user',
-    width: 90,
+    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -460,7 +461,7 @@ const datasetColumns = [
   {
     title: '执行时间',
     key: 'case_st_time',
-    width: 170,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', row.case_st_time ? formatDateTime(row.case_st_time) : '-')
@@ -469,14 +470,14 @@ const datasetColumns = [
   {
     title: '执行耗时',
     key: 'case_elapsed',
-    width: 90,
+    width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '批次标识',
     key: 'batch_code',
-    width: 280,
+    width: 400,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -486,7 +487,7 @@ const datasetColumns = [
   {
     title: '报告标识',
     key: 'report_code',
-    width: 280,
+    width: 400,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
@@ -496,7 +497,7 @@ const datasetColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -505,11 +506,12 @@ const datasetColumns = [
           NButton,
           {
             size: 'small',
-            type: 'primary',
+            type: 'info',
+            quaternary: true,
             onClick: () => openDetailDrawer(row),
           },
           {
-            default: () => '查看详情',
+            default: () => '详情',
             icon: renderIcon('material-symbols:visibility-outline', { size: 16 }),
           },
         ),
@@ -634,7 +636,7 @@ const datasetColumns = [
           :columns="batchColumns"
           :data="pagedBatchRows"
           :row-key="(r) => r._key"
-          :scroll-x="1600"
+          :scroll-x="2000"
           :single-line="true"
           striped
         />
@@ -666,7 +668,7 @@ const datasetColumns = [
           :columns="datasetColumns"
           :data="activeBatch.runs"
           :row-key="(r) => r.report_code || r.report_id || r.id"
-          :scroll-x="1400"
+          :scroll-x="1800"
           :single-line="true"
           size="small"
           striped
