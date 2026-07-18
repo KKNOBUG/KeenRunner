@@ -47,16 +47,21 @@
               保存
             </n-button>
             <n-button type="success" size="small" @click="emit('history')">历史</n-button>
-            <n-switch
-                class="case-mode-switch"
-                size="medium"
-                :round="false"
-                :value="!treeMode"
-                @update:value="onSourceModeSwitch"
-            >
-              <template #checked>源数据模式</template>
-              <template #unchecked>步骤树模式</template>
-            </n-switch>
+            <div class="case-mode-switch-box">
+              <n-switch
+                  class="case-mode-switch"
+                  size="medium"
+                  :round="false"
+                  :value="!treeMode"
+                  @update:value="onSourceModeSwitch"
+              />
+              <span
+                  class="case-mode-switch-text"
+                  :class="treeMode ? 'is-tree' : 'is-source'"
+              >
+                {{ treeMode ? '步骤树模式' : '源数据模式' }}
+              </span>
+            </div>
           </n-space>
         </div>
       </div>
@@ -516,15 +521,24 @@ defineExpose({
   font-size: var(--step-editor-font-size, 13px);
 }
 
+/* 方形开关：文案固定叠在轨道内（滑块旁），避免 checked/unchecked 插槽切换动画错位 */
+.case-mode-switch-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  vertical-align: middle;
+}
+
 .case-mode-switch {
   height: 28px;
 }
 
 .case-mode-switch :deep(.n-switch__rail) {
   height: 28px;
-  min-width: 96px;
-  padding: 0 8px;
+  min-width: 108px;
   border-radius: 2px;
+  box-sizing: border-box;
 }
 
 .case-mode-switch :deep(.n-switch__button) {
@@ -534,11 +548,33 @@ defineExpose({
   top: 3px;
 }
 
-.case-mode-switch :deep(.n-switch__checked),
-.case-mode-switch :deep(.n-switch__unchecked) {
+.case-mode-switch-text {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
-  line-height: 28px;
-  padding: 0 4px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 步骤树模式：滑块在左，文案在右 */
+.case-mode-switch-text.is-tree {
+  left: 26px;
+  right: 8px;
+  color: var(--n-text-color-2);
+}
+
+/* 源数据模式：滑块在右，文案在左（轨道主色） */
+.case-mode-switch-text.is-source {
+  left: 8px;
+  right: 26px;
+  color: #fff;
 }
 
 .case-info-form {
