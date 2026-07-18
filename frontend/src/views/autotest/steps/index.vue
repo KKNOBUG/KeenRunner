@@ -149,7 +149,7 @@
           <TheIcon icon="mdi:drag-vertical" :size="16" />
         </div>
         <div class="right-column steps-split-main">
-          <n-card size="small" hoverable class="config-card">
+          <div class="config-panel">
             <component
                 v-if="currentStep"
                 :key="currentStep.id + (currentStep.isQuoteInner ? '-readonly' : '')"
@@ -158,7 +158,7 @@
                 @update:config="(val) => { if (!currentStep?.isQuoteInner) updateStepConfig(currentStep.id, val) }"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
-          </n-card>
+          </div>
         </div>
         <button
             v-if="leftPanelCollapsed"
@@ -3268,18 +3268,19 @@ const RecursiveStepChildren = defineComponent({
   padding: 0;
 }
 
-/* 配置卡片：使用 flex 布局，占满可用高度 */
-.config-card {
+/* 右侧明细容器：仅布局滚动，不再套一层 n-card，子页自带红边卡片 */
+.config-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* 步骤树 / 右侧明细：统一滚动条（默认隐藏，悬停且溢出时显示细条） */
 .step-tree-container,
-.config-card :deep(.n-card__content) {
+.config-panel {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -3292,28 +3293,28 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .step-tree-container:hover,
-.config-card :deep(.n-card__content):hover {
+.config-panel:hover {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--n-border-color) 75%, transparent) transparent;
 }
 
 .step-tree-container::-webkit-scrollbar,
-.config-card :deep(.n-card__content)::-webkit-scrollbar {
+.config-panel::-webkit-scrollbar {
   width: 0;
 }
 
 .step-tree-container:hover::-webkit-scrollbar,
-.config-card :deep(.n-card__content):hover::-webkit-scrollbar {
+.config-panel:hover::-webkit-scrollbar {
   width: 4px;
 }
 
 .step-tree-container:hover::-webkit-scrollbar-track,
-.config-card :deep(.n-card__content):hover::-webkit-scrollbar-track {
+.config-panel:hover::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .step-tree-container:hover::-webkit-scrollbar-thumb,
-.config-card :deep(.n-card__content):hover::-webkit-scrollbar-thumb {
+.config-panel:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--n-border-color) 75%, transparent);
   border-radius: 4px;
 }

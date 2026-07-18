@@ -1,120 +1,168 @@
+<!--
+  引用公共脚本 — 只读「用例信息」
+  布局/样式与 CaseInfoPanel 保持一致；字段只读，右侧提供「重新选择」。
+-->
 <template>
   <n-card
-      size="small"
-      class="case-info-card quote-script-case-card"
-      title="用例信息"
+      :bordered="false"
+      style="width: 100%;"
+      :class="['case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
   >
-    <template #header-extra>
-      <n-button
-          v-if="reselectHandler"
-          type="primary"
-          quaternary
-          size="small"
-          @click="reselectHandler"
-      >
-        <template #icon>
-          <TheIcon icon="material-symbols:refresh" :size="14"/>
-        </template>
-        重新选择
-      </n-button>
+    <template #header>
+      <div class="card-header-row">
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="caseInfoCollapsed = !caseInfoCollapsed"
+            @keydown.enter.prevent="caseInfoCollapsed = !caseInfoCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="caseInfoCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">用例信息</div>
+        </div>
+        <div class="card-header-actions" @click.stop>
+          <n-button
+              v-if="reselectHandler"
+              type="primary"
+              size="small"
+              @click="reselectHandler"
+          >
+            <template #icon>
+              <TheIcon icon="material-symbols:refresh" :size="14"/>
+            </template>
+            重新选择
+          </n-button>
+        </div>
+      </div>
     </template>
 
-    <div v-if="!quoteCasePayload" class="quote-case-hint">
-      <n-text depth="3">暂无脚本详情，请在「选择公共脚本」中选定脚本；若已选过仍无内容，请保存并重新打开用例或点击「重新选择」。</n-text>
-    </div>
-
-    <div
-        v-else
-        class="case-info-fields quote-case-readonly"
-    >
-      <div class="case-field">
-        <span class="case-field-label case-field-required">所属应用</span>
-        <n-select
-            :value="readonlyProjectId"
-            :options="projectOptions"
-            disabled
-            filterable
-            placeholder="所属应用"
-            size="small"
-            class="case-field-input"
-        />
+    <n-collapse-transition :show="!caseInfoCollapsed">
+      <div v-if="!quoteCasePayload" class="quote-case-hint">
+        <n-text depth="3">
+          暂无脚本详情，请在「选择公共脚本」中选定脚本；若已选过仍无内容，请保存并重新打开用例或点击「重新选择」。
+        </n-text>
       </div>
 
-      <div class="case-field">
-        <span class="case-field-label case-field-required">用例名称</span>
-        <n-input
-            :value="quoteCasePayload.case_name || ''"
-            disabled
-            size="small"
-            placeholder="请输入用例名称"
-            class="case-field-input"
-        />
-      </div>
+      <n-form
+          v-else
+          :model="readonlyForm"
+          label-placement="left"
+          label-width="80px"
+          class="case-info-form"
+      >
+        <div class="case-info-fields">
+          <div class="case-field case-field-name">
+            <n-form-item label="用例名称" path="case_name" required :show-feedback="false">
+              <n-input
+                  :value="readonlyForm.case_name"
+                  disabled
+                  size="small"
+                  placeholder="请输入用例名称"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-      <div class="case-field">
-        <span class="case-field-label case-field-required">所属标签</span>
-        <n-input
-            :value="displayTags"
-            disabled
-            size="small"
-            placeholder="请选择所属标签"
-            class="case-field-input"
-        />
-      </div>
+          <div class="case-field case-field-desc">
+            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
+              <n-input
+                  :value="readonlyForm.case_desc"
+                  disabled
+                  size="small"
+                  type="textarea"
+                  :resizable="false"
+                  :autosize="{ minRows: 1, maxRows: 1 }"
+                  placeholder="请输入用例描述"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-      <div class="case-field">
-        <span class="case-field-label case-field-required">用例属性</span>
-        <n-select
-            :value="readonlyCaseAttr"
-            :options="caseAttrOptions"
-            disabled
-            placeholder="请选择用例属性"
-            size="small"
-            class="case-field-input"
-        />
-      </div>
+          <div class="case-field">
+            <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
+              <n-select
+                  :value="readonlyForm.case_type"
+                  :options="caseTypeOptions"
+                  disabled
+                  placeholder="请选择用例类型"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-      <div class="case-field">
-        <span class="case-field-label case-field-required">用例类型</span>
-        <n-select
-            :value="readonlyCaseType"
-            :options="caseTypeOptions"
-            disabled
-            placeholder="请选择用例类型"
-            size="small"
-            class="case-field-input"
-        />
-      </div>
+          <div class="case-field">
+            <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
+              <n-select
+                  :value="readonlyForm.case_attr"
+                  :options="caseAttrOptions"
+                  disabled
+                  placeholder="请选择用例属性"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
 
-      <div class="case-field case-field-full">
-        <span class="case-field-label">用例描述</span>
-        <n-input
-            :value="quoteCasePayload.case_desc || ''"
-            disabled
-            size="small"
-            type="textarea"
-            placeholder="请输入用例描述"
-        />
-      </div>
-    </div>
+          <div class="case-field">
+            <n-form-item label="所属应用" path="case_project" required :show-feedback="false">
+              <n-select
+                  :value="readonlyForm.case_project"
+                  :options="projectOptions"
+                  disabled
+                  filterable
+                  placeholder="所属应用"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field">
+            <n-form-item label="所属标签" path="case_tags" required :show-feedback="false">
+              <n-input
+                  :value="displayTags"
+                  disabled
+                  size="small"
+                  placeholder="请选择所属标签"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+        </div>
+      </n-form>
+    </n-collapse-transition>
   </n-card>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { NCard, NText, NButton, NInput, NSelect } from 'naive-ui'
+import {
+  NButton,
+  NCard,
+  NCollapseTransition,
+  NForm,
+  NFormItem,
+  NInput,
+  NSelect,
+  NText,
+} from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api/index.js'
 
-/** 与步骤编辑页 `steps/index.vue`「用例信息」、用例管理表单选项一致（testcase 列表页无该卡片） */
+/** 与 CaseInfoPanel 选项顺序一致 */
 const caseAttrOptions = [
   { label: '正用例', value: '正用例' },
-  { label: '反用例', value: '反用例' }
+  { label: '反用例', value: '反用例' },
 ]
 
 const caseTypeOptions = [
+  { label: '用户脚本', value: '用户脚本' },
   { label: '公共脚本', value: '公共脚本' },
-  { label: '用户脚本', value: '用户脚本' }
 ]
 
 let tagIdToNameCache = null
@@ -141,34 +189,40 @@ const props = defineProps({
   step: { type: Object, default: () => ({}) },
   /** 重新选择公共脚本（勿用 onXxx 命名，Vue 会当成事件监听器） */
   reselectHandler: { type: Function, default: null },
-  projectOptions: { type: Array, default: () => [] }
+  projectOptions: { type: Array, default: () => [] },
 })
+
+const caseInfoCollapsed = ref(false)
 
 const quoteCasePayload = computed(() => props.step?.original?.quote_case ?? null)
 
-const readonlyProjectId = computed(() => {
+const readonlyForm = computed(() => {
   const qc = quoteCasePayload.value
-  if (!qc) return null
+  if (!qc) {
+    return {
+      case_name: '',
+      case_desc: '',
+      case_type: null,
+      case_attr: null,
+      case_project: null,
+    }
+  }
   const cp = qc.case_project
+  let case_project = null
   if (cp && typeof cp === 'object') {
     const id = cp.project_id
-    return id != null ? Number(id) : null
-  }
-  if (cp != null && cp !== '') {
+    case_project = id != null ? Number(id) : null
+  } else if (cp != null && cp !== '') {
     const n = Number(cp)
-    return Number.isNaN(n) ? null : n
+    case_project = Number.isNaN(n) ? null : n
   }
-  return null
-})
-
-const readonlyCaseAttr = computed(() => {
-  const v = quoteCasePayload.value?.case_attr
-  return v != null && v !== '' ? String(v) : null
-})
-
-const readonlyCaseType = computed(() => {
-  const v = quoteCasePayload.value?.case_type
-  return v != null && v !== '' ? String(v) : null
+  return {
+    case_name: qc.case_name || '',
+    case_desc: qc.case_desc || '',
+    case_type: qc.case_type != null && qc.case_type !== '' ? String(qc.case_type) : null,
+    case_attr: qc.case_attr != null && qc.case_attr !== '' ? String(qc.case_attr) : null,
+    case_project,
+  }
 })
 
 const displayTags = ref('')
@@ -216,105 +270,127 @@ watch(
         displayTags.value = ids.map((id) => `#${id}`).join('、')
       }
     },
-    { immediate: true, deep: true }
+    { immediate: true, deep: true },
 )
 </script>
 
 <style scoped>
-/* 与 steps/index.vue 顶部「用例信息」卡片一致 */
+/* 与 CaseInfoPanel 卡片壳一致 */
 .case-info-card {
-  margin-bottom: 0;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.quote-script-case-card {
   margin: 8px 0;
   border-radius: 12px;
   box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
-  border-left: 3px solid #F4511E
+  border-left: 3px solid #F4511E;
+}
+
+.panel-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.panel-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.panel-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3, #999);
+}
+
+.card-header-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 24px;
+  padding-right: 140px;
+}
+
+.card-header-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-info-card.is-collapsed :deep(.n-card__content) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.case-info-form {
+  width: 100%;
+  font-size: 13px;
+}
+
+.case-info-form :deep(.n-form-item-label) {
+  font-size: 13px;
 }
 
 .case-info-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px 24px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px 16px;
 }
 
 .case-field {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
+  min-width: 0;
+  grid-column: span 3;
 }
 
-.case-field-full {
-  grid-column: 1 / -1;
-  align-items: flex-start;
+.case-field :deep(.n-form-item) {
+  width: 100%;
 }
 
-.case-field-full :deep(.n-input) {
-  flex: 1;
+.case-field-name {
+  grid-column: span 3;
 }
 
-.case-field-label {
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  min-width: 70px;
-  flex-shrink: 0;
+.case-field-desc {
+  grid-column: span 9;
 }
 
-.case-field-required::before {
-  content: '*';
-  color: #f4511e;
-  margin-right: 4px;
+.case-field-desc :deep(textarea) {
+  resize: none;
 }
 
 .case-field-input {
-  flex: 1;
-  transition: border-color 0.3s ease;
+  width: 100%;
 }
 
 .quote-case-hint {
   padding: 8px 0;
 }
 
-/* 引用脚本用例信息不允许修改：整体置灰（仅表单区域，不影响右上角「重新选择」） */
-.quote-case-readonly {
-  opacity: 0.72;
-}
-
-.quote-case-readonly :deep(.n-input),
-.quote-case-readonly :deep(.n-base-selection) {
-  cursor: not-allowed;
-}
-
 @media (max-width: 768px) {
   .case-info-fields {
     grid-template-columns: 1fr;
-    gap: 10px;
   }
 
-  .case-field {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
+  .case-field,
+  .case-field-name,
+  .case-field-desc {
+    grid-column: 1 / -1;
   }
 
-  .case-field-label {
-    font-size: 13px;
-    min-width: auto;
+  .card-header-row {
+    padding-right: 0;
   }
 
-  .case-field-input {
-    width: 100%;
-  }
-}
-
-@media (min-width: 1200px) {
-  .case-info-fields {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .card-header-actions {
+    position: static;
+    transform: none;
+    margin-left: auto;
   }
 }
 </style>

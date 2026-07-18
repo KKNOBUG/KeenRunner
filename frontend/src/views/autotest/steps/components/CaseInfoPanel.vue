@@ -1,31 +1,42 @@
 <!--
   CaseInfoPanel — 步骤编辑页顶部「用例信息」区
 
-  职责：维护 caseForm（项目/名称/标签/描述/属性/类型），加载项目与标签选项；
-        提供执行/调试/保存按钮（通过 emit 交给 index.vue 处理）。
-
-  与 index.vue 协作：
-  - 父通过 ref 调用 getCaseForm / getCasePayload / validateCaseForm / hydrateFromStepTree
-  - case_type 变化时 emit case-type-change，父级负责步骤树里「引用公共脚本」的移除/恢复
+  与步骤子页（HTTP/TCP Request 等）同一实现：n-card + 左侧红边卡片样式。
+  职责：维护 caseForm；执行/调试/保存通过 emit 交给 index.vue。
 -->
 <template>
-  <n-collapse
-      v-model:expanded-names="caseInfoExpandedNames"
-      class="case-info-collapse"
-      arrow-placement="right"
-      :trigger-areas="['main', 'arrow']"
+  <n-card
+      :bordered="false"
+      style="width: 100%;"
+      :class="['case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
   >
-    <n-collapse-item name="caseInfo">
-      <template #header>
-        <span class="case-info-collapse-title">用例信息</span>
-      </template>
-      <template #header-extra>
-        <n-space :size="8" class="case-info-header-actions" @click.stop>
-          <n-button type="info" size="small" :loading="runLoading" @click="emit('run')">执行</n-button>
-          <n-button type="primary" size="small" :loading="debugLoading" @click="emit('debug')">调试</n-button>
-          <n-button type="success" size="small" :loading="saveLoading" @click="emit('save')">保存</n-button>
-        </n-space>
-      </template>
+    <template #header>
+      <div class="card-header-row">
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="caseInfoCollapsed = !caseInfoCollapsed"
+            @keydown.enter.prevent="caseInfoCollapsed = !caseInfoCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="caseInfoCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">用例信息</div>
+        </div>
+        <div class="card-header-actions" @click.stop>
+          <n-space :size="8" class="case-info-header-actions">
+            <n-button type="info" size="small" :loading="runLoading" @click="emit('run')">执行</n-button>
+            <n-button type="primary" size="small" :loading="debugLoading" @click="emit('debug')">调试</n-button>
+            <n-button type="success" size="small" :loading="saveLoading" @click="emit('save')">保存</n-button>
+          </n-space>
+        </div>
+      </div>
+    </template>
+
+    <n-collapse-transition :show="!caseInfoCollapsed">
       <n-form
           :model="caseForm"
           label-placement="left"
@@ -160,31 +171,25 @@
           </div>
         </div>
       </n-form>
-    </n-collapse-item>
-  </n-collapse>
+    </n-collapse-transition>
+  </n-card>
 </template>
 
 <script setup>
 /**
  * CaseInfoPanel.vue
  *
- * defineProps: runLoading / debugLoading / saveLoading — 按钮 loading，由父 v-model 或单向传入
- * defineEmits:
- *   - run / debug / save → index.vue 的 handleRun / handleDebug / handleSaveAll
- *   - case-type-change({ newType, oldType }) → index.vue 的 onCaseTypeChange
- *
- * defineExpose（父组件 caseInfoPanelRef）：
- *   - caseForm, getCaseForm, getCasePayload, validateCaseForm
- *   - hydrateFromStepTree(data) — loadSteps 后用步骤树接口首条 case 回填表单
- *   - reloadFromRoute — 解析 route.query.case_info（从用例管理复制进入）
- *   - projectOptions, projectLoading — 供右侧 HTTP/TCP/DB 编辑器选「所属应用」
+ * defineProps: runLoading / debugLoading / saveLoading
+ * defineEmits: run / debug / save / case-type-change
+ * defineExpose: caseForm, getCaseForm, getCasePayload, validateCaseForm,
+ *               hydrateFromStepTree, reloadFromRoute, projectOptions, projectLoading
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NButton,
-  NCollapse,
-  NCollapseItem,
+  NCard,
+  NCollapseTransition,
   NForm,
   NFormItem,
   NInput,
@@ -194,6 +199,7 @@ import {
   NSelect,
   NSpace,
 } from 'naive-ui'
+import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api'
 
 defineProps({
@@ -206,10 +212,9 @@ const emit = defineEmits(['run', 'debug', 'save', 'case-type-change'])
 
 const route = useRoute()
 
-/** 用例信息折叠面板展开项，默认展开 */
-const caseInfoExpandedNames = ref(['caseInfo'])
+/** 与步骤子页 Request 卡片一致的收起状态 */
+const caseInfoCollapsed = ref(false)
 
-/** 用例基本信息，保存时由 getCasePayload() 交给 index 拼进 updateOrCreateStepTree */
 const caseForm = reactive({
   case_project: '',
   case_name: '',
@@ -254,7 +259,6 @@ const currentTagNames = computed(() => {
   return tagModeGroups.value[selectedTagMode.value] || []
 })
 
-/** 从路由 query.case_info（JSON）初始化表单，用于用例管理「复制」新开页签 */
 const initCaseInfoFromRoute = () => {
   if (!route.query.case_info) return
   try {
@@ -353,7 +357,6 @@ const handleTagSelect = (tagId) => {
   }
 }
 
-/** 保存前必填校验，index.vue handleSaveAll 首步调用 */
 const validateCaseForm = () => {
   if (!caseForm.case_project) {
     return { valid: false, message: '请选择所属应用' }
@@ -373,7 +376,6 @@ const validateCaseForm = () => {
   return { valid: true }
 }
 
-/** 从步骤树接口数据回填用例信息（loadSteps / 复制进入时由父组件调用） */
 const hydrateFromStepTree = (data) => {
   const firstStepCase = data?.[0]?.case
   if (firstStepCase) {
@@ -422,7 +424,6 @@ watch(
     { immediate: true },
 )
 
-/** 用例类型变更通知父页面（引用步骤增删逻辑在 index，不在本组件） */
 watch(
     () => caseForm.case_type,
     (newType, oldType) => {
@@ -434,7 +435,6 @@ onMounted(() => {
   loadProjects()
 })
 
-/** 对外 API，供 index.vue 通过 caseInfoPanelRef 访问 */
 defineExpose({
   caseForm,
   getCaseForm: () => caseForm,
@@ -448,66 +448,69 @@ defineExpose({
 </script>
 
 <style scoped>
-.case-info-collapse {
-  --n-title-font-size: 13px;
-  --n-font-size: 13px;
-  --n-title-font-weight: 400;
-  margin-bottom: 16px;
-  font-size: 13px;
-}
-
-.case-info-collapse-title {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-}
-
-.case-info-collapse :deep(.n-collapse-item) {
+/* 与步骤子页 tcp-card / http-card 同一套卡片壳 */
+.case-info-card {
+  margin: 8px 0 16px;
   border-radius: 12px;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--n-border-color) 50%, transparent);
+  box-shadow: 0 0 15px rgba(214, 214, 214, 0.2);
   border-left: 3px solid #F4511E;
-  background: var(--n-color);
 }
 
-.case-info-collapse :deep(.n-collapse-item__header) {
+.panel-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.panel-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.panel-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3, #999);
+}
+
+.card-header-row {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 10px 12px !important;
-  font-size: 13px !important;
-  font-weight: 400;
-  min-height: 40px;
-  box-sizing: border-box;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 24px;
+  padding-right: 220px;
 }
 
-.case-info-collapse :deep(.n-collapse-item__header-main) {
+.card-header-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  line-height: 1.15;
+  gap: 8px;
 }
 
-.case-info-collapse :deep(.n-collapse-item__header-extra) {
-  flex: 1;
-  display: flex;
-  justify-content: flex-end;
-  margin-left: 12px;
+.case-info-card.is-collapsed :deep(.n-card__content) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 .case-info-header-actions :deep(.n-button) {
   font-size: 13px;
 }
 
-.case-info-collapse :deep(.n-collapse-item__content-inner) {
-  padding: 0 12px 16px;
-}
-
-.case-info-collapse :deep(.n-form-item-label) {
+.case-info-form {
+  width: 100%;
   font-size: 13px;
 }
 
-.case-info-form {
-  width: 100%;
+.case-info-form :deep(.n-form-item-label) {
   font-size: 13px;
 }
 
@@ -526,7 +529,6 @@ defineExpose({
   width: 100%;
 }
 
-/* 第一行：名称与第二行「用例类型」同宽（1/4），描述占剩余 3/4 */
 .case-field-name {
   grid-column: span 3;
 }
@@ -557,6 +559,16 @@ defineExpose({
   .case-field-name,
   .case-field-desc {
     grid-column: 1 / -1;
+  }
+
+  .card-header-row {
+    padding-right: 0;
+  }
+
+  .card-header-actions {
+    position: static;
+    transform: none;
+    margin-left: auto;
   }
 }
 
