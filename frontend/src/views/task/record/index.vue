@@ -329,7 +329,6 @@ const columns = [
   { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true } },
   { title: '任务ID', key: 'task_id', width: 90, align: 'center', ellipsis: { tooltip: true } },
   { title: '调度ID', key: 'celery_id', width: 400, align: 'center', ellipsis: { tooltip: true } },
-  { title: '回溯ID', key: 'celery_trace_id', width: 400, align: 'center', ellipsis: { tooltip: true } },
 ]
 </script>
 

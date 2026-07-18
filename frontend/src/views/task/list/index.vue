@@ -514,7 +514,7 @@ const columns = computed(() => {
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -530,12 +530,6 @@ const columns = computed(() => {
           key: 'history',
           icon: renderIcon('material-symbols:history', {size: 16}),
           onClick: () => openHistory(row),
-        },
-        {
-          label: '编辑',
-          key: 'edit',
-          icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-          onClick: () => openEdit(row),
         },
         {
           label: '删除',
@@ -587,6 +581,19 @@ const columns = computed(() => {
                   icon: renderIcon('material-symbols:play-circle-outline', {size: 16}),
                 },
             ),
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'info',
+              onClick: () => openEdit(row),
+            },
+            {
+              default: () => '编辑',
+              icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+            },
+        ),
         h(
             NDropdown,
             {
