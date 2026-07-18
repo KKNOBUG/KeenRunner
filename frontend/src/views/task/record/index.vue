@@ -7,7 +7,7 @@
         :remote="true"
         :columns="columns"
         :get-data="getTaskRecordList"
-        :scroll-x="3600"
+        :scroll-x="2900"
         :single-line="true"
     >
       <template #queryBar>
@@ -69,7 +69,7 @@
               class="query-input"
           />
         </QueryBarItem>
-        <QueryBarItem label="开始时间起：">
+        <QueryBarItem label="开始时间：">
           <NInput
               v-model:value="queryItems.celery_start_time_begin"
               clearable
@@ -79,7 +79,7 @@
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-        <QueryBarItem label="开始时间止：">
+        <QueryBarItem label="开始时间：">
           <NInput
               v-model:value="queryItems.celery_start_time_end"
               clearable
@@ -119,8 +119,8 @@ import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { formatDateTime } from '@/utils'
 import api from '@/api'
+import { formatDateTime } from '@/utils'
 
 defineOptions({ name: '执行记录' })
 
@@ -232,11 +232,8 @@ const formatCaseIds = (ids) => {
 }
 
 const columns = [
-  { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true } },
-  { title: '任务ID', key: 'task_id', width: 90, align: 'center', ellipsis: { tooltip: true } },
-  { title: '任务标识', key: 'task_code', width: 160, ellipsis: { tooltip: true } },
-  { title: '任务名称', key: 'task_name', width: 160, ellipsis: { tooltip: true } },
-  { title: '任务类型', key: 'task_type', width: 110, ellipsis: { tooltip: true } },
+  { title: '任务名称', key: 'task_name', width: 300, align: 'center', ellipsis: { tooltip: true } },
+  { title: '任务类型', key: 'task_type', width: 200, align: 'center', ellipsis: { tooltip: true } },
   {
     title: '触发来源',
     key: 'trigger_type',
@@ -251,34 +248,15 @@ const columns = [
       )
     },
   },
-  { title: '报告类型', key: 'report_type', width: 100, align: 'center', ellipsis: { tooltip: true } },
-  { title: '批次码', key: 'batch_code', width: 160, ellipsis: { tooltip: true } },
   {
-    title: '用例IDs',
+    title: '用例ID',
     key: 'case_ids',
     width: 140,
+    align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
       const s = formatCaseIds(row.case_ids)
       return h('span', { title: Array.isArray(row.case_ids) ? row.case_ids.join(', ') : '' }, s)
-    },
-  },
-  {
-    title: '执行参数',
-    key: 'exec_snapshot',
-    width: 220,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return renderJsonCell('执行参数', row.exec_snapshot)
-    },
-  },
-  {
-    title: '执行结果',
-    key: 'task_summary',
-    width: 240,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return renderJsonCell('执行结果', row.task_summary)
     },
   },
   {
@@ -296,9 +274,31 @@ const columns = [
     },
   },
   {
+    title: '执行参数',
+    key: 'exec_snapshot',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return renderJsonCell('执行参数', row.exec_snapshot)
+    },
+  },
+  {
+    title: '执行结果',
+    key: 'task_summary',
+    width: 220,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return renderJsonCell('执行结果', row.task_summary)
+    },
+  },
+  { title: '执行耗时', key: 'celery_duration', width: 90, align: 'center', ellipsis: { tooltip: true } },
+  {
     title: '错误信息',
     key: 'task_error',
     width: 200,
+    align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
       const s = row.task_error
@@ -306,8 +306,6 @@ const columns = [
       return h('span', { title: s }, s.length > 80 ? `${s.slice(0, 80)}...` : s)
     },
   },
-  { title: '调度ID', key: 'celery_id', width: 260, ellipsis: { tooltip: true } },
-  { title: '回溯ID', key: 'celery_trace_id', width: 200, ellipsis: { tooltip: true } },
   {
     title: '开始时间',
     key: 'celery_start_time',
@@ -326,7 +324,12 @@ const columns = [
       return h('span', row.celery_end_time ? formatDateTime(row.celery_end_time) : '-')
     },
   },
-  { title: '耗时', key: 'celery_duration', width: 80, align: 'center', ellipsis: { tooltip: true } },
+  { title: '批次标识', key: 'batch_code', width: 400, align: 'center', ellipsis: { tooltip: true } },
+  { title: '任务标识', key: 'task_code', width: 400, align: 'center', ellipsis: { tooltip: true } },
+  { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true } },
+  { title: '任务ID', key: 'task_id', width: 90, align: 'center', ellipsis: { tooltip: true } },
+  { title: '调度ID', key: 'celery_id', width: 400, align: 'center', ellipsis: { tooltip: true } },
+  { title: '回溯ID', key: 'celery_trace_id', width: 400, align: 'center', ellipsis: { tooltip: true } },
 ]
 </script>
 
