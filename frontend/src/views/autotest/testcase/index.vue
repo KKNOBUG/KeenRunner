@@ -5,6 +5,7 @@ import {NButton, NInput, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag,
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
+import CaseHistoryDrawer from '@/views/autotest/testcase/components/CaseHistoryDrawer.vue'
 import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
@@ -121,6 +122,14 @@ const openRunModal = async (row) => {
   } finally {
     runningCaseId.value = null
   }
+}
+
+// 执行历史：左侧抽屉按 case_id 查报告列表 → 右侧步骤明细
+const historyDrawerVisible = ref(false)
+const historyCaseRow = ref(null)
+function openHistoryDrawer(row) {
+  historyCaseRow.value = row || null
+  historyDrawerVisible.value = true
 }
 
 /**
@@ -478,7 +487,7 @@ const columns = computed(() => {
     {
       title: '操作',
       key: 'actions',
-      width: 140,
+      width: 180,
       align: 'center',
       fixed: 'right',
       render(row) {
@@ -559,6 +568,19 @@ const columns = computed(() => {
               {
                 default: () => '复制',
                 icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+              }
+          ),
+          h(
+              NButton,
+              {
+                size: 'tiny',
+                quaternary: true,
+                type: 'info',
+                onClick: () => openHistoryDrawer(row),
+              },
+              {
+                default: () => '历史',
+                icon: renderIcon('material-symbols:history', {size: 16}),
               }
           ),
           h(
@@ -739,6 +761,10 @@ const columns = computed(() => {
     </CrudTable>
 
     <ExecConfigModal ref="execConfigModalRef" v-model:run-loading="runLoading" />
+    <CaseHistoryDrawer
+        v-model:show="historyDrawerVisible"
+        :case-row="historyCaseRow"
+    />
   </CommonPage>
 </template>
 

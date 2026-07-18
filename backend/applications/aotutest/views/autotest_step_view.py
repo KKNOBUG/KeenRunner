@@ -1545,10 +1545,14 @@ async def execute_step_tree(
             try:
                 from backend.celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
 
+                # 与 ASYNC_EXEC / 任务批量执行一致：同一次触发共用 batch_code，
+                # 多数据源时各报告才能归为「同一次执行」。
+                batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                 celery_kwargs: Dict[str, Any] = {
                     "case_id": case_id,
                     "initial_variables": _serialize_for_celery_initial_variables(initial_variables),
                     "report_type": AutoTestReportType.SCHEDULE_EXEC.value,
+                    "batch_code": batch_code,
                     "selected_dataset_names": list(selected_dataset_names or []),
                     "steps_execute_config": _serialize_for_celery_steps_execute_config(steps_execute_config),
                 }
@@ -1560,6 +1564,7 @@ async def execute_step_tree(
                     "celery_task_id": apply_async_result.task_id,
                     "task_state": apply_async_result.state,
                     "case_id": case_id,
+                    "batch_code": batch_code,
                     "execute_type": execute_type.value,
                 }
                 return SuccessResponse(

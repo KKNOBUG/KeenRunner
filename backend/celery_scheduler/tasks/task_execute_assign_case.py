@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import datetime
+import uuid
 from typing import Any, Dict, List, Optional
 
 from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
@@ -33,6 +35,10 @@ def _normalize_initial_variables(
     return out
 
 
+def _new_batch_code() -> str:
+    return f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+
+
 async def _execute_step_tree_impl(
         case_id: int,
         initial_variables: Optional[List[Dict[str, Any]]] = None,
@@ -44,6 +50,9 @@ async def _execute_step_tree_impl(
     if selected_dataset_names is None:
         selected_dataset_names = []
     initial_variables = _normalize_initial_variables(initial_variables)
+    # 兜底：调用方未传时仍生成，保证多数据源报告可归为同一次执行
+    if not batch_code:
+        batch_code = _new_batch_code()
 
     step_crud = AutoTestApiStepCrud()
     if not selected_dataset_names:
@@ -59,6 +68,7 @@ async def _execute_step_tree_impl(
         result["dataset_name"] = None
         return {
             "parameterized": False,
+            "batch_code": batch_code,
             "execute_count": 1,
             "success_count": 1 if result.get("success") else 0,
             "failed_count": 0 if result.get("success") else 1,
@@ -89,6 +99,7 @@ async def _execute_step_tree_impl(
 
     return {
         "parameterized": True,
+        "batch_code": batch_code,
         "execute_count": execute_count,
         "success_count": success_count,
         "failed_count": failed_count,
