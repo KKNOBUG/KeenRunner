@@ -324,6 +324,8 @@ const columns = [
       return h('span', row.celery_end_time ? formatDateTime(row.celery_end_time) : '-')
     },
   },
+  { title: '创建人员', key: 'created_user', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '维护人员', key: 'updated_user', width: 100, align: 'center', ellipsis: { tooltip: true } },
   { title: '批次标识', key: 'batch_code', width: 400, align: 'center', ellipsis: { tooltip: true } },
   { title: '任务标识', key: 'task_code', width: 400, align: 'center', ellipsis: { tooltip: true } },
   { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true } },
