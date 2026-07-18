@@ -50,7 +50,7 @@ from backend.core.responses import (
     NotFoundResponse,
 )
 from backend.enums import AutoTestStepType
-from backend.services import CTX_USER_ID
+from backend.services import get_current_username
 from backend.services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
@@ -173,8 +173,7 @@ async def update_data_source_info(
                 step_data, dataset_names, norm_matrix = await parse_dataframe_matrix_async(data_in.dataframe)
             except ValueError as e:
                 return BadReqResponse(message=f"解析表格数据失败: {e}")
-            user_id = CTX_USER_ID.get(0)
-            updated_user = str(user_id) if user_id else None
+            updated_user = get_current_username()
             effective = data_in.model_copy(
                 update={
                     "dataset": step_data,
@@ -477,8 +476,7 @@ async def single_step_dataset_upload(
             on_error=True,
             state__not=1
         )
-        user_id = CTX_USER_ID.get(0)
-        created_user = str(user_id) if user_id else None
+        created_user = get_current_username()
         instance = await services.data_source_curd.create_data_sources_from_parsed(
             case_id=case_id,
             case_code=case_instance.case_code,
@@ -583,8 +581,7 @@ async def batch_step_dataset_upload(
         return BadReqResponse(message="解析结果为空")
 
     sheet_names = list(full_parsed.keys())
-    user_id = CTX_USER_ID.get(0)
-    created_user = str(user_id) if user_id else None
+    created_user = get_current_username()
     created: List[Dict[str, Any]] = []
     for i, sheet_name in enumerate(sheet_names):
         step_data = full_parsed[sheet_name]

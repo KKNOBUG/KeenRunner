@@ -63,6 +63,7 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
 )
 from backend.enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, AutoTestConfigNodeType
+from backend.services.ctx import get_current_username
 
 autotest_step = APIRouter()
 
@@ -1555,6 +1556,7 @@ async def execute_step_tree(
                     "batch_code": batch_code,
                     "selected_dataset_names": list(selected_dataset_names or []),
                     "steps_execute_config": _serialize_for_celery_steps_execute_config(steps_execute_config),
+                    "created_user": get_current_username(),
                 }
                 apply_async_result = execute_step_tree_task.apply_async(
                     kwargs=celery_kwargs,

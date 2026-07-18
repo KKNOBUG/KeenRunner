@@ -15,7 +15,7 @@ from backend.applications.base.models.role_model import Role
 from backend.applications.user.models.user_model import User
 from backend.configure import PROJECT_CONFIG
 from backend.enums import HTTPMethod
-from backend.services import CTX_USER_ID
+from backend.services import CTX_USER_ID, CTX_USERNAME
 
 
 class AuthControl:
@@ -37,6 +37,7 @@ class AuthControl:
                 raise HTTPException(status_code=401, detail="请求服务鉴权已过期, 请重新登录获取有效 Token 后进行访问")
 
             CTX_USER_ID.set(int(user_id))
+            CTX_USERNAME.set((user.username or "").strip())
             return user
         except jwt.DecodeError:
             raise HTTPException(status_code=401, detail="请求服务鉴权失败, 请携带有效 Token 进行访问")

@@ -306,6 +306,29 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         self.model = model
 
+    def _fill_created_user(self, obj_dict: Dict[str, Any]) -> None:
+        """创建时自动写入 created_user（已有值则不覆盖）。"""
+        if not hasattr(self.model, "created_user"):
+            return
+        if obj_dict.get("created_user"):
+            return
+        # 惰性导入，避免 scaffold ↔ services.dependency 循环依赖
+        from backend.services.ctx import get_current_username
+        username = get_current_username()
+        if username:
+            obj_dict["created_user"] = username
+
+    def _fill_updated_user(self, obj_dict: Dict[str, Any]) -> None:
+        """更新时自动写入 updated_user（已有值则不覆盖）。"""
+        if not hasattr(self.model, "updated_user"):
+            return
+        if obj_dict.get("updated_user"):
+            return
+        from backend.services.ctx import get_current_username
+        username = get_current_username()
+        if username:
+            obj_dict["updated_user"] = username
+
     async def get_or_error(self, id: int, **kwargs) -> ModelType:
         """
         根据 ID 获取对象，不存在时抛出异常。
@@ -391,9 +414,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :return: 创建成功的数据库对象
         """
         if isinstance(obj_in, Dict):
-            obj_dict = obj_in
+            obj_dict = dict(obj_in)
         else:
             obj_dict = obj_in.model_dump(warnings=False)
+        self._fill_created_user(obj_dict)
         obj = self.model(**obj_dict)
         await obj.save()
         return obj
@@ -411,9 +435,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         instances = []
         for obj_in in obj_list:
             if isinstance(obj_in, Dict):
-                obj_dict = obj_in
+                obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(warnings=False)
+            self._fill_created_user(obj_dict)
             obj = self.model(**obj_dict)
             await obj.save()
             instances.append(obj)
@@ -432,9 +457,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         obj = await self.get_or_error(id=id)
         if isinstance(obj_in, Dict):
-            obj_dict = obj_in
+            obj_dict = dict(obj_in)
         else:
             obj_dict = obj_in.model_dump(exclude_unset=True, exclude={"id"})
+        self._fill_updated_user(obj_dict)
         obj = obj.update_from_dict(obj_dict)
         await obj.save()
         LOGGER.info(f"更新成功: {self.model.__name__}(id={id}), 字段: {list(obj_dict.keys())}")
@@ -466,6 +492,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         # 获取模型有效字段列表
         valid_fields = set(self.model._meta.db_fields)
         valid_fields.update(self.model._meta.fk_fields)
+        from backend.services.ctx import get_current_username
+        current_username = get_current_username()
 
         total_updated = 0
         for update_data in updates:
@@ -490,6 +518,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
             if not update_dict:
                 continue
+
+            if current_username and hasattr(self.model, "updated_user") and not update_dict.get("updated_user"):
+                update_dict["updated_user"] = current_username
 
             # 执行更新
             count = await self.model.filter(**{key_field: key_value}).update(**update_dict)

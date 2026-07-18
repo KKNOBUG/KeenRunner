@@ -19,6 +19,7 @@ from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
 from backend.configure import LOGGER
 from backend.enums import AutoTestReportType
+from backend.services.ctx import CTX_USERNAME
 
 
 def _normalize_initial_variables(
@@ -46,7 +47,11 @@ async def _execute_step_tree_impl(
         batch_code: Optional[str] = None,
         selected_dataset_names: Optional[List[str]] = None,
         steps_execute_config: Optional[Dict[str, Any]] = None,
+        created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
+    # Worker 进程无 HTTP 鉴权上下文，用提交任务时传入的用户账号埋点
+    if created_user:
+        CTX_USERNAME.set(str(created_user).strip())
     if selected_dataset_names is None:
         selected_dataset_names = []
     initial_variables = _normalize_initial_variables(initial_variables)
@@ -119,6 +124,7 @@ def execute_step_tree_task(
         batch_code: Optional[str] = None,
         selected_dataset_names: Optional[List[str]] = None,
         steps_execute_config: Optional[Dict[str, Any]] = None,
+        created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Celery task：后台执行单用例步骤树（默认 SCHEDULE_EXEC）。
@@ -136,7 +142,7 @@ def execute_step_tree_task(
         LOGGER.info(
             f"【Celery-Worker】开始执行步骤树任务: case_id={case_id}, report_type={getattr(rt, 'value', rt)}, "
             f"batch_code={batch_code}, dataset_count={len(selected_dataset_names or [])}, "
-            f"has_steps_execute_config={bool(steps_execute_config)}"
+            f"has_steps_execute_config={bool(steps_execute_config)}, created_user={created_user}"
         )
         result = run_async(
             _execute_step_tree_impl(
@@ -146,6 +152,7 @@ def execute_step_tree_task(
                 batch_code=batch_code,
                 selected_dataset_names=selected_dataset_names,
                 steps_execute_config=steps_execute_config,
+                created_user=created_user,
             )
         )
         LOGGER.info(

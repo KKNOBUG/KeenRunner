@@ -66,7 +66,7 @@ from backend.enums import (
     AutoTestReqArgsType,
     AutoTestConfigNodeType, HTTPMethod
 )
-from backend.services import CTX_USER_ID
+from backend.services import get_current_username
 
 
 class StepExecutionError(Exception):
@@ -3337,8 +3337,8 @@ class AutoTestStepExecutionEngine:
             defer_create_report: Optional[AutoTestApiReportCreate] = None
             pending_create_details: Optional[List[AutoTestApiDetailCreate]] = None
             if self._save_report and report_code:
-                user_id: Optional[int] = CTX_USER_ID.get(0)
-                user_name: Optional[str] = str(user_id) if user_id else None
+                # 优先取上下文用户名；兼容旧逻辑仅有 user_id 时不再写入数字 ID
+                user_name: Optional[str] = get_current_username()
                 final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
                 defer_create_report = AutoTestApiReportCreate(
                     case_id=case_id,
