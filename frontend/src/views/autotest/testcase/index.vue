@@ -540,6 +540,13 @@ const columns = computed(() => {
       fixed: 'right',
       render(row) {
         const dropdownOptions = []
+        dropdownOptions.push({
+          label: '复制',
+          key: 'copy',
+          icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+          disabled: copyLoading.value,
+          onClick: () => handleCopyCase(row),
+        })
         if (hasCaseApiPermission('post', '/autotest/case/update')) {
           dropdownOptions.push({
             label: '编辑',
@@ -548,13 +555,6 @@ const columns = computed(() => {
             onClick: () => openCaseEdit(row),
           })
         }
-        dropdownOptions.push({
-          label: '复制',
-          key: 'copy',
-          icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
-          disabled: copyLoading.value,
-          onClick: () => handleCopyCase(row),
-        })
         dropdownOptions.push({
           label: '历史',
           key: 'history',
