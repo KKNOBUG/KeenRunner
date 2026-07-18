@@ -63,7 +63,18 @@
               >
                 <template #header>
                   <div class="extract-validator-card-header db-op-header">
-                    <div class="db-op-title-row">
+                    <div
+                        class="db-op-title-row"
+                        role="button"
+                        tabindex="0"
+                        @click="toggleOpCollapse(key)"
+                        @keydown.enter.prevent="toggleOpCollapse(key)"
+                    >
+                      <TheIcon
+                          class="panel-collapse-icon"
+                          :icon="opCollapseState[key] ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+                          :size="20"
+                      />
                       <template v-if="editingDatabaseOpKey === String(key) && !props.readonly">
                         <n-input
                             v-model:value="item.name"
@@ -71,6 +82,7 @@
                             class="db-op-title-input"
                             :placeholder="databaseOpDefaultTitle(key)"
                             clearable
+                            @click.stop
                             @blur="endEditDatabaseOpTitle"
                             @keydown.enter.prevent="endEditDatabaseOpTitle"
                         />
@@ -79,7 +91,7 @@
                         <span class="db-op-title-text">{{ databaseOpDisplayTitle(item, key) }}</span>
                         <n-tooltip v-if="!props.readonly" trigger="hover">
                           <template #trigger>
-                            <n-button text size="tiny" class="db-op-title-edit" @click="startEditDatabaseOpTitle(key)">
+                            <n-button text size="tiny" class="db-op-title-edit" @click.stop="startEditDatabaseOpTitle(key)">
                               <template #icon>
                                 <TheIcon icon="material-symbols:edit-outline" :size="18"/>
                               </template>
@@ -89,15 +101,7 @@
                         </n-tooltip>
                       </template>
                     </div>
-                    <n-space>
-                      <n-button text @click="toggleOpCollapse(key)" size="small">
-                        <template #icon>
-                          <TheIcon
-                              :icon="opCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                              :size="18"
-                          />
-                        </template>
-                      </n-button>
+                    <n-space @click.stop>
                       <n-button text @click="duplicateOp(key)" type="info" size="small" :disabled="props.readonly">
                         <template #icon>
                           <TheIcon icon="material-symbols:content-copy" :size="18"/>
@@ -112,9 +116,9 @@
                   </div>
                 </template>
                 <div v-show="!opCollapseState[key]" class="db-op-body">
-                  <n-form class="step-editor-form" :model="item" label-width="80px" label-placement="left" size="small">
+                  <n-form class="step-editor-form" :model="item" label-width="90px" label-placement="left" size="small">
                     <div class="db-op-field-rows">
-                      <div class="db-op-field-row db-op-field-row--cols3">
+                      <div class="db-op-field-row db-op-field-row--cols4">
                         <n-form-item label="所属应用" required class="db-op-fi-fill">
                           <n-select
                               v-model:value="item.project_id"
@@ -139,7 +143,7 @@
                               @update:value="() => onConfigNameChange(item)"
                           />
                         </n-form-item>
-                        <n-form-item label="数据库名" required class="db-op-fi-fill">
+                        <n-form-item label="数据库名称" required class="db-op-fi-fill">
                           <n-select
                               v-model:value="item.database_name"
                               :options="dbNameOptionsForRow(item)"
@@ -150,17 +154,17 @@
                               :disabled="props.readonly"
                           />
                         </n-form-item>
-                      </div>
-                      <div class="db-op-field-row db-op-field-row--op-desc">
                         <n-form-item label="存储变量" required class="db-op-fi-fill">
                           <n-input v-model:value="item.variable_name" placeholder="写入变量池的变量名" clearable :disabled="props.readonly"/>
                         </n-form-item>
+                      </div>
+                      <div class="db-op-field-row db-op-field-row--sql">
                         <n-form-item label="SQL语句" required class="db-op-fi-fill">
                           <n-input
                               v-model:value="item.expr"
                               type="textarea"
                               placeholder="支持表名/字段中使用 ${变量名}"
-                              :autosize="{ minRows: 1, maxRows: 18 }"
+                              :autosize="{ minRows: 2, maxRows: 18 }"
                               :disabled="props.readonly"
                               class="db-op-expr-textarea"
                           />
@@ -586,11 +590,18 @@ const duplicateOp = (key) => {
 .db-op-title-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
   font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.db-op-title-row .panel-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
 }
 
 .db-op-title-text {
@@ -665,23 +676,22 @@ const duplicateOp = (key) => {
   width: 100%;
 }
 
-.db-op-field-row--cols3 {
+.db-op-field-row--cols4 {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 3fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   align-items: start;
 }
 
-/* 第二行：存储变量 30%、SQL语句 70% */
-.db-op-field-row--op-desc {
+.db-op-field-row--sql {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  grid-template-columns: 1fr;
   gap: 12px;
   align-items: start;
 }
 
-.db-op-field-row--cols3 :deep(.n-form-item),
-.db-op-field-row--op-desc :deep(.n-form-item) {
+.db-op-field-row--cols4 :deep(.n-form-item),
+.db-op-field-row--sql :deep(.n-form-item) {
   min-width: 0;
 }
 

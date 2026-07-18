@@ -425,7 +425,7 @@ const monacoEditorOptions = (readOnly) => {
   return options
 }
 
-const monacoEditorOptionsForBody = () => ({ ...monacoEditorOptions(false) })
+const monacoEditorOptionsForBody = () => ({ ...monacoEditorOptions(!!props.readonly) })
 
 const buildConfigFromState = () => {
   const payloadText = String(state.form.request_payload ?? '')

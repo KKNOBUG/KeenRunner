@@ -100,4 +100,83 @@
 .step-ev-form :deep(.n-form-item-label) {
   font-size: 13px;
   padding-bottom: 0;
+  white-space: nowrap;
+}
+
+.step-ev-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.step-ev-row {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+}
+
+.step-ev-row--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 提取：范围略窄、路径更宽、继续提取保持一列 */
+.step-ev-row--extract {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.45fr) minmax(0, 1fr);
+}
+
+/* 断言：表达式更宽、操作符略窄、预期值保持一列 */
+.step-ev-row--assert {
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.85fr) minmax(0, 1fr);
+}
+
+.extract-scope-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.extract-scope-inline :deep(.n-radio-group) {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.extract-scope-inline :deep(.n-radio) {
+  white-space: nowrap;
+}
+
+.extract-scope-help {
+  flex-shrink: 0;
+  cursor: help;
+  color: var(--n-text-color-3);
+}
+
+.step-ev-fi {
+  min-width: 0;
+}
+
+.step-ev-fi--span2 {
+  grid-column: span 2;
+}
+
+.step-ev-fi :deep(.n-form-item) {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .step-ev-row--2,
+  .step-ev-row--extract,
+  .step-ev-row--assert {
+    grid-template-columns: 1fr;
+  }
+
+  .step-ev-fi--span2 {
+    grid-column: auto;
+  }
 }

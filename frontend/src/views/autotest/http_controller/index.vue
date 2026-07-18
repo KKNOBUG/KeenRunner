@@ -2,17 +2,19 @@
   <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
-        <div class="panel-title">Request</div>
-        <div class="card-header-actions">
-          <n-button text size="tiny" @click="toggleRequestCardCollapsed" class="collapse-tiny-btn">
-            <template #icon>
-              <TheIcon
-                  :icon="requestCardCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                  :size="18"
-              />
-            </template>
-            {{ requestCardCollapsed ? '展开' : '收起' }}
-          </n-button>
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="toggleRequestCardCollapsed"
+            @keydown.enter.prevent="toggleRequestCardCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="requestCardCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">Request</div>
         </div>
       </div>
     </template>
@@ -198,6 +200,7 @@
                 v-model:value="state.form.jsonBody"
                 lang="json"
                 :options="monacoEditorOptionsForBody()"
+                :read-only="props.readonly"
                 class="json-editor"
                 style="min-height: 400px; height: auto; margin-top: 12px;"
             />
@@ -238,6 +241,7 @@
           <StepExtractPanel
               v-model="state.form.extract_variables"
               mode="response"
+              :readonly="props.readonly"
           />
         </n-tab-pane>
         <n-tab-pane name="assert_validators" tab="断言">
@@ -246,7 +250,11 @@
               <span>断言</span>
             </n-badge>
           </template>
-          <StepAssertPanel v-model="state.form.assert_validators" mode="response" />
+          <StepAssertPanel
+              v-model="state.form.assert_validators"
+              mode="response"
+              :readonly="props.readonly"
+          />
         </n-tab-pane>
       </n-tabs>
     </n-collapse-transition>
@@ -259,10 +267,23 @@
       :class="['step-editor-card', { 'is-collapsed': dataSourceCollapsed }]"
   >
     <template #header>
-      <div class="card-header-row">
-        <div class="panel-title">DataSource</div>
-        <div class="card-header-actions">
-          <n-tooltip v-if="dataSourceCollapsed" trigger="hover">
+      <div class="card-header-row card-header-row--with-actions">
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="toggleDataSourceCollapsed"
+            @keydown.enter.prevent="toggleDataSourceCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="dataSourceCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">DataSource</div>
+        </div>
+        <div v-if="dataSourceCollapsed" class="card-header-actions">
+          <n-tooltip trigger="hover">
             <template #trigger>
               <n-text class="data-source-tip" depth="3" style="cursor: help;">
                 {{ dataSourceTipText }}
@@ -270,15 +291,6 @@
             </template>
             {{ dataSourceTipText }}
           </n-tooltip>
-          <n-button text size="tiny" @click="toggleDataSourceCollapsed" class="collapse-tiny-btn">
-            <template #icon>
-              <TheIcon
-                  :icon="dataSourceCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                  :size="18"
-              />
-            </template>
-            {{ dataSourceCollapsed ? '展开' : '收起' }}
-          </n-button>
         </div>
       </div>
     </template>
@@ -411,8 +423,21 @@
       ref="debugResultRef"
   >
     <template #header>
-      <div class="card-header-row">
-        <div class="panel-title">Response</div>
+      <div class="card-header-row card-header-row--with-actions">
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="toggleResponseCardCollapsed"
+            @keydown.enter.prevent="toggleResponseCardCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="responseCardCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">Response</div>
+        </div>
         <div class="card-header-actions">
           <n-space align="center" :wrap="false">
             <n-space v-if="response && !debugLoading" align="center" :wrap="false">
@@ -427,15 +452,6 @@
               </template>
               请求中...
             </n-tag>
-            <n-button text size="tiny" @click="toggleResponseCardCollapsed" class="collapse-tiny-btn">
-              <template #icon>
-                <TheIcon
-                    :icon="responseCardCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                    :size="18"
-                />
-              </template>
-              {{ responseCardCollapsed ? '展开' : '收起' }}
-            </n-button>
           </n-space>
         </div>
       </div>
@@ -1859,7 +1875,7 @@ const monacoEditorOptions = (readOnly) => {
 // 请求体 JSON 编辑器：黑色背景 + JSON 语法校验（红色波浪线）
 const monacoEditorOptionsForBody = () => {
   return {
-    ...monacoEditorOptions(false),
+    ...monacoEditorOptions(!!props.readonly),
   }
 }
 
@@ -2418,7 +2434,11 @@ const validatorColumns = [
 /* .panel-title 见 .step-editor-card */
 
 .card-header-row {
-  padding-right: 220px; /* 预留右侧 actions 空间，避免标题过长被遮挡 */
+  padding-right: 0;
+}
+
+.card-header-row--with-actions {
+  padding-right: 220px; /* 预留右侧 status / tip 空间 */
 }
 
 .data-source-content {

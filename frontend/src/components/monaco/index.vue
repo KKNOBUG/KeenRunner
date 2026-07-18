@@ -260,6 +260,9 @@ const initEditor = () => {
     // setOptions()
 
   } else {
+    if (props.readOnly) {
+      options.readOnly = true
+    }
     editor.value = monaco.editor.create(monacoEditorRef.value, options)
     modEditor = editor.value
     registerCustomEvent(modEditor)
@@ -514,6 +517,20 @@ watch(
 //     },
 //     {deep: true}
 // )
+
+/** 只读状态变化时同步到编辑器（单栏 / Diff 双栏） */
+watch(
+    () => props.readOnly,
+    (readOnly) => {
+      if (!editor.value) return
+      if (props.isDiff) {
+        toRaw(editor.value).getModifiedEditor()?.updateOptions({ readOnly })
+        toRaw(editor.value).getOriginalEditor()?.updateOptions({ readOnly })
+      } else {
+        toRaw(editor.value).updateOptions({ readOnly })
+      }
+    }
+)
 
 /** SQL 场景：库表元数据变化时刷新补全数据源 */
 watch(

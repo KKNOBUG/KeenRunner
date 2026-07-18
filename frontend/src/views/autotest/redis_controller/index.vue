@@ -73,7 +73,18 @@
               >
                 <template #header>
                   <div class="extract-validator-card-header db-op-header">
-                    <div class="db-op-title-row">
+                    <div
+                        class="db-op-title-row"
+                        role="button"
+                        tabindex="0"
+                        @click="toggleOpCollapse(key)"
+                        @keydown.enter.prevent="toggleOpCollapse(key)"
+                    >
+                      <TheIcon
+                          class="panel-collapse-icon"
+                          :icon="opCollapseState[key] ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+                          :size="20"
+                      />
                       <template v-if="editingRedisOpKey === String(key) && !props.readonly">
                         <n-input
                             v-model:value="item.name"
@@ -81,6 +92,7 @@
                             class="db-op-title-input"
                             :placeholder="redisOpDefaultTitle(key)"
                             clearable
+                            @click.stop
                             @blur="endEditRedisOpTitle"
                             @keydown.enter.prevent="endEditRedisOpTitle"
                         />
@@ -89,7 +101,7 @@
                         <span class="db-op-title-text">{{ redisOpDisplayTitle(item, key) }}</span>
                         <n-tooltip v-if="!props.readonly" trigger="hover">
                           <template #trigger>
-                            <n-button text size="tiny" class="db-op-title-edit" @click="startEditRedisOpTitle(key)">
+                            <n-button text size="tiny" class="db-op-title-edit" @click.stop="startEditRedisOpTitle(key)">
                               <template #icon>
                                 <TheIcon icon="material-symbols:edit-outline" :size="18"/>
                               </template>
@@ -99,15 +111,7 @@
                         </n-tooltip>
                       </template>
                     </div>
-                    <n-space>
-                      <n-button text @click="toggleOpCollapse(key)" size="small">
-                        <template #icon>
-                          <TheIcon
-                              :icon="opCollapseState[key] ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                              :size="18"
-                          />
-                        </template>
-                      </n-button>
+                    <n-space @click.stop>
                       <n-button text @click="duplicateOp(key)" type="info" size="small" :disabled="props.readonly">
                         <template #icon>
                           <TheIcon icon="material-symbols:content-copy" :size="18"/>
@@ -1105,11 +1109,18 @@ const doDebugRequest = async (env_id) => {
 .db-op-title-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
   font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.db-op-title-row .panel-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
 }
 
 .db-op-title-text {

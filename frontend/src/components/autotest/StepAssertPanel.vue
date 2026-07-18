@@ -39,71 +39,77 @@
         <div v-show="!collapseState[key]">
           <n-form
               :model="item"
-              label-width="auto"
+              label-width="90px"
               label-placement="left"
               size="small"
               class="step-ev-form"
           >
-            <n-form-item label="断言名称">
-              <n-input
-                  v-model:value="item.name"
-                  placeholder="请输入断言名称"
-                  clearable
-                  :disabled="readonly"
-              />
-            </n-form-item>
+            <div class="step-ev-rows">
+              <div class="step-ev-row step-ev-row--assert">
+                <n-form-item label="断言名称" class="step-ev-fi step-ev-fi--span2">
+                  <n-input
+                      v-model:value="item.name"
+                      placeholder="请输入断言名称"
+                      clearable
+                      :disabled="readonly"
+                  />
+                </n-form-item>
 
-            <n-form-item v-if="isVariableSource" label="断言来源">
-              <n-select
-                  v-model:value="item.source"
-                  :options="sourceOptions"
-                  placeholder="选择「请求」中的存储变量名（variable_name）"
-                  filterable
-                  clearable
-                  :disabled="readonly || !sourceOptions.length"
-              />
-            </n-form-item>
-            <n-form-item v-else-if="!isPython" label="断言对象">
-              <n-select
-                  v-model:value="item.object"
-                  :options="RESPONSE_ASSERT_OBJECT_OPTIONS"
-                  placeholder="请选择断言对象"
-                  :disabled="readonly"
-              />
-            </n-form-item>
-            <n-form-item v-else label="断言对象">
-              <n-select
-                  v-model:value="item.object"
-                  :options="PYTHON_ASSERT_OBJECT_OPTIONS"
-                  placeholder="变量池"
-                  :disabled="readonly"
-              />
-            </n-form-item>
+                <n-form-item v-if="isVariableSource" label="断言对象" class="step-ev-fi">
+                  <n-select
+                      v-model:value="item.source"
+                      :options="sourceOptions"
+                      placeholder="选择「请求」中的存储变量名（variable_name）"
+                      filterable
+                      clearable
+                      :disabled="readonly || !sourceOptions.length"
+                  />
+                </n-form-item>
+                <n-form-item v-else-if="!isPython" label="断言对象" class="step-ev-fi">
+                  <n-select
+                      v-model:value="item.object"
+                      :options="RESPONSE_ASSERT_OBJECT_OPTIONS"
+                      placeholder="请选择断言对象"
+                      :disabled="readonly"
+                  />
+                </n-form-item>
+                <n-form-item v-else label="断言对象" class="step-ev-fi">
+                  <n-select
+                      v-model:value="item.object"
+                      :options="PYTHON_ASSERT_OBJECT_OPTIONS"
+                      placeholder="变量池"
+                      :disabled="readonly"
+                  />
+                </n-form-item>
+              </div>
 
-            <n-form-item label="断言表达式">
-              <n-input
-                  v-model:value="item.jsonpath"
-                  :placeholder="exprPlaceholder(item)"
-                  clearable
-                  :disabled="readonly"
-              />
-            </n-form-item>
-            <n-form-item label="断言操作符">
-              <n-select
-                  v-model:value="item.assertion"
-                  :options="assertionOptions"
-                  placeholder="请选择断言方法"
-                  :disabled="readonly"
-              />
-            </n-form-item>
-            <n-form-item label="断言预期值">
-              <n-input
-                  v-model:value="item.value"
-                  placeholder="请输入预期值"
-                  clearable
-                  :disabled="readonly"
-              />
-            </n-form-item>
+              <div class="step-ev-row step-ev-row--assert">
+                <n-form-item label="断言表达式" class="step-ev-fi">
+                  <n-input
+                      v-model:value="item.jsonpath"
+                      :placeholder="exprPlaceholder(item)"
+                      clearable
+                      :disabled="readonly"
+                  />
+                </n-form-item>
+                <n-form-item label="断言操作符" class="step-ev-fi">
+                  <n-select
+                      v-model:value="item.assertion"
+                      :options="assertionOptions"
+                      placeholder="请选择断言方法"
+                      :disabled="readonly"
+                  />
+                </n-form-item>
+                <n-form-item label="断言预期值" class="step-ev-fi">
+                  <n-input
+                      v-model:value="item.value"
+                      placeholder="请输入预期值"
+                      clearable
+                      :disabled="readonly"
+                  />
+                </n-form-item>
+              </div>
+            </div>
           </n-form>
         </div>
       </n-card>
