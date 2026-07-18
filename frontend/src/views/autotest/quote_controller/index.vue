@@ -6,7 +6,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['step-editor-card', 'case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
+      :class="['step-editor-card', { 'is-collapsed': caseInfoCollapsed }]"
   >
     <template #header>
       <div class="card-header-row">

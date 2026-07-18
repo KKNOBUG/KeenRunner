@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', 'http-card', { 'is-collapsed': requestCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>
@@ -256,7 +256,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['step-editor-card', 'http-card', { 'is-collapsed': dataSourceCollapsed }]"
+      :class="['step-editor-card', { 'is-collapsed': dataSourceCollapsed }]"
   >
     <template #header>
       <div class="card-header-row">
@@ -407,7 +407,7 @@
       v-if="response || debugLoading"
       :bordered="false"
       style="width: 100%; margin-top: 8px;"
-      :class="['step-editor-card', 'http-card', { 'is-collapsed': responseCardCollapsed }]"
+      :class="['step-editor-card', { 'is-collapsed': responseCardCollapsed }]"
       ref="debugResultRef"
   >
     <template #header>

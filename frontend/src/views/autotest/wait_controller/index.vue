@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" class="step-editor-card wait-card">
+  <n-card :bordered="false" class="step-editor-card">
     <template #header>
       <div class="panel-title">等待控制</div>
     </template>

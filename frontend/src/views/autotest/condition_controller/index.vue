@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" class="step-editor-card condition-card">
+  <n-card :bordered="false" class="step-editor-card">
     <template #header>
       <div class="panel-title">条件分支</div>
     </template>

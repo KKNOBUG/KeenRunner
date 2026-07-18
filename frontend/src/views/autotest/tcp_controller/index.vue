@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', 'tcp-card', { 'is-collapsed': requestCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>
@@ -136,7 +136,7 @@
   <n-card
       v-if="response || debugLoading"
       :bordered="false"
-      class="step-editor-card tcp-card"
+      class="step-editor-card"
       style="width: 100%;"
   >
     <template #header>

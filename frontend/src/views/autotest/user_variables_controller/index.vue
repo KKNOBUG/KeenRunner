@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" class="step-editor-card user-variables-card">
+  <n-card :bordered="false" class="step-editor-card">
     <template #header>
       <div class="panel-title">用户变量</div>
     </template>

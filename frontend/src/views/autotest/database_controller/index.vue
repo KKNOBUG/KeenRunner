@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', 'db-card', { 'is-collapsed': mainCardCollapsed }]">
+  <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': mainCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
         <div class="panel-title">Request</div>

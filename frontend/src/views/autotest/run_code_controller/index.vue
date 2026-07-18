@@ -1,6 +1,6 @@
 <template>
   <div class="code-container">
-    <n-card :bordered="false" class="step-editor-card code-card">
+    <n-card :bordered="false" class="step-editor-card">
       <template #header>
         <div class="card-header-row">
           <div class="panel-title">Python 代码</div>
@@ -99,7 +99,7 @@
     <n-card
         v-if="debugResponse"
         :bordered="false"
-        class="step-editor-card response-card"
+        class="step-editor-card"
     >
       <template #header>
         <div class="panel-title">Response</div>

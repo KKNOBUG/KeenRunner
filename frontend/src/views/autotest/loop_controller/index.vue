@@ -1,5 +1,5 @@
 <template>
-  <n-card :bordered="false" class="step-editor-card loop-card">
+  <n-card :bordered="false" class="step-editor-card">
     <template #header>
       <div class="panel-title">循环结构</div>
     </template>
