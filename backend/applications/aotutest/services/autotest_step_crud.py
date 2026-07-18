@@ -1217,7 +1217,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         task_code=task_code,
                         batch_code=batch_code,
                     )
-                result["error"] = None
+                result["error"] = ""
                 results.append(result)
                 if result.get("success", False):
                     success_cases += 1

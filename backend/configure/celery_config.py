@@ -68,9 +68,6 @@ class CeleryConfig(BaseSettings):
             "result_expires": 3600,
             "result_persistent": True,
             "task_routes": {
-                "backend.celery_scheduler.tasks.task_autotest_case.execute_batch_cases_task": {
-                    "queue": "autotest_queue"
-                },
                 "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
                     "queue": "autotest_queue"
                 },

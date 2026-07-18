@@ -122,25 +122,52 @@ const formatJsonBrief = (val, maxLen = 50) => {
 }
 const logRecordColumns = [
   { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true }, render: (row) => h('span', row.record_id ?? row.id ?? '-') },
-  { title: '任务ID', key: 'task_id', width: 100, align: 'center', ellipsis: { tooltip: true } },
-  { title: '任务名称', key: 'task_name', width: 180, ellipsis: { tooltip: true } },
-  { title: '任务节点', key: 'celery_node', width: 180, ellipsis: { tooltip: true }, render: (row) => h('span', { title: row.celery_node || '' }, row.celery_node ?? '-') },
-  { title: '任务参数', key: 'task_kwargs', width: 200, ellipsis: { tooltip: true }, render: (row) => h('span', { title: JSON.stringify(row.task_kwargs) }, formatJsonBrief(row.task_kwargs, 40)) },
-  { title: '调度方式', key: 'celery_scheduler', width: 100, align: 'center', ellipsis: { tooltip: true } },
+  { title: '任务标识', key: 'task_code', width: 160, ellipsis: { tooltip: true } },
+  { title: '任务名称', key: 'task_name', width: 160, ellipsis: { tooltip: true } },
   {
-    title: '调度状态',
+    title: '触发来源',
+    key: 'trigger_type',
+    width: 100,
+    align: 'center',
+    render: (row) => {
+      const typeMap = { 手动执行: 'info', 定时执行: 'warning' }
+      return h(NTag, { type: typeMap[row.trigger_type] || 'default', size: 'small', round: true }, () => row.trigger_type || '-')
+    },
+  },
+  { title: '批次码', key: 'batch_code', width: 160, ellipsis: { tooltip: true } },
+  {
+    title: '用例IDs',
+    key: 'case_ids',
+    width: 140,
+    ellipsis: { tooltip: true },
+    render: (row) => h('span', { title: Array.isArray(row.case_ids) ? row.case_ids.join(', ') : '' }, Array.isArray(row.case_ids) && row.case_ids.length ? row.case_ids.join(', ') : '-'),
+  },
+  {
+    title: '执行参数',
+    key: 'exec_snapshot',
+    width: 200,
+    ellipsis: { tooltip: true },
+    render: (row) => h('span', { title: row.exec_snapshot ? JSON.stringify(row.exec_snapshot) : '' }, formatJsonBrief(row.exec_snapshot, 40)),
+  },
+  {
+    title: '执行结果',
+    key: 'task_summary',
+    width: 220,
+    ellipsis: { tooltip: true },
+    render: (row) => h('span', { title: row.task_summary ? JSON.stringify(row.task_summary) : '' }, formatJsonBrief(row.task_summary, 40)),
+  },
+  {
+    title: '执行状态',
     key: 'celery_status',
     width: 100,
     align: 'center',
     render: (row) => {
-      const typeMap = { '等待执行': 'default', '正在执行': 'warning', '成功': 'success', '失败': 'error' }
+      const typeMap = { 等待执行: 'default', 正在执行: 'warning', 成功: 'success', 失败: 'error' }
       return h(NTag, { type: typeMap[row.celery_status] || 'default', size: 'small', round: true }, () => row.celery_status || '-')
-    }
+    },
   },
-  { title: '执行摘要', key: 'task_summary', width: 220, ellipsis: { tooltip: true }, render: (row) => (row.task_summary ? (row.task_summary.length > 50 ? row.task_summary.slice(0, 50) + '...' : row.task_summary) : '-') },
-  { title: '错误信息', key: 'task_error', width: 220, ellipsis: { tooltip: true }, render: (row) => (row.task_error ? (row.task_error.length > 50 ? row.task_error.slice(0, 50) + '...' : row.task_error) : '-') },
+  { title: '错误信息', key: 'task_error', width: 180, ellipsis: { tooltip: true }, render: (row) => (row.task_error ? (row.task_error.length > 50 ? row.task_error.slice(0, 50) + '...' : row.task_error) : '-') },
   { title: '调度ID', key: 'celery_id', width: 200, ellipsis: { tooltip: true } },
-  { title: '回溯ID', key: 'celery_trace_id', width: 200, ellipsis: { tooltip: true } },
   { title: '开始时间', key: 'celery_start_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_start_time) || '-') },
   { title: '结束时间', key: 'celery_end_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_end_time) || '-') },
   { title: '耗时', key: 'celery_duration', width: 80, align: 'center', ellipsis: { tooltip: true } },
@@ -487,7 +514,7 @@ const columns = computed(() => {
   {
     title: '操作',
     key: 'actions',
-    width: 70,
+    width: 100,
     align: 'center',
     fixed: 'right',
     render(row) {

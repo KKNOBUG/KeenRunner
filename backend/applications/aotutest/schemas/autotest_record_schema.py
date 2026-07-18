@@ -10,6 +10,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+from backend.enums import AutoTestTaskStatus, AutoTestTaskTriggerType, AutoTestTaskType
+
 
 class AutoTestApiRecordSelect(BaseModel):
     page: int = Field(default=1, ge=1, description="页码")
@@ -18,10 +20,13 @@ class AutoTestApiRecordSelect(BaseModel):
 
     celery_id: Optional[str] = Field(None, max_length=255, description="调度ID")
     task_id: Optional[int] = Field(None, description="任务ID")
+    task_code: Optional[str] = Field(None, max_length=64, description="任务标识")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
-    celery_node: Optional[str] = Field(None, max_length=512, description="调度节点")
-    celery_status: Optional[str] = Field(None, max_length=32, description="调度状态")
-    celery_scheduler: Optional[str] = Field(None, max_length=32, description="调度方式")
+    task_type: Optional[AutoTestTaskType] = Field(None, description="任务类型")
+    task_project: Optional[int] = Field(None, description="所属应用")
+    trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="触发来源")
+    batch_code: Optional[str] = Field(None, max_length=64, description="批次码")
+    celery_status: Optional[AutoTestTaskStatus] = Field(None, description="执行状态")
     celery_start_time_begin: Optional[str] = Field(None, max_length=32, description="开始时间起")
     celery_start_time_end: Optional[str] = Field(None, max_length=32, description="开始时间止")
     celery_end_time_begin: Optional[str] = Field(None, max_length=32, description="结束时间起")

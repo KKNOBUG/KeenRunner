@@ -296,7 +296,7 @@ async def search_task_records(
         record_in: AutoTestApiRecordSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """按条件分页查询任务执行记录（Celery 调度任务ID、任务信息ID、任务名称、状态、调度方式、开始/结束时间等）。"""
+    """按条件分页查询任务执行观测记录（触发来源、批次码、状态、时间等）。"""
     try:
         total, instances = await services.record_curd.select_records(record_in=record_in)
         data = [

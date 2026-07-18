@@ -59,7 +59,7 @@ def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
 
 
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """解析任务中的用例执行配置：顶层字段优先，否则回退到 task_kwargs。"""
+    """解析用例执行配置：顶层权威；兼容读取旧数据中 task_kwargs 嵌套副本。"""
     cases_cfg = task_dict.get("cases_execute_config")
     if isinstance(cases_cfg, dict) and cases_cfg:
         return cases_cfg
@@ -71,6 +71,16 @@ def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str
     return cases_cfg if isinstance(cases_cfg, dict) else None
 
 
+def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
+    """压缩 task_kwargs：保留 case_ids / initial_variables 及未知扩展键，剔除 cases_execute_config。"""
+    if task_kwargs is None:
+        return None
+    if not isinstance(task_kwargs, dict):
+        return {}
+    cleaned = {k: v for k, v in task_kwargs.items() if k != "cases_execute_config"}
+    return cleaned
+
+
 class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
     """自动化测试任务的 CRUD 服务，负责任务的增删改查及调度开关。"""
 
@@ -79,12 +89,25 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         super().__init__(model=AutoTestApiTaskInfo)
 
     @staticmethod
+    def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
+        for key in ("task_type", "task_periodic_expr", "last_execute_state"):
+            if key in data and data[key] is not None and hasattr(data[key], "value"):
+                data[key] = data[key].value
+        return data
+
+    @staticmethod
     def _apply_related_env_ids(task_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """根据 cases_execute_config / task_kwargs 同步汇总 related_cases_env_id。"""
+        """根据 cases_execute_config 汇总 related_cases_env_id，并规范化 task_kwargs。"""
+        if "task_kwargs" in task_dict:
+            task_dict["task_kwargs"] = normalize_task_kwargs(task_dict.get("task_kwargs"))
         cases_cfg = resolve_cases_execute_config(task_dict)
         if cases_cfg is not None:
             task_dict["cases_execute_config"] = cases_cfg
             task_dict["related_cases_env_id"] = extract_related_cases_env_ids(cases_cfg)
+            # 若仅从旧嵌套读取到配置，写回顶层后从 kwargs 去掉嵌套
+            kwargs = task_dict.get("task_kwargs")
+            if isinstance(kwargs, dict) and "cases_execute_config" in kwargs:
+                task_dict["task_kwargs"] = normalize_task_kwargs(kwargs)
         return task_dict
 
     async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
@@ -153,11 +176,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
         try:
             task_dict: Dict[str, Any] = task_in.model_dump(exclude_none=True, exclude_unset=True)
-            if "task_periodic_expr" in task_dict and task_dict["task_periodic_expr"] is not None:
-                task_dict["task_periodic_expr"] = task_dict["task_periodic_expr"].value
-            if "last_execute_state" in task_dict and task_dict["last_execute_state"] is not None:
-                task_dict["last_execute_state"] = task_dict["last_execute_state"].value
-            # 新增时同步写入更新人，便于列表「更新人员」展示
+            task_dict = self._dump_enum_fields(task_dict)
             if task_dict.get("created_user") and not task_dict.get("updated_user"):
                 task_dict["updated_user"] = task_dict["created_user"]
             task_dict = self._apply_related_env_ids(task_dict)
@@ -190,11 +209,9 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             exclude_unset=True,
             exclude={"task_id", "task_code"}
         )
-        if "task_periodic_expr" in update_dict and update_dict["task_periodic_expr"] is not None:
-            update_dict["task_periodic_expr"] = update_dict["task_periodic_expr"].value
-        if "last_execute_state" in update_dict and update_dict["last_execute_state"] is not None:
-            update_dict["last_execute_state"] = update_dict["last_execute_state"].value
-        # 汇总涉及环境：优先用本次提交的配置，否则回退到库中已有配置
+        update_dict = self._dump_enum_fields(update_dict)
+        if "task_kwargs" in update_dict:
+            update_dict["task_kwargs"] = normalize_task_kwargs(update_dict.get("task_kwargs"))
         merged_for_env = {
             "task_kwargs": update_dict.get("task_kwargs", instance.task_kwargs),
             "cases_execute_config": update_dict.get(

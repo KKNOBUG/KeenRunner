@@ -56,7 +56,7 @@ function createEmptyForm() {
     task_code: null,
     task_name: '',
     task_desc: '',
-    task_type: 'autotest',
+    task_type: 'autotest_api',
     task_project: null,
     task_notify: null,
     task_notifier: [],
@@ -258,11 +258,16 @@ async function loadTaskDetail(taskId) {
       task_code: d.task_code || null,
       task_name: d.task_name || '',
       task_desc: d.task_desc || '',
-      task_type: d.task_type || 'autotest',
+      task_type: d.task_type || 'autotest_api',
       task_project: d.task_project ?? null,
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
-      task_kwargs: { ...taskKwargs, case_ids: caseIds },
+      task_kwargs: {
+        case_ids: caseIds,
+        ...(Array.isArray(taskKwargs.initial_variables)
+          ? { initial_variables: taskKwargs.initial_variables }
+          : {}),
+      },
       task_crontabs_expr: d.task_crontabs_expr || '',
       task_periodic_expr: d.task_periodic_expr || '执行N次',
     }
@@ -370,19 +375,21 @@ async function handleSubmit() {
 
   modalLoading.value = true
   try {
-    const taskKwargsPayload = {
-      ...(taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object'
+    const prevKwargs =
+      taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object'
         ? taskForm.value.task_kwargs
-        : {}),
+        : {}
+    const taskKwargsPayload = {
       case_ids: caseIds,
-      cases_execute_config: casesCfgPayload,
     }
-    delete taskKwargsPayload.env_name
+    if (Array.isArray(prevKwargs.initial_variables)) {
+      taskKwargsPayload.initial_variables = prevKwargs.initial_variables
+    }
 
     const payload = {
       task_name: taskForm.value.task_name.trim(),
       task_desc: taskForm.value.task_desc || null,
-      task_type: 'autotest',
+      task_type: taskForm.value.task_type || 'autotest_api',
       task_project: taskForm.value.task_project,
       task_notify: Array.isArray(taskForm.value.task_notify) ? taskForm.value.task_notify : null,
       task_notifier: Array.isArray(taskForm.value.task_notifier) ? taskForm.value.task_notifier : null,

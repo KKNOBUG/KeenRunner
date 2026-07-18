@@ -84,6 +84,10 @@ from .celery_base import (
 )
 
 _async_event_loop_pool = None
+# 扫描任务不写执行记录、不走终态更新
+_SCAN_TASK_NAME = (
+    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
+)
 
 
 @worker_process_init.connect
@@ -123,13 +127,10 @@ async def _ensure_tortoise_then_create_task_record(
         celery_trace_id: str,
         task_id: str,
         celery_task_name: str,
+        trigger_type=None,
+        report_type=None,
 ):
-    """
-    在同一协程内先 init Tortoise 再写执行记录，保证「连接池创建」与「使用连接池写记录」在
-    同一次 run()、同一个 event loop 中完成，从而避免 aiomysql Pool._wakeup 等 Future 绑定到
-    与当前运行 loop 不一致的 loop（"Task got Future attached to a different loop"）。
-    执行顺序：await init_tortoise_orm() → await _create_task_record(...)。
-    """
+    """同一协程内先 init Tortoise 再写执行记录，保证同 loop。"""
     await init_tortoise_orm()
     await _create_task_record(
         celery_id=celery_id,
@@ -137,7 +138,43 @@ async def _ensure_tortoise_then_create_task_record(
         celery_trace_id=celery_trace_id,
         task_id=task_id,
         celery_task_name=celery_task_name,
+        trigger_type=trigger_type,
+        report_type=report_type,
     )
+
+
+def _resolve_trigger_and_report(task: Task):
+    """从 Celery request 解析触发来源与报告类型。"""
+    from backend.enums import AutoTestReportType, AutoTestTaskTriggerType
+
+    req_kwargs = getattr(task.request, "kwargs", None) or {}
+    report_type = req_kwargs.get("report_type")
+    if report_type is None:
+        args = getattr(task.request, "args", None) or ()
+        if len(args) >= 2:
+            report_type = args[1]
+    report_val = getattr(report_type, "value", report_type)
+    is_manual = (
+        report_type == AutoTestReportType.ASYNC_EXEC
+        or (isinstance(report_val, str) and report_val.strip() == AutoTestReportType.ASYNC_EXEC.value)
+    )
+    if is_manual:
+        return AutoTestTaskTriggerType.MANUAL, AutoTestReportType.ASYNC_EXEC
+    return AutoTestTaskTriggerType.SCHEDULE, AutoTestReportType.SCHEDULE_EXEC
+
+
+def _to_jsonable(value: Any) -> Any:
+    """将任意对象转为可 JSON 落库结构（保留完整内容）。"""
+    import json
+
+    if value is None:
+        return None
+    if isinstance(value, (dict, list, str, int, float, bool)):
+        try:
+            return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+        except Exception:
+            return {"raw": str(value)}
+    return {"raw": str(value)}
 
 
 async def _create_task_record(
@@ -146,60 +183,72 @@ async def _create_task_record(
         celery_trace_id: str,
         task_id: str,
         celery_task_name: str,
+        trigger_type=None,
+        report_type=None,
 ):
-    """
-    创建任务执行记录（状态 RUNNING），由 _ensure_tortoise_then_create_task_record 或事件循环池调用。
-    :param celery_id: 对应 celery_id
-    :param celery_node: 调度节点（Celery 任务完全限定名，如 run_autotest_task）
-    :param celery_trace_id: 对应 celery_trace_id（调度回溯ID）
-    :param task_id: 对应 task_id（任务信息表主键，来自 __task_id，可为空）
-    :param celery_task_name: Celery 任务完全限定名，用于判断是否从业务任务表取 task_name/case_ids
-    """
+    """创建任务执行观测记录（RUNNING），并写入完整执行入参快照。"""
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
     from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
-    from backend.enums import AutoTestTaskStatus, AutoTestTaskScheduler
-    task_name: Optional[str] = None
-    task_kwargs: Dict[str, Any] = {}
-    celery_scheduler: Optional[str] = None
-    # task_id 来自 apply_async(..., __task_id=task_id)；未传 __task_id 时此处为 None，不查任务表，record 无 task_id/task_name。
-    if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
-        task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
-        if task_instance:
-            task_name = getattr(task_instance, "task_name", None)
-            task_kwargs = getattr(task_instance, "task_kwargs", None) or {}
-            # 任务表已移除 task_scheduler，统一 Cron 触发，执行记录记为 cron
-            celery_scheduler = AutoTestTaskScheduler.CRON
+    from backend.enums import AutoTestTaskStatus
+
+    report_val = getattr(report_type, "value", report_type)
     data: Dict[str, Any] = {
         "task_id": task_id,
-        "task_name": task_name,
-        "task_kwargs": task_kwargs,
         "celery_id": celery_id,
         "celery_node": celery_node,
         "celery_trace_id": celery_trace_id,
         "celery_status": AutoTestTaskStatus.RUNNING,
-        "celery_scheduler": celery_scheduler,
         "celery_start_time": datetime.now(),
+        "trigger_type": trigger_type,
+        "report_type": report_type,
     }
+    if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
+        task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
+        if task_instance:
+            kwargs = getattr(task_instance, "task_kwargs", None) or {}
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+            case_ids = kwargs.get("case_ids") if isinstance(kwargs.get("case_ids"), list) else []
+            cases_cfg = getattr(task_instance, "cases_execute_config", None) or {}
+            if not cases_cfg and isinstance(kwargs, dict):
+                cases_cfg = kwargs.get("cases_execute_config") or {}
+            periodic = getattr(task_instance, "task_periodic_expr", None)
+            data.update({
+                "task_code": getattr(task_instance, "task_code", None),
+                "task_name": getattr(task_instance, "task_name", None),
+                "task_type": getattr(task_instance, "task_type", None),
+                "task_project": getattr(task_instance, "task_project", None),
+                "case_ids": case_ids,
+                "exec_snapshot": _to_jsonable({
+                    "report_type": report_val,
+                    "task_kwargs": {
+                        "case_ids": case_ids,
+                        **(
+                            {"initial_variables": kwargs["initial_variables"]}
+                            if isinstance(kwargs.get("initial_variables"), list)
+                            else {}
+                        ),
+                    },
+                    "cases_execute_config": cases_cfg if isinstance(cases_cfg, dict) else {},
+                    "task_crontabs_expr": getattr(task_instance, "task_crontabs_expr", None),
+                    "task_periodic_expr": getattr(periodic, "value", periodic),
+                    "task_enabled": getattr(task_instance, "task_enabled", None),
+                }),
+            })
     await AutoTestApiTaskRecordCrud().create_record(data)
     LOGGER.info(
-        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, 已更新[celery_id={celery_id}]记录"
+        f"【Krun-Celery-Worker】【span_id={get_span_id()}】创建执行记录成功, celery_id={celery_id}"
     )
 
 
 async def _update_task_record_on_end(
         celery_id: str,
         success: bool,
-        result_or_error: str,
+        task_summary: Any = None,
         traceback_str: str = None,
+        batch_code: str = None,
 ):
-    """
-    将任务执行记录更新为终态（SUCCESS/FAILURE），由 on_success/on_failure 通过事件循环池调用。
-
-    :param celery_id: Celery 任务 ID
-    :param success: 是否成功
-    :param result_or_error: 结果或错误摘要
-    :param traceback_str: 失败时的堆栈（可选）
-    """
+    """将执行记录更新为终态；task_summary 保存完整响应对象。"""
     if not celery_id:
         return
     from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
@@ -207,13 +256,20 @@ async def _update_task_record_on_end(
 
     now = datetime.now()
     status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE
-    summary = (result_or_error or "").strip() or ""
+    summary_obj = _to_jsonable(task_summary)
+    error_text = None
+    if not success:
+        if isinstance(task_summary, dict) and task_summary.get("error"):
+            error_text = str(task_summary.get("error"))
+        error_text = traceback_str or error_text or "执行失败"
     data = {
         "celery_status": status_enum,
         "celery_end_time": now,
-        "task_summary": summary,
-        "task_error": None if success else (traceback_str or summary),
+        "task_summary": summary_obj,
+        "task_error": error_text,
     }
+    if batch_code:
+        data["batch_code"] = batch_code
     record_crud = AutoTestApiTaskRecordCrud()
     record = await record_crud.get_by_celery_id(celery_id=celery_id)
     if not record:
@@ -229,7 +285,7 @@ async def _update_task_record_on_end(
         data["celery_duration"] = f"{delta.total_seconds():.2f}s"
     await record_crud.update_record_by_celery_id(celery_id=celery_id, data=data)
     LOGGER.info(
-        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, 已更新[celery_id={celery_id}]记录"
+        f"【Krun-Celery-Worker】【span_id={get_span_id()}】更新执行记录成功, celery_id={celery_id}"
     )
 
 
@@ -249,12 +305,9 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
             f"task_name=[{task.name}], "
             f"celery_id=[{task.request.id}], "
         )
-        _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
         if task.name == _SCAN_TASK_NAME:
-            # 扫描任务：只做 Tortoise 初始化（一次 run(init_tortoise_orm())），不写执行记录
             ensure_tortoise_orm_initialized()
         else:
-            # 非扫描任务：单次 run( init → create_record )，保证 Tortoise 与写记录同一 loop
             try:
                 h = getattr(task.request, "headers", None) or {}
                 if isinstance(h, dict):
@@ -262,6 +315,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                 else:
                     celery_trace_id_val = ""
                 celery_node_val = (task.name or "").strip() or ""
+                trigger_type, report_type = _resolve_trigger_and_report(task)
                 get_async_event_loop_pool().run(
                     _ensure_tortoise_then_create_task_record(
                         task_id=task_id,
@@ -269,6 +323,8 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                         celery_node=celery_node_val,
                         celery_trace_id=celery_trace_id_val,
                         celery_task_name=task.name,
+                        trigger_type=trigger_type,
+                        report_type=report_type,
                     )
                 )
             except Exception as e:
@@ -357,17 +413,23 @@ def create_celery():
                 args, kwargs, task_id, producer, link, link_error, shadow, **options
             )
 
-        def handel_task_record(self, success: bool, result_or_error: str, traceback_str: str = None):
-            """在同步回调中通过事件循环池更新任务记录为 SUCCESS/FAILURE，扫描任务不更新。"""
-            _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
+        def handel_task_record(
+            self,
+            success: bool,
+            task_summary: Any = None,
+            traceback_str: str = None,
+            batch_code: str = None,
+        ):
+            """更新观测记录终态；task_summary 为完整响应对象；扫描任务跳过。"""
             if self.request.id and self.name != _SCAN_TASK_NAME:
                 try:
                     get_async_event_loop_pool().run(
                         _update_task_record_on_end(
                             celery_id=self.request.id,
                             success=success,
-                            result_or_error=result_or_error or "",
+                            task_summary=task_summary,
                             traceback_str=traceback_str,
+                            batch_code=batch_code,
                         )
                     )
                 except Exception as e:
@@ -380,24 +442,17 @@ def create_celery():
                     )
 
         def on_success(self, retval, task_id, args, kwargs):
-            """Celery-Worker 任务执行成功时回调，更新执行记录为: SUCCESS"""
+            """任务成功：完整响应写入 task_summary（对象），并回写 batch_code。"""
             LOGGER.info(
                 f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行成功: task_id=[{task_id}]"
             )
-            # 字典结果落库为 JSON，便于历史页按 batch_code 关联脚本报告
-            if isinstance(retval, dict):
-                try:
-                    import json
-                    summary = json.dumps(retval, ensure_ascii=False, default=str)
-                except Exception:
-                    summary = str(retval)
-            else:
-                summary = str(retval) if retval is not None else ""
-            self.handel_task_record(True, summary)
+            batch_code = retval.get("batch_code") if isinstance(retval, dict) else None
+            summary = retval if retval is not None else {"success": True}
+            self.handel_task_record(True, summary, batch_code=batch_code)
             return super(ContextTask, self).on_success(retval, task_id, args, kwargs)
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):
-            """Celery-Worker 任务执行失败时回调，更新执行记录为: FAILURE"""
+            """任务失败：完整错误对象写入 task_summary，堆栈写入 task_error。"""
             LOGGER.error(
                 f"【Krun-Celery-Worker】【span_id={get_span_id()}】任务执行失败: "
                 f"task_id=[{task_id}], "
@@ -405,7 +460,16 @@ def create_celery():
                 f"错误描述: {str(exc)}, \n"
                 f"错误回溯: {einfo.traceback}"
             )
-            self.handel_task_record(False, str(exc) if exc else "", getattr(einfo, "traceback", None) or "")
+            summary = {
+                "success": False,
+                "error": str(exc) if exc else "执行失败",
+                "error_type": type(exc).__name__ if exc else None,
+            }
+            self.handel_task_record(
+                False,
+                summary,
+                traceback_str=getattr(einfo, "traceback", None) or "",
+            )
             return super(ContextTask, self).on_failure(exc, task_id, args, kwargs, einfo)
 
         def __call__(self, *args, **kwargs):

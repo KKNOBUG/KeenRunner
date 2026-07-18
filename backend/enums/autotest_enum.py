@@ -82,11 +82,15 @@ class AutoTestAssertionOperation(StringEnum):
     IS_EMPTY = "为空"
 
 
-class AutoTestTaskScheduler(StringEnum):
-    """任务执行记录等处仍可能引用；任务表已不再使用 interval/datetime 模式。"""
-    CRON = "cron"
-    INTERVAL = "interval"
-    DATETIME = "datetime"
+class AutoTestTaskType(StringEnum):
+    """任务业务类型：扫描过滤与扩展路由均按此枚举区分。"""
+    AUTOTEST_API = "autotest_api"
+
+
+class AutoTestTaskTriggerType(StringEnum):
+    """任务触发来源：记录表用于区分手动执行与定时扫描。"""
+    MANUAL = "手动执行"
+    SCHEDULE = "定时执行"
 
 
 class AutoTestTaskPeriodicSwitch(StringEnum):
