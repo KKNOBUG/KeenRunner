@@ -394,14 +394,14 @@ const columns = computed(() => {
   {
     title: '任务名称',
     key: 'task_name',
-    width: 150,
+    width: 300,
     align: 'center',
     ellipsis: {tooltip: true},
   },
   {
     title: '任务描述',
     key: 'task_desc',
-    width: 150,
+    width: 300,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -411,7 +411,7 @@ const columns = computed(() => {
   {
     title: '所属应用',
     key: 'task_project',
-    width: 120,
+    width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -422,7 +422,7 @@ const columns = computed(() => {
   {
     title: '启动状态',
     key: 'task_enabled',
-    width: 90,
+    width: 100,
     align: 'center',
     render(row) {
       return h('span', {class: row.task_enabled ? 'text-success' : 'text-secondary'}, row.task_enabled ? '已启动' : '未启动')
@@ -442,7 +442,7 @@ const columns = computed(() => {
   {
     title: '最后执行结果',
     key: 'last_execute_state',
-    width: 110,
+    width: 100,
     align: 'center',
     render(row) {
       const v = row.last_execute_state
@@ -464,7 +464,7 @@ const columns = computed(() => {
     {
       title: '最后执行时间',
       key: 'last_execute_time',
-      width: 150,
+      width: 180,
       align: 'center',
       render(row) {
         const val = row.last_execute_time
@@ -476,7 +476,7 @@ const columns = computed(() => {
   {
     title: '更新人员',
     key: 'updated_user',
-    width: 100,
+    width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -486,7 +486,7 @@ const columns = computed(() => {
   {
     title: '更新时间',
     key: 'updated_time',
-    width: 150,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.updated_time) || '-')
@@ -495,7 +495,7 @@ const columns = computed(() => {
   {
     title: '创建人员',
     key: 'created_user',
-    width: 100,
+    width: 150,
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
@@ -505,7 +505,7 @@ const columns = computed(() => {
   {
     title: '创建时间',
     key: 'created_time',
-    width: 150,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', formatDateTime(row.created_time) || '-')
@@ -519,6 +519,25 @@ const columns = computed(() => {
     fixed: 'right',
     render(row) {
       const dropdownOptions = [
+        row.task_enabled
+          ? {
+              label: '停止',
+              key: 'stop',
+              icon: renderIcon('material-symbols:stop-circle-outline', {size: 16}),
+              onClick: () => handleStopTask(row),
+            }
+          : {
+              label: '启动',
+              key: 'start',
+              icon: renderIcon('material-symbols:play-circle-outline', {size: 16}),
+              onClick: () => handleStartTask(row),
+            },
+        {
+          label: '编辑',
+          key: 'edit',
+          icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+          onClick: () => openEdit(row),
+        },
         {
           label: '日志',
           key: 'log',
@@ -552,46 +571,6 @@ const columns = computed(() => {
             {
               default: () => '执行',
               icon: renderIcon('material-symbols:play-arrow', {size: 16}),
-            },
-        ),
-        row.task_enabled
-            ? h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'error',
-                  onClick: () => handleStopTask(row),
-                },
-                {
-                  default: () => '停止',
-                  icon: renderIcon('material-symbols:stop-circle-outline', {size: 16}),
-                },
-            )
-            : h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'success',
-                  onClick: () => handleStartTask(row),
-                },
-                {
-                  default: () => '启动',
-                  icon: renderIcon('material-symbols:play-circle-outline', {size: 16}),
-                },
-            ),
-        h(
-            NButton,
-            {
-              size: 'tiny',
-              quaternary: true,
-              type: 'info',
-              onClick: () => openEdit(row),
-            },
-            {
-              default: () => '编辑',
-              icon: renderIcon('material-symbols:edit-outline', {size: 16}),
             },
         ),
         h(
@@ -641,7 +620,7 @@ onMounted(() => {
         :columns="columns"
         :get-data="api.getApiTaskList"
         row-key="task_id"
-        :scroll-x="2600"
+        :scroll-x="2100"
         :single-line="true"
         @query-bar-create="openAdd"
         @query-bar-delete="handleBatchDelete"

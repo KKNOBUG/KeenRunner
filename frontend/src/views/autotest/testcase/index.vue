@@ -1,7 +1,7 @@
 <script setup>
-import {h, onMounted, ref, resolveDirective, withDirectives, computed, watch} from 'vue'
+import {h, onMounted, ref, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NInput, NPopconfirm, NSelect, NPopover, NList, NListItem, NTag, NTooltip} from 'naive-ui'
+import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
@@ -21,7 +21,6 @@ const $table = ref(null)
 const queryItems = ref({
   case_tags: [] // 初始化为空数组
 })
-const vPermission = resolveDirective('permission')
 
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
@@ -130,6 +129,41 @@ const historyCaseRow = ref(null)
 function openHistoryDrawer(row) {
   historyCaseRow.value = row || null
   historyDrawerVisible.value = true
+}
+
+function openCaseEdit(row) {
+  const query = {
+    case_id: row.case_id,
+    case_info: JSON.stringify(row),
+  }
+  if (row.case_code) {
+    query.case_code = row.case_code
+  }
+  const targetPath = (() => {
+    const match = (row.case_id != null && row.case_id !== '')
+        ? tagsStore.tags.find((t) => {
+          if (!t.path.startsWith('/autotest/steps')) return false
+          const cid = getCaseIdFromPath(t.path)
+          return cid != null && String(cid) === String(row.case_id)
+        })
+        : row.case_code
+            ? tagsStore.tags.find((t) => {
+              if (!t.path.startsWith('/autotest/steps')) return false
+              const code = getCaseCodeFromPath(t.path)
+              return code != null && String(code) === String(row.case_code)
+            })
+            : null
+    return match ? match.path : null
+  })()
+  if (targetPath) {
+    router.push(targetPath)
+  } else {
+    router.push({path: '/autotest/steps', query})
+  }
+}
+
+function hasCaseApiPermission(method, path) {
+  return userStore.isSuperUser || permissionStore.apis.includes(apiPermissionKey(method, path))
 }
 
 /**
@@ -370,7 +404,7 @@ const columns = computed(() => {
     {
       title: '序号',
       key: '__seq',
-      width: 64,
+      width: 50,
       align: 'center',
       fixed: 'left',
       render(_row, rowIndex) {
@@ -405,8 +439,16 @@ const columns = computed(() => {
       ellipsis: {tooltip: true},
     },
     {
+      title: '用例描述',
+      key: 'case_desc',
+      width: 300,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
       title: '用例属性',
       key: 'case_attr',
+      width: 100,
       align: 'center',
       ellipsis: {tooltip: true},
       render(row) {
@@ -427,22 +469,24 @@ const columns = computed(() => {
     {
       title: '用例步骤',
       key: 'case_steps',
+      width: 100,
       align: 'center',
       ellipsis: {tooltip: true},
     },
     {
       title: '用例版本',
       key: 'case_version',
+      width: 100,
       align: 'center',
       ellipsis: {tooltip: true},
     },
     {
       title: '所属应用',
       key: 'case_project',
+      width: 150,
       align: 'center',
       ellipsis: {tooltip: true},
       render(row) {
-        // case_project 现在是对象，显示 project_name
         return h('span', row.case_project?.project_name || '')
       },
     },
@@ -455,6 +499,23 @@ const columns = computed(() => {
         return renderCaseTagsCompact(row)
       },
     },
+
+    {
+      title: '更新人员',
+      key: 'updated_user',
+      width: 150,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
+      title: '更新时间',
+      key: 'updated_time',
+      width: 180,
+      align: 'center',
+      render(row) {
+        return h('span', formatDateTime(row.updated_time))
+      },
+    },
     {
       title: '创建人员',
       key: 'created_user',
@@ -463,34 +524,55 @@ const columns = computed(() => {
       ellipsis: {tooltip: true},
     },
     {
-      title: '更新人员',
-      key: 'updated_user',
-      align: 'center',
-      ellipsis: {tooltip: true},
-    },
-    {
       title: '创建时间',
       key: 'created_time',
+      width: 180,
       align: 'center',
       render(row) {
         return h('span', formatDateTime(row.created_time))
       },
     },
     {
-      title: '更新时间',
-      key: 'updated_time',
-      align: 'center',
-      render(row) {
-        return h('span', formatDateTime(row.updated_time))
-      },
-    },
-    {
       title: '操作',
       key: 'actions',
-      width: 180,
+      width: 80,
       align: 'center',
       fixed: 'right',
       render(row) {
+        const dropdownOptions = []
+        if (hasCaseApiPermission('post', '/autotest/case/update')) {
+          dropdownOptions.push({
+            label: '编辑',
+            key: 'edit',
+            icon: renderIcon('material-symbols:edit-outline', {size: 16}),
+            onClick: () => openCaseEdit(row),
+          })
+        }
+        dropdownOptions.push({
+          label: '复制',
+          key: 'copy',
+          icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+          disabled: copyLoading.value,
+          onClick: () => handleCopyCase(row),
+        })
+        dropdownOptions.push({
+          label: '历史',
+          key: 'history',
+          icon: renderIcon('material-symbols:history', {size: 16}),
+          onClick: () => openHistoryDrawer(row),
+        })
+        if (hasCaseApiPermission('delete', '/autotest/case/delete')) {
+          dropdownOptions.push({
+            label: '删除',
+            key: 'delete',
+            icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+            onClick: () => {
+              if (window.confirm('确定删除该用例吗?')) {
+                handleDelete({case_id: row.case_id}, false)
+              }
+            },
+          })
+        }
         return [
           h(
               NButton,
@@ -507,107 +589,32 @@ const columns = computed(() => {
                 icon: renderIcon('material-symbols:play-arrow', {size: 16}),
               }
           ),
-          withDirectives(
-              h(
-                  NButton,
-                  {
-                    size: 'tiny',
-                    quaternary: true,
-                    type: 'info',
-                    onClick: () => {
-                      // 将完整的用例信息通过query传递（使用JSON字符串）
-                      const query = {
-                        case_id: row.case_id,
-                        case_info: JSON.stringify(row) // 将整条用例信息对象转换为JSON字符串
-                      }
-                      if (row.case_code) {
-                        query.case_code = row.case_code
-                      }
-                      // 若已有同用例的步骤编辑页签，则激活该页签；否则新建
-                      const targetPath = (() => {
-                        const match = (row.case_id != null && row.case_id !== '')
-                            ? tagsStore.tags.find((t) => {
-                              if (!t.path.startsWith('/autotest/steps')) return false
-                              const cid = getCaseIdFromPath(t.path)
-                              return cid != null && String(cid) === String(row.case_id)
-                            })
-                            : row.case_code
-                                ? tagsStore.tags.find((t) => {
-                                  if (!t.path.startsWith('/autotest/steps')) return false
-                                  const code = getCaseCodeFromPath(t.path)
-                                  return code != null && String(code) === String(row.case_code)
-                                })
-                                : null
-                        return match ? match.path : null
-                      })()
-                      if (targetPath) {
-                        router.push(targetPath)
-                      } else {
-                        router.push({path: '/autotest/steps', query})
-                      }
-                    },
-                  },
-                  {
-                    default: () => '编辑',
-                    icon: renderIcon('material-symbols:edit-outline', {size: 16}),
-                  }
-              ),
-              [[vPermission, apiPermissionKey('post', '/autotest/case/update')]]
-
-          ),
           h(
-              NButton,
+              NDropdown,
               {
-                size: 'tiny',
-                quaternary: true,
-                type: 'warning',
-                loading: copyLoading.value,
-                disabled: copyLoading.value,
-                onClick: () => handleCopyCase(row),
+                trigger: 'click',
+                options: dropdownOptions.map((opt) => ({
+                  label: opt.label,
+                  key: opt.key,
+                  icon: opt.icon,
+                  disabled: opt.disabled,
+                })),
+                onSelect: (key) => dropdownOptions.find((o) => o.key === key)?.onClick?.(),
               },
               {
-                default: () => '复制',
-                icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
-              }
-          ),
-          h(
-              NButton,
-              {
-                size: 'tiny',
-                quaternary: true,
-                type: 'info',
-                onClick: () => openHistoryDrawer(row),
-              },
-              {
-                default: () => '历史',
-                icon: renderIcon('material-symbols:history', {size: 16}),
-              }
-          ),
-          h(
-              NPopconfirm,
-              {
-                onPositiveClick: () => handleDelete({case_id: row.case_id}, false),
-                onNegativeClick: () => {
-                },
-              },
-              {
-                trigger: () =>
-                    withDirectives(
-                        h(
-                            NButton,
-                            {
-                              size: 'tiny',
-                              quaternary: true,
-                              type: 'error',
-                            },
-                            {
-                              default: () => '删除',
-                              icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-                            }
-                        ),
-                        [[vPermission, apiPermissionKey('delete', '/autotest/case/delete')]]
+                default: () =>
+                    h(
+                        NButton,
+                        {
+                          size: 'tiny',
+                          quaternary: true,
+                          type: 'default',
+                        },
+                        {
+                          default: () => '更多',
+                          icon: renderIcon('material-symbols:more-horiz', {size: 16}),
+                        }
                     ),
-                default: () => h('div', {}, '确定删除该用例吗?'),
               }
           ),
         ]
@@ -632,7 +639,7 @@ const columns = computed(() => {
         :columns="columns"
         :get-data="api.getApiTestcaseList"
         :row-key="'case_id'"
-        :scroll-x="2112"
+        :scroll-x="2100"
         :single-line="true"
         @pagination-meta="onListPaginationMeta"
         @query-bar-create="customHandleAdd"
