@@ -2,13 +2,12 @@
   <AppPage>
     <CaseInfoPanel
         ref="caseInfoPanelRef"
-        :run-loading="runLoading"
         :debug-loading="debugLoading"
         :save-loading="saveLoading"
         @case-type-change="onCaseTypeChange"
-        @run="handleRun"
         @debug="handleDebug"
         @save="handleSaveAll"
+        @history="openCaseHistory"
     />
     <div class="page-container">
       <div class="steps-split-layout">
@@ -186,8 +185,13 @@
 
     <ExecConfigModal
         ref="execConfigModalRef"
-        v-model:run-loading="runLoading"
         v-model:debug-loading="debugLoading"
+    />
+
+    <CaseHistoryDrawer
+        v-model:show="historyDrawerVisible"
+        :case-row="historyCaseRow"
+        :single-dataset-only="true"
     />
   </AppPage>
 </template>
@@ -197,7 +201,7 @@
  * index.vue — API 自动化「步骤编辑」页编排层
  *
  * 本文件：左侧步骤树、右侧动态编辑器、步骤树 CRUD、前后端映射、保存/加载。
- * CaseInfoPanel：用例信息；ExecConfigModal：执行/调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
+ * CaseInfoPanel：用例信息；ExecConfigModal：调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
 defineOptions({ name: '步骤编辑' })
 import {computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
@@ -221,6 +225,7 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import {formatDateTime, renderIcon} from '@/utils'
 import AppPage from "@/components/page/AppPage.vue";
 import CaseInfoPanel from './components/CaseInfoPanel.vue'
+import CaseHistoryDrawer from '@/views/autotest/testcase/components/CaseHistoryDrawer.vue'
 import ScriptSelectDrawer from './components/ScriptSelectDrawer.vue'
 import ExecConfigModal from './components/ExecConfigModal.vue'
 import AddStepPopover from './components/AddStepPopover.vue'
@@ -237,7 +242,6 @@ import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import api from "@/api";
 import { mapBackendStep, forEachStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
-import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
 import {useUserStore, useAutotestStore} from '@/store'
 import { validateAssertList, validateExtractList } from '@/utils/autotestExtractAssert';
 
@@ -744,10 +748,21 @@ const onCaseTypeChange = ({ newType, oldType }) => {
   }
 }
 
-const runLoading = ref(false)
 const debugLoading = ref(false)
 const saveLoading = ref(false)
-const { runSavedCase } = useAutotestSavedCaseRun(execConfigModalRef, runLoading)
+
+const historyDrawerVisible = ref(false)
+const historyCaseRow = ref(null)
+
+function openCaseHistory() {
+  const id = caseId.value
+  if (id == null || id === '') {
+    window.$message?.warning?.('请先保存用例后再查看历史')
+    return
+  }
+  historyCaseRow.value = { case_id: Number(id) }
+  historyDrawerVisible.value = true
+}
 
 /** 与后端 AutoTestStepTreeExecute.case_id 一致：优先路由 case_id，否则从步骤树 original 递归解析 */
 const resolveNumericCaseIdForExecuteApi = () => {
@@ -1911,20 +1926,6 @@ const handleSaveAll = async () => {
   } finally {
     saveLoading.value = false
   }
-}
-
-/** 执行：拉取已保存步骤树，打开执行配置弹窗（与用例列表「执行」共用逻辑） */
-const handleRun = async () => {
-  if (!caseId.value && !caseCode.value) {
-    window.$message?.warning?.('请先选择或创建测试用例')
-    return
-  }
-  await runSavedCase({
-    caseId: caseId.value,
-    caseCode: caseCode.value,
-    projectOptions: editorProjectOptions.value,
-    executeType: '异步执行',
-  })
 }
 
 /** 调试：校验当前步骤树后打开调试配置弹窗 */

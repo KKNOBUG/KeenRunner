@@ -1,11 +1,11 @@
 <!--
   ExecConfigModal — 执行 / 调试前的「脚本执行配置」弹窗
 
-  由 index.vue 调用：
-  - openRun(ctx)  — 使用已保存步骤树（handleRun 重新请求后端后传入）
-  - openDebug(ctx) — 使用当前编辑中的 steps（handleDebug 传入 buildDebugExecutePayload）
+  由父页面调用：
+  - openRun(ctx)  — 使用已保存步骤树（用例列表「执行」等入口）
+  - openDebug(ctx) — 使用当前编辑中的 steps（步骤编辑页 handleDebug）
 
-  运行确认后调用 api.executeStepTree；execute_type 由 openRun(ctx).executeType 传入（步骤编辑：异步执行；用例列表：定时执行）。
+  运行确认后调用 api.executeStepTree；execute_type 由 openRun(ctx).executeType 传入（用例列表：定时执行）。
 -->
 <template>
   <n-modal
@@ -53,7 +53,7 @@
  *   - quoteStepsMap: 引用步骤内 HTTP/TCP/DB 也要参与聚合
  *   - projectOptions: 应用 id → 名称，左侧应用列表展示
  *   - resolveCaseId: () => number | null，执行/调试 payload 的 case_id
- *   - executeType: 执行类型枚举值（异步执行 / 定时执行 等），对应后端 execute_type
+ *   - executeType: 执行类型枚举值（定时执行 等），对应后端 execute_type
  *   - ensureQuoteStepsLoaded: 仅 debug，打开前 await 加载 quoteStepsMap
  *   - buildDebugExecutePayload(step_exec_config_map, datasetPart): 调试专用请求体
  *
@@ -1064,7 +1064,7 @@ const doExecuteFromSavedTree = async (_env_name, step_exec_config_map = null) =>
           : undefined
   runLoading.value = true
   try {
-    const executeType = execCtx.value?.executeType || '异步执行'
+    const executeType = execCtx.value?.executeType || '定时执行'
     const payload = {
       case_id: cid,
       execute_type: executeType,

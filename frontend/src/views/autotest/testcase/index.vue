@@ -437,6 +437,34 @@ const columns = computed(() => {
       width: 300,
       align: 'center',
       ellipsis: {tooltip: true},
+      render(row) {
+        const name = row.case_name || ''
+        if (!hasCaseApiPermission('post', '/autotest/case/update')) {
+          return name
+        }
+        return h(
+            'a',
+            {
+              href: 'javascript:void(0)',
+              title: name,
+              style: {
+                display: 'inline-block',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: '#2080f0',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              },
+              onClick: (e) => {
+                e.preventDefault()
+                openCaseEdit(row)
+              },
+            },
+            name
+        )
+      },
     },
     {
       title: '用例描述',

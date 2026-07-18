@@ -1,5 +1,5 @@
 /**
- * 已保存用例「执行」：拉取步骤树、加载引用脚本、打开 ExecConfigModal（与 steps/index handleRun 一致）
+ * 已保存用例「执行」：拉取步骤树、加载引用脚本、打开 ExecConfigModal（用例列表等入口）
  */
 import api from '@/api'
 import { forEachStep, mapBackendStep } from './stepTreeMap'
@@ -58,7 +58,7 @@ export async function loadQuoteStepsForList(list, quoteStepsMap) {
 /**
  * @param {import('vue').Ref} execConfigModalRef ExecConfigModal 组件 ref
  * @param {{ caseId?: *, caseCode?: string, projectOptions?: Array, executeType?: string }} options
- * @param executeType 后端 execute_type：步骤编辑页「异步执行」；用例列表「定时执行」
+ * @param executeType 后端 execute_type：用例列表一般为「定时执行」
  */
 export async function openSavedCaseExecModal(
     execConfigModalRef,

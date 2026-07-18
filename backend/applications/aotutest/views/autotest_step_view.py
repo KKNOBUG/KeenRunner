@@ -1582,11 +1582,13 @@ async def execute_step_tree(
                 # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
                 if not selected_dataset_names:
                     # 普通单次执行（无选中数据集）
+                    batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                     result_data: Dict[str, Any] = await services.step_curd.execute_single_case(
                         case_id=case_id,
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
-                        report_type=AutoTestReportType.SYNC_EXEC
+                        report_type=AutoTestReportType.SYNC_EXEC,
+                        batch_code=batch_code,
                     )
                     total_steps: int = result_data.get("total_steps")
                     success_steps: int = result_data.get("success_steps")
@@ -1685,7 +1687,9 @@ async def execute_step_tree(
                 debug_dataset_name: str = selected_dataset_names[0]
             else:
                 debug_dataset_name: Optional[str] = None
-            engine = AutoTestStepExecutionEngine(save_report=True)
+            # 与 ASYNC_EXEC / SCHEDULE_EXEC 一致：调试落库报告写入 batch_code，供历史记录按批次聚合
+            batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+            engine = AutoTestStepExecutionEngine(save_report=True, batch_code=batch_code)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
                 case=case_info,
                 steps=all_root_steps,
@@ -1729,7 +1733,9 @@ async def execute_step_tree(
                 "results": [serialize_result(r) for r in results],
                 "logs": {str(k): v for k, v in logs.items()},
                 "session_variables": final_session_variables,
-                "saved_to_database": True
+                "saved_to_database": True,
+                "batch_code": batch_code,
+                "report_code": report_code,
             }
             return SuccessResponse(
                 message=f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, 失败{failed_steps}步, 成功率: {passed_ratio}%",

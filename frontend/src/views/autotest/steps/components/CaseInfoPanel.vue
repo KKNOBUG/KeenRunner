@@ -2,7 +2,7 @@
   CaseInfoPanel — 步骤编辑页顶部「用例信息」区
 
   与步骤子页（HTTP/TCP Request 等）同一实现：n-card + 左侧红边卡片样式。
-  职责：维护 caseForm；执行/调试/保存通过 emit 交给 index.vue。
+  职责：维护 caseForm；调试/保存/历史通过 emit 交给 index.vue。
 -->
 <template>
   <n-card
@@ -28,9 +28,9 @@
         </div>
         <div class="card-header-actions" @click.stop>
           <n-space :size="8" class="case-info-header-actions">
-            <n-button type="info" size="small" :loading="runLoading" @click="emit('run')">执行</n-button>
             <n-button type="primary" size="small" :loading="debugLoading" @click="emit('debug')">调试</n-button>
-            <n-button type="success" size="small" :loading="saveLoading" @click="emit('save')">保存</n-button>
+            <n-button type="info" size="small" :loading="saveLoading" @click="emit('save')">保存</n-button>
+            <n-button type="success" size="small" @click="emit('history')">历史</n-button>
           </n-space>
         </div>
       </div>
@@ -180,8 +180,8 @@
 /**
  * CaseInfoPanel.vue
  *
- * defineProps: runLoading / debugLoading / saveLoading
- * defineEmits: run / debug / save / case-type-change
+ * defineProps: debugLoading / saveLoading
+ * defineEmits: debug / save / history / case-type-change
  * defineExpose: caseForm, getCasePayload, validateCaseForm,
  *               hydrateFromStepTree, reloadFromRoute, projectOptions, projectLoading
  */
@@ -204,12 +204,11 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api'
 
 defineProps({
-  runLoading: { type: Boolean, default: false },
   debugLoading: { type: Boolean, default: false },
   saveLoading: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['run', 'debug', 'save', 'case-type-change'])
+const emit = defineEmits(['debug', 'save', 'history', 'case-type-change'])
 
 const route = useRoute()
 
@@ -455,7 +454,7 @@ defineExpose({
 }
 
 .card-header-row {
-  padding-right: 220px;
+  padding-right: 300px;
 }
 
 .case-info-header-actions :deep(.n-button) {
