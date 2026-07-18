@@ -4,13 +4,22 @@
         ref="caseInfoPanelRef"
         :debug-loading="debugLoading"
         :save-loading="saveLoading"
+        :tree-mode="treeMode"
         @case-type-change="onCaseTypeChange"
         @debug="handleDebug"
         @save="handleSaveAll"
         @history="openCaseHistory"
+        @request-tree-mode-change="handleTreeModeChange"
     />
     <div class="page-container">
-      <div class="steps-split-layout">
+      <StepSourceJsonPanel
+          v-if="!treeMode"
+          v-model="sourceJsonText"
+          :apply-loading="sourceJsonApplyLoading"
+          @reset="resetSourceJson"
+          @apply="applySourceJsonFromEditor"
+      />
+      <div v-else class="steps-split-layout">
         <div
             v-show="!leftPanelCollapsed"
             class="left-column"
@@ -225,6 +234,7 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import {formatDateTime, renderIcon} from '@/utils'
 import AppPage from "@/components/page/AppPage.vue";
 import CaseInfoPanel from './components/CaseInfoPanel.vue'
+import StepSourceJsonPanel from './components/StepSourceJsonPanel.vue'
 import CaseHistoryDrawer from '@/views/autotest/testcase/components/CaseHistoryDrawer.vue'
 import ScriptSelectDrawer from './components/ScriptSelectDrawer.vue'
 import ExecConfigModal from './components/ExecConfigModal.vue'
@@ -242,6 +252,13 @@ import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import api from "@/api";
 import { mapBackendStep, forEachStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
+import {
+  createEmptyStepTreePayloadTemplate,
+  isJsonTextEqual,
+  parseAndValidateStepTreePayload,
+  stringifyStepTreePayload,
+  stripIdentityFieldsForNewCase,
+} from './utils/stepSourceJson'
 import {useUserStore, useAutotestStore} from '@/store'
 import { validateAssertList, validateExtractList } from '@/utils/autotestExtractAssert';
 
@@ -305,6 +322,12 @@ const router = useRouter()
 const autotestStore = useAutotestStore()
 const caseId = computed(() => route.query.case_id || null)
 const caseCode = computed(() => route.query.case_code || null)
+
+/**
+ * 源数据「应用」带入的用例标识（路由可能尚无 case_id/case_code）。
+ * 序列化 / 保存时优先路由，其次本字段，再次步骤树 original。
+ */
+const appliedCaseMeta = ref({ case_id: null, case_code: null })
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
@@ -751,6 +774,11 @@ const onCaseTypeChange = ({ newType, oldType }) => {
 const debugLoading = ref(false)
 const saveLoading = ref(false)
 
+/** true=步骤树模式（默认），false=源数据 JSON 模式 */
+const treeMode = ref(true)
+const sourceJsonText = ref('')
+const sourceJsonApplyLoading = ref(false)
+
 const historyDrawerVisible = ref(false)
 const historyCaseRow = ref(null)
 
@@ -764,10 +792,12 @@ function openCaseHistory() {
   historyDrawerVisible.value = true
 }
 
-/** 与后端 AutoTestStepTreeExecute.case_id 一致：优先路由 case_id，否则从步骤树 original 递归解析 */
+/** 与后端 AutoTestStepTreeExecute.case_id 一致：优先路由 case_id，否则已应用源数据，再从步骤树 original 递归解析 */
 const resolveNumericCaseIdForExecuteApi = () => {
   const fromRoute = toPositiveCaseId(caseId.value)
   if (fromRoute != null) return fromRoute
+  const fromApplied = toPositiveCaseId(appliedCaseMeta.value?.case_id)
+  if (fromApplied != null) return fromApplied
   return resolveCaseIdFromSteps(steps.value, null)
 }
 
@@ -1389,9 +1419,10 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.case = original.case
   } else {
     const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
+    const caseMeta = resolveCaseMetaForPayload()
     backendStep.case = {
-      case_id: caseId.value || null,
-      case_code: caseCode.value || null,
+      case_id: caseMeta.case_id,
+      case_code: caseMeta.case_code,
       ...casePayload,
     }
   }
@@ -1419,6 +1450,195 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
   }
 
   return cleanedStep
+}
+
+/** 解析用例 case_id / case_code：路由 > 已应用源数据 > 步骤树 original */
+const resolveCaseMetaForPayload = () => {
+  const fromRouteId = toPositiveCaseId(caseId.value)
+  const fromRouteCode = caseCode.value ? String(caseCode.value) : null
+  const fromAppliedId = toPositiveCaseId(appliedCaseMeta.value?.case_id)
+  const fromAppliedCode = appliedCaseMeta.value?.case_code
+      ? String(appliedCaseMeta.value.case_code)
+      : null
+
+  let fromStepsId = null
+  let fromStepsCode = null
+  forEachStep(steps.value, (s) => {
+    if (fromStepsId != null && fromStepsCode) return
+    const o = s?.original || {}
+    if (fromStepsId == null) {
+      fromStepsId = toPositiveCaseId(o.case_id ?? o.case?.case_id)
+    }
+    if (!fromStepsCode) {
+      const code = o.case_code ?? o.case?.case_code
+      if (code) fromStepsCode = String(code)
+    }
+  })
+
+  return {
+    case_id: fromRouteId ?? fromAppliedId ?? fromStepsId ?? null,
+    case_code: fromRouteCode || fromAppliedCode || fromStepsCode || null,
+  }
+}
+
+/** 构建与 update_or_create_tree 一致的 { case, steps }（内存步骤树序列化） */
+const buildUpdateOrCreateTreePayload = () => {
+  const isNewCasePage = toPositiveCaseId(caseId.value) == null && !caseCode.value
+  const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
+  const countTotalSteps = (list) => {
+    let count = 0
+    for (const step of list || []) {
+      count++
+      if (step.children?.length) count += countTotalSteps(step.children)
+    }
+    return count
+  }
+  const totalSteps = countTotalSteps(steps.value)
+
+  let caseInfo
+  if (isNewCasePage) {
+    // 新建：case_id / case_code 置 null，由后端创建
+    caseInfo = {
+      case_id: null,
+      case_code: null,
+      ...casePayload,
+      case_steps: totalSteps,
+      session_variables: null,
+    }
+  } else {
+    const caseMeta = resolveCaseMetaForPayload()
+    caseInfo = {
+      case_id: caseMeta.case_id,
+      case_code: caseMeta.case_code,
+      ...casePayload,
+      case_steps: totalSteps,
+      session_variables: null,
+    }
+  }
+
+  if (!steps.value?.length) {
+    return createEmptyStepTreePayloadTemplate(caseInfo)
+  }
+  const stepNoMap = assignStepNumbers(steps.value)
+  const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
+  const payload = { case: caseInfo, steps: backendSteps }
+  // 新建：去掉 steps 上的 step_id/step_code/case_id/case（convert 会带上 case）
+  return isNewCasePage ? stripIdentityFieldsForNewCase(payload) : payload
+}
+
+const buildSourceJsonFromMemoryTree = () => stringifyStepTreePayload(buildUpdateOrCreateTreePayload())
+
+const isSourceJsonDirty = () => !isJsonTextEqual(sourceJsonText.value, buildSourceJsonFromMemoryTree())
+
+const markExpandStatesForMappedSteps = (list) => {
+  forEachStep(list, (s) => {
+    if (stepDefinitions[s.type]?.allowChildren) {
+      stepExpandStates.value.set(s.id, true)
+    }
+  })
+}
+
+/**
+ * 将校验通过的 { case, steps } 写入内存步骤树与用例信息表单。
+ * 新建页（路由无 case_id/case_code）：剥离 case/steps 主键后再入库内存，按新增保存。
+ * 应用成功后用「内存树再序列化」回写编辑器，避免与脏检查基准不一致而重复弹窗。
+ * @returns {{ ok: true } | { ok: false, message: string }}
+ */
+const applyValidatedSourcePayload = (payload) => {
+  const isNewCasePage = toPositiveCaseId(caseId.value) == null && !caseCode.value
+  const normalized = isNewCasePage ? stripIdentityFieldsForNewCase(payload) : payload
+
+  const mapped = (normalized.steps || []).map(mapBackendStep).filter(Boolean)
+  if ((normalized.steps || []).length && mapped.length !== normalized.steps.length) {
+    return { ok: false, message: '部分步骤无法转换为步骤树（请检查 step_type 等字段）' }
+  }
+  caseInfoPanelRef.value?.hydrateFromCasePayload?.(normalized.case)
+  if (isNewCasePage) {
+    appliedCaseMeta.value = { case_id: null, case_code: null }
+  } else {
+    appliedCaseMeta.value = {
+      case_id: toPositiveCaseId(caseId.value) ?? toPositiveCaseId(normalized.case?.case_id) ?? null,
+      case_code: (caseCode.value || normalized.case?.case_code)
+          ? String(caseCode.value || normalized.case.case_code)
+          : null,
+    }
+  }
+  steps.value = mapped
+  stepExpandStates.value = new Map()
+  markExpandStatesForMappedSteps(mapped)
+  selectedKeys.value = mapped[0]?.id ? [mapped[0].id] : []
+  updateStepDisplayNames()
+  loadQuoteStepsForAllQuoteSteps()
+  // 与 isSourceJsonDirty 同一套序列化，保证「已应用且未再改」时切回不弹窗
+  sourceJsonText.value = buildSourceJsonFromMemoryTree()
+  return { ok: true }
+}
+
+const tryApplySourceJsonText = (text) => {
+  const parsed = parseAndValidateStepTreePayload(text)
+  if (!parsed.ok) return parsed
+  return applyValidatedSourcePayload(parsed.payload)
+}
+
+const resetSourceJson = () => {
+  sourceJsonText.value = buildSourceJsonFromMemoryTree()
+  window.$message?.success?.('已恢复为当前步骤树数据')
+}
+
+const applySourceJsonFromEditor = () => {
+  sourceJsonApplyLoading.value = true
+  try {
+    const result = tryApplySourceJsonText(sourceJsonText.value)
+    if (!result.ok) {
+      notifyError(result.message || '应用失败')
+      return false
+    }
+    window.$message?.success?.('已应用到步骤树（尚未落库，请切回步骤树模式后点击保存）')
+    return true
+  } finally {
+    sourceJsonApplyLoading.value = false
+  }
+}
+
+const enterSourceMode = () => {
+  sourceJsonText.value = buildSourceJsonFromMemoryTree()
+  treeMode.value = false
+}
+
+const switchToTreeModeDiscardingJson = () => {
+  treeMode.value = true
+}
+
+const handleTreeModeChange = (wantTree) => {
+  if (wantTree === treeMode.value) return
+  if (!wantTree) {
+    enterSourceMode()
+    return
+  }
+  // 源数据 → 步骤树
+  if (!isSourceJsonDirty()) {
+    treeMode.value = true
+    return
+  }
+  window.$dialog?.confirm?.({
+    title: '切回步骤树模式',
+    type: 'warning',
+    content: '当前 JSON 相对步骤树有改动。是否将 JSON 应用到步骤树？选「取消」将丢弃 JSON 改动并直接切回。',
+    positiveText: '应用并切回',
+    negativeText: '不应用，直接切回',
+    confirm() {
+      const result = tryApplySourceJsonText(sourceJsonText.value)
+      if (!result.ok) {
+        notifyError(result.message || '应用失败，请修正 JSON 或点击「重置」')
+        return false
+      }
+      treeMode.value = true
+      window.$message?.success?.('已应用 JSON 并切回步骤树模式')
+    },
+    cancel() {
+      switchToTreeModeDiscardingJson()
+    },
+  })
 }
 
 
@@ -1784,6 +2004,10 @@ const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
 
 /** 校验用例与步骤树后调用 updateOrCreateStepTree 保存 */
 const handleSaveAll = async () => {
+  if (!treeMode.value) {
+    window.$message?.warning?.('源数据模式下不可直接保存，请先应用 JSON 并切回步骤树模式后再点击保存')
+    return
+  }
   if (saveLoading.value) return
   if (!steps.value?.length) {
     window.$message?.warning?.('请至少添加一个步骤后再点击保存')
@@ -1867,14 +2091,28 @@ const handleSaveAll = async () => {
     const totalSteps = countTotalSteps(steps.value)
 
     // 构建用例信息（AutoTestApiCaseUpdate 格式）
+    const isNewCasePage = toPositiveCaseId(caseId.value) == null && !caseCode.value
     const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
-    const caseInfo = {
-      case_id: caseId.value || null,
-      case_code: caseCode.value || null,
-      ...casePayload,
-      case_steps: totalSteps,
-      session_variables: null,
-      updated_user: currentUser,
+    let caseInfo
+    if (isNewCasePage) {
+      caseInfo = {
+        case_id: null,
+        case_code: null,
+        ...casePayload,
+        case_steps: totalSteps,
+        session_variables: null,
+        updated_user: currentUser,
+      }
+    } else {
+      const caseMeta = resolveCaseMetaForPayload()
+      caseInfo = {
+        case_id: caseMeta.case_id,
+        case_code: caseMeta.case_code,
+        ...casePayload,
+        case_steps: totalSteps,
+        session_variables: null,
+        updated_user: currentUser,
+      }
     }
 
     // 按照树的前序遍历顺序分配 step_no，确保唯一且按顺序递增
@@ -1885,10 +2123,13 @@ const handleSaveAll = async () => {
       return convertStepToBackend(step, null, stepNoMap)
     })
 
-    // 构建请求体（AutoTestStepTreeUpdateList 格式）
-    const payload = {
+    // 构建请求体（AutoTestStepTreeUpdateList 格式）；新建不传主键与 steps[].case
+    let payload = {
       case: caseInfo,
       steps: backendSteps
+    }
+    if (isNewCasePage) {
+      payload = stripIdentityFieldsForNewCase(payload)
     }
 
     // 调用新的后端接口
@@ -1930,6 +2171,10 @@ const handleSaveAll = async () => {
 
 /** 调试：校验当前步骤树后打开调试配置弹窗 */
 const handleDebug = async () => {
+  if (!treeMode.value) {
+    window.$message?.warning?.('源数据模式下不可调试，请先切回步骤树模式')
+    return
+  }
   if (!steps.value?.length) {
     window.$message?.warning?.('请先添加测试步骤')
     return
@@ -1995,6 +2240,10 @@ const loadStepsFromCopy = (caseInfo) => {
 const loadSteps = async () => {
   stepExpandStates.value = new Map()
   stashedQuoteStepsWhenPublic.value = []
+  appliedCaseMeta.value = {
+    case_id: toPositiveCaseId(caseId.value),
+    case_code: caseCode.value ? String(caseCode.value) : null,
+  }
   if (!caseId.value && !caseCode.value) {
     // 检查是否为复制进入：case_info 含 is_copy 和 steps
     const caseInfoStr = route.query.case_info
@@ -2006,6 +2255,7 @@ const loadSteps = async () => {
     }
     steps.value = []
     selectedKeys.value = []
+    appliedCaseMeta.value = { case_id: null, case_code: null }
     caseInfoPanelRef.value?.hydrateFromStepTree?.([])
     return
   }

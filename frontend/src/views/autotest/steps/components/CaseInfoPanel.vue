@@ -2,7 +2,7 @@
   CaseInfoPanel — 步骤编辑页顶部「用例信息」区
 
   与步骤子页（HTTP/TCP Request 等）同一实现：n-card + 左侧红边卡片样式。
-  职责：维护 caseForm；调试/保存/历史通过 emit 交给 index.vue。
+  职责：维护 caseForm；调试/保存/历史/模式切换通过 emit 交给 index.vue。
 -->
 <template>
   <n-card
@@ -27,10 +27,36 @@
           <div class="panel-title">用例信息</div>
         </div>
         <div class="card-header-actions" @click.stop>
-          <n-space :size="8" class="case-info-header-actions">
-            <n-button type="primary" size="small" :loading="debugLoading" @click="emit('debug')">调试</n-button>
-            <n-button type="info" size="small" :loading="saveLoading" @click="emit('save')">保存</n-button>
+          <n-space :size="8" align="center" class="case-info-header-actions">
+            <n-button
+                type="primary"
+                size="small"
+                :loading="debugLoading"
+                :disabled="sourceMode"
+                @click="emit('debug')"
+            >
+              调试
+            </n-button>
+            <n-button
+                type="info"
+                size="small"
+                :loading="saveLoading"
+                :disabled="sourceMode"
+                @click="emit('save')"
+            >
+              保存
+            </n-button>
             <n-button type="success" size="small" @click="emit('history')">历史</n-button>
+            <n-switch
+                class="case-mode-switch"
+                size="medium"
+                :round="false"
+                :value="!treeMode"
+                @update:value="onSourceModeSwitch"
+            >
+              <template #checked>源数据模式</template>
+              <template #unchecked>步骤树模式</template>
+            </n-switch>
           </n-space>
         </div>
       </div>
@@ -180,9 +206,9 @@
 /**
  * CaseInfoPanel.vue
  *
- * defineProps: debugLoading / saveLoading
- * defineEmits: debug / save / history / case-type-change
- * defineExpose: caseForm, getCasePayload, validateCaseForm,
+ * defineProps: debugLoading / saveLoading / treeMode
+ * defineEmits: debug / save / history / case-type-change / update:treeMode / request-tree-mode-change
+ * defineExpose: caseForm, getCasePayload, validateCaseForm, hydrateFromCasePayload,
  *               hydrateFromStepTree, reloadFromRoute, projectOptions, projectLoading
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -199,16 +225,26 @@ import {
   NPopover,
   NSelect,
   NSpace,
+  NSwitch,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api'
 
-defineProps({
+const props = defineProps({
   debugLoading: { type: Boolean, default: false },
   saveLoading: { type: Boolean, default: false },
+  /** true=步骤树模式，false=源数据模式 */
+  treeMode: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['debug', 'save', 'history', 'case-type-change'])
+const emit = defineEmits(['debug', 'save', 'history', 'case-type-change', 'update:treeMode', 'request-tree-mode-change'])
+
+const sourceMode = computed(() => !props.treeMode)
+
+const onSourceModeSwitch = (sourceOn) => {
+  // switch 开启=源数据模式(右)，关闭=步骤树模式(左)
+  emit('request-tree-mode-change', !sourceOn)
+}
 
 const route = useRoute()
 
@@ -395,6 +431,24 @@ const hydrateFromStepTree = (data) => {
   }
 }
 
+const hydrateFromCasePayload = (caseInfo) => {
+  if (!caseInfo || typeof caseInfo !== 'object') return
+  if (caseInfo.case_project != null) {
+    caseForm.case_project = typeof caseInfo.case_project === 'object'
+        ? caseInfo.case_project.project_id
+        : caseInfo.case_project
+  }
+  if (caseInfo.case_name != null) caseForm.case_name = caseInfo.case_name || ''
+  if (caseInfo.case_tags != null) {
+    caseForm.case_tags = Array.isArray(caseInfo.case_tags)
+        ? caseInfo.case_tags.map((tag) => (typeof tag === 'object' ? tag.tag_id : tag)).filter((id) => id != null)
+        : []
+  }
+  if (caseInfo.case_desc != null) caseForm.case_desc = caseInfo.case_desc || ''
+  if (caseInfo.case_attr != null) caseForm.case_attr = caseInfo.case_attr || ''
+  if (caseInfo.case_type != null) caseForm.case_type = caseInfo.case_type || ''
+}
+
 const getCasePayload = () => ({
   case_name: caseForm.case_name || '',
   case_project: caseForm.case_project || null,
@@ -439,6 +493,7 @@ defineExpose({
   caseForm,
   getCasePayload,
   validateCaseForm,
+  hydrateFromCasePayload,
   hydrateFromStepTree,
   reloadFromRoute: initCaseInfoFromRoute,
   projectOptions,
@@ -454,11 +509,36 @@ defineExpose({
 }
 
 .card-header-row {
-  padding-right: 300px;
+  padding-right: 360px;
 }
 
 .case-info-header-actions :deep(.n-button) {
   font-size: var(--step-editor-font-size, 13px);
+}
+
+.case-mode-switch {
+  height: 28px;
+}
+
+.case-mode-switch :deep(.n-switch__rail) {
+  height: 28px;
+  min-width: 96px;
+  padding: 0 8px;
+  border-radius: 2px;
+}
+
+.case-mode-switch :deep(.n-switch__button) {
+  border-radius: 2px;
+  width: 22px;
+  height: 22px;
+  top: 3px;
+}
+
+.case-mode-switch :deep(.n-switch__checked),
+.case-mode-switch :deep(.n-switch__unchecked) {
+  font-size: 12px;
+  line-height: 28px;
+  padding: 0 4px;
 }
 
 .case-info-form {
