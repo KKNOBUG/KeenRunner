@@ -1,6 +1,7 @@
 /**
  * 源数据模式：与 POST /autotest/step/update_or_create_tree 入参一致的 { case, steps } 校验与模板。
  * 不自动补齐缺失字段（含 step_no）；结构规则对齐后端 validate_step_tree_structure。
+ * 步骤可选字段 step_is_skipped（跳过/注释，默认 false）随 JSON 原样保留，不做剥离。
  */
 
 export const ALLOWED_CHILDREN_STEP_TYPES = new Set(['循环结构', '条件分支'])

@@ -48,6 +48,8 @@
                     class="step-item"
                     :class="{
                     'is-selected': selectedKeys.includes(step.id),
+                    'is-skipped': !!step.step_is_skipped,
+                    'is-skip-inherited': isStepSkipInherited(step.id),
                     'is-drag-target': dragState.draggingId && stepDefinitions[step.type]?.allowChildren, // 所有 loop/if 步骤的普通高亮
                     'is-drag-over': dragState.dragOverId === step.id && stepDefinitions[step.type]?.allowChildren // 焦点高亮
                   }"
@@ -70,6 +72,20 @@
                     <span class="step-name-text">{{ getStepDisplayName(step.name, step.id) }}</span>
                     <span class="step-actions">
                       <span class="step-number">#{{ getStepNumber(step.id) }}</span>
+                      <n-button
+                          text
+                          size="tiny"
+                          @click.stop="toggleSkipStep(step.id, $event)"
+                          class="action-btn"
+                          :title="step.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
+                      >
+                        <template #icon>
+                          <TheIcon
+                              :icon="step.step_is_skipped ? 'lucide:badge-x' : 'lucide:badge-check'"
+                              :size="14"
+                          />
+                        </template>
+                      </n-button>
                       <n-button
                           v-if="stepDefinitions[step.type]?.allowChildren"
                           text
@@ -119,7 +135,10 @@
                             v-for="(item, idx) in getQuoteStepsFlattened(quoteStepsMap[step.id] || [])"
                             :key="'quote-' + step.id + '-' + idx + '-' + (item.step.id || '')"
                             class="step-item quote-inner-item"
-                            :class="{ 'is-selected': selectedKeys.includes(getQuoteInnerKey(step.id, idx)) }"
+                            :class="{
+                              'is-selected': selectedKeys.includes(getQuoteInnerKey(step.id, idx)),
+                              'is-skipped': !!item.step.step_is_skipped || !!step.step_is_skipped,
+                            }"
                             :style="{ marginLeft: (item.depth * 10) + 'px' }"
                             @click.stop="handleSelect([getQuoteInnerKey(step.id, idx)])"
                         >
@@ -908,6 +927,25 @@ const findStepParent = (id, list = steps.value, parent = null) => {
   return null
 }
 
+/** 祖先是否被跳过（继承灰显；子开关可保留但不生效） */
+const isStepSkipInherited = (id) => {
+  let parent = findStepParent(id)
+  while (parent) {
+    if (parent.step_is_skipped) return true
+    parent = findStepParent(parent.id)
+  }
+  return false
+}
+
+/** 切换步骤跳过/注释标记 */
+const toggleSkipStep = (id, event) => {
+  event?.stopPropagation?.()
+  const step = findStep(id)
+  if (!step) return
+  step.step_is_skipped = !step.step_is_skipped
+  if (step.original) step.original.step_is_skipped = step.step_is_skipped
+}
+
 /**
  * 前序遍历步骤树，对每个步骤执行 fn（可选：包含「引用公共脚本」加载的内部步骤）。
  * 说明：
@@ -1183,6 +1221,7 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     case_id: original.case_id || caseId.value || null,
     parent_step_id: parentStepId,
     quote_case_id: original.quote_case_id || null,
+    step_is_skipped: !!step.step_is_skipped,
     // case_type 从用例信息中获取，必填字段（新增步骤时）
     case_type: (caseInfoPanelRef.value?.caseForm?.case_type) || original.case_type || '用户脚本'
   }
@@ -2390,6 +2429,7 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
     id: genId(),
     type,
     name: type === 'quote' && config.step_name ? config.step_name : defaultName,
+    step_is_skipped: false,
     config
   }
   if (type === 'quote') {
@@ -3226,6 +3266,8 @@ const RecursiveStepChildren = defineComponent({
     const capturedHandleDrop = handleDrop
     const capturedHandleCopyStep = handleCopyStep
     const capturedHandleDeleteStep = handleDeleteStep
+    const capturedToggleSkipStep = toggleSkipStep
+    const capturedIsStepSkipInherited = isStepSkipInherited
     const capturedIsPublicScriptCase = isPublicScriptCase
     const capturedHandleAddStep = handleAddStep
     const capturedDragState = dragState
@@ -3276,6 +3318,8 @@ const RecursiveStepChildren = defineComponent({
               'step-item',
               {
                 'is-selected': capturedSelectedKeys.value.includes(child.id),
+                'is-skipped': !!child.step_is_skipped,
+                'is-skip-inherited': capturedIsStepSkipInherited(child.id),
                 'is-drag-target': capturedDragState.value.draggingId && capturedStepDefinitions[child.type]?.allowChildren
               }
             ],
@@ -3323,6 +3367,21 @@ const RecursiveStepChildren = defineComponent({
                   h('span', {
                     class: 'step-number'
                   }, `#${capturedGetStepNumber(child.id)}`),
+                  h(NButton, {
+                    text: true,
+                    size: 'tiny',
+                    class: 'action-btn',
+                    title: child.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)',
+                    onClick: (e) => {
+                      e.stopPropagation()
+                      capturedToggleSkipStep(child.id, e)
+                    }
+                  }, {
+                    icon: () => h(TheIcon, {
+                      icon: child.step_is_skipped ? 'mdi:toggle-switch-off-outline' : 'mdi:toggle-switch-outline',
+                      size: 14
+                    })
+                  }),
                   capturedStepDefinitions[child.type]?.allowChildren ? h(NButton, {
                     text: true,
                     size: 'tiny',
@@ -3603,6 +3662,17 @@ const RecursiveStepChildren = defineComponent({
   cursor: pointer;
   padding: 3px 0;
   margin: 0;
+}
+
+:deep(.step-item.is-skipped .step-name-text),
+:deep(.step-item.is-skip-inherited .step-name-text) {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+:deep(.step-item.is-skipped),
+:deep(.step-item.is-skip-inherited) {
+  opacity: 0.85;
 }
 
 :deep(.step-item.is-selected) {

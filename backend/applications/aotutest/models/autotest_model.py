@@ -199,6 +199,8 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     parent_step_id = fields.BigIntField(null=True, index=True, description="父级步骤ID")
     # 引用公共脚本ID（普通字段，不设外键，业务层验证）
     quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
+    # 跳过/注释：执行时当作不存在该步骤（不写明细、不计入统计）；默认不跳过
+    step_is_skipped = fields.BooleanField(default=False, description="是否跳过执行(注释)")
 
     # 请求相关字段
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")

@@ -1040,11 +1040,19 @@ class BaseStepExecutor:
             self.context.log(error_message, step_code=self.step_code)
             raise StepExecutionError(error_message) from e
 
-    async def execute(self) -> StepExecutionResult:
+    async def execute(self) -> Optional[StepExecutionResult]:
         """
         执行当前步骤：注入 defined_variables、调用 _execute、合并 extract_variables、可选保存明细
-        :return: 本步骤执行结果，含 success、error、children、elapsed 等
+        :return: 本步骤执行结果；若 step_is_skipped 则返回 None（不写明细、不计入统计）
         """
+        # 跳过/注释：当作没有该步骤（父跳过时不会进入子步，故无需祖先标记）
+        if bool(getattr(self.step, "step_is_skipped", False)):
+            LOGGER.info(
+                f"【步骤跳过】case_id={self.case_id}, step_no={self.step_no}, "
+                f"step_name={self.step_name}, step_code={self.step_code}, step_type={self.step_type}"
+            )
+            return None
+
         start: float = time.perf_counter()
         step_start_time: datetime = datetime.now()
         step_st_time_str: str = step_start_time.strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -1260,7 +1268,8 @@ class BaseStepExecutor:
             try:
                 executor: BaseStepExecutor = StepExecutorFactory.create_executor(child, self.context)
                 child_result = await executor.execute()
-                results.append(child_result)
+                if child_result is not None:
+                    results.append(child_result)
             except Exception as e:
                 case_id: int = child.case_id
                 step_id: int = child.step_id
@@ -2124,6 +2133,8 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 try:
                     executor = StepExecutorFactory.create_executor(quote_step, self.context)
                     child_result = await executor.execute()
+                    if child_result is None:
+                        continue
                     result.append_child(child_result)
                     if not child_result.success:
                         result.success = False
@@ -3308,7 +3319,9 @@ class AutoTestStepExecutionEngine:
             results: List[StepExecutionResult] = []
             for step in ordered_root_steps:
                 executor: BaseStepExecutor = StepExecutorFactory.create_executor(step, context)
-                result: StepExecutionResult = await executor.execute()
+                result: Optional[StepExecutionResult] = await executor.execute()
+                if result is None:
+                    continue
                 results.append(result)
                 # 对于根步骤（parent_step_id 为 None）, 汇总所有子步骤的日志
                 if step.parent_step_id is None:

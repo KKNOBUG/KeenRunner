@@ -213,6 +213,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     case_id: Optional[int] = Field(None, description="步骤所属用例")
     quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
+    step_is_skipped: Optional[bool] = Field(False, description="是否跳过执行(注释)，默认不跳过")
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
     wait: Optional[float] = Field(None, ge=0, le=300, description="等待控制(正浮点数, 单位:秒)")

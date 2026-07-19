@@ -65,11 +65,13 @@ export function mapBackendStep(step) {
     id: stepId,
     type: localType,
     name: step.step_name || step.step_type || '步骤',
+    step_is_skipped: !!step.step_is_skipped,
     config: {},
     original: {
       ...step,
       id: step.step_id || step.id || null,
       step_code: step.step_code || null,
+      step_is_skipped: !!step.step_is_skipped,
       children: undefined,
       quote_steps: step.quote_steps || [],
     },

@@ -800,6 +800,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     exclude_none=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code"},
                 )
+                create_step_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if final_parent_step_id is not None:
                     create_step_dict["parent_step_id"] = final_parent_step_id
 
@@ -837,6 +838,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code"},
                     exclude_none=True
                 )
+                # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
+                update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if "parent_step_id" not in step_data.model_dump(exclude_unset=True) and parent_step_id is not None:
                     update_dict["parent_step_id"] = parent_step_id
                 elif step_data.parent_step_id is not None:
