@@ -689,6 +689,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
 
         async def wrapper(*args, **kwargs):
+            """
+            在数据库事务中执行被装饰函数，并将连接注入 kwargs。
+
+            :param args: 原函数位置参数
+            :param kwargs: 原函数关键字参数；执行前注入 _connection
+            :return: 原函数返回值
+            """
             async with in_transaction() as connection:
                 # 将 connection 注入 kwargs，供被装饰函数使用
                 kwargs['_connection'] = connection
@@ -776,7 +783,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要软删除的记录 ID
         :param updated_user: 执行操作的用户标识（可选）
         :return: 更新后的数据库对象
-        :raises NotFoundException: 记录不存在时抛出
+        :raises DoesNotExist: 记录不存在时抛出
         :raises ParameterException: 模型未继承 StateModel 时抛出
         """
         obj = await self.get_or_error(id=id)
@@ -802,7 +809,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要恢复的记录 ID
         :param updated_user: 执行操作的用户标识（可选）
         :return: 恢复后的数据库对象
-        :raises NotFoundException: 记录不存在时抛出
+        :raises DoesNotExist: 记录不存在时抛出
         :raises ParameterException: 模型未继承 StateModel 时抛出
         """
         obj = await self.get_or_error(id=id)

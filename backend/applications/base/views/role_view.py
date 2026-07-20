@@ -35,6 +35,14 @@ async def create_role(
         current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    创建角色。
+
+    :param role_in: 角色入参
+    :param current_user: 当前登录用户
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await role_crud.create_role(role_in=role_in, created_user=current_user.username)
         data: dict = await instance.to_dict()
@@ -48,6 +56,13 @@ async def delete_role_one(
         role_id: int = Query(..., description="角色ID"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    删除角色。
+
+    :param role_id: 角色 ID
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await role_crud.delete_role(role_id=role_id)
         data = await instance.to_dict()
@@ -65,6 +80,13 @@ async def delete_roles_batch(
         body_in: RoleBatchDelete = Body(..., description="批量删除参数"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    批量删除角色。
+
+    :param body_in: 角色批量删除入参
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         count = await role_crud.delete_roles(
             role_ids=body_in.role_ids,
@@ -83,6 +105,14 @@ async def update_role(
         current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    更新角色。
+
+    :param role_in: 角色入参
+    :param current_user: 当前登录用户
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     update_dict = role_in.model_dump(exclude_unset=True, exclude={"id"})
     update_dict["updated_user"] = current_user.username
     instance = await role_crud.update(id=role_in.id, obj_in=update_dict)
@@ -96,6 +126,14 @@ async def get_role_by(
         name: str = Form(default=None, description="角色代码"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    查看角色。
+
+    :param code: 角色代码
+    :param name: 角色名称
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     where: dict = {}
     if code:
         where[code] = code
@@ -114,6 +152,16 @@ async def list_role(
         name: str = Query(default="", description="角色名称，用于查询"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    查看角色列表。
+
+    :param page: 页码
+    :param page_size: 每页条数
+    :param order: 排序字段
+    :param name: 角色名称
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     q = Q()
     if name:
         q = Q(name__contains=name)
@@ -129,6 +177,13 @@ async def get_role_authorized(
         id: int = Query(..., description="角色ID"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    查看角色权限。
+
+    :param id: 角色 ID
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     role_obj = await role_crud.get_or_error(id=id)
     data = await role_obj.to_dict(m2m=True)
     return SuccessResponse(data=data)
@@ -139,6 +194,13 @@ async def update_role_authorized(
         role_in: RoleUpdateMenusRouters,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
+    """
+    更新角色权限。
+
+    :param role_in: 角色菜单与路由权限入参
+    :param role_crud: 角色 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     role_obj = await role_crud.get_or_none(id=role_in.id)
     await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
     return SuccessResponse()

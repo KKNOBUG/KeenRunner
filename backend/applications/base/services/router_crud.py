@@ -20,10 +20,22 @@ from backend.core.exceptions import DataAlreadyExistsException, NotFoundExceptio
 
 
 class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
+    """接口路由 CRUD 与路由同步相关业务。"""
+
     def __init__(self):
         super().__init__(model=Router)
 
     async def get_by_id(self, router_id: int, on_error: bool = True, **kwargs) -> Optional[Router]:
+        """
+        按主键 ID 查询路由。
+
+        :param router_id: 路由 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 路由实例或 None
+        :raises ParameterException: router_id 为空
+        :raises NotFoundException: on_error 为 True 且路由不存在
+        """
         if not router_id:
             error_message: str = "查询路由信息失败, 参数(router_id)不允许为空"
             LOGGER.error(error_message)
@@ -36,6 +48,16 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def get_by_path(self, path: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        """
+        按路径查询路由列表（同一 path 可能对应多种 method）。
+
+        :param path: 路由路径
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 路由实例列表；无匹配且 on_error 为 False 时为空列表
+        :raises ParameterException: path 为空
+        :raises NotFoundException: on_error 为 True 且无匹配路由
+        """
         if not path:
             error_message: str = "查询路由信息失败, 参数(username)不允许为空"
             LOGGER.error(error_message)
@@ -48,6 +70,16 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def get_by_method(self, method: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        """
+        按 HTTP 方法查询路由列表。
+
+        :param method: HTTP 方法（如 GET、POST）
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 路由实例列表；无匹配且 on_error 为 False 时为空列表
+        :raises ParameterException: method 为空
+        :raises NotFoundException: on_error 为 True 且无匹配路由
+        """
         if not method:
             error_message: str = "查询路由信息失败, 参数(method)不允许为空"
             LOGGER.error(error_message)
@@ -60,6 +92,16 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def get_by_summary(self, summary: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        """
+        按接口摘要查询路由列表。
+
+        :param summary: 接口摘要
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 路由实例列表；无匹配且 on_error 为 False 时为空列表
+        :raises ParameterException: summary 为空
+        :raises NotFoundException: on_error 为 True 且无匹配路由
+        """
         if not summary:
             error_message: str = "查询路由信息失败, 参数(summary)不允许为空"
             LOGGER.error(error_message)
@@ -72,6 +114,16 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def get_by_tags(self, tags: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
+        """
+        按标签字符串查询路由列表。
+
+        :param tags: 标签（库内逗号拼接存储）
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 路由实例列表；无匹配且 on_error 为 False 时为空列表
+        :raises ParameterException: tags 为空
+        :raises NotFoundException: on_error 为 True 且无匹配路由
+        """
         if not tags:
             error_message: str = "查询路由信息失败, 参数(tags)不允许为空"
             LOGGER.error(error_message)
@@ -84,6 +136,13 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def create_router(self, router_in: RouterCreate) -> Router:
+        """
+        创建路由：校验 path+method 唯一性后落库。
+
+        :param router_in: 新增路由入参
+        :return: 新建的路由实例
+        :raises DataAlreadyExistsException: 相同 path 与 method 已存在
+        """
         path = router_in.path
         method = router_in.method
         instances = await self.get_by_conditions(only_one=False, on_error=False, path=path, method=method)
@@ -94,11 +153,26 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def delete_router(self, router_id: int, **kwargs) -> Router:
+        """
+        按 ID 物理删除单个路由。
+
+        :param router_id: 路由 ID
+        :param kwargs: 额外查询条件
+        :return: 被删除的路由实例
+        :raises NotFoundException: 路由不存在
+        """
         instance = await self.get_by_id(router_id, on_error=True, **kwargs)
         await instance.delete()
         return instance
 
     async def update_router(self, router_in: RouterUpdate) -> Router:
+        """
+        按路由 ID 更新路由字段。
+
+        :param router_in: 更新入参（含 id）
+        :return: 更新后的路由实例
+        :raises NotFoundException: 路由不存在
+        """
         router_id: int = router_in.id
         router_if: dict = router_in.model_dump(exclude_none=True)
         try:
@@ -109,6 +183,12 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         return instance
 
     async def refresh_router(self, app: FastAPI) -> List[Router]:
+        """
+        根据 FastAPI 应用当前路由同步数据库：删除废弃项，新增或更新现有项。
+
+        :param app: FastAPI 应用实例
+        :return: 同步后的全部路由列表
+        """
         # 获取全部路由数据
         all_router_list = []
         for route in app.routes:
@@ -138,5 +218,3 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
                     await self.model.create(**data)
 
         return await self.model.all()
-
-

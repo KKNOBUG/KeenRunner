@@ -18,10 +18,22 @@ from backend.core.exceptions import DataAlreadyExistsException, NotFoundExceptio
 
 
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
+    """菜单 CRUD 相关业务。"""
+
     def __init__(self):
         super().__init__(model=Menu)
 
     async def get_by_id(self, menu_id: int, on_error: bool = True, **kwargs) -> Optional[Menu]:
+        """
+        按主键 ID 查询菜单。
+
+        :param menu_id: 菜单 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 菜单实例或 None
+        :raises ParameterException: menu_id 为空
+        :raises NotFoundException: on_error 为 True 且菜单不存在
+        """
         if not menu_id:
             error_message: str = "查询菜单信息失败, 参数(menu_id)不允许为空"
             LOGGER.error(error_message)
@@ -34,6 +46,16 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         return instance
 
     async def get_by_menu_path(self, path: str, on_error: bool = False, **kwargs) -> Optional[Menu]:
+        """
+        按菜单路径查询单条菜单。
+
+        :param path: 菜单路径
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 菜单实例或 None
+        :raises ParameterException: path 为空
+        :raises NotFoundException: on_error 为 True 且菜单不存在
+        """
         if not path:
             error_message: str = "查询菜单信息失败, 参数(path)不允许为空"
             LOGGER.error(error_message)
@@ -46,6 +68,13 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         return instance
 
     async def create_menu(self, menu_in: MenuCreate) -> Menu:
+        """
+        创建菜单：校验 name/path 唯一性后落库。
+
+        :param menu_in: 新增菜单入参
+        :return: 新建的菜单实例
+        :raises DataAlreadyExistsException: name 或 path 已存在
+        """
         name = menu_in.name
         path = menu_in.path
         instances = await self.get_by_conditions(only_one=True, on_error=False, name=name, path=path)
@@ -56,11 +85,26 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         return instance
 
     async def delete_menu(self, menu_id: int, **kwargs) -> Menu:
+        """
+        按 ID 物理删除单个菜单。
+
+        :param menu_id: 菜单 ID
+        :param kwargs: 额外查询条件
+        :return: 被删除的菜单实例
+        :raises NotFoundException: 菜单不存在
+        """
         instance = await self.get_by_id(menu_id=menu_id, on_error=True, **kwargs)
         await instance.delete()
         return instance
 
     async def update_menu(self, menu_in: MenuUpdate) -> Menu:
+        """
+        按菜单 ID 更新菜单字段。
+
+        :param menu_in: 更新入参（含 id）
+        :return: 更新后的菜单实例
+        :raises NotFoundException: 菜单不存在
+        """
         menu_id: int = menu_in.id
         menu_if: dict = menu_in.model_dump(exclude_none=True)
         try:
@@ -69,5 +113,3 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
             raise NotFoundException(message=f"菜单(id={menu_id})信息不存在")
 
         return instance
-
-

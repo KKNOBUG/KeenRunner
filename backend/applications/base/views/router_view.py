@@ -29,6 +29,13 @@ async def create_router(
         router_in: RouterCreate = Body(),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    新增路由信息。
+
+    :param router_in: 路由入参
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await router_crud.create_router(router_in=router_in)
         data = await instance.to_dict()
@@ -44,6 +51,13 @@ async def delete_router(
         router_id: int = Query(..., description="接口ID"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    删除路由信息。
+
+    :param router_id: 路由 ID
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await router_crud.delete_router(router_id)
         data = await instance.to_dict()
@@ -59,6 +73,13 @@ async def update_user(
         router_in: RouterUpdate = Body(..., description="接口信息"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    更新路由信息。
+
+    :param router_in: 路由入参
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await router_crud.update_router(router_in)
         data = await instance.to_dict()
@@ -74,6 +95,13 @@ async def get_user(
         router_id: int = Query(None, description="接口ID"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    查询路由信息。
+
+    :param router_id: 路由 ID
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     instance = await router_crud.get_or_none(id=router_id)
     if not instance:
         return NotFoundResponse(message=f"接口(id={router_id})信息不存在")
@@ -87,6 +115,13 @@ async def get_routers(
         router_in: RouterSelect = Body(),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    查询路由列表。
+
+    :param router_in: 路由查询入参
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     page = router_in.page
     page_size = router_in.page_size
     order = router_in.order
@@ -123,6 +158,18 @@ async def list_router(
         tags: str = Query(None, description="路由所属标签"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    查询路由列表。
+
+    :param page: 页码
+    :param page_size: 每页条数
+    :param order: 排序字段
+    :param path: 路由请求路径
+    :param summary: 路由作用简介
+    :param tags: 路由所属标签
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     q = Q()
     if path:
         q &= Q(path__contains=path)
@@ -142,6 +189,13 @@ async def refresh_router(
         request: Request,
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
+    """
+    刷新路由列表。
+
+    :param request: HTTP 请求对象
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     app = request.app
     data = await router_crud.refresh_router(app=app)
     return SuccessResponse(message="刷新成功", data=data, total=len(data))

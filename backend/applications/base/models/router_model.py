@@ -13,6 +13,8 @@ from backend.applications.base.services.scaffold import ScaffoldModel, MaintainM
 
 
 class Router(ScaffoldModel, MaintainMixin, TimestampMixin):
+    """路由模型，对应表 krun_router。"""
+
     path = fields.CharField(max_length=255, index=True, description="路由请求路径")
     method = fields.CharEnumField(HTTPMethod, description="路由请求方式")
     summary = fields.CharField(max_length=255, index=True, description='路由作用简介')

@@ -33,6 +33,13 @@ async def get_login_access_token(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    验证用户密码和状态并生成令牌。
+
+    :param credentials: 登录凭证入参
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         user: User = await user_crud.authenticate(credentials)
     except (NotFoundException, NoPermissionException) as e:
@@ -73,6 +80,11 @@ async def get_login_access_token(
 
 @auth_secure.post("/usermenu", summary="用户鉴权-查看当前用户菜单")
 async def get_user_menu():
+    """
+    查看当前用户菜单。
+
+    :return: 统一 HTTP 响应
+    """
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
     menus: List[Menu] = []
@@ -103,6 +115,12 @@ async def get_user_menu():
 async def get_userinfo(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    查看当前用户信息。
+
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     user_id = CTX_USER_ID.get()
     user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
     data = await user_obj.to_dict(exclude_fields=["password"])
@@ -113,6 +131,11 @@ async def get_userinfo(
 
 @auth_secure.post("/getUserRouters", summary="用户鉴权-查看当前用户路由")
 async def get_user_router():
+    """
+    查看当前用户路由。
+
+    :return: 统一 HTTP 响应
+    """
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
     if user_obj.is_superuser:

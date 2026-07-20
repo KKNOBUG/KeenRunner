@@ -18,11 +18,21 @@ from backend.core.exceptions import ParameterException, NotFoundException
 
 
 class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
+    """审计日志 CRUD 与统计相关业务。"""
+
     def __init__(self):
         super().__init__(model=Audit)
 
     async def get_by_id(self, audit_id: int, on_error: bool = True) -> Optional[Audit]:
-        """根据ID获取单条审计日志"""
+        """
+        按主键 ID 查询单条审计日志。
+
+        :param audit_id: 审计日志 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :return: 审计日志实例或 None
+        :raises ParameterException: audit_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
+        """
         if not audit_id:
             error_message: str = "查询审计日志失败, 参数(audit_id)不允许为空"
             LOGGER.error(error_message)
@@ -35,7 +45,15 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         return instance
 
     async def get_by_user_id(self, user_id: int, on_error: bool = True) -> Optional[List[Audit]]:
-        """根据用户ID获取该用户的所有审计日志"""
+        """
+        按用户 ID 查询该用户的全部审计日志。
+
+        :param user_id: 用户 ID
+        :param on_error: 无记录时是否抛出 NotFoundException
+        :return: 审计日志列表；无匹配且 on_error 为 False 时为空列表
+        :raises ParameterException: user_id 为空
+        :raises NotFoundException: on_error 为 True 且该用户无审计日志
+        """
         if not user_id:
             error_message: str = "查询审计日志失败, 参数(user_id)不允许为空"
             LOGGER.error(error_message)
@@ -48,7 +66,12 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         return instances
 
     async def create_audit(self, audit_in: AuditCreate) -> Audit:
-        """创建审计日志记录"""
+        """
+        创建审计日志记录。
+
+        :param audit_in: 新增审计日志入参
+        :return: 新建的审计日志实例
+        """
         return await self.create(audit_in)
 
     async def list_audit(
@@ -58,24 +81,49 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             search: Q = Q(),
             order: Optional[list] = None
     ) -> Tuple[int, List[Audit]]:
-        """分页查询审计日志列表"""
+        """
+        分页查询审计日志列表，默认按创建时间倒序。
+
+        :param page: 页码，从 1 开始
+        :param page_size: 每页记录数
+        :param search: 搜索条件（Q 对象）
+        :param order: 排序字段列表；为空时使用 ["-created_time"]
+        :return: (总记录数, 当前页审计日志列表)
+        """
         return await self.list(page=page, page_size=page_size, search=search, order=order or ["-created_time"])
 
     async def delete_by_id(self, audit_id: int) -> Audit:
-        """根据ID删除单条审计日志"""
+        """
+        按 ID 物理删除单条审计日志。
+
+        :param audit_id: 审计日志 ID
+        :return: 被删除的审计日志实例
+        :raises NotFoundException: 记录不存在
+        """
         instance = await self.get_by_id(audit_id=audit_id, on_error=True)
         await instance.delete()
         return instance
 
     async def delete_by_ids(self, audit_ids: Optional[List[int]]) -> int:
-        """按主键列表批量物理删除"""
+        """
+        按主键列表批量物理删除审计日志。
+
+        :param audit_ids: 审计日志 ID 列表；为空则不删除
+        :return: 实际删除的记录数
+        """
         if not audit_ids:
             return 0
         ids = [int(x) for x in audit_ids]
         return int(await self.model.filter(id__in=ids).delete())
 
     async def delete_by_user_id(self, user_id: int) -> int:
-        """根据用户ID删除该用户的所有审计日志"""
+        """
+        按用户 ID 物理删除该用户的全部审计日志。
+
+        :param user_id: 用户 ID
+        :return: 实际删除的记录数
+        :raises ParameterException: user_id 为空
+        """
         if not user_id:
             error_message: str = "删除审计日志失败, 参数(user_id)不允许为空"
             LOGGER.error(error_message)
@@ -87,7 +135,14 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             start_time: str,
             end_time: str
     ) -> int:
-        """根据时间范围删除审计日志"""
+        """
+        按创建时间范围物理删除审计日志。
+
+        :param start_time: 起始时间
+        :param end_time: 结束时间
+        :return: 实际删除的记录数
+        :raises ParameterException: start_time 或 end_time 为空
+        """
         if not start_time or not end_time:
             error_message: str = "删除审计日志失败, 时间范围参数不允许为空"
             LOGGER.error(error_message)
@@ -95,7 +150,13 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         return int(await self.model.filter(created_time__range=[start_time, end_time]).delete())
 
     async def get_statistics_by_user(self, user_id: int) -> Dict[str, Any]:
-        """获取指定用户的审计日志统计信息"""
+        """
+        统计指定用户的审计日志：总量、按请求方式、按响应代码分布。
+
+        :param user_id: 用户 ID
+        :return: 含 user_id、total_count、method_statistics、code_statistics 的字典
+        :raises ParameterException: user_id 为空
+        """
         if not user_id:
             error_message: str = "统计审计日志失败, 参数(user_id)不允许为空"
             LOGGER.error(error_message)
@@ -128,18 +189,25 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             limit: int = 10,
             user_id: Optional[int] = None
     ) -> List[Audit]:
-        """获取最近的审计日志"""
+        """
+        按创建时间倒序获取最近的审计日志。
+
+        :param limit: 返回条数上限，默认 10
+        :param user_id: 可选，仅查询该用户的日志
+        :return: 审计日志列表
+        """
         query = self.model.all()
         if user_id:
             query = query.filter(user_id=user_id)
         return await query.order_by("-created_time").limit(limit)
 
     async def clear_all(self) -> int:
-        """清空所有审计日志（危险操作）"""
+        """
+        清空全部审计日志（危险操作，物理删除）。
+
+        :return: 清空前的记录总数（即删除数量）
+        """
         count = await self.model.all().count()
         await self.model.all().delete()
         LOGGER.warning(f"已清空所有审计日志, 删除数量: {count}")
         return count
-
-
-

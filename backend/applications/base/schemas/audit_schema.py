@@ -15,6 +15,8 @@ from backend.enums import HTTPMethod
 
 
 class AuditBase(BaseModel):
+    """审计日志公共字段（创建/查询共用）。"""
+
     user_id: Optional[int] = Field(default=None, description="用户ID")
     username: Optional[str] = Field(default=None, max_length=32, description="用户名称")
     request_time: Optional[datetime] = Field(default=None, description="请求时间")
@@ -34,6 +36,8 @@ class AuditBase(BaseModel):
 
 
 class AuditCreate(AuditBase):
+    """新增审计日志入参。"""
+
     user_id: int = Field(..., description="用户ID")
     username: str = Field(..., max_length=32, description="用户名称")
     request_time: datetime = Field(..., description="请求时间")
@@ -43,10 +47,17 @@ class AuditCreate(AuditBase):
     response_elapsed: str = Field(..., max_length=16, description="响应耗时")
 
     def create_dict(self):
+        """
+        转为落库字典，仅包含请求中显式设置的字段。
+
+        :return: 可直接传入 AuditCrud.create 的字段字典
+        """
         return self.model_dump(exclude_unset=True)
 
 
 class AuditSelect(AuditBase):
+    """分页查询审计日志入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: Optional[list] = Field(default=[], examples=["-created_time"], description="排序字段")
@@ -55,4 +66,6 @@ class AuditSelect(AuditBase):
 
 
 class AuditBatchDelete(BaseModel):
+    """批量删除审计日志入参。"""
+
     audit_ids: Optional[List[int]] = Field(default=None, description="审计日志ID列表")

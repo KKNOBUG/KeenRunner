@@ -12,6 +12,8 @@ from backend.applications.base.services.scaffold import ScaffoldModel, Timestamp
 
 
 class Role(ScaffoldModel, TimestampMixin, MaintainMixin):
+    """角色模型，对应表 krun_role。"""
+
     code = fields.CharField(max_length=16, unique=True, description="角色代码")
     name = fields.CharField(max_length=64, unique=True, description="角色名称")
     description = fields.TextField(null=True, description="角色描述")

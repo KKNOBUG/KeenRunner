@@ -37,6 +37,18 @@ async def upload_file(
         check_filesize: bool = Form(default=True, title="是否检查文件体积是否符合规范"),
         upload_file_size: FileSizeEum = Form(default=FileSizeEum.TINY.value, title="文件的体积限制"),
 ):
+    """
+    上传文件。
+
+    :param file: 文件对象
+    :param path: 文件上传目的地
+    :param add_timestamp: 是否为上传的文件添加时间戳
+    :param check_filename: 是否检查文件名称是否符合规范
+    :param check_filetype: 是否检查文件后缀是否符合规范
+    :param check_filesize: 是否检查文件体积是否符合规范
+    :param upload_file_size: 文件的体积限制
+    :return: 统一 HTTP 响应
+    """
     state, detail = await FileTransfer.save_upload_file_chunks(
         upload_file=file,
         destination=path,
@@ -54,6 +66,12 @@ async def upload_file(
 
 @file_transfer.post("/download", summary="下载文件")
 async def download_file(path: Union[str, Path] = Form(..., title="文件下载路径")):
+    """
+    下载文件。
+
+    :param path: 文件下载路径
+    :return: 统一 HTTP 响应
+    """
     filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
     filename: str = quote(os.path.basename(path).encode("utf-8"))
     return StreamingResponse(
@@ -68,6 +86,12 @@ async def download_file(path: Union[str, Path] = Form(..., title="文件下载�
 
 @file_transfer.post("/read", summary="读取文件")
 async def read_file(path: Union[str, Path] = Form(..., title="文件读取路径")):
+    """
+    读取文件。
+
+    :param path: 文件读取路径
+    :return: 统一 HTTP 响应
+    """
     filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
     try:
         with open(file=filepath, mode="r", encoding="utf-8") as fp:
@@ -84,6 +108,13 @@ async def move_file(
         src_path: Union[str, Path] = Form(..., title="文件原始路径"),
         dst_path: Union[str, Path] = Form(..., title="文件目标路径"),
 ):
+    """
+    移动文件。
+
+    :param src_path: 文件原始路径
+    :param dst_path: 文件目标路径
+    :return: 统一 HTTP 响应
+    """
     src_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, src_path)
     dst_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, dst_path)
     try:

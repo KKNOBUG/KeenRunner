@@ -20,10 +20,22 @@ from backend.core.exceptions import DataAlreadyExistsException, ParameterExcepti
 
 
 class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
+    """角色 CRUD 与菜单/路由授权相关业务。"""
+
     def __init__(self):
         super().__init__(model=Role)
 
     async def get_by_id(self, role_id: int, on_error: bool = False, **kwargs) -> Optional[Role]:
+        """
+        按主键 ID 查询角色。
+
+        :param role_id: 角色 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 角色实例或 None
+        :raises ParameterException: role_id 为空
+        :raises NotFoundException: on_error 为 True 且角色不存在
+        """
         if not role_id:
             error_message: str = "查询角色信息失败, 参数(role_id)不允许为空"
             LOGGER.error(error_message)
@@ -36,11 +48,21 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         return instance
 
     async def get_by_code(self, role_code: str, on_error: bool = False, **kwargs) -> Optional[Role]:
+        """
+        按角色编码查询单条角色。
+
+        :param role_code: 角色编码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 角色实例或 None
+        :raises ParameterException: role_code 为空
+        :raises NotFoundException: on_error 为 True 且角色不存在
+        """
         if not role_code:
             error_message: str = "查询角色信息失败, 参数(role_code)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        instance = await self.get_by_conditions(only_one=False, code=role_code, **kwargs)
+        instance = await self.get_by_conditions(only_one=True, on_error=False, code=role_code, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询角色信息失败, 角色(code={role_code})不存在"
             LOGGER.error(error_message)
@@ -48,11 +70,21 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         return instance
 
     async def get_by_name(self, role_name: str, on_error: bool = False, **kwargs) -> Optional[Role]:
+        """
+        按角色名称查询单条角色。
+
+        :param role_name: 角色名称
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 角色实例或 None
+        :raises ParameterException: role_name 为空
+        :raises NotFoundException: on_error 为 True 且角色不存在
+        """
         if not role_name:
             error_message: str = "查询角色信息失败, 参数(role_name)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        instance = await self.get_by_conditions(only_one=False, name=role_name, **kwargs)
+        instance = await self.get_by_conditions(only_one=True, on_error=False, name=role_name, **kwargs)
         if not instance and on_error:
             error_message: str = f"查询角色信息失败, 角色(name={role_name})不存在"
             LOGGER.error(error_message)
@@ -60,9 +92,24 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         return instance
 
     async def is_exist(self, name: str, **kwargs) -> bool:
+        """
+        判断指定名称的角色是否存在。
+
+        :param name: 角色名称
+        :param kwargs: 额外过滤条件
+        :return: 存在返回 True，否则 False
+        """
         return await self.model.filter(name=name, **kwargs).exists()
 
     async def create_role(self, role_in: RoleCreate, created_user: Optional[str] = None) -> Role:
+        """
+        创建角色：校验 code/name 唯一性后落库，可选写入创建人。
+
+        :param role_in: 新增角色入参
+        :param created_user: 创建人；非 None 时覆盖写入 created_user
+        :return: 新建的角色实例
+        :raises DataAlreadyExistsException: code 或 name 已存在
+        """
         code = role_in.code
         name = role_in.name
         instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
@@ -76,6 +123,14 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         return instance
 
     async def update_roles(self, role: Role, menu_ids: List[int], router_infos: List[dict]) -> None:
+        """
+        重置角色的菜单与路由关联：先清空再按入参重新绑定。
+
+        :param role: 角色实例
+        :param menu_ids: 菜单 ID 列表
+        :param router_infos: 路由信息列表，每项含 path、method
+        :return: None
+        """
         await role.menus.clear()
         for menu_id in menu_ids:
             menu_obj = await Menu.filter(id=menu_id).first()
@@ -87,6 +142,14 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
             await role.routers.add(router_obj)
 
     async def delete_role(self, role_id: int, **kwargs) -> Role:
+        """
+        按 ID 物理删除单个角色。
+
+        :param role_id: 角色 ID
+        :param kwargs: 额外查询条件
+        :return: 被删除的角色实例
+        :raises NotFoundException: 角色不存在
+        """
         instance = await self.get_by_id(role_id=role_id, on_error=True, **kwargs)
         await instance.delete()
         return instance
@@ -115,5 +178,3 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
                     except Exception:
                         continue
         return n
-
-

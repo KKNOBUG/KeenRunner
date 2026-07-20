@@ -19,6 +19,12 @@ menu = APIRouter()
 
 
 def _norm_menu_type(v) -> str:
+    """
+    规范化菜单类型值。
+
+    :param v: 原始菜单类型（可为枚举、字符串或 None）
+    :return: 规范化后的菜单类型字符串
+    """
     if v is None:
         return ""
     if hasattr(v, "value"):
@@ -27,7 +33,14 @@ def _norm_menu_type(v) -> str:
 
 
 def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
-    """按名称子串、类型筛选树：节点自身命中或子树有命中则保留。"""
+    """
+    按名称子串、类型筛选菜单树：节点自身命中或子树有命中则保留。
+
+    :param nodes: 菜单树节点列表
+    :param name_kw: 菜单名称关键字
+    :param type_kw: 菜单类型关键字
+    :return: 筛选后的菜单树
+    """
     if not name_kw and not type_kw:
         return nodes
     out = []
@@ -54,7 +67,21 @@ async def list_menu(
         menu_type: str = Query(default="", description="菜单类型：catalog / menu"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
+    """
+    查看菜单列表。
+
+    :param name: 菜单名称（子串匹配）
+    :param menu_type: 菜单类型
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     async def get_menu_with_children(menu_id: int):
+        """
+        递归获取菜单及其子菜单。
+
+        :param menu_id: 菜单 ID
+        :return: 含 children 的菜单字典，或未找到时的响应
+        """
         menu = await menu_crud.get_by_id(menu_id=menu_id, on_error=False)
         if not menu:
             return NotFoundResponse(message=f"菜单(id={menu_id})信息不存在")
@@ -79,6 +106,13 @@ async def get_menu(
         menu_id: int = Query(..., description="菜单id"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
+    """
+    查看菜单。
+
+    :param menu_id: 菜单 ID
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)
         return SuccessResponse(message="查询成功", data=result, total=1)
@@ -95,6 +129,13 @@ async def create_menu(
         menu_in: MenuCreate,
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
+    """
+    创建菜单。
+
+    :param menu_in: 菜单入参
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await menu_crud.create_menu(menu_in=menu_in)
         data = await instance.to_dict()
@@ -112,6 +153,13 @@ async def update_menu(
         menu_in: MenuUpdate,
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
+    """
+    更新菜单。
+
+    :param menu_in: 菜单入参
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await menu_crud.update_menu(menu_in=menu_in)
         data = await instance.to_dict()
@@ -127,6 +175,13 @@ async def delete_menu(
         id: int = Query(..., description="菜单id"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
+    """
+    删除菜单。
+
+    :param id: 菜单 ID
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     child_menu_count = await menu_crud.model.filter(parent_id=id).count()
     if child_menu_count > 0:
         return FailureResponse(message="不能删除带有子菜单的菜单")
