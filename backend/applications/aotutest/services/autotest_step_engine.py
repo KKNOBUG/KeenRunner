@@ -2263,29 +2263,55 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.has_dataset_payload(step_struct):
-                # TCP 步骤根据报文类型选择替换方式：xml 用 XPath，其它用 JSONPath
-                if self.step.request_args_type == AutoTestReqArgsType.XML:
+                # TCP 多为 raw + request_text：按内容嗅探 XML/JSON，替换后写回 request_text，保证实际发送报文生效
+                text_for_detect = request_text if isinstance(request_text, str) else ""
+                is_xml = (
+                    self.step.request_args_type == AutoTestReqArgsType.XML
+                    or text_for_detect.strip().startswith("<")
+                )
+                if is_xml:
                     xml_source = request_text or (request_body if isinstance(request_body, str) else None)
                     request_text = AutoTestToolService.replace_xml_datagram(
                         body_map=step_struct.get("body") or {},
                         request_text=xml_source,
                     )
                 else:
+                    body_for_replace = request_body
+                    if (
+                        body_for_replace is None
+                        or body_for_replace == {}
+                        or body_for_replace == ""
+                    ) and isinstance(request_text, str):
+                        stripped = request_text.strip()
+                        if stripped.startswith(("{", "[")):
+                            try:
+                                body_for_replace = orjson.loads(request_text)
+                            except (orjson.JSONDecodeError, ValueError, TypeError):
+                                body_for_replace = request_body
                     out = AutoTestToolService.replace_json_datagram(
                         head_map=step_struct.get("head") or {},
                         body_map=step_struct.get("body") or {},
                         request_headers=None,
-                        request_body=request_body,
+                        request_body=body_for_replace,
                         form_data=None,
                         urlencoded=None,
                     )
                     request_body = out["request_body"]
+                    if isinstance(request_body, (dict, list)):
+                        request_text = orjson.dumps(request_body).decode("UTF-8")
+                    elif isinstance(request_body, str) and request_body:
+                        request_text = request_body
 
             request_body = self.context.resolve_placeholders(
                 variables=request_body,
                 step_code=self.step_code
             )
-            if self.step.request_args_type == AutoTestReqArgsType.XML and request_text:
+            text_after_ds = request_text if isinstance(request_text, str) else ""
+            use_xml_placeholders = (
+                self.step.request_args_type == AutoTestReqArgsType.XML
+                or text_after_ds.strip().startswith("<")
+            )
+            if use_xml_placeholders and request_text:
                 request_text = self.context.resolve_xml_placeholders(
                     xml_text=request_text,
                     step_code=self.step_code,

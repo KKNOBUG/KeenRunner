@@ -1263,13 +1263,23 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_url = null
     backendStep.request_port = null
 
-    const payloadRaw = config.request_text != null && String(config.request_text).trim() !== ''
-        ? config.request_text
-        : (config.request_payload ?? null)
-    const payloadTrimmed = payloadRaw != null ? String(payloadRaw).trim() : ''
-    backendStep.request_args_type = 'raw'
-    backendStep.request_text = payloadTrimmed !== '' ? payloadRaw : null
-    backendStep.request_body = null
+    const argsTypeRaw = (config.request_args_type ?? original.request_args_type ?? 'xml').toString().toLowerCase()
+    const argsType = ['xml', 'json', 'raw'].includes(argsTypeRaw) ? argsTypeRaw : 'xml'
+    backendStep.request_args_type = argsType
+
+    if (argsType === 'json') {
+      backendStep.request_body = config.data !== undefined
+          ? (config.data || {})
+          : (original.request_body || {})
+      backendStep.request_text = null
+    } else {
+      const payloadRaw = config.request_text != null
+          ? config.request_text
+          : (original.request_text ?? null)
+      const payloadTrimmed = payloadRaw != null ? String(payloadRaw).trim() : ''
+      backendStep.request_text = payloadTrimmed !== '' ? payloadRaw : null
+      backendStep.request_body = null
+    }
 
     if (config.extract_variables !== undefined) {
       backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
@@ -1286,6 +1296,13 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     } else {
       backendStep.assert_validators = null
     }
+
+    backendStep.data_source_name = config.data_source_name !== undefined
+        ? (config.data_source_name || null)
+        : (original.data_source_name || null)
+    backendStep.data_source_desc = config.data_source_desc !== undefined
+        ? (config.data_source_desc || null)
+        : (original.data_source_desc || null)
   }
   if (step.type === 'http') {
     backendStep.request_method = config.method || original.request_method || 'POST'

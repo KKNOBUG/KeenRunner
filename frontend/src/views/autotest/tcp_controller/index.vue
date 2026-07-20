@@ -89,21 +89,52 @@
       </n-form>
 
       <n-tabs type="line" animated style="margin-top: 16px;">
-        <n-tab-pane name="body" tab="请求">
-          <div v-if="!props.readonly" class="tcp-body-toolbar">
-            (排版规则：XML格式 -> JSON格式 -> 纯文本)
-            <n-button size="small" type="primary" tertiary @click="beautifyRequestPayload">
-              一键排版
-            </n-button>
+        <n-tab-pane name="body" tab="请求体">
+          <template #tab>
+            <n-badge :value="getBodyCount" :max="99" show-zero>
+              <span>请求体</span>
+            </n-badge>
+          </template>
+          <n-radio-group v-model:value="state.form.bodyType" name="tcpBodyType" :disabled="props.readonly">
+            <n-space>
+              <n-radio value="xml">xml</n-radio>
+              <n-radio value="json">json</n-radio>
+              <n-radio value="raw">raw</n-radio>
+            </n-space>
+          </n-radio-group>
+
+          <div v-if="state.form.bodyType === 'xml'">
+            <monaco-editor
+                v-model:value="state.form.xmlBody"
+                lang="xml"
+                :options="monacoEditorOptionsForBody()"
+                class="json-editor"
+                style="min-height: 400px; height: auto; margin-top: 12px;"
+                :readOnly="props.readonly"
+            />
           </div>
-          <monaco-editor
-              v-model:value="state.form.request_payload"
-              :lang="monacoBodyLang"
-              :options="monacoEditorOptionsForBody()"
-              class="json-editor"
-              style="min-height: 400px; height: auto; margin-top: 8px;"
-              :readOnly="props.readonly"
-          />
+
+          <div v-if="state.form.bodyType === 'json'">
+            <monaco-editor
+                v-model:value="state.form.jsonBody"
+                lang="json"
+                :options="monacoEditorOptionsForBody()"
+                class="json-editor"
+                style="min-height: 400px; height: auto; margin-top: 12px;"
+                :readOnly="props.readonly"
+            />
+          </div>
+
+          <div v-if="state.form.bodyType === 'raw'">
+            <n-input
+                v-model:value="state.form.rawBody"
+                type="textarea"
+                placeholder="请输入 raw 请求体文本"
+                :rows="12"
+                style="margin-top: 12px;"
+                :disabled="props.readonly"
+            />
+          </div>
         </n-tab-pane>
         <n-tab-pane name="extract_variables" tab="提取">
           <template #tab>
@@ -132,6 +163,15 @@
       </n-tabs>
     </n-collapse-transition>
   </n-card>
+
+  <StepDataSourcePanel
+      :step="props.step"
+      :readonly="props.readonly"
+      :step-name="state.form.step_name"
+      step-type-label="TCP请求"
+      v-model:data-source-name="state.form.data_source_name"
+      v-model:data-source-desc="state.form.data_source_desc"
+  />
 
   <n-card
       v-if="response || debugLoading"
@@ -207,21 +247,19 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NInputNumber,
   NModal,
   NRadio,
   NRadioGroup,
   NSelect,
   NSpace,
-  NSwitch,
   NTabPane,
   NTabs,
-  NTooltip,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import MonacoEditor from '@/components/monaco/index.vue'
 import StepExtractPanel from '@/components/autotest/StepExtractPanel.vue'
 import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
+import StepDataSourcePanel from '@/components/autotest/StepDataSourcePanel.vue'
 import api from '@/api'
 import {
   ASSERT_MODE_RESPONSE,
@@ -257,7 +295,13 @@ const state = reactive({
     step_desc: '',
     request_project_id: null,
     request_config_name: null,
-    request_payload: '',
+    /** 与后端 request_args_type 一致：xml | json | raw */
+    bodyType: 'xml',
+    xmlBody: '',
+    jsonBody: '',
+    rawBody: '',
+    data_source_name: '',
+    data_source_desc: '',
     extract_variables: {},
     assert_validators: {},
   }
@@ -265,6 +309,19 @@ const state = reactive({
 
 const extractCount = computed(() => countDictKeys(state.form.extract_variables))
 const validatorsCount = computed(() => countDictKeys(state.form.assert_validators))
+
+const getBodyCount = computed(() => {
+  switch (state.form.bodyType) {
+    case 'xml':
+      return String(state.form.xmlBody || '').trim() ? 1 : 0
+    case 'json':
+      return String(state.form.jsonBody || '').trim() ? 1 : 0
+    case 'raw':
+      return String(state.form.rawBody || '').trim() ? 1 : 0
+    default:
+      return 0
+  }
+})
 
 const hydrateExtractValidatorsFromSource = (cfg, original) => {
   state.form.extract_variables = hydrateExtractDictFromBackend(
@@ -315,16 +372,6 @@ const rules = {
   ]
 }
 
-/** Monaco 语言：xml | json | plaintext，与落库 body_format_mode 对应 */
-const monacoBodyLang = ref('xml')
-
-/** 将 Monaco languageId 转为步骤 config 中的 body_format_mode */
-const monacoLangToBodyFormatMode = (lang) => {
-  if (lang === 'plaintext') return 'text'
-  if (lang === 'json' || lang === 'xml') return lang
-  return 'text'
-}
-
 /** 校验是否为可解析的 XML（无 parsererror） */
 const tryParseValidXml = (raw) => {
   const s = String(raw ?? '').trim()
@@ -337,7 +384,7 @@ const tryParseValidXml = (raw) => {
 }
 
 /**
- * 简易 XML 排版：在已通过 DOMParser 校验后，在标签间断行并缩进（与常见 snippet 行为一致）
+ * 简易 XML 排版：在已通过 DOMParser 校验后，在标签间断行并缩进
  */
 const formatXmlPretty = (xml) => {
   let formatted = ''
@@ -362,6 +409,15 @@ const formatXmlPretty = (xml) => {
   return formatted.trimEnd()
 }
 
+/** 尝试格式化 XML；无效时返回 null */
+const tryBeautifyXml = (raw) => {
+  const doc = tryParseValidXml(raw)
+  if (!doc) return null
+  const ser = new XMLSerializer().serializeToString(doc.documentElement)
+  return formatXmlPretty(ser)
+}
+
+/** 尝试格式化 JSON；无效时返回 null */
 const tryBeautifyJson = (raw) => {
   const s = String(raw ?? '').trim()
   if (!s) return null
@@ -372,44 +428,35 @@ const tryBeautifyJson = (raw) => {
   }
 }
 
-/** 非 XML/JSON 时仅做轻量纯文本整理 */
-const normalizePlainText = (raw) =>
-    String(raw ?? '')
-        .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trimEnd()
-
-const beautifyRequestPayload = () => {
-  if (props.readonly) return
-  const raw = state.form.request_payload
-  const doc = tryParseValidXml(raw)
-  if (doc) {
-    const ser = new XMLSerializer().serializeToString(doc.documentElement)
-    state.form.request_payload = formatXmlPretty(ser)
-    monacoBodyLang.value = 'xml'
-    window.$message?.success?.('已按 XML 排版')
-    return
-  }
-  const jsonStr = tryBeautifyJson(raw)
-  if (jsonStr != null) {
-    state.form.request_payload = jsonStr
-    monacoBodyLang.value = 'json'
-    window.$message?.success?.('已按 JSON 排版')
-    return
-  }
-  state.form.request_payload = normalizePlainText(raw)
-  monacoBodyLang.value = 'plaintext'
-  window.$message?.info?.('未识别为 XML/JSON，已按纯文本整理')
+/** 自动格式化 xml（仅加载 / 切换到 xml 时调用一次；编辑过程不强制重排） */
+const autoFormatXmlBody = () => {
+  const raw = state.form.xmlBody
+  if (!String(raw ?? '').trim()) return false
+  const pretty = tryBeautifyXml(raw)
+  if (pretty == null || pretty === String(raw)) return false
+  state.form.xmlBody = pretty
+  return true
 }
 
-/** 与 http_controller 请求体 JSON 编辑器 options 一致 */
+/** 自动格式化 json（仅加载 / 切换到 json 时调用一次；编辑过程不强制重排） */
+const autoFormatJsonBody = () => {
+  const raw = state.form.jsonBody
+  if (!String(raw ?? '').trim()) return false
+  const pretty = tryBeautifyJson(raw)
+  if (pretty == null || pretty === String(raw)) return false
+  state.form.jsonBody = pretty
+  return true
+}
+
+/**
+ * 与 HTTP JSON 一致：依赖 Monaco formatOnPaste（粘贴时排版一次）。
+ * XML 的 DocumentFormattingEditProvider 已在 monaco 组件内注册；用户手动改格式后不再强制重排。
+ */
 const monacoEditorOptions = (readOnly) => {
   const options = {
     theme: 'vs-dark',
-    language: 'json',
     fontSize: 14,
-    tabSize: 4,
+    tabSize: 2,
     automaticLayout: true,
     minimap: { enabled: true },
     lineNumbers: 'on',
@@ -419,7 +466,8 @@ const monacoEditorOptions = (readOnly) => {
     folding: true,
     foldingStrategy: 'auto',
     roundedSelection: false,
-    cursorStyle: 'line'
+    cursorStyle: 'line',
+    formatOnPaste: true,
   }
   if (readOnly) options.readOnly = true
   return options
@@ -427,9 +475,41 @@ const monacoEditorOptions = (readOnly) => {
 
 const monacoEditorOptionsForBody = () => ({ ...monacoEditorOptions(!!props.readonly) })
 
+const normalizeBodyType = (raw) => {
+  const t = String(raw ?? '').toLowerCase()
+  if (t === 'xml' || t === 'json' || t === 'raw') return t
+  return 'xml'
+}
+
 const buildConfigFromState = () => {
-  const payloadText = String(state.form.request_payload ?? '')
-  const cfg = {
+  const bodyType = normalizeBodyType(state.form.bodyType)
+  // 三种类型草稿始终带回 config（对齐 HTTP form_data / jsonBodyText），切换时互不覆盖
+  const xmlBodyText = state.form.xmlBody ?? ''
+  const jsonBodyText = state.form.jsonBody ?? ''
+  const rawBodyText = state.form.rawBody ?? ''
+
+  let request_text = null
+  let data = {}
+
+  switch (bodyType) {
+    case 'json': {
+      try {
+        data = state.form.jsonBody ? JSON.parse(state.form.jsonBody) : {}
+      } catch {
+        data = {}
+      }
+      break
+    }
+    case 'xml':
+      request_text = xmlBodyText
+      break
+    case 'raw':
+    default:
+      request_text = rawBodyText
+      break
+  }
+
+  return {
     step_name: state.form.step_name,
     step_desc: state.form.step_desc,
     request_project_id: state.form.request_project_id,
@@ -439,16 +519,17 @@ const buildConfigFromState = () => {
     /** 目标地址由「脚本执行配置」或后端按应用+环境解析，页面不再编辑 */
     request_url: '',
     request_port: null,
-    body_format_mode: monacoLangToBodyFormatMode(monacoBodyLang.value),
-    // TCP 步骤：始终按原始文本发送，不区分 JSON/XML 提交类型
-    request_args_type: 'raw',
-    request_text: payloadText,
-    data: {},
-    request_payload: payloadText,
+    request_args_type: bodyType,
+    request_text,
+    data,
+    xmlBodyText,
+    jsonBodyText,
+    rawBodyText,
+    data_source_name: state.form.data_source_name || '',
+    data_source_desc: state.form.data_source_desc || '',
     extract_variables: buildExtractForBackend(),
     assert_validators: buildValidatorsForBackend(),
   }
-  return cfg
 }
 
 const initFromProps = () => {
@@ -458,30 +539,45 @@ const initFromProps = () => {
   state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
   state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
-  const argsType = String(cfg.request_args_type ?? original.request_args_type ?? '').toLowerCase()
-  if (argsType === 'json') {
+  state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
+  state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
+
+  const argsType = normalizeBodyType(cfg.request_args_type ?? original.request_args_type ?? 'xml')
+  state.form.bodyType = argsType
+
+  const backendText = cfg.request_text ?? original.request_text ?? ''
+  const legacyPayload = typeof cfg.request_payload === 'string' ? cfg.request_payload : ''
+
+  // 三种类型各自恢复：优先草稿字段，避免互相覆盖（对齐 HTTP jsonBody / rawBody）
+  state.form.xmlBody = cfg.xmlBodyText != null
+      ? String(cfg.xmlBodyText)
+      : (argsType === 'xml' ? (backendText || legacyPayload || '') : '')
+
+  if (cfg.jsonBodyText != null) {
+    state.form.jsonBody = String(cfg.jsonBodyText)
+  } else if (argsType === 'json') {
     const bodyObj = cfg.data ?? original.request_body ?? {}
-    state.form.request_payload = typeof cfg.request_payload === 'string'
-        ? cfg.request_payload
-        : JSON.stringify(bodyObj || {}, null, 2)
+    try {
+      if (typeof bodyObj === 'string') {
+        state.form.jsonBody = bodyObj
+      } else {
+        state.form.jsonBody = Object.keys(bodyObj || {}).length
+            ? JSON.stringify(bodyObj, null, 2)
+            : ''
+      }
+    } catch {
+      state.form.jsonBody = ''
+    }
   } else {
-    state.form.request_payload = cfg.request_payload ?? cfg.request_text ?? original.request_text ?? ''
+    state.form.jsonBody = ''
   }
 
-  const rawAfterLoad = String(state.form.request_payload || '')
-  if (cfg.body_format_mode && ['xml', 'json', 'text'].includes(cfg.body_format_mode)) {
-    monacoBodyLang.value = cfg.body_format_mode === 'text' ? 'plaintext' : cfg.body_format_mode
-  } else if (cfg.body_editor_kind && ['json', 'xml', 'text'].includes(cfg.body_editor_kind)) {
-    monacoBodyLang.value = cfg.body_editor_kind === 'text' ? 'plaintext' : cfg.body_editor_kind
-  } else if (!rawAfterLoad.trim()) {
-    monacoBodyLang.value = 'xml'
-  } else if (argsType === 'json') {
-    monacoBodyLang.value = 'json'
-  } else if (/^\s*</.test(rawAfterLoad)) {
-    monacoBodyLang.value = 'xml'
-  } else {
-    monacoBodyLang.value = 'plaintext'
-  }
+  state.form.rawBody = cfg.rawBodyText != null
+      ? String(cfg.rawBodyText)
+      : (argsType === 'raw' ? (backendText || legacyPayload || '') : '')
+
+  if (argsType === 'xml') autoFormatXmlBody()
+  else if (argsType === 'json') autoFormatJsonBody()
 
   hydrateExtractValidatorsFromSource(cfg, original)
 }
@@ -490,6 +586,17 @@ watch(
     () => props.step?.id,
     () => initFromProps(),
     { immediate: true }
+)
+
+/** 仅切换类型时对当前类型排版一次（加载态对齐）；不把其它类型内容互相拷贝、不持续强制重排 */
+watch(
+    () => state.form.bodyType,
+    (type, prev) => {
+      if (props.readonly) return
+      if (prev == null || prev === type) return
+      if (type === 'xml') autoFormatXmlBody()
+      else if (type === 'json') autoFormatJsonBody()
+    }
 )
 
 const tcpConfigNameOptions = ref([])
@@ -616,18 +723,23 @@ const doDebugRequest = async (env_id) => {
                 ? String(original.request_config_name).trim()
                 : '')
 
-    const bodyText = cfg.request_text ?? cfg.request_payload
-    const requestText = bodyText != null && String(bodyText) !== '' ? String(bodyText) : undefined
+    const bodyType = normalizeBodyType(cfg.request_args_type)
 
     /** @type {Record<string, unknown>} */
     const debugPayload = {
       env_id: Number(env_id),
       step_name: state.form.step_name || original.step_name || 'TCP 调试',
       request_project_id: Number(cfg.request_project_id ?? original.request_project_id),
-      request_config_name: requestConfigName
+      request_config_name: requestConfigName,
+      request_args_type: bodyType,
     }
-    if (requestText !== undefined) {
-      debugPayload.request_text = requestText
+    if (bodyType === 'json') {
+      debugPayload.request_body = cfg.data && typeof cfg.data === 'object' ? cfg.data : {}
+    } else {
+      const bodyText = cfg.request_text
+      if (bodyText != null && String(bodyText) !== '') {
+        debugPayload.request_text = String(bodyText)
+      }
     }
     const ev = buildExtractForBackend()
     if (ev.length > 0) {
@@ -717,13 +829,6 @@ const doDebugRequest = async (env_id) => {
 
 .request-toolbar-select {
   width: 100%;
-}
-
-.tcp-body-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-bottom: 0;
 }
 
 /* 与 http_controller「请求体」json 编辑器一致 */

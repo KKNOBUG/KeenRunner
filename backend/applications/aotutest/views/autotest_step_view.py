@@ -891,7 +891,8 @@ async def debug_tcp_request(
         request_project_id: int = step_data.request_project_id
         request_config_name: str = step_data.request_config_name
         request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-        request_text: str = step_data.request_text
+        request_text: Optional[str] = step_data.request_text
+        request_body: Any = step_data.request_body
 
         session_variables: List[StepVariablesBase] = step_data.session_variables
         defined_variables: List[StepVariablesBase] = step_data.defined_variables
@@ -928,6 +929,7 @@ async def debug_tcp_request(
                     f"环境ID: {env_id}\n\t"
                     f"应用ID: {request_project_id}\n\t"
                     f"配置名称: {request_config_name}\n\t"
+                    f"请求体类型: {request_args_type}\n\t"
                     f"目标地址: 由环境配置解析(config_host/config_port)"
         )
         append_debugging_log(message="【参数替换】开始: ")
@@ -937,7 +939,13 @@ async def debug_tcp_request(
             logger_object=append_debugging_log,
             finished_variables={}
         )
-        if request_text is not None:
+        if request_args_type == AutoTestReqArgsType.JSON:
+            request_body = AutoTestToolService.resolve_placeholders(
+                value=request_body,
+                logger_object=append_debugging_log,
+                finished_variables=finished_variables,
+            )
+        elif request_text is not None:
             if request_args_type == AutoTestReqArgsType.XML:
                 request_text = AutoTestToolService.resolve_xml_placeholders(
                     xml_text=request_text,
@@ -983,8 +991,14 @@ async def debug_tcp_request(
                 message="TCP请求调试失败, 目标服务器地址或端口未配置(请检查该环境下的 API 环境配置中的 config_host/config_port)"
             )
 
-        # 发送TCP请求
-        payload = request_text
+        # 发送TCP请求：json 发 request_body，xml/raw 发 request_text
+        if request_args_type == AutoTestReqArgsType.JSON:
+            if isinstance(request_body, (dict, list)):
+                payload: Any = orjson.dumps(request_body).decode("UTF-8")
+            else:
+                payload = request_body
+        else:
+            payload = request_text
         start_time = time.time()
         async with AioTcpClient(timeout=timedelta(seconds=30), connect_timeout=timedelta(seconds=10)) as client:
             try:
@@ -1022,20 +1036,25 @@ async def debug_tcp_request(
 
         # 变量提取 / 断言（同 HTTP 调试）
         request_json_for_extract: Optional[Union[list, dict]] = None
-        if isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
+        if isinstance(request_body, (dict, list)):
+            request_json_for_extract = request_body
+        elif isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
             try:
                 parsed_request = orjson.loads(request_text)
                 if isinstance(parsed_request, (dict, list)):
                     request_json_for_extract = parsed_request
             except Exception:
                 request_json_for_extract = None
+        request_text_for_extract = request_text
+        if request_text_for_extract in (None, "") and isinstance(request_body, (dict, list)):
+            request_text_for_extract = orjson.dumps(request_body).decode("UTF-8")
         extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
             response_json=response_json,
             response_headers=None,
             response_cookies=None,
-            request_text=request_text,
+            request_text=request_text_for_extract,
             request_json=request_json_for_extract,
             request_headers=None,
             request_cookies=None,
@@ -1050,7 +1069,7 @@ async def debug_tcp_request(
             response_json=response_json,
             response_headers=None,
             response_cookies=None,
-            request_text=request_text,
+            request_text=request_text_for_extract,
             request_json=request_json_for_extract,
             request_headers=None,
             request_cookies=None,

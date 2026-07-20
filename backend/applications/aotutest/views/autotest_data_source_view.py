@@ -436,9 +436,9 @@ async def get_dataset_scenario_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/import_template_xlsx", summary="API自动化测试-下载HTTP步骤数据集导入模板xlsx")
+@autotest_data_source.get("/import_template_xlsx", summary="API自动化测试-下载请求步骤数据集导入模板xlsx")
 async def download_http_step_dataset_import_template():
-    """分发仓库内置于 output/template 的 xlsx；流式读取，不加 UTF-8 BOM，避免损坏二进制格式。"""
+    """分发仓库内置于 output/template 的 xlsx（HTTP/TCP 请求步骤共用）；流式读取，不加 UTF-8 BOM，避免损坏二进制格式。"""
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
         return NotFoundResponse(message="导入模板文件不存在，请确认已部署 output/template 下模板文件")
@@ -492,8 +492,8 @@ async def single_step_dataset_upload(
         LOGGER.error(f"查询步骤失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=str(e))
 
-    if step_instance.step_type != AutoTestStepType.HTTP.value:
-        return ParameterResponse(message="仅支持对HTTP请求步骤上传数据驱动文件")
+    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
+        return ParameterResponse(message="仅支持对HTTP/TCP请求步骤上传数据驱动文件")
 
     destination = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(

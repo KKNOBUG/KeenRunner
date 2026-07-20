@@ -189,7 +189,7 @@ export default {
   // 环境相关：查询环境名称列表(去重)，用于执行/调试时选择执行环境
   getApiEnvNames: () => request.get('/autotest/env/get_names'),
 
-  // 数据源（HTTP 步骤）
+  // 数据源（HTTP/TCP 请求步骤）
   getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
   /** Form：case_id */
   queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),

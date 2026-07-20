@@ -36,7 +36,7 @@ self.MonacoEnvironment = {
     if (label === 'css' || label === 'scss' || label === 'less') {
       return new cssWorker()
     }
-    if (label === 'html' || label === 'handlebars' || label === 'razor') {
+    if (label === 'html' || label === 'handlebars' || label === 'razor' || label === 'xml') {
       return new htmlWorker()
     }
     if (label === 'typescript' || label === 'javascript') {
@@ -44,6 +44,71 @@ self.MonacoEnvironment = {
     }
     return new editorWorker()
   }
+}
+
+/** XML 简易排版（供 formatOnPaste / formatOnType 使用） */
+const tryParseValidXmlDoc = (raw) => {
+  const s = String(raw ?? '').trim()
+  if (!s || !s.includes('<')) return null
+  if (typeof DOMParser === 'undefined') return null
+  const doc = new DOMParser().parseFromString(s, 'text/xml')
+  const pe = doc.querySelector('parsererror')
+  if (pe && String(pe.textContent || '').trim()) return null
+  if (!doc.documentElement) return null
+  return doc
+}
+
+const formatXmlPrettyText = (xml) => {
+  let formatted = ''
+  let pad = 0
+  const normalized = String(xml).replace(/>\s*</g, '>\n<')
+  normalized.split('\n').forEach((line) => {
+    const node = line.trim()
+    if (!node) return
+    let indent = 0
+    if (node.match(/.+<\/\w[^>]*>$/)) {
+      indent = 0
+    } else if (node.match(/^<\/\w/)) {
+      if (pad > 0) pad -= 1
+    } else if (node.match(/^<\w[^>]*[^/]>.*$/)) {
+      indent = 1
+    } else {
+      indent = 0
+    }
+    formatted += `${'  '.repeat(pad)}${node}\n`
+    pad += indent
+  })
+  return formatted.trimEnd()
+}
+
+const beautifyXmlText = (raw) => {
+  const doc = tryParseValidXmlDoc(raw)
+  if (!doc) return null
+  const ser = new XMLSerializer().serializeToString(doc.documentElement)
+  return formatXmlPrettyText(ser)
+}
+
+/** 仅注册一次，避免重复 provider */
+let xmlFormattingProvidersRegistered = false
+const ensureXmlFormattingProviders = () => {
+  if (xmlFormattingProvidersRegistered) return
+  xmlFormattingProvidersRegistered = true
+  monaco.languages.registerDocumentFormattingEditProvider('xml', {
+    provideDocumentFormattingEdits(model) {
+      const text = model.getValue()
+      const pretty = beautifyXmlText(text)
+      if (pretty == null || pretty === text) return []
+      return [{ range: model.getFullModelRange(), text: pretty }]
+    },
+  })
+  monaco.languages.registerDocumentRangeFormattingEditProvider('xml', {
+    provideDocumentRangeFormattingEdits(model) {
+      const text = model.getValue()
+      const pretty = beautifyXmlText(text)
+      if (pretty == null || pretty === text) return []
+      return [{ range: model.getFullModelRange(), text: pretty }]
+    },
+  })
 }
 
 const props = defineProps({
@@ -208,6 +273,9 @@ const state = reactive({
  */
 const initEditor = () => {
   let options = {...state.options, ...props.options}
+  if (props.lang === 'xml') {
+    ensureXmlFormattingProviders()
+  }
   state.sqlSnippets = new SQLSnippets(
       monaco,
       props.onInputField,
@@ -475,6 +543,9 @@ watch(
 watch(
     () => props.lang,
     (newVal) => {
+      if (newVal === 'xml') {
+        ensureXmlFormattingProviders()
+      }
       if (props.isDiff) {
         // toRaw(editor.value).getOriginalEditor().setModelLanguage(toRaw(editor.value).getOriginalEditor().getModel(), newVal)
         // toRaw(editor.value).getModifiedEditor().setModelLanguage(toRaw(editor.value).getModifiedEditor().getModel(), newVal)

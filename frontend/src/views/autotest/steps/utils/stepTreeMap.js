@@ -108,23 +108,17 @@ export function mapBackendStep(step) {
     }
   } else if (localType === 'tcp') {
     const argsType = (step.request_args_type || '').toString().toLowerCase()
-    const payloadStr =
-        argsType === 'json' ? JSON.stringify(step.request_body || {}, null, 2) : step.request_text || ''
-    let body_format_mode = 'xml'
-    if (!String(payloadStr).trim()) body_format_mode = 'xml'
-    else if (argsType === 'json') body_format_mode = 'json'
-    else if (/^\s*</.test(String(payloadStr))) body_format_mode = 'xml'
-    else body_format_mode = 'text'
+    const requestArgsType = ['xml', 'json', 'raw'].includes(argsType) ? argsType : 'xml'
     base.config = {
       step_name: step.step_name || '',
       step_desc: step.step_desc || '',
       request_project_id: step.request_project_id ?? null,
       request_config_name: step.request_config_name ?? null,
-      body_format_mode,
-      request_args_type: 'raw',
-      request_payload: payloadStr,
+      data_source_name: step.data_source_name || '',
+      data_source_desc: step.data_source_desc || '',
+      request_args_type: requestArgsType,
       request_text: step.request_text || null,
-      data: {},
+      data: step.request_body || {},
       extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
     }
