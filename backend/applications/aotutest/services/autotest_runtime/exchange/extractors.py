@@ -143,19 +143,21 @@ class Extractors:
             text: Optional[str],
             expr: Optional[str],
             range_type: str,
-            operation_type: str,
-            empty_message: str,
+            index: Optional[Any] = None,
+            operation_type: str = "变量提取",
+            empty_message: str = "内容为空",
     ) -> Any:
         """
-        从纯文本按正则提取首个匹配串。
+        从纯文本按正则提取匹配串，可选指定分组。
 
         :param text: 请求或响应正文
         :param expr: 正则表达式；SOME 模式必填
         :param range_type: ``all`` 或 ``some``
+        :param index: 分组编号；None 或 0 取整个匹配串(group(0))，正整数 N 取第 N 个捕获分组(group(N))
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
-        :return: 匹配到的 group(0)；ALL 时返回原文
-        :raises ValueError: 空正文、正则非法或未匹配
+        :return: 匹配到的分组值；ALL 时返回原文
+        :raises ValueError: 空正文、正则非法、未匹配、分组索引越界
         """
         if not text:
             raise ValueError(empty_message)
@@ -165,9 +167,21 @@ class Extractors:
             raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
         try:
             match = re.search(expr, text, re.S)
-            if match:
+            if not match:
+                raise ValueError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
+            if index is None or int(index) == 0:
                 return match.group(0)
-            raise ValueError(f"【{operation_type}】正则表达式[{expr}]未匹配到内容")
+            index_int = int(index)
+            if index_int < 0:
+                raise ValueError(
+                    f"【{operation_type}】分组索引[{index_int}]不支持负数, 正则分组编号须为非负整数(0=整体匹配, 1=第一个分组)"
+                )
+            group_count = len(match.groups())
+            if index_int > group_count:
+                raise ValueError(
+                    f"【{operation_type}】分组索引[{index_int}]超出范围, 正则表达式共有[{group_count}]个分组(可用范围: 0~{group_count})"
+                )
+            return match.group(index_int)
         except re.error as e:
             raise ValueError(f"【{operation_type}】正则表达式执行失败, 错误描述: {e}") from e
 
@@ -382,11 +396,14 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         """注册 Text 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-            """从请求或响应纯文本按表达式提取。"""
+            """从请求或响应纯文本按表达式提取，index 指定正则分组编号。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
             return E._extract_text_payload(
-                text=text, expr=expr, range_type=range_type,
+                text=text,
+                expr=expr,
+                range_type=range_type,
+                index=index,
                 operation_type=operation_type,
                 empty_message=f"【{operation_type}】{label}内容不是有效的Text数据",
             )
