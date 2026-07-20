@@ -639,18 +639,21 @@ defineExpose({
   font-weight: 500;
 }
 
+/* 用例标签二级选择面板（左分类 / 右标签名） */
 .tag-picker-panel {
   display: flex;
   height: 300px;
   width: 400px;
 }
 
+/* 左侧分类列（配合 .overlay-scroll） */
 .tag-picker-col {
   width: 45%;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
+/* 右侧标签名列 */
 .tag-picker-col--names {
   width: 50%;
 }

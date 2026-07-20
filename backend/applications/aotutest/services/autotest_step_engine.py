@@ -916,30 +916,37 @@ class BaseStepExecutor:
 
     @property
     def case_id(self) -> Optional[int]:
+        """当前步骤所属用例 ID。"""
         return self.step.case_id
 
     @property
     def step_id(self) -> Optional[int]:
+        """当前步骤主键 ID。"""
         return self.step.step_id
 
     @property
     def step_no(self) -> Optional[int]:
+        """当前步骤序号。"""
         return self.step.step_no
 
     @property
     def step_code(self) -> Optional[str]:
+        """当前步骤标识代码。"""
         return self.step.step_code
 
     @property
     def step_name(self) -> Optional[str]:
+        """当前步骤名称。"""
         return self.step.step_name
 
     @property
     def step_type(self) -> AutoTestStepType:
+        """当前步骤类型枚举。"""
         return AutoTestStepType(self.step.step_type)
 
     @property
     def quote_case_id(self) -> Optional[int]:
+        """引用用例 ID（引用公共脚本时）。"""
         return self.step.quote_case_id
 
     @property
@@ -954,6 +961,7 @@ class BaseStepExecutor:
 
     @classmethod
     async def get_services(cls) -> AutoTestApiServices:
+        """获取自动化测试依赖注入的 CRUD 服务聚合。"""
         from backend.applications.aotutest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
@@ -1042,8 +1050,11 @@ class BaseStepExecutor:
 
     async def execute(self) -> Optional[StepExecutionResult]:
         """
-        执行当前步骤：注入 defined_variables、调用 _execute、合并 extract_variables、可选保存明细
-        :return: 本步骤执行结果；若 step_is_skipped 则返回 None（不写明细、不计入统计）
+        执行当前步骤：注入 defined_variables、调用 _execute、合并 extract_variables、可选保存明细。
+
+        若 step_is_skipped 为 True，仅打 INFO 日志并返回 None（不写明细、不计入统计、不执行子步骤）。
+
+        :return: 本步骤执行结果；跳过时返回 None
         """
         # 跳过/注释：当作没有该步骤（父跳过时不会进入子步，故无需祖先标记）
         if bool(getattr(self.step, "step_is_skipped", False)):
@@ -1259,9 +1270,9 @@ class BaseStepExecutor:
 
     async def _execute_children(self) -> List[StepExecutionResult]:
         """
-        按step_no顺序执行所有子步骤（children + quote_steps）
+        按 step_no 顺序执行所有子步骤（children + quote_steps）。
 
-        :return: 子步骤执行结果列表；单个子步骤异常时生成失败结果项而非中断整列表
+        :return: 子步骤结果列表；step_is_skipped 的子步返回 None 会被跳过；异常子步转为失败结果项
         """
         results: List[StepExecutionResult] = []
         for child in self.children:
@@ -2072,12 +2083,16 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
 class QuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本执行器：加载引用用例根步骤树，按step_no顺序执行并挂到result.children
+    引用公共脚本执行器：加载引用用例根步骤树，按 step_no 顺序执行并挂到 result.children。
+
+    本步 step_is_skipped 时由 BaseStepExecutor.execute 直接返回，不会进入本执行器。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        :param result: 本步执行结果，子步骤结果写入children
+        加载并执行引用用例的根步骤树；跳过的子步（execute 返回 None）不挂入 children。
+
+        :param result: 本步执行结果，子步骤结果写入 children
         :return: None
         """
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
@@ -2321,6 +2336,7 @@ class TcpStepExecutor(BaseStepExecutor):
             response_type = (self.step.tcp_response_type or "text").strip().lower()
 
             def _to_timedelta(v: Any) -> Optional["timedelta"]:
+                """将秒数字符串/数值转为 timedelta；空或非法返回 None。"""
                 if v is None or v == "":
                     return None
                 try:
@@ -2679,6 +2695,12 @@ class RedisStepExecutor(BaseStepExecutor):
 
     @staticmethod
     def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
+        """
+        判断 Redis 命令结果列表是否含有效数据（非空/非空白）。
+
+        :param command_results: 命令返回值列表
+        :return: 存在有效结果则为 True
+        """
         if not command_results:
             return False
         for result in command_results:
@@ -2692,6 +2714,12 @@ class RedisStepExecutor(BaseStepExecutor):
         return False
 
     async def _execute(self, result: StepExecutionResult) -> None:
+        """
+        按环境配置顺序执行 redis_operates，解析占位符并写入结果；支持查到即止。
+
+        :param result: 本步执行结果
+        :return: None
+        """
         try:
             merge_operates_env_name: Optional[str] = None
             redis_operates: Optional[List[RedisOperates]] = self.step.redis_operates
@@ -3273,9 +3301,10 @@ class AutoTestStepExecutionEngine:
         Optional[List[AutoTestApiDetailCreate]]
     ]:
         """
-        执行单用例：在上下文中按step_no执行根步骤，可选收集报告与明细供调用方落库
+        执行单用例：在上下文中按 step_no 执行根步骤，可选收集报告与明细供调用方落库。
 
-        参数化时仅传入dataset_name，HTTP、TCP步骤按case_id/step_code与数据集名称查表取数
+        参数化时仅传入 dataset_name，HTTP、TCP 步骤按 case_id/step_code 与数据集名称查表取数。
+        step_is_skipped 的步骤不进入 results、不写明细、不计入 statistics。
 
         :param case: 用例信息字典，含 case_id、case_code、case_name
         :param steps: 根步骤可迭代对象（已排序按 step_no）
@@ -3284,7 +3313,7 @@ class AutoTestStepExecutionEngine:
         :param initial_variables: 初始会话变量列表，每项含 key、value、desc
         :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数
         :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。
-            - results 为根步骤执行结果列表；
+            - results 为根步骤执行结果列表（不含已跳过步骤）；
             - logs 按 step_code 分组；
             - report_code 未保存时为 None；
             - statistics 含 total_steps、success_steps、failed_steps、passed_ratio；

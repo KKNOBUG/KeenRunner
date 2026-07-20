@@ -206,7 +206,6 @@ async def run_task_info(
         task_in: dict = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """立即执行指定任务（下发 Celery 异步执行）。"""
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
@@ -241,7 +240,6 @@ async def start_task_info(
         task_in: dict = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """将任务设为启用，使其被定时扫描并按时执行。"""
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
@@ -270,7 +268,6 @@ async def stop_task_info(
         task_in: dict = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """将任务设为未启动（task_enabled=False），不再被定时扫描执行。"""
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
@@ -299,7 +296,6 @@ async def search_task_records(
         record_in: AutoTestApiRecordSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """按条件分页查询任务执行观测记录（触发来源、批次码、状态、时间等）。"""
     try:
         total, instances = await services.record_curd.select_records(record_in=record_in)
         data = [

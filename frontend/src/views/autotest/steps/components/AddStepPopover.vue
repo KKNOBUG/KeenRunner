@@ -214,6 +214,7 @@ const handleSelectItem = (item) => {
 }
 
 .add-step-menu-scroll {
+  /* 添加步骤菜单：限高滚动，滚动条样式见全局 .overlay-scroll */
   max-height: min(400px, calc(100vh - 112px));
   overflow-x: hidden;
   overflow-y: auto;

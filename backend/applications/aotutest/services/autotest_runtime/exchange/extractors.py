@@ -348,9 +348,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
     E = Extractors
 
     def json_side(side: str):
-        """注册 JSON 侧（request/response）提取器。"""
+        """注册 JSON 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取 JSON 并提取。"""
 
         def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+            """从请求或响应 JSON 按表达式提取。"""
             data = ctx.response_json if side == "response" else ctx.request_json
             label = "响应" if side == "response" else "请求"
             return E._extract_json_payload(
@@ -362,9 +363,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def xml_side(side: str):
-        """注册 XML 侧（request/response）提取器。"""
+        """注册 XML 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+            """从请求或响应 XML 文本按表达式提取。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
             return E._extract_xml_payload(
@@ -377,9 +379,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def text_side(side: str):
-        """注册 Text 侧（request/response）提取器。"""
+        """注册 Text 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+            """从请求或响应纯文本按表达式提取。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
             return E._extract_text_payload(
@@ -391,9 +394,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def mapping_side(attr: str, empty: str, miss_prefix: str):
-        """注册 Headers/Cookies 等映射字段提取器。"""
+        """注册 Headers/Cookies 等映射字段提取器；返回的 ``_run`` 从 ctx.attr 取值。"""
 
         def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+            """从映射字段（Headers/Cookies 等）按表达式提取。"""
             data = getattr(ctx, attr)
             return E._extract_mapping_payload(
                 data=data, expr=expr, range_type=range_type,

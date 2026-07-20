@@ -267,9 +267,6 @@ async def reset_password(
 async def logout(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
-    """
-    用户主动登出：吊销当前用户所有 Token
-    """
     user_id = CTX_USER_ID.get()
     try:
         await user_crud.logout(user_id=user_id)

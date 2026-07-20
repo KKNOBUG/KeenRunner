@@ -96,6 +96,7 @@ class AssertionCompare:
             raise ValueError(f"操作符[{operation!r}]不被支持") from exc
 
         def _length_equal(a: Any, e: Any) -> bool:
+            """比较实际值字符串长度是否等于期望长度。"""
             nb = cls._normalize_value(e)
             return nb is not None and len(str(a)) == int(nb)
 

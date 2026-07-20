@@ -23,6 +23,7 @@ from backend.applications.aotutest.services.autotest_task_crud import AutoTestAp
 
 @dataclass
 class AutoTestApiServices:
+    """自动化测试相关 CRUD 服务聚合，供视图层依赖注入。"""
     case_curd: AutoTestApiCaseCrud
     data_source_curd: AutoTestDataSourceCrud
     detail_curd: AutoTestApiDetailCrud
@@ -37,6 +38,11 @@ class AutoTestApiServices:
 
 
 async def get_autotest_api_services() -> AutoTestApiServices:
+    """
+    构造并返回自动化测试 CRUD 服务聚合实例。
+
+    :return: AutoTestApiServices 实例
+    """
     return AutoTestApiServices(
         case_curd=AutoTestApiCaseCrud(),
         data_source_curd=AutoTestDataSourceCrud(),

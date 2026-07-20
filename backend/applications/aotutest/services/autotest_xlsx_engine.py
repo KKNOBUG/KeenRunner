@@ -18,6 +18,12 @@ executor = ThreadPoolExecutor(max_workers=2)
 
 
 def validate_excel_structure(sheets: dict):
+    """
+    校验多 sheet 数据驱动表结构：首行场景名一致、分区不重复、字段不重复。
+
+    :param sheets: ``{sheet_name: DataFrame}``（header=None）
+    :return: ``{"valid": bool, "error": list}``
+    """
     errors = []
     first_row_standard = None
 
@@ -132,6 +138,13 @@ def validate_excel_structure(sheets: dict):
 
 
 def parse_kv_string(text, requests_body_key):
+    """
+    将多行 ``key: value`` 文本解析为 JSONPath 键值字典。
+
+    :param text: 原始 KV 文本
+    :param requests_body_key: 路径前缀片段；None 时前缀为 ``$.``
+    :return: ``{JSONPath: value}``；非字符串输入返回空字典
+    """
     if requests_body_key is None:
         key_path = "$."
     else:
@@ -148,6 +161,14 @@ def parse_kv_string(text, requests_body_key):
 
 
 def parse_sheet_fast(df: pd.DataFrame, sheet_name, requests_body_key):
+    """
+    同步解析单个 sheet 为按场景组织的 head/body/assert 结构。
+
+    :param df: sheet DataFrame（header=None）
+    :param sheet_name: sheet 名，用于匹配 requests_body_key
+    :param requests_body_key: sheet 到 body 路径键的映射
+    :return: ``(场景字典, 错误列表)``
+    """
     values = df.values
 
     scene_names = values[0, 1:]
@@ -241,11 +262,20 @@ def parse_sheet_fast(df: pd.DataFrame, sheet_name, requests_body_key):
 
 
 async def parse_sheet_async(df, sheet_name, requests_body_key):
+    """在线程池中异步调用 ``parse_sheet_fast``。"""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, parse_sheet_fast, df, sheet_name, requests_body_key)
 
 
 async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name: str):
+    """
+    将源工作簿首个 sheet 复制到目标文件的指定 sheet（同名则覆盖）。
+
+    :param save_neo_name: 目标 xlsx 路径
+    :param save_file_name: 源 xlsx 路径
+    :param sheet_name: 目标 sheet 名
+    :return: None
+    """
     source_wb = load_workbook(save_file_name)
     source_ws = source_wb[source_wb.sheetnames[0]]
     if save_neo_name.is_file():
@@ -263,6 +293,13 @@ async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name:
 
 
 async def save_upload_file(upload_file, destination: Path):
+    """
+    将上传文件分块写入目标路径。
+
+    :param upload_file: 支持 ``read`` 的上传对象
+    :param destination: 目标文件路径
+    :return: None
+    """
     with destination.open("wb") as buffer:
         while True:
             chunk = await upload_file.read(1024 * 1024)
@@ -273,6 +310,14 @@ async def save_upload_file(upload_file, destination: Path):
 
 
 async def xlsx_to_json_async(file_path: str, requests_body_key: dict, first_sheet_only: bool = False):
+    """
+    异步读取 xlsx，校验结构后解析为按 sheet/场景组织的 JSON。
+
+    :param file_path: Excel 路径
+    :param requests_body_key: sheet 到 body 路径键的映射
+    :param first_sheet_only: 为 True 时仅解析首个 sheet
+    :return: ``{"valid": True, "data": ...}`` 或 ``{"valid": False, "errors": ...}``
+    """
     if first_sheet_only:
         df = pd.read_excel(file_path, sheet_name=0, header=None)
         sheets = {"sheet1": df}

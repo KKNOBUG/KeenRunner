@@ -28,10 +28,12 @@ except ImportError as e:
 
 
 def _log(msg: str) -> None:
+    """向控制台打印演示日志。"""
     print(f"  [log] {msg}")
 
 
 def main() -> None:
+    """运行占位符解析各场景演示。"""
     # 非核心引擎：变量来自 key/value 列表
     var_list: List[Dict[str, Any]] = [
         {"key": "a", "value": 1},
@@ -47,6 +49,12 @@ def main() -> None:
     ]
 
     def run_case(title: str, template: str) -> None:
+        """执行单个占位符解析用例并打印结果。
+
+        :param title: 场景标题
+        :param template: 待解析模板字符串
+        :return: None
+        """
         print(f"\n--- {title} ---")
         print(f"  模板: {template!r}")
         out = AutoTestToolService.resolve_placeholders(

@@ -90,6 +90,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     @staticmethod
     def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
+        """将任务字典中的枚举字段（task_type 等）转为 ``.value`` 原始值。"""
         for key in ("task_type", "task_periodic_expr", "last_execute_state"):
             if key in data and data[key] is not None and hasattr(data[key], "value"):
                 data[key] = data[key].value

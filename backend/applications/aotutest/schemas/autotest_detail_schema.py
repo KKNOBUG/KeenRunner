@@ -53,6 +53,12 @@ class ConditionsBase(BaseModel):
     @field_validator("condition_compare", mode="before")
     @classmethod
     def validate_condition_compare(cls, v: Any) -> str:
+        """
+        校验并规范化条件比较符为 AutoTestAssertionOperation 枚举值。
+
+        :param v: 原始比较符
+        :return: 规范化后的比较符字符串
+        """
         if v is None or (isinstance(v, str) and not str(v).strip()):
             raise ValueError("条件比较符不能为空")
         return AutoTestAssertionOperation(str(v).strip()).value
@@ -103,6 +109,12 @@ class AutoTestApiDetailVarBase(BaseModel):
     @field_validator("step_exec_logger", mode="before")
     @classmethod
     def normalize_step_exec_logger(cls, v: Any) -> Optional[List[str]]:
+        """
+        将 step_exec_logger 规范为 list[str] 或 null，过滤空项。
+
+        :param v: 原始日志字段
+        :return: 规范化后的日志列表，全空则返回 None
+        """
         if v is None:
             return None
         if not isinstance(v, list):
@@ -113,6 +125,12 @@ class AutoTestApiDetailVarBase(BaseModel):
     @field_validator('database_operates', mode='before')
     @classmethod
     def normalize_database_operates(cls, v):
+        """
+        将单条 database_operates 对象包装为列表。
+
+        :param v: 原始值（null / dict / list）
+        :return: 列表形式或原值
+        """
         if v is None:
             return None
         if isinstance(v, dict):
@@ -124,6 +142,12 @@ class AutoTestApiDetailVarBase(BaseModel):
     @field_validator('redis_operates', mode='before')
     @classmethod
     def normalize_redis_operates(cls, v):
+        """
+        将单条 redis_operates 对象包装为列表。
+
+        :param v: 原始值（null / dict / list）
+        :return: 列表形式或原值
+        """
         if v is None:
             return None
         if isinstance(v, dict):
@@ -135,6 +159,12 @@ class AutoTestApiDetailVarBase(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def normalize_json_fields(cls, v):
+        """
+        将嵌套模型/复杂字段转为可 JSON 序列化结构；失败时置空并写入 step_exec_logger。
+
+        :param v: 原始入参字典或其它类型
+        :return: 规范化后的入参
+        """
         if not isinstance(v, dict):
             return v
         executive_logger: List[str] = []

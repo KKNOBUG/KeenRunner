@@ -58,6 +58,12 @@ class ConditionsBase(BaseModel):
     @field_validator("condition_compare", mode="before")
     @classmethod
     def validate_condition_compare(cls, v: Any) -> str:
+        """
+        校验并规范化条件比较符为 AutoTestAssertionOperation 枚举值。
+
+        :param v: 原始比较符
+        :return: 规范化后的比较符字符串
+        """
         if v is None or (isinstance(v, str) and not str(v).strip()):
             raise ValueError("条件比较符不能为空")
         return AutoTestAssertionOperation(str(v).strip()).value
@@ -128,6 +134,12 @@ class AutoTestApiStepDbBase(BaseModel):
     @field_validator("database_operates", mode="before")
     @classmethod
     def normalize_database_operates(cls, v: Any) -> Any:
+        """
+        将 database_operates 规范为 null 或对象列表；单条 dict 包装为列表。
+
+        :param v: 原始值
+        :return: 规范化后的列表或 None
+        """
         if v is None:
             return None
         if isinstance(v, dict):
@@ -146,6 +158,12 @@ class AutoTestApiStepRedisBase(BaseModel):
     @field_validator("redis_operates", mode="before")
     @classmethod
     def normalize_redis_operates(cls, v: Any) -> Any:
+        """
+        将 redis_operates 规范为 null 或对象列表；dict 取其 values 作为列表。
+
+        :param v: 原始值
+        :return: 规范化后的列表或 None
+        """
         if v is None:
             return None
         if isinstance(v, dict):
@@ -166,6 +184,12 @@ class AutoTestApiStepVarBase(BaseModel):
     @field_validator("session_variables", mode="before")
     @classmethod
     def _session_variables_list_shape(cls, v: Any) -> Any:
+        """
+        校验 session_variables 为数组或 null。
+
+        :param v: 原始值
+        :return: 原值（合法时）
+        """
         if v is None:
             return None
         if not isinstance(v, list):
@@ -175,6 +199,12 @@ class AutoTestApiStepVarBase(BaseModel):
     @field_validator("defined_variables", mode="before")
     @classmethod
     def _defined_variables_list_shape(cls, v: Any) -> Any:
+        """
+        校验 defined_variables 为数组或 null。
+
+        :param v: 原始值
+        :return: 原值（合法时）
+        """
         if v is None:
             return None
         if not isinstance(v, list):
@@ -184,6 +214,12 @@ class AutoTestApiStepVarBase(BaseModel):
     @field_validator("extract_variables", mode="before")
     @classmethod
     def _extract_variables_list_shape(cls, v: Any) -> Any:
+        """
+        校验 extract_variables 为数组或 null。
+
+        :param v: 原始值
+        :return: 原值（合法时）
+        """
         if v is None:
             return None
         if not isinstance(v, list):
@@ -193,6 +229,12 @@ class AutoTestApiStepVarBase(BaseModel):
     @field_validator("assert_validators", mode="before")
     @classmethod
     def _assert_validators_list_shape(cls, v: Any) -> Any:
+        """
+        校验 assert_validators 为数组或 null。
+
+        :param v: 原始值
+        :return: 原值（合法时）
+        """
         if v is None:
             return None
         if not isinstance(v, list):
@@ -232,6 +274,12 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     @field_validator("conditions", mode="before")
     @classmethod
     def _conditions_must_be_object_or_none(cls, v: Any) -> Any:
+        """
+        校验 conditions 为对象、ConditionsBase 实例或 null。
+
+        :param v: 原始值
+        :return: 原值（合法时）
+        """
         if v is None:
             return None
         if isinstance(v, ConditionsBase):
@@ -335,6 +383,11 @@ class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase
 
     @model_validator(mode="after")
     def validate_redis_debug_request(self):
+        """
+        校验 Redis 调试请求至少包含一条 redis_operates。
+
+        :return: 当前模型实例
+        """
         if not self.redis_operates:
             raise ValueError("redis_operates 至少包含一条 Redis 操作配置")
         return self
@@ -365,6 +418,11 @@ class AutoTestStepTreeExecute(BaseModel):
 
     @model_validator(mode='after')
     def validate_execute_request(self):
+        """
+        按 execute_type 校验 steps 是否必填或禁止传递。
+
+        :return: 当前模型实例
+        """
         if self.case_id is None:
             raise ValueError("必须提供 case_id")
         has_steps = bool(self.steps)

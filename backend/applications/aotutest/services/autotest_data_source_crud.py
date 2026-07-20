@@ -86,6 +86,15 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         return instance
 
     async def get_by_hash(self, file_hash: str, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
+        """
+        按文件哈希查询数据源（排除已软删）。
+
+        :param file_hash: 文件哈希
+        :param on_error: 为 True 时未找到则抛出 NotFoundException
+        :return: 数据源实例或 None
+        :raises ParameterException: file_hash 为空时
+        :raises NotFoundException: on_error 为 True 且记录不存在时
+        """
         if not file_hash:
             error_message: str = "查询数据源信息失败, 参数(file_hash)不允许为空"
             LOGGER.error(error_message)
@@ -342,6 +351,15 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             raise ParameterException(message=error_message) from e
 
     async def get_by_case_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
+        """
+        按用例 ID 取最新一条有效数据源（有 file_hash、未软删）。
+
+        :param case_id: 用例主键
+        :param on_error: 为 True 时未找到则抛出 NotFoundException
+        :return: 数据源实例或 None
+        :raises ParameterException: case_id 为空时
+        :raises NotFoundException: on_error 为 True 且记录不存在时
+        """
         if not case_id:
             error_message: str = "查询数据源失败, 参数(case_id)不允许为空"
             LOGGER.error(error_message)
@@ -375,6 +393,16 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         return record.dataset.get((dataset_name or "").strip())
 
     async def query_dataset(self, case_id: str, step_code: str, dataset_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        按用例与步骤查询 dataset；可再按场景名收窄为单场景。
+
+        :param case_id: 用例主键
+        :param step_code: 步骤标识代码
+        :param dataset_name: 场景名；为空则返回完整 dataset
+        :return: 含 dataset 字段的字典
+        :raises ParameterException: case_id 或 step_code 为空时
+        :raises NotFoundException: 无匹配记录或指定场景不存在时
+        """
         if not case_id or not step_code:
             error_message: str = "查询数据源信息失败, 参数(case_id、step_code)不允许为空"
             LOGGER.error(error_message)
@@ -517,6 +545,15 @@ class AutoTestApiDataCreateCrud(
         super().__init__(model=AutoTestApiDataCreateInfo)
 
     async def get_by_code(self, create_code: str, on_error: bool = False) -> Optional[AutoTestApiDataCreateInfo]:
+        """
+        按 create_code 查询数据源生成记录（排除已软删）。
+
+        :param create_code: 生成任务标识
+        :param on_error: 为 True 时未找到则抛出 NotFoundException
+        :return: 生成记录或 None
+        :raises ParameterException: create_code 为空时
+        :raises NotFoundException: on_error 为 True 且记录不存在时
+        """
         if not create_code:
             error_message: str = "查询数据源生成信息失败, 参数(create_code)不允许为空"
             LOGGER.error(error_message)
@@ -530,6 +567,15 @@ class AutoTestApiDataCreateCrud(
         return instance
 
     async def get_by_step(self, step_code: str, on_error: bool = False) -> List[Optional[AutoTestApiDataCreateInfo]]:
+        """
+        按步骤标识查询最近最多 3 条数据源生成记录（排除已软删）。
+
+        :param step_code: 步骤标识代码
+        :param on_error: 为 True 时无记录则抛出 NotFoundException
+        :return: 生成记录列表
+        :raises ParameterException: step_code 为空时
+        :raises NotFoundException: on_error 为 True 且无记录时
+        """
         if not step_code:
             error_message: str = "查询数据源生成信息失败, 参数(step_code)不允许为空"
             LOGGER.error(error_message)
@@ -543,6 +589,15 @@ class AutoTestApiDataCreateCrud(
         return instance
 
     async def get_by_hash(self, file_hash: str, on_error: bool = False) -> Optional[AutoTestApiDataCreateInfo]:
+        """
+        按文件哈希查询数据源生成记录（排除已软删）。
+
+        :param file_hash: 文件哈希
+        :param on_error: 为 True 时未找到则抛出 NotFoundException
+        :return: 生成记录或 None
+        :raises ParameterException: file_hash 为空时
+        :raises NotFoundException: on_error 为 True 且记录不存在时
+        """
         if not file_hash:
             error_message: str = "查询数据源生成信息失败, 参数(file_hash)不允许为空"
             LOGGER.error(error_message)
@@ -556,6 +611,13 @@ class AutoTestApiDataCreateCrud(
         return instance
 
     async def create_data_create(self, data_in: AutoTestApiDataCreateCreate) -> AutoTestApiDataCreateInfo:
+        """
+        创建数据源生成记录；若同 file_hash 已存在则重置状态并更新路径。
+
+        :param data_in: 创建入参
+        :return: 创建或更新后的生成记录
+        :raises DataAlreadyExistsException: 持久化异常时
+        """
         try:
             instance = await self.get_by_hash(file_hash=data_in.file_hash)
             if instance:
@@ -577,6 +639,13 @@ class AutoTestApiDataCreateCrud(
             raise DataAlreadyExistsException(message=error_message) from e
 
     async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestApiDataCreateInfo:
+        """
+        按主键更新数据源生成记录。
+
+        :param data_in: 更新入参（须含 id）
+        :return: 更新后的生成记录
+        :raises DataAlreadyExistsException: 更新异常时
+        """
         try:
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.update(id=data_in.id, obj_in=data_dict)
@@ -590,6 +659,14 @@ class AutoTestApiDataCreateCrud(
             self,
             create_code: Optional[str] = None,
     ) -> AutoTestApiDataCreateInfo:
+        """
+        按 create_code 软删除数据源生成记录（state=1）。
+
+        :param create_code: 生成任务标识
+        :return: 软删除后的记录
+        :raises ParameterException: 参数校验失败时
+        :raises NotFoundException: 记录不存在时
+        """
         if not id:
             error_message: str = f"参数缺失, 删除数据源生成信息时必须传递id"
             LOGGER.error(error_message)
@@ -611,6 +688,16 @@ class AutoTestApiDataCreateCrud(
         return instance
 
     async def select_data_source(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+        """
+        分页查询数据源生成记录。
+
+        :param search: Tortoise Q 条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总数, 实例列表)
+        :raises ParameterException: 查询字段非法时
+        """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
@@ -620,6 +707,13 @@ class AutoTestApiDataCreateCrud(
 
 
 async def delete_step_create(case_id, step_code_list):
+    """
+    软删除指定步骤的数据源与生成记录，并清理关联本地文件。
+
+    :param case_id: 用例主键（用于定位上传目录）
+    :param step_code_list: 待清理的步骤标识列表
+    :return: None
+    """
     data_source_crud = AutoTestDataSourceCrud()
     data_create_crud = AutoTestApiDataCreateCrud()
     await data_source_crud.model.filter(step_code__in=step_code_list).update(state=1)

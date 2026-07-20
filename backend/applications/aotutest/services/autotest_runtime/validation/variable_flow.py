@@ -53,6 +53,7 @@ class VariableFlowValidation:
         produced.update({"loop_index", "loop_value", "loop_key"})
 
         def _collect_produced(step: AutoTestStepTreeUpdateItem) -> None:
+            """递归收集步骤树上可产出的变量名到 produced。"""
             for var in (step.session_variables or []):
                 key = getattr(var, "key", None) or (var.get("key") if isinstance(var, dict) else None)
                 if key:
@@ -130,6 +131,7 @@ class VariableFlowValidation:
         errors: List[Dict[str, Any]] = []
 
         def _check_refs(step: AutoTestStepTreeUpdateItem) -> None:
+            """检查步骤字段中的 ${var} 是否均已产出，未匹配则写入 errors。"""
             fields = _step_ref_fields(step)
             for field_name, field_value in fields.items():
                 refs = _collect_refs_in_value(field_value)

@@ -260,13 +260,6 @@ async def copy_step_tree(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """
-    复制指定用例的步骤树，返回 { case, steps }，不包含 step_id、step_code 等更新必填项。
-
-    前端两种使用场景（同一接口，不同用法）：
-    1. 用例管理「复制」：使用 case + steps，创建新用例编辑页（路由跳转），保存时按新增逻辑
-    2. 步骤明细「复制指定脚本」：仅使用 steps，将步骤插入当前用例的步骤树
-    """
     try:
         if not case_id and not case_code:
             return BadReqResponse(message="必须提供 case_id 或 case_code 参数")
@@ -285,26 +278,6 @@ async def batch_update_steps_tree(
         data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """
-    批量更新测试用例和步骤信息
-
-    核心功能：
-    1. 根据case_id和case_code判断是新增还是更新(如果有case_id和case_code说明存在用例，是更新动作，但是步骤中可能会存在新增)
-    2. 校验步骤树结构合法性（自循环引用、结构合法性）
-    3. 接收嵌套结构的步骤树数据
-    4. 提取并去重测试用例信息，批量更新或新增
-    5. 递归处理所有层级的步骤，批量更新或新增
-    6. 验证用例信息和步骤信息的关联正确性
-    7. 使用事务保证原子性（要么全部成功，要么全部回滚）
-
-    入参格式：
-    - case: 用例信息（AutoTestApiCaseUpdate格式）
-    - steps: 步骤树数据（数组格式）
-
-    返回格式：
-    - 成功：返回更新成功的提示 + 影响的用例数 / 步骤数 + 详细的用例和步骤信息
-    - 失败：返回失败原因
-    """
     try:
         # 获取用例信息和步骤数据
         case_data: AutoTestApiCaseUpdate = data.case
@@ -343,6 +316,12 @@ async def batch_update_steps_tree(
                             def recursive_update_case_id(
                                     steps: List[AutoTestStepTreeUpdateItem], relevant_case_id: int
                             ) -> None:
+                                """
+                                递归将步骤树中各节点的 case_id 更新为目标用例 ID。
+
+                                :param steps: 步骤列表
+                                :param relevant_case_id: 目标用例 ID
+                                """
                                 for step in steps:
                                     step.case_id = relevant_case_id
                                     if step.children:
@@ -417,19 +396,6 @@ async def validate_step_tree(
         steps: List[AutoTestStepTreeUpdateItem] = Body(..., description="待校验的步骤树根步骤列表"),
         deep_validate: bool = Query(True, description="是否做深度校验（执行器字段+变量引用链）"),
 ):
-    """
-    校验步骤树JSON的静态合法性（不执行、不保存），供AI智能体生成步骤树后做前置校验。
-
-    四层校验：
-    1. Pydantic 模型校验（请求体自动完成，到此处已通过）
-    2. 树结构校验（自循环引用、仅LOOP/IF可含子步骤）—— validate_step_tree_structure
-    3. 执行器字段校验（各 step_type 的必填字段组合）—— validate_executor_fields
-    4. 变量引用链校验（${var} 引用是否有对应产出）—— validate_variable_flow
-
-    :param steps: 步骤树根步骤列表
-    :param deep_validate: 是否执行第3、4层校验
-    :return: 校验结果，含 is_valid、各层错误明细、摘要
-    """
     try:
         # 第2层：树结构校验
         is_valid_structure, structure_error = AutoTestToolService.validate_step_tree_structure(steps)
@@ -446,6 +412,12 @@ async def validate_step_tree(
 
         # 摘要
         def _count_steps(items: List[AutoTestStepTreeUpdateItem]) -> int:
+            """
+            递归统计步骤树节点总数（含 children / quote_steps）。
+
+            :param items: 步骤列表
+            :return: 节点总数
+            """
             total: int = 0
             for s in items:
                 total += 1
@@ -456,6 +428,11 @@ async def validate_step_tree(
         step_types: List[str] = []
 
         def _collect_types(items: List[AutoTestStepTreeUpdateItem]) -> None:
+            """
+            递归收集步骤树中各节点的 step_type 到外层 step_types。
+
+            :param items: 步骤列表
+            """
             for s in items:
                 step_types.append(str(s.step_type) if s.step_type else "N/A")
                 _collect_types(s.children or [])
@@ -556,6 +533,11 @@ async def debug_http_request(
 
         # 日志辅助函数：添加时间戳和步骤名称
         def append_debugging_log(message: str) -> None:
+            """
+            将带时间戳与步骤名的调试日志追加到 debugging_logs。
+
+            :param message: 日志内容
+            """
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
@@ -852,6 +834,11 @@ async def debug_tcp_request(
 
         # 日志辅助函数：添加时间戳和步骤名称
         def append_debugging_log(message: str) -> None:
+            """
+            将带时间戳与步骤名的调试日志追加到 debugging_logs。
+
+            :param message: 日志内容
+            """
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
@@ -1025,27 +1012,6 @@ async def debug_python_code(
         step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """
-    调试Python代码执行接口
-
-    功能说明：
-    1. 接收前端发送的Python代码和变量配置数据
-    2. 使用StepExecutionContext执行Python代码（不保存到数据库）
-    3. 返回执行结果与断言结果（若配置），并包含 request 快照用于排障
-
-    请求参数格式：
-    - step_name: 步骤名称
-    - code: Python代码
-    - defined_variables: 定义的变量（列表格式，每个元素包含key、value、desc，用于变量替换和代码执行上下文）
-    - session_variables: 会话变量（列表格式，每个元素包含key、value、desc，用于变量替换和代码执行上下文）
-    - assert_validators: 断言规则（source=变量池/session_variables 时，expr 按 JSONPath 解析）
-
-    返回 data 结构：
-    - request: 本次执行的代码快照（request.code）
-    - result: 代码返回的 Dict 结果
-    - assert_validators: 断言结果列表
-    - error: 失败时返回错误描述
-    """
     try:
         # 提取请求参数
         code = step_data.code
@@ -1140,6 +1106,12 @@ async def debug_python_code(
 
 
 def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
+    """
+    判断 Redis 命令结果列表中是否存在有效（非空）结果。
+
+    :param command_results: 命令返回值列表
+    :return: 存在有效结果则为 True
+    """
     if not command_results:
         return False
     for result in command_results:
@@ -1182,6 +1154,11 @@ async def debug_redis_request(
         debugging_logs: List[str] = []
 
         def append_debugging_log(message: str) -> None:
+            """
+            将带时间戳与步骤名的调试日志追加到 debugging_logs。
+
+            :param message: 日志内容
+            """
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
@@ -1470,6 +1447,12 @@ async def debug_redis_request(
 def _serialize_for_celery_initial_variables(
         items: Optional[List[StepVariablesBase]],
 ) -> List[Dict[str, Any]]:
+    """
+    将初始变量列表序列化为 Celery 可传递的纯 dict 列表。
+
+    :param items: StepVariablesBase 或 dict 列表
+    :return: 序列化后的变量列表
+    """
     if not items:
         return []
     out: List[Dict[str, Any]] = []
@@ -1486,6 +1469,12 @@ def _serialize_for_celery_initial_variables(
 def _serialize_for_celery_steps_execute_config(
         cfg: Optional[Dict[str, StepsExecuteConfigBase]],
 ) -> Optional[Dict[str, Any]]:
+    """
+    将步骤执行配置序列化为 Celery 可传递的纯 dict。
+
+    :param cfg: 步骤执行配置映射
+    :return: 序列化后的配置，空则返回 None
+    """
     if not cfg:
         return None
     serialized: Dict[str, Any] = {}
@@ -1504,13 +1493,6 @@ async def execute_step_tree(
         request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """
-    按 execute_type（AutoTestReportType）分发：
-    - SYNC_EXEC：暂不处理，直接返回
-    - ASYNC_EXEC：异步执行（原运行模式，同步执行已保存步骤树）
-    - DEBUG_EXEC：调试执行（原调试模式）
-    - SCHEDULE_EXEC：定时/后台执行，提交 Celery 任务
-    """
     try:
         case_id: int = request.case_id
         execute_type: AutoTestReportType = request.execute_type
@@ -1524,6 +1506,12 @@ async def execute_step_tree(
 
         # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
+            """
+            将步骤执行结果对象递归序列化为可返回的字典。
+
+            :param r: 单步执行结果
+            :return: 序列化后的结果字典（含 children）
+            """
             return {
                 "case_id": r.case_id,
                 "step_id": r.step_id,
@@ -1668,6 +1656,12 @@ async def execute_step_tree(
                 }
 
             def merged_variables(*variables: List[StepVariablesBase]) -> List[StepVariablesBase]:
+                """
+                按 key 合并多组变量，后者覆盖前者。
+
+                :param variables: 多组 StepVariablesBase 列表
+                :return: 去重合并后的变量列表
+                """
                 merged: Dict[str, StepVariablesBase] = {}
                 builtin_merged_append = merged.__setitem__
                 for variable in variables:

@@ -2,6 +2,7 @@
  * 步骤树：后端数据 ↔ 前端树节点（执行配置弹窗、步骤编辑页共用）
  */
 
+/** 步骤类型是否允许挂子节点 */
 const stepDefinitions = {
   user_variables: { allowChildren: false },
   if: { allowChildren: true },
@@ -16,8 +17,10 @@ const stepDefinitions = {
 }
 
 let seed = 1000
+/** 生成临时前端步骤 id */
 const genId = () => `step-${seed++}`
 
+/** 后端 step_type 枚举文案 → 前端本地 type */
 const backendTypeToLocal = (step_type) => {
   switch (step_type) {
     case '用户变量':
@@ -54,7 +57,7 @@ export function forEachStep(list, fn) {
   }
 }
 
-/** 将后端步骤转为前端树节点（含 original，供 ExecConfigModal 聚合环境配置） */
+/** 将后端步骤转为前端树节点（含 original、step_is_skipped，供编辑页与执行配置共用） */
 export function mapBackendStep(step) {
   if (!step || !step.step_type) return null
   const localType = backendTypeToLocal(step.step_type)

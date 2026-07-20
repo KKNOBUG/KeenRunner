@@ -278,6 +278,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         project_ids: Set[int] = set()
 
         def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
+            """将原始 step_type 规范为枚举；非法则返回 None。"""
             if st is None:
                 return None
             if isinstance(st, AutoTestStepType):
@@ -288,6 +289,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 return None
 
         def recursive_require_project_ids(step: AutoTestStepTreeUpdateItem) -> None:
+            """递归收集 HTTP/TCP/DB/Redis 步骤上的 project_id 到外层集合。"""
             st_e = _norm_step_type(step.step_type)
             if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
                 request_project_id = step.request_project_id
@@ -1037,6 +1039,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
 
         def _merge_session_variables(*parts: List[StepVariablesBase]) -> List[StepVariablesBase]:
+            """按 key 合并多段会话变量，后者覆盖前者。"""
             merged: Dict[str, StepVariablesBase] = {}
             for part in parts:
                 for it in part:

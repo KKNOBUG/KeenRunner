@@ -180,11 +180,13 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
 
 async def _parse_sheet_async(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+    """在线程池中异步解析单个 sheet，返回 {场景名: {head, body, assert}}。"""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _parse_sheet_fast, df)
 
 
 def _cell_is_blank(value: Any) -> bool:
+    """判断单元格是否为空（None / NaN / 空白字符串）。"""
     if value is None:
         return True
     try:

@@ -2499,7 +2499,8 @@ const validatorColumns = [
 
 /* 添加必要的布局样式 */
 .response-code {
-  max-height: 400px; /* 限制代码块高度 */
+  /* HTTP 调试响应体限高；滚动条样式见全局 .overlay-scroll */
+  max-height: 400px;
   overflow: auto;
 }
 

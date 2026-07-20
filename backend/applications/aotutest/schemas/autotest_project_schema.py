@@ -32,6 +32,12 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @field_validator('project_dev_owners', mode='before')
     @classmethod
     def normalize_project_dev_owners(cls, v):
+        """
+        将开发负责人字段规范为列表（逗号分隔字符串拆分）。
+
+        :param v: 原始值（null / str / list）
+        :return: 人员列表或原值
+        """
         if v is None:
             return None
         if isinstance(v, str):
@@ -43,6 +49,12 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @field_validator('project_developers', mode='before')
     @classmethod
     def normalize_project_developers(cls, v):
+        """
+        将开发人员字段规范为列表（逗号分隔字符串拆分）。
+
+        :param v: 原始值（null / str / list）
+        :return: 人员列表或原值
+        """
         if v is None:
             return None
         if isinstance(v, str):
@@ -54,6 +66,12 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @field_validator('project_test_owners', mode='before')
     @classmethod
     def normalize_project_test_owners(cls, v):
+        """
+        将测试负责人字段规范为列表（逗号分隔字符串拆分）。
+
+        :param v: 原始值（null / str / list）
+        :return: 人员列表或原值
+        """
         if v is None:
             return None
         if isinstance(v, str):
@@ -65,6 +83,12 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @field_validator('project_testers', mode='before')
     @classmethod
     def normalize_project_testers(cls, v):
+        """
+        将测试人员字段规范为列表（逗号分隔字符串拆分）。
+
+        :param v: 原始值（null / str / list）
+        :return: 人员列表或原值
+        """
         if v is None:
             return None
         if isinstance(v, str):

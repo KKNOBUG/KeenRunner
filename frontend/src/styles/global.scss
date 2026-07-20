@@ -78,9 +78,10 @@ body {
 
 /**
  * 悬浮显现细滚动条（步骤树 / 明细 / 嵌套溢出区统一）
- * - 始终预留 4px 槽位（scrollbar-gutter + 固定宽度），悬停不抖
+ * - scrollbar-gutter + 固定 webkit 宽度：始终占位，悬停不抖
  * - 默认滑块透明，悬停显示弱对比色
- * - 仅样式，不设置 overflow（由业务容器自行 overflow: auto / overflow-y: auto）
+ * - 粗细：改 &::-webkit-scrollbar 的 width/height（Firefox 仅有 thin）
+ * - 不设置 overflow，由业务容器自行 overflow: auto / overflow-y: auto
  */
 .overlay-scroll {
   scrollbar-gutter: stable;

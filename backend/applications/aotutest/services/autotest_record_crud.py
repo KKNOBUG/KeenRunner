@@ -36,11 +36,23 @@ class AutoTestApiTaskRecordCrud(
         super().__init__(model=AutoTestApiRecordInfo)
 
     async def get_by_celery_id(self, celery_id: str) -> Optional[AutoTestApiRecordInfo]:
+        """
+        按 Celery 任务 ID 查询执行记录。
+
+        :param celery_id: Celery 任务 ID；为空时返回 None
+        :return: 记录实例或 None
+        """
         if not celery_id:
             return None
         return await self.model.filter(celery_id=celery_id).first()
 
     async def create_record(self, data: Dict[str, Any]) -> AutoTestApiRecordInfo:
+        """
+        创建一条任务执行记录。
+
+        :param data: 记录字段字典
+        :return: 新建的记录实例
+        """
         return await self.create(data)
 
     async def update_record_by_celery_id(
@@ -48,6 +60,13 @@ class AutoTestApiTaskRecordCrud(
             celery_id: str,
             data: Dict[str, Any],
     ) -> Optional[AutoTestApiRecordInfo]:
+        """
+        按 celery_id 更新执行记录；仅写入模型已有字段，部分键允许置空。
+
+        :param celery_id: Celery 任务 ID
+        :param data: 待更新字段字典
+        :return: 更新后的记录；不存在则返回 None
+        """
         record = await self.get_by_celery_id(celery_id=celery_id)
         if not record:
             return None
@@ -70,6 +89,13 @@ class AutoTestApiTaskRecordCrud(
         return record
 
     async def select_records(self, record_in: AutoTestApiRecordSelect) -> tuple:
+        """
+        按筛选条件分页查询任务执行记录。
+
+        :param record_in: 查询条件（含分页、排序与时间区间）
+        :return: (总数, 记录列表)
+        :raises ParameterException: 查询字段非法时
+        """
         try:
             q = Q()
             if record_in.celery_id:
@@ -95,6 +121,7 @@ class AutoTestApiTaskRecordCrud(
                 q &= Q(celery_status=status_val)
 
             def _parse_dt(raw: Optional[str]):
+                """将 ``YYYY-MM-DD HH:MM:SS`` 字符串解析为 datetime；失败返回 None。"""
                 if not raw:
                     return None
                 try:

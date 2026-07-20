@@ -28,6 +28,7 @@ class ExecutorFieldsValidation:
         errors: List[Dict[str, Any]] = []
 
         def _norm_step_type(raw: Any) -> Optional[AutoTestStepType]:
+            """将原始 step_type 规范为枚举；非法则返回 None。"""
             if raw is None:
                 return None
             if isinstance(raw, AutoTestStepType):
@@ -38,6 +39,7 @@ class ExecutorFieldsValidation:
                 return None
 
         def _check_step(step: AutoTestStepTreeUpdateItem) -> None:
+            """按步骤类型校验必填字段，缺失则写入 errors。"""
             step_type = _norm_step_type(step.step_type)
             step_code = step.step_code
             step_name = step.step_name

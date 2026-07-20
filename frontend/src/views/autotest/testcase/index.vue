@@ -824,6 +824,7 @@ const columns = computed(() => {
   font-weight: 500;
 }
 
+/* 用例列表查询：标签二级选择面板 */
 .tag-picker-panel {
   display: flex;
   height: 300px;

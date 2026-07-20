@@ -39,6 +39,13 @@ class Field:
 # =============================
 
 def read_excel_template(file_path: str) -> List[Field]:
+    """
+    解析接口字段模板 Excel，提取「输入」区字段定义。
+
+    :param file_path: 模板文件路径
+    :return: Field 列表
+    :raises ValueError: 缺少表头或「输入」标识行时
+    """
     df = pd.read_excel(file_path, sheet_name=0, header=None)
 
     header_row = None
@@ -138,16 +145,25 @@ def read_excel_template(file_path: str) -> List[Field]:
 # =============================
 
 def is_required(value: Optional[str]) -> bool:
+    """判断「是否必输」字段是否为必填（是/m/y/true）。"""
     if not value:
         return False
     return str(value).strip().lower() in ["是", "m", "y", "true"]
 
 
 def random_string(length: int) -> str:
+    """生成指定长度的随机字母数字串。"""
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 
 def random_enum_invalid(enum_str: str, length: int):
+    """
+    生成不在枚举列表中的非法值。
+
+    :param enum_str: 逗号分隔的合法枚举
+    :param length: 字段长度，用于控制随机范围
+    :return: 非法枚举字符串
+    """
     values = [v.strip() for v in enum_str.split(',') if v.strip()]
     max_int = length * 9
     while True:
@@ -160,6 +176,14 @@ def random_enum_invalid(enum_str: str, length: int):
 
 
 def generate_length_invalid(field: Field, rule: str):
+    """
+    按长度规则生成超长非法值。
+
+    :param field: 字段定义
+    :param rule: ``length_int`` 或 ``length_float``
+    :return: (非法值, 配置长度)；无法生成时为 (None, None)
+    :raises ValueError: 小数位数配置非法时
+    """
     if not field.length:
         return None, None
     s = field.length.replace("，", ",")
@@ -188,6 +212,14 @@ def generate_length_invalid(field: Field, rule: str):
 
 
 def generate_decimal_invalid(field: Field, decimal_flag: str):
+    """
+    按边界规则生成小数非法/边界值。
+
+    :param field: 字段定义（需含 length 如 ``总长,小数位``）
+    :param decimal_flag: 边界规则标识（decimal_nine / decimal_zero 等）
+    :return: 生成值；无法生成时返回 None
+    :raises ValueError: 小数位数配置非法时
+    """
     if not field.length:
         return None
     s = field.length.replace("，", ",")
@@ -222,6 +254,14 @@ def generate_decimal_invalid(field: Field, decimal_flag: str):
 
 
 def generate_cases_np(fields: List[Field], selected_rules: List[str], base_json: Dict[str, Any]):
+    """
+    基于字段定义与规则，从基准报文批量生成负向/边界用例行。
+
+    :param fields: 字段列表
+    :param selected_rules: 已选规则标识列表
+    :param base_json: 基准报文（可含 body）
+    :return: 用例字典列表（含 case_name 与字段值）
+    """
     if "body" in base_json.keys() or "Body" in base_json.keys():
         base_json = base_json.get("body", base_json.get("Body"))
     base_json_neo = {}
@@ -299,6 +339,14 @@ def generate_cases_np(fields: List[Field], selected_rules: List[str], base_json:
 # =============================
 
 def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: str):
+    """
+    将用例行转置导出为数据驱动 Excel（含 Body 分区行）。
+
+    :param cases: 用例字典列表
+    :param fields: 字段定义（list/array 父字段不导出）
+    :param output_file: 输出路径
+    :return: None
+    """
     # 父字段(list/array)不作为导出行
     export_fields = [f for f in fields if (f.data_type or "").lower() not in ["list", "array"]]
 
@@ -336,6 +384,16 @@ def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: 
 
 async def generate_test_data(input_excel: str, output_excel: str, rules: List[str], json_message: Union[str, dict],
                              create_id: int):
+    """
+    异步生成测试数据：读模板、按规则造数、导出 Excel，并回写生成状态。
+
+    :param input_excel: 字段模板路径
+    :param output_excel: 输出 Excel 路径
+    :param rules: 规则标识（可含 length/decimal/required 聚合项）
+    :param json_message: 基准报文（dict 或 JSON 字符串）
+    :param create_id: 数据源生成记录主键
+    :return: None
+    """
     data_create_crud = AutoTestApiDataCreateCrud()
     await data_create_crud.update_data_create(
         data_in=(

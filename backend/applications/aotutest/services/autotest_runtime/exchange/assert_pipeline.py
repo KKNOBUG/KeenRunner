@@ -216,6 +216,7 @@ class AssertPipeline:
             return
 
         def _resolve_expected(raw_expected: Any) -> Any:
+            """若提供 finished_variables，则对期望值做占位符解析。"""
             if finished_variables is None:
                 return raw_expected
             return PlaceholderResolver.resolve_placeholders(
@@ -233,6 +234,7 @@ class AssertPipeline:
                 expr: str,
                 skip_error: Optional[str] = None,
         ) -> None:
+            """追加一条断言结果；skip_error 非空时直接记失败。"""
             resolved_except_value = _resolve_expected(except_value)
             if skip_error:
                 validator_results.append({

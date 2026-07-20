@@ -374,10 +374,12 @@ const leftPanelCollapsed = ref(false)
 /** 正在拖拽调整步骤树宽度 */
 const leftPanelResizing = ref(false)
 
+/** 将宽度限制在 MIN~MAX 区间 */
 function clampLeftPanelWidth(width) {
   return Math.min(LEFT_PANEL_WIDTH_MAX, Math.max(LEFT_PANEL_WIDTH_MIN, width))
 }
 
+/** 从 localStorage 恢复左侧面板宽度 */
 function loadLeftPanelWidth() {
   try {
     const raw = localStorage.getItem(LEFT_PANEL_WIDTH_STORAGE_KEY)
@@ -390,6 +392,7 @@ function loadLeftPanelWidth() {
   }
 }
 
+/** 将当前左侧面板宽度写入 localStorage */
 function saveLeftPanelWidth() {
   try {
     localStorage.setItem(LEFT_PANEL_WIDTH_STORAGE_KEY, String(leftPanelWidth.value))
@@ -401,12 +404,14 @@ function saveLeftPanelWidth() {
 let resizeLeftPanelStartX = 0
 let resizeLeftPanelStartWidth = LEFT_PANEL_WIDTH_DEFAULT
 
+/** 拖拽中：按鼠标位移更新左侧面板宽度 */
 function onResizeLeftPanelMove(event) {
   leftPanelWidth.value = clampLeftPanelWidth(
       resizeLeftPanelStartWidth + event.clientX - resizeLeftPanelStartX
   )
 }
 
+/** 结束拖拽：落盘宽度并清理全局监听 */
 function stopResizeLeftPanel() {
   leftPanelResizing.value = false
   saveLeftPanelWidth()
@@ -416,6 +421,7 @@ function stopResizeLeftPanel() {
   document.body.style.userSelect = ''
 }
 
+/** 开始拖拽调整左侧面板宽度（忽略双击的第二次 mousedown） */
 function startResizeLeftPanel(event) {
   if (event.button !== 0) return
   // 双击折叠时忽略第二次 mousedown 触发的拖拽
@@ -429,11 +435,13 @@ function startResizeLeftPanel(event) {
   document.addEventListener('mouseup', stopResizeLeftPanel)
 }
 
+/** 双击分隔条：折叠步骤树 */
 function collapseLeftPanel() {
   stopResizeLeftPanel()
   leftPanelCollapsed.value = true
 }
 
+/** 展开已折叠的步骤树 */
 function expandLeftPanel() {
   leftPanelCollapsed.value = false
 }
@@ -3500,6 +3508,7 @@ const RecursiveStepChildren = defineComponent({
   min-width: 0;
 }
 
+/* 左右分栏拖拽分隔条：扩大命中区，中间竖线 + 握柄 */
 .steps-split-resizer {
   position: relative;
   flex-shrink: 0;
@@ -3515,6 +3524,7 @@ const RecursiveStepChildren = defineComponent({
   color: var(--n-text-color-3, #999);
 }
 
+/* 分隔条中线（常态细线，悬停/拖拽时加粗高亮） */
 .steps-split-resizer__line {
   position: absolute;
   top: 0;
@@ -3527,6 +3537,7 @@ const RecursiveStepChildren = defineComponent({
   pointer-events: none;
 }
 
+/* 分隔条中央握柄（悬停/拖拽时强化可见度） */
 .steps-split-resizer__handle {
   position: relative;
   z-index: 1;
@@ -3568,6 +3579,7 @@ const RecursiveStepChildren = defineComponent({
   box-shadow: 0 2px 6px color-mix(in srgb, var(--n-primary-color, #F4511E) 16%, transparent);
 }
 
+/* 拖拽进行中：分隔条主题色 */
 .steps-split-resizer.is-resizing {
   color: var(--n-primary-color, #F4511E);
 }
@@ -3708,6 +3720,7 @@ const RecursiveStepChildren = defineComponent({
 
 :deep(.step-item.is-skipped .step-name-text),
 :deep(.step-item.is-skip-inherited .step-name-text) {
+  /* 本步注释 或 祖先已注释：名称删除线弱化 */
   text-decoration: line-through;
   opacity: 0.55;
 }
