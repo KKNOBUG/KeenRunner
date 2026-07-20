@@ -7,7 +7,7 @@
 @DateTime: 2026/1/16 16:35
 """
 import traceback
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, Set, Tuple
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -75,7 +75,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise ParameterException(message=error_message)
 
         existing_tags = await self.model.filter(id__in=tag_ids, **kwargs).values_list("id", flat=True)
-        missing_tags: set = set(tag_ids) - set(existing_tags)
+        missing_tags: Set[int] = set(tag_ids) - set(existing_tags)
         if missing_tags:
             error_message: str = f"查询标签信息失败, 标签({missing_tags})不存在"
             LOGGER.error(error_message)
@@ -238,7 +238,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             count = 0
         return count
 
-    async def select_tags(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_tags(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTagInfo]]:
         """
         分页查询标签列表。
 

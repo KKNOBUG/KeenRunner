@@ -10,6 +10,7 @@ import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from openpyxl import Workbook, load_workbook
@@ -17,7 +18,7 @@ from openpyxl import Workbook, load_workbook
 executor = ThreadPoolExecutor(max_workers=2)
 
 
-def validate_excel_structure(sheets: dict):
+def validate_excel_structure(sheets: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """
     校验多 sheet 数据驱动表结构：首行场景名一致、分区不重复、字段不重复。
 
@@ -137,7 +138,7 @@ def validate_excel_structure(sheets: dict):
     }
 
 
-def parse_kv_string(text, requests_body_key):
+def parse_kv_string(text: str, requests_body_key: Optional[str]) -> Dict[str, str]:
     """
     将多行 ``key: value`` 文本解析为 JSONPath 键值字典。
 
@@ -160,7 +161,7 @@ def parse_kv_string(text, requests_body_key):
     return result
 
 
-def parse_sheet_fast(df: pd.DataFrame, sheet_name, requests_body_key):
+def parse_sheet_fast(df: pd.DataFrame, sheet_name: str, requests_body_key: Dict[str, List[str]]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     同步解析单个 sheet 为按场景组织的 head/body/assert 结构。
 
@@ -261,13 +262,14 @@ def parse_sheet_fast(df: pd.DataFrame, sheet_name, requests_body_key):
     return result, errors
 
 
-async def parse_sheet_async(df, sheet_name, requests_body_key):
+async def parse_sheet_async(df: pd.DataFrame, sheet_name: str, requests_body_key: Dict[str, List[str]]) -> Tuple[
+    Dict[str, Any], List[Dict[str, Any]]]:
     """在线程池中异步调用 ``parse_sheet_fast``。"""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, parse_sheet_fast, df, sheet_name, requests_body_key)
 
 
-async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name: str):
+async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name: str) -> None:
     """
     将源工作簿首个 sheet 复制到目标文件的指定 sheet（同名则覆盖）。
 
@@ -292,7 +294,7 @@ async def save_case_sheet(save_neo_name: Path, save_file_name: Path, sheet_name:
     target_wb.save(save_neo_name)
 
 
-async def save_upload_file(upload_file, destination: Path):
+async def save_upload_file(upload_file: Any, destination: Path) -> None:
     """
     将上传文件分块写入目标路径。
 
@@ -309,7 +311,7 @@ async def save_upload_file(upload_file, destination: Path):
     return
 
 
-async def xlsx_to_json_async(file_path: str, requests_body_key: dict, first_sheet_only: bool = False):
+async def xlsx_to_json_async(file_path: str, requests_body_key: Dict[str, List[str]], first_sheet_only: bool = False) -> Dict[str, Any]:
     """
     异步读取 xlsx，校验结构后解析为按 sheet/场景组织的 JSON。
 

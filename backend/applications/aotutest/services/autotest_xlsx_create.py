@@ -11,7 +11,7 @@ import random
 import string
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import orjson
@@ -158,7 +158,7 @@ def random_string(length: int) -> str:
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 
-def random_enum_invalid(enum_str: str, length: int):
+def random_enum_invalid(enum_str: str, length: int) -> str:
     """
     生成不在枚举列表中的非法值。
 
@@ -177,7 +177,7 @@ def random_enum_invalid(enum_str: str, length: int):
             return val
 
 
-def generate_length_invalid(field: Field, rule: str):
+def generate_length_invalid(field: Field, rule: str) -> Tuple[Optional[str], Optional[int]]:
     """
     按长度规则生成超长非法值。
 
@@ -213,7 +213,7 @@ def generate_length_invalid(field: Field, rule: str):
         return value, float_length
 
 
-def generate_decimal_invalid(field: Field, decimal_flag: str):
+def generate_decimal_invalid(field: Field, decimal_flag: str) -> Optional[str]:
     """
     按边界规则生成小数非法/边界值。
 
@@ -255,7 +255,7 @@ def generate_decimal_invalid(field: Field, decimal_flag: str):
     return value
 
 
-def generate_cases_np(fields: List[Field], selected_rules: List[str], base_json: Dict[str, Any]):
+def generate_cases_np(fields: List[Field], selected_rules: List[str], base_json: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     基于字段定义与规则，从基准报文批量生成负向/边界用例行。
 
@@ -340,7 +340,7 @@ def generate_cases_np(fields: List[Field], selected_rules: List[str], base_json:
 # Excel导出
 # =============================
 
-def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: str):
+def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: str) -> None:
     """
     将用例行转置导出为数据驱动 Excel（含 Body 分区行）。
 
@@ -384,8 +384,8 @@ def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: 
     df.to_excel(output_file, index=False)
 
 
-async def generate_test_data(input_excel: str, output_excel: str, rules: List[str], json_message: Union[str, dict],
-                             create_id: int):
+async def generate_test_data(input_excel: str, output_excel: str, rules: List[str], json_message: Union[str, Dict[str, Any]],
+                             create_id: int) -> None:
     """
     异步生成测试数据：读模板、按规则造数、导出 Excel，并回写生成状态。
 

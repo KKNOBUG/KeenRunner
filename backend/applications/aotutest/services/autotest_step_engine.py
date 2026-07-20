@@ -209,7 +209,12 @@ class StepExecutionContext:
             self.log(message=error_message)
             raise StepExecutionError(error_message) from e
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+            self,
+            exc_type: Optional[type[BaseException]],
+            exc: Optional[BaseException],
+            tb: Optional[types.TracebackType],
+    ) -> None:
         """
         异步上下文退出：关闭由本上下文创建的 HTTP 客户端
         :param exc_type: 异常类型
@@ -223,7 +228,7 @@ class StepExecutionContext:
             error_message: str = f"异步上下文管理器: 关闭HTTP客户端连接失败, 错误描述: {e}"
             self.log(message=error_message)
 
-    def resolve_placeholders(self, variables, step_code: Optional[str] = None) -> Any:
+    def resolve_placeholders(self, variables: Any, step_code: Optional[str] = None) -> Any:
         """
         解析变量或配置中的${...}占位符（含函数占位符）
 
@@ -892,7 +897,7 @@ class StepExecutionContext:
             return code
 
     @property
-    def current_step_code(self):
+    def current_step_code(self) -> Optional[str]:
         """
         当前执行步骤的 step_code，用于日志归属
         :return: 当前步骤编号，未设置时为 None
@@ -1282,12 +1287,12 @@ class BaseStepExecutor:
                 if child_result is not None:
                     results.append(child_result)
             except Exception as e:
-                case_id: int = child.case_id
-                step_id: int = child.step_id
-                step_no: int = child.step_no
-                step_code: str = child.step_code
-                step_name: str = child.step_name
-                step_type: str = child.step_type
+                case_id: Optional[int] = child.case_id
+                step_id: Optional[int] = child.step_id
+                step_no: Optional[int] = child.step_no
+                step_code: Optional[str] = child.step_code
+                step_name: Optional[str] = child.step_name
+                step_type: AutoTestStepType = child.step_type
                 error_message: str = AutoTestToolService.format_step_error_message(step=child, exception=e, is_child_step=True)
                 self.context.log(error_message, step_code=step_code)
                 failed_result = StepExecutionResult(
@@ -2156,11 +2161,11 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 except StepExecutionError:
                     raise
                 except Exception as e:
-                    case_id: int = quote_step.case_id
-                    step_id: int = quote_step.step_id
-                    step_no: int = quote_step.step_no
-                    step_code: str = quote_step.step_code
-                    step_name: str = quote_step.step_name
+                    case_id: Optional[int] = quote_step.case_id
+                    step_id: Optional[int] = quote_step.step_id
+                    step_no: Optional[int] = quote_step.step_no
+                    step_code: Optional[str] = quote_step.step_code
+                    step_name: Optional[str] = quote_step.step_name
                     st_enum = quote_step.step_type
                     error_message: str = AutoTestToolService.format_step_error_message(step=quote_step, exception=e, is_child_step=True)
                     self.context.log(error_message, step_code=step_code)

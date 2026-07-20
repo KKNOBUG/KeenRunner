@@ -9,7 +9,7 @@
 import datetime
 import traceback
 import uuid
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Tuple
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -121,7 +121,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: int = case_instance.id
 
         # 获取所有根步骤（没有父步骤的步骤）
-        root_steps: List = await self.model.filter(
+        root_steps: List[AutoTestApiStepInfo] = await self.model.filter(
             case_id=case_id,
             parent_step_id__isnull=True,
             state__not=1
@@ -184,7 +184,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})所属用例信息完成")
 
             # 获取子步骤（递归构建）
-            children: List = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("step_no").all()
+            children: List[AutoTestApiStepInfo] = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("step_no").all()
             if children:
                 LOGGER.info(f"- 获取步骤(step_id={step.id}, step_no={step.step_no})所有子步骤(递归构建)开始 -")
                 step_dict["children"] = [await build_step_tree(child, is_quote=is_quote) for child in children]
@@ -206,7 +206,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 return step_dict
 
             # 获取引用的公共脚本的所有步骤(包含子步骤, 递归构建)
-            quote_case_root_steps: List = await self.model.filter(
+            quote_case_root_steps: List[AutoTestApiStepInfo] = await self.model.filter(
                 case_id=step.quote_case_id,
                 parent_step_id__isnull=True,
                 state__not=1
@@ -522,7 +522,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     raise DataBaseStorageException(message=error_message)
 
                 # 业务层验证：检查循环引用（防止父步骤的父步骤链中包含当前步骤）
-                visited: Set = set()
+                visited: Set[int] = set()
                 current_parent_id = parent_step.parent_step_id
                 while current_parent_id:
                     if current_parent_id == step_id:
@@ -601,7 +601,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             step_code: Optional[str] = None,
             parent_step_id: Optional[int] = None,
             case_id: Optional[int] = None,
-            exclude_step: Optional[Set[tuple]] = None
+            exclude_step: Optional[Set[Tuple[Optional[int], Optional[str]]]] = None
     ) -> int:
         """递归软删除步骤：可按 step_id/step_code 删单步及其子步骤，或按 parent_step_id/case_id 批量删。
 
@@ -674,7 +674,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         return deleted_count
 
-    async def select_steps(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_steps(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiStepInfo]]:
         """分页查询步骤列表。
 
         :param search: Tortoise Q 查询条件。
@@ -709,7 +709,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         created_count: int = 0
         updated_count: int = 0
         success_detail: List[Dict[str, Any]] = []
-        processed_step_codes: Dict[int, Set] = {}
+        processed_step_codes: Dict[int, Set[str]] = {}
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
         case_crud = AutoTestApiCaseCrud()
         for sid, step_data in enumerate(steps_data, start=1):
@@ -930,7 +930,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         raise DataBaseStorageException(message=error_message)
 
                     # 业务层验证：检查深层循环引用（防止父步骤的父步骤链中包含当前步骤）
-                    visited: Set = set()
+                    visited: Set[int] = set()
                     current_parent_id = parent_step.parent_step_id
                     while current_parent_id:
                         if current_parent_id == step_id:

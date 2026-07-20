@@ -251,7 +251,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             count = 0
         return count
 
-    async def select_envs(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_envs(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvEnumInfo]]:
         """
         分页查询环境枚举列表。
 

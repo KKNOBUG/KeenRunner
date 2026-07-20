@@ -7,7 +7,7 @@
 @DateTime: 2026/1/2 18:01
 """
 import traceback
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
@@ -255,7 +255,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             count = 0
         return count
 
-    async def select_projects(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_projects(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiProjectInfo]]:
         """
         分页查询应用列表。
 

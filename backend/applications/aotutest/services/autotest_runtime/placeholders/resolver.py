@@ -96,7 +96,7 @@ class PlaceholderResolver:
                 to_string=PlaceholderArithmetic._formatter_resolved_placeholders
             )
 
-        resolved_values: List[Optional[Any]] = [value for match, value, failed_content in regularly_slots]
+        resolved_values: List[Any] = [value for match, value, failed_content in regularly_slots]
         calculated_nums: List[Optional[float]] = [PlaceholderArithmetic._is_calculated_numeric(v) for v in resolved_values]
         if not all(cn is not None for cn in calculated_nums):
             return PlaceholderArithmetic._split_placeholders(

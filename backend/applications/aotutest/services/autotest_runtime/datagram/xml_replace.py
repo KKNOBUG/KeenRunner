@@ -20,7 +20,7 @@ class XmlDatagram:
             *,
             body_map: Optional[Dict[str, Any]] = None,
             request_text: Optional[str] = None,
-    ) -> str:
+    ) -> Optional[str]:
         """
         数据驱动报文替换（XML）：按 XPath 将 body_map 写入请求 XML。
 

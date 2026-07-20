@@ -8,7 +8,7 @@
 """
 import os
 import traceback
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from typing import Union
 
 import aiofiles.os as aos
@@ -334,7 +334,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         await instance.save()
         return instance
 
-    async def select_data_sources(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataSourceInfo]]:
         """
         分页查询数据源列表。
 
@@ -570,7 +570,7 @@ class AutoTestApiDataCreateCrud(
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_step(self, step_code: str, on_error: bool = False) -> List[Optional[AutoTestApiDataCreateInfo]]:
+    async def get_by_step(self, step_code: str, on_error: bool = False) -> List[AutoTestApiDataCreateInfo]:
         """
         按步骤标识查询最近最多 3 条数据源生成记录（排除已软删）。
 
@@ -691,7 +691,7 @@ class AutoTestApiDataCreateCrud(
         await instance.save()
         return instance
 
-    async def select_data_source(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_data_source(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataCreateInfo]]:
         """
         分页查询数据源生成记录。
 
@@ -710,7 +710,7 @@ class AutoTestApiDataCreateCrud(
             raise ParameterException(message=error_message) from e
 
 
-async def delete_step_create(case_id, step_code_list):
+async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     软删除指定步骤的数据源与生成记录，并清理关联本地文件。
 

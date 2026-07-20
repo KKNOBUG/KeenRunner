@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from typing import List
+from typing import Any, List, Optional, Set, Tuple
 
 from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 
@@ -13,7 +13,7 @@ class StepTreeValidation:
     """保存前第一步：步骤树拓扑与嵌套合法性校验。"""
 
     @classmethod
-    def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> tuple:
+    def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> Tuple[bool, Optional[str]]:
         """
         校验步骤树结构：无自循环引用, 且仅有「循环结构」「条件分支」类型可包含子步骤
 
@@ -25,7 +25,7 @@ class StepTreeValidation:
         # 允许有子步骤的步骤类型
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
 
-        def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: set, path: list) -> tuple:
+        def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: Set[Any], path: List[Any]) -> Tuple[bool, Optional[str]]:
             """
             递归校验单个步骤节点及其 children：
             - 检查 step_id / step_code 自循环

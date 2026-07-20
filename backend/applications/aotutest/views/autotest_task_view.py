@@ -7,7 +7,7 @@
 @DateTime: 2026/1/31 12:42
 """
 import traceback
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
@@ -240,7 +240,7 @@ async def search_tasks_info(
 
 @autotest_task.post("/run", summary="API自动化测试-立即执行任务")
 async def run_task_info(
-        task_in: dict = Body(..., description="任务ID"),
+        task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -281,7 +281,7 @@ async def run_task_info(
 
 @autotest_task.post("/start", summary="API自动化测试-启动任务（启用调度）")
 async def start_task_info(
-        task_in: dict = Body(..., description="任务ID"),
+        task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -316,7 +316,7 @@ async def start_task_info(
 
 @autotest_task.post("/stop", summary="API自动化测试-停止任务（关闭调度）")
 async def stop_task_info(
-        task_in: dict = Body(..., description="任务ID"),
+        task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """

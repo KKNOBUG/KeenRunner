@@ -309,7 +309,7 @@ class Extractors:
                 )
                 for op_resp in response_json
             )
-            expr_executive_data: Optional[Any] = None
+            expr_executive_data: Any = None
             is_redis_response: bool = any(
                 isinstance(op_resp, dict) and "redis_data" in op_resp for op_resp in response_json
             )
@@ -347,10 +347,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
     """
     E = Extractors
 
-    def json_side(side: str):
+    def json_side(side: str) -> Callable[..., Any]:
         """注册 JSON 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取 JSON 并提取。"""
 
-        def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+        def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从请求或响应 JSON 按表达式提取。"""
             data = ctx.response_json if side == "response" else ctx.request_json
             label = "响应" if side == "response" else "请求"
@@ -362,10 +362,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
 
         return _run
 
-    def xml_side(side: str):
+    def xml_side(side: str) -> Callable[..., Any]:
         """注册 XML 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
 
-        def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+        def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从请求或响应 XML 文本按表达式提取。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
@@ -378,10 +378,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
 
         return _run
 
-    def text_side(side: str):
+    def text_side(side: str) -> Callable[..., Any]:
         """注册 Text 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
 
-        def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+        def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从请求或响应纯文本按表达式提取。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
@@ -393,10 +393,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
 
         return _run
 
-    def mapping_side(attr: str, empty: str, miss_prefix: str):
+    def mapping_side(attr: str, empty: str, miss_prefix: str) -> Callable[..., Any]:
         """注册 Headers/Cookies 等映射字段提取器；返回的 ``_run`` 从 ctx.attr 取值。"""
 
-        def _run(ctx: ExchangeContext, expr, range_type, index, operation_type):
+        def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从映射字段（Headers/Cookies 等）按表达式提取。"""
             data = getattr(ctx, attr)
             return E._extract_mapping_payload(
@@ -408,7 +408,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
 
         return _run
 
-    def session_vars(ctx: ExchangeContext, expr, range_type, index, operation_type):
+    def session_vars(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
         """从变量池 session_lookup 按 JSONPath 取值。"""
         if not expr:
             raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")

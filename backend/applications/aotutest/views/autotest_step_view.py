@@ -393,7 +393,7 @@ async def batch_update_steps_tree(
                 deleted_step_count: int = 0
                 created_step_count: int = step_result['created_count']
                 updated_step_count: int = step_result['updated_count']
-                process_step_count: Dict[str, Set] = step_result['process_detail']
+                process_step_count: Dict[str, Set[str]] = step_result['process_detail']
                 success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
                 # 2.3 删除多余步骤
                 if process_step_count:
@@ -401,7 +401,7 @@ async def batch_update_steps_tree(
                         actual_step_codes = await services.step_curd.model.filter(
                             case_id=case_id, state__not=1
                         ).values_list("step_code", flat=True)
-                        missing_step_codes: set = set(actual_step_codes) - step_codes
+                        missing_step_codes: Set[str] = set(actual_step_codes) - step_codes
                         if missing_step_codes:
                             deleted_step_count += len(missing_step_codes)
                             LOGGER.warning(
@@ -1035,7 +1035,7 @@ async def debug_tcp_request(
             response_json = None
 
         # 变量提取 / 断言（同 HTTP 调试）
-        request_json_for_extract: Optional[Union[list, dict]] = None
+        request_json_for_extract: Optional[Union[List[Any], Dict[str, Any]]] = None
         if isinstance(request_body, (dict, list)):
             request_json_for_extract = request_body
         elif isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):

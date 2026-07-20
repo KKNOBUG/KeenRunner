@@ -16,7 +16,7 @@ import math
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -284,7 +284,7 @@ async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any
         raise FileNotFoundError(f"文件不存在: {file_path}")
 
     parsed_data = await _excel_to_json_async(file_path)
-    all_dataset_names: set = set()
+    all_dataset_names: Set[str] = set()
     for sheet_data in parsed_data.values():
         all_dataset_names.update(sheet_data.keys())
     dataset_names = sorted(all_dataset_names)

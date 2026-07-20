@@ -7,7 +7,7 @@
 @DateTime: 2026/1/31 12:42
 """
 import traceback
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set, Tuple
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.exceptions import FieldError
@@ -37,7 +37,7 @@ def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
     """
     if not isinstance(cases_execute_config, dict):
         return []
-    env_ids: set = set()
+    env_ids: Set[int] = set()
     for case_cfg in cases_execute_config.values():
         if not isinstance(case_cfg, dict):
             continue
@@ -308,7 +308,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         await instance.save(update_fields=["task_enabled"])
         return instance
 
-    async def select_tasks(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_tasks(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTaskInfo]]:
         """
         分页查询任务列表；默认按最后执行时间倒序，未执行过的排在后面。
 

@@ -69,9 +69,9 @@ class ListVariableResolver:
 
 def coerce_variable_resolver(
         *,
-        finished_variables: Optional[Any],
+        finished_variables: Any,
         is_core_engine: bool,
-) -> Optional[Any]:
+) -> Any:
     """
     将历史 (is_core_engine, finished_variables) 转为可 get_variable 的对象。
 

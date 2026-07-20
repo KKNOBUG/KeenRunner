@@ -38,7 +38,7 @@ class KvUtils:
                 raise TypeError(f"变量项必须为 StepVariablesBase，得到 {type(item).__name__}")
             if skip_if_no_value and item.value is None:
                 continue
-            key: Optional[str] = item.key
+            key: str = item.key
             if key:
                 result[key] = item.value
         return result
@@ -75,7 +75,7 @@ class KvUtils:
         return result
 
     @staticmethod
-    def get_value_from_list(variables: Sequence[StepVariablesBase], name: str) -> Any:
+    def get_value_from_list(variables: Optional[Sequence[StepVariablesBase]], name: str) -> Any:
         """
         从StepVariablesBase列表中取key为name的项的value
 
@@ -154,7 +154,7 @@ class KvUtils:
         """
         if not headers or not isinstance(headers, dict):
             return {}
-        cookie_raw: Optional[Any] = None
+        cookie_raw: Any = None
         for key, value in headers.items():
             if str(key).lower() == "cookie":
                 cookie_raw = value

@@ -44,7 +44,7 @@ class JsonDatagram:
             return
 
         inner_path = "$." + inner_path
-        outer_value: Union[str, list] = JSONPathUtils.query(datagram, outer_path)
+        outer_value: Optional[Union[str, list, dict]] = JSONPathUtils.query(datagram, outer_path)
         if outer_value == [] or outer_value is None:
             return
 

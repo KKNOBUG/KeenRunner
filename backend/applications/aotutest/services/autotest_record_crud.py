@@ -8,7 +8,7 @@
 """
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List, Tuple
 
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
@@ -98,7 +98,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         await record.save(update_fields=list(update_dict.keys()))
         return record
 
-    async def select_records(self, record_in: AutoTestApiRecordSelect) -> tuple:
+    async def select_records(self, record_in: AutoTestApiRecordSelect) -> Tuple[int, List[AutoTestApiRecordInfo]]:
         """
         按筛选条件分页查询任务执行记录。
 
@@ -130,7 +130,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
                 status_val = getattr(record_in.celery_status, "value", record_in.celery_status)
                 q &= Q(celery_status=status_val)
 
-            def _parse_dt(raw: Optional[str]):
+            def _parse_dt(raw: Optional[str]) -> Optional[datetime]:
                 """将 ``YYYY-MM-DD HH:MM:SS`` 字符串解析为 datetime；失败返回 None。"""
                 if not raw:
                     return None

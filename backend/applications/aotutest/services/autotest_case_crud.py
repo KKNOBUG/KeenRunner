@@ -7,7 +7,7 @@
 @DateTime: 2025/4/28
 """
 import traceback
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List, Set, Tuple
 
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -218,7 +218,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         await instance.delete()
         return instance
 
-    async def select_cases(self, search: Q, page: int, page_size: int, order: list) -> tuple:
+    async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiCaseInfo]]:
         """
         分页查询用例列表。
 
@@ -249,7 +249,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         created_count: int = 0
         updated_count: int = 0
-        processed_case: Set = set()  # 用于去重（仅针对已有id的用例）
+        processed_case: Set[Tuple[Optional[int], Optional[str]]] = set()  # 用于去重（仅针对已有id的用例）
         success_detail: List[Dict[str, Any]] = []  # 存储处理成功的用例信息（附带输入映射）
 
         for cid, case_data in enumerate(cases_data, start=1):
