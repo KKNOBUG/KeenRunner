@@ -999,14 +999,42 @@ async def debug_tcp_request(
                 payload = request_body
         else:
             payload = request_text
+
+        # TCP 配置（与 TcpStepExecutor 一致，不再硬编码）
+        tcp_frame_mode = (step_data.tcp_frame_mode or "length_prefix_json").strip().lower()
+        frame_mode = TcpFrameMode.RAW if tcp_frame_mode == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON
+        length_field_size = step_data.tcp_length_field_size or 8
+        encoding = step_data.tcp_encoding or "utf-8"
+        max_response_bytes = step_data.tcp_max_response_bytes or (10 * 1024 * 1024)
+        response_type = (step_data.tcp_response_type or "text").strip().lower()
+
+        def _to_timedelta(v: Any) -> Optional[timedelta]:
+            if v is None or v == "":
+                return None
+            try:
+                return timedelta(seconds=float(v))
+            except Exception:
+                return None
+
+        connect_td = _to_timedelta(step_data.tcp_connect_timeout)
+        read_td = _to_timedelta(step_data.tcp_read_timeout)
+
         start_time = time.time()
-        async with AioTcpClient(timeout=timedelta(seconds=30), connect_timeout=timedelta(seconds=10)) as client:
+        async with AioTcpClient(
+            timeout=read_td or timedelta(seconds=30),
+            connect_timeout=connect_td,
+            length_field_size=int(length_field_size),
+            max_response_bytes=int(max_response_bytes),
+        ) as client:
             try:
                 utils: AsyncTcpUtils = await client.tcp(
                     host=host,
                     port=int(port),
-                    data=payload, frame_mode=TcpFrameMode.LENGTH_PREFIX_JSON,
-                    encoding="utf-8"
+                    data=payload,
+                    frame_mode=frame_mode,
+                    encoding=encoding,
+                    connect_timeout=connect_td,
+                    read_timeout=read_td,
                 )
                 raw_bytes = await utils.bytes_resp()
             except ReqInvalidException as e:
@@ -1021,18 +1049,42 @@ async def debug_tcp_request(
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message="TCP请求调试异常", data=error_message)
 
-        # 解析响应：优先 JSON，否则当作 text
-        response_json: Optional[Dict[str, Any]] = None
+        # 解析响应：与 TcpStepExecutor 一致，按 response_type 本地解析
         duration = int((time.time() - start_time) * 1000)
         append_debugging_log(message=f"TCP请求调试完成: 耗时: {duration}ms")
-        response_text: str = raw_bytes.decode("utf-8", errors="ignore")
-        response_data: Optional[Union[str, Dict[str, Any]]] = response_text
         try:
-            response_json = orjson.loads(response_text)
-            response_data = response_json
+            response_text: str = raw_bytes.decode(encoding, errors="ignore")
         except Exception:
-            LOGGER.warning(f"响应体转换JSON格式失败, 保留原样")
+            response_text = ""
+        response_json: Optional[Any] = None
+
+        if response_type == "json":
+            try:
+                body_any = orjson.loads(raw_bytes) if raw_bytes else None
+                response_json = body_any if isinstance(body_any, (dict, list)) else None
+                if body_any is not None:
+                    response_text = orjson.dumps(body_any).decode("UTF-8")
+            except Exception:
+                response_json = None
+        elif response_type == "xml":
+            try:
+                if raw_bytes and raw_bytes.strip():
+                    from lxml import etree
+                    parser = etree.XMLParser(recover=False, remove_blank_text=True, encoding=encoding)
+                    root = etree.fromstring(raw_bytes, parser=parser)
+                    response_text = etree.tostring(root, encoding=str, pretty_print=True, xml_declaration=False).strip()
+            except Exception:
+                pass
             response_json = None
+        elif response_type == "bytes":
+            response_json = None
+        else:  # text
+            try:
+                response_json = orjson.loads(response_text) if response_text and response_text.strip().startswith(("{", "[")) else None
+            except Exception:
+                response_json = None
+
+        response_data: Optional[Union[str, Dict[str, Any]]] = response_json if response_json is not None else response_text
 
         # 变量提取 / 断言（同 HTTP 调试）
         request_json_for_extract: Optional[Union[List[Any], Dict[str, Any]]] = None

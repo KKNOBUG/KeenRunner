@@ -2394,33 +2394,36 @@ class TcpStepExecutor(BaseStepExecutor):
                     connect_timeout=connect_td,
                     read_timeout=read_td,
                 )
+                # 只请求一次：获取原始字节后本地解析，避免解析失败时重发 TCP 请求
+                resp_bytes = await utils.bytes_resp()
                 try:
-                    if response_type == "json":
-                        body_any = await utils.json_resp()
-                        resp_text = orjson.dumps(body_any).decode("UTF-8")
-                        response_json = body_any if isinstance(body_any, (dict, list)) else None
-                        resp_bytes = resp_text.encode(encoding, errors="ignore")
-                    elif response_type == "xml":
-                        resp_text = await utils.xml_resp() or ""
-                        resp_bytes = resp_text.encode(encoding, errors="ignore")
-                        response_json = None
-                    elif response_type == "bytes":
-                        resp_bytes = await utils.bytes_resp()
-                        try:
-                            resp_text = resp_bytes.decode(encoding, errors="ignore")
-                        except Exception:
-                            resp_text = ""
-                        response_json = None
-                    else:  # text
-                        resp_text = await utils.text_resp()
-                        resp_bytes = resp_text.encode(encoding, errors="ignore")
-                        try:
-                            response_json = orjson.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
-                        except Exception:
-                            response_json = None
-                except Exception:
-                    resp_bytes = await utils.bytes_resp()
                     resp_text = resp_bytes.decode(encoding, errors="ignore")
+                except Exception:
+                    resp_text = ""
+                response_json: Optional[Any] = None
+
+                if response_type == "json":
+                    try:
+                        body_any = orjson.loads(resp_bytes) if resp_bytes else None
+                        response_json = body_any if isinstance(body_any, (dict, list)) else None
+                        if body_any is not None:
+                            resp_text = orjson.dumps(body_any).decode("UTF-8")
+                    except Exception:
+                        response_json = None
+                elif response_type == "xml":
+                    # 与 xml_resp 行为一致：lxml 格式化
+                    try:
+                        if resp_bytes and resp_bytes.strip():
+                            from lxml import etree
+                            parser = etree.XMLParser(recover=False, remove_blank_text=True, encoding=encoding)
+                            root = etree.fromstring(resp_bytes, parser=parser)
+                            resp_text = etree.tostring(root, encoding=str, pretty_print=True, xml_declaration=False).strip()
+                    except Exception:
+                        pass  # 格式化失败，保留 decode 后的文本
+                    response_json = None
+                elif response_type == "bytes":
+                    response_json = None
+                else:  # text
                     try:
                         response_json = orjson.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
                     except Exception:
