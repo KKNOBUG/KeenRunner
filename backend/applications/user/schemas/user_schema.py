@@ -12,6 +12,8 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
+    """用户公共字段（创建/更新/查询共用）。"""
+
     username: Optional[str] = Field(default=None, max_length=32, description="用户账号")
     alias: Optional[str] = Field(default=None, max_length=32, description="用户姓名")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
@@ -30,6 +32,8 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    """新增用户入参。"""
+
     username: str = Field(..., max_length=32, description="用户账号")
     password: str = Field(..., max_length=255, description="用户密码")
     alias: str = Field(..., max_length=32, description="用户姓名")
@@ -42,21 +46,32 @@ class UserCreate(UserBase):
     role_ids: Optional[List[int]] = Field(default=[], description="角色ID列表")
 
     def create_dict(self):
+        """
+        转为落库字典：排除未设置字段，并移除 role_ids（角色单独绑定）。
+
+        :return: 可直接传入 UserCrud.create 的字段字典
+        """
         data = self.model_dump(exclude_unset=True)
         data.pop("role_ids", None)
         return data
 
 
 class UserUpdate(UserBase):
+    """更新用户入参。"""
+
     user_id: int = Field(..., ge=1, description="用户ID")
     updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
 
 
 class UserBatchDelete(BaseModel):
+    """批量删除用户入参。"""
+
     user_ids: Optional[List[int]] = Field(None, description="用户ID列表")
 
 
 class UserSelect(UserBase):
+    """分页查询用户入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: Optional[list] = Field(default=[], examples=["id"], description="排序字段")
@@ -64,5 +79,7 @@ class UserSelect(UserBase):
 
 
 class UpdatePassword(BaseModel):
+    """用户修改密码入参。"""
+
     old_password: str = Field(description="旧密码")
     new_password: str = Field(description="新密码")
