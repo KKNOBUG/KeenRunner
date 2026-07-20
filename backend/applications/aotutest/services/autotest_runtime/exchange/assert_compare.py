@@ -80,6 +80,63 @@ class AssertionCompare:
         return comparator(str(actual), str(expected))
 
     @classmethod
+    def _assertion_length_equal(cls, actual: Any, expected: Any) -> bool:
+        """
+        比较实际值长度是否等于期望长度。
+
+        - 有 ``__len__`` 的类型（list/dict/str/set/tuple）：用 ``len(actual)``
+        - 无 ``__len__`` 的类型（int/float/bool）：用 ``len(str(actual))`` 取字符长度
+        - ``None``：返回 False
+
+        :param actual: 实际值
+        :param expected: 期望长度（数字字符串会经 _normalize_value 转换）
+        :return: 长度是否相等
+        """
+        nb = cls._normalize_value(expected)
+        if nb is None or actual is None:
+            return False
+        try:
+            actual_len = len(actual)
+        except TypeError:
+            actual_len = len(str(actual))
+        return actual_len == int(nb)
+
+    @classmethod
+    def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
+        """
+        判断实际值是否为空。
+
+        - ``None``：空
+        - 空字符串：空
+        - 空容器（list/dict/set/tuple 长度为 0）：空
+        - 数值/布尔等：非空
+
+        :param actual: 实际值
+        :param expected: 期望值（忽略）
+        :return: 是否为空
+        """
+        del expected
+        if actual is None:
+            return True
+        if isinstance(actual, str):
+            return actual == ""
+        if isinstance(actual, (list, dict, set, tuple)):
+            return len(actual) == 0
+        return False
+
+    @classmethod
+    def _assertion_not_empty(cls, actual: Any, expected: Any) -> bool:
+        """
+        判断实际值是否非空。
+
+        :param actual: 实际值
+        :param expected: 期望值（忽略）
+        :return: 是否非空
+        """
+        del expected
+        return not cls._assertion_is_empty(actual, None)
+
+    @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """
         根据操作符对实际值与期望值做断言比较；operation须为AutoTestAssertionOperation枚举值。
@@ -95,11 +152,6 @@ class AssertionCompare:
         except ValueError as exc:
             raise ValueError(f"操作符[{operation!r}]不被支持") from exc
 
-        def _length_equal(a: Any, e: Any) -> bool:
-            """比较实际值字符串长度是否等于期望长度。"""
-            nb = cls._normalize_value(e)
-            return nb is not None and len(str(a)) == int(nb)
-
         handlers: Dict[AutoTestAssertionOperation, Callable[[Any, Any], bool]] = {
             AutoTestAssertionOperation.EQUAL: cls._type_aware_equals,
             AutoTestAssertionOperation.NOT_EQUAL: lambda a, e: not cls._type_aware_equals(a, e),
@@ -107,13 +159,13 @@ class AssertionCompare:
             AutoTestAssertionOperation.GREATER_OR_EQUAL: lambda a, e: cls._type_aware_compare(a, e, operator.ge),
             AutoTestAssertionOperation.LESS_THAN: lambda a, e: cls._type_aware_compare(a, e, operator.lt),
             AutoTestAssertionOperation.LESS_OR_EQUAL: lambda a, e: cls._type_aware_compare(a, e, operator.le),
-            AutoTestAssertionOperation.LENGTH_EQUAL: _length_equal,
+            AutoTestAssertionOperation.LENGTH_EQUAL: cls._assertion_length_equal,
             AutoTestAssertionOperation.CONTAINS: lambda a, e: str(e) in str(a),
             AutoTestAssertionOperation.NOT_CONTAINS: lambda a, e: str(e) not in str(a),
             AutoTestAssertionOperation.STARTS_WITH: lambda a, e: str(a).startswith(str(e)),
             AutoTestAssertionOperation.ENDS_WITH: lambda a, e: str(a).endswith(str(e)),
-            AutoTestAssertionOperation.NOT_EMPTY: lambda a, _e: a is not None and a != "",
-            AutoTestAssertionOperation.IS_EMPTY: lambda a, _e: a is None or a == "",
+            AutoTestAssertionOperation.NOT_EMPTY: cls._assertion_not_empty,
+            AutoTestAssertionOperation.IS_EMPTY: cls._assertion_is_empty,
         }
         comparator = handlers.get(op)
         if comparator is None:
