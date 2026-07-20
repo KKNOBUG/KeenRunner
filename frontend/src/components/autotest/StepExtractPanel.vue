@@ -114,18 +114,6 @@
 
                 <n-form-item label="继续提取" class="step-ev-fi">
                   <n-space align="center" :wrap-item="false" :size="8">
-                    <n-button
-                        v-if="!isVariableSource"
-                        text
-                        type="primary"
-                        :disabled="readonly || item.extractScope !== '部分提取'"
-                        @click="onContinueExtract"
-                    >
-                      继续提取
-                      <template #icon>
-                        <TheIcon icon="material-symbols:dataset-linked-outline" :size="18" />
-                      </template>
-                    </n-button>
                     <n-switch
                         v-model:value="item.continueExtract"
                         size="small"
@@ -258,10 +246,6 @@ function duplicateItem(key) {
 
 function toggleCollapse(key) {
   collapseState[key] = !collapseState[key]
-}
-
-function onContinueExtract() {
-  window.$message?.info?.('继续提取功能待实现')
 }
 </script>
 
