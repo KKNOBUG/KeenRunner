@@ -27,7 +27,7 @@ from backend.enums import AutoTestCaseType
 
 
 class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
-    """自动化测试用例的 CRUD 服务，负责用例的增删改查及批量更新。"""
+    """用例 CRUD 与批量更新相关业务。"""
 
     def __init__(self):
         """初始化 CRUD，绑定模型 AutoTestApiCaseInfo。"""
@@ -35,13 +35,14 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
-        根据用例主键 ID 查询单条用例
+        按主键 ID 查询用例。
 
-        :param case_id: 用例主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 用例实例或 None。
-        :raises ParameterException: 当 case_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param case_id: 用例主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 用例实例或 None
+        :raises ParameterException: case_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not case_id:
             error_message: str = "查询用例信息失败, 参数(case_id)不允许为空"
@@ -57,13 +58,14 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def get_by_code(self, case_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
-        根据用例标识代码查询单条用例
+        按用例标识代码查询用例。
 
-        :param case_code: 用例标识代码。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 用例实例或 None。
-        :raises ParameterException: 当 case_code 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param case_code: 用例标识代码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 用例实例或 None
+        :raises ParameterException: case_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not case_code:
             error_message: str = "查询用例信息失败, 参数(case_code)不允许为空"
@@ -78,14 +80,15 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         return instance
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
-        """创建一条用例，校验标签存在性及同项目下用例名称唯一性。
+        """
+        创建用例，校验标签存在及同项目下用例名唯一。
 
-        :param case_in: 用例创建 schema。
-        :returns: 创建后的用例实例。
-        :raises ParameterException: 参数或查询异常时。
-        :raises NotFoundException: 标签不存在时。
-        :raises DataAlreadyExistsException: 同项目下用例名重复时。
-        :raises DataBaseStorageException: 违反数据库约束时。
+        :param case_in: 用例创建 schema
+        :return: 创建后的用例实例
+        :raises ParameterException: 参数异常
+        :raises NotFoundException: 标签不存在
+        :raises DataAlreadyExistsException: 同项目下用例名重复
+        :raises DataBaseStorageException: 违反数据库约束
         """
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
@@ -121,13 +124,14 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
-        """更新用例，支持按 case_id 或 case_code 定位，并递增 case_version。
+        """
+        更新用例，按 case_id 或 case_code 定位并递增 case_version。
 
-        :param case_in: 用例更新 schema，需包含 case_id 或 case_code。
-        :returns: 更新后的用例实例。
-        :raises NotFoundException: 用例不存在或更新时记录被删除。
-        :raises DataAlreadyExistsException: 同项目下用例名重复时。
-        :raises DataBaseStorageException: 违反数据库约束时。
+        :param case_in: 用例更新 schema，需含 case_id 或 case_code
+        :return: 更新后的用例实例
+        :raises NotFoundException: 用例不存在
+        :raises DataAlreadyExistsException: 同项目下用例名重复
+        :raises DataBaseStorageException: 违反数据库约束
         """
         case_id: Optional[int] = case_in.case_id
         case_code: Optional[str] = case_in.case_code
@@ -181,13 +185,14 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestApiCaseInfo:
-        """软删除用例（state=1），需无步骤且无引用。
+        """
+        删除用例：先硬删关联步骤，再删除用例；公共脚本需无引用。
 
-        :param case_id: 用例主键 ID，与 case_code 二选一。
-        :param case_code: 用例标识代码，与 case_id 二选一。
-        :returns: 软删除后的用例实例。
-        :raises NotFoundException: 用例不存在时。
-        :raises DataAlreadyExistsException: 存在步骤或被引用时。
+        :param case_id: 用例主键 ID，与 case_code 二选一
+        :param case_code: 用例标识代码，与 case_id 二选一
+        :return: 删除后的用例实例
+        :raises NotFoundException: 用例不存在
+        :raises DataAlreadyExistsException: 公共脚本仍被引用
         """
         # 业务层验证: 检查用例是否存在
         if case_id:
@@ -214,14 +219,15 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         return instance
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: list) -> tuple:
-        """分页查询用例列表。
+        """
+        分页查询用例列表。
 
-        :param search: Tortoise Q 查询条件。
-        :param page: 页码。
-        :param page_size: 每页条数。
-        :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
-        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        :param search: Tortoise Q 查询条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -234,12 +240,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         批量新增或更新用例：无 case_id/case_code 则新增，有则更新。
 
-        :param cases_data: 用例更新 schema 列表，每项需为 AutoTestApiCaseUpdate。
-        :returns: 包含 created_count、updated_count、success_detail 的字典。
-        :raises TypeRejectException: 列表项类型非 AutoTestApiCaseUpdate 时。
-        :raises ParameterException: 必填字段缺失时。
-        :raises DataAlreadyExistsException: 同项目下用例名重复时。
-        :raises DataBaseStorageException: 数据库写入异常时。
+        :param cases_data: 用例更新 schema 列表
+        :return: 含 created_count、updated_count、success_detail 的字典
+        :raises TypeRejectException: 列表项类型非法
+        :raises ParameterException: 必填字段缺失
+        :raises DataAlreadyExistsException: 同项目下用例名重复
+        :raises DataBaseStorageException: 数据库写入异常
         """
         created_count: int = 0
         updated_count: int = 0

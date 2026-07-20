@@ -41,6 +41,13 @@ async def create_task_info(
         task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增任务。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.task_curd.create_task(task_in=task_in)
         data = await instance.to_dict(
@@ -69,6 +76,14 @@ async def delete_task_info(
         task_code: Optional[str] = Query(None, description="任务标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除任务。
+
+    :param task_id: 任务主键 ID
+    :param task_code: 任务业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.task_curd.delete_task(task_id=task_id, task_code=task_code)
         data = await instance.to_dict(
@@ -94,6 +109,13 @@ async def update_task_info(
         task_in: AutoTestApiTaskUpdate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新任务。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.task_curd.update_task(task_in=task_in)
         data = await instance.to_dict(
@@ -122,6 +144,14 @@ async def get_task_info(
         task_code: Optional[str] = Query(None, description="任务标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询任务。
+
+    :param task_id: 任务主键 ID
+    :param task_code: 任务业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if task_id:
             instance = await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
@@ -150,6 +180,13 @@ async def search_tasks_info(
         task_in: AutoTestApiTaskSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询任务。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if task_in.task_id:
@@ -206,6 +243,13 @@ async def run_task_info(
         task_in: dict = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    立即执行任务。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
@@ -240,6 +284,13 @@ async def start_task_info(
         task_in: dict = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    启动任务（启用调度）。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
@@ -268,6 +319,13 @@ async def stop_task_info(
         task_in: dict = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    停止任务（关闭调度）。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
@@ -296,6 +354,13 @@ async def search_task_records(
         record_in: AutoTestApiRecordSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    任务执行记录查询。
+
+    :param record_in: 任务执行记录查询入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         total, instances = await services.record_curd.select_records(record_in=record_in)
         data = [

@@ -14,6 +14,8 @@ from backend.enums import AutoTestTaskStatus, AutoTestTaskTriggerType, AutoTestT
 
 
 class AutoTestApiRecordSelect(BaseModel):
+    """分页查询任务执行观测记录入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-celery_start_time", "-id"], description="排序字段")

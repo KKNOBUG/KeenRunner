@@ -30,8 +30,15 @@ from backend.enums import AutoTestConfigNodeType
 
 async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tuple[str, Optional[str]]:
     """
-    按「全局环境枚举名 + 应用」解析 HTTP 网关 host/port：
-    先查 AutoTestApiEnvEnumInfo（仅 env_name），再查 AutoTestApiEnvConfigInfo（project_id + env_id，config_type=api）。
+    按「全局环境枚举名 + 应用」解析 HTTP 网关 host/port。
+
+    先查 AutoTestApiEnvEnumInfo（env_name），再查 AutoTestApiEnvConfigInfo（project_id + env_id，config_type=api）。
+
+    :param project_id: 应用主键 ID
+    :param env_name: 环境枚举名称
+    :return: (host, port)；port 可为空
+    :raises ParameterException: env_name 为空
+    :raises NotFoundException: 环境枚举或 API 配置不存在
     """
     pid = int(project_id)
     name = (env_name or "").strip()
@@ -67,20 +74,21 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
 
 
 class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnvCreate, AutoTestApiEnvUpdate]):
-    """自动化测试环境的 CRUD 服务，负责环境枚举的增删改查。"""
+    """环境枚举 CRUD 与相关业务。"""
 
     def __init__(self):
-        """初始化 CRUD，绑定模型 AutoTestApiEnvEnumInfo。"""
         super().__init__(model=AutoTestApiEnvEnumInfo)
 
     async def get_by_id(self, env_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvEnumInfo]:
         """
-        根据环境枚举主键查询
+        按主键 ID 查询环境枚举。
+
         :param env_id: 环境枚举主键
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :returns: 环境实例或 None
-        :raises ParameterException: 当 env_id 为空时
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 环境枚举实例或 None
+        :raises ParameterException: env_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not env_id:
             error_message: str = "查询环境枚举信息失败, 参数(env_id)不允许为空"
@@ -96,12 +104,14 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def get_by_code(self, env_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvEnumInfo]:
         """
-        根据环境枚举标识代码查询
+        按标识代码查询环境枚举。
+
         :param env_code: 环境标识代码
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :returns: 环境实例或 None
-        :raises ParameterException: 当 env_code 为空时
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 环境枚举实例或 None
+        :raises ParameterException: env_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not env_code:
             error_message: str = "查询环境枚举信息失败, 参数(env_code)不允许为空"
@@ -117,12 +127,14 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def get_by_name(self, env_name: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvEnumInfo]:
         """
-        根据环境枚举名称查询
+        按名称查询环境枚举。
+
         :param env_name: 环境枚举名称
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException
-        :returns: 环境实例或 None
-        :raises ParameterException: 当 env_id 为空时
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 环境枚举实例或 None
+        :raises ParameterException: env_name 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not env_name:
             error_message: str = "查询环境枚举信息失败, 参数(env_name)不允许为空"
@@ -138,11 +150,11 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def create_env(self, env_in: AutoTestApiEnvCreate) -> AutoTestApiEnvEnumInfo:
         """
-        创建环境枚举信息
-        :param env_in: 环境枚举创建 schema 定义
-        :returns: 创建或恢复后的环境枚举实例
-        :raises DataAlreadyExistsException: 已存在启用状态的环境枚举名称时
-        :raises DataBaseStorageException: 违反数据库约束时
+        创建环境枚举；同名已存在则恢复并更新。
+
+        :param env_in: 环境枚举创建 schema
+        :return: 创建或恢复后的环境枚举实例
+        :raises DataBaseStorageException: 违反数据库约束
         """
         env_name: str = env_in.env_name
         # 业务层验证：检查环境枚举名称是否存在
@@ -168,12 +180,12 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def update_env(self, env_in: AutoTestApiEnvUpdate) -> AutoTestApiEnvEnumInfo:
         """
-        更新环境信息
-        :param env_in: 环境枚举更新 schema 定义
-        :returns: 更新后的环境枚举实例
-        :raises NotFoundException: 环境枚举不存在时
-        :raises DataAlreadyExistsException: 环境枚举名称重复时
-        :raises DataBaseStorageException: 违反约束时
+        更新环境枚举，按 env_id 或 env_code 定位。
+
+        :param env_in: 环境枚举更新 schema
+        :return: 更新后的环境枚举实例
+        :raises NotFoundException: 环境枚举不存在
+        :raises DataBaseStorageException: 违反约束
         """
         env_id: Optional[int] = env_in.env_id
         env_code: Optional[str] = env_in.env_code
@@ -205,11 +217,12 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def delete_env(self, env_id: Optional[int] = None, env_code: Optional[str] = None) -> AutoTestApiEnvEnumInfo:
         """
-        删除环境枚举信息
-        :param env_id: 环境枚举主键
-        :param env_code: 环境枚举标识代码
-        :returns: 删除后的环境枚举实例
-        :raises NotFoundException: 环境枚举不存在时
+        软删除环境枚举（state=1）。
+
+        :param env_id: 环境枚举主键，与 env_code 二选一
+        :param env_code: 环境枚举标识代码，与 env_id 二选一
+        :return: 软删除后的环境枚举实例
+        :raises NotFoundException: 环境枚举不存在
         """
         # 业务层验证：检查环境信息是否存在
         if env_id:
@@ -223,9 +236,10 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
         """
-        删除环境枚举信息
-        :param env_in: 环境枚举删除 schema 定义
-        :returns: 删除的数量
+        按 ID 或 code 列表批量软删除环境枚举。
+
+        :param env_in: 环境枚举删除 schema
+        :return: 更新条数
         """
         env_ids: Optional[List[int]] = env_in.env_ids
         env_codes: Optional[List[str]] = env_in.env_codes
@@ -239,13 +253,14 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def select_envs(self, search: Q, page: int, page_size: int, order: list) -> tuple:
         """
-        分页查询环境枚举列表
-        :param search: Tortoise Q 查询条件。
-        :param page: 页码。
-        :param page_size: 每页条数。
-        :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
-        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        分页查询环境枚举列表。
+
+        :param search: Tortoise Q 查询条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

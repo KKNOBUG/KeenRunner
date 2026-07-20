@@ -41,6 +41,13 @@ async def create_case(
         case_in: AutoTestApiCaseCreate = Body(..., description="用例信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增用例。
+
+    :param case_in: 用例入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.case_curd.create_case(case_in)
         data = await instance.to_dict(
@@ -69,6 +76,14 @@ async def delete_case(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除用例。
+
+    :param case_id: 用例主键 ID
+    :param case_code: 用例业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.case_curd.delete_case(case_id=case_id, case_code=case_code)
         data = await instance.to_dict(
@@ -96,6 +111,13 @@ async def update_case(
         case_in: AutoTestApiCaseUpdate = Body(..., description="用例信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新除用例。
+
+    :param case_in: 用例入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.case_curd.update_case(case_in)
         data = await instance.to_dict(
@@ -124,6 +146,14 @@ async def get_case(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询用例。
+
+    :param case_id: 用例主键 ID
+    :param case_code: 用例业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if case_id:
             instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
@@ -175,6 +205,13 @@ async def search_cases(
         case_in: AutoTestApiCaseSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询用例。
+
+    :param case_in: 用例入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if case_in.case_id:

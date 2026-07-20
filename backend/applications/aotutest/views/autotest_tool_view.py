@@ -145,6 +145,11 @@ def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
 
 @autotest_tool.get("/get", summary="API自动化测试-辅助函数查询")
 async def get_func_info():
+    """
+    辅助函数查询。
+
+    :return: 统一 HTTP 响应
+    """
     try:
         func_list = _build_func_list_with_desc2(GenerateUtils)
         LOGGER.info("辅助函数查询成功")

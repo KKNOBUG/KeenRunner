@@ -15,6 +15,8 @@ from backend.enums import AutoTestCaseType, AutoTestCaseAttr
 
 
 class AutoTestApiCaseCreate(BaseModel):
+    """创建用例入参。"""
+
     case_name: str = Field(..., max_length=255, description="用例名称")
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     case_tags: List[int] = Field(..., description="用例所属标签")
@@ -26,6 +28,8 @@ class AutoTestApiCaseCreate(BaseModel):
 
 
 class AutoTestApiCaseBase(BaseModel):
+    """用例公共字段（创建/更新/查询共用）。"""
+
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
@@ -41,11 +45,15 @@ class AutoTestApiCaseBase(BaseModel):
 
 
 class AutoTestApiCaseUpdate(AutoTestApiCaseBase):
+    """更新用例入参。"""
+
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiCaseSelect(AutoTestApiCaseBase):
+    """分页查询用例入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-created_time"], description="排序字段")

@@ -16,6 +16,8 @@ from backend.enums import AutoTestTagType
 
 
 class AutoTestApiTagCreate(BaseModel):
+    """创建标签入参。"""
+
     tag_type: AutoTestTagType = Field(default=AutoTestTagType.SCRIPT, description="标签所属类型")
     tag_project: int = Field(..., ge=1, description="标签所属应用")
     tag_mode: str = Field(..., max_length=64, description="标签大类")
@@ -24,6 +26,8 @@ class AutoTestApiTagCreate(BaseModel):
 
 
 class AutoTestApiTagUpdate(BaseModel):
+    """更新标签入参。"""
+
     tag_id: Optional[int] = Field(None, description="标签ID")
     tag_code: Optional[str] = Field(None, max_length=64, description="标签标识代码")
     tag_type: Optional[AutoTestTagType] = Field(None, description="标签所属类型")
@@ -34,11 +38,15 @@ class AutoTestApiTagUpdate(BaseModel):
 
 
 class AutoTestApiTagDelete(BaseModel):
+    """删除标签入参。"""
+
     tag_ids: Optional[List[int]] = Field(None, description="标签ID列表")
     tag_codes: Optional[List[str]] = Field(None, description="标签标识代码列表")
 
 
 class AutoTestApiTagSelect(AutoTestApiTagUpdate):
+    """分页查询标签入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-updated_time"], description="排序字段")

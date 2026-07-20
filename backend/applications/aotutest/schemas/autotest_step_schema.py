@@ -28,6 +28,8 @@ NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
 class DataBaseOperates(BaseModel):
+    """步骤定义中的单条数据库操作字段模型。"""
+
     name: str = Field(..., max_length=128, description="数据库操作名称")
     expr: str = Field(..., max_length=4096, description="数据库操作SQL语句")
     project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
@@ -39,6 +41,8 @@ class DataBaseOperates(BaseModel):
 
 
 class RedisOperates(BaseModel):
+    """步骤定义中的单条 Redis 操作字段模型。"""
+
     name: str = Field(..., max_length=128, description="Redis操作名称")
     expr: str = Field(..., max_length=4096, description="Redis命令(支持多行)")
     project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
@@ -50,6 +54,8 @@ class RedisOperates(BaseModel):
 
 
 class ConditionsBase(BaseModel):
+    """条件/循环判断基础字段模型。"""
+
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
     condition_value: Optional[Any] = Field(None, description="条件比对值")
@@ -70,12 +76,16 @@ class ConditionsBase(BaseModel):
 
 
 class StepVariablesBase(BaseModel):
+    """步骤变量键值对基础字段模型。"""
+
     key: str = Field(..., max_length=1024, description="会话变量(键)")
     value: Optional[Any] = Field(None, description="会话变量(值)")
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
 
 
 class StepsExecuteConfigBase(BaseModel):
+    """步骤执行时环境配置覆盖基础字段模型。"""
+
     env_name: str = Field(..., max_length=128, description="环境名称")
     config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
@@ -104,6 +114,8 @@ class StepAssertValidatorItem(BaseModel):
 
 
 class AutoTestApiStepReqBase(BaseModel):
+    """步骤请求相关基础字段模型。"""
+
     request_url: Optional[str] = Field(None, max_length=2048, description="请求地址")
     request_port: Optional[str] = Field(None, max_length=16, description="请求端口")
     request_method: Optional[HTTPMethod] = Field(None, max_length=16, description="请求方法(GET/POST/PUT/DELETE等)")
@@ -128,6 +140,8 @@ class AutoTestApiStepReqBase(BaseModel):
 
 
 class AutoTestApiStepDbBase(BaseModel):
+    """步骤数据库操作基础字段模型。"""
+
     database_operates: Optional[List[DataBaseOperates]] = Field(None, description="数据库请求操作列表")
     database_searched: Optional[bool] = Field(None, description="数据库请求查到即止开关")
 
@@ -152,6 +166,8 @@ class AutoTestApiStepDbBase(BaseModel):
 
 
 class AutoTestApiStepRedisBase(BaseModel):
+    """步骤 Redis 操作基础字段模型。"""
+
     redis_operates: Optional[List[RedisOperates]] = Field(None, description="Redis请求操作列表")
     redis_searched: Optional[bool] = Field(None, description="Redis请求查到即止开关")
 
@@ -176,6 +192,8 @@ class AutoTestApiStepRedisBase(BaseModel):
 
 
 class AutoTestApiStepVarBase(BaseModel):
+    """步骤变量/提取/断言基础字段模型。"""
+
     session_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(所有步骤持续累积), 列表项为 key / value / desc")
     defined_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="定义变量, 列表项为 key / value / desc")
     extract_variables: Optional[List[StepExtractVariableItem]] = Field(default=None, description="提取规则(步骤定义), 使用 scope 表示 ALL/SOME")
@@ -243,6 +261,8 @@ class AutoTestApiStepVarBase(BaseModel):
 
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepRedisBase, AutoTestApiStepVarBase):
+    """步骤公共字段（创建/更新/树节点共用）。"""
+
     model_config = ConfigDict(extra="ignore")
 
     step_id: Optional[int] = Field(None, description="步骤ID(更新必填, 新增不填)")
@@ -292,11 +312,15 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
 
 
 class AutoTestApiStepChildren(BaseModel):
+    """步骤子节点与引用步骤字段模型。"""
+
     children: Optional[List["AutoTestApiStepBase"]] = Field(None, description="子步骤")
     quote_steps: Optional[List["AutoTestApiStepBase"]] = Field(None, description="引用步骤")
 
 
 class AutoTestApiStepCreate(AutoTestApiStepBase):
+    """创建步骤入参。"""
+
     step_no: int = Field(..., ge=1, description="步骤序号")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     step_type: AutoTestStepType = Field(..., description="步骤所属类型")
@@ -304,10 +328,14 @@ class AutoTestApiStepCreate(AutoTestApiStepBase):
 
 
 class AutoTestApiStepUpdate(AutoTestApiStepBase):
+    """更新步骤入参。"""
+
     updated_user: Optional[Union[UpperStr, str]] = Field(None, description="更新人员")
 
 
 class AutoTestApiStepSelect(BaseModel):
+    """分页查询步骤入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["case_id", "step_no"], description="排序字段")
@@ -326,6 +354,8 @@ class AutoTestApiStepSelect(BaseModel):
 
 
 class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
+    """步骤树更新单节点入参。"""
+
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
     quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表(与 children 同型；更新时忽略)")
@@ -351,11 +381,15 @@ class AutoTestCaseStepTreeLoadResult(BaseModel):
 
 
 class AutoTestStepTreeUpdateList(BaseModel):
+    """整棵步骤树更新入参。"""
+
     case: AutoTestApiCaseUpdate = Field(..., description="用例信息")
     steps: List[AutoTestStepTreeUpdateItem] = Field(..., description="步骤树数据")
 
 
 class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
+    """HTTP 步骤调试入参。"""
+
     env_id: int = Field(..., ge=1, description="环境枚举ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
@@ -365,6 +399,8 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 
 
 class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
+    """TCP 步骤调试入参。"""
+
     env_id: int = Field(..., ge=1, description="环境枚举ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_text: Optional[str] = Field(None, description="请求体数据(Text格式)")
@@ -373,11 +409,15 @@ class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 
 
 class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
+    """Python 代码步骤调试入参。"""
+
     step_name: str = Field(..., max_length=255, description="步骤名称")
     code: str = Field(..., description="执行代码(Python)")
 
 
 class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase):
+    """Redis 步骤调试入参。"""
+
     env_id: int = Field(..., ge=1, description="环境枚举ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
 
@@ -401,6 +441,8 @@ class AutoTestCaseRunInfo(BaseModel):
 
 
 class AutoTestStepTreeExecute(BaseModel):
+    """步骤树执行/调试入参。"""
+
     case_id: int = Field(..., description="用例ID")
     execute_type: AutoTestReportType = Field(..., description="执行类型，复用 AutoTestReportType 枚举")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
@@ -437,6 +479,8 @@ class AutoTestStepTreeExecute(BaseModel):
 
 
 class AutoTestBatchExecuteCases(BaseModel):
+    """批量执行用例入参。"""
+
     env_name: Optional[str] = Field(None, description="执行环境名称")
     case_ids: List[int] = Field(..., min_length=1, description="用例ID列表")
     initial_variables: Optional[List[StepVariablesBase]] = Field(

@@ -48,7 +48,7 @@ from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType
 
 
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
-    """自动化测试步骤的 CRUD 服务，负责步骤树增删改查、批量更新及单用例/批量用例执行。"""
+    """步骤 CRUD、步骤树与用例执行相关业务。"""
 
     def __init__(self):
         """初始化 CRUD，绑定模型 AutoTestApiStepInfo。"""
@@ -56,14 +56,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def get_by_id(self, step_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
         """
-        根据步骤主键 ID 查询单条步骤
+        按主键 ID 查询步骤。
 
-        :param step_id: 步骤主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录。
-        :returns: 步骤实例或 None。
-        :raises ParameterException: 当 step_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param step_id: 步骤主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 步骤实例或 None
+        :raises ParameterException: step_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not step_id:
             error_message: str = "查询步骤信息失败, 参数(step_id)不允许为空"
@@ -78,14 +78,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def get_by_code(self, step_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
         """
-        根据步骤标识代码查询单条步骤
+        按步骤标识代码查询步骤。
 
-        :param step_code: 步骤标识代码。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :param kwargs: 额外查询条件，如 state__not=1 过滤已删除记录。
-        :returns: 步骤实例或 None。
-        :raises ParameterException: 当 step_code 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param step_code: 步骤标识代码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 步骤实例或 None
+        :raises ParameterException: step_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not step_code:
             error_message: str = "查询步骤信息失败, 参数(step_code)不允许为空"
@@ -105,12 +105,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_code: Optional[str] = None
     ) -> AutoTestCaseStepTreeLoadResult:
         """
-        根据用例 ID 或 case_code 获取该用例的步骤树（含引用脚本步骤及统计信息）。
+        按用例 ID 或 case_code 获取该用例的步骤树（含引用脚本步骤及统计）。
 
-        :param case_id: 用例主键 ID，与 case_code 二选一。
-        :param case_code: 用例标识代码，与 case_id 二选一。
-        :returns: ``AutoTestCaseStepTreeLoadResult``：根步骤均为 ``AutoTestStepTreeUpdateItem``，计数见 ``step_counter``。
-        :raises NotFoundException: 用例不存在时。
+        :param case_id: 用例主键 ID，与 case_code 二选一
+        :param case_code: 用例标识代码，与 case_id 二选一
+        :return: AutoTestCaseStepTreeLoadResult（根步骤为 AutoTestStepTreeUpdateItem）
+        :raises NotFoundException: 用例不存在
         """
         # 业务层验证：检查用例是否存在
         case_crud = AutoTestApiCaseCrud()
@@ -272,7 +272,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         - 数据库请求：step.database_operates[*].project_id（可能多个）
 
         递归遍历 children 与 quote_steps（引用公共脚本展开后的步骤）。
-        :returns: 去重后的 project_id 列表（升序）。
+        :return: 去重后的 project_id 列表（升序）。
         """
         load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
         project_ids: Set[int] = set()
@@ -344,7 +344,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param case_id: 用例主键 ID，与 case_code 二选一。
         :param case_code: 用例标识代码，与 case_id 二选一。
-        :returns: {"case": {...}, "steps": [...]}，case 中 case_id/case_code 置空。
+        :return: {"case": {...}, "steps": [...]}，case 中 case_id/case_code 置空。
         """
         load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
 
@@ -385,7 +385,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """创建单条步骤，校验用例存在、父步骤存在且同用例、同用例下 step_no 唯一。
 
         :param step_in: 步骤创建 schema。
-        :returns: 创建后的步骤实例。
+        :return: 创建后的步骤实例。
         :raises NotFoundException: 用例或父步骤不存在时。
         :raises DataAlreadyExistsException: 同用例下步骤序号重复或父步骤类型不允许子步骤时。
         :raises DataBaseStorageException: 违反数据库约束时。
@@ -447,7 +447,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """更新单条步骤，支持按 step_id 或 step_code 定位；校验 step_no 唯一、父步骤存在且无循环引用。
 
         :param step_in: 步骤更新 schema。
-        :returns: 更新后的步骤实例。
+        :return: 更新后的步骤实例。
         :raises NotFoundException: 步骤或用例或父步骤不存在时。
         :raises DataAlreadyExistsException: 同用例下步骤序号重复时。
         :raises DataBaseStorageException: 循环引用或违反约束时。
@@ -569,7 +569,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param step_id: 步骤主键 ID，与 step_code 二选一。
         :param step_code: 步骤标识代码，与 step_id 二选一。
-        :returns: 软删除后的步骤实例。
+        :return: 软删除后的步骤实例。
         :raises NotFoundException: 步骤不存在时。
         :raises DataAlreadyExistsException: 存在子步骤时。
         """
@@ -610,7 +610,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param parent_step_id: 指定父步骤 ID 时，删除该父步骤下所有子步骤。
         :param case_id: 指定用例 ID 时，删除该用例下所有根步骤（及子步骤）。
         :param exclude_step: 不删除的 (step_id, step_code) 集合。
-        :returns: 实际软删除的步骤数量。
+        :return: 实际软删除的步骤数量。
         """
         deleted_count: int = 0
         if exclude_step is None:
@@ -681,7 +681,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param page: 页码。
         :param page_size: 每页条数。
         :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
+        :return: 由 (总条数, 当前页记录列表) 组成的元组。
         :raises ParameterException: 查询条件非法导致 FieldError 时。
         """
         try:
@@ -700,7 +700,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param steps_data: 步骤树项列表，每项可为 AutoTestStepTreeUpdateItem。
         :param parent_step_id: 当前层级的父步骤 ID，用于新增时挂载。
-        :returns: 包含 created_count、updated_count、process_detail、success_detail 的字典。
+        :return: 包含 created_count、updated_count、process_detail、success_detail 的字典。
         :raises ParameterException: 必填字段缺失或父步骤类型不允许子步骤时。
         :raises NotFoundException: 用例或父步骤不存在时。
         :raises DataAlreadyExistsException: 同用例下步骤序号重复时。
@@ -1012,7 +1012,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param task_code: 任务标识代码，可选。
         :param batch_code: 批次标识代码，可选。
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由 HTTP 步骤执行器内查表获取。
-        :returns: 包含报告与执行结果的字典（如 report_code、case_state、details 等）。
+        :return: 包含报告与执行结果的字典（如 report_code、case_state、details 等）。
         :raises NotFoundException: 用例不存在时。
         """
         if not initial_variables or not isinstance(initial_variables, list):
@@ -1114,7 +1114,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param steps_execute_config: 全部用例共用的执行配置（兼容旧数据）。
         :param cases_execute_config: 按 case_id 的执行配置，优先于 steps_execute_config。
         :param task_code: 任务标识代码，可选。
-        :returns: 包含 total_cases、success_cases、failed_cases、results 等汇总信息的字典。
+        :return: 包含 total_cases、success_cases、failed_cases、results 等汇总信息的字典。
         """
         if not initial_variables or not isinstance(initial_variables, list):
             initial_variables = []

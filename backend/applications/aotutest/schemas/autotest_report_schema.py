@@ -15,6 +15,8 @@ from backend.enums import AutoTestReportType
 
 
 class AutoTestApiReportBase(BaseModel):
+    """测试报告公共字段（创建/更新共用）。"""
+
     case_st_time: Optional[str] = Field(None, max_length=32, description="用例执行开始时间")
     case_ed_time: Optional[str] = Field(None, max_length=32, description="用例执行结束时间")
     case_elapsed: Optional[str] = Field(None, max_length=16, description="用例执行消耗时间")
@@ -31,6 +33,8 @@ class AutoTestApiReportBase(BaseModel):
 
 
 class AutoTestApiReportCreate(AutoTestApiReportBase):
+    """创建测试报告入参。"""
+
     case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     case_state: bool = Field(default=False, description="用例执行状态(True:成功, False:失败)")
@@ -50,12 +54,16 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
 
 
 class AutoTestApiReportUpdate(AutoTestApiReportBase):
+    """更新测试报告入参。"""
+
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, max_length=64, description="报告标识代码")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiReportSelect(BaseModel):
+    """分页查询测试报告入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-updated_time"], description="排序字段")

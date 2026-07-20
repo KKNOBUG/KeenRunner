@@ -15,6 +15,8 @@ from backend.enums import AutoTestTaskPeriodicSwitch, AutoTestTaskStatus, AutoTe
 
 
 class AutoTestApiTaskCreate(BaseModel):
+    """创建自动化测试任务入参。"""
+
     task_name: str = Field(..., max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[AutoTestTaskType] = Field(
@@ -42,6 +44,8 @@ class AutoTestApiTaskCreate(BaseModel):
 
 
 class AutoTestApiTaskUpdate(BaseModel):
+    """更新自动化测试任务入参。"""
+
     task_id: Optional[int] = Field(None, description="任务ID")
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
@@ -70,6 +74,8 @@ class AutoTestApiTaskUpdate(BaseModel):
 
 
 class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
+    """分页查询自动化测试任务入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-last_execute_time"], description="排序字段")

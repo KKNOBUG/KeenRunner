@@ -73,6 +73,13 @@ async def create_step(
         step_in: AutoTestApiStepCreate = Body(..., description="步骤信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增步骤。
+
+    :param step_in: 步骤入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.step_curd.create_step(step_in)
         data = await instance.to_dict(
@@ -101,6 +108,14 @@ async def delete_step(
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除步骤。
+
+    :param step_id: 步骤主键 ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.step_curd.delete_step(step_id=step_id, step_code=step_code)
         data = await instance.to_dict(
@@ -128,6 +143,13 @@ async def update_step(
         step_in: AutoTestApiStepUpdate = Body(..., description="步骤信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新步骤。
+
+    :param step_in: 步骤入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.step_curd.update_step(step_in)
         data = await instance.to_dict(
@@ -156,6 +178,14 @@ async def get_step(
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询步骤。
+
+    :param step_id: 步骤主键 ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if step_id:
             instance = await services.step_curd.get_by_id(step_id=step_id, on_error=True, state__not=1)
@@ -184,6 +214,13 @@ async def search_steps(
         step_in: AutoTestApiStepSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询步骤。
+
+    :param step_in: 步骤入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if step_in.step_id:
@@ -236,6 +273,14 @@ async def get_step_tree(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询步骤树。
+
+    :param case_id: 用例主键 ID
+    :param case_code: 用例业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
         LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {load.step_counter.model_dump()}")
@@ -260,6 +305,14 @@ async def copy_step_tree(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    复制用例步骤树（返回未保存的副本）。
+
+    :param case_id: 用例主键 ID
+    :param case_code: 用例业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if not case_id and not case_code:
             return BadReqResponse(message="必须提供 case_id 或 case_code 参数")
@@ -278,6 +331,13 @@ async def batch_update_steps_tree(
         data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    更新用例级步骤树。
+
+    :param data: 步骤树入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         # 获取用例信息和步骤数据
         case_data: AutoTestApiCaseUpdate = data.case
@@ -396,6 +456,13 @@ async def validate_step_tree(
         steps: List[AutoTestStepTreeUpdateItem] = Body(..., description="待校验的步骤树根步骤列表"),
         deep_validate: bool = Query(True, description="是否做深度校验（执行器字段+变量引用链）"),
 ):
+    """
+    校验步骤树JSON合法性。
+
+    :param steps: 步骤树入参
+    :param deep_validate: 是否深度校验
+    :return: 统一 HTTP 响应
+    """
     try:
         # 第2层：树结构校验
         is_valid_structure, structure_error = AutoTestToolService.validate_step_tree_structure(steps)
@@ -467,6 +534,13 @@ async def debug_http_request(
         step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    HTTP请求调试。
+
+    :param step_data: 步骤调试入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
         env_id: int = step_data.env_id
@@ -804,6 +878,13 @@ async def debug_tcp_request(
         step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    TCP请求调试。
+
+    :param step_data: 步骤调试入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         env_id: int = step_data.env_id
         step_name: str = step_data.step_name
@@ -1012,6 +1093,13 @@ async def debug_python_code(
         step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    Python代码调试。
+
+    :param step_data: 步骤调试入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         # 提取请求参数
         code = step_data.code
@@ -1130,6 +1218,13 @@ async def debug_redis_request(
         step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    Redis请求调试。
+
+    :param step_data: 步骤调试入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         env_id: int = step_data.env_id
         step_name: str = step_data.step_name
@@ -1493,6 +1588,13 @@ async def execute_step_tree(
         request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    执行或调试步骤树。
+
+    :param request: 业务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         case_id: int = request.case_id
         execute_type: AutoTestReportType = request.execute_type
@@ -1752,6 +1854,13 @@ async def batch_execute_cases_endpoint(
         request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    批量执行用例。
+
+    :param request: 业务入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         case_ids = request.case_ids
         env_name = request.env_name

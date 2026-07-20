@@ -29,7 +29,7 @@ from backend.core.exceptions import (
 
 
 class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, AutoTestApiTagUpdate]):
-    """自动化测试标签的 CRUD 服务，负责标签的增删改查及批量 ID 校验。"""
+    """标签 CRUD 与批量校验相关业务。"""
 
     def __init__(self):
         """初始化 CRUD，绑定模型 AutoTestApiTagInfo。"""
@@ -37,13 +37,14 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def get_by_id(self, tag_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTagInfo]:
         """
-        根据标签主键 ID 查询单条标签
+        按主键 ID 查询标签。
 
-        :param tag_id: 标签主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 标签实例或 None。
-        :raises ParameterException: 当 tag_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param tag_id: 标签主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 标签实例或 None
+        :raises ParameterException: tag_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not tag_id:
             error_message: str = "查询标签信息失败, 参数(tag_id)不允许为空"
@@ -57,15 +58,16 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_ids(self, tag_ids: List[int], on_error: bool = False, **kwargs) -> Optional[Union[bool, List[AutoTestApiTagInfo]]]:
-        """校验一批标签 ID 是否均存在（排除已删除）；可选返回对象列表。
+    async def get_by_ids(self, tag_ids: List[int], on_error: bool = False, **kwargs) -> Union[bool, List[AutoTestApiTagInfo]]:
+        """
+        校验一批标签 ID 是否均存在；全部存在时返回实例列表。
 
-        :param tag_ids: 标签主键 ID 列表。
-        :param on_error: 为 True 时若有 ID 不存在则抛出 NotFoundException。
-        :param return_obj: 为 True 时返回标签实例列表，否则返回 True/False。
-        :returns: 全部存在时 return_obj 为 True 则返回列表否则 True；有缺失且 on_error 为 False 时返回 False。
-        :raises ParameterException: tag_ids 为空或非列表时。
-        :raises NotFoundException: 存在不存在的 ID 且 on_error 为 True 时。
+        :param tag_ids: 标签主键 ID 列表
+        :param on_error: 有缺失时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 全部存在时返回标签列表；有缺失且 on_error 为 False 时返回 False
+        :raises ParameterException: tag_ids 为空或非列表
+        :raises NotFoundException: 存在缺失 ID 且 on_error 为 True
         """
         if not tag_ids or not isinstance(tag_ids, list):
             error_message: str = "查询标签信息失败, 参数(tag_id)不允许为空且必须是List[int]类型"
@@ -84,13 +86,14 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def get_by_code(self, tag_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTagInfo]:
         """
-        根据标签标识代码查询单条标签
+        按标签标识代码查询标签。
 
-        :param tag_code: 标签标识代码。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 标签实例或 None。
-        :raises ParameterException: 当 tag_code 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param tag_code: 标签标识代码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 标签实例或 None
+        :raises ParameterException: tag_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not tag_code:
             error_message: str = "查询标签信息失败, 参数(tag_id)不允许为空"
@@ -105,13 +108,13 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         return instance
 
     async def create_tag(self, tag_in: AutoTestApiTagCreate) -> AutoTestApiTagInfo:
-        """创建标签，校验项目存在及 (tag_type, tag_mode, tag_name) 唯一。
+        """
+        创建标签；同 type/mode/name 已存在则恢复并更新。
 
-        :param tag_in: 标签创建 schema。
-        :returns: 创建后的标签实例。
-        :raises NotFoundException: 项目不存在时。
-        :raises DataAlreadyExistsException: 同类型同模式同名标签已存在时。
-        :raises DataBaseStorageException: 违反数据库约束时。
+        :param tag_in: 标签创建 schema
+        :return: 创建或恢复后的标签实例
+        :raises NotFoundException: 应用不存在
+        :raises DataBaseStorageException: 违反数据库约束
         """
         tag_type: str = tag_in.tag_type.value
         tag_mode: str = tag_in.tag_mode
@@ -143,13 +146,14 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestApiTagInfo:
-        """更新标签，支持按 tag_id 或 tag_code 定位，并校验 (tag_type, tag_mode, tag_name) 唯一。
+        """
+        更新标签，按 tag_id 或 tag_code 定位并校验 (tag_type, tag_mode, tag_name) 唯一。
 
-        :param tag_in: 标签更新 schema。
-        :returns: 更新后的标签实例。
-        :raises NotFoundException: 标签不存在时。
-        :raises DataAlreadyExistsException: 同类型同模式同名标签已存在时。
-        :raises DataBaseStorageException: 违反约束时。
+        :param tag_in: 标签更新 schema
+        :return: 更新后的标签实例
+        :raises NotFoundException: 标签不存在
+        :raises DataAlreadyExistsException: 同类型同模式同名标签已存在
+        :raises DataBaseStorageException: 违反约束
         """
         tag_id: Optional[int] = tag_in.tag_id
         tag_code: Optional[str] = tag_in.tag_code
@@ -192,13 +196,14 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_tag(self, tag_id: Optional[int] = None, tag_code: Optional[str] = None) -> AutoTestApiTagInfo:
-        """软删除标签（state=1），需无用例关联该标签。
+        """
+        软删除标签（state=1）；需无用例关联该标签。
 
-        :param tag_id: 标签主键 ID，与 tag_code 二选一。
-        :param tag_code: 标签标识代码，与 tag_id 二选一。
-        :returns: 软删除后的标签实例。
-        :raises NotFoundException: 标签不存在时。
-        :raises DataAlreadyExistsException: 有用例关联该标签时。
+        :param tag_id: 标签主键 ID，与 tag_code 二选一
+        :param tag_code: 标签标识代码，与 tag_id 二选一
+        :return: 软删除后的标签实例
+        :raises NotFoundException: 标签不存在
+        :raises DataAlreadyExistsException: 有用例关联该标签
         """
         if tag_id:
             instance = await self.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
@@ -218,9 +223,10 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def delete_tags(self, tag_in: AutoTestApiTagDelete) -> int:
         """
-        删除标签信息
-        :param tag_in: 标签删除 schema 定义
-        :returns: 删除的数量
+        按 ID 或 code 列表批量软删除标签。
+
+        :param tag_in: 标签删除 schema
+        :return: 更新条数
         """
         tag_ids: Optional[List[int]] = tag_in.tag_ids
         tag_codes: Optional[List[str]] = tag_in.tag_codes
@@ -233,14 +239,15 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         return count
 
     async def select_tags(self, search: Q, page: int, page_size: int, order: list) -> tuple:
-        """分页查询标签列表。
+        """
+        分页查询标签列表。
 
-        :param search: Tortoise Q 查询条件。
-        :param page: 页码。
-        :param page_size: 每页条数。
-        :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
-        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        :param search: Tortoise Q 查询条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

@@ -43,6 +43,13 @@ async def create_tag_info(
         tag_in: AutoTestApiTagCreate = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增标签。
+
+    :param tag_in: 标签入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.tag_curd.create_tag(tag_in=tag_in)
         data = await instance.to_dict(
@@ -71,6 +78,14 @@ async def delete_tag_info(
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除标签。
+
+    :param tag_id: 标签主键 ID
+    :param tag_code: 标签业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.tag_curd.delete_tag(tag_id=tag_id, tag_code=tag_code)
         data = await instance.to_dict(
@@ -98,6 +113,13 @@ async def delete_tag_batch(
         tag_in: AutoTestApiTagDelete = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code列表删除标签。
+
+    :param tag_in: 标签入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         count = await services.tag_curd.delete_tags(tag_in=tag_in)
         LOGGER.info(f"按id或code列表删除标签成功, 数量: {count}")
@@ -112,6 +134,13 @@ async def update_tag_info(
         tag_in: AutoTestApiTagUpdate = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新标签。
+
+    :param tag_in: 标签入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.tag_curd.update_tag(tag_in=tag_in)
         data = await instance.to_dict(
@@ -144,6 +173,14 @@ async def get_tag_info(
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询标签。
+
+    :param tag_id: 标签主键 ID
+    :param tag_code: 标签业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if tag_id:
             instance = await services.tag_curd.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
@@ -174,6 +211,13 @@ async def search_tags_info(
         tag_in: AutoTestApiTagSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询标签。
+
+    :param tag_in: 标签入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if tag_in.tag_id:

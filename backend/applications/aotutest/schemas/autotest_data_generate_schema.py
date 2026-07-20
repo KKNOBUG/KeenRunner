@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 
 class AutoTestApiDataCreateCreate(BaseModel):
+    """创建接口文件生成记录入参。"""
+
     case_id: int = Field(..., description="用例ID")
     step_code: str = Field(..., max_length=64, description="用例标识代码")
     create_status: str = Field(..., description="创建状态（0：提交，1：生成中，2：失败，3：成功）")
@@ -24,6 +26,8 @@ class AutoTestApiDataCreateCreate(BaseModel):
 
 
 class AutoTestApiDataCreateUpdate(BaseModel):
+    """更新接口文件生成记录入参。"""
+
     id: int = Field(..., description="ID")
     create_status: str = Field(..., description="创建状态（0：提交，1：生成中，2：失败，3：成功）")
     file_path: Optional[str] = Field(None, max_length=1024, description="接口文件存储路径")

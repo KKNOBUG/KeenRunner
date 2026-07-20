@@ -20,6 +20,8 @@ NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
 
 
 class DataBaseOperates(BaseModel):
+    """步骤执行明细中的单条数据库操作字段模型。"""
+
     index: int = Field(..., ge=0, description="数据库操作序号")
     name: str = Field(..., max_length=128, description="数据库操作名称")
     env_name: str = Field(..., max_length=128, description="数据库操作环境名称")
@@ -33,6 +35,8 @@ class DataBaseOperates(BaseModel):
 
 
 class RedisOperates(BaseModel):
+    """步骤执行明细中的单条 Redis 操作字段模型。"""
+
     index: int = Field(..., ge=0, description="Redis操作序号")
     name: str = Field(..., max_length=128, description="Redis操作名称")
     env_name: str = Field(..., max_length=128, description="Redis操作环境名称")
@@ -45,6 +49,8 @@ class RedisOperates(BaseModel):
 
 
 class ConditionsBase(BaseModel):
+    """条件/循环判断基础字段模型。"""
+
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
     condition_value: Optional[Any] = Field(None, description="条件比对值")
@@ -65,6 +71,8 @@ class ConditionsBase(BaseModel):
 
 
 class AutoTestApiDetailReqBase(BaseModel):
+    """步骤执行明细请求字段基础模型。"""
+
     request_url: Optional[str] = Field(default=None, max_length=2048, description="实际发出的请求地址")
     request_port: Optional[str] = Field(default=None, max_length=16, description="实际发出的请求端口")
     request_method: Optional[HTTPMethod] = Field(default=None, max_length=16, description="实际发出的请求方法")
@@ -82,6 +90,8 @@ class AutoTestApiDetailReqBase(BaseModel):
 
 
 class AutoTestApiDetailResBase(BaseModel):
+    """步骤执行明细响应字段基础模型。"""
+
     response_cookie: NON_DICT_TYPE = Field(default=None, description="响应信息(cookies)")
     response_header: NON_DICT_TYPE = Field(default=None, description="响应信息(headers)")
     response_body: Union[NON_DICT_TYPE, NON_LIST_DICT_TYPE] = Field(default=None, description="响应信息(body)")
@@ -90,6 +100,8 @@ class AutoTestApiDetailResBase(BaseModel):
 
 
 class AutoTestApiDetailVarBase(BaseModel):
+    """步骤执行明细变量/断言/操作快照基础字段模型。"""
+
     conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件/循环判断条件")
     session_variables: Optional[List[StepVariablesBase]] = Field(
         default=None, description="会话变量(包含提取变量，以及前后code设置的变量), 项为 key/value/desc"
@@ -230,6 +242,8 @@ class AutoTestApiDetailVarBase(BaseModel):
 
 
 class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, AutoTestApiDetailResBase):
+    """步骤执行明细公共字段（创建/更新共用）。"""
+
     quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本ID")
     step_st_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行开始时间")
     step_ed_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行结束时间")
@@ -254,6 +268,8 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
 
 
 class AutoTestApiDetailCreate(AutoTestApiDetailBase):
+    """创建步骤执行明细入参。"""
+
     case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     report_code: str = Field(..., max_length=64, description="报告标识代码")
@@ -267,6 +283,8 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
 
 
 class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
+    """更新步骤执行明细入参。"""
+
     case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     report_code: str = Field(..., max_length=64, description="报告标识代码")
@@ -278,6 +296,8 @@ class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
 
 
 class AutoTestApiDetailSelect(BaseModel):
+    """分页查询步骤执行明细入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["step_st_time"], description="排序字段")

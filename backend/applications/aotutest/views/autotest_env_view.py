@@ -41,6 +41,13 @@ async def create_env_info(
         env_in: AutoTestApiEnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增环境。
+
+    :param env_in: 环境入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.env_enum_curd.create_env(env_in=env_in)
         data = await instance.to_dict(
@@ -69,6 +76,14 @@ async def delete_env_info(
         env_code: Optional[str] = Query(None, description="环境标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除环境。
+
+    :param env_id: 环境主键 ID
+    :param env_code: 环境业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.env_enum_curd.delete_env(env_id=env_id, env_code=env_code)
         data = await instance.to_dict(
@@ -94,6 +109,13 @@ async def delete_env_batch(
         env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code列表删除环境。
+
+    :param env_in: 环境入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         count = await services.env_enum_curd.delete_envs(env_in=env_in)
         LOGGER.info(f"按id或code列表删除环境成功, 数量: {count}")
@@ -108,6 +130,13 @@ async def update_env_info(
         env_in: AutoTestApiEnvUpdate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新环境。
+
+    :param env_in: 环境入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.env_enum_curd.update_env(env_in=env_in)
         data = await instance.to_dict(
@@ -136,6 +165,14 @@ async def get_env_info(
         env_code: Optional[str] = Query(None, description="环境标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询环境。
+
+    :param env_id: 环境主键 ID
+    :param env_code: 环境业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if env_id:
             instance = await services.env_enum_curd.get_by_id(env_id=env_id, on_error=True, state__not=1)
@@ -163,6 +200,12 @@ async def get_env_info(
 async def get_env_name_list(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    查询环境名称(去重)。
+
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         names: List[str] = await services.env_enum_curd.model.filter(state__not=1).distinct().values_list("env_name", flat=True)
         LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
@@ -179,6 +222,13 @@ async def search_env_info(
         env_in: AutoTestApiEnvSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询环境。
+
+    :param env_in: 环境入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if env_in.env_id:

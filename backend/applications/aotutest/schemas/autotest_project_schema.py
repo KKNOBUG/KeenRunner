@@ -14,6 +14,8 @@ from backend.applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiProjectBase(BaseModel):
+    """应用（项目）公共字段（创建/更新/查询共用）。"""
+
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
     project_desc: Optional[str] = Field(None, max_length=2048, description="应用描述")
     project_state: Optional[str] = Field(None, max_length=64, description="应用状态")
@@ -26,6 +28,8 @@ class AutoTestApiProjectBase(BaseModel):
 
 
 class AutoTestApiProjectCreate(AutoTestApiProjectBase):
+    """创建应用（项目）入参。"""
+
     project_name: str = Field(..., max_length=255, description="应用名称")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
@@ -99,17 +103,23 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
 
 
 class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
+    """更新应用（项目）入参。"""
+
     project_id: Optional[int] = Field(None, description="应用ID")
     project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiProjectDelete(BaseModel):
+    """删除应用（项目）入参。"""
+
     project_ids: Optional[List[int]] = Field(None, description="应用ID列表")
     project_codes: Optional[List[str]] = Field(None, description="应用标识代码列表")
 
 
 class AutoTestApiProjectSelect(AutoTestApiProjectBase):
+    """分页查询应用（项目）入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-updated_time"], description="排序字段")

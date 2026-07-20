@@ -30,7 +30,7 @@ from backend.core.exceptions import (
 
 
 class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
-    """自动化测试步骤执行明细的 CRUD 服务，负责明细的增删改查。"""
+    """步骤执行明细 CRUD 与相关业务。"""
 
     def __init__(self):
         """初始化 CRUD，绑定模型 AutoTestApiDetailInfo。"""
@@ -38,13 +38,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def get_by_id(self, detail_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
         """
-        根据明细主键 ID 查询单条明细
+        按主键 ID 查询执行明细。
 
-        :param detail_id: 明细主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 明细实例或 None。
-        :raises ParameterException: 当 detail_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param detail_id: 明细主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 明细实例或 None
+        :raises ParameterException: detail_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not detail_id:
             error_message: str = "查询明细信息失败, 参数(detail_id)不允许为空"
@@ -60,13 +61,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
         """
-        根据明细标识（report_code）查询单条明细
+        按 report_code 查询一条明细（参数名 detail_code）。
 
-        :param detail_code: 报告标识代码 report_code，此处参数名为 detail_code。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 明细实例或 None。
-        :raises ParameterException: 当 detail_code 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param detail_code: 报告标识代码 report_code
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 明细实例或 None
+        :raises ParameterException: detail_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not detail_code:
             error_message: str = "查询明细信息失败, 参数(detail_code)不允许为空"
@@ -81,14 +83,15 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         return instance
 
     async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestApiDetailInfo:
-        """创建一条执行明细，校验用例与报告存在性（可选跳过报告校验）。
+        """
+        创建执行明细，校验用例与报告存在（可跳过报告校验）。
 
-        :param detail_in: 明细创建 schema。
-        :param skip_report_check: 为 True 时不校验 report 是否存在。
-        :returns: 创建后的明细实例。
-        :raises NotFoundException: 用例或报告不存在时。
-        :raises DataBaseStorageException: 违反唯一约束时。
-        :raises DataAlreadyExistsException: 其他写入冲突时。
+        :param detail_in: 明细创建 schema
+        :param skip_report_check: 为 True 时不校验报告是否存在
+        :return: 创建后的明细实例
+        :raises NotFoundException: 用例或报告不存在
+        :raises DataBaseStorageException: 违反唯一约束
+        :raises DataAlreadyExistsException: 其他写入冲突
         """
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
@@ -127,13 +130,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             raise DataAlreadyExistsException(message=error_message) from e
 
     async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
-        """更新明细，需提供 detail_id 或 (report_code, step_code) 定位。
+        """
+        更新明细，需提供 detail_id 或 (report_code, step_code) 定位。
 
-        :param detail_in: 明细更新 schema，含 case_id/case_code 及定位字段。
-        :returns: 更新后的明细实例。
-        :raises ParameterException: 定位参数缺失或用例/报告不存在时。
-        :raises NotFoundException: 明细不存在时。
-        :raises DataBaseStorageException: 违反约束时。
+        :param detail_in: 明细更新 schema
+        :return: 更新后的明细实例
+        :raises ParameterException: 定位参数缺失
+        :raises NotFoundException: 用例、报告或明细不存在
+        :raises DataBaseStorageException: 违反约束
         """
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
@@ -195,14 +199,15 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             step_code: Optional[str] = None,
             report_code: Optional[str] = None
     ) -> AutoTestApiDetailInfo:
-        """软删除明细，需提供 detail_id 或 (report_code, step_code)。
+        """
+        软删除明细，需提供 detail_id 或 (report_code, step_code)。
 
-        :param detail_id: 明细主键 ID，与 (report_code, step_code) 二选一。
-        :param step_code: 步骤标识代码，与 detail_id 二选一时必填。
-        :param report_code: 报告标识代码，与 detail_id 二选一时必填。
-        :returns: 软删除后的明细实例。
-        :raises ParameterException: 参数缺失时。
-        :raises NotFoundException: 明细不存在时。
+        :param detail_id: 明细主键 ID，与 (report_code, step_code) 二选一
+        :param step_code: 步骤标识代码
+        :param report_code: 报告标识代码
+        :return: 软删除后的明细实例
+        :raises ParameterException: 参数缺失
+        :raises NotFoundException: 明细不存在
         """
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数缺失, 删除明细信息时必须传递(detail_id)或(report_code, step_code)字段"
@@ -225,14 +230,15 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         return instance
 
     async def select_details(self, search: Q, page: int, page_size: int, order: list) -> tuple:
-        """分页查询明细列表。
+        """
+        分页查询明细列表。
 
-        :param search: Tortoise Q 查询条件。
-        :param page: 页码。
-        :param page_size: 每页条数。
-        :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
-        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        :param search: Tortoise Q 查询条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

@@ -15,6 +15,8 @@ from backend.enums import AutoTestDataBaseType, AutoTestConfigNodeType
 
 
 class AutoTestApiConfigBase(BaseModel):
+    """环境配置公共字段（创建/更新/查询共用）。"""
+
     env_id: Optional[int] = Field(None, ge=1, description="环境ID")
     project_id: Optional[int] = Field(None, ge=1, description="应用ID")
     config_name: Optional[str] = Field(None, description="配置名称")
@@ -34,6 +36,8 @@ class AutoTestApiConfigBase(BaseModel):
 
 
 class AutoTestApiConfigCreate(AutoTestApiConfigBase):
+    """创建环境配置入参。"""
+
     env_id: int = Field(..., ge=1, description="环境ID")
     project_id: int = Field(..., ge=1, description="应用ID")
     config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
@@ -43,17 +47,23 @@ class AutoTestApiConfigCreate(AutoTestApiConfigBase):
 
 
 class AutoTestApiConfigUpdate(AutoTestApiConfigBase):
+    """更新环境配置入参。"""
+
     config_id: Optional[int] = Field(None, ge=1, description="配置主键ID")
     config_code: Optional[str] = Field(None, max_length=64, description="配置标识代码")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiConfigDelete(BaseModel):
+    """删除环境配置入参。"""
+
     config_ids: Optional[List[int]] = Field(None, description="配置主键ID列表")
     config_codes: Optional[List[str]] = Field(None, description="配置标识代码列表")
 
 
 class AutoTestApiConfigSelect(AutoTestApiConfigBase):
+    """分页查询环境配置入参。"""
+
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-created_time"], description="排序字段")

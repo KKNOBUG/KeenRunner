@@ -44,6 +44,13 @@ async def create_env_config(
         config_in: AutoTestApiConfigCreate = Body(..., description="环境配置"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增环境配置。
+
+    :param config_in: 环境配置入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.env_config_curd.create_config(config_in=config_in)
         data = await instance.to_dict(
@@ -72,6 +79,14 @@ async def delete_env_config(
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除环境配置。
+
+    :param config_id: 环境配置主键 ID
+    :param config_code: 环境配置业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.env_config_curd.delete_config(config_id=config_id, config_code=config_code)
         data = await instance.to_dict(
@@ -97,6 +112,13 @@ async def delete_env_config_batch(
         config_in: AutoTestApiConfigDelete = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code列表删除环境。
+
+    :param config_in: 环境配置入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         count = await services.env_config_curd.delete_configs(config_in=config_in)
         LOGGER.info(f"按id或code列表删除环境配置成功, 数量: {count}")
@@ -111,6 +133,13 @@ async def update_env_config(
         config_in: AutoTestApiConfigUpdate = Body(..., description="环境配置"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新环境配置。
+
+    :param config_in: 环境配置入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.env_config_curd.update_config(config_in=config_in)
         data = await instance.to_dict(
@@ -139,6 +168,14 @@ async def get_env_info(
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询环境配置。
+
+    :param config_id: 环境配置主键 ID
+    :param config_code: 环境配置业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if config_id:
             instance = await services.env_config_curd.get_by_id(config_id=config_id, on_error=True, state__not=1)
@@ -167,6 +204,13 @@ async def search_env_info(
         config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询环境配置。
+
+    :param config_in: 环境配置入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if config_in.config_id:
@@ -277,6 +321,15 @@ async def get_unique_env_config_name_list(
         config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型，可选"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    获取去重后的配置名称列表。
+
+    :param project_id: 应用主键 ID
+    :param env_id: 环境主键 ID
+    :param config_type: 配置类型
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         config_type_val = config_type.value if config_type is not None else None
         data = await services.env_config_curd.list_distinct_config_names(

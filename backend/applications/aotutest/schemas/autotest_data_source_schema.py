@@ -14,6 +14,8 @@ from backend.applications.base.services.scaffold import UpperStr
 
 
 class AutoTestDataSourceBase(BaseModel):
+    """数据驱动文件公共字段（创建/更新共用）。"""
+
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     step_id: Optional[int] = Field(None, ge=1, description="步骤ID")
@@ -29,6 +31,8 @@ class AutoTestDataSourceBase(BaseModel):
 
 
 class AutoTestDataSourceCreate(AutoTestDataSourceBase):
+    """创建数据驱动文件入参。"""
+
     case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     step_id: int = Field(..., ge=1, description="步骤ID")
@@ -37,12 +41,16 @@ class AutoTestDataSourceCreate(AutoTestDataSourceBase):
 
 
 class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
+    """更新数据驱动文件入参。"""
+
     data_source_id: Optional[int] = Field(None, ge=1, description="主键ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动文件标识代码")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestDataSourceSelect(BaseModel):
+    """分页查询数据驱动文件入参。"""
+
     data_source_id: Optional[int] = Field(None, ge=1, description="主键过滤")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动标识过滤")
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
@@ -65,6 +73,8 @@ class AutoTestDataSourceConditionQuery(BaseModel):
 
 
 class AutoTestDataSourceListOut(BaseModel):
+    """数据驱动文件列表输出字段模型。"""
+
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, description="用例标识代码")
     data_source_code: Optional[str] = Field(None, description="数据驱动标识代码")

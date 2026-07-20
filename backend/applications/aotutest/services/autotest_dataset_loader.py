@@ -7,6 +7,8 @@ from backend.applications.aotutest.services.autotest_data_source_parser import n
 
 
 class DatasetLoader:
+    """用例步骤数据源场景加载与结构规范化。"""
+
     @classmethod
     def _acquire_dataset_payload(cls, step_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """

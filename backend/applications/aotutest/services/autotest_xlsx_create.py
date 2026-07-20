@@ -26,6 +26,8 @@ from backend.applications.aotutest.services.autotest_data_source_crud import Aut
 
 @dataclass
 class Field:
+    """接口字段模板 Excel「输入」区的单列字段定义。"""
+
     cn_name: str
     en_name: str
     data_type: str

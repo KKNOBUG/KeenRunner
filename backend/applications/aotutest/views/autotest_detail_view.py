@@ -40,6 +40,13 @@ async def create_step_detail(
         detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增明细。
+
+    :param detail_in: 明细入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.detail_curd.create_detail(detail_in)
         data = await instance.to_dict(
@@ -69,6 +76,15 @@ async def delete_report(
         report_code: Optional[str] = Query(None, description="报告标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code删除明细。
+
+    :param detail_id: 明细主键 ID
+    :param step_code: 步骤业务标识
+    :param report_code: 报告业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.detail_curd.delete_detail(
             detail_id=detail_id,
@@ -98,6 +114,13 @@ async def update_report(
         detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code更新明细。
+
+    :param detail_in: 明细入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.detail_curd.update_detail(detail_in)
         data = await instance.to_dict(
@@ -127,6 +150,15 @@ async def get_step_detail(
         report_code: Optional[str] = Query(None, description="报告标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按id或code查询明细。
+
+    :param detail_id: 明细主键 ID
+    :param step_code: 步骤业务标识
+    :param report_code: 报告业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         if detail_id:
             instance = await services.detail_curd.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
@@ -159,6 +191,13 @@ async def search_step_details(
         detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件查询明细。
+
+    :param detail_in: 明细入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if detail_in.case_id:

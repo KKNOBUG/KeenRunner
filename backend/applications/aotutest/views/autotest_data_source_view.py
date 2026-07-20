@@ -118,6 +118,13 @@ async def create_data_source_info(
         data_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增数据源。
+
+    :param data_in: 数据源入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.data_source_curd.create_data_source(data_source_in=data_in)
         data = await _serialize_data_source(instance)
@@ -142,6 +149,18 @@ async def delete_data_source_info(
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    删除数据源(软删)。
+
+    :param data_source_id: 数据源主键 ID
+    :param data_source_code: 数据源业务标识
+    :param case_id: 用例主键 ID
+    :param case_code: 用例业务标识
+    :param step_id: 步骤主键 ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await services.data_source_curd.delete_data_source(
             data_source_id=data_source_id,
@@ -166,6 +185,13 @@ async def update_data_source_info(
         data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    更新数据源。
+
+    :param data_in: 数据源入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         effective = data_in
         if data_in.dataframe is not None:
@@ -242,6 +268,13 @@ async def query_case_name(
         case_id: int = Form(..., title="案例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    案例数据场景查询。
+
+    :param case_id: 用例主键 ID
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     instance = await services.data_source_curd.get_by_case_id(case_id=case_id)
     if not instance:
         return FailureResponse(message="ID对应场景不存在")
@@ -254,6 +287,13 @@ async def search_data_source_info(
         sel_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件分页查询数据源。
+
+    :param sel_in: 数据源查询入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         q = Q()
         if sel_in.data_source_id:
@@ -373,6 +413,15 @@ async def get_dataset_scenario_info(
         dataset_name: str = Query(..., description="数据集/场景名称"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    查询某步骤下单个数据集场景。
+
+    :param case_id: 用例主键 ID
+    :param step_code: 步骤业务标识
+    :param dataset_name: 数据集场景名称
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     try:
         scenario = await services.data_source_curd.get_dataset_scenario(
             case_id=case_id,
@@ -414,6 +463,17 @@ async def single_step_dataset_upload(
         file: UploadFile = File(..., description="单步骤数据驱动文件(仅支持.xlsx后缀, 单步骤模式仅读取第1个sheet页)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    参数化驱动-单步骤数据集上传。
+
+    :param case_id: 用例主键 ID
+    :param step_id: 步骤主键 ID
+    :param step_code: 步骤业务标识
+    :param file_desc: 文件描述
+    :param file: 上传文件
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     if not file.filename.endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
@@ -517,6 +577,15 @@ async def batch_step_dataset_upload(
         file: UploadFile = File(..., description="xlsx 文件（所有 sheet 均为数据集，按 sheet 顺序对应根步骤）"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    参数化驱动-多步骤数据集上传。
+
+    :param case_id: 用例主键 ID
+    :param file_desc: 文件描述
+    :param file: 上传文件
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
     if not case_id:
         return ParameterResponse(message="case_id 不能为空")
 

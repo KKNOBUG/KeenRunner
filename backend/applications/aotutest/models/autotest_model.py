@@ -82,6 +82,8 @@ class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试环境配置模型，对应表 tbx_autotest_api_config。"""
+
     env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
 
@@ -561,6 +563,8 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
 
 
 class AutoTestApiDataCreateInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """自动化测试接口文件生成记录模型，对应表 tbx_autotest_api_data_create。"""
+
     case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     create_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="接口文件标识代码")

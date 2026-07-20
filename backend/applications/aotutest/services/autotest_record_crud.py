@@ -30,7 +30,7 @@ class _RecordCreatePlaceholder(BaseModel):
 class AutoTestApiTaskRecordCrud(
     ScaffoldCrud[AutoTestApiRecordInfo, _RecordCreatePlaceholder, _RecordCreatePlaceholder]
 ):
-    """任务执行观测记录 CRUD。"""
+    """任务执行记录 CRUD 与相关业务。"""
 
     def __init__(self):
         super().__init__(model=AutoTestApiRecordInfo)

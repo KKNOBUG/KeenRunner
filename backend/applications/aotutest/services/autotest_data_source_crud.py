@@ -31,25 +31,27 @@ def make_cache_key(case_id: int, step_code: str) -> str:
 
     :param case_id: 用例主键。
     :param step_code: 步骤标识代码。
-    :returns: 缓存键字符串。
+    :return: 缓存键字符串。
     """
     return f"dataset_{case_id}_{step_code}"
 
 
 class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDataSourceCreate, AutoTestDataSourceUpdate]):
+    """数据源 CRUD 与相关业务。"""
 
     def __init__(self):
         super().__init__(model=AutoTestApiDataSourceInfo)
 
     async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
-        根据数据源主键 ID 查询单条记录（排除已软删 state=1）。
+        根据数据源主键 ID 查询单条记录（排除已软删需调用方传 state__not=1）。
 
-        :param data_source_id: 数据源主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 数据源实例或 None。
-        :raises ParameterException: 当 data_source_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param data_source_id: 数据源主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 数据源实例或 None
+        :raises ParameterException: data_source_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not data_source_id:
             error_message: str = "查询数据源失败, 参数(data_source_id)不允许为空"
@@ -69,7 +71,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param data_source_code: 数据驱动标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 数据源实例或 None。
+        :return: 数据源实例或 None。
         :raises ParameterException: 当 data_source_code 为空时。
         :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
         """
@@ -126,7 +128,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_id: 步骤主键。
         :param step_code: 步骤标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 单条实例、列表或 None。
+        :return: 单条实例、列表或 None。
         :raises ParameterException: 未传 case_id 且 case_code 为空时。
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
         """
@@ -174,7 +176,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         已存在且启用则抛出 DataAlreadyExistsException。
 
         :param data_source_in: 创建 schema（data_source_code 由模型默认值生成，无需传入）。
-        :returns: 新建或恢复后的数据源实例。
+        :return: 新建或恢复后的数据源实例。
         :raises DataAlreadyExistsException: 同键已存在且为启用状态时。
         :raises DataBaseStorageException: 违反数据库约束时。
         :raises NotFoundException: 恢复路径上记录异常丢失时（极少见）。
@@ -224,7 +226,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         定位字段及 case_id / case_code / step_id / step_code / cache_key 不会写入更新字典。
 
         :param data_source_in: 更新 schema。
-        :returns: 更新后的数据源实例。
+        :return: 更新后的数据源实例。
         :raises ParameterException: 定位参数不足时。
         :raises NotFoundException: 记录不存在时。
         :raises DataBaseStorageException: 违反约束时。
@@ -299,7 +301,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_code: 用例标识代码。
         :param step_id: 步骤主键。
         :param step_code: 步骤标识代码。
-        :returns: 软删除后的实例。
+        :return: 软删除后的实例。
         :raises ParameterException: 定位参数不足时。
         :raises NotFoundException: 记录不存在时。
         """
@@ -340,7 +342,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param page: 页码。
         :param page_size: 每页条数。
         :param order: 排序字段列表。
-        :returns: (总条数, 当前页记录列表) 元组。
+        :return: (总条数, 当前页记录列表) 元组。
         :raises ParameterException: 查询条件非法导致 FieldError 时。
         """
         try:
@@ -379,7 +381,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_id: 用例主键。
         :param step_code: 步骤标识代码。
         :param dataset_name: 场景/数据集名称。
-        :returns: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典；无数据时返回 None。
+        :return: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典；无数据时返回 None。
         """
         if not (dataset_name or "").strip():
             return None
@@ -462,7 +464,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param dataset_names: 场景名称列表。
         dataframe: Optional[List[Any]] = None,
         :param created_user: 创建人（更新路径会映射为 updated_user）。
-        :returns: 数据源实例。
+        :return: 数据源实例。
         :raises ParameterException: parsed_data 为空时。
         """
         if not parsed_data:
@@ -531,7 +533,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param case_id: 用例主键。
         :param state: 状态过滤，默认 0（启用）。
-        :returns: 按 updated_time 倒序及步骤字段排序的列表。
+        :return: 按 updated_time 倒序及步骤字段排序的列表。
         :raises ParameterException: case_id 为空时。
         """
         if not case_id:
@@ -541,6 +543,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
 class AutoTestApiDataCreateCrud(
     ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
+    """数据源生成记录 CRUD 与相关业务。"""
+
     def __init__(self):
         super().__init__(model=AutoTestApiDataCreateInfo)
 

@@ -27,9 +27,13 @@ from backend.core.exceptions import (
 
 
 def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
-    """从 cases_execute_config 汇总去重后的环境 ID 列表。
+    """
+    从 cases_execute_config 汇总去重后的环境 ID 列表。
 
-    优先取每个用例的 global_env_id；若步骤配置中带有 env_id 一并纳入。
+    优先取每个用例的 global_env_id；步骤配置中的 env_id 一并纳入。
+
+    :param cases_execute_config: 用例执行配置字典
+    :return: 升序环境 ID 列表
     """
     if not isinstance(cases_execute_config, dict):
         return []
@@ -59,7 +63,12 @@ def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
 
 
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """解析用例执行配置：顶层权威；兼容读取旧数据中 task_kwargs 嵌套副本。"""
+    """
+    解析用例执行配置：顶层权威；兼容读取旧数据中 task_kwargs 嵌套副本。
+
+    :param task_dict: 任务字段字典
+    :return: cases_execute_config 或 None
+    """
     cases_cfg = task_dict.get("cases_execute_config")
     if isinstance(cases_cfg, dict) and cases_cfg:
         return cases_cfg
@@ -72,7 +81,12 @@ def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str
 
 
 def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
-    """压缩 task_kwargs：保留 case_ids / initial_variables 及未知扩展键，剔除 cases_execute_config。"""
+    """
+    压缩 task_kwargs：保留 case_ids / initial_variables 及未知扩展键，剔除 cases_execute_config。
+
+    :param task_kwargs: 原始 task_kwargs
+    :return: 清洗后的字典；输入为 None 时返回 None
+    """
     if task_kwargs is None:
         return None
     if not isinstance(task_kwargs, dict):
@@ -82,15 +96,19 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
 
 
 class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
-    """自动化测试任务的 CRUD 服务，负责任务的增删改查及调度开关。"""
+    """任务 CRUD 与调度开关相关业务。"""
 
     def __init__(self):
-        """初始化 CRUD，绑定模型 AutoTestApiTaskInfo。"""
         super().__init__(model=AutoTestApiTaskInfo)
 
     @staticmethod
     def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
-        """将任务字典中的枚举字段（task_type 等）转为 ``.value`` 原始值。"""
+        """
+        将任务字典中的枚举字段（task_type 等）转为 ``.value`` 原始值。
+
+        :param data: 任务字段字典
+        :return: 原地转换后的字典
+        """
         for key in ("task_type", "task_periodic_expr", "last_execute_state"):
             if key in data and data[key] is not None and hasattr(data[key], "value"):
                 data[key] = data[key].value
@@ -98,7 +116,12 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     @staticmethod
     def _apply_related_env_ids(task_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """根据 cases_execute_config 汇总 related_cases_env_id，并规范化 task_kwargs。"""
+        """
+        根据 cases_execute_config 汇总 related_cases_env_id，并规范化 task_kwargs。
+
+        :param task_dict: 任务字段字典
+        :return: 原地处理后的字典
+        """
         if "task_kwargs" in task_dict:
             task_dict["task_kwargs"] = normalize_task_kwargs(task_dict.get("task_kwargs"))
         cases_cfg = resolve_cases_execute_config(task_dict)
@@ -113,13 +136,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
-        根据任务主键 ID 查询单条任务
+        按主键 ID 查询任务。
 
-        :param task_id: 任务主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 任务实例或 None。
-        :raises ParameterException: 当 task_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param task_id: 任务主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 任务实例或 None
+        :raises ParameterException: task_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not task_id:
             error_message: str = "查询任务信息失败, 参数(task_id)不允许为空"
@@ -134,13 +158,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def get_by_code(self, task_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
-        根据任务标识代码查询单条任务
+        按任务标识代码查询任务。
 
-        :param task_code: 任务标识代码。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 任务实例或 None。
-        :raises ParameterException: 当 task_code 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param task_code: 任务标识代码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 任务实例或 None
+        :raises ParameterException: task_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not task_code:
             error_message: str = "查询任务信息失败, 参数(task_code)不允许为空"
@@ -154,13 +179,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         return instance
 
     async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestApiTaskInfo:
-        """创建任务，校验项目存在及 (task_name, task_project) 唯一。
+        """
+        创建任务，校验应用存在及 (task_name, task_project) 唯一。
 
-        :param task_in: 任务创建 schema。
-        :returns: 创建后的任务实例。
-        :raises NotFoundException: 项目不存在时。
-        :raises DataAlreadyExistsException: 同项目下任务名已存在时。
-        :raises DataBaseStorageException: 违反数据库约束时。
+        :param task_in: 任务创建 schema
+        :return: 创建后的任务实例
+        :raises NotFoundException: 应用不存在
+        :raises DataAlreadyExistsException: 同应用下任务名已存在
+        :raises DataBaseStorageException: 违反数据库约束
         """
         task_name: str = task_in.task_name
         task_project: int = task_in.task_project
@@ -189,13 +215,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestApiTaskInfo:
-        """更新任务，支持按 task_id 或 task_code 定位，并校验 (task_name, task_project) 唯一。
+        """
+        更新任务，按 task_id 或 task_code 定位并校验 (task_name, task_project) 唯一。
 
-        :param task_in: 任务更新 schema。
-        :returns: 更新后的任务实例。
-        :raises NotFoundException: 任务不存在时。
-        :raises DataAlreadyExistsException: 同项目下任务名已存在时。
-        :raises DataBaseStorageException: 违反约束时。
+        :param task_in: 任务更新 schema
+        :return: 更新后的任务实例
+        :raises NotFoundException: 任务不存在
+        :raises DataAlreadyExistsException: 同应用下任务名已存在
+        :raises DataBaseStorageException: 违反约束
         """
         task_id: Optional[int] = task_in.task_id
         task_code: Optional[str] = task_in.task_code
@@ -249,12 +276,13 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_task(self, task_id: Optional[int] = None, task_code: Optional[str] = None) -> AutoTestApiTaskInfo:
-        """软删除任务（state=1）并关闭调度（task_enabled=False）。
+        """
+        软删除任务（state=1）并关闭调度（task_enabled=False）。
 
-        :param task_id: 任务主键 ID，与 task_code 二选一。
-        :param task_code: 任务标识代码，与 task_id 二选一。
-        :returns: 软删除后的任务实例。
-        :raises NotFoundException: 任务不存在时。
+        :param task_id: 任务主键 ID，与 task_code 二选一
+        :param task_code: 任务标识代码，与 task_id 二选一
+        :return: 软删除后的任务实例
+        :raises NotFoundException: 任务不存在
         """
         if task_id:
             instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
@@ -267,23 +295,29 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         return instance
 
     async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:
-        """设置任务是否启动调度（仅切换 task_enabled，触发完全依赖 crontab）。"""
+        """
+        设置任务是否启用调度（仅切换 task_enabled，触发依赖 crontab）。
+
+        :param task_id: 任务主键 ID
+        :param enabled: 是否启用
+        :return: 更新后的任务实例
+        :raises NotFoundException: 任务不存在
+        """
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         instance.task_enabled = enabled
         await instance.save(update_fields=["task_enabled"])
         return instance
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: list) -> tuple:
-        """分页查询任务列表。
+        """
+        分页查询任务列表；默认按最后执行时间倒序，未执行过的排在后面。
 
-        默认按最后执行时间倒序，未执行过的任务（last_execute_time 为空）排在后面。
-
-        :param search: Tortoise Q 查询条件。
-        :param page: 页码。
-        :param page_size: 每页条数。
-        :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
-        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        :param search: Tortoise Q 查询条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询字段非法
         """
         try:
             order = order or ["-last_execute_time"]

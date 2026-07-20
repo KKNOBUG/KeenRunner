@@ -29,7 +29,7 @@ from backend.core.exceptions import (
 
 
 class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
-    """自动化测试报告的 CRUD 服务，负责报告的增删改查；删除报告会同步软删除关联明细。"""
+    """报告 CRUD 与关联明细删除相关业务。"""
 
     def __init__(self):
         """初始化 CRUD，绑定模型 AutoTestApiReportInfo。"""
@@ -37,13 +37,14 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     async def get_by_id(self, report_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiReportInfo]:
         """
-        根据报告主键 ID 查询单条报告
+        按主键 ID 查询报告。
 
-        :param report_id: 报告主键 ID。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 报告实例或 None。
-        :raises ParameterException: 当 report_id 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param report_id: 报告主键 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 报告实例或 None
+        :raises ParameterException: report_id 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not report_id:
             error_message: str = "查询报告信息失败, 参数(report_id)不允许为空"
@@ -59,13 +60,14 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     async def get_by_code(self, report_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiReportInfo]:
         """
-        根据报告标识代码查询单条报告
+        按报告标识代码查询报告。
 
-        :param report_code: 报告标识代码。
-        :param on_error: 为 True 时若未找到则抛出 NotFoundException。
-        :returns: 报告实例或 None。
-        :raises ParameterException: 当 report_code 为空时。
-        :raises NotFoundException: 当 on_error 为 True 且记录不存在时。
+        :param report_code: 报告标识代码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 报告实例或 None
+        :raises ParameterException: report_code 为空
+        :raises NotFoundException: on_error 为 True 且记录不存在
         """
         if not report_code:
             error_message: str = "查询报告信息失败, 参数(report_code)不允许为空"
@@ -80,12 +82,13 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         return instance
 
     async def create_report(self, report_in: AutoTestApiReportCreate) -> AutoTestApiReportInfo:
-        """创建报告，校验用例存在性。
+        """
+        创建报告，校验用例存在。
 
-        :param report_in: 报告创建 schema。
-        :returns: 创建后的报告实例。
-        :raises NotFoundException: 用例不存在时。
-        :raises DataBaseStorageException: 违反数据库约束时。
+        :param report_in: 报告创建 schema
+        :return: 创建后的报告实例
+        :raises NotFoundException: 用例不存在
+        :raises DataBaseStorageException: 违反数据库约束
         """
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
@@ -109,12 +112,13 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_report(self, report_in: AutoTestApiReportUpdate) -> AutoTestApiReportInfo:
-        """更新报告，支持按 report_id 或 report_code 定位。
+        """
+        更新报告，按 report_id 或 report_code 定位。
 
-        :param report_in: 报告更新 schema。
-        :returns: 更新后的报告实例。
-        :raises NotFoundException: 报告不存在时。
-        :raises DataBaseStorageException: 违反约束时。
+        :param report_in: 报告更新 schema
+        :return: 更新后的报告实例
+        :raises NotFoundException: 报告不存在
+        :raises DataBaseStorageException: 违反约束
         """
         report_id: Optional[int] = report_in.report_id
         report_code: Optional[str] = report_in.report_code
@@ -144,12 +148,13 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             report_id: Optional[int] = None,
             report_code: Optional[str] = None
     ) -> AutoTestApiReportInfo:
-        """软删除报告（state=1），并同步软删除该报告下所有明细。
+        """
+        软删除报告（state=1），并同步软删除该报告下所有明细。
 
-        :param report_id: 报告主键 ID，与 report_code 二选一。
-        :param report_code: 报告标识代码，与 report_id 二选一。
-        :returns: 软删除后的报告实例。
-        :raises NotFoundException: 报告不存在时。
+        :param report_id: 报告主键 ID，与 report_code 二选一
+        :param report_code: 报告标识代码，与 report_id 二选一
+        :return: 软删除后的报告实例
+        :raises NotFoundException: 报告不存在
         """
         # 业务层验证：检查用例是否存在
         if report_id:
@@ -169,14 +174,15 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         return instance
 
     async def select_reports(self, search: Q, page: int, page_size: int, order: list) -> tuple:
-        """分页查询报告列表。
+        """
+        分页查询报告列表。
 
-        :param search: Tortoise Q 查询条件。
-        :param page: 页码。
-        :param page_size: 每页条数。
-        :param order: 排序字段列表。
-        :returns: 由 (总条数, 当前页记录列表) 组成的元组。
-        :raises ParameterException: 查询条件非法导致 FieldError 时。
+        :param search: Tortoise Q 查询条件
+        :param page: 页码
+        :param page_size: 每页条数
+        :param order: 排序字段列表
+        :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
