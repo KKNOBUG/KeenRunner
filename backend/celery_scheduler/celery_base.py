@@ -5,6 +5,8 @@
 @Project : Krun
 @Module  : celery_base
 @DateTime: 2026/1/27 16:25
+
+Celery Worker 公共能力：Tortoise 初始化、异步协程桥接、定时任务到期判断、链路上下文。
 """
 from __future__ import annotations
 
@@ -27,8 +29,11 @@ _init_threading_safe_lock = threading.Lock()
 
 def reset_tortoise_orm_state() -> None:
     """
-    重置 Tortoise 初始化标记，供 Celery worker_process_init 在 prefork 子进程里调用。
-    子进程不应沿用父进程的 _tortoise_orm_initialized，否则会误以为已 init 而跳过。
+    重置 Tortoise 初始化标记，供 Celery worker_process_init 在 prefork 子进程中调用。
+
+    子进程不应沿用父进程的 ``_tortoise_orm_initialized``，否则会误以为已 init 而跳过。
+
+    :return: None
     """
     global _tortoise_orm_initialized
     _tortoise_orm_initialized = False
@@ -36,8 +41,13 @@ def reset_tortoise_orm_state() -> None:
 
 def run_async(func: Union[Coroutine, Awaitable]) -> Any:
     """
-    在 Celery 任务（同步上下文）中执行异步协程的入口。
-    统一通过 AsyncEventLoopContextIOPool.run_in_pool 投递到池的 loop，保证 Tortoise 与业务同 loop。
+    在 Celery 任务（同步上下文）中执行异步协程。
+
+    统一通过 ``AsyncEventLoopContextIOPool.run_in_pool`` 投递到池的 event loop，
+    保证 Tortoise 与业务协程运行在同一 loop。
+
+    :param func: 待执行的协程对象
+    :return: 协程执行结果
     """
     from backend.common import AsyncEventLoopContextIOPool
     return AsyncEventLoopContextIOPool.run_in_pool(func)
@@ -45,8 +55,13 @@ def run_async(func: Union[Coroutine, Awaitable]) -> Any:
 
 async def init_tortoise_orm() -> None:
     """
-    在「当前 running loop」所在线程中初始化 Tortoise（创建连接池）。
-    必须在池线程、池的 loop 里调用；若已初始化则做连接可用性检查（SELECT 1）。
+    在当前 running loop 所在线程中初始化 Tortoise（创建连接池）。
+
+    必须在池线程、池的 loop 内调用；若已初始化则执行连接可用性检查（SELECT 1），
+    连接失效时关闭并重新初始化。
+
+    :return: None
+    :raises RuntimeError: 数据库主机不可达等连接失败
     """
     global _tortoise_orm_initialized
 
@@ -103,8 +118,11 @@ async def init_tortoise_orm() -> None:
 
 def ensure_tortoise_orm_initialized() -> None:
     """
-    同步封装：在池的 loop 里执行 init_tortoise_orm()。
-    用于扫描任务 task_prerun、以及 ContextTask.__call__ 兜底。
+    同步封装：在池的 loop 中执行 ``init_tortoise_orm()``。
+
+    用于扫描任务 ``task_prerun``、以及 ``ContextTask.__call__`` 兜底。
+
+    :return: None
     """
     from backend.common import AsyncEventLoopContextIOPool
 
@@ -115,7 +133,11 @@ def ensure_tortoise_orm_initialized() -> None:
 
 
 def get_span_id_for_log() -> str:
-    """从 Worker 上下文获取 span_id，用于 Celery 业务日志定位。"""
+    """
+    从 Worker 上下文获取 span_id，用于 Celery 业务日志定位。
+
+    :return: span_id 字符串；不可用时返回空串
+    """
     from backend.common.request_context import get_span_id as _get
 
     sid = _get()
@@ -125,7 +147,12 @@ def get_span_id_for_log() -> str:
 
 
 async def get_scheduled_tasks(task_type: Any) -> List[Any]:
-    """拉取未删除、已启用且配置了 Cron 的任务；task_type 支持枚举或字符串。"""
+    """
+    拉取未删除、已启用且配置了 Cron 表达式的自动化任务。
+
+    :param task_type: 任务类型枚举或字符串（如 AutoTestTaskType.AUTOTEST_API）
+    :return: 满足条件的 AutoTestApiTaskInfo 列表；参数无效时返回空列表
+    """
     if not task_type:
         return []
     type_val = getattr(task_type, "value", task_type)
@@ -145,8 +172,12 @@ async def get_scheduled_tasks(task_type: Any) -> List[Any]:
 
 def check_task_expired(task: Any) -> bool:
     """
-    判断任务是否已到执行时间（仅基于 task_crontabs_expr）。
-    规则：最近一次 cron 触发点晚于 last_execute_time（或从未执行）则到期。
+    判断任务是否已到执行时间（仅基于 ``task_crontabs_expr``）。
+
+    规则：最近一次 cron 触发点晚于 ``last_execute_time``（或从未执行）则视为到期。
+
+    :param task: 任务模型实例（需含 task_crontabs_expr / last_execute_time 等字段）
+    :return: 到期为 True，否则为 False；Cron 解析失败时返回 False
     """
     expr = (getattr(task, "task_crontabs_expr", None) or "").strip()
     if not expr:
@@ -196,15 +227,33 @@ class LocalContextVar:
     __slots__ = ("_storage",)
 
     def __init__(self) -> None:
+        """
+        初始化 ContextVar 存储。
+
+        :return: None
+        """
         object.__setattr__(self, "_storage", ContextVar("local_storage"))
 
     def __getattr__(self, name: str) -> Any:
+        """
+        读取上下文中的属性。
+
+        :param name: 属性名
+        :return: 属性值；不存在时返回 None
+        """
         try:
             return self._storage.get({})[name]
         except KeyError:
             return None
 
     def __setattr__(self, name: str, value: Any) -> None:
+        """
+        写入上下文属性。
+
+        :param name: 属性名
+        :param value: 属性值
+        :return: None
+        """
         values = self._storage.get({}).copy()
         values[name] = value
         self._storage.set(values)

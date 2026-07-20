@@ -5,8 +5,9 @@
 @Project : Krun
 @Module  : task_execute_assign_case.py
 @DateTime: 2026/3/20
-"""
 
+指定用例步骤树异步执行任务（支持多数据源参数化与批次号归并）。
+"""
 from __future__ import annotations
 
 import datetime
@@ -25,6 +26,12 @@ from backend.services.ctx import CTX_USERNAME
 def _normalize_initial_variables(
         raw: Optional[List[Dict[str, Any]]],
 ) -> List[StepVariablesBase]:
+    """
+    将初始变量规范为 ``StepVariablesBase`` 列表。
+
+    :param raw: 原始变量列表（dict 或已是 schema）
+    :return: StepVariablesBase 列表；空入参返回 []
+    """
     if not raw:
         return []
     out: List[StepVariablesBase] = []
@@ -37,6 +44,11 @@ def _normalize_initial_variables(
 
 
 def _new_batch_code() -> str:
+    """
+    生成一次执行的批次号（时间戳-UUID）。
+
+    :return: 批次号字符串
+    """
     return f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
 
 
@@ -49,6 +61,20 @@ async def _execute_step_tree_impl(
         steps_execute_config: Optional[Dict[str, Any]] = None,
         created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """
+    后台执行单用例步骤树（支持多数据源参数化）。
+
+    Worker 无 HTTP 鉴权上下文时，用 ``created_user`` 写入 CTX_USERNAME 埋点。
+
+    :param case_id: 用例主键 ID
+    :param initial_variables: 初始会话变量列表
+    :param report_type: 报告类型枚举
+    :param batch_code: 批次号；为空时自动生成
+    :param selected_dataset_names: 选中的数据源名称列表；空则单次执行
+    :param steps_execute_config: 步骤执行环境配置覆盖
+    :param created_user: 提交任务的用户账号
+    :return: 含 parameterized、batch_code、执行统计与 details 的结果字典
+    """
     # Worker 进程无 HTTP 鉴权上下文，用提交任务时传入的用户账号埋点
     if created_user:
         CTX_USERNAME.set(str(created_user).strip())
@@ -127,9 +153,19 @@ def execute_step_tree_task(
         created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery task：后台执行单用例步骤树（默认 SCHEDULE_EXEC）。
+    Celery 同步入口：后台执行单用例步骤树（默认 SCHEDULE_EXEC）。
 
-    注意：Celery task 函数是同步入口，内部通过 run_async 进入 Worker 池执行协程。
+    内部通过 ``run_async`` 进入 Worker 池执行协程。
+
+    :param case_id: 用例主键 ID
+    :param initial_variables: 初始会话变量列表
+    :param report_type: 报告类型字符串或枚举；非法时回退 SCHEDULE_EXEC
+    :param batch_code: 批次号
+    :param selected_dataset_names: 数据源名称列表
+    :param steps_execute_config: 步骤执行环境配置
+    :param created_user: 提交用户账号
+    :return: 执行结果字典
+    :raises Exception: 执行失败时向上抛出，供 Celery on_failure 处理
     """
     try:
         rt = AutoTestReportType.SCHEDULE_EXEC
