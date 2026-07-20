@@ -19,6 +19,12 @@ generate = APIRouter()
 
 @generate.post("/info", summary="随机生成虚拟信息")
 async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
+    """
+    随机生成虚拟信息。
+
+    :param rq_in: 虚拟信息生成入参
+    :return: 统一 HTTP 响应
+    """
     data: Dict[str, Any] = {}
     number: int = rq_in.number
     minAge: int = rq_in.minAge

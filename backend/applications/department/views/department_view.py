@@ -44,6 +44,14 @@ async def create_dept(
         current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    新增部门信息。
+
+    :param department_in: 部门入参
+    :param current_user: 当前登录用户
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await dept_crud.create_department(
             department_in=department_in,
@@ -64,6 +72,13 @@ async def delete_dept_one(
         department_id: int = Query(..., description="部门ID"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    删除部门信息。
+
+    :param department_id: 部门 ID
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await dept_crud.delete_department(department_id)
         data = await instance.to_dict()
@@ -79,6 +94,13 @@ async def delete_depts_batch(
         body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    批量删除部门。
+
+    :param body_in: 批量删除入参
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         count = await dept_crud.delete_departments(body_in.department_ids)
         LOGGER.info(f"批量删除部门成功, 数量: {count}")
@@ -94,6 +116,14 @@ async def update_dept(
         current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    更新部门信息。
+
+    :param department_in: 部门入参
+    :param current_user: 当前登录用户
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await dept_crud.update_department(
             department_in=department_in,
@@ -114,6 +144,13 @@ async def get_dept(
         department_id: int = Query(..., description="部门ID"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    查询部门信息。
+
+    :param department_id: 部门 ID
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     instance = await dept_crud.get_or_none(id=department_id)
     if not instance:
         return NotFoundResponse(message=f"部门(id={department_id})信息不存在")
@@ -127,6 +164,13 @@ async def list_dept(
         name: str = Query(default=None, description="部门名称"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    查询部门列表。
+
+    :param name: 部门名称（模糊）
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     dept_tree = await dept_crud.get_dept_tree(name)
     return SuccessResponse(data=dept_tree)
 
@@ -136,6 +180,13 @@ async def search_dept(
         department_in: DepartmentSelect = Body(),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    查询部门列表。
+
+    :param department_in: 部门入参
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     page = department_in.page
     page_size = department_in.page_size
     order = department_in.order

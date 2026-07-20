@@ -46,6 +46,13 @@ async def create_user(
         user_in: UserCreate = Body(),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    新增用户。
+
+    :param user_in: 用户入参
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await user_crud.create_user(user_in=user_in)
         data = await instance.to_dict(exclude_fields=["password"])
@@ -61,6 +68,13 @@ async def delete_user(
         user_id: int = Query(..., description="用户ID"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    删除用户。
+
+    :param user_id: 用户 ID
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         instance = await user_crud.delete_user(user_id)
         data = await instance.to_dict(exclude_fields=["password"])
@@ -78,6 +92,13 @@ async def delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    按id列表删除用户。
+
+    :param user_in: 用户入参
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     try:
         deleted_ids = await user_crud.delete_users(user_in=user_in)
         deleted_num = len(deleted_ids)
@@ -93,6 +114,13 @@ async def update_user(
         user_in: UserUpdate = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    更新用户。
+
+    :param user_in: 用户入参
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     user_id: int = user_in.user_id
     try:
         instance = await user_crud.update_user(user_in=user_in)
@@ -111,6 +139,14 @@ async def get_user(
         user_crud: UserCrud = Depends(get_user_crud),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    查询用户信息。
+
+    :param user_id: 用户 ID
+    :param user_crud: 用户 CRUD 服务
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
     if not instance:
         return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
@@ -125,6 +161,13 @@ async def get_user_by_username(
         username: str = Query(..., description="用户名称"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    查询用户信息。
+
+    :param username: 用户账号
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     instance = await user_crud.get_by_username(username=username)
     if not instance:
         return NotFoundResponse(message=f"用户(username={username})信息不存在")
@@ -149,6 +192,25 @@ async def list_user(
         user_crud: UserCrud = Depends(get_user_crud),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    查询用户列表。
+
+    :param page: 页码
+    :param page_size: 每页条数
+    :param order: 排序字段
+    :param username: 用户账号
+    :param alias: 查询参数
+    :param email: 查询参数
+    :param phone: 查询参数
+    :param gender: 查询参数
+    :param user_type: 查询参数
+    :param is_active: 查询参数
+    :param is_superuser: 查询参数
+    :param dept_id: 主键 ID
+    :param user_crud: 用户 CRUD 服务
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     q = Q()
     if username:
         q &= Q(username__contains=username)
@@ -191,6 +253,14 @@ async def get_users(
         user_crud: UserCrud = Depends(get_user_crud),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
+    """
+    查询用户列表。
+
+    :param user_in: 用户入参
+    :param user_crud: 用户 CRUD 服务
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     q = Q()
     if user_in.username:
         q &= Q(username__contains=user_in.username)
@@ -243,6 +313,13 @@ async def update_user_password(
         req_in: UpdatePassword,
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    修改密码。
+
+    :param req_in: 修改密码入参
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     user_id = CTX_USER_ID.get()
     instance = await user_crud.get_or_error(user_id)
     verified = verify_password(req_in.old_password, instance.password)
@@ -259,6 +336,13 @@ async def reset_password(
         user_id: int = Body(..., description="用户ID", embed=True),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    重置密码。
+
+    :param user_id: 用户 ID
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     data = await user_crud.reset_password(user_id)
     return SuccessResponse(message="重置密码", data=data, total=1)
 
@@ -267,6 +351,12 @@ async def reset_password(
 async def logout(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
+    """
+    用户登出。
+
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一 HTTP 响应
+    """
     user_id = CTX_USER_ID.get()
     try:
         await user_crud.logout(user_id=user_id)

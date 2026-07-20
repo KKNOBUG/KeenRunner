@@ -20,10 +20,22 @@ from backend.core.exceptions import DataAlreadyExistsException, NotFoundExceptio
 
 
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
+    """部门 CRUD 与闭包表维护（最多两级树）。"""
+
     def __init__(self):
         super().__init__(model=Department)
 
     async def get_by_id(self, department_id: int, on_error: bool = True, **kwargs) -> Optional[Department]:
+        """
+        按主键 ID 查询部门。
+
+        :param department_id: 部门 ID
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 部门实例或 None
+        :raises ParameterException: department_id 为空
+        :raises NotFoundException: on_error 为 True 且部门不存在
+        """
         if not department_id:
             error_message: str = "查询部门信息失败, 参数(department_id)不允许为空"
             LOGGER.error(error_message)
@@ -36,6 +48,16 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def get_by_code(self, code: str, on_error: bool = False, **kwargs) -> Optional[Department]:
+        """
+        按部门代码查询单条部门。
+
+        :param code: 部门代码
+        :param on_error: 未找到时是否抛出 NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 部门实例或 None
+        :raises ParameterException: code 为空
+        :raises NotFoundException: on_error 为 True 且部门不存在
+        """
         if not code:
             error_message: str = "查询部门信息失败, 参数(code)不允许为空"
             LOGGER.error(error_message)
@@ -47,8 +69,15 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_name(self, name: str) -> Optional[Department]:
-        return await self.get_by_conditions(only_one=False, on_error=False, name=name)
+    async def get_by_name(self, name: str) -> List[Department]:
+        """
+        按部门名称精确查询，可能返回多条。
+
+        :param name: 部门名称
+        :return: 匹配的部门列表（无匹配时为空列表）
+        """
+        result = await self.get_by_conditions(only_one=False, on_error=False, name=name)
+        return result if isinstance(result, list) else ([] if result is None else [result])
 
     async def _validate_parent_id(self, parent_id: int, *, department_id: Optional[int] = None) -> None:
         """部门最多两级：parent_id 只能为 0 或顶级部门 id。"""
@@ -63,6 +92,15 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise ParameterException(message="子部门不允许再添加子部门，父级只能选择顶级部门")
 
     async def create_department(self, department_in: DepartmentCreate, created_user: Optional[str] = None) -> Department:
+        """
+        创建部门：校验父级与唯一性，落库并写入闭包表。
+
+        :param department_in: 新增部门入参
+        :param created_user: 可选，覆盖 created_user 字段
+        :return: 新建的部门实例
+        :raises ParameterException: 父级不合法
+        :raises DataAlreadyExistsException: code 或 name 已存在
+        """
         await self._validate_parent_id(department_in.parent_id)
         code = department_in.code
         name = department_in.name
@@ -78,6 +116,13 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def delete_department(self, department_id: int) -> Optional[Department]:
+        """
+        软删除单个部门并清除闭包表中以该节点为 descendant 的关系。
+
+        :param department_id: 部门 ID
+        :return: 更新后的部门实例
+        :raises NotFoundException: 部门不存在
+        """
         instance = await self.get_by_id(department_id)
         instance.is_deleted = 1
         await instance.save()
@@ -86,6 +131,15 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return instance
 
     async def update_department(self, department_in: DepartmentUpdate, updated_user: Optional[str] = None) -> Department:
+        """
+        更新部门：可变更父级（重建闭包表）及基础字段。
+
+        :param department_in: 更新入参（含 id）
+        :param updated_user: 可选，写入 updated_user
+        :return: 更新后的部门实例
+        :raises NotFoundException: 部门不存在
+        :raises ParameterException: 父级变更不合法或含子部门的顶级部门不能降为子部门
+        """
         department_id: int = department_in.id
         try:
             instance = await self.get_by_id(department_id=department_id)
@@ -115,7 +169,13 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         except DoesNotExist as e:
             raise NotFoundException(message=f"部门(id={department_id})信息不存在")
 
-    async def get_dept_tree(self, name):
+    async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:
+        """
+        构建未删除部门的树形结构（从 parent_id=0 递归）。
+
+        :param name: 可选，按名称模糊过滤后再建树
+        :return: 顶级部门节点列表，每节点含 children
+        """
         q = Q()
         # 获取所有未被软删除的部门
         q &= Q(is_deleted=False)
@@ -124,7 +184,13 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         all_dept = await self.model.filter(q).order_by("order")
 
         # 辅助函数，用于递归构建部门树
-        def build_tree(parent_id):
+        def build_tree(parent_id: int) -> List[dict]:
+            """
+            递归组装指定 parent_id 下的子树节点。
+
+            :param parent_id: 父部门 ID，0 表示顶级
+            :return: 子节点字典列表
+            """
             fmt = lambda x: datetime.datetime.strftime(x, "%Y-%m-%d %H:%M:%S") if isinstance(x, datetime.datetime) else x
             return [
                 {
@@ -149,19 +215,30 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         return dept_tree
 
     @classmethod
-    async def update_dept_closure(cls, obj: Department):
+    async def update_dept_closure(cls, obj: Department) -> None:
+        """
+        为部门节点重建闭包表记录：继承父级祖先链并追加自身。
+
+        :param obj: 已落库的部门实例（含 id、parent_id）
+        :return: None
+        """
         parent_depts = await DeptStruct.filter(descendant=obj.parent_id).all()
         dept_struct_objs: List[DeptStruct] = []
         # 插入父级关系
         for item in parent_depts:
             dept_struct_objs.append(DeptStruct(ancestor=item.ancestor, descendant=obj.id, level=item.level + 1))
-        # 插入自身x
+        # 插入自身
         dept_struct_objs.append(DeptStruct(ancestor=obj.id, descendant=obj.id, level=0))
         # 创建关系
         await DeptStruct.bulk_create(dept_struct_objs)
 
     async def delete_departments(self, department_ids: Optional[List[int]]) -> int:
-        """按 ID 列表软删除部门（与单笔 delete_department 行为一致）。"""
+        """
+        按 ID 列表软删除部门（与单笔 delete_department 行为一致）。
+
+        :param department_ids: 部门 ID 列表
+        :return: 实际删除成功的条数
+        """
         if not department_ids:
             return 0
         n = 0
