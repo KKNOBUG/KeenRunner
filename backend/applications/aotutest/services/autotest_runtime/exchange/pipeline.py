@@ -42,6 +42,7 @@ class ExtractAssertPipeline:
             is_core_engine: bool = True,
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
             raise_on_failure: bool = True,
+            body_source: str = "response json",
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         统一执行变量提取与断言验证（引擎主路径）。
@@ -72,6 +73,8 @@ class ExtractAssertPipeline:
             （即使内部各块为空也会进入追加逻辑，仅在结构非法时直接跳过）
         :param raise_on_failure: True 时提取或断言存在失败项即抛 ValueError（文案与历史引擎一致）；
             False 时仅返回结果列表，由调用方自行判断
+        :param body_source: assert_body 的提取来源；默认 ``response json``，
+            TCP XML 响应时应传 ``response xml``
         :return: ``(extract_results_list, assert_results_list)``，元素为结果 dict
             （含 name/source/expr/success/error 等字段）
         :raises ValueError: ``raise_on_failure=True`` 且存在失败的提取或断言时
@@ -123,6 +126,7 @@ class ExtractAssertPipeline:
                 finished_variables=finished_variables,
                 is_core_engine=is_core_engine,
                 log_callback=log_callback,
+                body_source=body_source,
             )
         if raise_on_failure:
             assert_failed_items = [item for item in validator_results if not item.get("success", True)]

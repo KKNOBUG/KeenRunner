@@ -1014,6 +1014,7 @@ class BaseStepExecutor:
             assert_validators: Optional[Any] = None,
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
             session_lookup_extra: Optional[Dict[str, Any]] = None,
+            body_source: str = "response json",
     ) -> None:
         """
         统一变量提取 + 断言：构建变量池查找表，调用工具管线，失败转为 StepExecutionError。
@@ -1041,6 +1042,7 @@ class BaseStepExecutor:
                 finished_variables=self.context,
                 is_core_engine=True,
                 step_struct=step_struct,
+                body_source=body_source,
             )
             result.extract_variables.extend(extract_results)
             result.assert_validators.extend(assert_results)
@@ -2447,6 +2449,15 @@ class TcpStepExecutor(BaseStepExecutor):
             request_text_for_extract = request_text if request_text not in (None, "") else (
                 payload if isinstance(payload, str) else None
             )
+            # 根据响应类型选择数据驱动 assert_body 的提取来源
+            if response_type == "json":
+                tcp_body_source = "response json"
+            elif response_type == "xml":
+                tcp_body_source = "response xml"
+            elif response_type == "text":
+                tcp_body_source = "response text"
+            else:
+                tcp_body_source = "response json"
             self.apply_extract_and_assert(
                 result,
                 step_label="TCP请求",
@@ -2455,6 +2466,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_text=request_text_for_extract,
                 request_json=request_json_for_extract,
                 step_struct=step_struct,
+                body_source=tcp_body_source,
             )
         except StepExecutionError:
             raise

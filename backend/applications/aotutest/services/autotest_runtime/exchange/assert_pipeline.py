@@ -190,26 +190,30 @@ class AssertPipeline:
             finished_variables: Optional[Any] = None,
             is_core_engine: bool = False,
             log_callback: Optional[Callable[[str], None]] = None,
+            body_source: str = "response json",
     ) -> None:
         """
         将数据驱动场景的 assert_head / assert_body 追加到 validator_results（原地修改）。
 
-        - assert_head：source 固定为 ``response headers``，expr 为路径字符串
-        - assert_body：source 固定为 ``response json``；当 ``response_json is None`` 时
-          逐条记失败（``响应不是JSON，无法进行JSONPath断言``），与 TCP 历史行为一致
+        - assert_head：source 固定为 ``response headers``；当 ``response_headers is None``
+          时跳过全部 head 断言（TCP 无响应头场景）
+        - assert_body：source 由 ``body_source`` 指定（默认 ``response json``）；
+          TCP XML 响应时调用方应传 ``response xml`` 以走 XPath 断言
         - 提供 ``finished_variables`` 时，预期值先经 ``resolve_placeholders`` 再比较
 
         :param step_struct: 含 assert_head/assert_body 的数据驱动结构；非 dict 则直接返回
         :param validator_results: 断言结果列表（原地追加）
-        :param response_text: 响应正文（当前 head/body 追加路径未直接使用，保留签名兼容）
-        :param response_json: 响应 JSON；None 时 body 断言全部失败
-        :param response_headers: 响应头（assert_head 实际取值来源）
+        :param response_text: 响应正文（XML/Text 断言取值来源）
+        :param response_json: 响应 JSON；None 且 body_source 为 response json 时 body 断言失败
+        :param response_headers: 响应头（assert_head 取值来源）；None 时跳过 head 断言
         :param response_cookies: 响应 Cookie（签名保留，供 extract_from_source 透传）
         :param session_variables_lookup: 变量池字典
         :param compare_fail_message: 比较失败时的默认错误文案
         :param finished_variables: 期望值占位符解析上下文；None 则不解析
         :param is_core_engine: 占位符解析模式（见 PlaceholderResolver）
         :param log_callback: 可选日志回调；同时作为占位符解析 logger
+        :param body_source: assert_body 的提取来源；默认 ``response json``，
+            TCP XML 响应时应传 ``response xml``
         :return: None
         """
         if not isinstance(step_struct, dict):
@@ -288,23 +292,32 @@ class AssertPipeline:
                     "error": str(e),
                 })
 
-        for except_path, except_value in (step_struct.get("assert_head") or {}).items():
-            if not except_path:
-                continue
-            _append_one(
-                except_path=except_path,
-                except_value=except_value,
-                source="response headers",
-                expr=str(except_path).strip(),
-            )
+        # assert_head：response_headers 为 None 时跳过（TCP 无响应头）
+        if response_headers is not None:
+            for except_path, except_value in (step_struct.get("assert_head") or {}).items():
+                if not except_path:
+                    continue
+                _append_one(
+                    except_path=except_path,
+                    except_value=except_value,
+                    source="response headers",
+                    expr=str(except_path).strip(),
+                )
 
         for except_path, except_value in (step_struct.get("assert_body") or {}).items():
             if not except_path:
                 continue
+            skip_error: Optional[str] = None
+            if body_source == "response json" and response_json is None:
+                skip_error = "响应不是JSON，无法进行JSONPath断言"
+            elif body_source == "response xml" and not response_text:
+                skip_error = "响应不是有效的XML数据"
+            elif body_source == "response text" and not response_text:
+                skip_error = "响应内容不是有效的Text数据"
             _append_one(
                 except_path=except_path,
                 except_value=except_value,
-                source="response json",
+                source=body_source,
                 expr=except_path,
-                skip_error=None if response_json is not None else "响应不是JSON，无法进行JSONPath断言",
+                skip_error=skip_error,
             )
