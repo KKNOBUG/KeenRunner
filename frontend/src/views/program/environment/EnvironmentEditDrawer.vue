@@ -1,20 +1,46 @@
 <template>
   <NDrawer :show="show" :width="1200" placement="right" @update:show="(v) => emit('update:show', v)">
     <NDrawerContent :title="drawerTitle" closable @close="closeDrawer" class="env-drawer-content">
-      <NCard size="small" :bordered="false">
+      <NCard size="small" :bordered="false" class="env-basic-card">
         <NForm ref="envFormRef" :model="envForm" label-placement="left" label-align="left" :label-width="90">
           <div class="env-grid">
-            <NFormItem label="环境名称" path="env_name"
-                       :rule="{ required: true, message: '请输入环境名称', trigger: ['input', 'blur'] }">
-              <NInput v-model:value="envForm.env_name"/>
+            <NFormItem
+                v-if="currentEnvId"
+                label="环境代码"
+                path="env_code"
+            >
+              <NInput :value="envForm.env_code" disabled placeholder="系统自动生成"/>
+            </NFormItem>
+            <NFormItem
+                label="环境名称"
+                path="env_name"
+                :rule="{ required: true, message: '请输入环境名称', trigger: ['input', 'blur'] }"
+            >
+              <NInput
+                  v-model:value="envForm.env_name"
+                  maxlength="128"
+                  show-count
+                  clearable
+                  placeholder="全局唯一，如 UAT、SIT、PP"
+              />
             </NFormItem>
             <NFormItem label="环境说明" path="env_desc" class="full-row">
-              <NInput v-model:value="envForm.env_desc" type="textarea" :rows="3"/>
+              <NInput
+                  v-model:value="envForm.env_desc"
+                  type="textarea"
+                  maxlength="2048"
+                  show-count
+                  :autosize="{ minRows: 2, maxRows: 5 }"
+                  placeholder="可选：说明该环境用途或接入范围"
+              />
             </NFormItem>
           </div>
         </NForm>
       </NCard>
-      <div class="tabs-wrap">
+      <div v-if="!currentEnvId" class="env-config-hint">
+        请先填写并保存环境基本信息，再配置应用 / 数据库 / Redis / 文件服务器明细。
+      </div>
+      <div class="tabs-wrap" :class="{ 'is-disabled-hint': !currentEnvId }">
         <NTabs v-model:value="activeTab" type="line" animated>
           <NTabPane name="app" tab="应用配置" display-directive="show">
             <CrudTable
@@ -254,7 +280,13 @@
         </NFormItem>
         <NFormItem v-if="isInfraRedis" label="库编号" path="database_name"
                    :rule="{ required: true, message: '请输入库编号', trigger: ['input', 'blur'] }">
-          <NInput v-model:value="infraForm.database_name" placeholder="0"/>
+          <NSelect
+              v-model:value="infraForm.database_name"
+              :options="redisDbOptions"
+              filterable
+              tag
+              placeholder="Redis DB（0–15），与应用配置绑定"
+          />
         </NFormItem>
         <NFormItem label="主机地址" path="config_host"
                    :rule="{ required: true, message: '请输入主机地址', trigger: ['input', 'blur'] }">
@@ -311,6 +343,7 @@
 import {computed, h, nextTick, reactive, ref, resolveDirective, watch, withDirectives} from 'vue'
 import {
   NButton,
+  NCard,
   NCheckbox,
   NDrawer,
   NDrawerContent,
@@ -355,7 +388,7 @@ const envDrawerQueryBarProps = {
 }
 
 const activeTab = ref('app')
-const drawerTitle = computed(() => (currentEnvId.value ? '环境明细编辑' : '新建环境'))
+const drawerTitle = computed(() => (currentEnvId.value ? '编辑环境' : '新建环境'))
 
 const envFormRef = ref(null)
 const envForm = reactive({
@@ -864,6 +897,11 @@ const infraModalSaving = ref(false)
 const infraType = ref('database')
 const isInfraDatabase = computed(() => infraType.value === 'database')
 const isInfraRedis = computed(() => infraType.value === 'redis')
+/** Redis 库号预设（可 tag 输入非 0–15 值） */
+const redisDbOptions = Array.from({ length: 16 }, (_, i) => ({
+  label: String(i),
+  value: String(i),
+}))
 const infraModalTitle = computed(() => {
   const action = infraModalMode.value === 'edit' ? '编辑' : '新增'
   if (isInfraRedis.value) return `${action}Redis配置`
@@ -1075,6 +1113,21 @@ watch(() => props.show, async (v) => {
 
 .tabs-wrap {
   margin-top: 12px;
+}
+
+.env-config-hint {
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--n-text-color-2);
+  background: var(--n-color-embedded);
+  border-radius: 6px;
+  border: 1px dashed var(--n-border-color);
+}
+
+.tabs-wrap.is-disabled-hint {
+  opacity: 0.72;
 }
 
 .app-grid,

@@ -1,16 +1,21 @@
 <script setup>
-import { computed, h, ref, resolveDirective, withDirectives } from 'vue'
-import { NButton, NInput, NPopconfirm } from 'naive-ui'
+import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
+import { NButton, NInput, NPopconfirm, NText } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { apiPermissionKey, renderIcon } from '@/utils'
+import { apiPermissionKey, formatDate, renderIcon } from '@/utils'
 import api from '@/api'
 import EnvironmentEditDrawer from './EnvironmentEditDrawer.vue'
 
 defineOptions({ name: '环境管理' })
+
+/**
+ * 环境 = 全局枚举（如 UAT/SIT）；明细配置（应用/库/Redis/文件）在抽屉内按应用挂载。
+ * Redis「应用+配置名 → 库号」在抽屉 Redis 配置中维护。
+ */
 
 const $table = ref(null)
 /** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
@@ -20,7 +25,11 @@ function onListPaginationMeta(meta) {
 }
 
 const checkedRowKeys = ref([])
-const queryItems = ref({ env_name: '' })
+const queryItems = ref({
+  env_name: '',
+  created_user: '',
+  updated_user: '',
+})
 const projectOptions = ref([])
 const vPermission = resolveDirective('permission')
 
@@ -46,7 +55,7 @@ async function handleDelete(params) {
   $table.value?.handleSearch?.()
 }
 
-/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「更多」） */
+/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「操作」） */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
@@ -64,7 +73,7 @@ async function handleBatchDelete() {
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 条环境吗？`,
+    content: `确定删除选中的 ${ids.length} 条环境吗？删除后调试/执行将无法再选择这些环境。`,
     async confirm() {
       await api.deleteEnvBatch({ env_ids: ids })
       window.$message?.success?.('删除成功')
@@ -75,12 +84,27 @@ async function handleBatchDelete() {
 }
 
 function buildSearchBody(overrides = {}) {
+  const q = queryItems.value
   return {
     state: 0,
-    env_name: queryItems.value.env_name || undefined,
     ...overrides,
+    env_name: (overrides.env_name ?? q.env_name) || undefined,
+    created_user: (overrides.created_user ?? q.created_user) || undefined,
+    updated_user: (overrides.updated_user ?? q.updated_user) || undefined,
   }
 }
+
+onMounted(async () => {
+  try {
+    const res = await api.getProjectList({ page: 1, page_size: 9999, state: 0 })
+    projectOptions.value = (res?.data || []).map((p) => ({
+      label: p.project_name || p.project_code,
+      value: p.project_id,
+    }))
+  } catch (_) {
+    projectOptions.value = []
+  }
+})
 
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
@@ -90,18 +114,75 @@ const columns = computed(() => {
     {
       title: '序号',
       key: '__seq',
-      width: 64,
+      width: 50,
       align: 'center',
       render(_row, rowIndex) {
         return seqBase + rowIndex + 1
       },
     },
-    { title: '环境名称', key: 'env_name', align: 'center', ellipsis: { tooltip: true } },
-    { title: '环境代码', key: 'env_code', align: 'center', ellipsis: { tooltip: true } },
-    { title: '创建人员', key: 'created_user', align: 'center', ellipsis: { tooltip: true } },
-    { title: '更新人员', key: 'updated_user', align: 'center', ellipsis: { tooltip: true } },
-    { title: '创建时间', key: 'created_time', align: 'center', ellipsis: { tooltip: true } },
-    { title: '维护时间', key: 'updated_time', align: 'center', ellipsis: { tooltip: true } },
+    {
+      title: '环境名称',
+      key: 'env_name',
+      minWidth: 150,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '环境描述',
+      key: 'env_desc',
+      minWidth: 200,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const d = String(row.env_desc ?? '').trim()
+        return d || h(NText, { depth: 3 }, { default: () => '-' })
+      },
+    },
+    {
+      title: '环境代码',
+      key: 'env_code',
+      width: 400,
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '更新时间',
+      key: 'updated_time',
+      width: 180,
+      align: 'center',
+      render(row) {
+        return row.updated_time ? formatDate(row.updated_time, 'YYYY-MM-DD HH:mm:ss') : '-'
+      },
+    },
+    {
+      title: '更新人员',
+      key: 'updated_user',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.updated_user || '-'
+      },
+    },
+    {
+      title: '创建时间',
+      key: 'created_time',
+      width: 180,
+      align: 'center',
+      render(row) {
+        return row.created_time ? formatDate(row.created_time, 'YYYY-MM-DD HH:mm:ss') : '-'
+      },
+    },
+    {
+      title: '创建人员',
+      key: 'created_user',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.created_user || '-'
+      },
+    },
     {
       title: '操作',
       key: 'actions',
@@ -120,7 +201,7 @@ const columns = computed(() => {
                     onClick: () => openEdit(row),
                   },
                   {
-                    default: () => '编辑',
+                    default: () => '明细',
                     icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
                   }
               ),
@@ -149,7 +230,8 @@ const columns = computed(() => {
                         ),
                         [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
                     ),
-                default: () => h('div', {}, '确定删除该环境吗?'),
+                default: () =>
+                    h('div', {}, '确定删除该环境吗？删除后将无法在调试/执行中选择。'),
               }
           ),
         ]
@@ -157,7 +239,6 @@ const columns = computed(() => {
     },
   ]
 })
-
 </script>
 
 <template>
@@ -169,9 +250,10 @@ const columns = computed(() => {
         :query-bar-props="queryBarProps"
         :is-pagination="true"
         :remote="true"
-        :scroll-x="1200"
+        :scroll-x="1400"
         :columns="columns"
         :get-data="(params) => api.getEnvList(buildSearchBody(params))"
+        :single-line="true"
         row-key="env_id"
         @query-bar-create="openCreate"
         @query-bar-delete="handleBatchDelete"
@@ -182,7 +264,26 @@ const columns = computed(() => {
           <NInput
               v-model:value="queryItems.env_name"
               clearable
-              placeholder="请输入环境名称"
+              placeholder="支持模糊搜索"
+              style="width: 180px"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="创建人员：">
+          <NInput
+              v-model:value="queryItems.created_user"
+              clearable
+              placeholder="创建人员"
+              style="width: 140px"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="更新人员：">
+          <NInput
+              v-model:value="queryItems.updated_user"
+              clearable
+              placeholder="更新人员"
+              style="width: 140px"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
