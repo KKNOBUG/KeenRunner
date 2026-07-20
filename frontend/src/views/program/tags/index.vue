@@ -1,17 +1,33 @@
 <script setup>
-import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
-import { NButton, NForm, NFormItem, NInput, NPopconfirm, NSelect } from 'naive-ui'
+import { computed, h, onMounted, ref, resolveDirective, watch, withDirectives } from 'vue'
+import {
+  NButton,
+  NForm,
+  NFormItem,
+  NInput,
+  NPopconfirm,
+  NSelect,
+  NTag,
+  NText,
+  NTooltip,
+} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { apiPermissionKey, renderIcon } from '@/utils'
+import { apiPermissionKey, formatDate, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
 defineOptions({ name: '标签管理' })
+
+/**
+ * 标签心智模型（与用例选标一致）：
+ * 应用 × 类型(接口/脚本) × 大类(tag_mode) × 名称(tag_name)
+ * 唯一约束同后端 unique_together。
+ */
 
 const $table = ref(null)
 /** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
@@ -21,12 +37,23 @@ function onListPaginationMeta(meta) {
 }
 
 const checkedRowKeys = ref([])
-const queryItems = ref({ tag_project: null, tag_name: '', tag_type: null })
+const queryItems = ref({
+  tag_project: null,
+  tag_type: null,
+  tag_mode: null,
+  tag_name: '',
+})
 const projectOptions = ref([])
+const projectLoading = ref(false)
 const tagTypeOptions = [
   { label: '接口', value: '接口' },
   { label: '脚本', value: '脚本' },
 ]
+/** 查询区「大类」下拉（随应用/类型变化） */
+const queryModeOptions = ref([])
+/** 表单「大类」下拉（可新建，随应用/类型变化） */
+const formModeOptions = ref([])
+const modeOptionsLoading = ref(false)
 const vPermission = resolveDirective('permission')
 
 const {
@@ -45,27 +72,29 @@ const {
   initForm: {
     tag_type: '脚本',
     tag_project: null,
-    tag_mode: '',
+    tag_mode: null,
     tag_name: '',
     tag_desc: '',
   },
-  doCreate: (form) => api.createTag({
-    tag_type: form.tag_type,
-    tag_project: form.tag_project,
-    tag_mode: form.tag_mode,
-    tag_name: form.tag_name,
-    tag_desc: form.tag_desc || undefined,
-  }),
+  doCreate: (form) =>
+      api.createTag({
+        tag_type: form.tag_type,
+        tag_project: form.tag_project,
+        tag_mode: String(form.tag_mode ?? '').trim(),
+        tag_name: String(form.tag_name ?? '').trim(),
+        tag_desc: form.tag_desc?.trim?.() || form.tag_desc || undefined,
+      }),
   doDelete: (params) => api.deleteTag(params),
-  doUpdate: (form) => api.updateTag({
-    tag_id: form.tag_id,
-    tag_code: form.tag_code,
-    tag_type: form.tag_type,
-    tag_project: form.tag_project,
-    tag_mode: form.tag_mode,
-    tag_name: form.tag_name,
-    tag_desc: form.tag_desc || undefined,
-  }),
+  doUpdate: (form) =>
+      api.updateTag({
+        tag_id: form.tag_id,
+        tag_code: form.tag_code,
+        tag_type: form.tag_type,
+        tag_project: form.tag_project,
+        tag_mode: String(form.tag_mode ?? '').trim(),
+        tag_name: String(form.tag_name ?? '').trim(),
+        tag_desc: form.tag_desc?.trim?.() || form.tag_desc || undefined,
+      }),
   refresh: () => $table.value?.handleSearch(),
 })
 
@@ -78,6 +107,53 @@ const queryBarProps = {
   actionMode: 'dropdown',
 }
 
+function tagTypeTagType(type) {
+  if (type === '接口') return 'info'
+  if (type === '脚本') return 'success'
+  return 'default'
+}
+
+function projectLabel(projectId) {
+  const opt = projectOptions.value.find((p) => p.value === projectId)
+  return opt?.label ?? (projectId != null ? String(projectId) : '-')
+}
+
+/**
+ * 拉取某应用（可选类型）下已有大类，供查询/表单复用，减少「冒烟 / 冒烟测试」分裂。
+ */
+async function loadModeOptions({ projectId, tagType, target }) {
+  if (!projectId) {
+    if (target === 'query' || target === 'both') queryModeOptions.value = []
+    if (target === 'form' || target === 'both') formModeOptions.value = []
+    return
+  }
+  modeOptionsLoading.value = true
+  try {
+    const res = await api.getTagList({
+      page: 1,
+      page_size: 9999,
+      state: 0,
+      tag_project: projectId,
+      tag_type: tagType || undefined,
+    })
+    const modes = [
+      ...new Set(
+          (res?.data || [])
+              .map((t) => String(t.tag_mode ?? '').trim())
+              .filter(Boolean)
+      ),
+    ].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    const opts = modes.map((m) => ({ label: m, value: m }))
+    if (target === 'query' || target === 'both') queryModeOptions.value = opts
+    if (target === 'form' || target === 'both') formModeOptions.value = opts
+  } catch (_) {
+    if (target === 'query' || target === 'both') queryModeOptions.value = []
+    if (target === 'form' || target === 'both') formModeOptions.value = []
+  } finally {
+    modeOptionsLoading.value = false
+  }
+}
+
 async function handleBatchDelete() {
   const ids = checkedRowKeys.value || []
   if (!ids.length) {
@@ -87,12 +163,20 @@ async function handleBatchDelete() {
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 条标签吗？`,
+    content: `确定删除选中的 ${ids.length} 条标签吗？删除后用例上已关联的标签将失效，请谨慎操作。`,
     async confirm() {
       await api.deleteTagBatch({ tag_ids: ids })
       window.$message?.success?.('删除成功')
       checkedRowKeys.value = []
       $table.value?.handleSearch?.()
+      // 大类选项可能变化
+      if (queryItems.value.tag_project) {
+        loadModeOptions({
+          projectId: queryItems.value.tag_project,
+          tagType: queryItems.value.tag_type,
+          target: 'query',
+        })
+      }
     },
   })
 }
@@ -101,24 +185,90 @@ function buildSearchBody(overrides = {}) {
   return {
     state: 0,
     tag_project: queryItems.value.tag_project || undefined,
-    tag_name: queryItems.value.tag_name || undefined,
     tag_type: queryItems.value.tag_type || undefined,
+    tag_mode: queryItems.value.tag_mode || undefined,
+    tag_name: queryItems.value.tag_name || undefined,
     ...overrides,
   }
 }
 
+function onQueryProjectChange(projectId) {
+  queryItems.value.tag_mode = null
+  loadModeOptions({
+    projectId,
+    tagType: queryItems.value.tag_type,
+    target: 'query',
+  })
+  $table.value?.handleSearch?.()
+}
+
+function onQueryTypeChange(tagType) {
+  queryItems.value.tag_mode = null
+  loadModeOptions({
+    projectId: queryItems.value.tag_project,
+    tagType,
+    target: 'query',
+  })
+  $table.value?.handleSearch?.()
+}
+
+function customHandleAdd() {
+  handleAdd()
+  // 若查询区已选应用，新增时默认带上，减少重复选择
+  if (queryItems.value.tag_project) {
+    modalForm.value.tag_project = queryItems.value.tag_project
+  }
+  if (queryItems.value.tag_type) {
+    modalForm.value.tag_type = queryItems.value.tag_type
+  }
+  if (queryItems.value.tag_mode) {
+    modalForm.value.tag_mode = queryItems.value.tag_mode
+  }
+}
+
+function customHandleEdit(row) {
+  handleEdit(row)
+}
+
+watch(
+    () => [modalVisible.value, modalForm.value.tag_project, modalForm.value.tag_type],
+    ([visible, projectId, tagType]) => {
+      if (!visible) return
+      loadModeOptions({ projectId, tagType, target: 'form' })
+    }
+)
+
+const originalHandleSave = handleSave
+function customHandleSave(...args) {
+  originalHandleSave(...args, () => {
+    if (queryItems.value.tag_project) {
+      loadModeOptions({
+        projectId: queryItems.value.tag_project,
+        tagType: queryItems.value.tag_type,
+        target: 'query',
+      })
+    }
+  })
+}
+
 onMounted(async () => {
+  projectLoading.value = true
   try {
     const res = await api.getProjectList({ page: 1, page_size: 9999, state: 0 })
-    projectOptions.value = (res.data || []).map((p) => ({ label: p.project_name || p.project_code, value: p.project_id }))
-  } catch (_) {}
+    projectOptions.value = (res.data || []).map((p) => ({
+      label: p.project_name || p.project_code,
+      value: p.project_id,
+    }))
+  } catch (_) {
+    projectOptions.value = []
+  } finally {
+    projectLoading.value = false
+  }
   // 进入页面不自动请求表格数据，由用户点击「搜索」按钮时再请求
-  // $table.value?.handleSearch()
 })
 
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
-  const projects = projectOptions.value
   const seqBase = (page - 1) * page_size
   return [
     { type: 'selection', fixed: 'left', width: 48 },
@@ -131,26 +281,113 @@ const columns = computed(() => {
         return seqBase + rowIndex + 1
       },
     },
-    { title: '标签ID', key: 'tag_id', width: 80, align: 'center' },
-    { title: '标签代码', key: 'tag_code', align: 'center', ellipsis: { tooltip: true } },
-    { title: '标签类型', key: 'tag_type', align: 'center' },
     {
-      title: '所属应用',
-      key: 'tag_project',
+      title: '标签名称',
+      key: 'tag_name',
+      minWidth: 140,
+      align: 'left',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const name = String(row.tag_name ?? '').trim()
+        if (!name) return '-'
+        return h(
+            NTag,
+            {
+              size: 'small',
+              type: tagTypeTagType(row.tag_type),
+              bordered: true,
+              round: false,
+            },
+            { default: () => name }
+        )
+      },
+    },
+    {
+      title: '类型',
+      key: 'tag_type',
+      width: 88,
+      align: 'center',
+      render(row) {
+        const t = row.tag_type
+        if (!t) return '-'
+        return h(
+            NTag,
+            { size: 'small', type: tagTypeTagType(t), bordered: false },
+            { default: () => t }
+        )
+      },
+    },
+    {
+      title: '大类',
+      key: 'tag_mode',
+      width: 120,
       align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
-        const opt = projects.find((p) => p.value === row.tag_project)
-        return opt?.label ?? (row.tag_project != null ? String(row.tag_project) : '')
+        const mode = String(row.tag_mode ?? '').trim()
+        if (!mode) return h(NText, { depth: 3 }, { default: () => '未分类' })
+        return mode
       },
     },
-    { title: '标签大类', key: 'tag_mode', align: 'center', ellipsis: { tooltip: true } },
-    { title: '标签名称', key: 'tag_name', align: 'center', ellipsis: { tooltip: true } },
-    { title: '标签描述', key: 'tag_desc', align: 'center', ellipsis: { tooltip: true } },
+    {
+      title: '所属应用',
+      key: 'tag_project',
+      minWidth: 140,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return projectLabel(row.tag_project)
+      },
+    },
+    {
+      title: '描述',
+      key: 'tag_desc',
+      minWidth: 160,
+      align: 'left',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const d = String(row.tag_desc ?? '').trim()
+        return d || h(NText, { depth: 3 }, { default: () => '-' })
+      },
+    },
+    {
+      title: '标签代码',
+      key: 'tag_code',
+      width: 160,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        const code = row.tag_code
+        if (!code) return '-'
+        return h(
+            NTooltip,
+            { trigger: 'hover' },
+            {
+              trigger: () =>
+                  h(
+                      NText,
+                      { code: true, depth: 2, style: 'font-size: 12px; cursor: default;' },
+                      { default: () => code }
+                  ),
+              default: () => '系统生成，用于内部标识',
+            }
+        )
+      },
+    },
+    {
+      title: '更新时间',
+      key: 'updated_time',
+      width: 168,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.updated_time ? formatDate(row.updated_time, 'YYYY-MM-DD HH:mm:ss') : '-'
+      },
+    },
     {
       title: '操作',
       key: 'actions',
-      width: 80,
+      width: 96,
       align: 'center',
       fixed: 'right',
       render(row) {
@@ -162,7 +399,7 @@ const columns = computed(() => {
                     size: 'tiny',
                     quaternary: true,
                     type: 'info',
-                    onClick: () => handleEdit(row),
+                    onClick: () => customHandleEdit(row),
                   },
                   {
                     default: () => '编辑',
@@ -194,7 +431,7 @@ const columns = computed(() => {
                         ),
                         [[vPermission, apiPermissionKey('delete', '/autotest/tag/delete')]]
                     ),
-                default: () => h('div', {}, '确定删除该标签吗?'),
+                default: () => h('div', {}, '确定删除该标签吗？用例上已关联的引用将失效。'),
               }
           ),
         ]
@@ -213,11 +450,12 @@ const columns = computed(() => {
         :query-bar-props="queryBarProps"
         :is-pagination="true"
         :remote="true"
-        :scroll-x="1320"
+        :scroll-x="1280"
         :columns="columns"
         :get-data="(params) => api.getTagList(buildSearchBody(params))"
+        :single-line="true"
         row-key="tag_id"
-        @query-bar-create="handleAdd"
+        @query-bar-create="customHandleAdd"
         @query-bar-delete="handleBatchDelete"
         @pagination-meta="onListPaginationMeta"
     >
@@ -226,10 +464,12 @@ const columns = computed(() => {
           <NSelect
               v-model:value="queryItems.tag_project"
               :options="projectOptions"
+              :loading="projectLoading"
               clearable
+              filterable
               placeholder="请选择应用"
               style="width: 180px"
-              @update:value="$table?.handleSearch()"
+              @update:value="onQueryProjectChange"
           />
         </QueryBarItem>
         <QueryBarItem label="标签类型：">
@@ -237,8 +477,21 @@ const columns = computed(() => {
               v-model:value="queryItems.tag_type"
               :options="tagTypeOptions"
               clearable
-              placeholder="请选择类型"
+              placeholder="全部类型"
               style="width: 120px"
+              @update:value="onQueryTypeChange"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="标签大类：">
+          <NSelect
+              v-model:value="queryItems.tag_mode"
+              :options="queryModeOptions"
+              :loading="modeOptionsLoading"
+              :disabled="!queryItems.tag_project"
+              clearable
+              filterable
+              placeholder="先选应用后可选"
+              style="width: 140px"
               @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -246,14 +499,20 @@ const columns = computed(() => {
           <NInput
               v-model:value="queryItems.tag_name"
               clearable
-              placeholder="请输入标签名称"
+              placeholder="支持模糊搜索"
+              style="width: 160px"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
       </template>
     </CrudTable>
 
-    <CrudModal v-model:visible="modalVisible" :title="modalTitle" :loading="modalLoading" @save="handleSave">
+    <CrudModal
+        v-model:visible="modalVisible"
+        :title="modalTitle"
+        :loading="modalLoading"
+        @save="customHandleSave"
+    >
       <NForm
           ref="modalFormRef"
           label-placement="left"
@@ -262,15 +521,19 @@ const columns = computed(() => {
           :model="modalForm"
           :disabled="modalAction === 'view'"
       >
-        <NFormItem v-if="modalAction === 'edit'" label="标签ID" path="tag_id">
-          <NInput v-model:value="modalForm.tag_id" disabled />
+        <NFormItem v-if="modalAction === 'edit'" label="标签代码" path="tag_code">
+          <NInput :value="modalForm.tag_code" disabled placeholder="系统自动生成" />
         </NFormItem>
         <NFormItem
             label="标签类型"
             path="tag_type"
             :rule="{ required: true, message: '请选择标签类型', trigger: ['change', 'blur'] }"
         >
-          <NSelect v-model:value="modalForm.tag_type" :options="tagTypeOptions" placeholder="请选择类型" />
+          <NSelect
+              v-model:value="modalForm.tag_type"
+              :options="tagTypeOptions"
+              placeholder="接口 / 脚本"
+          />
         </NFormItem>
         <NFormItem
             label="所属应用"
@@ -280,6 +543,8 @@ const columns = computed(() => {
           <NSelect
               v-model:value="modalForm.tag_project"
               :options="projectOptions"
+              :loading="projectLoading"
+              filterable
               placeholder="请选择应用"
               :disabled="modalAction === 'edit'"
           />
@@ -287,19 +552,41 @@ const columns = computed(() => {
         <NFormItem
             label="标签大类"
             path="tag_mode"
-            :rule="{ required: true, message: '请输入标签大类', trigger: ['input', 'blur'] }"
+            :rule="{ required: true, message: '请选择或输入标签大类', trigger: ['change', 'blur'] }"
         >
-          <NInput v-model:value="modalForm.tag_mode" placeholder="如：冒烟、回归" />
+          <NSelect
+              v-model:value="modalForm.tag_mode"
+              :options="formModeOptions"
+              :loading="modeOptionsLoading"
+              :disabled="!modalForm.tag_project"
+              filterable
+              tag
+              clearable
+              placeholder="如：冒烟、回归；可输入新建"
+          />
         </NFormItem>
         <NFormItem
             label="标签名称"
             path="tag_name"
             :rule="{ required: true, message: '请输入标签名称', trigger: ['input', 'blur'] }"
         >
-          <NInput v-model:value="modalForm.tag_name" placeholder="请输入标签名称" />
+          <NInput
+              v-model:value="modalForm.tag_name"
+              maxlength="64"
+              show-count
+              clearable
+              placeholder="用例选标时展示的名称"
+          />
         </NFormItem>
         <NFormItem label="标签描述" path="tag_desc">
-          <NInput v-model:value="modalForm.tag_desc" type="textarea" placeholder="请输入标签描述" />
+          <NInput
+              v-model:value="modalForm.tag_desc"
+              type="textarea"
+              maxlength="2048"
+              show-count
+              :autosize="{ minRows: 2, maxRows: 6 }"
+              placeholder="可选：说明该标签适用场景"
+          />
         </NFormItem>
       </NForm>
     </CrudModal>
