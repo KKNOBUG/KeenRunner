@@ -9,7 +9,6 @@ import {
   NSelect,
   NTag,
   NText,
-  NTooltip,
 } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -275,37 +274,26 @@ const columns = computed(() => {
     {
       title: '序号',
       key: '__seq',
-      width: 64,
+      width: 50,
       align: 'center',
       render(_row, rowIndex) {
         return seqBase + rowIndex + 1
       },
     },
     {
-      title: '标签名称',
-      key: 'tag_name',
-      minWidth: 140,
-      align: 'left',
+      title: '所属应用',
+      key: 'tag_project',
+      minWidth: 150,
+      align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
-        const name = String(row.tag_name ?? '').trim()
-        if (!name) return '-'
-        return h(
-            NTag,
-            {
-              size: 'small',
-              type: tagTypeTagType(row.tag_type),
-              bordered: true,
-              round: false,
-            },
-            { default: () => name }
-        )
+        return projectLabel(row.tag_project)
       },
     },
     {
-      title: '类型',
+      title: '标签类型',
       key: 'tag_type',
-      width: 88,
+      width: 100,
       align: 'center',
       render(row) {
         const t = row.tag_type
@@ -318,9 +306,9 @@ const columns = computed(() => {
       },
     },
     {
-      title: '大类',
+      title: '标签大类',
       key: 'tag_mode',
-      width: 120,
+      width: 100,
       align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
@@ -330,20 +318,21 @@ const columns = computed(() => {
       },
     },
     {
-      title: '所属应用',
-      key: 'tag_project',
-      minWidth: 140,
+      title: '标签名称',
+      key: 'tag_name',
+      minWidth: 150,
       align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
-        return projectLabel(row.tag_project)
+        const name = String(row.tag_name ?? '').trim()
+        return name || '-'
       },
     },
     {
-      title: '描述',
+      title: '标签描述',
       key: 'tag_desc',
-      minWidth: 160,
-      align: 'left',
+      minWidth: 150,
+      align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
         const d = String(row.tag_desc ?? '').trim()
@@ -353,41 +342,52 @@ const columns = computed(() => {
     {
       title: '标签代码',
       key: 'tag_code',
-      width: 160,
+      width: 400,
       align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        const code = row.tag_code
-        if (!code) return '-'
-        return h(
-            NTooltip,
-            { trigger: 'hover' },
-            {
-              trigger: () =>
-                  h(
-                      NText,
-                      { code: true, depth: 2, style: 'font-size: 12px; cursor: default;' },
-                      { default: () => code }
-                  ),
-              default: () => '系统生成，用于内部标识',
-            }
-        )
-      },
+      ellipsis: { tooltip: true }
     },
     {
       title: '更新时间',
       key: 'updated_time',
-      width: 168,
+      width: 180,
       align: 'center',
-      ellipsis: { tooltip: true },
       render(row) {
         return row.updated_time ? formatDate(row.updated_time, 'YYYY-MM-DD HH:mm:ss') : '-'
       },
     },
     {
+      title: '更新人员',
+      key: 'updated_user',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.updated_user || '-'
+      },
+    },
+    {
+      title: '创建时间',
+      key: 'created_time',
+      width: 180,
+      align: 'center',
+      render(row) {
+        return row.created_time ? formatDate(row.created_time, 'YYYY-MM-DD HH:mm:ss') : '-'
+      },
+    },
+    {
+      title: '创建人员',
+      key: 'created_user',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.created_user || '-'
+      },
+    },
+    {
       title: '操作',
       key: 'actions',
-      width: 96,
+      width: 80,
       align: 'center',
       fixed: 'right',
       render(row) {
@@ -450,7 +450,7 @@ const columns = computed(() => {
         :query-bar-props="queryBarProps"
         :is-pagination="true"
         :remote="true"
-        :scroll-x="1280"
+        :scroll-x="2000"
         :columns="columns"
         :get-data="(params) => api.getTagList(buildSearchBody(params))"
         :single-line="true"
