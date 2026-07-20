@@ -153,7 +153,8 @@ class Extractors:
         :param text: 请求或响应正文
         :param expr: 正则表达式；SOME 模式必填
         :param range_type: ``all`` 或 ``some``
-        :param index: 分组编号；None 或 0 取整个匹配串(group(0))，正整数 N 取第 N 个捕获分组(group(N))
+        :param index: 分组编号；None 或 0 取整个匹配串(group(0))，正整数 N 取第 N 个捕获分组(group(N))，
+            负数 -1 取最后一个分组、-2 取倒数第二个分组，以此类推（与 JSON/XML 负索引语义一致）
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
         :return: 匹配到的分组值；ALL 时返回原文
@@ -172,11 +173,15 @@ class Extractors:
             if index is None or int(index) == 0:
                 return match.group(0)
             index_int = int(index)
-            if index_int < 0:
-                raise ValueError(
-                    f"【{operation_type}】分组索引[{index_int}]不支持负数, 正则分组编号须为非负整数(0=整体匹配, 1=第一个分组)"
-                )
             group_count = len(match.groups())
+            if index_int < 0:
+                # 负数索引：-1 取最后一个分组，-2 取倒数第二个，以此类推
+                actual_index = group_count + index_int + 1
+                if actual_index <= 0:
+                    raise ValueError(
+                        f"【{operation_type}】分组索引[{index_int}]超出范围, 正则表达式共有[{group_count}]个分组(可用范围: -{group_count}~-1 或 0~{group_count})"
+                    )
+                return match.group(actual_index)
             if index_int > group_count:
                 raise ValueError(
                     f"【{operation_type}】分组索引[{index_int}]超出范围, 正则表达式共有[{group_count}]个分组(可用范围: 0~{group_count})"

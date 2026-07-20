@@ -123,8 +123,7 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
       source: defaultSource ?? null,
       extractScope: '部分提取',
       jsonpath: '',
-      continueExtract: false,
-      extractIndex: 0,
+        extractIndex: 0,
     }
   }
   return {
@@ -132,7 +131,6 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
     object: 'Response Json',
     extractScope: '部分提取',
     jsonpath: '',
-    continueExtract: false,
     extractIndex: 0,
   }
 }
@@ -162,7 +160,6 @@ export function createEmptyAssertItem(assertMode, defaultSource = null) {
     jsonpath: '',
     assertion: '等于',
     value: '',
-    continueExtract: false,
     extractIndex: 0,
   }
 }
@@ -178,8 +175,7 @@ export function hydrateExtractDictFromBackend(list, extractMode) {
         source: resolveDatabaseSourceVar(item),
         extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
         jsonpath: item.expr || '',
-        continueExtract: item.continueExtract || false,
-        extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : 0,
+            extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : 0,
       }
     } else {
       dict[key] = {
@@ -187,8 +183,7 @@ export function hydrateExtractDictFromBackend(list, extractMode) {
         object: item.source || 'Response Json',
         extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
         jsonpath: item.expr || '',
-        continueExtract: item.continueExtract || false,
-        extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null,
+            extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null,
       }
     }
   })
@@ -223,8 +218,7 @@ export function hydrateAssertDictFromBackend(list, assertMode) {
         jsonpath: item.expr || '',
         assertion: item.operation || '等于',
         value: item.except_value != null ? String(item.except_value) : '',
-        continueExtract: item.continueExtract || false,
-        extractIndex: item.extractIndex ?? 0,
+            extractIndex: item.extractIndex ?? 0,
       }
     }
   })

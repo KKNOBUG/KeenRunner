@@ -114,11 +114,6 @@
 
                 <n-form-item label="继续提取" class="step-ev-fi">
                   <n-space align="center" :wrap-item="false" :size="8">
-                    <n-switch
-                        v-model:value="item.continueExtract"
-                        size="small"
-                        :disabled="readonly || item.extractScope !== '部分提取'"
-                    />
                     <n-input-number
                         v-model:value="item.extractIndex"
                         :min="0"
@@ -157,7 +152,6 @@ import {
   NRadioGroup,
   NSelect,
   NSpace,
-  NSwitch,
   NTooltip,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'

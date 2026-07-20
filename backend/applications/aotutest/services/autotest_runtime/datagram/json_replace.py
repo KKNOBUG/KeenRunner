@@ -89,10 +89,8 @@ class JsonDatagram:
         """
         if not json_path or not isinstance(json_path, str):
             return ""
-        s = json_path.strip()
-        if s.startswith("$."):
-            s = s[2:]
-        return s.split(".")[0].strip() if s else ""
+        parts = json_path.strip().split("$.", 1)
+        return parts[-1].strip() if parts and parts[-1] else ""
 
     @staticmethod
     def _by_jsonpath_modify_request_params(

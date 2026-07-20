@@ -166,7 +166,7 @@
           </n-radio-group>
           <div v-if="state.form.bodyType === 'params'">
             <KeyValueEditor
-                v-model:items="state.form.bodyForm"
+                v-model:items="state.form.params"
                 :body-type="'none'"
                 :is-for-body="true"
                 :available-variable-list="props.availableVariableList"
@@ -1245,7 +1245,7 @@ const doDebugRequest = async (env_id) => {
       jsonBody: state.form.jsonBody,
       rawBody: state.form.rawBody ?? '',
       formData: state.form.bodyType === 'form-data' ? state.form.bodyParams : null,
-      formUrlencoded: (state.form.bodyType === 'params' || state.form.bodyType === 'x-www-form-urlencoded') ? state.form.bodyForm : null
+      formUrlencoded: state.form.bodyType === 'x-www-form-urlencoded' ? state.form.bodyForm : null
     }
 
     const caseId = route.query.case_id ? Number(route.query.case_id) : null
