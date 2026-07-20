@@ -1540,7 +1540,6 @@ defineExpose({
   max-height: calc(var(--exec-config-dataset-visible-rows) * var(--exec-config-dataset-row-height));
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .exec-config-dataset-row {
@@ -1711,7 +1710,6 @@ defineExpose({
   max-height: calc(var(--exec-config-visible-rows) * var(--exec-config-row-height));
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .exec-config-table-header,

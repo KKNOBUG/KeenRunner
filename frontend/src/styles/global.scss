@@ -75,3 +75,37 @@ body {
     }
   }
 }
+
+/**
+ * 悬浮显现细滚动条（步骤树 / 明细 / 嵌套溢出区统一）
+ * - 始终预留 4px 槽位（scrollbar-gutter + 固定宽度），悬停不抖
+ * - 默认滑块透明，悬停显示弱对比色
+ * - 仅样式，不设置 overflow（由业务容器自行 overflow: auto / overflow-y: auto）
+ */
+.overlay-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &::-webkit-scrollbar {
+    width: 2px;
+    height: 2px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  &:hover {
+    scrollbar-color: color-mix(in srgb, var(--n-border-color, #bfbfbf) 75%, transparent) transparent;
+
+    &::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--n-border-color, #bfbfbf) 75%, transparent);
+    }
+  }
+}

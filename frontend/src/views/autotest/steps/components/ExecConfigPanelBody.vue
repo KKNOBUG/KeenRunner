@@ -111,7 +111,7 @@
         </template>
         <div class="exec-config-modal">
           <div class="exec-config-left">
-            <div class="exec-config-app-list">
+            <div class="exec-config-app-list overlay-scroll">
               <div
                   v-for="app in panel.debugApps"
                   :key="String(app.project_id)"
@@ -128,7 +128,7 @@
             </div>
           </div>
 
-          <div class="exec-config-right">
+          <div class="exec-config-right overlay-scroll">
             <div v-if="!panel.debugSelectedProjectId" class="exec-config-empty">请选择应用</div>
             <template v-else>
               <div v-if="panel.debugApiRowsForSelected.length" class="exec-config-section">
@@ -143,7 +143,7 @@
                     <div class="col config">配置名</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div class="exec-config-table-body">
+                  <div class="exec-config-table-body overlay-scroll">
                     <div v-for="(row, idx) in panel.debugApiRowsForSelected" :key="row.key" class="exec-config-table-row">
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
@@ -185,7 +185,7 @@
                     <div class="col config">数据库名</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div class="exec-config-table-body">
+                  <div class="exec-config-table-body overlay-scroll">
                     <div v-for="(row, idx) in panel.debugDbRowsForSelected" :key="row.key" class="exec-config-table-row">
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
@@ -235,7 +235,7 @@
                     <div class="col config">库编号</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div class="exec-config-table-body">
+                  <div class="exec-config-table-body overlay-scroll">
                     <div v-for="(row, idx) in panel.debugRedisRowsForSelected" :key="row.key" class="exec-config-table-row">
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
@@ -284,7 +284,7 @@
                     <div class="col config">配置名</div>
                     <div class="col addr">IP/端口</div>
                   </div>
-                  <div class="exec-config-table-body">
+                  <div class="exec-config-table-body overlay-scroll">
                     <div v-for="(row, idx) in panel.debugFileRowsForSelected" :key="row.key" class="exec-config-table-row">
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
@@ -335,7 +335,7 @@
             <div v-else-if="!panel.debugExecDatasetRows.length" class="exec-config-dataset-empty">
               <n-empty description="暂无数据, 请先上传数据源或确认用例已保存" />
             </div>
-            <div v-else class="exec-config-dataset-body">
+            <div v-else class="exec-config-dataset-body overlay-scroll">
               <div
                   v-for="(row, idx) in panel.debugExecDatasetRows"
                   :key="row.id"

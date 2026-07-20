@@ -163,8 +163,8 @@
                   />
                 </template>
                 <template #default>
-                  <div style="display: flex; height: 300px; width: 400px;">
-                    <div style="width: 45%; overflow-y: auto;">
+                  <div class="tag-picker-panel">
+                    <div class="tag-picker-col overlay-scroll">
                       <n-list v-if="Object.keys(tagModeGroups).length > 0">
                         <n-list-item
                             v-for="(tags, mode) in tagModeGroups"
@@ -179,7 +179,7 @@
                         {{ tagLoading ? '加载中...' : '暂无标签数据' }}
                       </div>
                     </div>
-                    <div style="width: 50%; overflow-y: auto;">
+                    <div class="tag-picker-col tag-picker-col--names overlay-scroll">
                       <n-list v-if="selectedTagMode && currentTagNames.length > 0">
                         <n-list-item
                             v-for="tag in currentTagNames"
@@ -637,6 +637,22 @@ defineExpose({
 .tag-mode-selected {
   background-color: rgba(244, 81, 30, 0.1);
   font-weight: 500;
+}
+
+.tag-picker-panel {
+  display: flex;
+  height: 300px;
+  width: 400px;
+}
+
+.tag-picker-col {
+  width: 45%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tag-picker-col--names {
+  width: 50%;
 }
 
 .tag-name-selected {

@@ -42,7 +42,7 @@
                 </n-button>
               </div>
             </template>
-            <div class="step-tree-container">
+            <div class="step-tree-container overlay-scroll">
               <template v-for="(step, index) in steps" :key="step.id">
                 <div
                     class="step-item"
@@ -73,20 +73,6 @@
                     <span class="step-actions">
                       <span class="step-number">#{{ getStepNumber(step.id) }}</span>
                       <n-button
-                          text
-                          size="tiny"
-                          @click.stop="toggleSkipStep(step.id, $event)"
-                          class="action-btn"
-                          :title="step.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
-                      >
-                        <template #icon>
-                          <TheIcon
-                              :icon="step.step_is_skipped ? 'lucide:badge-x' : 'lucide:badge-check'"
-                              :size="14"
-                          />
-                        </template>
-                      </n-button>
-                      <n-button
                           v-if="stepDefinitions[step.type]?.allowChildren"
                           text
                           size="tiny"
@@ -96,7 +82,21 @@
                       >
                         <template #icon>
                           <TheIcon
-                              :icon="isStepExpanded(step.id) ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down'"
+                              :icon="isStepExpanded(step.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'"
+                              :size="14"
+                          />
+                        </template>
+                      </n-button>
+                      <n-button
+                          text
+                          size="tiny"
+                          @click.stop="toggleSkipStep(step.id, $event)"
+                          class="action-btn"
+                          :title="step.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
+                      >
+                        <template #icon>
+                          <TheIcon
+                              :icon="step.step_is_skipped ? 'gravity-ui:eye' : 'gravity-ui:eye-slash'"
                               :size="14"
                           />
                         </template>
@@ -109,7 +109,7 @@
                           title="复制当前步骤"
                       >
                         <template #icon>
-                          <TheIcon icon="material-symbols:content-copy" :size="14"/>
+                          <TheIcon icon="gravity-ui:square-article" :size="14"/>
                         </template>
                       </n-button>
                       <n-popconfirm @positive-click="handleDeleteStep(step.id)" @click.stop>
@@ -169,14 +169,21 @@
         <div
             v-show="!leftPanelCollapsed"
             class="steps-split-resizer"
-            title="拖动调整步骤树宽度，双击折叠"
+            :class="{ 'is-resizing': leftPanelResizing }"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整步骤树宽度"
+            title="拖动调整宽度 · 双击折叠"
             @mousedown="startResizeLeftPanel"
             @dblclick.prevent="collapseLeftPanel"
         >
-          <TheIcon icon="mdi:drag-vertical" :size="16" />
+          <span class="steps-split-resizer__line" aria-hidden="true" />
+          <span class="steps-split-resizer__handle" aria-hidden="true">
+            <TheIcon icon="mdi:drag-vertical" :size="14" />
+          </span>
         </div>
         <div class="right-column steps-split-main">
-          <div class="config-panel">
+          <div class="config-panel overlay-scroll">
             <component
                 v-if="currentStep"
                 :key="currentStep.id + (currentStep.isQuoteInner ? '-readonly' : '')"
@@ -364,6 +371,8 @@ const LEFT_PANEL_WIDTH_MAX = 600
 const leftPanelWidth = ref(LEFT_PANEL_WIDTH_DEFAULT)
 /** 步骤树是否折叠（双击分隔条折叠，左侧边缘按钮恢复） */
 const leftPanelCollapsed = ref(false)
+/** 正在拖拽调整步骤树宽度 */
+const leftPanelResizing = ref(false)
 
 function clampLeftPanelWidth(width) {
   return Math.min(LEFT_PANEL_WIDTH_MAX, Math.max(LEFT_PANEL_WIDTH_MIN, width))
@@ -399,6 +408,7 @@ function onResizeLeftPanelMove(event) {
 }
 
 function stopResizeLeftPanel() {
+  leftPanelResizing.value = false
   saveLeftPanelWidth()
   document.removeEventListener('mousemove', onResizeLeftPanelMove)
   document.removeEventListener('mouseup', stopResizeLeftPanel)
@@ -410,6 +420,7 @@ function startResizeLeftPanel(event) {
   if (event.button !== 0) return
   // 双击折叠时忽略第二次 mousedown 触发的拖拽
   if (event.detail > 1) return
+  leftPanelResizing.value = true
   resizeLeftPanelStartX = event.clientX
   resizeLeftPanelStartWidth = leftPanelWidth.value
   document.body.style.cursor = 'col-resize'
@@ -3378,7 +3389,7 @@ const RecursiveStepChildren = defineComponent({
                     }
                   }, {
                     icon: () => h(TheIcon, {
-                      icon: child.step_is_skipped ? 'mdi:toggle-switch-off-outline' : 'mdi:toggle-switch-outline',
+                      icon: child.step_is_skipped ? 'gravity-ui:eye' : 'gravity-ui:eye-slash',
                       size: 14
                     })
                   }),
@@ -3392,7 +3403,7 @@ const RecursiveStepChildren = defineComponent({
                     }
                   }, {
                     icon: () => h(TheIcon, {
-                      icon: capturedIsStepExpanded(child.id) ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down',
+                      icon: capturedIsStepExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down',
                       size: 14
                     })
                   }) : null,
@@ -3407,7 +3418,7 @@ const RecursiveStepChildren = defineComponent({
                     }
                   }, {
                     icon: () => h(TheIcon, {
-                      icon: 'material-symbols:content-copy',
+                      icon: 'gravity-ui:square-article',
                       size: 14,
                     })
                   }),
@@ -3490,16 +3501,75 @@ const RecursiveStepChildren = defineComponent({
 }
 
 .steps-split-resizer {
+  position: relative;
   flex-shrink: 0;
-  width: 3px;
-  margin: 0 3px;
+  width: 15px;
+  margin: 0 0px;
   cursor: col-resize;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  touch-action: none;
   user-select: none;
-  color: var(--n-text-color-3, #F4511E);
+  z-index: 2;
+  color: var(--n-text-color-3, #999);
+}
+
+.steps-split-resizer__line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--n-border-color, rgba(0, 0, 0, 0.08));
+  transition: width 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: none;
+}
+
+.steps-split-resizer__handle {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--n-color, #fff);
+  border: 1px solid var(--n-border-color, rgba(0, 0, 0, 0.1));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  opacity: 0.55;
+  transform: scale(0.92);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+  pointer-events: none;
+}
+
+.steps-split-resizer:hover .steps-split-resizer__line,
+.steps-split-resizer.is-resizing .steps-split-resizer__line {
+  width: 2px;
+  background: var(--n-primary-color, #F4511E);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--n-primary-color, #F4511E) 18%, transparent);
+}
+
+.steps-split-resizer:hover .steps-split-resizer__handle,
+.steps-split-resizer.is-resizing .steps-split-resizer__handle {
+  opacity: 1;
+  transform: scale(1);
+  color: var(--n-primary-color, #F4511E);
+  border-color: color-mix(in srgb, var(--n-primary-color, #F4511E) 45%, transparent);
+  background: color-mix(in srgb, var(--n-primary-color, #F4511E) 8%, var(--n-color, #fff));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--n-primary-color, #F4511E) 16%, transparent);
+}
+
+.steps-split-resizer.is-resizing {
+  color: var(--n-primary-color, #F4511E);
 }
 
 /* 折叠后：不占布局宽度，浮在左侧边缘中间 */
@@ -3589,45 +3659,17 @@ const RecursiveStepChildren = defineComponent({
   font-size: var(--step-editor-font-size, 13px);
 }
 
-/* 步骤树 / 右侧明细：统一滚动条（默认隐藏，悬停且溢出时显示细条） */
+/* 步骤树 / 右侧明细：统一由 .overlay-scroll 控制滚动条观感 */
 .step-tree-container,
 .config-panel {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
-  scrollbar-width: none;
 }
 
 .step-tree-container {
   padding: 4px 0;
-}
-
-.step-tree-container:hover,
-.config-panel:hover {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--n-border-color) 75%, transparent) transparent;
-}
-
-.step-tree-container::-webkit-scrollbar,
-.config-panel::-webkit-scrollbar {
-  width: 0;
-}
-
-.step-tree-container:hover::-webkit-scrollbar,
-.config-panel:hover::-webkit-scrollbar {
-  width: 4px;
-}
-
-.step-tree-container:hover::-webkit-scrollbar-track,
-.config-panel:hover::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.step-tree-container:hover::-webkit-scrollbar-thumb,
-.config-panel:hover::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--n-border-color) 75%, transparent);
-  border-radius: 4px;
 }
 
 .step-header {

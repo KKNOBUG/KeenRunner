@@ -734,8 +734,8 @@ const columns = computed(() => {
               />
             </template>
             <template #default>
-              <div style="display: flex; height: 300px; width: 400px;">
-                <div style="width: 45%; overflow-y: auto;">
+              <div class="tag-picker-panel">
+                <div class="tag-picker-col overlay-scroll">
                   <NList v-if="Object.keys(tagModeGroups).length > 0">
                     <NListItem
                         v-for="(tags, mode) in tagModeGroups"
@@ -750,7 +750,7 @@ const columns = computed(() => {
                     {{ tagLoading ? '加载中...' : '暂无标签数据' }}
                   </div>
                 </div>
-                <div style="width: 50%; overflow-y: auto;">
+                <div class="tag-picker-col tag-picker-col--names overlay-scroll">
                   <NList v-if="selectedTagMode && currentTagNames.length > 0">
                     <NListItem
                         v-for="tag in currentTagNames"
@@ -822,6 +822,22 @@ const columns = computed(() => {
 .tag-mode-selected {
   background-color: var(--n-color-primary-hover);
   font-weight: 500;
+}
+
+.tag-picker-panel {
+  display: flex;
+  height: 300px;
+  width: 400px;
+}
+
+.tag-picker-col {
+  width: 45%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tag-picker-col--names {
+  width: 50%;
 }
 
 .tag-name-selected {

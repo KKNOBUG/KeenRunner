@@ -25,7 +25,7 @@
         添加步骤
       </n-button>
     </template>
-    <div class="add-step-menu-scroll">
+    <div class="add-step-menu-scroll overlay-scroll">
       <div class="add-step-menu">
         <section
             v-for="section in menuSections"
@@ -218,14 +218,6 @@ const handleSelectItem = (item) => {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-.add-step-menu-scroll::-webkit-scrollbar {
-  width: 1px;
-}
-
-.add-step-menu-scroll::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 .add-step-menu {

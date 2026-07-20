@@ -546,7 +546,7 @@
                     :code="typeof response.data === 'object'? JSON.stringify(response.data, null, 2) : response.data || ''"
                     :language="responseLanguage"
                     show-line-numbers
-                    class="response-code"
+                    class="response-code overlay-scroll"
                 />
               </n-collapse-item>
             </n-collapse>
@@ -2500,7 +2500,7 @@ const validatorColumns = [
 /* 添加必要的布局样式 */
 .response-code {
   max-height: 400px; /* 限制代码块高度 */
-  overflow: auto; /* 添加滚动条 */
+  overflow: auto;
 }
 
 .debug-loading {
