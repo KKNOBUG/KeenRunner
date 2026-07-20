@@ -8,28 +8,23 @@
 """
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
-from pydantic import BaseModel
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiRecordInfo
-from backend.applications.aotutest.schemas.autotest_record_schema import AutoTestApiRecordSelect
+from backend.applications.aotutest.schemas.autotest_record_schema import (
+    AutoTestApiRecordCreate,
+    AutoTestApiRecordUpdate,
+    AutoTestApiRecordSelect,
+)
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException
 
 
-class _RecordCreatePlaceholder(BaseModel):
-    """占位用 schema，任务执行记录由业务直接写字典。"""
-
-    pass
-
-
-class AutoTestApiTaskRecordCrud(
-    ScaffoldCrud[AutoTestApiRecordInfo, _RecordCreatePlaceholder, _RecordCreatePlaceholder]
-):
+class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
     """任务执行记录 CRUD 与相关业务。"""
 
     def __init__(self):
@@ -46,34 +41,49 @@ class AutoTestApiTaskRecordCrud(
             return None
         return await self.model.filter(celery_id=celery_id).first()
 
-    async def create_record(self, data: Dict[str, Any]) -> AutoTestApiRecordInfo:
+    async def create_record(
+            self,
+            data: Union[AutoTestApiRecordCreate, Dict[str, Any]],
+    ) -> AutoTestApiRecordInfo:
         """
         创建一条任务执行记录。
 
-        :param data: 记录字段字典
+        :param data: 创建入参 Schema 或字段字典
         :return: 新建的记录实例
         """
-        return await self.create(data)
+        if isinstance(data, dict):
+            record_in = AutoTestApiRecordCreate.model_validate(data)
+        else:
+            record_in = data
+        return await self.create(record_in.create_dict())
 
     async def update_record_by_celery_id(
             self,
             celery_id: str,
-            data: Dict[str, Any],
+            data: Union[AutoTestApiRecordUpdate, Dict[str, Any]],
     ) -> Optional[AutoTestApiRecordInfo]:
         """
         按 celery_id 更新执行记录；仅写入模型已有字段，部分键允许置空。
 
         :param celery_id: Celery 任务 ID
-        :param data: 待更新字段字典
+        :param data: 更新入参 Schema 或字段字典
         :return: 更新后的记录；不存在则返回 None
         """
         record = await self.get_by_celery_id(celery_id=celery_id)
         if not record:
             return None
+        if isinstance(data, dict):
+            record_in = AutoTestApiRecordUpdate.model_validate(data)
+            raw = data
+        else:
+            record_in = data
+            raw = data.model_dump(exclude_unset=True)
+        update_dict = record_in.update_dict()
+        # task_summary / task_error / batch_code 允许显式置空
         allow_none_keys = ("task_summary", "task_error", "batch_code")
         update_dict = {
-            k: v for k, v in data.items()
-            if hasattr(record, k) and (v is not None or k in allow_none_keys)
+            k: v for k, v in update_dict.items()
+            if hasattr(record, k) and (v is not None or (k in allow_none_keys and k in raw))
         }
         # Worker 更新终态时无 HTTP 用户上下文：优先入参，其次沿用创建人
         if not update_dict.get("updated_user"):
