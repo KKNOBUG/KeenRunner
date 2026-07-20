@@ -1305,7 +1305,7 @@ const doDebugRequest = async (env_id) => {
           bodyType: reqInfo.body_type || 'none',
           jsonBody: reqInfo.body_type === 'json' && reqInfo.body ? JSON.stringify(reqInfo.body, null, 2) : '',
           formData: reqInfo.body_type === 'form-data' ? reqInfo.body : null,
-          formUrlencoded: (reqInfo.body_type === 'params' || reqInfo.body_type === 'x-www-form-urlencoded') ? reqInfo.body : null,
+          formUrlencoded: reqInfo.body_type === 'x-www-form-urlencoded' ? reqInfo.body : null,
           rawBody: reqInfo.body_type === 'raw' && reqInfo.request_text != null ? reqInfo.request_text : (requestInfo.value.rawBody ?? '')
         }
       }
