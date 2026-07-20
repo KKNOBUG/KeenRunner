@@ -3103,6 +3103,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 )
                 request_header = out["headers"]
                 request_body = out["request_body"]
+                request_form_data = out["form_data"]
+                request_form_urlencoded = out["urlencoded"]
 
             # 3）再对报文做变量占位符解析
             request_header = self.context.resolve_placeholders(

@@ -280,7 +280,7 @@ const buildPreviewTableRowsByMatrix = (matrix) => {
 
 const isLockedKeywordRow = (row) => {
   const v = String(row?.c_1 ?? '').trim().toUpperCase()
-  return v === 'HEAD' || v === 'BODY' || v === 'ASSERT'
+  return v === 'HEAD' || v === 'BODY' || v === 'ASSERT_HEAD' || v === 'ASSERT_BODY'
 }
 
 const isProtectedPreviewRow = (row) => {
