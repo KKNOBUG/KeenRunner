@@ -2270,12 +2270,14 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.has_dataset_payload(step_struct):
-                # TCP 多为 raw + request_text：按内容嗅探 XML/JSON，替换后写回 request_text，保证实际发送报文生效
+                # 按 request_args_type 优先判断报文类型，未明确类型时按内容嗅探
                 text_for_detect = request_text if isinstance(request_text, str) else ""
-                is_xml = (
-                    self.step.request_args_type == AutoTestReqArgsType.XML
-                    or text_for_detect.strip().startswith("<")
-                )
+                if self.step.request_args_type == AutoTestReqArgsType.XML:
+                    is_xml = True
+                elif self.step.request_args_type == AutoTestReqArgsType.JSON:
+                    is_xml = False
+                else:
+                    is_xml = text_for_detect.strip().startswith("<")
                 if is_xml:
                     xml_source = request_text or (request_body if isinstance(request_body, str) else None)
                     request_text = AutoTestToolService.replace_xml_datagram(
