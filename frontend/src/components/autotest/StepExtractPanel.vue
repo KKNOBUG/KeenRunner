@@ -114,12 +114,17 @@
 
                 <n-form-item label="继续提取" class="step-ev-fi">
                   <n-space align="center" :wrap-item="false" :size="8">
+                    <n-switch
+                        v-model:value="item.extractContinue"
+                        size="small"
+                        :disabled="readonly || item.extractScope !== '部分提取'"
+                    />
                     <n-input-number
                         v-model:value="item.extractIndex"
                         :min="0"
                         size="small"
                         style="width: 80px;"
-                        :disabled="readonly || item.extractScope !== '部分提取'"
+                        :disabled="readonly || item.extractScope !== '部分提取' || !item.extractContinue"
                     />
                     <n-tooltip v-if="!isVariableSource" trigger="hover">
                       <template #trigger>
@@ -152,6 +157,7 @@ import {
   NRadioGroup,
   NSelect,
   NSpace,
+  NSwitch,
   NTooltip,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
@@ -204,6 +210,21 @@ function syncCollapseKeys() {
 }
 
 watch(model, syncCollapseKeys, { deep: true, immediate: true })
+
+// 继续提取开关：ON → extractIndex 设为 0，OFF → extractIndex 设为 null
+watch(model, (newVal) => {
+  Object.values(newVal || {}).forEach((item) => {
+    if (item.extractContinue === true) {
+      if (item.extractIndex === null || item.extractIndex === undefined) {
+        item.extractIndex = 0
+      }
+    } else if (item.extractContinue === false) {
+      if (item.extractIndex !== null) {
+        item.extractIndex = null
+      }
+    }
+  })
+}, { deep: true })
 
 function defaultSource() {
   if (!isVariableSource.value) return null

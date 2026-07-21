@@ -123,7 +123,8 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
       source: defaultSource ?? null,
       extractScope: '部分提取',
       jsonpath: '',
-        extractIndex: 0,
+      extractIndex: 0,
+      extractContinue: false,
     }
   }
   return {
@@ -131,7 +132,8 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
     object: 'Response Json',
     extractScope: '部分提取',
     jsonpath: '',
-    extractIndex: 0,
+    extractIndex: null,
+    extractContinue: false,
   }
 }
 
@@ -175,7 +177,8 @@ export function hydrateExtractDictFromBackend(list, extractMode) {
         source: resolveDatabaseSourceVar(item),
         extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
         jsonpath: item.expr || '',
-            extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : 0,
+        extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : 0,
+        extractContinue: item.index !== undefined && item.index !== null && item.index !== '',
       }
     } else {
       dict[key] = {
@@ -183,7 +186,8 @@ export function hydrateExtractDictFromBackend(list, extractMode) {
         object: item.source || 'Response Json',
         extractScope: item.scope === 'ALL' ? '全部提取' : '部分提取',
         jsonpath: item.expr || '',
-            extractIndex: item.index !== undefined && item.index !== null ? Number(item.index) : null,
+        extractIndex: item.index !== undefined && item.index !== null && item.index !== '' ? Number(item.index) : null,
+        extractContinue: item.index !== undefined && item.index !== null && item.index !== '',
       }
     }
   })
