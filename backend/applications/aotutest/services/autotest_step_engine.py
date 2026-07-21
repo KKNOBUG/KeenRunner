@@ -1043,9 +1043,27 @@ class BaseStepExecutor:
                 is_core_engine=True,
                 step_struct=step_struct,
                 body_source=body_source,
+                raise_on_failure=False,
             )
+            # 无论成功与否，先将结果追加到 result，确保落库不丢失
             result.extract_variables.extend(extract_results)
             result.assert_validators.extend(assert_results)
+            # 检查是否存在失败项，有则抛出 StepExecutionError
+            extract_failed = [r for r in extract_results if not r.get("success", True)]
+            assert_failed = [r for r in assert_results if not r.get("success", True)]
+            if extract_failed or assert_failed:
+                error_parts = []
+                if extract_failed:
+                    error_parts.append(
+                        f"【变量提取】共计{len(extract_failed)}个提取失败: \n"
+                        f"{orjson.dumps(extract_failed, option=orjson.OPT_INDENT_2).decode('UTF-8')}"
+                    )
+                if assert_failed:
+                    error_parts.append(
+                        f"【断言验证】共计{len(assert_failed)}个断言失败: \n"
+                        f"{orjson.dumps(assert_failed, option=orjson.OPT_INDENT_2).decode('UTF-8')}"
+                    )
+                raise StepExecutionError("\n".join(error_parts))
         except ValueError as e:
             raise StepExecutionError(str(e)) from e
         except StepExecutionError:
