@@ -341,6 +341,13 @@
                         style="min-height: 500px; height: auto;"
                     />
                   </div>
+                  <div v-else-if="isXmlRequestBody">
+                    <MonacoEditor
+                        :value="requestBodyForDisplay"
+                        :options="monacoEditorOptions(true, 'xml')"
+                        style="min-height: 500px; height: auto;"
+                    />
+                  </div>
                   <NDataTable
                       v-else-if="requestFormDataTable.length > 0"
                       :columns="[{ title: 'Key', key: 'key' }, { title: 'Value', key: 'value' }]"
@@ -393,8 +400,15 @@
                 <NCollapseItem title="Body" name="responseBody">
                   <div v-if="isJsonResponse">
                     <MonacoEditor
-                        :value="formatJson(currentDetail.response_body)"
+                        :value="formatJson(responseBodyText)"
                         :options="monacoEditorOptions(true)"
+                        style="min-height: 500px; height: auto;"
+                    />
+                  </div>
+                  <div v-else-if="isXmlResponse">
+                    <MonacoEditor
+                        :value="responseBodyText"
+                        :options="monacoEditorOptions(true, 'xml')"
                         style="min-height: 500px; height: auto;"
                     />
                   </div>
@@ -546,26 +560,46 @@ const formatJson = (data) => {
 }
 
 const isJsonResponse = computed(() => {
-  if (!currentDetail.value?.response_body) return false
-  try {
-    const body = currentDetail.value.response_body
-    if (typeof body === 'string') JSON.parse(body)
-    else if (typeof body === 'object') return true
-    return false
-  } catch {
-    return false
+  const body = currentDetail.value?.response_body ?? currentDetail.value?.response_text
+  if (!body) return false
+  if (typeof body === 'object') return true
+  if (typeof body === 'string') {
+    try {
+      JSON.parse(body)
+      return true
+    } catch {
+      return false
+    }
   }
+  return false
+})
+
+const isXmlResponse = computed(() => {
+  const body = currentDetail.value?.response_body ?? currentDetail.value?.response_text
+  if (!body) return false
+  if (typeof body === 'string') {
+    const trimmed = body.trim()
+    return trimmed.startsWith('<') && trimmed.endsWith('>')
+  }
+  return false
+})
+
+const responseBodyText = computed(() => {
+  return currentDetail.value?.response_body || currentDetail.value?.response_text || ''
 })
 
 const responseLanguage = computed(() => {
-  if (!currentDetail.value?.response_header) return 'text'
-  const headers = currentDetail.value.response_header
-  if (typeof headers === 'object') {
+  // 优先从 response_header 判断
+  const headers = currentDetail.value?.response_header
+  if (headers && typeof headers === 'object') {
     const ct = headers['content-type'] || headers['Content-Type'] || ''
     if (ct.includes('json')) return 'json'
     if (ct.includes('xml')) return 'xml'
     if (ct.includes('html')) return 'html'
   }
+  // 无 header 时从 body 内容推断（TCP 等协议无 HTTP 头）
+  if (isJsonResponse.value) return 'json'
+  if (isXmlResponse.value) return 'xml'
   return 'text'
 })
 
@@ -847,6 +881,7 @@ const requestFormDataRaw = computed(() => currentDetail.value?.request_form_data
 const requestFormUrlencodedRaw = computed(() => currentDetail.value?.request_form_urlencoded ?? null)
 const requestFormFileRaw = computed(() => currentDetail.value?.request_form_file ?? null)
 const requestTextRaw = computed(() => currentDetail.value?.request_text ?? null)
+const requestArgsTypeRaw = computed(() => currentDetail.value?.request_args_type ?? null)
 
 const normalizedRequestHeaders = computed(() => normalizeRequestField(requestHeadersRaw.value))
 const normalizedRequestParams = computed(() => {
@@ -870,6 +905,40 @@ const requestFormData = computed(() => normalizeRequestField(requestFormDataRaw.
 const requestFormUrlencoded = computed(() => normalizeRequestField(requestFormUrlencodedRaw.value))
 const requestFormFile = computed(() => normalizeRequestField(requestFormFileRaw.value))
 const requestText = computed(() => (requestTextRaw.value != null && requestTextRaw.value !== '') ? requestTextRaw.value : null)
+
+// 根据 request_args_type 判断请求体类型（与后端一致）
+const requestArgsType = computed(() => {
+  const raw = requestArgsTypeRaw.value
+  if (!raw) return null
+  return String(raw).toLowerCase()
+})
+const isJsonRequestBody = computed(() => {
+  // XML 优先：如果 args_type 是 xml，不展示 JSON body
+  if (requestArgsType.value === 'xml') return false
+  // 如果 args_type 是 json，展示 JSON body
+  if (requestArgsType.value === 'json') return requestBody.value != null && typeof requestBody.value === 'object'
+  // 未指定 args_type 时，按原有逻辑判断
+  if (requestArgsType.value === 'raw' || requestArgsType.value === 'form-data' || requestArgsType.value === 'x-www-form-urlencoded') return false
+  return requestBody.value != null && typeof requestBody.value === 'object'
+})
+const isXmlRequestBody = computed(() => {
+  if (requestArgsType.value === 'xml') return !!requestText.value
+  return false
+})
+const isRawRequestBody = computed(() => {
+  if (requestArgsType.value === 'raw') return !!requestText.value
+  return false
+})
+const requestBodyForDisplay = computed(() => {
+  if (isXmlRequestBody.value) return requestText.value || ''
+  if (isRawRequestBody.value) return requestText.value || ''
+  return null
+})
+const requestBodyLanguage = computed(() => {
+  if (requestArgsType.value === 'xml') return 'xml'
+  if (requestArgsType.value === 'json') return 'json'
+  return 'text'
+})
 const run_code = computed(() => {
   const s = reportPythonCodeFromDetail.value
   return s || null
@@ -909,6 +978,13 @@ const hasRequestInfo = computed(() => {
 const hasRequestBody = computed(() => !!(requestBody.value || requestFormData.value || requestFormUrlencoded.value || requestText.value))
 
 const requestBodyType = computed(() => {
+  // 根据 request_args_type 优先判断
+  if (requestArgsType.value === 'json' && requestBody.value) return 'JSON'
+  if (requestArgsType.value === 'xml' && requestText.value) return 'XML'
+  if (requestArgsType.value === 'raw' && requestText.value) return 'Raw'
+  if (requestArgsType.value === 'form-data' && requestFormData.value) return 'Form Data'
+  if (requestArgsType.value === 'x-www-form-urlencoded' && requestFormUrlencoded.value) return 'x-www-form-urlencoded'
+  // 未指定 args_type 时按原有逻辑
   if (requestBody.value) return 'JSON'
   if (requestFormData.value) return 'Form Data'
   if (requestFormUrlencoded.value) return 'x-www-form-urlencoded'
@@ -929,7 +1005,6 @@ const requestBodyText = computed(() => {
 
 const isObjectRequestHeaders = computed(() => normalizedRequestHeaders.value != null && typeof normalizedRequestHeaders.value === 'object' && !Array.isArray(normalizedRequestHeaders.value))
 const isObjectRequestParams = computed(() => normalizedRequestParams.value && typeof normalizedRequestParams.value === 'object' && Object.keys(normalizedRequestParams.value).length > 0)
-const isJsonRequestBody = computed(() => requestBody.value != null && typeof requestBody.value === 'object')
 
 const requestFormDataTable = computed(() => {
   if (!requestFormData.value || typeof requestFormData.value !== 'object') return []
@@ -1128,5 +1203,10 @@ watch(
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 错误日志红色字体 */
+.autotest-error-log-pre {
+  color: #d03050 !important;
 }
 </style>
