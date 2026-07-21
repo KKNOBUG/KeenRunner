@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import traceback
 from datetime import datetime
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple, Union
 from xml.etree import ElementTree
 
 import orjson
