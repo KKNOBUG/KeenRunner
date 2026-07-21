@@ -307,17 +307,25 @@ class AssertPipeline:
         for except_path, except_value in (step_struct.get("assert_body") or {}).items():
             if not except_path:
                 continue
+            expr = str(except_path).strip()
+            # 根据表达式前缀自动判断提取来源：$. → JSONPath, ./ 或 // → XPath, 其他 → Text
+            if expr.startswith("$."):
+                detected_source = "response json"
+            elif expr.startswith("./") or expr.startswith("//"):
+                detected_source = "response xml"
+            else:
+                detected_source = "response text"
             skip_error: Optional[str] = None
-            if body_source == "response json" and response_json is None:
+            if detected_source == "response json" and response_json is None:
                 skip_error = "响应不是JSON，无法进行JSONPath断言"
-            elif body_source == "response xml" and not response_text:
+            elif detected_source == "response xml" and not response_text:
                 skip_error = "响应不是有效的XML数据"
-            elif body_source == "response text" and not response_text:
+            elif detected_source == "response text" and not response_text:
                 skip_error = "响应内容不是有效的Text数据"
             _append_one(
                 except_path=except_path,
                 except_value=except_value,
-                source=body_source,
-                expr=except_path,
+                source=detected_source,
+                expr=expr,
                 skip_error=skip_error,
             )
