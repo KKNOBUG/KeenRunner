@@ -176,42 +176,129 @@
   <n-card
       v-if="response || debugLoading"
       :bordered="false"
-      class="step-editor-card"
-      style="width: 100%;"
+      style="width: 100%; margin-top: 8px;"
+      :class="['step-editor-card', { 'is-collapsed': responseCardCollapsed }]"
   >
     <template #header>
-      <div class="card-header-row">
-        <div class="panel-title">Response</div>
+      <div class="card-header-row card-header-row--with-actions">
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="toggleResponseCardCollapsed"
+            @keydown.enter.prevent="toggleResponseCardCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="responseCardCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">Response</div>
+        </div>
         <div class="card-header-actions">
-          <n-button text size="tiny" @click="toggleResponseCardCollapsed" class="collapse-tiny-btn">
-            <template #icon>
-              <TheIcon
-                  :icon="responseCardCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                  :size="18"
-              />
-            </template>
-            {{ responseCardCollapsed ? '展开' : '收起' }}
-          </n-button>
+          <n-space align="center" :wrap="false">
+            <n-space v-if="response && !debugLoading" align="center" :wrap="false">
+              <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
+              <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
+              <n-tag round size="small">Type: {{ contentType }}</n-tag>
+            </n-space>
+            <n-tag v-if="debugLoading" type="info" round size="small">
+              <template #icon>
+                <n-spin size="small"/>
+              </template>
+              请求中...
+            </n-tag>
+          </n-space>
         </div>
       </div>
     </template>
-
     <n-collapse-transition :show="!responseCardCollapsed">
-      <div v-if="debugLoading" style="padding: 12px;">调试中...</div>
-      <div v-else-if="response" style="padding: 12px;">
-        <div class="hint">耗时：{{ response.duration }}ms ｜ 大小：{{ response.size }}</div>
-        <MonacoEditor
-            v-if="response.data != null"
-            :value="formatResponseData(response.data)"
-            language="json"
-            height="240px"
-            :readonly="true"
-        />
-        <div v-if="Array.isArray(response.logs) && response.logs.length" class="hint" style="margin-top: 10px;">
-          <div style="font-weight: 600; margin-bottom: 6px;">Logs</div>
-          <pre style="white-space: pre-wrap; margin: 0;">{{ response.logs.join('\n') }}</pre>
-        </div>
+      <!-- 加载状态 -->
+      <div v-if="debugLoading" class="debug-loading">
+        <n-spin size="large" description="正在发送请求，请稍候..."/>
       </div>
+      <!-- 响应内容 -->
+      <n-tabs v-else type="line" animated>
+        <!-- 请求信息 -->
+        <n-tab-pane name="requestInfo" tab="请求信息">
+          <n-space vertical :size="16" v-if="response">
+            <n-collapse :default-expanded-names="['requestBasic', 'requestBody']">
+              <n-collapse-item title="Basic" name="requestBasic">
+                <n-space vertical :size="12">
+                  <n-descriptions bordered :column="2" size="small">
+                    <n-descriptions-item label="方法">
+                      <n-tag type="info">TCP</n-tag>
+                    </n-descriptions-item>
+                    <n-descriptions-item label="目标地址">
+                      <n-text copyable>{{ response.request_info?.url || '-' }}</n-text>
+                    </n-descriptions-item>
+                  </n-descriptions>
+                </n-space>
+              </n-collapse-item>
+              <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
+                <monaco-editor
+                    v-model:value="requestBodyDisplay"
+                    :lang="requestBodyLanguage"
+                    :options="monacoEditorOptionsForBody()"
+                    :readOnly="true"
+                    class="json-editor"
+                    style="min-height: 400px; height: auto;"
+                />
+              </n-collapse-item>
+            </n-collapse>
+          </n-space>
+        </n-tab-pane>
+        <!-- 响应信息 -->
+        <n-tab-pane name="responseInfo" tab="响应信息">
+          <n-space vertical :size="16" v-if="response">
+            <n-collapse :default-expanded-names="['responseBody']" arrow-placement="right">
+              <n-collapse-item :title="`Body (${contentType})`" name="responseBody">
+                <monaco-editor
+                    v-model:value="formattedResponse"
+                    :lang="responseLanguage"
+                    :options="monacoEditorOptionsForBody()"
+                    :readOnly="true"
+                    class="json-editor"
+                    style="min-height: 400px; height: auto;"
+                />
+              </n-collapse-item>
+            </n-collapse>
+          </n-space>
+        </n-tab-pane>
+        <!-- 数据提取 -->
+        <n-tab-pane name="extract_variables" tab="数据提取">
+          <n-data-table
+              v-if="response && response.extract_results && response.extract_results.length > 0"
+              :columns="extractColumns"
+              :data="response.extract_results"
+              size="small"
+              :bordered="true"
+          />
+          <n-empty v-else description="暂无数据提取结果"/>
+        </n-tab-pane>
+        <!-- 断言结果 -->
+        <n-tab-pane name="assert" tab="断言结果">
+          <n-data-table
+              v-if="response && response.validator_results && response.validator_results.length > 0"
+              :columns="validatorColumns"
+              :data="response.validator_results"
+              size="small"
+              :bordered="true"
+          />
+          <n-empty v-else description="暂无断言结果"/>
+        </n-tab-pane>
+        <!-- 执行日志 -->
+        <n-tab-pane name="logs" tab="执行日志">
+          <n-space vertical :size="12" v-if="response && response.logs && response.logs.length > 0">
+                <pre
+                    v-for="(log, index) in response.logs"
+                    :key="index"
+                    class="log-item"
+                >{{ log }}</pre>
+          </n-space>
+          <n-empty v-else description="暂无执行日志"/>
+        </n-tab-pane>
+      </n-tabs>
     </n-collapse-transition>
   </n-card>
 
@@ -238,12 +325,18 @@
 <script setup>
 defineOptions({ name: 'TCP请求控制器' })
 
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, h } from 'vue'
 import {
   NBadge,
   NButton,
   NCard,
+  NCollapse,
+  NCollapseItem,
   NCollapseTransition,
+  NDataTable,
+  NDescriptions,
+  NDescriptionsItem,
+  NEmpty,
   NForm,
   NFormItem,
   NInput,
@@ -252,8 +345,11 @@ import {
   NRadioGroup,
   NSelect,
   NSpace,
+  NSpin,
   NTabPane,
   NTabs,
+  NTag,
+  NText,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import MonacoEditor from '@/components/monaco/index.vue'
@@ -321,6 +417,27 @@ const getBodyCount = computed(() => {
     default:
       return 0
   }
+})
+
+const jsonBodyError = computed(() => {
+  // 无论当前在哪个模式，只要 JSON 数据非空就校验
+  const str = (state.form.jsonBody ?? '').trim()
+  if (!str) return ''
+  try {
+    JSON.parse(str)
+    return ''
+  } catch (e) {
+    return `JSON 语法错误: ${e.message}`
+  }
+})
+
+const xmlBodyError = computed(() => {
+  // 无论当前在哪个模式，只要 XML 数据非空就校验
+  const str = (state.form.xmlBody ?? '').trim()
+  if (!str) return ''
+  const doc = tryParseValidXml(str)
+  if (!doc) return 'XML 语法错误: 解析失败'
+  return ''
 })
 
 const hydrateExtractValidatorsFromSource = (cfg, original) => {
@@ -491,20 +608,30 @@ const buildConfigFromState = () => {
   let request_text = null
   let data = {}
 
-  switch (bodyType) {
-    case 'json': {
-      try {
-        data = state.form.jsonBody ? JSON.parse(state.form.jsonBody) : {}
-      } catch {
-        data = {}
-      }
-      break
+  // 始终解析 JSON（无论当前在哪个模式），用于落库到 request_body
+  const jsonStr = jsonBodyText.trim()
+  if (jsonStr) {
+    try {
+      data = JSON.parse(jsonStr)
+    } catch {
+      data = {}
     }
+  }
+
+  switch (bodyType) {
+    case 'json':
+      // JSON 模式下后端使用 request_body(data) 作为 payload，
+      // request_text 保留 XML 文本用于落库（raw 已在切换时清空 XML 或被覆盖）
+      request_text = xmlBodyText || null
+      break
     case 'xml':
+      // XML 模式下 request_text = XML 文本（payload），data = JSON dict（落库）
       request_text = xmlBodyText
       break
     case 'raw':
     default:
+      // raw 模式下 request_text = raw 文本（payload），data = JSON dict（落库）
+      // XML 已在切换 raw 模式时经用户确认后清空
       request_text = rawBodyText
       break
   }
@@ -548,28 +675,36 @@ const initFromProps = () => {
   const backendText = cfg.request_text ?? original.request_text ?? ''
   const legacyPayload = typeof cfg.request_payload === 'string' ? cfg.request_payload : ''
 
-  // 三种类型各自恢复：优先草稿字段，避免互相覆盖（对齐 HTTP jsonBody / rawBody）
+  // 三种类型各自恢复：
+  // XML：草稿 > request_text（按 < 前缀判断）> argsType=xml时的 backendText
+  // JSON：草稿 > request_body（解析后 stringify）> request_text（按 { 前缀，语法错误恢复场景）
+  // raw：草稿 > argsType=raw时的 backendText
+  const xmlRecoverable = backendText && backendText.trim().startsWith('<')
+  const jsonRecoverable = backendText && backendText.trim().startsWith('{')
+
   state.form.xmlBody = cfg.xmlBodyText != null
       ? String(cfg.xmlBodyText)
-      : (argsType === 'xml' ? (backendText || legacyPayload || '') : '')
+      : (xmlRecoverable ? backendText : (argsType === 'xml' ? (backendText || legacyPayload || '') : ''))
 
   if (cfg.jsonBodyText != null) {
     state.form.jsonBody = String(cfg.jsonBodyText)
-  } else if (argsType === 'json') {
+  } else {
+    // 无论当前在哪个模式，都从 request_body 恢复 JSON 数据
     const bodyObj = cfg.data ?? original.request_body ?? {}
     try {
       if (typeof bodyObj === 'string') {
         state.form.jsonBody = bodyObj
+      } else if (Object.keys(bodyObj || {}).length) {
+        state.form.jsonBody = JSON.stringify(bodyObj, null, 2)
+      } else if (jsonRecoverable) {
+        // request_body 为空（JSON 语法错误导致 data={}），从 request_text 恢复原始文本
+        state.form.jsonBody = backendText
       } else {
-        state.form.jsonBody = Object.keys(bodyObj || {}).length
-            ? JSON.stringify(bodyObj, null, 2)
-            : ''
+        state.form.jsonBody = ''
       }
     } catch {
       state.form.jsonBody = ''
     }
-  } else {
-    state.form.jsonBody = ''
   }
 
   state.form.rawBody = cfg.rawBodyText != null
@@ -588,12 +723,26 @@ watch(
     { immediate: true }
 )
 
-/** 仅切换类型时对当前类型排版一次（加载态对齐）；不把其它类型内容互相拷贝、不持续强制重排 */
+/** 切换模式时排版 + raw 模式冲突处理 */
 watch(
     () => state.form.bodyType,
     (type, prev) => {
       if (props.readonly) return
       if (prev == null || prev === type) return
+
+      // 切换到 raw 模式时，若已有 XML 数据，弹窗确认是否清空
+      if (type === 'raw' && prev !== 'raw') {
+        const xmlStr = (state.form.xmlBody ?? '').trim()
+        if (xmlStr) {
+          if (window.confirm('切换到 raw 模式将清空已有 XML 数据，是否继续？')) {
+            state.form.xmlBody = ''
+          } else {
+            state.form.bodyType = prev
+            return
+          }
+        }
+      }
+
       if (type === 'xml') autoFormatXmlBody()
       else if (type === 'json') autoFormatJsonBody()
     }
@@ -632,13 +781,24 @@ watch(
     { immediate: true }
 )
 
+// 使用防抖，避免频繁触发；JSON/XML 语法错误不阻断 emit，由 steps/index.vue 统一校验拦截保存
+let emitTimer = null
 watch(
-    () => state.form,
+    () => [
+      state.form.step_name, state.form.step_desc,
+      state.form.request_project_id, state.form.request_config_name,
+      state.form.bodyType, state.form.xmlBody, state.form.jsonBody, state.form.rawBody,
+      state.form.data_source_name, state.form.data_source_desc,
+      state.form.extract_variables, state.form.assert_validators
+    ],
     () => {
       if (props.readonly) return
-      emit('update:config', buildConfigFromState())
+      if (emitTimer) clearTimeout(emitTimer)
+      emitTimer = setTimeout(() => {
+        emit('update:config', buildConfigFromState())
+      }, 300)
     },
-    { deep: true }
+    {deep: true}
 )
 
 /* =================== Debug（与 AutoTestTcpDebugRequest 一致，仅传 schema 所需字段） =================== */
@@ -647,9 +807,273 @@ const debugLoading = ref(false)
 const responseCardCollapsed = ref(false)
 const toggleResponseCardCollapsed = () => { responseCardCollapsed.value = !responseCardCollapsed.value }
 
-const formatResponseData = (data) => {
-  try { return typeof data === 'string' ? data : JSON.stringify(data, null, 2) } catch { return String(data ?? '') }
-}
+// 响应类型
+const contentType = computed(() => {
+  const data = response.value?.data
+  if (data === null || data === undefined) return 'text'
+  if (typeof data === 'object') return 'application/json'
+  if (typeof data === 'string') {
+    const trimmed = data.trim()
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'application/json'
+    if (trimmed.startsWith('<') && trimmed.endsWith('>')) return 'application/xml'
+  }
+  return 'text/plain'
+})
+
+const isJsonResponse = computed(() => contentType.value.includes('json'))
+
+const responseLanguage = computed(() => {
+  const ct = contentType.value.toLowerCase()
+  if (ct.includes('json')) return 'json'
+  if (ct.includes('xml')) return 'xml'
+  return 'text'
+})
+
+// 响应格式化
+const formattedResponse = computed(() => {
+  try {
+    const data = response.value?.data
+    if (data && typeof data === 'object') {
+      return JSON.stringify(data, null, 2)
+    }
+    if (data && typeof data === 'string') {
+      try {
+        const parsed = JSON.parse(data)
+        return JSON.stringify(parsed, null, 2)
+      } catch {
+        return data
+      }
+    }
+    return String(data ?? '')
+  } catch {
+    return String(response.value?.data ?? '')
+  }
+})
+
+// 耗时标签颜色
+const durationTagType = computed(() => {
+  const d = response.value?.duration
+  if (d == null) return 'default'
+  return d >= 5000 ? 'error' : d >= 1000 ? 'warning' : 'success'
+})
+
+// 大小标签颜色
+const sizeTagType = computed(() => {
+  const s = response.value?.size
+  if (!s) return 'default'
+  const match = s.match(/^([\d.]+)\s*(KB|MB|B)$/i)
+  if (!match) return 'default'
+  const val = parseFloat(match[1])
+  const unit = match[2].toUpperCase()
+  if (unit === 'MB' || (unit === 'KB' && val > 500)) return 'warning'
+  return 'success'
+})
+
+// 请求体类型
+const requestBodyType = computed(() => {
+  const bt = response.value?.request_info?.body_type
+  if (bt) return String(bt)
+  return 'text'
+})
+
+const isJsonRequest = computed(() => {
+  const bt = requestBodyType.value.toLowerCase()
+  return bt === 'json' || bt === 'application/json'
+})
+
+const requestBodyLanguage = computed(() => {
+  const bt = requestBodyType.value.toLowerCase()
+  if (bt === 'json' || bt === 'application/json') return 'json'
+  if (bt === 'xml' || bt === 'application/xml') return 'xml'
+  return 'text'
+})
+
+// 请求体文本
+const requestBodyText = computed(() => {
+  const body = response.value?.request_info?.body
+  if (body === null || body === undefined) return ''
+  if (typeof body === 'object') return JSON.stringify(body, null, 2)
+  return String(body)
+})
+
+// 请求体 JSON 格式化
+const formattedRequestJson = computed(() => {
+  try {
+    const body = response.value?.request_info?.body
+    if (body && typeof body === 'object') {
+      return JSON.stringify(body, null, 2)
+    }
+    if (body && typeof body === 'string') {
+      try {
+        const parsed = JSON.parse(body)
+        return JSON.stringify(parsed, null, 2)
+      } catch {
+        return body
+      }
+    }
+    return String(body ?? '')
+  } catch {
+    return String(response.value?.request_info?.body ?? '')
+  }
+})
+
+// 请求体展示：JSON 格式化为字符串，非 JSON 直接展示原文
+const requestBodyDisplay = computed(() => {
+  return isJsonRequest.value ? formattedRequestJson.value : requestBodyText.value
+})
+
+// 数据提取结果表格列定义
+const extractColumns = [
+  {
+    title: '变量名',
+    key: 'name',
+    width: 120
+  },
+  {
+    title: '提取来源',
+    key: 'source',
+    width: 120,
+    render: (row) => {
+      const sourceMap = {
+        'Request Json': 'Request Json',
+        'Request Text': 'Request Text',
+        'Request XML': 'Request XML',
+        'Response Json': 'Response Json',
+        'Response Text': 'Response Text',
+        'Response XML': 'Response XML',
+      }
+      return sourceMap[row.source] || row.source
+    }
+  },
+  {
+    title: '提取范围',
+    key: 'scope',
+    width: 120,
+    render: (row) => (row.scope === 'ALL' ? '全部提取' : '部分提取')
+  },
+  {
+    title: '提取路径',
+    key: 'expr',
+    width: 120,
+    ellipsis: {tooltip: true}
+  },
+  {
+    title: '提取值',
+    key: 'extract_value',
+    width: 120,
+    ellipsis: {tooltip: true},
+    render: (row) => {
+      if (row.extract_value === null || row.extract_value === undefined) {
+        return '-'
+      }
+      const value = typeof row.extract_value === 'object'
+          ? JSON.stringify(row.extract_value)
+          : String(row.extract_value)
+      return value.length > 100 ? value.substring(0, 100) + '...' : value
+    }
+  },
+  {
+    title: '提取结果',
+    key: 'success',
+    width: 120,
+    render: (row) => {
+      return h(NTag, {
+        type: row.success ? 'success' : 'error',
+        round: true,
+        size: 'small'
+      }, {default: () => row.success ? 'pass' : 'fail'})
+    }
+  },
+  {
+    title: '错误信息',
+    key: 'error',
+    width: 120,
+    ellipsis: {tooltip: true},
+    render: (row) => row.error || '-'
+  }
+]
+
+// 断言结果表格列定义
+const validatorColumns = [
+  {
+    title: '断言名称',
+    key: 'name',
+    width: 120,
+    ellipsis: {tooltip: true}
+  },
+  {
+    title: '断言对象',
+    key: 'source',
+    width: 120,
+    render: (row) => {
+      const sourceMap = {
+        'Request Json': 'requestJson',
+        'Request Text': 'requestText',
+        'Request XML': 'requestXml',
+        'Response Json': 'responseJson',
+        'Response Text': 'responseText',
+        'Response XML': 'responseXml',
+        '变量池': '变量池'
+      }
+      return sourceMap[row.source] || row.source
+    }
+  },
+  {
+    title: '断言路径',
+    key: 'expr',
+    width: 130,
+    ellipsis: {tooltip: true}
+  },
+  {
+    title: '结果值',
+    key: 'actual_value',
+    width: 150,
+    ellipsis: {tooltip: true},
+    render: (row) => {
+      if (row.actual_value === null || row.actual_value === undefined) {
+        return '-'
+      }
+      const value = typeof row.actual_value === 'object'
+          ? JSON.stringify(row.actual_value)
+          : String(row.actual_value)
+      return value.length > 100 ? value.substring(0, 100) + '...' : value
+    }
+  },
+  {
+    title: '期望值',
+    key: 'expect_value',
+    width: 150,
+    ellipsis: {tooltip: true},
+    render: (row) => {
+      if (row.expect_value === null || row.expect_value === undefined) {
+        return '-'
+      }
+      const value = typeof row.expect_value === 'object'
+          ? JSON.stringify(row.expect_value)
+          : String(row.expect_value)
+      return value.length > 100 ? value.substring(0, 100) + '...' : value
+    }
+  },
+  {
+    title: '断言结果',
+    key: 'success',
+    width: 120,
+    render: (row) => {
+      return h(NTag, {
+        type: row.success ? 'success' : 'error',
+        round: true,
+        size: 'small'
+      }, {default: () => row.success ? 'pass' : 'fail'})
+    }
+  },
+  {
+    title: '错误信息',
+    key: 'error',
+    width: 120,
+    ellipsis: {tooltip: true},
+    render: (row) => row.error || '-'
+  }
+]
 
 const envOptions = ref([])
 const envLoading = ref(false)
@@ -699,6 +1123,16 @@ const debugging = async () => {
 }
 
 const doDebugRequest = async (env_id) => {
+  // 语法校验：JSON 或 XML 有语法错误时阻止调试
+  if (jsonBodyError.value) {
+    window.$message?.error?.(jsonBodyError.value)
+    return
+  }
+  if (xmlBodyError.value) {
+    window.$message?.error?.(xmlBodyError.value)
+    return
+  }
+
   const extractCheck = validateExtractList(buildExtractForBackend())
   if (!extractCheck.valid) {
     window.$message?.error?.(extractCheck.message)
@@ -769,13 +1203,30 @@ const doDebugRequest = async (env_id) => {
 /* 卡片壳 / 标题 / 折叠见 .step-editor-card */
 
 .card-header-row {
+  padding-right: 0;
+}
+
+.card-header-row--with-actions {
   padding-right: 220px;
 }
 
-.hint {
-  margin-top: 8px;
-  color: var(--n-text-color-3);
-  font-size: 12px;
+.debug-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px 0;
+}
+
+.response-code {
+  max-height: 400px;
+  overflow: auto;
+}
+
+.log-item {
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
 }
 
 .tcp-request-row {

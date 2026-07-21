@@ -1267,19 +1267,16 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     const argsType = ['xml', 'json', 'raw'].includes(argsTypeRaw) ? argsTypeRaw : 'xml'
     backendStep.request_args_type = argsType
 
-    if (argsType === 'json') {
-      backendStep.request_body = config.data !== undefined
-          ? (config.data || {})
-          : (original.request_body || {})
-      backendStep.request_text = null
-    } else {
-      const payloadRaw = config.request_text != null
-          ? config.request_text
-          : (original.request_text ?? null)
-      const payloadTrimmed = payloadRaw != null ? String(payloadRaw).trim() : ''
-      backendStep.request_text = payloadTrimmed !== '' ? payloadRaw : null
-      backendStep.request_body = null
-    }
+    // JSON 与 XML/Raw 数据始终双向落库，不再根据当前模式互斥丢弃
+    backendStep.request_body = config.data !== undefined
+        ? (config.data || {})
+        : (original.request_body || {})
+
+    // 发送原值：'' 表示用户清空了（后端 exclude_none 不会排除空字符串），null 表示未设置过
+    const payloadRaw = config.request_text != null
+        ? config.request_text
+        : (original.request_text ?? null)
+    backendStep.request_text = payloadRaw
 
     if (config.extract_variables !== undefined) {
       backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
@@ -2030,11 +2027,14 @@ const validateEmptyKeyInSteps = (stepList) => {
   return {valid: true}
 }
 
-// 递归校验步骤树中所有 HTTP 步骤：若请求体为 json，则校验 JSON 语法
+// 递归校验步骤树中所有 HTTP/TCP 步骤：若请求体为 json，则校验 JSON 语法
 const validateJsonBodyInSteps = (stepList) => {
   for (const step of stepList) {
+    const config = step.config || {}
+    const original = step.original || {}
+    const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
+
     if (step.type === 'http') {
-      const config = step.config || {}
       const requestArgsType = config.request_args_type ?? 'none'
       if (requestArgsType === 'json') {
         const raw = config.jsonBodyText ?? (config.data != null ? JSON.stringify(config.data) : '')
@@ -2043,14 +2043,54 @@ const validateJsonBodyInSteps = (stepList) => {
           try {
             JSON.parse(trimmed)
           } catch (e) {
-            const stepName = step.name || config.step_name || '未命名步骤'
             return {valid: false, message: e.message || 'JSON 格式错误', stepName}
           }
         }
       }
     }
+
+    if (step.type === 'tcp') {
+      const raw = config.jsonBodyText ?? ''
+      const trimmed = (raw || '').trim()
+      if (trimmed !== '') {
+        try {
+          JSON.parse(trimmed)
+        } catch (e) {
+          return {valid: false, message: e.message || 'JSON 格式错误', stepName}
+        }
+      }
+    }
+
     if (step.children && step.children.length > 0) {
       const childResult = validateJsonBodyInSteps(step.children)
+      if (!childResult.valid) return childResult
+    }
+  }
+  return {valid: true}
+}
+
+// 递归校验步骤树中所有 TCP 步骤的 XML 请求体语法
+const validateXmlBodyInSteps = (stepList) => {
+  for (const step of stepList) {
+    if (step.type === 'tcp') {
+      const config = step.config || {}
+      const original = step.original || {}
+      const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
+      const raw = config.xmlBodyText ?? ''
+      const trimmed = (raw || '').trim()
+      if (trimmed !== '') {
+        const doc = new DOMParser().parseFromString(trimmed, 'text/xml')
+        const pe = doc.querySelector('parsererror')
+        if (pe && String(pe.textContent || '').trim()) {
+          return {valid: false, message: 'XML 语法错误', stepName}
+        }
+        if (!doc.documentElement) {
+          return {valid: false, message: 'XML 语法错误', stepName}
+        }
+      }
+    }
+    if (step.children && step.children.length > 0) {
+      const childResult = validateXmlBodyInSteps(step.children)
       if (!childResult.valid) return childResult
     }
   }
@@ -2117,6 +2157,15 @@ const handleSaveAll = async () => {
     if (!jsonValidation.valid) {
       window.$message?.error?.(
           `步骤：${jsonValidation.stepName}，请求体JSON格式错误，请修正后再保存`
+      )
+      return
+    }
+
+    // 请求体为 xml 时校验 XML 语法，有错误则提示并阻止保存
+    const xmlValidation = validateXmlBodyInSteps(steps.value)
+    if (!xmlValidation.valid) {
+      window.$message?.error?.(
+          `步骤：${xmlValidation.stepName}，请求体XML格式错误，请修正后再保存`
       )
       return
     }

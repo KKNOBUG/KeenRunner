@@ -894,10 +894,10 @@ async def debug_tcp_request(
         request_text: Optional[str] = step_data.request_text
         request_body: Any = step_data.request_body
 
-        session_variables: List[StepVariablesBase] = step_data.session_variables
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables
-        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators
+        session_variables: List[StepVariablesBase] = step_data.session_variables or []
+        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
+        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
+        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
 
         # 合并变量池（同 HTTP 调试）
         merge_all_variables: Dict[str, Any] = {}
