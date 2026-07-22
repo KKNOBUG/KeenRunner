@@ -273,15 +273,28 @@ async def query_case_name(
     """
     案例数据场景查询。
 
+    合并当前用例下所有数据源的 dataset_names，去重并保持出现顺序。
+
     :param case_id: 用例主键 ID
     :param services: 自动化测试 CRUD 依赖聚合
     :return: 统一 HTTP 响应
     """
-    instance = await services.data_source_curd.get_by_case_id(case_id=case_id)
-    if not instance:
-        return FailureResponse(message="ID对应场景不存在")
+    if not case_id:
+        return ParameterResponse(message="查询失败, 参数(case_id)不允许为空")
 
-    return SuccessResponse(message="查询数据源成功", data=instance.dataset_names)
+    data_source_instances = await services.data_source_curd.model.filter(case_id=case_id, state__not=1).order_by("created_time").all()
+
+    merged_names: List[str] = []
+    seen: Set[str] = set()
+    for ds in data_source_instances:
+        if isinstance(ds.dataset_names, list):
+            for name in ds.dataset_names:
+                name_str = str(name).strip()
+                if name_str and name_str not in seen:
+                    seen.add(name_str)
+                    merged_names.append(name_str)
+
+    return SuccessResponse(message="查询数据源成功", data=merged_names)
 
 
 @autotest_data_source.post("/search", summary="API自动化测试-按条件分页查询数据源")

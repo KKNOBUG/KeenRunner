@@ -13,6 +13,8 @@ import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
  *   - columns: 表头数组，第 0 项为第一列表头（通常留空），其余为场景列名
  *   - readonly: 是否只读
  *   - options: 透传给 luckysheet 的额外配置
+ *   - protectedRowKeywords: 关键字数组，若某行第 0 列匹配其中一项，
+ *     则该行整体置灰且只读（不可编辑/粘贴）。
  *
  * Expose:
  *   - getData(): 获取当前 sheet 的 celldata 二维数组
@@ -26,6 +28,7 @@ const props = defineProps({
   columns: {type: Array, default: () => []},
   readonly: {type: Boolean, default: false},
   options: {type: Object, default: () => ({})},
+  protectedRowKeywords: {type: Array, default: () => []},
 })
 
 const emit = defineEmits(['change'])
@@ -95,28 +98,58 @@ const loadStyles = () => {
   })
 }
 
+const PROTECTED_ROW_BG = '#f0f0f0'
+
 const buildLuckysheetData = () => {
   const celldata = []
   const columns = Array.isArray(props.columns) ? props.columns : []
+  const dataRows = Array.isArray(props.data) ? props.data : []
+  const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
+  const keywordSet = new Set(keywords.map((k) => String(k).trim().toUpperCase()))
 
   // 第一行：表头
   columns.forEach((col, c) => {
     const value = col == null ? '' : String(col)
-    celldata.push({r: 0, c, v: {ct: {fa: 'General', t: 'g'}, m: value, v: value}})
+    celldata.push({r: 0, c, v: {ct: {fa: 'General', t: 'g'}, m: value, v: value, ht: 0, vt: 0}})
   })
 
   // 数据行
-  const dataRows = Array.isArray(props.data) ? props.data : []
   dataRows.forEach((row, r) => {
     const rowIndex = r + 1
     const rowArr = Array.isArray(row) ? row : []
-    rowArr.forEach((cell, c) => {
-      const value = cell == null ? '' : String(cell)
-      celldata.push({r: rowIndex, c, v: {ct: {fa: 'General', t: 'g'}, m: value, v: value}})
-    })
+    const firstValue = rowArr[0] == null ? '' : String(rowArr[0]).trim().toUpperCase()
+    const isProtected = keywordSet.has(firstValue)
+    const numCols = Math.max(columns.length, rowArr.length)
+
+    for (let c = 0; c < numCols; c++) {
+      const cellValue = rowArr[c] == null ? '' : String(rowArr[c])
+      // 非保护行跳过空单元格，保护行则生成全部列以应用置灰样式
+      if (cellValue === '' && !isProtected) continue
+
+      const cellObj = {ct: {fa: 'General', t: 'g'}, m: cellValue, v: cellValue, ht: 0, vt: 0}
+      if (isProtected) {
+        cellObj.bg = PROTECTED_ROW_BG
+        cellObj.bl = 1
+      }
+      celldata.push({r: rowIndex, c, v: cellObj})
+    }
   })
 
   return celldata
+}
+
+const isProtectedRow = (rowIndex) => {
+  const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
+  if (!keywords.length || !luckysheetRef.value || !isReady.value) return false
+  try {
+    const sheetData = luckysheetRef.value.getSheetData() || []
+    const cell = sheetData[rowIndex]?.[0]
+    if (!cell) return false
+    const value = String(cell.v ?? cell.m ?? '').trim().toUpperCase()
+    return keywords.some((kw) => String(kw).trim().toUpperCase() === value)
+  } catch (_) {
+    return false
+  }
 }
 
 const initLuckysheet = async () => {
@@ -160,6 +193,19 @@ const initLuckysheet = async () => {
     hook: {
       cellUpdated: () => {
         emit('change')
+      },
+      cellUpdateBefore: (row, col, value, isRefresh) => {
+        if (isProtectedRow(row)) return false
+      },
+      rangePasteBefore: (selectSave) => {
+        if (!selectSave || !Array.isArray(selectSave)) return true
+        for (const sel of selectSave) {
+          if (!sel || !sel.row || !Array.isArray(sel.row)) continue
+          for (let r = sel.row[0]; r <= sel.row[1]; r++) {
+            if (isProtectedRow(r)) return false
+          }
+        }
+        return true
       },
       cellDeleteBefore: () => {
         if (props.readonly) return false
@@ -233,16 +279,28 @@ const getDataForSave = () => {
     if (!hasHeader && !hasData) blankCols.add(c)
   }
 
-  // 清理完全空白的行（排除第一列）
-  const filteredRows = dataRows.filter((row) => {
-    for (let c = 1; c < row.length; c++) {
-      if (blankCols.has(c)) continue
-      if (row[c] != null && String(row[c]).trim() !== '') return true
-    }
-    return false
-  })
+  // 清理完全空白的行，并将行列投影到保留列（移除空白列而非标记 null）
+  const keepCols = []
+  for (let c = 0; c < headers.length; c++) {
+    if (!blankCols.has(c)) keepCols.push(c)
+  }
 
-  const filteredHeaders = headers.map((h, c) => (blankCols.has(c) ? null : h))
+  const filteredRows = dataRows
+      .filter((row) => {
+        for (const c of keepCols) {
+          if (row[c] != null && String(row[c]).trim() !== '') return true
+        }
+        return false
+      })
+      .map((row) => keepCols.map((c) => {
+        const v = row[c]
+        return v == null ? '' : String(v)
+      }))
+
+  const filteredHeaders = keepCols.map((c) => {
+    const h = headers[c]
+    return h == null ? '' : h
+  })
 
   return {headers: filteredHeaders, rows: filteredRows}
 }

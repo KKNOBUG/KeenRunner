@@ -89,6 +89,7 @@
                     :data="sheetData"
                     :columns="sheetColumns"
                     :readonly="props.readonly"
+                    :protectedRowKeywords="FIXED_KEYWORDS"
                     @change="onSheetChange"
                 />
               </div>
@@ -289,12 +290,38 @@ const loadStepDataframePreview = async () => {
   lastStepContext.value = ctx
   const { caseId, stepId, stepCode } = ctx
 
-  if (!caseId || !stepId || !stepCode) {
+  if (!caseId) {
     const { headers, data } = buildBlankTemplate()
     sheetColumns.value = headers
     sheetData.value = data
     hasDbRecord.value = false
     isDirty.value = false
+    return
+  }
+
+  // 新增步骤尚未保存（无 stepId/stepCode）：仍查询当前用例下已落库数据源的场景列名，
+  // 填充到空白模板列上，便于用户直接在已有场景列上录入数据
+  if (!stepId || !stepCode) {
+    isLoading.value = true
+    try {
+      const res = await api.getSceneNamesByCase({ case_id: caseId })
+      const scenes = Array.isArray(res?.data?.data_source_scene_name_set)
+          ? res.data.data_source_scene_name_set
+          : []
+      const { headers, data } = buildBlankTemplate(scenes)
+      sheetColumns.value = headers
+      sheetData.value = data
+      hasDbRecord.value = false
+      isDirty.value = false
+    } catch (_) {
+      const { headers, data } = buildBlankTemplate()
+      sheetColumns.value = headers
+      sheetData.value = data
+      hasDbRecord.value = false
+      isDirty.value = false
+    } finally {
+      isLoading.value = false
+    }
     return
   }
 

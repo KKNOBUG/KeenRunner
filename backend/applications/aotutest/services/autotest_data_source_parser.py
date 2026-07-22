@@ -200,15 +200,26 @@ def _cell_is_blank(value: Any) -> bool:
 
 
 def _dataframe_to_matrix(df: pd.DataFrame) -> Union[List[Any], object]:
-    """将 DataFrame 转为二维矩阵（NaN/NaT/Inf 置为 None），剔除子项全为空白(None/NaN/空串)的行。"""
+    """将 DataFrame 转为二维矩阵（NaN/NaT/Inf 置为 None），剔除子项全为空白(None/NaN/空串)的行与列。"""
     if df is None or df.empty:
         return []
     safe_df = df.where(pd.notna(df), None)
+    col_count = len(safe_df.columns)
+
+    # 剔除全空白列（第 0 列始终保留）
+    blank_cols: Set[int] = set()
+    for col_idx in range(1, col_count):
+        col_values = safe_df.iloc[:, col_idx]
+        if all(_cell_is_blank(json_safe_value(c)) for c in col_values):
+            blank_cols.add(col_idx)
+    keep_cols = [i for i in range(col_count) if i not in blank_cols]
+
     rows: List[List[Any]] = []
     for row in safe_df.values.tolist():
         cleaned = [json_safe_value(c) for c in row]
-        if not all(_cell_is_blank(c) for c in cleaned):
-            rows.append(cleaned)
+        projected = [cleaned[i] for i in keep_cols]
+        if not all(_cell_is_blank(c) for c in projected):
+            rows.append(projected)
     return rows
 
 
