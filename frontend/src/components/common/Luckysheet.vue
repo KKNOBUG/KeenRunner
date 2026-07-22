@@ -1,0 +1,305 @@
+<template>
+  <div :id="containerId" class="luckysheet-container"/>
+</template>
+
+<script setup>
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+
+/**
+ * Luckysheet Vue3 封装组件
+ *
+ * Props:
+ *   - data: 二维数组，每个元素为单元格值或 null
+ *   - columns: 表头数组，第 0 项为第一列表头（通常留空），其余为场景列名
+ *   - readonly: 是否只读
+ *   - options: 透传给 luckysheet 的额外配置
+ *
+ * Expose:
+ *   - getData(): 获取当前 sheet 的 celldata 二维数组
+ *   - getDataForSave(): 获取去除了空行列后的干净二维数组
+ *   - setData(data, columns): 重置表格数据与列头
+ *   - getLuckysheet(): 返回 luckysheet 实例（全局对象）
+ */
+
+const props = defineProps({
+  data: {type: Array, default: () => []},
+  columns: {type: Array, default: () => []},
+  readonly: {type: Boolean, default: false},
+  options: {type: Object, default: () => ({})},
+})
+
+const emit = defineEmits(['change'])
+
+const containerId = computed(() => `luckysheet-container-${Math.random().toString(36).slice(2, 10)}`)
+const luckysheetRef = ref(null)
+const isReady = ref(false)
+const isInitializing = ref(false)
+
+const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+const LUCKYSHEET_BASE = import.meta.env.DEV
+    ? '/node_modules/luckysheet/dist'
+    : `${baseUrl}/luckysheet`
+const JQUERY_URL = import.meta.env.DEV
+    ? '/node_modules/jquery/dist/jquery.min.js'
+    : `${baseUrl}/luckysheet/jquery.min.js`
+const LUCKYSHEET_PLUGIN_URL = import.meta.env.DEV
+    ? '/node_modules/luckysheet/dist/plugins/js/plugin.js'
+    : `${baseUrl}/luckysheet/plugins/js/plugin.js`
+
+const loadScript = (src) =>
+    new Promise((resolve, reject) => {
+      if (typeof document === 'undefined') return resolve()
+      const existing = document.querySelector(`script[src="${src}"]`)
+      if (existing) {
+        existing.addEventListener('load', () => resolve())
+        if (window.luckysheet) resolve()
+        return
+      }
+      const script = document.createElement('script')
+      script.src = src
+      script.async = true
+      script.onload = () => resolve()
+      script.onerror = (e) => reject(e)
+      document.body.appendChild(script)
+    })
+
+const loadLuckysheet = async () => {
+  if (typeof window === 'undefined') return null
+  if (window.luckysheet && typeof window.luckysheet.create === 'function') {
+    return window.luckysheet
+  }
+  await loadScript(JQUERY_URL)
+  await loadScript(LUCKYSHEET_PLUGIN_URL)
+  await loadScript(`${LUCKYSHEET_BASE}/luckysheet.umd.js`)
+  if (window.luckysheet && typeof window.luckysheet.create === 'function') {
+    return window.luckysheet
+  }
+  throw new Error('Luckysheet UMD 加载失败，未找到 window.luckysheet.create')
+}
+
+const loadStyles = () => {
+  if (typeof document === 'undefined') return
+  const styles = [
+    { id: 'luckysheet-plugins-css', url: `${LUCKYSHEET_BASE}/plugins/css/pluginsCss.css` },
+    { id: 'luckysheet-plugins2-css', url: `${LUCKYSHEET_BASE}/plugins/plugins.css` },
+    { id: 'luckysheet-css', url: `${LUCKYSHEET_BASE}/css/luckysheet.css` },
+    { id: 'luckysheet-iconfont-css', url: `${LUCKYSHEET_BASE}/assets/iconfont/iconfont.css` },
+  ]
+  styles.forEach(({ id, url }) => {
+    if (document.getElementById(id)) return
+    const link = document.createElement('link')
+    link.id = id
+    link.rel = 'stylesheet'
+    link.href = url
+    document.head.appendChild(link)
+  })
+}
+
+const buildLuckysheetData = () => {
+  const celldata = []
+  const columns = Array.isArray(props.columns) ? props.columns : []
+
+  // 第一行：表头
+  columns.forEach((col, c) => {
+    const value = col == null ? '' : String(col)
+    celldata.push({r: 0, c, v: {ct: {fa: 'General', t: 'g'}, m: value, v: value}})
+  })
+
+  // 数据行
+  const dataRows = Array.isArray(props.data) ? props.data : []
+  dataRows.forEach((row, r) => {
+    const rowIndex = r + 1
+    const rowArr = Array.isArray(row) ? row : []
+    rowArr.forEach((cell, c) => {
+      const value = cell == null ? '' : String(cell)
+      celldata.push({r: rowIndex, c, v: {ct: {fa: 'General', t: 'g'}, m: value, v: value}})
+    })
+  })
+
+  return celldata
+}
+
+const initLuckysheet = async () => {
+  if (isInitializing.value) return
+  isInitializing.value = true
+  try {
+    const luckysheet = await loadLuckysheet()
+    if (!luckysheet) return
+
+    loadStyles()
+    luckysheetRef.value = luckysheet
+
+    const config = {
+    container: containerId.value,
+    title: '',
+    lang: 'zh',
+    showtoolbar: !props.readonly,
+    showinfobar: false,
+    sheetFormulaBar: !props.readonly,
+    showsheetbar: false,
+    showstatisticBar: false,
+    enableAddRow: !props.readonly,
+    enableAddCol: !props.readonly,
+    rowHeaderWidth: 40,
+    columnHeaderHeight: 28,
+    defaultColWidth: 150,
+    defaultRowHeight: 28,
+    data: [
+      {
+        name: '数据源',
+        color: '',
+        status: 1,
+        order: 0,
+        celldata: buildLuckysheetData(),
+        config: {
+          columnlen: {},
+          rowlen: {},
+        },
+      },
+    ],
+    hook: {
+      cellUpdated: () => {
+        emit('change')
+      },
+      cellDeleteBefore: () => {
+        if (props.readonly) return false
+      },
+    },
+    ...props.options,
+  }
+
+    luckysheet.create(config)
+    isReady.value = true
+  } catch (e) {
+    console.error('[Luckysheet] create failed:', e)
+    throw e
+  } finally {
+    isInitializing.value = false
+  }
+}
+
+const destroyLuckysheet = () => {
+  if (!luckysheetRef.value) return
+  try {
+    if (typeof luckysheetRef.value.destroy === 'function') {
+      luckysheetRef.value.destroy()
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  luckysheetRef.value = null
+  isReady.value = false
+}
+
+const getSheetData = () => {
+  if (!luckysheetRef.value || !isReady.value) return []
+  try {
+    return luckysheetRef.value.getSheetData() || []
+  } catch (_) {
+    return []
+  }
+}
+
+const getData = () => {
+  const sheetData = getSheetData()
+  const rows = sheetData.length
+  if (rows === 0) return []
+  const cols = Math.max(...sheetData.map((row) => (Array.isArray(row) ? row.length : 0)))
+  const result = []
+  for (let r = 0; r < rows; r++) {
+    const row = []
+    for (let c = 0; c < cols; c++) {
+      const cell = sheetData[r]?.[c]
+      row.push(cell?.v ?? cell?.m ?? '')
+    }
+    result.push(row)
+  }
+  return result
+}
+
+const getDataForSave = () => {
+  const raw = getData()
+  if (!raw.length) return {headers: [], rows: []}
+
+  // 第一行视为表头
+  const headers = raw[0].map((h) => (h == null || h === '' ? null : String(h)))
+  const dataRows = raw.slice(1)
+
+  // 清理完全空白的列（排除第一列）
+  const blankCols = new Set()
+  for (let c = 1; c < headers.length; c++) {
+    const hasHeader = headers[c] != null
+    const hasData = dataRows.some((row) => row[c] != null && String(row[c]).trim() !== '')
+    if (!hasHeader && !hasData) blankCols.add(c)
+  }
+
+  // 清理完全空白的行（排除第一列）
+  const filteredRows = dataRows.filter((row) => {
+    for (let c = 1; c < row.length; c++) {
+      if (blankCols.has(c)) continue
+      if (row[c] != null && String(row[c]).trim() !== '') return true
+    }
+    return false
+  })
+
+  const filteredHeaders = headers.map((h, c) => (blankCols.has(c) ? null : h))
+
+  return {headers: filteredHeaders, rows: filteredRows}
+}
+
+const setData = async (data, columns) => {
+  if (isInitializing.value) {
+    // 等待当前初始化完成后再重建，避免并发破坏实例状态
+    await new Promise((resolve) => {
+      const stop = watch(isInitializing, (v) => {
+        if (!v) {
+          stop()
+          resolve()
+        }
+      })
+    })
+  }
+  destroyLuckysheet()
+  const el = document.getElementById(containerId.value)
+  if (el) el.innerHTML = ''
+  await initLuckysheet()
+}
+
+const getLuckysheet = () => luckysheetRef.value
+
+watch(
+    () => [props.data, props.columns],
+    () => {
+      if (isReady.value) {
+        setData(props.data, props.columns)
+      }
+    },
+    {deep: true}
+)
+
+onMounted(() => {
+  initLuckysheet()
+})
+
+onUnmounted(() => {
+  destroyLuckysheet()
+})
+
+defineExpose({
+  getData,
+  getDataForSave,
+  setData,
+  getLuckysheet,
+  isReady,
+})
+</script>
+
+<style scoped>
+.luckysheet-container {
+  width: 100%;
+  min-height: 360px;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+</style>

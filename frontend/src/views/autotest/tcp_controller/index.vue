@@ -169,6 +169,7 @@
       :readonly="props.readonly"
       :step-name="state.form.step_name"
       step-type-label="TCP请求"
+      v-model:data-source-id="state.form.data_source_id"
       v-model:data-source-name="state.form.data_source_name"
       v-model:data-source-desc="state.form.data_source_desc"
   />
@@ -396,6 +397,7 @@ const state = reactive({
     xmlBody: '',
     jsonBody: '',
     rawBody: '',
+    data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
     extract_variables: {},
@@ -652,6 +654,7 @@ const buildConfigFromState = () => {
     xmlBodyText,
     jsonBodyText,
     rawBodyText,
+    data_source_id: state.form.data_source_id ?? null,
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
     extract_variables: buildExtractForBackend(),
@@ -666,6 +669,7 @@ const initFromProps = () => {
   state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
   state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
+  state.form.data_source_id = cfg.data_source_id ?? original.data_source_id ?? null
   state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
   state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
 
@@ -788,7 +792,7 @@ watch(
       state.form.step_name, state.form.step_desc,
       state.form.request_project_id, state.form.request_config_name,
       state.form.bodyType, state.form.xmlBody, state.form.jsonBody, state.form.rawBody,
-      state.form.data_source_name, state.form.data_source_desc,
+      state.form.data_source_id, state.form.data_source_name, state.form.data_source_desc,
       state.form.extract_variables, state.form.assert_validators
     ],
     () => {

@@ -285,6 +285,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     loop_iterable: Optional[str] = Field(None, max_length=512, description="循环对象来源(变量名或可迭代对象)")
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
     loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
+    data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
     data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
     conditions: Optional[ConditionsBase] = Field(None, description="判断条件(循环结构或条件分支)")

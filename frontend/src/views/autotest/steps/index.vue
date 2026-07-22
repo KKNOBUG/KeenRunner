@@ -1294,6 +1294,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
       backendStep.assert_validators = null
     }
 
+    backendStep.data_source_id = config.data_source_id !== undefined
+        ? (config.data_source_id || null)
+        : (original.data_source_id || null)
     backendStep.data_source_name = config.data_source_name !== undefined
         ? (config.data_source_name || null)
         : (original.data_source_name || null)
@@ -1315,6 +1318,9 @@ const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
     backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
     backendStep.request_form_urlencoded = filterKeyValueList(Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : []))
     backendStep.request_body = config.data || original.request_body || {}
+    backendStep.data_source_id = config.data_source_id !== undefined
+        ? (config.data_source_id || null)
+        : (original.data_source_id || null)
     backendStep.data_source_name = config.data_source_name !== undefined
         ? (config.data_source_name || null)
         : (original.data_source_name || null)

@@ -265,6 +265,7 @@
       :readonly="props.readonly"
       :step-name="state.form.step_name"
       step-type-label="HTTP请求"
+      v-model:data-source-id="state.form.data_source_id"
       v-model:data-source-name="state.form.data_source_name"
       v-model:data-source-desc="state.form.data_source_desc"
   />
@@ -663,6 +664,7 @@ const state = reactive({
     description: '',
     request_project_id: null, // 请求项目ID（与 request_args_type 等一致，从 form 读写；无 UI 时由 init 从 config/original 带入）
     request_config_name: null, // 与 /autotest/config/config_names 中 api 类配置名一致
+    data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
     defined_variables: [],
@@ -715,6 +717,7 @@ const initFromConfig = () => {
   state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
   state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
   state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
+  state.form.data_source_id = cfg.data_source_id ?? original.data_source_id ?? null
   state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
   state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
 
@@ -910,6 +913,7 @@ const buildConfigFromState = () => {
     request_config_name: state.form.request_config_name != null && String(state.form.request_config_name).trim() !== ''
         ? String(state.form.request_config_name).trim()
         : null,
+    data_source_id: state.form.data_source_id ?? null,
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
     data,
@@ -932,7 +936,7 @@ watch(
       state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
       state.form.jsonBody, state.form.rawBody, state.form.request_project_id,
       state.form.request_config_name,
-      state.form.data_source_name, state.form.data_source_desc,
+      state.form.data_source_id, state.form.data_source_name, state.form.data_source_desc,
       state.form.defined_variables, state.form.extract_variables, state.form.assert_validators
     ],
     () => {

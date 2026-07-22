@@ -244,6 +244,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
 
     # 数据源相关
+    data_source_id = fields.BigIntField(null=True, index=True, description="数据源ID")
     data_source_name = fields.CharField(max_length=2048, null=True, description="数据源名称")
     data_source_desc = fields.CharField(max_length=2048, null=True, description="数据源描述")
 

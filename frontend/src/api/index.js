@@ -191,6 +191,7 @@ export default {
 
   // 数据源（HTTP/TCP 请求步骤）
   getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
+  getSceneNamesByCase: (params = {}) => request.get('/autotest/data_source/scene_names_by_case', { params }),
   /** Form：case_id */
   queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),
   updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),

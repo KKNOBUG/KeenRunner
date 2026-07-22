@@ -11,7 +11,7 @@ import io
 import os.path
 import traceback
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from urllib.parse import quote
 
 import pandas as pd
@@ -80,6 +80,7 @@ async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[st
 async def _sync_step_data_source_meta(
         case_id: int,
         step_code: str,
+        data_source_id: Optional[int],
         file_name: Optional[str],
         file_desc: Optional[str],
 ) -> None:
@@ -91,6 +92,7 @@ async def _sync_step_data_source_meta(
             step_code=step_code,
             state=0,
         ).update(
+            data_source_id=data_source_id,
             data_source_name=(file_name or "")[:2048] or None,
             data_source_desc=(file_desc or "")[:2048] or None,
         )
@@ -362,6 +364,103 @@ async def get_data_source_by_case_step(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
+@autotest_data_source.get("/scene_names_by_case", summary="API自动化测试-按用例查询已落库数据源场景列名")
+async def get_scene_names_by_case(
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    返回当前用例下所有已落库数据源的场景列名信息，用于无数据源绑定步骤生成空白模板。
+
+    :param case_id: 用例主键 ID
+    :param case_code: 用例标识代码
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
+    try:
+        if not case_id and not (case_code or "").strip():
+            return ParameterResponse(message="查询失败, 参数(case_id或case_code)必须二选一传递")
+
+        # 定位用例，优先使用 case_id
+        effective_case_id: Optional[int] = case_id
+        if not effective_case_id and (case_code or "").strip():
+            case_instance = await services.case_curd.get_by_code(
+                case_code=case_code.strip(),
+                on_error=False,
+                state__not=1,
+            )
+            effective_case_id = case_instance.id if case_instance else None
+
+        if not effective_case_id:
+            return NotFoundResponse(message="未找到对应用例信息")
+
+        # 查询该用例下所有未软删的数据源
+        data_source_instances = await services.data_source_curd.get_by_case_step(
+            case_id=effective_case_id,
+            on_error=False,
+        )
+        if not isinstance(data_source_instances, list):
+            data_source_instances = [data_source_instances] if data_source_instances else []
+
+        # 预查步骤信息（step_id -> {step_no, step_name}）
+        step_ids = [ds.step_id for ds in data_source_instances if ds.step_id]
+        step_map: Dict[int, Dict[str, Any]] = {}
+        if step_ids:
+            step_models = await services.step_curd.model.filter(
+                id__in=step_ids,
+                state__not=1,
+            ).all()
+            step_map = {
+                sm.id: {
+                    "step_no": sm.step_no,
+                    "step_name": sm.step_name,
+                }
+                for sm in step_models
+            }
+
+        data_source_info: List[Dict[str, Any]] = []
+        seen_scenes: List[str] = []
+        seen_set: Set[str] = set()
+
+        for ds in data_source_instances:
+            if not ds or ds.state == 1:
+                continue
+            scene_names = []
+            if isinstance(ds.dataset_names, list):
+                for name in ds.dataset_names:
+                    name_str = str(name).strip()
+                    if not name_str:
+                        continue
+                    scene_names.append(name_str)
+                    if name_str not in seen_set:
+                        seen_set.add(name_str)
+                        seen_scenes.append(name_str)
+
+            step_meta = step_map.get(ds.step_id) or {}
+            data_source_info.append({
+                "step_id": str(ds.step_id) if ds.step_id else None,
+                "step_no": str(step_meta.get("step_no", "")) if step_meta.get("step_no") is not None else None,
+                "step_name": step_meta.get("step_name") or None,
+                "data_source_scene_names": scene_names,
+            })
+
+        return SuccessResponse(
+            message="查询成功",
+            data={
+                "case_id": effective_case_id,
+                "data_source_info": data_source_info,
+                "data_source_scene_name_set": seen_scenes,
+            },
+            total=len(data_source_info),
+        )
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按用例查询数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
 @autotest_data_source.get("/export_xlsx", summary="API自动化测试-按用例步骤导出数据源xlsx")
 async def export_data_source_xlsx(
         case_id: int = Query(..., description="用例ID"),
@@ -562,6 +661,7 @@ async def single_step_dataset_upload(
     await _sync_step_data_source_meta(
         case_id=case_id,
         step_code=step_code,
+        data_source_id=instance.id,
         file_name=file_name,
         file_desc=file_desc,
     )
@@ -694,6 +794,7 @@ async def batch_step_dataset_upload(
             await _sync_step_data_source_meta(
                 case_id=case_id,
                 step_code=step_code,
+                data_source_id=instance.id,
                 file_name=file_name,
                 file_desc=file_desc,
             )
