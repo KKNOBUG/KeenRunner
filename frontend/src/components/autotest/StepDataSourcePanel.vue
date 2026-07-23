@@ -458,6 +458,9 @@ const importLoading = ref(false)
 const exportLoading = ref(false)
 
 const dataSourceMoreOptions = computed(() => [
+  { label: '撤销', key: 'undo', disabled: props.readonly },
+  { label: '重做', key: 'redo', disabled: props.readonly },
+  { type: 'divider', key: 'd1' },
   { label: '导入模板下载', key: 'downloadTemplate', disabled: props.readonly || downloadTemplateLoading.value },
   { label: '导入', key: 'import', disabled: props.readonly || importLoading.value },
   { label: '导出', key: 'export', disabled: props.readonly || exportLoading.value },
@@ -465,7 +468,9 @@ const dataSourceMoreOptions = computed(() => [
 ])
 
 const onDataSourceMoreSelect = (key) => {
-  if (key === 'downloadTemplate') downloadStepDataTemplate()
+  if (key === 'undo') luckysheetRef.value?.getLuckysheet()?.undo?.()
+  else if (key === 'redo') luckysheetRef.value?.getLuckysheet()?.redo?.()
+  else if (key === 'downloadTemplate') downloadStepDataTemplate()
   else if (key === 'import') openImport()
   else if (key === 'export') dataSourceExport()
   else if (key === 'save') dataSourceSave()
