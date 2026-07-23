@@ -31,7 +31,7 @@ const props = defineProps({
   protectedRowKeywords: {type: Array, default: () => []},
 })
 
-const emit = defineEmits(['change'])
+const emit = defineEmits(['change', 'protectedAction'])
 
 const containerId = computed(() => `luckysheet-container-${Math.random().toString(36).slice(2, 10)}`)
 const luckysheetRef = ref(null)
@@ -152,6 +152,81 @@ const isProtectedRow = (rowIndex) => {
   }
 }
 
+const hasProtectedRowInSelection = () => {
+  if (!luckysheetRef.value || !isReady.value) return false
+  const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
+  if (!keywords.length) return false
+  try {
+    const selections = luckysheetRef.value.getluckysheet_select_save() || []
+    for (const sel of selections) {
+      if (!sel || !sel.row || !Array.isArray(sel.row)) continue
+      for (let r = sel.row[0]; r <= sel.row[1]; r++) {
+        if (isProtectedRow(r)) return true
+      }
+    }
+  } catch (_) {}
+  return false
+}
+
+const isSelectionColumnWide = () => {
+  if (!luckysheetRef.value || !isReady.value) return false
+  try {
+    const sheetData = luckysheetRef.value.getSheetData() || []
+    const totalRows = sheetData.length
+    if (totalRows === 0) return false
+    const selections = luckysheetRef.value.getluckysheet_select_save() || []
+    for (const sel of selections) {
+      if (!sel || !sel.row || !Array.isArray(sel.row)) continue
+      if (sel.row[0] === 0 && sel.row[1] >= totalRows - 1) return true
+    }
+  } catch (_) {}
+  return false
+}
+
+let deletionProtectionCleanup = []
+
+const setupDeletionProtection = () => {
+  deletionProtectionCleanup.forEach((fn) => fn())
+  deletionProtectionCleanup = []
+  if (typeof document === 'undefined') return
+  if (!Array.isArray(props.protectedRowKeywords) || !props.protectedRowKeywords.length) return
+
+  const shouldBlock = () => hasProtectedRowInSelection() && !isSelectionColumnWide()
+  const interceptClick = (e) => {
+    if (shouldBlock()) {
+      e.stopImmediatePropagation()
+      e.preventDefault()
+      emit('protectedAction', 'delete')
+    }
+  }
+  const interceptKeydown = (e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && shouldBlock()) {
+      e.stopImmediatePropagation()
+      e.preventDefault()
+      emit('protectedAction', 'delete')
+    }
+  }
+
+  const delBtnIds = [
+    'luckysheet-del-selected',
+    'luckysheet-del-selected_t',
+    'luckysheet-delRows',
+    'luckysheet-delCellsMoveUp',
+  ]
+  delBtnIds.forEach((id) => {
+    const btn = document.getElementById(id)
+    if (!btn) return
+    btn.addEventListener('click', interceptClick, true)
+    deletionProtectionCleanup.push(() => btn.removeEventListener('click', interceptClick, true))
+  })
+
+  const container = document.getElementById(containerId.value)
+  if (container) {
+    container.addEventListener('keydown', interceptKeydown, true)
+    deletionProtectionCleanup.push(() => container.removeEventListener('keydown', interceptKeydown, true))
+  }
+}
+
 const initLuckysheet = async () => {
   if (isInitializing.value) return
   isInitializing.value = true
@@ -216,6 +291,7 @@ const initLuckysheet = async () => {
 
     luckysheet.create(config)
     isReady.value = true
+    setupDeletionProtection()
   } catch (e) {
     console.error('[Luckysheet] create failed:', e)
     throw e
@@ -225,6 +301,8 @@ const initLuckysheet = async () => {
 }
 
 const destroyLuckysheet = () => {
+  deletionProtectionCleanup.forEach((fn) => fn())
+  deletionProtectionCleanup = []
   if (!luckysheetRef.value) return
   try {
     if (typeof luckysheetRef.value.destroy === 'function') {

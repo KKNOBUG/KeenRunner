@@ -195,6 +195,7 @@ export default {
   /** Form：case_id */
   queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),
   updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),
+  saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
   uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
   exportDataSourceXlsx: (params = {}) => axios.get(
       `${import.meta.env.VITE_BASE_API}/autotest/data_source/export_xlsx`,

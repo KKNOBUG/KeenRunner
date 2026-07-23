@@ -350,6 +350,45 @@ async def batch_update_steps_tree(
             LOGGER.error(error_message)
             return BadReqResponse(message=f"步骤树结构校验失败", data=error_msg)
 
+        # 1.5 校验HTTP/TCP步骤的数据源场景列名一致性
+        def _collect_http_tcp_with_ds(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
+            """递归收集步骤树中拥有 data_source_id 的 HTTP/TCP 步骤。"""
+            collected: List[AutoTestStepTreeUpdateItem] = []
+            for s in steps:
+                if s.step_type and str(s.step_type) in (str(AutoTestStepType.HTTP), str(AutoTestStepType.TCP)):
+                    if s.data_source_id:
+                        collected.append(s)
+                if s.children:
+                    collected.extend(_collect_http_tcp_with_ds(s.children))
+            return collected
+
+        http_tcp_steps = _collect_http_tcp_with_ds(steps_data)
+        if http_tcp_steps:
+            ds_ids = list({s.data_source_id for s in http_tcp_steps if s.data_source_id})
+            ds_records = await services.data_source_curd.model.filter(
+                id__in=ds_ids, state__not=1
+            ).all()
+            ds_map = {ds.id: ds for ds in ds_records}
+
+            baseline_names: Optional[List[str]] = None
+            baseline_step_label: Optional[str] = None
+            for s in http_tcp_steps:
+                ds = ds_map.get(s.data_source_id)
+                if not ds:
+                    continue
+                current_names = ds.dataset_names if isinstance(ds.dataset_names, list) else []
+                step_label = s.step_name or s.step_code or f"步骤ID:{s.step_id}"
+                if baseline_names is None:
+                    baseline_names = current_names
+                    baseline_step_label = step_label
+                elif current_names != baseline_names:
+                    error_detail = (
+                        f"步骤「{step_label}」的数据源场景列名与步骤「{baseline_step_label}」不一致："
+                        f"前者为{current_names}，后者为{baseline_names}"
+                    )
+                    LOGGER.error(error_detail)
+                    return BadReqResponse(message="数据源场景列名不一致，请先统一各步骤数据源的场景列", data=error_detail)
+
         try:
             # 2. 使用事务执行批量更新/新增
             async with in_transaction():

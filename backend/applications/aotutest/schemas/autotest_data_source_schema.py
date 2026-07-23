@@ -48,6 +48,19 @@ class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
+class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
+    """保存或更新数据源入参（合并 create/update 为单一入口）。"""
+
+    data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
+    data_source_code: Optional[str] = Field(None, max_length=64, description="数据源标识代码")
+    case_id: int = Field(..., ge=1, description="用例ID")
+    case_code: str = Field(..., max_length=64, description="用例标识代码")
+    step_id: int = Field(..., ge=1, description="步骤ID")
+    step_code: str = Field(..., max_length=64, description="步骤标识代码")
+    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="操作人员")
+
+
 class AutoTestDataSourceSelect(BaseModel):
     """分页查询数据驱动文件入参。"""
 

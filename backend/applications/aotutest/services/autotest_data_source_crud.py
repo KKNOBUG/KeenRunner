@@ -115,7 +115,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             case_code: Optional[str] = None,
             step_id: Optional[int] = None,
             step_code: Optional[str] = None,
-            on_error: bool = False
+            on_error: bool = False,
+            **kwargs
     ) -> Optional[Union[AutoTestApiDataSourceInfo, List[AutoTestApiDataSourceInfo]]]:
         """按用例 + 步骤查询数据源（排除已软删）。
 
@@ -128,6 +129,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_id: 步骤主键。
         :param step_code: 步骤标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
+        :param kwargs: 额外过滤条件
         :return: 单条实例、列表或 None。
         :raises ParameterException: 未传 case_id 且 case_code 为空时。
         :raises NotFoundException: 当 on_error 为 True 且无匹配记录时。
@@ -135,10 +137,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         if not case_id and not (case_code or "").strip():
             error_message: str = "查询数据源失败, 参数(case_id或case_code)必须二选一传递"
             LOGGER.error(error_message)
-
             raise ParameterException(message=error_message)
 
-        conditions: Dict[str, Any] = {}
+        conditions: Dict[str, Any] = {**kwargs}
         if case_id:
             conditions["case_id"] = case_id
         if case_code:
@@ -153,7 +154,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             has_step_condition = True
 
         if has_step_condition:
-            instance = await self.model.filter(**conditions, state__not=1).first()
+            instance = await self.model.filter(**conditions).first()
             if not instance and on_error:
                 error_message: str = "根据条件查询数据源暂无匹配记录"
                 LOGGER.error(f"{error_message}, 条件明细: {conditions}")
@@ -256,7 +257,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 case_code=case_code,
                 step_id=step_id,
                 step_code=step_code,
-                on_error=True
+                on_error=True,
+                state__not=1
             )
         else:
             error_message: str = "更新数据源失败, 定位参数不足(需在 schema 中提供 data_source_id / data_source_code / case+step)"
@@ -323,7 +325,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 case_code=case_code,
                 step_id=step_id,
                 step_code=step_code,
-                on_error=True
+                on_error=True,
+                state__not=1
             )
         else:
             error_message: str = "删除数据源失败, 定位参数不足(需 id/data_source_code/(case+step))"
@@ -354,7 +357,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def get_by_case_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
         """
-        按用例 ID 取最新一条有效数据源（有 file_hash、未软删）。
+        按用例 ID 取最新一条有效数据源（未软删）。
 
         :param case_id: 用例主键
         :param on_error: 为 True 时未找到则抛出 NotFoundException
@@ -367,7 +370,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(case_id=case_id, file_hash__not='', state__not=1).order_by("-id").first()
+        instance = await self.model.filter(case_id=case_id, state__not=1).order_by("-id").first()
         if not instance and on_error:
             error_message: str = f"查询数据源失败, 数据源(case_id={case_id})不存在"
             LOGGER.error(error_message)
@@ -389,6 +392,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             case_id=case_id,
             step_code=(step_code or "").strip(),
             on_error=False,
+            state__not=1
         )
         if not record or not isinstance(record.dataset, dict):
             return None
@@ -483,6 +487,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             step_id=step_id,
             step_code=step_code,
             on_error=False,
+            state__not=1
         )
         cache_key = make_cache_key(case_id, step_code)
         if existing:
@@ -724,16 +729,16 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     await data_create_crud.model.filter(step_code__in=step_code_list, state__not=1).update(state=1)
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
     for instance in instance_list:
-        if not instance.file_hash.endswith("X"):
+        if instance.file_hash and not instance.file_hash.endswith("X"):
             if await aos.path.exists(instance.file_hash):
                 await aos.remove(instance.file_hash)
     LOGGER.warning(f"删除更新后多余步骤: (case_id={case_id}, step_code__in={list(step_code_list)})已被清理")
     steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
     for step_info in steps_info:
-        if step_info:
+        if step_info and step_info.file_name:
             file_path = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id), step_info.file_name)
             if await aos.path.exists(file_path):
                 await aos.remove(file_path)
-            if await aos.path.exists(step_info.file_path):
-                await aos.remove(step_info.file_path)
+        if step_info and step_info.file_path and await aos.path.exists(step_info.file_path):
+            await aos.remove(step_info.file_path)
     LOGGER.warning(f"删除更新后多余步骤: (case_id={case_id}, step_code__in={list(step_code_list)})已被清理")

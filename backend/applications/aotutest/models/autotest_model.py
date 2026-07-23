@@ -531,9 +531,9 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     step_id = fields.BigIntField(ge=1, index=True, description="步骤ID")
     step_code = fields.CharField(max_length=64, description="步骤标识代码")
-    file_name = fields.CharField(max_length=255, description="数据驱动文件存储名称")
-    file_hash = fields.CharField(max_length=255, description="数据驱动文件哈希代码")
-    file_path = fields.CharField(max_length=1024, description="数据驱动文件存储路径")
+    file_name = fields.CharField(max_length=255, null=True, description="数据驱动文件存储名称")
+    file_hash = fields.CharField(max_length=255, null=True, description="数据驱动文件哈希代码")
+    file_path = fields.CharField(max_length=1024, null=True, description="数据驱动文件存储路径")
     file_desc = fields.CharField(max_length=2048, null=True, description="数据驱动文件场景描述")
     # 存储格式：{"场景1": {"head":..., "body":..., "assert_head":..., "assert_body":... }, ... }
     dataset = fields.JSONField(description="数据驱动文件解析后的数据(该步骤×所有场景)")

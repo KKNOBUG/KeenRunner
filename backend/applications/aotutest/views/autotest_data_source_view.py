@@ -24,6 +24,7 @@ from backend.applications.aotutest.models.autotest_model import AutoTestApiDataS
 from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceCreate,
     AutoTestDataSourceUpdate,
+    AutoTestDataSourceSaveOrUpdate,
     AutoTestDataSourceSelect,
 )
 from backend.applications.aotutest.services.autotest_data_source_parser import (
@@ -223,6 +224,93 @@ async def update_data_source_info(
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
+@autotest_data_source.post("/save_or_update", summary="API自动化测试-保存或更新数据源")
+async def save_or_update_data_source_info(
+        data_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    保存或更新数据源（合并 create/update 为单一入口）。
+
+    按 (case_id, step_id, step_code) 定位：存在则更新，不存在则新增。
+    case_code 缺失时自动查询用例表补齐。
+
+    :param data_in: 数据源入参
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
+    try:
+        case_id: int = data_in.case_id
+        case_code: str = data_in.case_code
+        step_id: int = data_in.step_id
+        step_code: str = data_in.step_code
+        data_id: Optional[int] = data_in.data_source_id
+        data_code: Optional[str] = data_in.data_source_code
+        if data_id:
+            data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_id(
+                data_source_id=data_id,
+                on_error=False,
+                state__not=1
+            )
+        elif data_code:
+            data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_code(
+                data_source_code=data_code,
+                on_error=False,
+                state__not=1
+            )
+        elif (case_id or case_code) or (step_id or step_code):
+            data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_case_step(
+                case_id=case_id,
+                step_id=step_id,
+                case_code=case_code,
+                step_code=step_code,
+                on_error=False,
+                state__not=1
+            )
+        else:
+            return ParameterResponse(message=f"更新失败, 传递参数无法确认数据源处理逻辑")
+
+        if data_in.dataframe is not None:
+            try:
+                step_data, dataset_names, norm_matrix = await parse_dataframe_matrix_async(data_in.dataframe)
+            except ValueError as e:
+                return BadReqResponse(message=f"解析表格数据失败: {e}")
+            data_in.dataset = step_data
+            data_in.dataset_names = dataset_names
+            data_in.dataframe = norm_matrix
+
+        if data_source_instance:
+            # 已有启用记录 → 更新
+            data_in.updated_user = get_current_username()
+            instance = await services.data_source_curd.update_data_source(data_source_in=data_in)
+        else:
+            # 无启用记录 → 新增（case_code 缺失则自动查询补齐）
+            data_in.data_source_id = None
+            data_in.created_user = get_current_username()
+            data_in.cache_key = f"dataset_{case_id}_{step_code}"
+            instance = await services.data_source_curd.create_data_source(data_source_in=data_in)
+
+        # 同步步骤数据源元信息
+        await _sync_step_data_source_meta(
+            case_id=case_id,
+            step_code=step_code,
+            data_source_id=instance.id,
+            file_name=instance.file_name,
+            file_desc=instance.file_desc,
+        )
+
+        data = await _serialize_data_source(instance)
+        LOGGER.info(f"保存或更新数据源成功, 结果明细: {data}")
+        return SuccessResponse(message="保存成功", data=data, total=1)
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"保存或更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"保存失败, 异常描述: {e}")
+
+
 @autotest_data_source.get("/get", summary="API自动化测试-查询单条数据源")
 async def get_data_source_info(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
@@ -246,6 +334,7 @@ async def get_data_source_info(
                 step_id=step_id,
                 step_code=step_code,
                 on_error=True,
+                state__not=1
             )
         else:
             return ParameterResponse(
@@ -364,6 +453,7 @@ async def get_data_source_by_case_step(
             step_id=step_id,
             step_code=step_code,
             on_error=True,
+            state__not=1
         )
         if isinstance(result, list):
             serializes = [await _serialize_data_source(x) for x in result]
@@ -412,6 +502,7 @@ async def get_scene_names_by_case(
         data_source_instances = await services.data_source_curd.get_by_case_step(
             case_id=effective_case_id,
             on_error=False,
+            state__not=1
         )
         if not isinstance(data_source_instances, list):
             data_source_instances = [data_source_instances] if data_source_instances else []
@@ -488,6 +579,7 @@ async def export_data_source_xlsx(
             step_id=step_id,
             step_code=step_code,
             on_error=True,
+            state__not=1
         )
         if isinstance(instance, list) or not instance:
             return ParameterResponse(message="导出失败，未定位到唯一数据源记录")

@@ -91,6 +91,7 @@
                     :readonly="props.readonly"
                     :protectedRowKeywords="FIXED_KEYWORDS"
                     @change="onSheetChange"
+                    @protectedAction="onProtectedAction"
                 />
               </div>
             </n-space>
@@ -258,8 +259,10 @@ const getCaseId = () => (route.query.case_id ? Number(route.query.case_id) : nul
 
 const getStepContext = () => {
   const original = props.step?.original || {}
+  const caseCode = String(original.case_code ?? original.case?.case_code ?? route.query.case_code ?? '').trim()
   return {
     caseId: getCaseId(),
+    caseCode,
     stepId: original.id ? Number(original.id) : null,
     stepCode: String(original.step_code || '').trim(),
   }
@@ -381,6 +384,12 @@ const onSheetChange = () => {
   isDirty.value = true
 }
 
+const onProtectedAction = (action) => {
+  if (action === 'delete') {
+    $message.warning('HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 所在行不允许删除')
+  }
+}
+
 const getCurrentDataframeMatrix = () => {
   if (!luckysheetRef.value) return []
   const { headers = [], rows = [] } = luckysheetRef.value.getDataForSave() || {}
@@ -403,8 +412,8 @@ const hasAnySceneData = (matrix) => {
   return false
 }
 
-const shouldSave = () => {
-  if (!isDirty.value) return false
+const shouldSave = (force = false) => {
+  if (!force && !isDirty.value) return false
   const matrix = getCurrentDataframeMatrix()
   if (matrix.length < 2) return false
   if (hasDbRecord.value || dataSourceId.value) return true
@@ -413,18 +422,19 @@ const shouldSave = () => {
 
 const saveWithContext = async (ctx, opts = {}) => {
   if (props.readonly) return { success: true, skipped: true }
-  const { caseId, stepId, stepCode } = ctx || {}
-  if (!caseId || !stepId || !stepCode) {
+  const { caseId, caseCode, stepId, stepCode } = ctx || {}
+  if (!caseId || !caseCode || !stepId || !stepCode) {
     if (!opts.silent) $message.warning('当前步骤尚未保存入库，请先保存步骤树后再保存数据')
     return { success: false, skipped: true }
   }
-  if (!shouldSave()) {
+  if (!shouldSave(opts.force)) {
     return { success: true, skipped: true }
   }
   try {
     const matrix = getCurrentDataframeMatrix()
-    const res = await api.updateDataSource({
+    const res = await api.saveOrUpdateDataSource({
       case_id: caseId,
+      case_code: caseCode,
       step_id: stepId,
       step_code: stepCode,
       dataframe: matrix,
@@ -453,7 +463,7 @@ const dataSourceSave = async (opts = {}) => {
   if (saveLoading.value) return { success: true, skipped: true }
   saveLoading.value = true
   try {
-    return await saveWithContext(getStepContext(), opts)
+    return await saveWithContext(getStepContext(), { force: true, ...opts })
   } finally {
     saveLoading.value = false
   }
