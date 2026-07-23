@@ -39,51 +39,27 @@
         <n-tabs type="line" animated class="data-source-tabs">
           <n-tab-pane name="preview" tab="数据预览">
             <n-space vertical :size="12">
-              <div class="data-source-toolbar-row">
-                <n-space>
-                  <n-button
-                      size="small"
-                      type="primary"
-                      :disabled="props.readonly"
-                      :loading="downloadTemplateLoading"
-                      @click="downloadStepDataTemplate"
-                  >导入模板下载
-                  </n-button>
-                </n-space>
-                <n-space>
-                  <n-button
-                      size="small"
-                      type="warning"
-                      :disabled="props.readonly"
-                      :loading="importLoading"
-                      @click="openImport"
-                  >导入
-                    <input
-                        ref="importFileRef"
-                        type="file"
-                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        style="display: none"
-                        @change="onImportFileChange"
-                    /></n-button>
-                  <n-button
-                      size="small"
-                      type="info"
-                      :disabled="props.readonly"
-                      :loading="exportLoading"
-                      @click="dataSourceExport"
-                  >导出
-                  </n-button>
-                  <n-button
-                      size="small"
-                      type="success"
-                      :disabled="props.readonly"
-                      :loading="saveLoading"
-                      @click="dataSourceSave"
-                  >保存
-                  </n-button>
-                </n-space>
-              </div>
               <div class="luckysheet-wrap">
+                <div class="luckysheet-more-dropdown">
+                  <n-dropdown
+                      trigger="click"
+                      placement="bottom-end"
+                      :options="dataSourceMoreOptions"
+                      @select="onDataSourceMoreSelect"
+                  >
+                    <n-button size="tiny" quaternary :disabled="props.readonly">
+                      更多
+                      <TheIcon icon="material-symbols:arrow-drop-down" :size="16" />
+                    </n-button>
+                  </n-dropdown>
+                </div>
+                <input
+                    ref="importFileRef"
+                    type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    style="display: none"
+                    @change="onImportFileChange"
+                />
                 <Luckysheet
                     ref="luckysheetRef"
                     :data="sheetData"
@@ -179,6 +155,7 @@ import {
   NCheckboxGroup,
   NCollapseTransition,
   NDataTable,
+  NDropdown,
   NInput,
   NModal,
   NSpace,
@@ -480,6 +457,20 @@ const importFileRef = ref(null)
 const importLoading = ref(false)
 const exportLoading = ref(false)
 
+const dataSourceMoreOptions = computed(() => [
+  { label: '导入模板下载', key: 'downloadTemplate', disabled: props.readonly || downloadTemplateLoading.value },
+  { label: '导入', key: 'import', disabled: props.readonly || importLoading.value },
+  { label: '导出', key: 'export', disabled: props.readonly || exportLoading.value },
+  { label: '保存', key: 'save', disabled: props.readonly || saveLoading.value },
+])
+
+const onDataSourceMoreSelect = (key) => {
+  if (key === 'downloadTemplate') downloadStepDataTemplate()
+  else if (key === 'import') openImport()
+  else if (key === 'export') dataSourceExport()
+  else if (key === 'save') dataSourceSave()
+}
+
 const openImport = () => {
   if (props.readonly) return
   importFileRef.value?.click()
@@ -748,13 +739,6 @@ defineExpose({
   margin-top: 4px;
 }
 
-.data-source-toolbar-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .luckysheet-wrap {
   width: 100%;
   min-height: 400px;
@@ -762,5 +746,16 @@ defineExpose({
   border: 1px solid var(--n-border-color);
   border-radius: 8px;
   overflow: hidden;
+  position: relative;
+}
+
+.luckysheet-more-dropdown {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  height: 28px;
 }
 </style>

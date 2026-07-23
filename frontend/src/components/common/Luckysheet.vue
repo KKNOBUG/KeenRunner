@@ -247,7 +247,7 @@ const initLuckysheet = async () => {
     container: containerId.value,
     title: '',
     lang: 'zh',
-    showtoolbar: !props.readonly,
+    showtoolbar: false,
     showinfobar: false,
     sheetFormulaBar: !props.readonly,
     showsheetbar: false,
