@@ -1205,7 +1205,7 @@ const doDebugRequest = async (env_id) => {
 
 const dataSourcePanelRef = ref(null)
 const saveDataSource = async () => {
-  return await dataSourcePanelRef.value?.save?.()
+  return await dataSourcePanelRef.value?.save?.({ silent: true })
 }
 defineExpose({ saveDataSource })
 </script>

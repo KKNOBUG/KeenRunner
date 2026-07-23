@@ -254,6 +254,7 @@ const sheetData = ref([])
 const hasDbRecord = ref(false)
 const isDirty = ref(false)
 const isLoading = ref(false)
+const hasLoaded = ref(false)
 
 const getCaseId = () => (route.query.case_id ? Number(route.query.case_id) : null)
 
@@ -299,6 +300,7 @@ const loadStepDataframePreview = async () => {
     sheetData.value = data
     hasDbRecord.value = false
     isDirty.value = false
+    hasLoaded.value = true
     return
   }
 
@@ -325,6 +327,7 @@ const loadStepDataframePreview = async () => {
     } finally {
       isLoading.value = false
     }
+    hasLoaded.value = true
     return
   }
 
@@ -369,6 +372,7 @@ const loadStepDataframePreview = async () => {
     isDirty.value = false
   } finally {
     isLoading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -414,6 +418,8 @@ const hasAnySceneData = (matrix) => {
 
 const shouldSave = (force = false) => {
   if (!force && !isDirty.value) return false
+  // force 保存（步骤树保存按钮触发）时，必须确保数据已加载，避免空白模板覆盖已有数据源
+  if (force && !isDirty.value && !hasLoaded.value) return false
   const matrix = getCurrentDataframeMatrix()
   if (matrix.length < 2) return false
   if (hasDbRecord.value || dataSourceId.value) return true
@@ -423,7 +429,7 @@ const shouldSave = (force = false) => {
 const saveWithContext = async (ctx, opts = {}) => {
   if (props.readonly) return { success: true, skipped: true }
   const { caseId, caseCode, stepId, stepCode } = ctx || {}
-  if (!caseId || !caseCode || !stepId || !stepCode) {
+  if (!caseId || !stepId || !stepCode) {
     if (!opts.silent) $message.warning('当前步骤尚未保存入库，请先保存步骤树后再保存数据')
     return { success: false, skipped: true }
   }
@@ -679,8 +685,22 @@ watch(
 )
 
 onBeforeUnmount(async () => {
-  if (isDirty.value && lastStepContext.value) {
-    await saveWithContext(lastStepContext.value, { silent: true })
+  if (!isDirty.value || !lastStepContext.value) return
+  const ctx = lastStepContext.value
+  const { caseId, caseCode, stepId, stepCode } = ctx
+  if (!caseId || !stepId || !stepCode) return
+  try {
+    const matrix = getCurrentDataframeMatrix()
+    if (matrix.length < 2) return
+    await api.saveOrUpdateDataSource({
+      case_id: caseId,
+      case_code: caseCode,
+      step_id: stepId,
+      step_code: stepCode,
+      dataframe: matrix,
+    })
+  } catch (_) {
+    /* 静默保存，错误由 http 拦截器统一提示 */
   }
 })
 
