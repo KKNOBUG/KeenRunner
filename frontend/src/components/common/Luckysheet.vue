@@ -197,13 +197,19 @@ const setupDeletionProtection = () => {
       e.stopImmediatePropagation()
       e.preventDefault()
       emit('protectedAction', 'delete')
+    } else {
+      setTimeout(() => emit('change'), 0)
     }
   }
   const interceptKeydown = (e) => {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && shouldBlock()) {
-      e.stopImmediatePropagation()
-      e.preventDefault()
-      emit('protectedAction', 'delete')
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (shouldBlock()) {
+        e.stopImmediatePropagation()
+        e.preventDefault()
+        emit('protectedAction', 'delete')
+      } else {
+        setTimeout(() => emit('change'), 0)
+      }
     }
   }
 
