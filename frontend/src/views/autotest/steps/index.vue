@@ -186,6 +186,7 @@
           <div class="config-panel overlay-scroll">
             <component
                 v-if="currentStep"
+                ref="activeStepEditorRef"
                 :key="currentStep.id + (currentStep.isQuoteInner ? '-readonly' : '')"
                 :is="editorComponent"
                 v-bind="editorComponentProps"
@@ -357,6 +358,8 @@ const appliedCaseMeta = ref({ case_id: null, case_code: null })
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
+/** 当前步骤编辑器 ref：用于保存步骤树前先保存数据源 */
+const activeStepEditorRef = ref(null)
 /** 执行/调试环境配置弹窗 ref */
 const execConfigModalRef = ref(null)
 /** 引用/复制脚本抽屉 ref */
@@ -2261,6 +2264,9 @@ const handleSaveAll = async () => {
     if (isNewCasePage) {
       payload = stripIdentityFieldsForNewCase(payload)
     }
+
+    // 调用后端接口前，先保存当前步骤编辑器中的数据源（如有未提交的编辑）
+    await activeStepEditorRef.value?.saveDataSource?.()
 
     // 调用新的后端接口
     const res = await api.updateOrCreateStepTree(payload)

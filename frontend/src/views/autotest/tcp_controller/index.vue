@@ -165,6 +165,7 @@
   </n-card>
 
   <StepDataSourcePanel
+      ref="dataSourcePanelRef"
       :step="props.step"
       :readonly="props.readonly"
       :step-name="state.form.step_name"
@@ -1201,6 +1202,12 @@ const doDebugRequest = async (env_id) => {
     debugLoading.value = false
   }
 }
+
+const dataSourcePanelRef = ref(null)
+const saveDataSource = async () => {
+  return await dataSourcePanelRef.value?.save?.()
+}
+defineExpose({ saveDataSource })
 </script>
 
 <style scoped>

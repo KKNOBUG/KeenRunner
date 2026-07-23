@@ -261,6 +261,7 @@
   </n-card>
 
   <StepDataSourcePanel
+      ref="dataSourcePanelRef"
       :step="props.step"
       :readonly="props.readonly"
       :step-name="state.form.step_name"
@@ -1493,6 +1494,12 @@ const validatorColumns = [
     render: (row) => row.error || '-'
   }
 ]
+
+const dataSourcePanelRef = ref(null)
+const saveDataSource = async () => {
+  return await dataSourcePanelRef.value?.save?.()
+}
+defineExpose({ saveDataSource })
 
 </script>
 
