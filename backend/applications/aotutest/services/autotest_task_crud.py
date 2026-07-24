@@ -30,7 +30,7 @@ def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
     """
     从 cases_execute_config 汇总去重后的环境 ID 列表。
 
-    优先取每个用例的 global_env_id；步骤配置中的 env_id 一并纳入。
+    优先取每个用例的 global_env_id；步骤配置中的env_id一并纳入。
 
     :param cases_execute_config: 用例执行配置字典
     :return: 升序环境 ID 列表
@@ -64,7 +64,7 @@ def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
 
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
-    解析用例执行配置：顶层权威；兼容读取旧数据中 task_kwargs 嵌套副本。
+    解析用例执行配置
 
     :param task_dict: 任务字段字典
     :return: cases_execute_config 或None
@@ -82,10 +82,10 @@ def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str
 
 def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     """
-    压缩 task_kwargs：保留 case_ids / initial_variables 及未知扩展键，剔除 cases_execute_config。
+    压缩task_kwargs：保留case_ids/initial_variables及未知扩展键，剔除cases_execute_config。
 
-    :param task_kwargs: 原始 task_kwargs
-    :return: 清洗后的字典；输入为 None 时返回 None
+    :param task_kwargs: 原始task_kwargs
+    :return: 清洗后的字典；输入 None时返回None
     """
     if task_kwargs is None:
         return None
@@ -181,7 +181,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         创建任务，校验应用存在及 (task_name, task_project) 唯一。
 
-        :param task_in: 任务创 schema
+        :param task_in: 任务创建schema
         :return: 创建后的任务实例
         :raises NotFoundException: 应用不存在
         :raises DataAlreadyExistsException: 同应用下任务名已存在
@@ -215,7 +215,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestApiTaskInfo:
         """
-        更新任务，按task_id或task_code定位并校验 (task_name, task_project) 唯一。
+        更新任务，根据task_id或task_code定位并校验 (task_name, task_project) 唯一。
 
         :param task_in: 任务更新schema
         :return: 更新后的任务实例
@@ -276,7 +276,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def delete_task(self, task_id: Optional[int] = None, task_code: Optional[str] = None) -> AutoTestApiTaskInfo:
         """
-        软删除任务（state=1）并关闭调度（task_enabled=False）。
+        软删除任务并关闭调度。
 
         :param task_id: 任务主键ID，与task_code二选一
         :param task_code: 任务标识代码，与task_id二选一
@@ -309,7 +309,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTaskInfo]]:
         """
-        根据条件分页查询任务列表；默认按最后执行时间倒序，未执行过的排在后面。
+        根据条件分页查询任务列表；默认根据最后执行时间倒序，未执行过的排在后面。
 
         :param search: Tortoise Q 查询条件
         :param page: 页码
@@ -320,7 +320,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         try:
             order = order or ["-last_execute_time"]
-            # 按执行时间排序时：有执行记录优先（NULL 置后），再按时间倒序
+            # 根据执行时间排序时：有执行记录优先（NULL 置后），再根据时间倒序
             if order == ["-last_execute_time"] or (
                     len(order) == 1 and order[0] == "-last_execute_time"
             ):

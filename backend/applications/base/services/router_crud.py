@@ -58,7 +58,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :raises NotFoundException: on_error为True且无匹配路由
         """
         if not path:
-            error_message: str = "查询路由信息失败, 参数(username)不允许为空"
+            error_message: str = "查询路由信息失败, 参数(path)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(path=path, **kwargs).all()

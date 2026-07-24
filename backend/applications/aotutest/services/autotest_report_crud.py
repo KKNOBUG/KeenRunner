@@ -113,7 +113,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """
         更新报告，根据report_id或report_code定位。
 
-        :param report_in: 报告更新 schema
+        :param report_in: 报告更新schema
         :return: 更新后的报告实例
         :raises NotFoundException: 报告不存在
         :raises DataBaseStorageException: 违反约束
@@ -143,10 +143,10 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     async def delete_report(self, report_id: Optional[int] = None, report_code: Optional[str] = None) -> AutoTestApiReportInfo:
         """
-        软删除报告（state=1），并同步软删除该报告下所有明细。
+        软删除报告，并同步软删除该报告下所有明细。
 
-        :param report_id: 报告主键 ID，与 report_code 二选一
-        :param report_code: 报告标识代码，与 report_id 二选一
+        :param report_id: 报告主键 ID，与report_code二选一
+        :param report_code: 报告标识代码，与report_id二选一
         :return: 软删除后的报告实例
         :raises NotFoundException: 报告不存在
         """

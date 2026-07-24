@@ -34,6 +34,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         根据Celery任务ID查询执行记录。
 
         :param celery_id: Celery任务ID；为空时返回None
+        :param kwargs: 额外过滤条件
         :return: 记录实例或None
         """
         if not celery_id:
@@ -96,7 +97,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
 
     async def select_records(self, record_in: AutoTestApiRecordSelect) -> Tuple[int, List[AutoTestApiRecordInfo]]:
         """
-        按筛选条件分页查询任务执行记录。
+        根据条件分页查询任务执行记录。
 
         :param record_in: 查询条件（含分页、排序与时间区间）
         :return: (总数, 记录列表)
@@ -127,7 +128,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
                 q &= Q(celery_status=status_val)
 
             def _parse_dt(raw: Optional[str]) -> Optional[datetime]:
-                """将 ``YYYY-MM-DD HH:MM:SS`` 字符串解析为 datetime；失败返回 None。"""
+                """将YYYY-MM-DD HH:MM:SS格式的字符串解析为datetime对象，失败返回None。"""
                 if not raw:
                     return None
                 try:

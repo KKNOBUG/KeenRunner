@@ -58,7 +58,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def get_by_ids(self, tag_ids: List[int], on_error: bool = False, **kwargs) -> Union[bool, List[AutoTestApiTagInfo]]:
         """
-        校验一批标签ID是否均存在；全部存在时返回实例列表
+        校验一批标签ID是否均存在；全部存在时返回实例列表。
 
         :param tag_ids: 标签主键ID列表
         :param on_error: 有缺失时是否抛出NotFoundException
@@ -145,7 +145,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestApiTagInfo:
         """
-        更新标签，按tag_id或tag_code定位并校验 (tag_type, tag_mode, tag_name) 唯一。
+        更新标签，根据tag_id或tag_code定位并校验 (tag_type, tag_mode, tag_name) 唯一。
 
         :param tag_in: 标签更新schema
         :return: 更新后的标签实例
@@ -195,7 +195,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def delete_tag(self, tag_id: Optional[int] = None, tag_code: Optional[str] = None) -> AutoTestApiTagInfo:
         """
-        软删除标签（state=1）；需无用例关联该标签。
+        软删除标签；需无用例关联该标签。
 
         :param tag_id: 标签主键ID，与tag_code二选一
         :param tag_code: 标签标识代码，与tag_id二选一
@@ -221,7 +221,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def delete_tags(self, tag_in: AutoTestApiTagDelete) -> int:
         """
-        按ID或code列表批量软删除标签。
+        根据ID或code列表批量软删除标签。
 
         :param tag_in: 标签删除schema
         :return: 更新条数

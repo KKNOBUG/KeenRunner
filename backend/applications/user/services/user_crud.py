@@ -107,7 +107,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param credentials: 登录凭证（username、password）
         :return: 用户实例
         :raises NotFoundException: 用户不存在或密码错误
-        :raises NoPermissionException: 用户已禁用（state=1）
+        :raises NoPermissionException: 用户已禁用
         """
         user = await self.model.filter(username=credentials.username).first()
         if not user:
@@ -184,7 +184,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def update_user(self, user_in: UserUpdate) -> User:
         """
-        按 user_id 更新用户基础字段（不含角色，角色由 update_roles 单独处理）。
+        根据user_id更新用户基础字段（不含角色，角色由 update_roles 单独处理）。
 
         :param user_in: 更新入参
         :return: 更新后的用户实例
@@ -202,11 +202,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     @classmethod
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
         """
-        重置用户角色关联：先清空再按role_ids重新绑定。
+        重置用户角色关联：先清空再根据role_ids重新绑定。
 
         :param user: 用户实例
         :param role_ids: 角色 ID 列表；空列表表示清空
         :return: None
+        :raises DoesNotExist: 角色不存在
         """
         await user.roles.clear()
         for role_id in role_ids or []:
@@ -219,6 +220,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: 不含密码的用户字典，或ForbiddenResponse
+        :raises DoesNotExist: 用户不存在
         """
         instance = await self.get_or_error(id=user_id)
         if instance.is_superuser:
@@ -232,11 +234,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def update_password(self, user_id: int, new_password: str) -> User:
         """
-        用户修改密码：更新密码并吊销所有Token
+        用户修改密码：更新密码并吊销所有Token。
 
         :param user_id: 用户ID
         :param new_password: 新密码（明文）
         :return: 更新后的用户实例
+        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         instance.password = get_password_hash(password=new_password)
@@ -246,10 +249,11 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def logout(self, user_id: int) -> User:
         """
-        用户主动登出：吊销所有Token
+        用户主动登出：吊销所有Token。
 
         :param user_id: 用户ID
         :return: 更新后的用户实例
+        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         instance.token_version += 1  # 吊销用户所有Token

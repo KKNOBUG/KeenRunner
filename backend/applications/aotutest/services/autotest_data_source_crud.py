@@ -29,9 +29,9 @@ def make_cache_key(case_id: int, step_code: str) -> str:
     """
     生成 Redis 等使用的缓存键名。
 
-    :param case_id: 用例主键。
-    :param step_code: 步骤标识代码。
-    :return: 缓存键字符串。
+    :param case_id: 用例主键
+    :param step_code: 步骤标识代码
+    :return: 缓存键字符串
     """
     return f"dataset_{case_id}_{step_code}"
 
@@ -43,9 +43,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
-        根据主键ID查询查询数据源。
+        根据主键ID查询数据源。
 
-        :param data_source_id: 数据源主键 ID
+        :param data_source_id: 数据源主键ID
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
@@ -70,6 +70,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param data_source_code: 数据驱动标识代码
         :param on_error: 为True时若未找到则抛出NotFoundException
+        :param kwargs: 额外过滤条件
         :return: 数据源实例或None
         :raises ParameterException: 当data_source_code为空时
         :raises NotFoundException: 当on_error为True且记录不存在时
@@ -92,6 +93,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param file_hash: 文件哈希
         :param on_error: 为True时未找到则抛出NotFoundException
+        :param kwargs: 额外过滤条件
         :return: 数据源实例或None
         :raises ParameterException: file_hash为空时
         :raises NotFoundException: on_error为True且记录不存在时
@@ -118,11 +120,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             **kwargs
     ) -> Optional[Union[AutoTestApiDataSourceInfo, List[AutoTestApiDataSourceInfo]]]:
         """
-        按用例ID或用例标识 + 步骤ID或步骤标识查询数据源。
+        根据用例ID或用例标识 + 步骤ID或步骤标识查询数据源。
 
-        - case_id/case_code至少传其一
-        - 若同时传入step_id或step_code之一，则返回单条
-        - 若未传任何step 条件，则返回该用例下数据源列表
+        - case_id与case_code至少传其一；
+        - 若同时传入step_id或step_code之一则返回单条记录，
+        - 若未传任何step条件则返回该用例下的数据源列表。
 
         :param case_id: 用例主键
         :param case_code: 用例标识代码
@@ -174,6 +176,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param case_id: 用例主键
         :param on_error: 为True时未找到则抛出NotFoundException
+        :param kwargs: 额外过滤条件
         :return: 数据源实例或None
         :raises ParameterException: case_id为空时
         :raises NotFoundException: on_error为True且记录不存在时
@@ -197,6 +200,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_id: 用例主键
         :param step_code: 步骤标识代码
         :param dataset_name: 场景/数据集名称
+        :param kwargs: 额外过滤条件
         :return: 形如{"head", "body", "assert_head", "assert_body"}的场景字典；无数据时返回None
         """
         if not (dataset_name or "").strip():
@@ -213,11 +217,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestApiDataSourceInfo:
         """
-        创建数据源
+        创建数据源。
 
-        - 按 (case_id, case_code, step_id, step_code) 定位
-        - 无记录则新增；已存在且 state=1 则按入参更新并恢复 state=0
-        - 已存在且启用则抛出 DataAlreadyExistsException
+        - 根据(case_id, case_code, step_id, step_code)定位记录，无记录则新增；
+        - 已存在且state=1则根据入参更新并恢复 state=0；
+        - 已存在且为启用状态则抛出DataAlreadyExistsException。
 
         :param data_source_in: 创建 schema（data_source_code 由模型默认值生成，无需传入）
         :return: 新建或恢复后的数据源实例
@@ -265,10 +269,10 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def update_data_source(self, data_source_in: AutoTestDataSourceUpdate) -> AutoTestApiDataSourceInfo:
         """
-        更新数据源
+        更新数据源。
 
-        - 定位优先级：data_source_id > data_source_code > (case_id|case_code) 且 (step_id|step_code)
-        - 定位字段及 case_id / case_code / step_id / step_code / cache_key 不会写入更新字典
+        - 定位优先级为data_source_id > data_source_code > (case_id|case_code)且(step_id|step_code)
+        - 定位字段及case_id / case_code / step_id / step_code / cache_key不会写入更新字典。
 
         :param data_source_in: 更新schema
         :return: 更新后的数据源实例
@@ -338,19 +342,19 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             step_code: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
-        软删除数据源
+        软删除数据源。
 
-        - 定位优先级：data_source_id > data_source_code > (case_id|case_code) 且 (step_id|step_code)。
+        - 定位优先级为data_source_id > data_source_code > (case_id|case_code)且(step_id|step_code)。
 
-        :param data_source_id: 主键 ID。
-        :param data_source_code: 数据驱动标识代码。
-        :param case_id: 用例主键（与 step 组合定位）。
-        :param case_code: 用例标识代码。
-        :param step_id: 步骤主键。
-        :param step_code: 步骤标识代码。
-        :return: 软删除后的实例。
-        :raises ParameterException: 定位参数不足时。
-        :raises NotFoundException: 记录不存在时。
+        :param data_source_id: 主键ID
+        :param data_source_code: 数据驱动标识代码
+        :param case_id: 用例主键（与step组合定位）
+        :param case_code: 用例标识代码
+        :param step_id: 步骤主键
+        :param step_code: 步骤标识代码
+        :return: 软删除后的实例
+        :raises ParameterException: 定位参数不足时
+        :raises NotFoundException: 记录不存在时
         """
         if data_source_id:
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
@@ -402,11 +406,12 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def query_dataset(self, case_id: str, step_code: str, dataset_name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """
-        根据用例ID与步骤标识查询dataset；可再按场景名收窄为单场景。
+        根据用例ID与步骤标识查询dataset；可再根据场景名收窄为单场景。
 
         :param case_id: 用例主键
         :param step_code: 步骤标识代码
         :param dataset_name: 场景名；为空则返回完整dataset
+        :param kwargs: 额外过滤条件
         :return: 含 dataset 字段的字典
         :raises ParameterException: case_id或step_code为空时
         :raises NotFoundException: 无匹配记录或指定场景不存在时
@@ -456,7 +461,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             created_user: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
-        上传解析场景：按 case_id + step_id + step_code 若已存在则更新，否则创建。
+        上传解析场景：根据case_id + step_id + step_code若已存在则更新，否则创建。
 
         :param case_id: 用例主键
         :param case_code: 用例标识代码
@@ -535,11 +540,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def list_by_case(self, case_id: int, state: int = 0) -> List[AutoTestApiDataSourceInfo]:
         """
-        查询指定用例下的数据源列表
+        查询指定用例下的数据源列表。
 
         :param case_id: 用例主键
-        :param state: 状态过滤，默认 0（启用）
-        :return: 按 updated_time 倒序及步骤字段排序的列表
+        :param state: 状态过滤，默认0（启用）
+        :return: 根据updated_time倒序及步骤字段排序的列表
         :raises ParameterException: case_id 为空时
         """
         if not case_id:
@@ -554,10 +559,11 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
     async def get_by_code(self, create_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataCreateInfo]:
         """
-        按create_code查询数据源生成记录。
+        根据create_code查询数据源生成记录。
 
         :param create_code: 生成任务标识
         :param on_error: 为True时未找到则抛出NotFoundException
+        :param kwargs: 额外过滤条件
         :return: 生成记录或None
         :raises ParameterException: create_code为空时
         :raises NotFoundException: on_error为True且记录不存在时
@@ -576,11 +582,12 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
     async def get_by_step(self, step_code: str, on_error: bool = False, limit_num: int = 3, **kwargs) -> List[AutoTestApiDataCreateInfo]:
         """
-        按步骤标识查询最近最多3条数据源生成记录。
+        根据步骤标识查询最近N条数据源生成记录，默认最多3条。
 
         :param step_code: 步骤标识代码
         :param limit_num: 最近多少条数据
         :param on_error: 为True时无记录则抛出NotFoundException
+        :param kwargs: 额外过滤条件
         :return: 生成记录列表
         :raises ParameterException: step_code为空时
         :raises NotFoundException: on_error为True且无记录时
@@ -599,10 +606,11 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
     async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataCreateInfo]:
         """
-        按文件哈希查询数据源生成记录。
+        根据文件哈希查询数据源生成记录。
 
         :param file_hash: 文件哈希
         :param on_error: 为True时未找到则抛出NotFoundException
+        :param kwargs: 额外过滤条件
         :return: 生成记录或None
         :raises ParameterException: file_hash为空时
         :raises NotFoundException: on_error为True且记录不存在时
@@ -649,9 +657,9 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
     async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestApiDataCreateInfo:
         """
-        按主键更新数据源生成记录。
+        根据主键更新数据源生成记录。
 
-        :param data_in: 更新入参（须含 id）
+        :param data_in: 更新入参
         :return: 更新后的生成记录
         :raises DataAlreadyExistsException: 更新异常时
         """
@@ -666,15 +674,15 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
     async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestApiDataCreateInfo:
         """
-        按 create_code 软删除数据源生成记录（state=1）。
+        根据create_code软删除数据源生成记录。
 
         :param create_code: 生成任务标识
         :return: 软删除后的记录
         :raises ParameterException: 参数校验失败时
         :raises NotFoundException: 记录不存在时
         """
-        if not id:
-            error_message: str = f"参数缺失, 删除数据源生成信息时必须传递id"
+        if not create_code:
+            error_message: str = f"参数缺失, 删除数据源生成信息时必须传递create_code"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 

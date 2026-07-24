@@ -31,7 +31,6 @@ from backend.core.exceptions import (
 
 
 class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiProjectCreate, AutoTestApiProjectUpdate]):
-    """应用（项目）CRUD 与相关业务。"""
 
     def __init__(self):
         super().__init__(model=AutoTestApiProjectInfo)
@@ -146,7 +145,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
     async def update_project(self, project_in: AutoTestApiProjectUpdate) -> AutoTestApiProjectInfo:
         """
-        更新应用，按 project_id 或 project_code 定位并校验名称唯一。
+        更新应用，根据project_id或project_code定位并校验名称唯一。
 
         :param project_in: 应用更新schema
         :return: 更新后的应用实例
@@ -192,7 +191,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             project_code: Optional[str] = None
     ) -> AutoTestApiProjectInfo:
         """
-        软删除应用（state=1）；需无关联用例、环境配置明细、标签。
+        软删除应用；需无关联用例、环境配置明细、标签。
 
         :param project_id: 应用主键ID，与project_code二选一
         :param project_code: 应用标识代码，与project_id二选一

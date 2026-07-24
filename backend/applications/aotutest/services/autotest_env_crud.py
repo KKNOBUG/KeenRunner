@@ -30,15 +30,15 @@ from backend.enums import AutoTestConfigNodeType
 
 async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tuple[str, Optional[str]]:
     """
-    按「全局环境枚举名 + 应用」解析 HTTP 网关 host/port。
+    根据全局环境枚举名 + 应用解析host/port。
 
-    先查 AutoTestApiEnvEnumInfo（env_name），再查 AutoTestApiEnvConfigInfo（project_id + env_id，config_type=api）。
+    - 先查 AutoTestApiEnvEnumInfo（env_name），再查 AutoTestApiEnvConfigInfo（project_id + env_id，config_type=api）。
 
-    :param project_id: 应用主键 ID
+    :param project_id: 应用主键ID
     :param env_name: 环境枚举名称
-    :return: (host, port)；port 可为空
-    :raises ParameterException: env_name 为空
-    :raises NotFoundException: 环境枚举或 API 配置不存在
+    :return: (host, port)；port可为空
+    :raises ParameterException: env_name为空
+    :raises NotFoundException: 环境枚举或API配置不存在
     """
     pid = int(project_id)
     name = (env_name or "").strip()
@@ -153,7 +153,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         :param env_in: 环境枚举创建schema
         :return: 创建或恢复后的环境枚举实例
-        :raises DataBaseStorageException: 违反数据库约束
+        :raises DataBaseStorageException: 违反数据库约束或记录异常丢失
         """
         env_name: str = env_in.env_name
         # 业务层验证：检查环境枚举名称是否存在
@@ -179,7 +179,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def update_env(self, env_in: AutoTestApiEnvUpdate) -> AutoTestApiEnvEnumInfo:
         """
-        更新环境枚举，按env_id或env_code定位。
+        更新环境枚举，根据env_id或env_code定位。
 
         :param env_in: 环境枚举更新schema
         :return: 更新后的环境枚举实例
@@ -216,7 +216,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def delete_env(self, env_id: Optional[int] = None, env_code: Optional[str] = None) -> AutoTestApiEnvEnumInfo:
         """
-        软删除环境枚举（state=1）。
+        软删除环境枚举。
 
         :param env_id: 环境枚举主键，与env_code二选一
         :param env_code: 环境枚举标识代码，与env_id二选一
@@ -235,7 +235,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
         """
-        按ID或code列表批量软删除环境枚举。
+        根据ID或code列表批量软删除环境枚举。
 
         :param env_in: 环境枚举删除schema
         :return: 更新条数

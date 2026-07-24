@@ -123,7 +123,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
     async def update_roles(self, role: Role, menu_ids: List[int], router_infos: List[dict]) -> None:
         """
-        重置角色的菜单与路由关联：先清空再按入参重新绑定。
+        重置角色的菜单与路由关联：先清空再根据入参重新绑定。
 
         :param role: 角色实例
         :param menu_ids: 菜单ID列表
@@ -155,10 +155,11 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
     async def delete_roles(self, role_ids: Optional[List[int]] = None, role_codes: Optional[List[str]] = None) -> int:
         """
-        根据ID或code列表物理删除角色
-        :param role_ids:
-        :param role_codes:
-        :return:
+        根据ID或code列表物理删除角色。
+
+        :param role_ids: 角色ID列表
+        :param role_codes: 角色编码列表
+        :return: 实际删除的记录数
         """
         n = 0
         if role_ids:

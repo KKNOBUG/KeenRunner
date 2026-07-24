@@ -551,7 +551,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def hard_delete(self, id: int) -> ModelType:
         """
-        硬删除：从数据库中永久移除记录，无论记录是否已软删除（state=1），都将被物理删除。
+        硬删除：从数据库中永久移除记录，无论记录是否已软删除，都将被物理删除。
 
         :param id: 要硬删除的记录ID
         :return: 被删除的数据库对象

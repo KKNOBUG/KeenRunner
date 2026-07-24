@@ -33,7 +33,6 @@ from backend.enums import AutoTestConfigNodeType
 
 
 class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiConfigCreate, AutoTestApiConfigUpdate]):
-    """环境配置 CRUD 与相关业务。"""
 
     def __init__(self):
         super().__init__(model=AutoTestApiEnvConfigInfo)
@@ -69,7 +68,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 配置实例或None
-        :raises ParameterException: config_code 为空
+        :raises ParameterException: config_code为空
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_code:
@@ -86,10 +85,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def create_config(self, config_in: AutoTestApiConfigCreate) -> AutoTestApiEnvConfigInfo:
         """
-        创建环境配置；同应用/环境/类型/名称已存在则恢复并更新。
+        创建环境配置；同应用/环境/类型/名称已存在则覆盖更新。
 
         :param config_in: 配置创建 schema
-        :return: 创建或恢复后的配置实例
+        :return: 创建或覆盖更新后的配置实例
         :raises ParameterException: 配置类型或必填字段非法
         :raises NotFoundException: 环境或应用不存在
         :raises DataBaseStorageException: 违反数据库约束
@@ -264,7 +263,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def select_config(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvConfigInfo]]:
         """
-        分页查询环境配置列表。
+        根据条件分页查询环境配置列表。
 
         :param search: Tortoise Q 查询条件
         :param page: 页码
@@ -282,16 +281,16 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
-        按应用ID列表查询未删除环境配置并按类型嵌套归类。
+        根据应用ID列表查询未删除环境配置并根据类型嵌套归类。
 
-        - 结构：project_id -> env_id -> config_type -> config_name -> 连接字段字典
+        - 结构为project_id -> env_id -> config_type -> config_name -> 连接字段字典。
 
-        :param project_ids: 应用主键 ID 列表
-        :return: 嵌套归类结果；请求中的应用 ID 均出现在第一层
+        :param project_ids: 应用主键ID列表
+        :return: 嵌套归类结果；请求中的应用ID均出现在第一层
         :raises ParameterException: project_ids 为空
         """
         if not project_ids:
-            error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
+            error_message: str = "根据应用列表查询环境配置失败, 参数(project_ids)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -338,12 +337,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             config_type: Optional[str] = None,
     ) -> List[str]:
         """
-        未删除配置中 config_name 去重后的列表（按名称升序）。
+        未删除配置中config_name去重后的列表。
 
         :param project_id: 应用ID
         :param env_id: 环境ID
         :param config_type: 配置类型
-        :return:
+        :return: 去重且升序排列的配置名称列表
         """
         stmt: QuerySet = self.model.filter(state__not=1)
         if project_id is not None:

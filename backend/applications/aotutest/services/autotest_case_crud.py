@@ -33,9 +33,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
-        按主键ID查询用例。
+        根据主键ID查询用例。
 
-        :param case_id: 用例主键 ID
+        :param case_id: 用例主键ID
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
@@ -56,7 +56,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def get_by_code(self, case_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
-        按用例标识代码查询用例。
+        根据用例标识代码查询用例。
 
         :param case_code: 用例标识代码
         :param on_error: 未找到时是否抛出NotFoundException
@@ -83,7 +83,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param case_in: 用例创建 schema
         :return: 创建后的用例实例
-        :raises ParameterException: 参数异常
+        :raises ParameterException: 标签列表为空或格式非法
         :raises NotFoundException: 标签不存在
         :raises DataAlreadyExistsException: 同项目下用例名重复
         :raises DataBaseStorageException: 违反数据库约束
@@ -123,11 +123,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
         """
-        更新用例，按case_id或case_code定位并递增case_version。
+        更新用例，根据case_id或case_code定位并递增case_version。
 
         :param case_in: 用例更新schema，需含case_id或case_code
         :return: 更新后的用例实例
-        :raises NotFoundException: 用例不存在
+        :raises NotFoundException: 用例或关联标签不存在
         :raises DataAlreadyExistsException: 同项目下用例名重复
         :raises DataBaseStorageException: 违反数据库约束
         """
@@ -240,7 +240,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param cases_data: 用例更新 schema 列表
         :return: 含created_count、updated_count、success_detail的字典
-        :raises TypeRejectException: 列表项类型非法
+        :raises NotFoundException: 关联标签不存在
         :raises ParameterException: 必填字段缺失
         :raises DataAlreadyExistsException: 同项目下用例名重复
         :raises DataBaseStorageException: 数据库写入异常

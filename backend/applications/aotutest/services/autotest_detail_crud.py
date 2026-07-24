@@ -65,7 +65,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
-        :raises ParameterException: detail_code 为空
+        :raises ParameterException: detail_code为空
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_code:
@@ -214,7 +214,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
         # 业务层验证：检查明细信息是否存在
         if detail_id:
-            instance = await self.get_by_id(detail_id=detail_id, on_error=False, state__not=1)
+            instance = await self.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_conditions(
                 only_one=True,
