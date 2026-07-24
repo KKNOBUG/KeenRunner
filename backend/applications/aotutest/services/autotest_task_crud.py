@@ -67,7 +67,7 @@ def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str
     解析用例执行配置：顶层权威；兼容读取旧数据中 task_kwargs 嵌套副本。
 
     :param task_dict: 任务字段字典
-    :return: cases_execute_config 或 None
+    :return: cases_execute_config 或None
     """
     cases_cfg = task_dict.get("cases_execute_config")
     if isinstance(cases_cfg, dict) and cases_cfg:
@@ -96,7 +96,6 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
 
 
 class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
-    """任务 CRUD 与调度开关相关业务。"""
 
     def __init__(self):
         super().__init__(model=AutoTestApiTaskInfo)
@@ -104,7 +103,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
     @staticmethod
     def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        将任务字典中的枚举字段（task_type 等）转为 ``.value`` 原始值。
+        将任务字典中的枚举字段（task_type 等）转为原始值。
 
         :param data: 任务字段字典
         :return: 原地转换后的字典
@@ -117,7 +116,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
     @staticmethod
     def _apply_related_env_ids(task_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
-        根据 cases_execute_config 汇总 related_cases_env_id，并规范化 task_kwargs。
+        根据cases_execute_config汇总related_cases_env_id，并规范化task_kwargs。
 
         :param task_dict: 任务字段字典
         :return: 原地处理后的字典
@@ -136,14 +135,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
-        按主键 ID 查询任务。
+        根据主键ID查询任务。
 
         :param task_id: 任务主键 ID
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 任务实例或 None
-        :raises ParameterException: task_id 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :return: 任务实例或None
+        :raises ParameterException: task_id为空
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not task_id:
             error_message: str = "查询任务信息失败, 参数(task_id)不允许为空"
@@ -158,14 +157,14 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def get_by_code(self, task_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
         """
-        按任务标识代码查询任务。
+        根据任务标识代码查询任务。
 
         :param task_code: 任务标识代码
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 任务实例或 None
-        :raises ParameterException: task_code 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :return: 任务实例或None
+        :raises ParameterException: task_code为空
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not task_code:
             error_message: str = "查询任务信息失败, 参数(task_code)不允许为空"
@@ -182,7 +181,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         创建任务，校验应用存在及 (task_name, task_project) 唯一。
 
-        :param task_in: 任务创建 schema
+        :param task_in: 任务创 schema
         :return: 创建后的任务实例
         :raises NotFoundException: 应用不存在
         :raises DataAlreadyExistsException: 同应用下任务名已存在
@@ -216,9 +215,9 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestApiTaskInfo:
         """
-        更新任务，按 task_id 或 task_code 定位并校验 (task_name, task_project) 唯一。
+        更新任务，按task_id或task_code定位并校验 (task_name, task_project) 唯一。
 
-        :param task_in: 任务更新 schema
+        :param task_in: 任务更新schema
         :return: 更新后的任务实例
         :raises NotFoundException: 任务不存在
         :raises DataAlreadyExistsException: 同应用下任务名已存在
@@ -279,8 +278,8 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         软删除任务（state=1）并关闭调度（task_enabled=False）。
 
-        :param task_id: 任务主键 ID，与 task_code 二选一
-        :param task_code: 任务标识代码，与 task_id 二选一
+        :param task_id: 任务主键ID，与task_code二选一
+        :param task_code: 任务标识代码，与task_id二选一
         :return: 软删除后的任务实例
         :raises NotFoundException: 任务不存在
         """
@@ -298,7 +297,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         设置任务是否启用调度（仅切换 task_enabled，触发依赖 crontab）。
 
-        :param task_id: 任务主键 ID
+        :param task_id: 任务主键ID
         :param enabled: 是否启用
         :return: 更新后的任务实例
         :raises NotFoundException: 任务不存在
@@ -310,7 +309,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTaskInfo]]:
         """
-        分页查询任务列表；默认按最后执行时间倒序，未执行过的排在后面。
+        根据条件分页查询任务列表；默认按最后执行时间倒序，未执行过的排在后面。
 
         :param search: Tortoise Q 查询条件
         :param page: 页码
@@ -323,7 +322,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             order = order or ["-last_execute_time"]
             # 按执行时间排序时：有执行记录优先（NULL 置后），再按时间倒序
             if order == ["-last_execute_time"] or (
-                len(order) == 1 and order[0] == "-last_execute_time"
+                    len(order) == 1 and order[0] == "-last_execute_time"
             ):
                 query = self.model.filter(search)
                 total = await query.count()

@@ -41,14 +41,14 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def get_by_id(self, config_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvConfigInfo]:
         """
-        按主键 ID 查询环境配置。
+        根据主键ID查询环境配置。
 
         :param config_id: 配置主键
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 配置实例或 None
-        :raises ParameterException: config_id 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :return: 配置实例或None
+        :raises ParameterException: config_id为空
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_id:
             error_message: str = "查询配置信息失败, 参数(config_id)不允许为空"
@@ -63,14 +63,14 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def get_by_code(self, config_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvConfigInfo]:
         """
-        按配置标识代码查询环境配置。
+        根据配置标识代码查询环境配置。
 
         :param config_code: 配置标识代码
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 配置实例或 None
+        :return: 配置实例或None
         :raises ParameterException: config_code 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_code:
             error_message: str = "查询配置信息失败, 参数(config_code)不允许为空"
@@ -152,9 +152,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def update_config(self, config_in: AutoTestApiConfigUpdate) -> AutoTestApiEnvConfigInfo:
         """
-        更新环境配置，按 config_id 或 config_code 定位。
+        更新环境配置，根据config_id或config_code定位。
 
-        :param config_in: 配置更新 schema
+        :param config_in: 配置更新schema
         :return: 更新后的配置实例
         :raises ParameterException: 配置类型或必填字段非法
         :raises NotFoundException: 配置不存在
@@ -229,10 +229,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def delete_config(self, config_id: Optional[int] = None, config_code: Optional[str] = None) -> AutoTestApiEnvConfigInfo:
         """
-        软删除环境配置（state=1）。
+        软删除环境配置。
 
-        :param config_id: 配置主键，与 config_code 二选一
-        :param config_code: 配置标识代码，与 config_id 二选一
+        :param config_id: 配置主键，与config_code二选一
+        :param config_code: 配置标识代码，与config_id二选一
         :return: 软删除后的配置实例
         :raises NotFoundException: 配置不存在
         """
@@ -247,9 +247,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def delete_configs(self, config_in: AutoTestApiConfigDelete) -> int:
         """
-        按 ID 或 code 列表批量软删除环境配置。
+        根据ID或code列表批量软删除环境配置。
 
-        :param config_in: 环境配置删除 schema
+        :param config_in: 环境配置删除schema
         :return: 更新条数
         """
         config_ids: Optional[List[int]] = config_in.config_ids
@@ -282,9 +282,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
-        按应用 ID 列表查询未删除环境配置并按类型嵌套归类。
+        按应用ID列表查询未删除环境配置并按类型嵌套归类。
 
-        结构：project_id -> env_id -> config_type -> config_name -> 连接字段字典。
+        - 结构：project_id -> env_id -> config_type -> config_name -> 连接字段字典
 
         :param project_ids: 应用主键 ID 列表
         :return: 嵌套归类结果；请求中的应用 ID 均出现在第一层
@@ -339,7 +339,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
     ) -> List[str]:
         """
         未删除配置中 config_name 去重后的列表（按名称升序）。
-        可组合传入 project_id、env_id、config_type（与库中 CharEnum 取值一致，如 api/database/file）缩小范围。
+
+        :param project_id: 应用ID
+        :param env_id: 环境ID
+        :param config_type: 配置类型
+        :return:
         """
         stmt: QuerySet = self.model.filter(state__not=1)
         if project_id is not None:

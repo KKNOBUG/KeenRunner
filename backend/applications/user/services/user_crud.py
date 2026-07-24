@@ -30,21 +30,20 @@ from backend.services import verify_password, get_password_hash
 
 
 class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
-    """用户 CRUD 与认证相关业务。"""
 
     def __init__(self):
         super().__init__(model=User)
 
     async def get_by_id(self, user_id: int, on_error: bool = True, **kwargs) -> Optional[User]:
         """
-        按主键 ID 查询用户。
+        根据主键ID查询用户。
 
-        :param user_id: 用户 ID
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param user_id: 用户ID
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 用户实例或 None
-        :raises ParameterException: user_id 为空
-        :raises NotFoundException: on_error 为 True 且用户不存在
+        :return: 用户实例或None
+        :raises ParameterException: user_id为空
+        :raises NotFoundException: on_error为True且用户不存在
         """
         if not user_id:
             error_message: str = "查询用户信息失败, 参数(user_id)不允许为空"
@@ -59,14 +58,14 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def get_by_username(self, username: str, on_error: bool = False, **kwargs) -> Optional[User]:
         """
-        按登录账号查询用户。
+        根据登录账号查询用户。
 
         :param username: 用户账号
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 用户实例或 None
-        :raises ParameterException: username 为空
-        :raises NotFoundException: on_error 为 True 且用户不存在
+        :return: 用户实例或None
+        :raises ParameterException: username为空
+        :raises NotFoundException: on_error为True且用户不存在
         """
         if not username:
             error_message: str = "查询用户信息失败, 参数(username)不允许为空"
@@ -81,14 +80,14 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def get_by_alias(self, alias: str, on_error: bool = False, **kwargs) -> Optional[User]:
         """
-        按用户姓名（alias）查询单条用户。
+        根据用户姓名（alias）查询单条用户。
 
         :param alias: 用户姓名
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 用户实例或 None
-        :raises ParameterException: alias 为空
-        :raises NotFoundException: on_error 为 True 且用户不存在
+        :return: 用户实例或None
+        :raises ParameterException: alias为空
+        :raises NotFoundException: on_error为True且用户不存在
         """
         if not alias:
             error_message: str = "查询用户信息失败, 参数(alias)不允许为空"
@@ -124,7 +123,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         更新用户最后登录时间为当前时刻。
 
-        :param user_id: 用户 ID
+        :param user_id: 用户ID
         :return: None
         :raises NotFoundException: 用户不存在
         """
@@ -153,9 +152,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def delete_user(self, user_id: int, **kwargs) -> User:
         """
-        软删除单个用户并吊销全部 Token。
+        软删除单个用户并吊销全部Token。
 
-        :param user_id: 用户 ID
+        :param user_id: 用户ID
         :param kwargs: 额外查询条件
         :return: 更新后的用户实例
         :raises NotFoundException: 用户不存在
@@ -169,10 +168,10 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def delete_users(self, user_in: UserBatchDelete) -> List[int]:
         """
-        批量软删除用户并吊销 Token。
+        批量软删除用户并吊销Token。
 
-        :param user_in: 含 user_ids 的批量删除入参
-        :return: 实际删除的用户 ID 列表
+        :param user_in: 含user_ids的批量删除入参
+        :return: 实际删除的用户ID列表
         """
         user_ids: Optional[List[int]] = user_in.user_ids
         if user_ids:
@@ -203,7 +202,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
     @classmethod
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
         """
-        重置用户角色关联：先清空再按 role_ids 重新绑定。
+        重置用户角色关联：先清空再按role_ids重新绑定。
 
         :param user: 用户实例
         :param role_ids: 角色 ID 列表；空列表表示清空
@@ -216,10 +215,10 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def reset_password(self, user_id: int):
         """
-        管理员重置用户密码为默认值并吊销 Token；超级用户不可重置。
+        管理员重置用户密码为默认值并吊销Token；超级用户不可重置。
 
-        :param user_id: 用户 ID
-        :return: 不含密码的用户字典，或 ForbiddenResponse
+        :param user_id: 用户ID
+        :return: 不含密码的用户字典，或ForbiddenResponse
         """
         instance = await self.get_or_error(id=user_id)
         if instance.is_superuser:

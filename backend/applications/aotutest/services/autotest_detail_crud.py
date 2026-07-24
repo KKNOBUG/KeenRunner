@@ -30,22 +30,20 @@ from backend.core.exceptions import (
 
 
 class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
-    """步骤执行明细 CRUD 与相关业务。"""
 
     def __init__(self):
-        """初始化 CRUD，绑定模型 AutoTestApiDetailInfo。"""
         super().__init__(model=AutoTestApiDetailInfo)
 
     async def get_by_id(self, detail_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
         """
-        按主键 ID 查询执行明细。
+        根据主键ID查询明细。
 
-        :param detail_id: 明细主键 ID
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param detail_id: 明细主键ID
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 明细实例或 None
-        :raises ParameterException: detail_id 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :return: 明细实例或None
+        :raises ParameterException: detail_id为空
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_id:
             error_message: str = "查询明细信息失败, 参数(detail_id)不允许为空"
@@ -61,14 +59,14 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
         """
-        按 report_code 查询一条明细（参数名 detail_code）。
+        根据报告标识代码查询明细。
 
         :param detail_code: 报告标识代码 report_code
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 明细实例或 None
+        :return: 明细实例或None
         :raises ParameterException: detail_code 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_code:
             error_message: str = "查询明细信息失败, 参数(detail_code)不允许为空"
@@ -200,9 +198,9 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             report_code: Optional[str] = None
     ) -> AutoTestApiDetailInfo:
         """
-        软删除明细，需提供 detail_id 或 (report_code, step_code)。
+        软删除明细，需提供 detail_id或(report_code, step_code)。
 
-        :param detail_id: 明细主键 ID，与 (report_code, step_code) 二选一
+        :param detail_id: 明细主键ID，与(report_code, step_code)二选一
         :param step_code: 步骤标识代码
         :param report_code: 报告标识代码
         :return: 软删除后的明细实例
@@ -231,7 +229,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def select_details(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDetailInfo]]:
         """
-        分页查询明细列表。
+        根据条件分页查询明细列表。
 
         :param search: Tortoise Q 查询条件
         :param page: 页码

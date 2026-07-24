@@ -79,7 +79,7 @@ async def delete_report(
     """
     按id或code删除明细。
 
-    :param detail_id: 明细主键 ID
+    :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试 CRUD 依赖聚合
@@ -153,7 +153,7 @@ async def get_step_detail(
     """
     按id或code查询明细。
 
-    :param detail_id: 明细主键 ID
+    :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试 CRUD 依赖聚合

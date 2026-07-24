@@ -170,7 +170,7 @@ class ScaffoldModel(models.Model):
         :param fk_include_fields: 需要引入的外键表字段列表
         :param fk_exclude_fields: 需要排除的外键表字段列表
         :param cache: 缓存字典，避免重复查询
-        :return: (字段名, 关联对象字典或 None)
+        :return: (字段名, 关联对象字典或None)
         """
         fk_instance = getattr(self, field)
         if fk_instance:
@@ -321,11 +321,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """
 
     def __init__(self, model: Type[ModelType]):
-        """
-        初始化 CRUD 实例。
-
-        :param model: 数据库模型类，必须是 ScaffoldModel 的子类
-        """
         self.model = model
 
     def _fill_created_user(self, obj_dict: Dict[str, Any]) -> None:
@@ -353,7 +348,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get_or_error(self, id: int, **kwargs) -> ModelType:
         """
-        根据 ID 获取对象，不存在时抛出异常。
+        根据ID获取对象，不存在时抛出异常。
 
         :param id: 对象唯一标识符
         :param kwargs: 额外的过滤条件
@@ -364,11 +359,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get_or_none(self, id: int, **kwargs) -> Optional[ModelType]:
         """
-        根据 ID 获取对象，不存在时返回 None。
+        根据ID获取对象，不存在时返回None。
 
         :param id: 对象唯一标识符
         :param kwargs: 额外的过滤条件
-        :return: 数据库模型实例或 None
+        :return: 数据库模型实例或None
         """
         return await self.model.filter(id=id, **kwargs).first()
 
@@ -381,10 +376,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         根据条件查询对象。
 
-        :param only_one: True 返回单条记录，False 返回列表
-        :param on_error: True 时未找到则抛出 NotFoundException
+        :param only_one: True返回单条记录，False返回列表
+        :param on_error: True时未找到则抛出NotFoundException
         :param kwargs: 查询条件字段
-        :return: 单条记录、记录列表或 None
+        :return: 单条记录、记录列表或None
         :raises ParameterException: 查询条件字段错误时抛出
         :raises NotFoundException: 未找到记录且 on_error=True 时抛出
         """
@@ -411,12 +406,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             related: Optional[list] = None
     ) -> Tuple[int, List[ModelType]]:
         """
-        分页查询记录列表。
+        根据条件分页查询记录列表。
 
-        :param page: 页码，从 1 开始
+        :param page: 页码，从1开始
         :param page_size: 每页记录数
-        :param search: 搜索条件，使用 Q 对象组合复杂查询
-        :param order: 排序字段列表，如 ["-created_time"] 表示按创建时间倒序
+        :param search: 搜索条件，使用Q对象组合复杂查询
+        :param order: 排序字段列表，如["-created_time"]表示按创建时间倒序
         :param related: 预加载的关联字段列表
         :return: (总记录数, 当前页记录列表)
         """
@@ -432,7 +427,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         创建新记录。
 
-        :param obj_in: 创建数据，可以是 Pydantic Schema 实例或字典
+        :param obj_in: 创建数据，可以是Pydantic Schema实例或字典
         :return: 创建成功的数据库对象
         """
         if isinstance(obj_in, Dict):
@@ -448,7 +443,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         批量创建记录。
 
-        :param obj_list: 创建数据列表，每个元素可以是 Pydantic Schema 实例或字典
+        :param obj_list: 创建数据列表，每个元素可以是Pydantic Schema实例或字典
         :return: 创建成功的数据库对象列表
         """
         if not obj_list:
@@ -472,8 +467,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         更新记录。
 
-        :param id: 要更新的记录 ID
-        :param obj_in: 更新数据，可以是 Pydantic Schema 实例或字典
+        :param id: 要更新的记录ID
+        :param obj_in: 更新数据，可以是Pydantic Schema实例或字典
         :return: 更新后的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
         """
@@ -497,8 +492,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         批量更新记录。
 
-        :param updates: 更新数据列表，每个元素必须包含 key_field 指定的字段
-        :param key_field: 作为更新条件的字段名，默认为 "id"
+        :param updates: 更新数据列表，每个元素必须包含key_field指定的字段
+        :param key_field: 作为更新条件的字段名，默认为"id"
         :param strict: 是否严格校验字段
         :return: 实际更新的记录数
 
@@ -553,9 +548,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def remove_or_error(self, id: int, **kwargs) -> ModelType:
         """
-        删除记录（物理删除），不存在时抛出异常。
+        硬删除：不存在时抛出异常。
 
-        :param id: 要删除的记录 ID
+        :param id: 要删除的记录ID
         :param kwargs: 额外的过滤条件
         :return: 被删除的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
@@ -567,7 +562,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def hard_delete(self, id: int) -> ModelType:
         """
         硬删除：从数据库中永久移除记录，无论记录是否已软删除（state=1），都将被物理删除。
-        :param id: 要硬删除的记录 ID
+        :param id: 要硬删除的记录ID
         :return: 被删除的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
         """
@@ -580,7 +575,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         批量硬删除：从数据库中永久移除多条记录。
 
-        :param ids: 要硬删除的记录 ID 列表
+        :param ids: 要硬删除的记录ID列表
         :return: 实际删除的记录数
         """
         if not ids:
@@ -611,21 +606,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return QueryBuilder(self.model)
 
     async def count(self, search: Q = Q()) -> int:
-        """
-        统计记录数量。
-
-        :param search: 搜索条件
-        :return: 记录数量
-        """
+        """统计记录数量。"""
         return await self.model.filter(search).count()
 
     async def exists(self, **kwargs) -> bool:
-        """
-        检查是否存在符合条件的记录。
-
-        :param kwargs: 查询条件
-        :return: 是否存在
-        """
+        """检查是否存在符合条件的记录。"""
         return await self.model.filter(**kwargs).exists()
 
     async def aggregate(
@@ -734,7 +719,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         创建记录及其关联数据（在事务中执行）。
 
         :param obj_in: 主记录创建数据
-        :param related_data: 关联数据字典，格式为 {"field_name": [obj1, obj2, ...]}
+        :param related_data: 关联数据字典，格式为{"field_name": [obj1, obj2, ...]}
         :return: 创建成功的主记录对象
         :raises Exception: 创建失败时回滚事务
         """
@@ -769,9 +754,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         更新记录及其关联数据（在事务中执行）。
 
-        :param id: 要更新的记录 ID
+        :param id: 要更新的记录ID
         :param obj_in: 主记录更新数据
-        :param related_updates: 关联数据更新字典，格式为 {"field_name": [{"id": 1, "data": {...}}, ...]}
+        :param related_updates: 关联数据更新字典，格式为{"field_name": [{"id": 1, "data": {...}}, ...]}
         :return: 更新后的主记录对象
         :raises Exception: 更新失败时回滚事务
         """
@@ -800,13 +785,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete(self, id: int, updated_user: Optional[str] = None) -> ModelType:
         """
-        软删除：将记录标记为已删除（state=1）。
+        软删除：将记录标记为已删除
 
-        :param id: 要软删除的记录 ID
-        :param updated_user: 执行操作的用户标识（可选）
+        :param id: 要软删除的记录ID
+        :param updated_user: 执行操作的用户标识
         :return: 更新后的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
-        :raises ParameterException: 模型未继承 StateModel 时抛出
+        :raises ParameterException: 模型未继承StateModel时抛出
         """
         obj = await self.get_or_error(id=id)
         if not hasattr(obj, 'state'):
@@ -826,13 +811,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete_restore(self, id: int, updated_user: Optional[str] = None) -> ModelType:
         """
-        恢复软删除的记录（state=0）。
+        恢复软删除的记录
 
-        :param id: 要恢复的记录 ID
-        :param updated_user: 执行操作的用户标识（可选）
+        :param id: 要恢复的记录ID
+        :param updated_user: 执行操作的用户标识
         :return: 恢复后的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
-        :raises ParameterException: 模型未继承 StateModel 时抛出
+        :raises ParameterException: 模型未继承StateModel时抛出
         """
         obj = await self.get_or_error(id=id)
 
@@ -858,14 +843,14 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             order: Optional[list] = None
     ) -> Tuple[int, List[ModelType]]:
         """
-        查询已软删除的记录列表（state=1）。
+        查询已软删除的记录列表
 
-        :param page: 页码，从 1 开始
+        :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 额外的搜索条件
-        :param order: 排序字段列表，默认按 updated_time 倒序（即最近删除的在前）
+        :param order: 排序字段列表，默认按updated_time倒序
         :return: (总记录数, 已删除记录列表)
-        :raises ParameterException: 模型未继承 StateModel 时抛出
+        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法查询已删除记录"
@@ -878,12 +863,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
         """
-        批量软删除（state=1）。
+        批量软删除
 
-        :param ids: 要软删除的记录 ID 列表
-        :param updated_user: 执行操作的用户标识（可选）
+        :param ids: 要软删除的记录ID列表
+        :param updated_user: 执行操作的用户标识
         :return: 实际更新的记录数
-        :raises ParameterException: 模型未继承 StateModel 时抛出
+        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量软删除"
@@ -903,12 +888,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete_restore_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
         """
-        批量恢复软删除的记录（state=0）。
+        批量恢复软删除的记录
 
-        :param ids: 要恢复的记录 ID 列表
-        :param updated_user: 执行操作的用户标识（可选）
+        :param ids: 要恢复的记录ID列表
+        :param updated_user: 执行操作的用户标识
         :return: 实际恢复的记录数
-        :raises ParameterException: 模型未继承 StateModel 时抛出
+        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量恢复"
@@ -961,13 +946,7 @@ class QueryBuilder(Generic[ModelType]):
         self._prefetch: List[str] = []
 
     def clone(self) -> 'QueryBuilder[ModelType]':
-        """
-        克隆当前查询构建器，创建独立副本。
-
-        用于安全复用基础查询条件，避免状态污染。
-
-        :return: 新的 QueryBuilder 实例，复制当前所有条件
-        """
+        """克隆当前查询构建器，创建独立副本。"""
         new_builder = QueryBuilder(self.model)
         new_builder._filters = self._filters.copy()
         new_builder._excludes = self._excludes.copy()
@@ -1057,7 +1036,7 @@ class QueryBuilder(Generic[ModelType]):
         """
         分页查询。
 
-        :param page: 页码，从 1 开始
+        :param page: 页码，从1开始
         :param page_size: 每页数量
         :return: (总记录数, 当前页记录列表)
         """

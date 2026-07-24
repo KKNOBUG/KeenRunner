@@ -27,22 +27,20 @@ from backend.enums import AutoTestCaseType
 
 
 class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
-    """用例 CRUD 与批量更新相关业务。"""
 
     def __init__(self):
-        """初始化 CRUD，绑定模型 AutoTestApiCaseInfo。"""
         super().__init__(model=AutoTestApiCaseInfo)
 
     async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
         """
-        按主键 ID 查询用例。
+        按主键ID查询用例。
 
         :param case_id: 用例主键 ID
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 用例实例或 None
-        :raises ParameterException: case_id 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :return: 用例实例或None
+        :raises ParameterException: case_id为空
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not case_id:
             error_message: str = "查询用例信息失败, 参数(case_id)不允许为空"
@@ -61,11 +59,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         按用例标识代码查询用例。
 
         :param case_code: 用例标识代码
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 用例实例或 None
-        :raises ParameterException: case_code 为空
-        :raises NotFoundException: on_error 为 True 且记录不存在
+        :return: 用例实例或None
+        :raises ParameterException: case_code为空
+        :raises NotFoundException: on_error为True且记录不存在
         """
         if not case_code:
             error_message: str = "查询用例信息失败, 参数(case_code)不允许为空"
@@ -125,9 +123,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
         """
-        更新用例，按 case_id 或 case_code 定位并递增 case_version。
+        更新用例，按case_id或case_code定位并递增case_version。
 
-        :param case_in: 用例更新 schema，需含 case_id 或 case_code
+        :param case_in: 用例更新schema，需含case_id或case_code
         :return: 更新后的用例实例
         :raises NotFoundException: 用例不存在
         :raises DataAlreadyExistsException: 同项目下用例名重复
@@ -186,10 +184,10 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestApiCaseInfo:
         """
-        删除用例：先硬删关联步骤，再删除用例；公共脚本需无引用。
+        删除用例，先硬删关联步骤，再删除用例；公共脚本需无引用。
 
-        :param case_id: 用例主键 ID，与 case_code 二选一
-        :param case_code: 用例标识代码，与 case_id 二选一
+        :param case_id: 用例主键ID，与case_code二选一
+        :param case_code: 用例标识代码，与case_id二选一
         :return: 删除后的用例实例
         :raises NotFoundException: 用例不存在
         :raises DataAlreadyExistsException: 公共脚本仍被引用
@@ -220,7 +218,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiCaseInfo]]:
         """
-        分页查询用例列表。
+        根据条件分页查询用例。
 
         :param search: Tortoise Q 查询条件
         :param page: 页码
@@ -238,10 +236,10 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def batch_update_or_create_cases(self, cases_data: List[AutoTestApiCaseUpdate]) -> Dict[str, Any]:
         """
-        批量新增或更新用例：无 case_id/case_code 则新增，有则更新。
+        批量新增或更新用例：无case_id/case_code则新增，有则更新。
 
         :param cases_data: 用例更新 schema 列表
-        :return: 含 created_count、updated_count、success_detail 的字典
+        :return: 含created_count、updated_count、success_detail的字典
         :raises TypeRejectException: 列表项类型非法
         :raises ParameterException: 必填字段缺失
         :raises DataAlreadyExistsException: 同项目下用例名重复

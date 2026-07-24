@@ -54,7 +54,7 @@ async def delete_router(
     """
     删除路由信息。
 
-    :param router_id: 路由 ID
+    :param router_id: 路由ID
     :param router_crud: 路由 CRUD 服务
     :return: 统一 HTTP 响应
     """
@@ -98,7 +98,7 @@ async def get_user(
     """
     查询路由信息。
 
-    :param router_id: 路由 ID
+    :param router_id: 路由ID
     :param router_crud: 路由 CRUD 服务
     :return: 统一 HTTP 响应
     """

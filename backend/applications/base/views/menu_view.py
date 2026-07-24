@@ -22,7 +22,7 @@ def _norm_menu_type(v) -> str:
     """
     规范化菜单类型值。
 
-    :param v: 原始菜单类型（可为枚举、字符串或 None）
+    :param v: 原始菜单类型（可为枚举、字符串或None）
     :return: 规范化后的菜单类型字符串
     """
     if v is None:
@@ -79,7 +79,7 @@ async def list_menu(
         """
         递归获取菜单及其子菜单。
 
-        :param menu_id: 菜单 ID
+        :param menu_id: 菜单ID
         :return: 含 children 的菜单字典，或未找到时的响应
         """
         menu = await menu_crud.get_by_id(menu_id=menu_id, on_error=False)
@@ -109,7 +109,7 @@ async def get_menu(
     """
     查看菜单。
 
-    :param menu_id: 菜单 ID
+    :param menu_id: 菜单ID
     :param menu_crud: 菜单 CRUD 服务
     :return: 统一 HTTP 响应
     """
@@ -178,7 +178,7 @@ async def delete_menu(
     """
     删除菜单。
 
-    :param id: 菜单 ID
+    :param id: 菜单ID
     :param menu_crud: 菜单 CRUD 服务
     :return: 统一 HTTP 响应
     """

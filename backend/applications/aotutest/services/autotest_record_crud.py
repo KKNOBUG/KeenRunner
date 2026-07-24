@@ -25,30 +25,26 @@ from backend.core.exceptions import ParameterException
 
 
 class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
-    """任务执行记录 CRUD 与相关业务。"""
 
     def __init__(self):
         super().__init__(model=AutoTestApiRecordInfo)
 
-    async def get_by_celery_id(self, celery_id: str) -> Optional[AutoTestApiRecordInfo]:
+    async def get_by_celery_id(self, celery_id: str, **kwargs) -> Optional[AutoTestApiRecordInfo]:
         """
-        按 Celery 任务 ID 查询执行记录。
+        根据Celery任务ID查询执行记录。
 
-        :param celery_id: Celery 任务 ID；为空时返回 None
-        :return: 记录实例或 None
+        :param celery_id: Celery任务ID；为空时返回None
+        :return: 记录实例或None
         """
         if not celery_id:
             return None
-        return await self.model.filter(celery_id=celery_id).first()
+        return await self.model.filter(celery_id=celery_id, **kwargs).first()
 
-    async def create_record(
-            self,
-            data: Union[AutoTestApiRecordCreate, Dict[str, Any]],
-    ) -> AutoTestApiRecordInfo:
+    async def create_record(self, data: Union[AutoTestApiRecordCreate, Dict[str, Any]]) -> AutoTestApiRecordInfo:
         """
         创建一条任务执行记录。
 
-        :param data: 创建入参 Schema 或字段字典
+        :param data: 创建入参Schema或字段字典
         :return: 新建的记录实例
         """
         if isinstance(data, dict):
@@ -63,13 +59,13 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             data: Union[AutoTestApiRecordUpdate, Dict[str, Any]],
     ) -> Optional[AutoTestApiRecordInfo]:
         """
-        按 celery_id 更新执行记录；仅写入模型已有字段，部分键允许置空。
+        根据celery_id更新执行记录；仅写入模型已有字段，部分键允许置空。
 
-        :param celery_id: Celery 任务 ID
-        :param data: 更新入参 Schema 或字段字典
-        :return: 更新后的记录；不存在则返回 None
+        :param celery_id: Celery任务ID
+        :param data: 更新入参 Schema或字段字典
+        :return: 更新后的记录；不存在则返回None
         """
-        record = await self.get_by_celery_id(celery_id=celery_id)
+        record = await self.get_by_celery_id(celery_id=celery_id, state__not=1)
         if not record:
             return None
         if isinstance(data, dict):

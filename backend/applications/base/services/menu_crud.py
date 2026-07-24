@@ -18,21 +18,20 @@ from backend.core.exceptions import DataAlreadyExistsException, NotFoundExceptio
 
 
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
-    """菜单 CRUD 相关业务。"""
 
     def __init__(self):
         super().__init__(model=Menu)
 
     async def get_by_id(self, menu_id: int, on_error: bool = True, **kwargs) -> Optional[Menu]:
         """
-        按主键 ID 查询菜单。
+        根据主键ID查询菜单。
 
-        :param menu_id: 菜单 ID
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param menu_id: 菜单ID
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 菜单实例或 None
-        :raises ParameterException: menu_id 为空
-        :raises NotFoundException: on_error 为 True 且菜单不存在
+        :return: 菜单实例或None
+        :raises ParameterException: menu_id为空
+        :raises NotFoundException: on_error为True且菜单不存在
         """
         if not menu_id:
             error_message: str = "查询菜单信息失败, 参数(menu_id)不允许为空"
@@ -47,14 +46,14 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     async def get_by_menu_path(self, path: str, on_error: bool = False, **kwargs) -> Optional[Menu]:
         """
-        按菜单路径查询单条菜单。
+        根据菜单路径查询单条菜单。
 
         :param path: 菜单路径
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 菜单实例或 None
+        :return: 菜单实例或None
         :raises ParameterException: path 为空
-        :raises NotFoundException: on_error 为 True 且菜单不存在
+        :raises NotFoundException: on_error为True且菜单不存在
         """
         if not path:
             error_message: str = "查询菜单信息失败, 参数(path)不允许为空"
@@ -86,9 +85,9 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     async def delete_menu(self, menu_id: int, **kwargs) -> Menu:
         """
-        按 ID 物理删除单个菜单。
+        根据ID物理删除单个菜单。
 
-        :param menu_id: 菜单 ID
+        :param menu_id: 菜单ID
         :param kwargs: 额外查询条件
         :return: 被删除的菜单实例
         :raises NotFoundException: 菜单不存在
@@ -99,9 +98,9 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     async def update_menu(self, menu_in: MenuUpdate) -> Menu:
         """
-        按菜单 ID 更新菜单字段。
+        根据菜单ID更新菜单字段。
 
-        :param menu_in: 更新入参（含 id）
+        :param menu_in: 更新入参
         :return: 更新后的菜单实例
         :raises NotFoundException: 菜单不存在
         """

@@ -20,21 +20,20 @@ from backend.core.exceptions import DataAlreadyExistsException, NotFoundExceptio
 
 
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
-    """部门 CRUD 与闭包表维护（最多两级树）。"""
 
     def __init__(self):
         super().__init__(model=Department)
 
     async def get_by_id(self, department_id: int, on_error: bool = True, **kwargs) -> Optional[Department]:
         """
-        按主键 ID 查询部门。
+        根据主键ID查询部门。
 
-        :param department_id: 部门 ID
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param department_id: 部门ID
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 部门实例或 None
-        :raises ParameterException: department_id 为空
-        :raises NotFoundException: on_error 为 True 且部门不存在
+        :return: 部门实例或None
+        :raises ParameterException: department_id为空
+        :raises NotFoundException: on_error为True且部门不存在
         """
         if not department_id:
             error_message: str = "查询部门信息失败, 参数(department_id)不允许为空"
@@ -49,14 +48,14 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def get_by_code(self, code: str, on_error: bool = False, **kwargs) -> Optional[Department]:
         """
-        按部门代码查询单条部门。
+        根据部门代码查询单条部门。
 
         :param code: 部门代码
-        :param on_error: 未找到时是否抛出 NotFoundException
+        :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 部门实例或 None
-        :raises ParameterException: code 为空
-        :raises NotFoundException: on_error 为 True 且部门不存在
+        :return: 部门实例或None
+        :raises ParameterException: code为空
+        :raises NotFoundException: on_error为True且部门不存在
         """
         if not code:
             error_message: str = "查询部门信息失败, 参数(code)不允许为空"
@@ -96,10 +95,10 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         创建部门：校验父级与唯一性，落库并写入闭包表。
 
         :param department_in: 新增部门入参
-        :param created_user: 可选，覆盖 created_user 字段
+        :param created_user: 可选，覆盖created_user字段
         :return: 新建的部门实例
         :raises ParameterException: 父级不合法
-        :raises DataAlreadyExistsException: code 或 name 已存在
+        :raises DataAlreadyExistsException: code或name已存在
         """
         await self._validate_parent_id(department_in.parent_id)
         code = department_in.code
@@ -117,9 +116,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def delete_department(self, department_id: int) -> Optional[Department]:
         """
-        软删除单个部门并清除闭包表中以该节点为 descendant 的关系。
+        软删除单个部门并清除闭包表中以该节点为descendant的关系。
 
-        :param department_id: 部门 ID
+        :param department_id: 部门ID
         :return: 更新后的部门实例
         :raises NotFoundException: 部门不存在
         """
@@ -134,8 +133,8 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         """
         更新部门：可变更父级（重建闭包表）及基础字段。
 
-        :param department_in: 更新入参（含 id）
-        :param updated_user: 可选，写入 updated_user
+        :param department_in: 更新入参
+        :param updated_user: 可选，写入updated_user
         :return: 更新后的部门实例
         :raises NotFoundException: 部门不存在
         :raises ParameterException: 父级变更不合法或含子部门的顶级部门不能降为子部门
@@ -174,7 +173,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         构建未删除部门的树形结构（从 parent_id=0 递归）。
 
         :param name: 可选，按名称模糊过滤后再建树
-        :return: 顶级部门节点列表，每节点含 children
+        :return: 顶级部门节点列表，每节点含children
         """
         q = Q()
         # 获取所有未被软删除的部门
@@ -234,9 +233,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def delete_departments(self, department_ids: Optional[List[int]]) -> int:
         """
-        按 ID 列表软删除部门（与单笔 delete_department 行为一致）。
+        根据ID列表软删除部门（与单笔 delete_department 行为一致）。
 
-        :param department_ids: 部门 ID 列表
+        :param department_ids: 部门ID列表
         :return: 实际删除成功的条数
         """
         if not department_ids:

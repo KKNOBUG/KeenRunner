@@ -356,7 +356,7 @@ async def _update_task_record_on_end(
     if batch_code:
         data["batch_code"] = batch_code
     record_crud = AutoTestApiTaskRecordCrud()
-    record = await record_crud.get_by_celery_id(celery_id=celery_id)
+    record = await record_crud.get_by_celery_id(celery_id=celery_id, state__not=1)
     if not record:
         LOGGER.error(
             f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录失败, 未找到[celery_id={celery_id}]记录"

@@ -152,7 +152,7 @@ class AutoTestApiStepDbBase(BaseModel):
         将 database_operates 规范为 null 或对象列表；单条 dict 包装为列表。
 
         :param v: 原始值
-        :return: 规范化后的列表或 None
+        :return: 规范化后的列表或None
         """
         if v is None:
             return None
@@ -178,7 +178,7 @@ class AutoTestApiStepRedisBase(BaseModel):
         将 redis_operates 规范为 null 或对象列表；dict 取其 values 作为列表。
 
         :param v: 原始值
-        :return: 规范化后的列表或 None
+        :return: 规范化后的列表或None
         """
         if v is None:
             return None
