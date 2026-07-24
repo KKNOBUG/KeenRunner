@@ -378,13 +378,13 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
     """
     仅解析 xlsx 的第一个 sheet 页（单步骤数据集上传用），自动识别水平/垂直方向。
 
-    :param file_path: xlsx 文件路径。
-    :return: (step_data, dataset_names, dataframe, axis)。step_data 为单 sheet 解析结果：
-             { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }
-             dataset_names 为该 sheet 中的场景名称列表（已排序）；
-             dataframe 为该 sheet 原始二维矩阵（NaN 已转为 None）；axis 为识别出的矩阵方向。
-    :raises FileNotFoundError: 文件不存在。
-    :raises ValueError: 解析失败或矩阵方向无法识别。
+    :param file_path: xlsx 文件路径
+    :return: (step_data, dataset_names, dataframe, axis)，其中 step_data 为单 sheet 解析结果
+             { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }，
+             dataset_names 为该 sheet 中的场景名称列表（已排序），
+             dataframe 为该 sheet 原始二维矩阵（NaN 已转为 None），axis 为识别出的矩阵方向
+    :raises FileNotFoundError: 文件不存在
+    :raises ValueError: 解析失败或矩阵方向无法识别
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -404,13 +404,13 @@ async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any
     """
     解析 xlsx 全部 sheet 为约定结构并提取数据集名称列表（多步骤数据集上传用），逐 sheet 自动识别方向。
 
-    :param file_path: xlsx 文件路径。
-    :return: (parsed_data, dataset_names, sheet_axes)。parsed_data 结构：
-             { "sheet_name_or_step_code": { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }, ... }
-             dataset_names 为所有 sheet 中出现的去重排序后的场景名称列表；
-             sheet_axes 为 { sheet_name: axis }。
-    :raises FileNotFoundError: 文件不存在。
-    :raises ValueError: 解析失败或某 sheet 矩阵方向无法识别。
+    :param file_path: xlsx 文件路径
+    :return: (parsed_data, dataset_names, sheet_axes)，其中 parsed_data 结构为
+             { "sheet_name_or_step_code": { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }, ... }，
+             dataset_names 为所有 sheet 中出现的去重排序后的场景名称列表，
+             sheet_axes 为 { sheet_name: axis }
+    :raises FileNotFoundError: 文件不存在
+    :raises ValueError: 解析失败或某 sheet 矩阵方向无法识别
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
