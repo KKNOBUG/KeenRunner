@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-变量提取管线：按 StepExtractVariableItem 列表批量调用 Extractors。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : extract_pipeline.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -11,7 +15,7 @@ from backend.applications.aotutest.services.autotest_runtime.exchange.extractors
 
 
 class ExtractPipeline:
-    """批量执行变量提取并汇总 name->value 与逐项结果。"""
+    """批量执行变量提取并汇总name->value与逐项结果。"""
 
     @classmethod
     def run_extract_variables(
@@ -30,23 +34,23 @@ class ExtractPipeline:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        按 StepExtractVariableItem 列表从请求/响应/变量池中提取变量。
+        按StepExtractVariableItem列表从请求/响应/变量池中提取变量。
 
-        不完整规则（缺 name/source，或 SOME 模式缺 expr）会跳过该项并可选记日志，
-        不中断其余项；单条提取异常记入该项 ``error``/``success=False``，不向外抛出。
+        不完整规则（缺name/source，或SOME模式缺expr）会跳过该项并可选记日志，
+        不中断其余项；单条提取异常记入该项error/success=False，不向外抛出。
 
-        :param extract_variables: 提取规则列表（元素须为 StepExtractVariableItem）
+        :param extract_variables: 提取规则列表（元素须为StepExtractVariableItem）
         :param response_text: 响应正文
-        :param response_json: 响应 JSON，或 DB/Redis 步骤的操作结果列表
+        :param response_json: 响应JSON，或DB/Redis步骤的操作结果列表
         :param response_headers: 响应头
-        :param response_cookies: 响应 Cookie
+        :param response_cookies: 响应Cookie
         :param request_text: 请求正文
-        :param request_json: 请求 JSON
+        :param request_json: 请求JSON
         :param request_headers: 请求头
-        :param request_cookies: 请求 Cookie
+        :param request_cookies: 请求Cookie
         :param session_variables_lookup: 变量池字典
-        :param log_callback: 可选日志回调 ``(str) -> None``
-        :return: ``(name -> value 字典, 逐项结果列表)``；成功项才写入字典
+        :param log_callback: 可选日志回调(str) -> None
+        :return: (name->value字典, 逐项结果列表)；成功项才写入字典
         :raises TypeError: 列表或子项类型非法时
         """
         extract_results_dict: Dict[str, Any] = {}

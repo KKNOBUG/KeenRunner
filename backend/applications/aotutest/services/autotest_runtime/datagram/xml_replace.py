@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-数据驱动 XML 报文替换。
-
-按 XPath 将 body_map 中的键值写入 XML 文本节点，规则与提取侧 XPath 语义对齐。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : xml_replace.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ from backend.common.xpath_utils import XPathUtils
 
 
 class XmlDatagram:
-    """按 XPath 映射更新 XML 请求报文。"""
+    """按XPath映射更新XML请求报文。"""
 
     @staticmethod
     def replace_xml_datagram(
@@ -22,15 +24,15 @@ class XmlDatagram:
             request_text: Optional[str] = None,
     ) -> Optional[str]:
         """
-        数据驱动报文替换（XML）：按 XPath 将 body_map 写入请求 XML。
+        数据驱动报文替换（XML）：按XPath将body_map写入请求XML。
 
-        通过 ``XPathUtils.update`` 逐项替换；匹配规则与提取侧 XPath 语义对齐。
-        空路径跳过；匹配不到时由 XPathUtils 决定（通常忽略），非法 XML / 执行失败抛 ValueError。
+        通过'XPathUtils.update'逐项替换；匹配规则与提取侧XPath语义对齐。
+        空路径跳过；匹配不到时由XPathUtils决定（通常忽略），非法XML/执行失败抛ValueError。
 
-        :param body_map: XPath -> 值的映射
-        :param request_text: XML 报文字符串；空值原样返回
-        :return: 替换后的 XML 字符串
-        :raises ValueError: 报文不是有效 XML，或 XPath 执行失败时
+        :param body_map: XPath->值的映射
+        :param request_text: XML报文字符串；空值原样返回
+        :return: 替换后的XML字符串
+        :raises ValueError: 报文不是有效XML，或XPath执行失败时
         """
         if not request_text:
             return request_text

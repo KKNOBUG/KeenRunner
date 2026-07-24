@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Python 步骤沙箱配置与占位符正则常量。
-
-提供报文/代码共用的 ${...} 正则，以及用户代码允许的 import 白名单与安全 __import__。
-步骤引擎应优先从此模块导入公开别名，勿依赖下划线私有符号。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : sandbox.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-提取/断言与占位符解析共用的上下文抽象。
-
-提供 ExchangeContext（请求/响应快照）、VariableResolver 协议及列表变量适配器，
-用于消除 is_core_engine 布尔分支与参数爆炸。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : context.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

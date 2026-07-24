@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-占位符算术求值：AST 白名单四则运算（无 eval）。
-
-在全部占位符解析为数值且模板骨架仅为算术字符时，对合并表达式安全求值。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : arithmetic.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

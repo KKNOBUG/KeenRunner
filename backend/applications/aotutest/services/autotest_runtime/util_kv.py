@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-键值列表、Cookie 解析与步骤错误格式化等通用工具。
-
-供引擎命名空间构建、HTTP 请求字段转换及错误文案统一使用。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : util_kv.py
+@DateTime: 2025/11/9 11:58
 """
 from __future__ import annotations
 

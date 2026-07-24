@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-占位符内 GenerateUtils 辅助函数调用解析与执行。
-
-支持 func_name(key=literal, ...) 形式，仅允许关键字参数与字面量。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : functions.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

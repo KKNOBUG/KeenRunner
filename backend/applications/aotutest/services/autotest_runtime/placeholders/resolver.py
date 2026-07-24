@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-报文与结构化数据中的 ${...} 占位符解析。
-
-支持变量、GenerateUtils 函数、多占位符拼接及纯算术整式求值；另提供 XML 节点级解析。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : resolver.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

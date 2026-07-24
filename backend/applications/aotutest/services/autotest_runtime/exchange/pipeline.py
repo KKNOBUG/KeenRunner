@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-引擎侧统一提取 + 断言编排入口。
-
-先跑变量提取，再跑断言；可选追加数据驱动 assert_head/assert_body；
-``raise_on_failure=True`` 时任一项失败即抛出 ValueError。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : pipeline.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from backend.applications.aotutest.services.autotest_runtime.exchange.extract_pi
 
 
 class ExtractAssertPipeline:
-    """串联 ExtractPipeline 与 AssertPipeline，供步骤引擎一次调用。"""
+    """串联ExtractPipeline与AssertPipeline，供步骤引擎一次调用。"""
 
     @classmethod
     def run_extract_and_assert(
@@ -48,36 +49,36 @@ class ExtractAssertPipeline:
         统一执行变量提取与断言验证（引擎主路径）。
 
         处理顺序：
-        1. ``ExtractPipeline.run_extract_variables``
-        2. 若 ``raise_on_failure`` 且存在 ``success=False`` 的提取项 → 抛出 ValueError
-        3. ``AssertPipeline.run_assert_validators``
-        4. 若 ``step_struct is not None`` → ``append_assert_validators`` 追加数据驱动断言
-        5. 若 ``raise_on_failure`` 且存在失败断言 → 抛出 ValueError
+        1. ExtractPipeline.run_extract_variables
+        2. 若raise_on_failure且存在success=False的提取项→抛出ValueError
+        3. AssertPipeline.run_assert_validators
+        4. 若step_struct is not None → append_assert_validators追加数据驱动断言
+        5. 若raise_on_failure且存在失败断言→抛出ValueError
 
-        :param extract_variables: 提取规则；None 视为空列表
-        :param assert_validators: 断言规则；None 视为空列表
-        :param response_text: 响应正文（Text/XML 提取与断言）
-        :param response_json: 响应 JSON，或 DB/Redis 步骤的操作结果列表
+        :param extract_variables: 提取规则；None视为空列表
+        :param assert_validators: 断言规则；None视为空列表
+        :param response_text: 响应正文（Text/XML提取与断言）
+        :param response_json: 响应JSON，或DB/Redis步骤的操作结果列表
         :param response_headers: 响应头
-        :param response_cookies: 响应 Cookie
+        :param response_cookies: 响应Cookie
         :param request_text: 请求正文
-        :param request_json: 请求 JSON
-        :param request_headers: 请求头；未传 request_cookies 时可用于解析 Cookie
-        :param request_cookies: 请求 Cookie；优先于从请求头解析
-        :param session_variables_lookup: 变量池字典（session_variables / 变量池 source）
-        :param log_callback: 可选日志回调 ``(str) -> None``
-        :param finished_variables: 断言期望值占位符解析上下文；引擎传 StepExecutionContext
-        :param is_core_engine: True 时 finished_variables 需提供 ``get_variable``；
-            False 时按 StepVariablesBase 列表解析（调试视图）
-        :param step_struct: 数据驱动结构；非 None 时追加 assert_head / assert_body
+        :param request_json: 请求JSON
+        :param request_headers: 请求头；未传request_cookies时可用于解析Cookie
+        :param request_cookies: 请求Cookie；优先于从请求头解析
+        :param session_variables_lookup: 变量池字典（session_variables/变量池source）
+        :param log_callback: 可选日志回调(str) -> None
+        :param finished_variables: 断言期望值占位符解析上下文；引擎传StepExecutionContext
+        :param is_core_engine: True时finished_variables需提供get_variable；
+            False时按StepVariablesBase列表解析（调试视图）
+        :param step_struct: 数据驱动结构；非None时追加assert_head/assert_body
             （即使内部各块为空也会进入追加逻辑，仅在结构非法时直接跳过）
-        :param raise_on_failure: True 时提取或断言存在失败项即抛 ValueError（文案与历史引擎一致）；
-            False 时仅返回结果列表，由调用方自行判断
-        :param body_source: assert_body 的提取来源；默认 ``response json``，
-            TCP XML 响应时应传 ``response xml``
-        :return: ``(extract_results_list, assert_results_list)``，元素为结果 dict
-            （含 name/source/expr/success/error 等字段）
-        :raises ValueError: ``raise_on_failure=True`` 且存在失败的提取或断言时
+        :param raise_on_failure: True时提取或断言存在失败项即抛ValueError（文案与历史引擎一致）；
+            False时仅返回结果列表，由调用方自行判断
+        :param body_source: 保留参数，当前未生效；assert_body来源按表达式前缀自动识别
+            （$. → response json，./或// → response xml，其他 → response text）
+        :return: (extract_results_list, assert_results_list)，元素为结果dict
+            （含name/source/expr/success/error等字段）
+        :raises ValueError: raise_on_failure=True且存在失败的提取或断言时
         :raises TypeError: 提取/断言规则列表或子项类型非法时（由下游管线抛出）
         """
         _, extract_results_list = ExtractPipeline.run_extract_variables(

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-按 source 从 ExchangeContext 提取值：EXTRACTORS 注册表 + DB/Redis variable_name 回退。
-
-新增标准请求/响应来源时，在 EXTRACTORS 中注册即可，无需改写主分支。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : extractors.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -18,11 +20,11 @@ from backend.common.xpath_utils import XPathUtils
 
 
 class Extractors:
-    """JSON / XML / Text / Headers / Cookies / 变量池提取实现与统一入口。"""
+    """JSON/XML/Text/Headers/Cookies/变量池提取实现与统一入口。"""
 
     @classmethod
     def _normalize_extract_source(cls, source: Optional[str]) -> str:
-        """统一提取来源别名（兼容 Header/Headers、Cookie/Cookies 单复数）。"""
+        """统一提取来源别名（兼容Header/Headers、Cookie/Cookies单复数）。"""
         source_strip_lower: str = (source or "").strip().lower()
         aliases = {
             "response header": "response headers",
@@ -44,14 +46,14 @@ class Extractors:
             empty_message: str,
     ) -> Any:
         """
-        从 JSON 对象按 ALL/SOME 与可选 index 提取。
+        从JSON对象按ALL/SOME与可选index提取。
 
-        :param data: 响应或请求 JSON（dict/list）
-        :param expr: JSONPath；SOME 模式必填
-        :param range_type: ``all`` 或 ``some``（已小写）
-        :param index: 多匹配列表下标；越界抛 ValueError
+        :param data: 响应或请求JSON（dict/list）
+        :param expr: JSONPath；SOME模式必填
+        :param range_type: all或some（已小写）
+        :param index: 多匹配列表下标；越界抛ValueError
         :param operation_type: 错误信息前缀（变量提取/断言验证）
-        :param empty_message: data 为空时的错误文案
+        :param empty_message: data为空时的错误文案
         :return: 提取值
         :raises ValueError: 数据为空、表达式非法、越界或路径无匹配
         """
@@ -91,17 +93,17 @@ class Extractors:
             invalid_xml_message: str,
     ) -> Any:
         """
-        从 XML 文本按 XPath 与可选 index 提取元素文本或序列化片段。
+        从XML文本按XPath与可选index提取元素文本或序列化片段。
 
-        :param text: XML 字符串
-        :param expr: XPath；SOME 模式必填
-        :param range_type: ``all`` 或 ``some``
+        :param text: XML字符串
+        :param expr: XPath；SOME模式必填
+        :param range_type: all或some
         :param index: 多匹配下标；缺省取最后一个
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
         :param invalid_xml_message: 解析失败时的错误文案前缀
-        :return: 元素 text 或 tostring 结果；ALL 时返回原文
-        :raises ValueError: 空正文、非法 XML、无匹配、越界等
+        :return: 元素text或tostring结果；ALL时返回原文
+        :raises ValueError: 空正文、非法XML、无匹配、越界等
         """
         if not text:
             raise ValueError(empty_message)
@@ -151,13 +153,13 @@ class Extractors:
         从纯文本按正则提取匹配串，可选指定分组。
 
         :param text: 请求或响应正文
-        :param expr: 正则表达式；SOME 模式必填
-        :param range_type: ``all`` 或 ``some``
-        :param index: 分组编号；None 或 0 取整个匹配串(group(0))，正整数 N 取第 N 个捕获分组(group(N))，
-            负数 -1 取最后一个分组、-2 取倒数第二个分组，以此类推（与 JSON/XML 负索引语义一致）
+        :param expr: 正则表达式；SOME模式必填
+        :param range_type: all或some
+        :param index: 分组编号；None或0取整个匹配串(group(0))，正整数N取第N个捕获分组(group(N))，
+            负数-1取最后一个分组、-2取倒数第二个分组，以此类推（与JSON/XML负索引语义一致）
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
-        :return: 匹配到的分组值；ALL 时返回原文
+        :return: 匹配到的分组值；ALL时返回原文
         :raises ValueError: 空正文、正则非法、未匹配、分组索引越界
         """
         if not text:
@@ -202,15 +204,15 @@ class Extractors:
             miss_message: str,
     ) -> Any:
         """
-        从 Headers/Cookies 等映射按 JSONPath 提取。
+        从Headers/Cookies等映射按JSONPath提取。
 
         :param data: 映射字典
-        :param expr: JSONPath；SOME 模式必填
-        :param range_type: ``all`` 或 ``some``
+        :param expr: JSONPath；SOME模式必填
+        :param range_type: all或some
         :param operation_type: 错误信息前缀
         :param empty_message: 映射为空时的错误文案
-        :param miss_message: 路径无匹配时的兜底文案
-        :return: 提取值；ALL 时返回整个映射
+        :param miss_message: 提取异常消息为空时的兜底文案
+        :return: 提取值；ALL时返回整个映射
         :raises ValueError: 空映射、表达式非法或路径无匹配
         """
         if not data:
@@ -227,11 +229,11 @@ class Extractors:
     @classmethod
     def _resolve_json_path(cls, data: Any, expr: str) -> Any:
         """
-        使用 JSONPath 表达式从 data 中取值, 支持标准 JSONPath(如 $.data[0].id、$.list[*].name)
+        使用JSONPath表达式从data中取值，支持标准JSONPath(如$.data[0].id、$.list[*].name)。
 
-        :param data: 待取值的对象(dict/list 或嵌套结构)
-        :param expr: 非空字符串, 合法 JSONPath 表达式(如 $.a.b、$.data[0].id、$.items[*].id)
-        :return: 单匹配时返回该值, 多匹配时返回值的列表无匹配时抛出 ValueError
+        :param data: 待取值的对象(dict/list或嵌套结构)
+        :param expr: 非空字符串，合法JSONPath表达式(如$.a.b、$.data[0].id、$.items[*].id)
+        :return: 单匹配时返回该值，多匹配时返回值的列表
         :raises ValueError: 表达式非法、路径无匹配或解析异常时
         """
         expr = str(expr).strip()
@@ -274,27 +276,27 @@ class Extractors:
             operation_type: str = "变量提取",
     ) -> Any:
         """
-        从 ``source`` 指定来源按表达式提取单个值（HTTP 调试与步骤引擎共用）。
+        从source指定来源按表达式提取单个值（HTTP调试与步骤引擎共用）。
 
-        标准来源（如 response/request json、xml、text、headers、cookies、
-        session_variables/变量池）经规范化别名后查 ``EXTRACTORS`` 注册表执行。
-        未命中注册表时，若 ``response_json`` 为 DB/Redis 操作结果列表，则按
-        ``source`` 与项内 ``variable_name`` 匹配后走 JSON 提取回退逻辑。
+        标准来源（如response/request json、xml、text、headers、cookies、
+        session_variables/变量池）经规范化别名后查EXTRACTORS注册表执行。
+        未命中注册表时，若response_json为DB/Redis操作结果列表，则按
+        source与项内variable_name匹配后走JSON提取回退逻辑，回退路径同样支持ALL/SOME。
 
-        :param source: 来源类型或 DB/Redis 的 variable_name；支持 Header/Cookie 单复数别名
-        :param expr: 提取表达式（JSONPath / XPath / 正则）；SOME 模式通常必填
-        :param range_type: ``ALL`` 返回整段数据，``SOME``（默认）按 expr 取值
-        :param index: 多匹配结果为列表时的下标；越界抛 ValueError
+        :param source: 来源类型或DB/Redis的variable_name；支持Header/Cookie单复数别名
+        :param expr: 提取表达式（JSONPath/XPath/正则）；SOME模式通常必填
+        :param range_type: ALL返回整段数据，SOME（默认）按expr取值
+        :param index: 多匹配结果为列表时的下标；越界抛ValueError
         :param response_text: 响应正文
-        :param response_json: 响应 JSON，或 DB/Redis 的 ``List[Dict]`` 操作结果
+        :param response_json: 响应JSON，或DB/Redis的List[Dict]操作结果
         :param response_headers: 响应头
-        :param response_cookies: 响应 Cookie
+        :param response_cookies: 响应Cookie
         :param request_text: 请求正文
-        :param request_json: 请求 JSON
-        :param request_headers: 请求头；当 ``request_cookies`` 为 None 时用于解析 Cookie
-        :param request_cookies: 请求 Cookie 映射
-        :param session_variables_lookup: 变量池 ``Dict[str, Any]``，按 JSONPath 取值
-        :param operation_type: 错误信息前缀，如 ``变量提取``、``断言验证``
+        :param request_json: 请求JSON
+        :param request_headers: 请求头；当request_cookies为None时用于解析Cookie
+        :param request_cookies: 请求Cookie映射
+        :param session_variables_lookup: 变量池Dict[str, Any]，按JSONPath取值
+        :param operation_type: 错误信息前缀，如变量提取、断言验证
         :return: 提取得到的值
         :raises ValueError: 来源不支持、数据为空、表达式非法、路径无匹配或数组越界等
         """
@@ -343,7 +345,7 @@ class Extractors:
                 return Extractors._extract_json_payload(
                     data=expr_executive_data,
                     expr=expr,
-                    range_type=range_type,
+                    range_type=range_type_n,
                     index=index,
                     operation_type=operation_type,
                     empty_message=f"【{operation_type}】未找到可提取的执行结果数据",
@@ -360,17 +362,17 @@ class Extractors:
 
 def _register_extractors() -> Dict[str, Callable[..., Any]]:
     """
-    构建 source 规范化键到提取函数的注册表。
+    构建source规范化键到提取函数的注册表。
 
-    :return: ``source_key -> (ctx, expr, range_type, index, operation_type) -> Any``
+    :return: source_key -> (ctx, expr, range_type, index, operation_type) -> Any
     """
     E = Extractors
 
     def json_side(side: str) -> Callable[..., Any]:
-        """注册 JSON 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取 JSON 并提取。"""
+        """注册JSON侧（request/response）提取器；返回的_run按侧从ctx取JSON并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-            """从请求或响应 JSON 按表达式提取。"""
+            """从请求或响应JSON按表达式提取。"""
             data = ctx.response_json if side == "response" else ctx.request_json
             label = "响应" if side == "response" else "请求"
             return E._extract_json_payload(
@@ -382,10 +384,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def xml_side(side: str) -> Callable[..., Any]:
-        """注册 XML 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
+        """注册XML侧（request/response）提取器；返回的_run按侧从ctx取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-            """从请求或响应 XML 文本按表达式提取。"""
+            """从请求或响应XML文本按表达式提取。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
             return E._extract_xml_payload(
@@ -398,10 +400,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def text_side(side: str) -> Callable[..., Any]:
-        """注册 Text 侧（request/response）提取器；返回的 ``_run`` 按侧从 ctx 取文本并提取。"""
+        """注册Text侧（request/response）提取器；返回的_run按侧从ctx取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-            """从请求或响应纯文本按表达式提取，index 指定正则分组编号。"""
+            """从请求或响应纯文本按表达式提取，index指定正则分组编号。"""
             text = ctx.response_text if side == "response" else ctx.request_text
             label = "响应" if side == "response" else "请求"
             return E._extract_text_payload(
@@ -416,10 +418,10 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def mapping_side(attr: str, empty: str, miss_prefix: str) -> Callable[..., Any]:
-        """注册 Headers/Cookies 等映射字段提取器；返回的 ``_run`` 从 ctx.attr 取值。"""
+        """注册Headers/Cookies等映射字段提取器；返回的_run从ctx.attr取值。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-            """从映射字段（Headers/Cookies 等）按表达式提取。"""
+            """从映射字段（Headers/Cookies等）按表达式提取。"""
             data = getattr(ctx, attr)
             return E._extract_mapping_payload(
                 data=data, expr=expr, range_type=range_type,
@@ -431,7 +433,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def session_vars(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-        """从变量池 session_lookup 按 JSONPath 取值。"""
+        """从变量池session_lookup按JSONPath取值。"""
         if not expr:
             raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
         if ctx.session_lookup is None:

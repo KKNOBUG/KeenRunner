@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-提取与断言领域：Extractors 注册表、批量管线与操作符比较。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : __init__.py
+@DateTime: 2025/12/28 16:15
 """
 from backend.applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors, EXTRACTORS
 from backend.applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline

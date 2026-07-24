@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-变量流校验：收集产出变量并检查 ${var} 引用是否有定义（第四层校验）。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : variable_flow.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

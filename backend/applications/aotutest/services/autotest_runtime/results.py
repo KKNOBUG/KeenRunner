@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-提取与断言结果的 TypedDict 形状定义。
-
-门面仍返回 List[Dict] 以兼容报告与前端；本模块用于类型标注与后续收敛。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : results.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

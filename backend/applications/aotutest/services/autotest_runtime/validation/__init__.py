@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-保存期步骤校验：树结构、执行器字段、变量流。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : __init__.py
+@DateTime: 2025/12/28 16:15
 """
 from backend.applications.aotutest.services.autotest_runtime.validation.executor_fields import ExecutorFieldsValidation
 from backend.applications.aotutest.services.autotest_runtime.validation.step_tree import StepTreeValidation

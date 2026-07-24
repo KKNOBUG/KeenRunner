@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-断言操作符比较：类型感知相等/大小比较及 AutoTestAssertionOperation 分发。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : assert_compare.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ class AssertionCompare:
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:
         """
-        将值标准化为便于比较的类型：数字字符串转 int 或 float, true 或 false 转 bool, 其余原样返回
+        将值标准化为便于比较的类型：数字字符串转int或float, true或false转bool, 其余原样返回。
 
         :param value: 任意值
         :return: 标准化后的值, 或原值
@@ -42,7 +46,7 @@ class AssertionCompare:
     @classmethod
     def _type_aware_equals(cls, actual: Any, expected: Any) -> bool:
         """
-        类型感知的相等比较：先直接比较, 若不等则对两值做 _normalize_value 后再比较
+        类型感知的相等比较：先直接比较, 若不等则对两值做_normalize_value后再比较。
 
         :param actual: 实际值
         :param expected: 期望值
@@ -64,11 +68,11 @@ class AssertionCompare:
             comparator: Callable[[Any, Any], bool],
     ) -> bool:
         """
-        类型感知的大小比较：先标准化再比较；若标准化后均为数值则用数值比较, 否则用字符串比较
+        类型感知的大小比较：先标准化再比较；若标准化后均为数值则用数值比较, 否则用字符串比较。
 
         :param actual: 实际值
         :param expected: 期望值
-        :param comparator: 二元谓词(左, 右) -> bool, 例如 operator.gt
+        :param comparator: 二元谓词(左, 右) -> bool, 例如operator.gt
         :return: 比较结果
         """
         norm_actual = cls._normalize_value(actual)
@@ -84,12 +88,10 @@ class AssertionCompare:
         """
         比较实际值长度是否等于期望长度。
 
-        - 有 ``__len__`` 的类型（list/dict/str/set/tuple）：用 ``len(actual)``
-        - 无 ``__len__`` 的类型（int/float/bool）：用 ``len(str(actual))`` 取字符长度
-        - ``None``：返回 False
+        有__len__的类型（list/dict/str/set/tuple）用len(actual)，无__len__的类型（int/float/bool）用len(str(actual))取字符长度，None返回False。
 
         :param actual: 实际值
-        :param expected: 期望长度（数字字符串会经 _normalize_value 转换）
+        :param expected: 期望长度（数字字符串会经_normalize_value转换）
         :return: 长度是否相等
         """
         nb = cls._normalize_value(expected)
@@ -106,10 +108,7 @@ class AssertionCompare:
         """
         判断实际值是否为空。
 
-        - ``None``：空
-        - 空字符串：空
-        - 空容器（list/dict/set/tuple 长度为 0）：空
-        - 数值/布尔等：非空
+        None、空字符串、空容器（list/dict/set/tuple长度为0）均为空，数值/布尔等为非空。
 
         :param actual: 实际值
         :param expected: 期望值（忽略）

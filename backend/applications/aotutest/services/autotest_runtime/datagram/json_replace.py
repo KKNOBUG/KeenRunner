@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-数据驱动 JSON 报文替换（请求头 / body / form / urlencoded）。
-
-支持普通 JSONPath 与 ``outer@JSON@inner`` 两段内嵌路径更新。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : json_replace.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -14,18 +16,20 @@ from backend.common import JSONPathUtils
 
 
 class JsonDatagram:
-    """按 JSONPath 映射原地（或解析后）更新 JSON 请求报文。"""
+    """按JSONPath映射原地（或解析后）更新JSON请求报文。"""
 
     @staticmethod
     def _by_jsonpath_modify_inner_content(datagram: Dict[str, Any], json_path: str, json_value: Any, split_symbol: str = "@JSON@") -> None:
         """
-        支持两段 JSONPath，用于类似：
-          $.escape_field@JSON@$.name
+        按两段内嵌JSONPath定位并更新字段值，无@JSON@分隔符时退化为普通单段JSONPath更新。
 
-        约定：
-        - 第一段 JSONPath 定位到一个“字符串 JSON”或“dict”字段
-        - 第二段 JSONPath 在该字段值所代表的 JSON 内部继续定位并更新
-        - 最后把更新结果回写到第一段 JSONPath 对应的字段
+        约定第一段JSONPath定位到一个字符串JSON或dict字段，第二段JSONPath在该字段值所代表的JSON内部继续定位并更新，
+        最后把更新结果回写到第一段JSONPath对应的字段，形如'$.escape_field@JSON@$.name'。
+
+        :param datagram: 待更新的JSON报文字典
+        :param json_path: 形如'outer@JSON@inner'的两段JSONPath，无分隔符时按单段处理
+        :param json_value: 要写入的目标值
+        :param split_symbol: 两段路径的分隔符，默认'@JSON@'
         """
         if not json_path or not isinstance(json_path, str):
             return
@@ -80,11 +84,11 @@ class JsonDatagram:
     @staticmethod
     def _by_jsonpath_modify_request_header(json_path: str) -> str:
         """
-        从 JSONPath 提取 HTTP 请求头字段名。
+        从JSONPath提取HTTP请求头字段名。
 
-        例如 $.Content-Type -> Content-Type
+        例如$.Content-Type -> Content-Type
 
-        :param json_path: JSONPath 字符串
+        :param json_path: JSONPath字符串
         :return: 头字段名；无效时返回空串
         """
         if not json_path or not isinstance(json_path, str):
@@ -101,8 +105,14 @@ class JsonDatagram:
             urlencoded: Optional[Dict[str, Any]],
     ) -> Any:
         """
-        将 JSONPath -> 值的映射写入 request_body（dict 或可解析为 dict 的 JSON 字符串）、
-        form-data、urlencoded；原地修改 dict，找不到路径则忽略（与 JSONPathUtils 行为一致）。
+        将JSONPath->值的映射写入request_body（dict或可解析为dict的JSON字符串）、form-data、urlencoded，
+        原地修改dict，找不到路径则忽略（与JSONPathUtils行为一致）。
+
+        :param path_map: JSONPath->值的映射
+        :param request_body: 原始body（dict或可解析为dict的JSON字符串）
+        :param form_data: form-data字典，原地修改；可为None
+        :param urlencoded: x-www-form-urlencoded字典，原地修改；可为None
+        :return: 写入后的request_body，字符串body解析为dict时返回该dict，否则返回原值
         """
         if not path_map:
             return request_body
@@ -147,22 +157,21 @@ class JsonDatagram:
             urlencoded: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        数据驱动报文替换：先按 head_map 更新请求头键值，再依次将 head_map、body_map
-        按 JSONPath 应用到 request_body / form_data / urlencoded。
+        数据驱动报文替换：先按head_map更新请求头键值，再依次将head_map、body_map
+        按JSONPath应用到request_body/form_data/urlencoded。
 
-        规则说明：
-        - head_map 中路径会先解析为请求头字段名，仅当该键已存在于 request_headers 时覆盖；
-        - head_map 与 body_map 均会写入 body/form/urlencoded（request_body 中也可能出现 head 侧路径）；
-        - 支持 ``outer@JSON@inner`` 两段内嵌 JSONPath；找不到路径时忽略（与 JSONPathUtils 一致）。
+        规则说明：head_map中路径会先解析为请求头字段名，仅当该键已存在于request_headers时覆盖；
+        head_map与body_map均会写入body/form/urlencoded（request_body中也可能出现head侧路径）；
+        支持'outer@JSON@inner'两段内嵌JSONPath，找不到路径时忽略（与JSONPathUtils一致）。
 
-        :param head_map: 请求头 / 报文侧 JSONPath -> 值
-        :param body_map: 报文体 JSONPath -> 值
-        :param request_body: 原始 body（dict 或可解析为 dict 的 JSON 字符串）
-        :param request_headers: 请求头字典；可为 None（则不改头）
-        :param form_data: form-data 字典；可为 None
-        :param urlencoded: x-www-form-urlencoded 字典；可为 None
-        :return: 含 ``headers`` / ``request_body`` / ``form_data`` / ``urlencoded`` 的字典
-            （dict 入参多为原地修改后的同一引用）
+        :param head_map: 请求头/报文侧JSONPath->值
+        :param body_map: 报文体JSONPath->值
+        :param request_body: 原始body（dict或可解析为dict的JSON字符串）
+        :param request_headers: 请求头字典；可为None（则不改头）
+        :param form_data: form-data字典；可为None
+        :param urlencoded: x-www-form-urlencoded字典；可为None
+        :return: 含'headers'/'request_body'/'form_data'/'urlencoded'的字典
+            （dict入参多为原地修改后的同一引用）
         """
         head_map = head_map or {}
         body_map = body_map or {}

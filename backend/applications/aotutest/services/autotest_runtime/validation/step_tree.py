@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-步骤树结构校验：自循环检测与「仅循环/条件可含子步骤」规则。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : step_tree.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-按步骤类型校验执行器必填字段组合（第三层校验）。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : executor_fields.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 

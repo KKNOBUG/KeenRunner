@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-断言管线：按规则取实际值并比较；支持数据驱动 assert_head/assert_body 追加。
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : assert_pipeline.py
+@DateTime: 2025/12/28 16:15
 """
 from __future__ import annotations
 
@@ -34,26 +38,26 @@ class AssertPipeline:
             is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        按 StepAssertValidatorItem 列表取实际值并与期望值比较。
+        按StepAssertValidatorItem列表取实际值并与期望值比较。
 
-        不完整规则（缺 name/expr/operation/source）会跳过该项；取实际值失败或比较
-        异常时记入该项结果且 ``success=False``，不中断其余项。
+        不完整规则（缺name/expr/operation/source）会跳过该项；取实际值失败或比较
+        异常时记入该项结果且success=False，不中断其余项。
 
-        :param assert_validators: 断言规则列表（元素须为 StepAssertValidatorItem）
+        :param assert_validators: 断言规则列表（元素须为StepAssertValidatorItem）
         :param response_text: 响应正文
-        :param response_json: 响应 JSON，或 DB/Redis 操作结果列表
+        :param response_json: 响应JSON，或DB/Redis操作结果列表
         :param response_headers: 响应头
-        :param response_cookies: 响应 Cookie
+        :param response_cookies: 响应Cookie
         :param request_text: 请求正文
-        :param request_json: 请求 JSON
+        :param request_json: 请求JSON
         :param request_headers: 请求头
-        :param request_cookies: 请求 Cookie
+        :param request_cookies: 请求Cookie
         :param session_variables_lookup: 变量池字典
-        :param log_callback: 可选日志回调 ``(str) -> None``；占位符解析时亦作 logger
-        :param finished_variables: 非空时对 ``except_value`` 先做占位符解析
-        :param is_core_engine: True 时 finished_variables 需提供 ``get_variable``；
-            False 时按变量列表解析
-        :return: 每项断言结果 dict 列表（含 name/source/expr/operation/except_value/
+        :param log_callback: 可选日志回调(str) -> None；占位符解析时亦作logger
+        :param finished_variables: 非空时对except_value先做占位符解析
+        :param is_core_engine: True时finished_variables需提供get_variable；
+            False时按变量列表解析
+        :return: 每项断言结果dict列表（含name/source/expr/operation/except_value/
             actual_value/success/error）
         :raises TypeError: 列表或子项类型非法时
         """
@@ -193,34 +197,32 @@ class AssertPipeline:
             body_source: str = "response json",
     ) -> None:
         """
-        将数据驱动场景的 assert_head / assert_body 追加到 validator_results（原地修改）。
+        将数据驱动场景的assert_head/assert_body追加到validator_results（原地修改）。
 
-        - assert_head：source 固定为 ``response headers``；当 ``response_headers is None``
-          时跳过全部 head 断言（TCP 无响应头场景）
-        - assert_body：source 由 ``body_source`` 指定（默认 ``response json``）；
-          TCP XML 响应时调用方应传 ``response xml`` 以走 XPath 断言
-        - 提供 ``finished_variables`` 时，预期值先经 ``resolve_placeholders`` 再比较
+        assert_head的source固定为response headers，当response_headers is None时跳过
+        全部head断言（TCP无响应头场景）；assert_body的source按表达式前缀自动判定
+        （$.走JSONPath、./或//走XPath、其余走Text）；提供finished_variables
+        时，预期值先经resolve_placeholders再比较。
 
-        :param step_struct: 含 assert_head/assert_body 的数据驱动结构；非 dict 则直接返回
+        :param step_struct: 含assert_head/assert_body的数据驱动结构；非dict则直接返回
         :param validator_results: 断言结果列表（原地追加）
-        :param response_text: 响应正文（XML/Text 断言取值来源）
-        :param response_json: 响应 JSON；None 且 body_source 为 response json 时 body 断言失败
-        :param response_headers: 响应头（assert_head 取值来源）；None 时跳过 head 断言
-        :param response_cookies: 响应 Cookie（签名保留，供 extract_from_source 透传）
+        :param response_text: 响应正文（XML/Text断言取值来源）
+        :param response_json: 响应JSON；None且表达式为JSONPath($.前缀)时body断言失败
+        :param response_headers: 响应头（assert_head取值来源）；None时跳过head断言
+        :param response_cookies: 响应Cookie（签名保留，供extract_from_source透传）
         :param session_variables_lookup: 变量池字典
         :param compare_fail_message: 比较失败时的默认错误文案
-        :param finished_variables: 期望值占位符解析上下文；None 则不解析
-        :param is_core_engine: 占位符解析模式（见 PlaceholderResolver）
-        :param log_callback: 可选日志回调；同时作为占位符解析 logger
-        :param body_source: assert_body 的提取来源；默认 ``response json``，
-            TCP XML 响应时应传 ``response xml``
+        :param finished_variables: 期望值占位符解析上下文；None则不解析
+        :param is_core_engine: 占位符解析模式（见PlaceholderResolver）
+        :param log_callback: 可选日志回调；同时作为占位符解析logger
+        :param body_source: 保留参数，当前未生效；assert_body的source按表达式前缀自动判定
         :return: None
         """
         if not isinstance(step_struct, dict):
             return
 
         def _resolve_expected(raw_expected: Any) -> Any:
-            """若提供 finished_variables，则对期望值做占位符解析。"""
+            """若提供finished_variables，则对期望值做占位符解析。"""
             if finished_variables is None:
                 return raw_expected
             return PlaceholderResolver.resolve_placeholders(
@@ -238,7 +240,7 @@ class AssertPipeline:
                 expr: str,
                 skip_error: Optional[str] = None,
         ) -> None:
-            """追加一条断言结果；skip_error 非空时直接记失败。"""
+            """追加一条断言结果；skip_error非空时直接记失败。"""
             resolved_except_value = _resolve_expected(except_value)
             if skip_error:
                 validator_results.append({
