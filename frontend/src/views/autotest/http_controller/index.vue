@@ -774,9 +774,13 @@ const initFromConfig = () => {
   if (state.form.bodyType === 'xml') {
     state.form.xmlBody = requestText
     state.form.rawBody = ''
-  } else {
+  } else if (state.form.bodyType === 'raw') {
     state.form.rawBody = requestText
     state.form.xmlBody = ''
+  } else {
+    // 其它类型（json、form-data 等）下报文暂存于 request_text，同时回填 xml 与 raw，避免切换类型后数据丢失
+    state.form.xmlBody = requestText
+    state.form.rawBody = requestText
   }
 
   // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc、type（form-data 需 type 供 KeyValueEditor 显示「数据」列）
@@ -923,25 +927,25 @@ const buildConfigFromState = () => {
   const form_data = normalizeBodyParams(state.form.bodyParams)
   const form_urlencoded = Array.isArray(state.form.bodyForm) ? normalizeList(state.form.bodyForm) : []
 
-  let jsonBodyText = undefined
-  switch (state.form.bodyType) {
-    case 'json':
-      try {
-        data = state.form.jsonBody ? JSON.parse(state.form.jsonBody) : {}
-      } catch {
-        data = {}
-      }
-      jsonBodyText = state.form.jsonBody ?? ''
-      break
-    case 'xml':
-      request_text = state.form.xmlBody ?? ''
-      break
-    case 'raw':
-      request_text = state.form.rawBody ?? ''
-      break
-    case 'none':
-    default:
-      break
+  // JSON 报文：无论当前请求体类型为何都尽量保留，避免切换类型后保存导致 JSON 数据丢失
+  let jsonBodyText = state.form.jsonBody ?? ''
+  if (state.form.jsonBody && state.form.jsonBody.trim()) {
+    try {
+      data = JSON.parse(state.form.jsonBody)
+    } catch {
+      data = {}
+    }
+  } else if (state.form.bodyType === 'json') {
+    data = {}
+  }
+
+  // XML / raw 报文：当前类型优先；切换到其它类型（json、form-data 等）时保留已填写的报文，避免保存后丢失
+  if (state.form.bodyType === 'xml') {
+    request_text = state.form.xmlBody ?? ''
+  } else if (state.form.bodyType === 'raw') {
+    request_text = state.form.rawBody ?? ''
+  } else {
+    request_text = state.form.xmlBody || state.form.rawBody || null
   }
 
   return {
