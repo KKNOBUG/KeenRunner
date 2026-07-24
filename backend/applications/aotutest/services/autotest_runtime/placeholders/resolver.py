@@ -24,20 +24,19 @@ from backend.applications.aotutest.services.autotest_runtime.sandbox import RE_P
 
 
 class PlaceholderResolver:
-    """递归解析 str / dict / list / XML 中的占位符。"""
+    """递归解析str/dict/list/XML中的占位符。"""
 
     @classmethod
     def _resolve_placeholder_inner(cls, inner: str, is_core_engine: bool, finished_variables: Optional[Any]) -> Any:
         """
-        解析单个 ${...} 花括号内的文本：含括号视为 GenerateUtils 函数, 否则按变量名解析
+        解析单个${...}花括号内的文本：含括号视为GenerateUtils函数, 否则按变量名解析。
 
-        :param inner: 占位符花括号内文本(如 \"a\" 或 \"generate_uuid()\")会进行 strip
-        :param is_core_engine: True 时 finished_variables 需提供 get_variable(name)
-        :param finished_variables: 核心引擎上下文或变量列表(List[Dict], 每项含 key/value)
-        :returns: 解析到的变量值或函数执行结果
+        :param inner: 占位符花括号内文本(如\"a\"或\"generate_uuid()\")会进行strip
+        :param is_core_engine: True时finished_variables需提供get_variable(name)
+        :param finished_variables: 核心引擎上下文或变量列表(List[Dict], 每项含key/value)
+        :return: 解析到的变量值或函数执行结果
         :raises KeyError: 变量未定义(非核心引擎列表路径)
         :raises AttributeError: 函数不存在或执行失败
-        :raises ValueError: inner 为空白时
         """
         inner = inner.strip()
         if "(" in inner and ")" in inner:
@@ -59,7 +58,13 @@ class PlaceholderResolver:
             finished_variables: Optional[Any],
     ) -> str:
         """
-        解析 str 内所有 ${...}：先占位符求值；失败则保留原 ${...}；全成功则视情况整式算术或拼接
+        解析str内所有${...}：先占位符求值；失败则保留原${...}；全成功则视情况整式算术或拼接。
+
+        :param content: 待解析的str内容
+        :param logger_object: 日志回调, 签名为(str) -> None
+        :param is_core_engine: True时finished_variables需提供get_variable
+        :param finished_variables: 核心引擎上下文或变量列表
+        :return: 占位符替换后的字符串
         """
         if "${" not in content:
             return content
@@ -138,10 +143,13 @@ class PlaceholderResolver:
             finished_variables: Optional[Any],
     ) -> Optional[str]:
         """
-        对 XML 文本片段（元素 text/tail 或属性值）解析占位符。
+        对XML文本片段（元素text/tail或属性值）解析占位符。
 
-        :param segment: 待处理文本；None 时原样返回。
-        :return: 解析后的文本。
+        :param segment: 待处理文本；None时原样返回
+        :param logger_object: 日志回调, 签名为(str) -> None
+        :param is_core_engine: True时finished_variables需提供get_variable
+        :param finished_variables: 核心引擎上下文或变量列表
+        :return: 解析后的文本
         """
         if segment is None or "${" not in segment:
             return segment
@@ -161,9 +169,12 @@ class PlaceholderResolver:
             finished_variables: Optional[Any],
     ) -> None:
         """
-        原地解析单个元素及其子树中的占位符（text、attrib、子元素 tail）。
+        原地解析单个元素及其子树中的占位符（text、attrib、子元素tail）。
 
-        :param element: 当前 XML 元素节点。
+        :param element: 当前XML元素节点
+        :param logger_object: 日志回调, 签名为(str) -> None
+        :param is_core_engine: True时finished_variables需提供get_variable
+        :param finished_variables: 核心引擎上下文或变量列表
         :return: None
         """
         element.text = cls._resolve_xml_string_segment(
@@ -203,16 +214,16 @@ class PlaceholderResolver:
             finished_variables: Optional[Any] = None,
     ) -> str:
         """
-        解析 XML 报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）。
+        解析XML报文中各文本节点与属性内的${...}占位符（含算术表达式）。
 
-        按元素 text / tail / attrib 粒度调用 _resolve_string_placeholders，与 JSON 字段级行为对齐。
-        无效 XML 时回退为整串 _resolve_string_placeholders。
+        按元素text/tail/attrib粒度调用_resolve_string_placeholders，与JSON字段级行为对齐。
+        无效XML时回退为整串_resolve_string_placeholders。
 
-        :param xml_text: XML 报文字符串
-        :param logger_object: 日志回调, 签名为 (str) -> None
-        :param is_core_engine: True 时 finished_variables 提供 get_variable
+        :param xml_text: XML报文字符串
+        :param logger_object: 日志回调, 签名为(str) -> None
+        :param is_core_engine: True时finished_variables提供get_variable
         :param finished_variables: 核心引擎上下文或变量列表
-        :return: 占位符替换后的 XML 字符串
+        :return: 占位符替换后的XML字符串
         """
         if not xml_text or not isinstance(xml_text, str):
             return xml_text
@@ -250,28 +261,23 @@ class PlaceholderResolver:
     @classmethod
     def resolve_placeholders(cls, value: Any, logger_object: Callable, is_core_engine: bool = False, finished_variables: Optional[Any] = None) -> Any:
         """
-        递归解析 str / dict / list 中的 ${...} 占位符。
+        递归解析str/dict/list中的${...}占位符。
 
-        【字符串】
-        - 单/多占位符：变量或 GenerateUtils 函数（花括号内同时含括号时按函数处理）
-        - 全部占位符解析成功且值均可视为数字、模板骨架为算术字符时，对合并表达式安全求值
-          （如 ``(${a}+10)*${b}/${c}``）；否则按字符串拼接
-        - 若整串以 ``{``/``[`` 开头且可 JSON 反序列化，则对内部 str 节点递归替换后再 dumps
+        【字符串】单/多占位符解析变量或GenerateUtils函数（花括号内同时含括号时按函数处理）。全部占位符解析成功且值均可视为数字、模板骨架为算术字符时，对合并表达式安全求值（如(${a}+10)*${b}/${c}）；否则按字符串拼接。若整串以{/[开头且可JSON反序列化，则对内部str节点递归替换后再dumps。
 
-        【字典】递归每个 value（key 不替换，与历史行为一致）
+        【字典】递归每个value（key不替换，与历史行为一致）
 
-        【列表】元素为 ``StepVariablesBase`` 时只解析其 ``value`` 并 ``model_copy``；
-        其余元素（含普通 dict/list/str）整项递归 ``resolve_placeholders``
+        【列表】元素为StepVariablesBase时只解析其value并model_copy；其余元素（含普通dict/list/str）整项递归resolve_placeholders
 
         【其它类型】原样返回
 
-        解析失败：对应占位符保留原文；外层异常时记录日志并返回原 value。
+        解析失败：对应占位符保留原文；外层异常时记录日志并返回原value。
 
         :param value: 待解析对象
-        :param logger_object: 日志回调，签名 ``(str) -> None``（解析路径中会调用，勿传 None）
-        :param is_core_engine: True 时 finished_variables 需提供 ``get_variable``
-        :param finished_variables: 引擎上下文或 StepVariablesBase 列表
-        :return: 结构形状不变；dict/list 为新建容器后的结果
+        :param logger_object: 日志回调，签名(str) -> None（解析路径中会调用，勿传None）
+        :param is_core_engine: True时finished_variables需提供get_variable
+        :param finished_variables: 引擎上下文或StepVariablesBase列表
+        :return: 结构形状不变；dict/list为新建容器后的结果
         """
         try:
             if isinstance(value, str):
@@ -282,7 +288,7 @@ class PlaceholderResolver:
                         return value
 
                     def _treatment(node: Any) -> Any:
-                        """递归处理 JSON 反序列化后的 dict/list/str 中的占位符。"""
+                        """递归处理JSON反序列化后的dict/list/str中的占位符。"""
                         if isinstance(node, dict):
                             for ck, cv in node.items():
                                 node[ck] = _treatment(cv)

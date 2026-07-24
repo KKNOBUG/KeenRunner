@@ -14,25 +14,22 @@ from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestS
 
 
 class ExecutorFieldsValidation:
-    """保存前第三层：HTTP/TCP/DB/Redis/Python 等执行器字段完整性。"""
+    """保存前第三层：HTTP/TCP/DB/Redis/Python等执行器字段完整性。"""
 
     @classmethod
-    def validate_executor_fields(
-            cls,
-            steps: List[AutoTestStepTreeUpdateItem],
-    ) -> List[Dict[str, Any]]:
+    def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:
         """
         按步骤类型校验各执行器的必填字段组合（第三层校验）。
 
         :param steps: 根步骤列表
-        :return: 错误项列表，每项含 step_code、step_name、step_type、missing（缺失字段名列表）、message
+        :return: 错误项列表，每项含step_code、step_name、step_type、missing（缺失字段名列表）、message
         """
         from backend.enums import AutoTestStepType, AutoTestLoopMode
 
         errors: List[Dict[str, Any]] = []
 
         def _norm_step_type(raw: Any) -> Optional[AutoTestStepType]:
-            """将原始 step_type 规范为枚举；非法则返回 None。"""
+            """将原始step_type规范为枚举；非法则返回None。"""
             if raw is None:
                 return None
             if isinstance(raw, AutoTestStepType):
@@ -43,7 +40,7 @@ class ExecutorFieldsValidation:
                 return None
 
         def _check_step(step: AutoTestStepTreeUpdateItem) -> None:
-            """按步骤类型校验必填字段，缺失则写入 errors。"""
+            """按步骤类型校验必填字段，缺失则写入errors。"""
             step_type = _norm_step_type(step.step_type)
             step_code = step.step_code
             step_name = step.step_name

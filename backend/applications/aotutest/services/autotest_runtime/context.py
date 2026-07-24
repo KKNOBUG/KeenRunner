@@ -21,7 +21,7 @@ class VariableResolver(Protocol):
         """
         按变量名取值。
 
-        :param name: 变量名（占位符 ${name} 中的 name）
+        :param name: 变量名（占位符${name}中的name）
         :return: 变量值
         :raises KeyError: 变量未定义或不存在时
         """
@@ -44,20 +44,22 @@ class ExchangeContext:
 
 
 class ListVariableResolver:
-    """调试视图等场景：从 StepVariablesBase 列表按 key 取值。"""
+    """调试视图等场景：从StepVariablesBase列表按key取值。"""
 
     def __init__(self, variables: Optional[Sequence[StepVariablesBase]]) -> None:
         """
-        :param variables: 变量列表；可为 None（视为空列表）
+        以StepVariablesBase列表构造解析器。
+
+        :param variables: 变量列表；可为None（视为空列表）
         """
         self._variables = variables
 
     def get_variable(self, name: str) -> Any:
         """
-        从列表中按 key 取值。
+        从列表中按key取值。
 
         :param name: 变量名
-        :return: 对应 value
+        :return: 对应value
         :raises KeyError: 未找到或值为空定义时
         """
         from backend.applications.aotutest.services.autotest_runtime.util_kv import KvUtils
@@ -74,13 +76,13 @@ def coerce_variable_resolver(
         is_core_engine: bool,
 ) -> Any:
     """
-    将历史 (is_core_engine, finished_variables) 转为可 get_variable 的对象。
+    将历史(is_core_engine, finished_variables)转为可get_variable的对象。
 
-    引擎上下文原样返回；列表路径包装为 ListVariableResolver。
+    引擎上下文原样返回；列表路径包装为ListVariableResolver。
 
-    :param finished_variables: 引擎上下文或变量列表；None 表示无变量源
-    :param is_core_engine: True 时视为已实现 get_variable 的引擎上下文
-    :return: VariableResolver 兼容对象；无变量源时返回 None
+    :param finished_variables: 引擎上下文或变量列表；None表示无变量源
+    :param is_core_engine: True时视为已实现get_variable的引擎上下文
+    :return: VariableResolver兼容对象；无变量源时返回None
     """
     if finished_variables is None:
         return None

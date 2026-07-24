@@ -46,13 +46,13 @@ def _safe_user_code_import(
         level: int = 0,
 ) -> Any:
     """
-    供 run_python_code 的 exec 使用：__import__ 仅加载白名单根模块，禁止相对导入。
+    供run_python_code的exec使用：__import__仅加载白名单根模块，禁止相对导入。
 
     :param name: 模块名
     :param globals: 全局命名空间
     :param locals: 局部命名空间
-    :param fromlist: from ... import 的子模块列表
-    :param level: 相对导入层级，非 0 则拒绝
+    :param fromlist: from ... import的子模块列表
+    :param level: 相对导入层级，非0则拒绝
     :return: 导入的模块对象
     :raises ImportError: 相对导入或不在白名单时
     """

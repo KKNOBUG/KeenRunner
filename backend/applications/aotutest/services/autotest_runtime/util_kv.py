@@ -21,16 +21,17 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 
 
 class KvUtils:
-    """变量列表与 HTTP 键值转换、会话查找表及错误消息格式化。"""
+    """变量列表与HTTP键值转换、会话查找表及错误消息格式化。"""
 
     @classmethod
     def _key_value_list_to_dict(cls, items: Sequence[StepVariablesBase], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
         """
-        将 StepVariablesBase 列表平铺为 Dict[str, Any]
+        将StepVariablesBase列表平铺为Dict[str, Any]。
 
         :param items: 变量项序列
-        :param skip_if_no_value: 为 True 时跳过 value 为 None 的项
-        :return: key -> value 字典
+        :param skip_if_no_value: 为True时跳过value为None的项
+        :return: key -> value字典
+        :raises TypeError: 变量项不是StepVariablesBase时
         """
         if not items:
             return {}
@@ -48,7 +49,7 @@ class KvUtils:
     @classmethod
     def list_to_dict(cls, variable_list: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将StepVariablesBase列表转为 name -> value 字典, 供 Python 代码命名空间 使用
+        将StepVariablesBase列表转为name -> value字典, 供Python代码命名空间使用，会跳过value为None的变量。
 
         :param variable_list: 变量模型列表
         :return: 键为变量名、值为变量值的字典
@@ -59,10 +60,10 @@ class KvUtils:
     @classmethod
     def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
         """
-        将HTTP步骤中的key/value列表（列表项优先为StepVariablesBase）转为字典
-        历史 JSON 仍为 dict 时在边界 model_validate 后应已为模型，此处仅作有限兼容
+        将HTTP步骤中的key/value列表（列表项优先为StepVariablesBase）转为字典。
+        历史JSON仍为dict时在边界model_validate后应已为模型，此处仅作有限兼容。
 
-        :param data: key/value 列表或空
+        :param data: key/value列表或空
         :return: 请求参数字典
         """
         if not data or not isinstance(data, list):
@@ -79,9 +80,9 @@ class KvUtils:
     @staticmethod
     def get_value_from_list(variables: Optional[Sequence[StepVariablesBase]], name: str) -> Any:
         """
-        从StepVariablesBase列表中取key为name的项的value
+        从StepVariablesBase列表中取key为name的项的value。
 
-        :param variables: 变量列表。
+        :param variables: 变量列表
         :param name: 变量名
         :return: 变量值；未找到时返回None
         """
@@ -95,10 +96,10 @@ class KvUtils:
     @staticmethod
     def try_serialize_request_body(raw: Any) -> Any:
         """
-        将步骤中的 request_body 规范为对象：JSON 字符串尽量解析为 dict，否则保持原样。
+        将步骤中的request_body规范为对象：JSON字符串尽量解析为dict，否则保持原样，空字符串返回{}。
 
-        :param raw: 原始 request_body
-        :return: 解析后的 dict 或原值
+        :param raw: 原始request_body
+        :return: 解析后的对象或原值
         """
         if isinstance(raw, str):
             try:
@@ -116,12 +117,12 @@ class KvUtils:
             offset_message: str = ""
     ) -> str:
         """
-        格式化步骤执行失败信息, 供步骤引擎中各类执行器统一使用
+        格式化步骤执行失败信息, 供步骤引擎中各类执行器统一使用。
 
         :param step: 步骤模型
         :param exception: 捕获的异常
         :param is_child_step: 是否为子步骤失败
-        :param offset_message: 附加偏移说明（如数据库第 N 条操作）
+        :param offset_message: 附加偏移说明（如数据库第N条操作）
         :return: 格式化后的多行错误字符串
         """
         message: str = "【子步骤】" if is_child_step else "【根步骤】"
@@ -149,10 +150,10 @@ class KvUtils:
     @staticmethod
     def parse_cookie_header(headers: Optional[Dict[str, Any]]) -> Dict[str, str]:
         """
-        从请求头 Cookie 字段解析 name -> value 字典。
+        从请求头Cookie字段解析name -> value字典。
 
-        :param headers: 请求头映射；键名大小写不敏感匹配 ``Cookie``
-        :return: Cookie 名到值的字典；无 Cookie 或非法输入时返回空字典
+        :param headers: 请求头映射；键名大小写不敏感匹配Cookie
+        :return: Cookie名到值的字典；无Cookie或非法输入时返回空字典
         """
         if not headers or not isinstance(headers, dict):
             return {}
@@ -186,11 +187,11 @@ class KvUtils:
             session_variables: Optional[Sequence[StepVariablesBase]] = None,
     ) -> Dict[str, Any]:
         """
-        合并 defined / session 变量为提取与断言用的查找字典（session 覆盖同名 defined）。
+        合并defined / session变量为提取与断言用的查找字典（session覆盖同名defined）。
 
         :param defined_variables: 用例/步骤定义变量
         :param session_variables: 会话变量（优先级更高）
-        :return: name -> value 字典
+        :return: name -> value字典
         """
         lookup: Dict[str, Any] = cls.list_to_dict(defined_variables or [])
         lookup.update(cls.list_to_dict(session_variables or []))

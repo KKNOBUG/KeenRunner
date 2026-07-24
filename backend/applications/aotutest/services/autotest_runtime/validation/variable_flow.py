@@ -18,15 +18,15 @@ from backend.applications.aotutest.services.autotest_runtime.sandbox import RE_P
 
 
 class VariableFlowValidation:
-    """保存前第四层：占位符引用与变量产出匹配；并提供 session 变量收集。"""
+    """保存前第四层：占位符引用与变量产出匹配；并提供session变量收集。"""
 
     @classmethod
     def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
-        递归收集步骤树中所有步骤的 session_variables，合并为扁平列表。
+        递归收集步骤树中所有步骤的session_variables，合并为扁平列表。
 
         :param steps: 根步骤或子步骤列表
-        :return: 合并后的 StepVariablesBase 列表（不去重）
+        :return: 合并后的StepVariablesBase列表（不去重）
         """
         variables: List[StepVariablesBase] = []
         if not steps:
@@ -43,10 +43,11 @@ class VariableFlowValidation:
             steps: List[AutoTestStepTreeUpdateItem],
     ) -> List[Dict[str, Any]]:
         """
-        校验步骤树中 ${var} 引用是否有对应的变量产出（第四层校验）。
+        校验步骤树中${var}引用是否有对应的变量产出（第四层校验）。
 
         收集所有变量产出源（session_variables、defined_variables、extract_variables、
-        循环注入的 loop_index/loop_value/loop_key），再遍历所有字符串值中的 ${...} 引用，
+        数据库/Redis操作产出的variable_name及variable_name_count、
+        循环注入的loop_index/loop_value/loop_key），再遍历所有字符串值中的${...}引用，
         检查是否存在未匹配的引用。
 
         :param steps: 根步骤列表
@@ -57,7 +58,7 @@ class VariableFlowValidation:
         produced.update({"loop_index", "loop_value", "loop_key"})
 
         def _collect_produced(step: AutoTestStepTreeUpdateItem) -> None:
-            """递归收集步骤树上可产出的变量名到 produced。"""
+            """递归收集步骤树上可产出的变量名到produced。"""
             for var in (step.session_variables or []):
                 key = getattr(var, "key", None) or (var.get("key") if isinstance(var, dict) else None)
                 if key:
@@ -87,7 +88,7 @@ class VariableFlowValidation:
                 _collect_produced(quote_step)
 
         def _collect_refs_in_value(value: Any) -> List[str]:
-            """递归收集任意值中的 ${...} 占位符内部变量名（排除函数调用形式）。"""
+            """递归收集任意值中的${...}占位符内部变量名（排除函数调用形式）。"""
             refs: List[str] = []
             if isinstance(value, str):
                 for match in RE_PLACEHOLDER.finditer(value):
@@ -105,7 +106,7 @@ class VariableFlowValidation:
             return refs
 
         def _step_ref_fields(step: AutoTestStepTreeUpdateItem) -> Dict[str, Any]:
-            """返回该步骤中可能含 ${...} 的字段及其值，供引用收集。"""
+            """返回该步骤中可能含${...}的字段及其值，供引用收集。"""
             fields: Dict[str, Any] = {}
             for attr in (
                     "request_url", "request_port", "request_text", "request_body",
@@ -135,7 +136,7 @@ class VariableFlowValidation:
         errors: List[Dict[str, Any]] = []
 
         def _check_refs(step: AutoTestStepTreeUpdateItem) -> None:
-            """检查步骤字段中的 ${var} 是否均已产出，未匹配则写入 errors。"""
+            """检查步骤字段中的${var}是否均已产出，未匹配则写入errors。"""
             fields = _step_ref_fields(step)
             for field_name, field_value in fields.items():
                 refs = _collect_refs_in_value(field_value)

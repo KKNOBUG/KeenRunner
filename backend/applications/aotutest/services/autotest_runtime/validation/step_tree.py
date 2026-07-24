@@ -19,10 +19,10 @@ class StepTreeValidation:
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> Tuple[bool, Optional[str]]:
         """
-        校验步骤树结构：无自循环引用, 且仅有「循环结构」「条件分支」类型可包含子步骤
+        校验步骤树结构：无自循环引用，且仅有「循环结构」「条件分支」类型可包含子步骤。
 
-        :param steps_data: 根步骤列表(每项可为带 children 的树节点)
-        :return: (True, None) 表示通过；(False, str) 表示失败及错误信息
+        :param steps_data: 根步骤列表(每项可为带children的树节点)
+        :return: (True, None)表示通过；(False, str)表示失败及错误信息
         """
         from backend.enums import AutoTestStepType
 
@@ -31,14 +31,14 @@ class StepTreeValidation:
 
         def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: Set[Any], path: List[Any]) -> Tuple[bool, Optional[str]]:
             """
-            递归校验单个步骤节点及其 children：
-            - 检查 step_id / step_code 自循环
-            - 检查非允许类型是否包含 children
+            递归校验单个步骤节点及其children。
+
+            检查step_id/step_code自循环，并检查非允许类型是否包含children。
 
             :param step: 当前步骤节点
-            :param visited_ids: 已访问 step_id 集合(用于检测自循环)
-            :param path: 访问路径 step_code 列表(用于检测自循环)
-            :returns: (True, None) 表示通过；(False, str) 表示失败及错误信息
+            :param visited_ids: 已访问step_id集合(用于检测自循环)
+            :param path: 访问路径step_code列表(用于检测自循环)
+            :return: (True, None)表示通过；(False, str)表示失败及错误信息
             """
             step_id = step.step_id
             step_code = step.step_code

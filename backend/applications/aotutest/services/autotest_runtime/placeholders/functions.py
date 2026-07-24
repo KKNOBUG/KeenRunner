@@ -15,18 +15,16 @@ from backend.common.generate_utils import GenerateUtils
 
 
 class PlaceholderFunctions:
-    """解析并动态执行 GenerateUtils 上的辅助函数。"""
+    """解析并动态执行GenerateUtils上的辅助函数。"""
 
     @classmethod
     def _parse_funcname_funcargs(cls, func_string: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """
-        从 func_name(key1=val1, key2=val2) 格式的字符串中解析出函数名与参数字典
+        从func_name(key1=val1, key2=val2)格式的字符串中解析出函数名与参数字典。
 
-        注意：当前仅支持关键字参数(如: key=value), 并使用 ast.literal_eval 进行字面量解析
-        不包含 = 的内容会被忽略(即位置参数不会被解析和记录)
-
+        注意：当前仅支持关键字参数(如: key=value), 并使用ast.literal_eval进行字面量解析, 不包含=的内容会被忽略(即位置参数不会被解析和记录)
         :param func_string: 函数调用形式的字符串
-        :return: 二元祖(函数名, 参数字典), 无法解析时返回 (None, None)
+        :return: 二元组(函数名, 参数字典), 无法解析时返回(None, None)
         :raises ValueError: 参数值不是合法字面量或解析失败时
         """
         if not isinstance(func_string, str):
@@ -39,8 +37,6 @@ class PlaceholderFunctions:
         if func_args.strip():
             _args: List[str] = func_args.split(",")
             for item in _args:
-                # key, value = item.split("=")
-                # args_dict[str(key).strip()] = eval(value)
                 part: str = item.strip()
                 if "=" not in part:
                     continue
@@ -56,9 +52,9 @@ class PlaceholderFunctions:
     @classmethod
     def execute_func_string_single(cls, content: str) -> Any:
         """
-        针对 content 为函数调用字符串格式, 如: func_name(...) 的场景，通过 GenerateUtils 类实现反射机制动态执行对应函数，并将函数返回值替换原变量值
+        针对content为函数调用字符串格式(如func_name(...))的场景, 通过GenerateUtils类实现反射机制动态执行对应函数并返回函数返回值。
 
-        :param content: 如 "generate_uuid()"、"generate_string(length=2)"
+        :param content: 如"generate_uuid()"、"generate_string(length=2)"
         :return: 函数返回值
         :raises AttributeError: 非函数形式或函数不存在/执行失败
         """
