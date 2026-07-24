@@ -30,7 +30,7 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_VERTICAL,
     _dataframe_to_matrix,
-    json_safe_obj,
+    json_safe_value,
     parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
     parse_xlsx_to_parsed_data_async,
@@ -57,26 +57,24 @@ from backend.services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
 
-_SERIALIZE_EXCLUDE = {
-    "state",
-    "created_user",
-    "updated_user",
-    "created_time",
-    "updated_time",
-    "reserve_1",
-    "reserve_2",
-    "reserve_3",
-}
-
 
 async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[str, Any]:
     """序列化单条数据源（与 env 视图 replace id 为业务主键字段风格一致）。"""
     data = await instance.to_dict(
-        exclude_fields=_SERIALIZE_EXCLUDE,
+        exclude_fields={
+            "state",
+            "created_user",
+            "updated_user",
+            "created_time",
+            "updated_time",
+            "reserve_1",
+            "reserve_2",
+            "reserve_3",
+        },
         replace_fields={"id": "data_source_id"},
     )
     # Excel/pandas 可能留下 NaN，标准 JSON 无法序列化
-    return json_safe_obj(data)
+    return json_safe_value(data)
 
 
 async def _sync_step_data_source_meta(

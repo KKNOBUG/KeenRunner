@@ -16,7 +16,7 @@ import math
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -54,11 +54,6 @@ def json_safe_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [json_safe_value(v) for v in value]
     return value
-
-
-def json_safe_obj(obj: Any) -> Any:
-    """递归清洗任意嵌套结构，保证可被标准 JSON 序列化。"""
-    return json_safe_value(obj)
 
 
 def parse_kv_string(text: str) -> Dict[str, str]:
@@ -120,21 +115,15 @@ def detect_matrix_axis(values: Any) -> int:
     raise ValueError("无法识别数据矩阵方向：第 0 行或第 0 列需包含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 分区标记")
 
 
-def empty_dataset_record() -> Dict[str, Dict[str, Any]]:
-    """返回始终含四键的空场景结构。"""
-    return {k: {} for k in _DATASET_SECTION_KEYS}
-
-
 def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
     规范化单场景结构：仅保留 head/body/assert_head/assert_body，缺失键补 {}。
     """
     src = step_data if isinstance(step_data, dict) else {}
-    out = empty_dataset_record()
-    for key in _DATASET_SECTION_KEYS:
-        val = src.get(key)
-        out[key] = dict(val) if isinstance(val, dict) else {}
-    return out
+    return {
+        key: dict(src[key]) if isinstance(src.get(key), dict) else {}
+        for key in _DATASET_SECTION_KEYS
+    }
 
 
 def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
@@ -177,7 +166,7 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         if pd.isna(scene_name) or not str(scene_name).strip():
             continue
         scene_name = str(scene_name).strip()
-        record = empty_dataset_record()
+        record = {k: {} for k in _DATASET_SECTION_KEYS}
         has_data = False
 
         for section in ("head", "body"):
@@ -202,7 +191,7 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
                     has_data = True
 
         if has_data:
-            # 即使某分区无字段，四键已由 empty_dataset_record 补齐
+            # 即使某分区无字段，四键已由记录初始化补齐
             result[scene_name] = record
 
     return result
@@ -240,7 +229,7 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         if pd.isna(scene_name) or not str(scene_name).strip():
             continue
         scene_name = str(scene_name).strip()
-        record = empty_dataset_record()
+        record = {k: {} for k in _DATASET_SECTION_KEYS}
         has_data = False
         for col_idx, section, field_key in field_columns:
             value = data_values[row_idx, col_idx]
@@ -282,7 +271,7 @@ def _cell_is_blank(value: Any) -> bool:
     return False
 
 
-def _dataframe_to_matrix(df: pd.DataFrame) -> Union[List[Any], object]:
+def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     """将 DataFrame 转为二维矩阵（NaN/NaT/Inf 置为 None），剔除子项全为空白(None/NaN/空串)的行与列。"""
     if df is None or df.empty:
         return []

@@ -467,9 +467,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param file_desc: 描述。
         :param parsed_data: 解析后的 dataset 字典。
         :param dataset_names: 场景名称列表。
-        :param dataframe: Optional[List[Any]] = None,
-        :param axis:
-        :param dataframe:
+        :param dataframe: 原始二维矩阵。
+        :param axis: 数据矩阵方向(0:水平模式, 1:垂直模式)。
         :param created_user: 创建人（更新路径会映射为 updated_user）。
         :return: 数据源实例。
         :raises ParameterException: parsed_data 为空时。
