@@ -78,7 +78,7 @@ class StepExecutionError(Exception):
 @dataclass
 class StepExecutionResult:
     """
-    单步执行结果；容器步骤可通过children挂载子步骤结果树
+    单步执行结果；容器步骤可通过children挂载子步骤结果树。
 
     :ivar case_id: 用例 ID
     :ivar step_id: 步骤 ID
@@ -120,8 +120,9 @@ class StepExecutionResult:
 
     def append_child(self, child: "StepExecutionResult") -> None:
         """
-        将子步骤执行结果追加到当前结果的 children 列表。
-        :param child: 子步骤的执行结果对象。
+        将子步骤执行结果追加到当前结果的children列表。
+
+        :param child: 子步骤的执行结果对象
         :return: None
         """
         self.children.append(child)
@@ -129,16 +130,16 @@ class StepExecutionResult:
 
 class HttpClientProtocol(Protocol):
     """
-    HTTP 客户端协议，便于依赖注入和单元测试。
+    HTTP客户端协议，便于依赖注入和单元测试。
     """
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """
-        发起 HTTP 请求（由httpx.AsyncClient实现）
+        发起HTTP请求（由httpx.AsyncClient实现）。
 
-        :param method: HTTP 方法
-        :param url: 请求 URL
-        :param kwargs: 传给 httpx 的额外参数（headers、json 等）
+        :param method: HTTP方法
+        :param url: 请求URL
+        :param kwargs: 传给httpx的额外参数（headers、json 等）
         :return: 响应对象
         """
         ...
@@ -162,15 +163,16 @@ class StepExecutionContext:
             pending_details: Optional[List[AutoTestApiDetailCreate]] = None,
     ) -> None:
         """
-        初始化步骤执行上下文
-        :param case_id: 用例 ID
+        初始化步骤执行上下文。
+
+        :param case_id: 用例ID
         :param case_code: 用例编码
         :param steps_execute_config: 执行环境配置
         :param report_code: 报告编码，用于保存步骤明细
-        :param dataset_name: 参数化时传入的数据集名称，仅 HttpStepExecutor 内据此 + case_id/step_no/step_code 查表取数
-        :param http_client: 可选 HTTP 客户端，不传则在__aenter__中创建
+        :param dataset_name: 参数化时传入的数据集名称，仅HttpStepExecutor内据此 + case_id/step_no/step_code查表取数
+        :param http_client: 可选HTTP客户端，不传则在__aenter__中创建
         :param initial_variables: 初始会话变量列表List[StepVariablesBase]；会经占位符解析后赋给session_variables
-        :param pending_details: save_report 时收集待落库明细的列表；非 None 时 _save_step_detail 仅追加不写库
+        :param pending_details: save_report 时收集待落库明细的列表；非None时_save_step_detail仅追加不写库
         """
         self.case_id = case_id
         self.case_code = case_code
@@ -193,11 +195,11 @@ class StepExecutionContext:
 
     async def __aenter__(self) -> "StepExecutionContext":
         """
-        异步上下文管理器入口方法, 初始化HTTP客户端（如未提供）
+        异步上下文管理器入口方法, 初始化HTTP客户端（如未提供）。
 
-        若未指定外部HTTP客户端, 将创建一个默认的 httpx.AsyncClient 实例,
-        并通过 AsyncExitStack 管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
+        若未指定外部HTTP客户端, 将创建一个默认的httpx.AsyncClient实例，并通过AsyncExitStack管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
         :return: 上下文管理器实例本身, 用于异步with语句
+        :raises StepExecutionError: 创建 HTTP 客户端失败时抛出
         """
         try:
             if self._http_client is None:
@@ -216,7 +218,8 @@ class StepExecutionContext:
             tb: Optional[types.TracebackType],
     ) -> None:
         """
-        异步上下文退出：关闭由本上下文创建的 HTTP 客户端
+        异步上下文退出：关闭由本上下文创建的HTTP客户端。
+
         :param exc_type: 异常类型
         :param exc: 异常实例
         :param tb: 回溯对象
@@ -230,7 +233,7 @@ class StepExecutionContext:
 
     def resolve_placeholders(self, variables: Any, step_code: Optional[str] = None) -> Any:
         """
-        解析变量或配置中的${...}占位符（含函数占位符）
+        解析变量或配置中的${...}占位符（含函数占位符）。
 
         :param variables: 待解析的值，常见为List[StepVariablesBase]或嵌套结构
         :param step_code: 日志归属的步骤标识，未传则使用当前步骤
@@ -247,11 +250,11 @@ class StepExecutionContext:
 
     def resolve_xml_placeholders(self, xml_text: str, step_code: Optional[str] = None) -> str:
         """
-        解析 XML 报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）
+        解析XML报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）。
 
-        :param xml_text: XML 报文字符串
+        :param xml_text: XML报文字符串
         :param step_code: 日志归属的步骤标识，未传则使用当前步骤
-        :return: 解析后的 XML 字符串；xml_text 为空时原样返回
+        :return: 解析后的XML字符串；xml_text为空时原样返回
         """
         if not xml_text:
             return xml_text
@@ -265,8 +268,10 @@ class StepExecutionContext:
     @property
     def http_client(self) -> HttpClientProtocol:
         """
-        获取当前 HTTP 客户端，必须在 async with 上下文中使用
-        :return: 当前注入或创建的 HTTP 客户端
+        获取当前HTTP客户端，必须在async with上下文中使用。
+
+        :return: 当前注入或创建的HTTP客户端
+        :raises RuntimeError: HTTP客户端未创建时抛出
         """
         if self._http_client is None:
             raise RuntimeError("异步上下文管理器: HTTP客户端未创建, 请在异步上下文中使用")
@@ -274,7 +279,8 @@ class StepExecutionContext:
 
     def log(self, message: str, step_code: Optional[str] = None) -> None:
         """
-        按步骤编号记录一条带时间戳的日志
+        按步骤编号记录一条带时间戳的日志。
+
         :param message: 日志内容
         :param step_code: 步骤编号，用于归属；未传则使用当前步骤编号
         :return: None
@@ -285,7 +291,8 @@ class StepExecutionContext:
 
     def set_current_step_code(self, step_code: Optional[str] = None) -> None:
         """
-        设置当前执行步骤的 step_code，用于后续日志归属
+        设置当前执行步骤的step_code，用于后续日志归属。
+
         :param step_code: 步骤标识代码
         :return: None
         """
@@ -293,8 +300,9 @@ class StepExecutionContext:
 
     def clone_state(self) -> Dict[str, Any]:
         """
-        返回当前 defined_variables 与 session_variables 的字典形式副本，用作 Python 代码命名空间。
-        :return: 含 "defined_variables"、"session_variables" 两个键的字典，值为 name->value。
+        返回当前defined_variables与session_variables的字典形式副本，用作Python代码命名空间。
+
+        :return: 含 "defined_variables"、"session_variables" 两个键的字典，值为name->value
         """
         return {
             "defined_variables": AutoTestToolService.list_to_dict(self.defined_variables),
@@ -302,10 +310,18 @@ class StepExecutionContext:
         }
 
     def update_variables(
-            self, variables: List[StepVariablesBase], *, scope: str = "defined_variables"
+            self,
+            variables: List[StepVariablesBase],
+            *,
+            scope: str = "defined_variables"
     ) -> None:
         """
         按作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加。
+
+        :param variables: 待更新的变量列表
+        :param scope: 目标作用域（defined_variables 或 session_variables）
+        :return: None
+        :raises ValueError: 作用域非法、入参非列表或元素非法时抛出
         """
         if scope not in ("defined_variables", "session_variables"):
             raise ValueError(
@@ -342,13 +358,14 @@ class StepExecutionContext:
 
     def get_variable(self, name: str) -> Any:
         """
-        按优先级从 defined_variables、session_variables 中取名为 name 的变量值
+        按优先级从defined_variables、session_variables中取名为name的变量值。
 
-        变量作用域说明：
-        - defined_variables: 当前步骤的临时变量（从步骤配置中获取）
-        - session_variables: 持续累积已执行的步骤产生的变量（所有步骤共享）
+        变量作用域说明：defined_variables 为当前步骤的临时变量（从步骤配置中获取），
+        session_variables 为持续累积已执行的步骤产生的变量（所有步骤共享）。
         :param name: 变量名，非空字符串
         :return: 变量值
+        :raises StepExecutionError: 变量名不是非空字符串时抛出
+        :raises KeyError: 变量未定义时抛出
         """
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: \n\t变量名必须是非空字符串, 当前值: {name}")
@@ -365,9 +382,11 @@ class StepExecutionContext:
 
     async def sleep(self, seconds: Optional[float]) -> None:
         """
-        异步等待指定秒数
-        :param seconds: 等待秒数；None 或 <=0 不等待
+        异步等待指定秒数。
+
+        :param seconds: 等待秒数；None不等待，小于0或大于300抛出异常
         :return: None
+        :raises StepExecutionError: seconds非法或等待异常时抛出
         """
         if seconds is None:
             return
@@ -399,17 +418,19 @@ class StepExecutionContext:
             timeout: Optional[float] = None,
     ) -> httpx.Response:
         """
-        使用上下文 HTTP 客户端发起请求，记录日志
-        :param method: HTTP 方法（如 GET、POST）
-        :param url: 请求 URL
+        使用上下文 HTTP 客户端发起请求，记录日志。
+
+        :param method: HTTP方法（如 GET、POST）
+        :param url: 请求URL
         :param headers: 请求头字典
         :param params: 查询参数字典
-        :param data: 请求体（非 JSON）
-        :param json_data: JSON 请求体
-        :param content: 原始内容请求体（如 XML）
+        :param data: 请求体（非JSON）
+        :param json_data: JSON请求体
+        :param content: 原始内容请求体（如XML）
         :param files: 上传文件
-        :param timeout: 超时秒数，None 使用上下文默认
+        :param timeout: 超时秒数，None使用上下文默认
         :return: 响应对象
+        :raises StepExecutionError: 请求失败、超时、URL非法或连接异常时抛出
         """
         try:
             client = self.http_client
@@ -427,13 +448,13 @@ class StepExecutionContext:
             raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
             try:
                 if raw_headers:
-                    # 对请求头中的中文进行 UTF-8 百分号编码
+                    # 对请求头中的中文进行UTF-8百分号编码
                     encoded_headers: Dict[str, Any] = {
                         key: quote(value, encoding="utf-8", safe=':/?#[]@!$&\'()*+,;=-._~%')
                         if isinstance(value, str) else value for key, value in raw_headers.items()
                     }
                     if encoded_headers:
-                        # 把编码后的 headers 放回 kwargs
+                        # 把编码后的headers放回kwargs
                         kwargs["headers"] = encoded_headers
                 response = await client.request(method, url, **kwargs)
                 self.log(
@@ -496,15 +517,20 @@ class StepExecutionContext:
             raise StepExecutionError(str(e)) from e
 
     def run_python_code(
-            self, code: str, *, namespace: Optional[Dict[str, Any]] = None, step_result: Optional[StepExecutionResult] = None
+            self,
+            code: str,
+            *,
+            namespace: Optional[Dict[str, Any]] = None,
+            step_result: Optional[StepExecutionResult] = None
     ) -> Dict[str, Any]:
         """
-        在受限内置与 namespace 下执行 code，支持单函数定义或 result 变量
-        import/from 仅允许 USER_CODE_EXTRA_BUILTINS 中的根名；其余模块不可导入；另可使用 safe_globals 中其它内置名及 namespace 变量
+        在受限内置与namespace下执行code，支持单函数定义或result变量。
+
+        import/from 仅允许USER_CODE_EXTRA_BUILTINS中的根名；其余模块不可导入；另可使用safe_globals中其它内置名及namespace变量。
         :param code: Python 代码字符串，可为单行或多行
-        :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过 __builtins__ 注入
-        :param step_result: 可选；传入时写入其 request，记录实际执行代码快照（当前以规范化后的 code 为主）
-        :return: 代码中定义的 result 或单函数返回的 dict；无结果时返回空字典
+        :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过__builtins__注入
+        :param step_result: 可选；传入时写入其request，记录原始代码快照（未经占位符解析与规范化的原始code）
+        :return: 代码中定义的 result 或单函数返回的dict；无结果时返回空字典
         """
         if step_result is not None:
             step_result.request = {
@@ -657,7 +683,7 @@ class StepExecutionContext:
             raise StepExecutionError(error_message)
         result_serializer: str = orjson.dumps(result, option=orjson.OPT_INDENT_2).decode("UTF-8")
         self.log(f"【代码请求(Python)】执行完成, 返回结果: \n{result_serializer}")
-        # 对于f-string支持度不够，如下示例：
+        # 对于f-string支持度不够，如下示例（暂未解决）：
         #     id_card = '${generate_ident_card_number()}'
         #     birthday = f'${{generate_ident_card_birthday(ident_card_number={id_card})}}'
         return result
@@ -665,7 +691,11 @@ class StepExecutionContext:
     @staticmethod
     def _validate_user_python_restricted(source: str) -> None:
         """
-        import/from 仅允许 USER_CODE_EXTRA_BUILTINS 中的根名（与 safe_user_code_import 一致）；语法错误留给 exec。
+        import/from 仅允许USER_CODE_EXTRA_BUILTINS中的根名（与safe_user_code_import一致）；语法错误留给exec。
+
+        :param source: 待校验的Python源代码字符串
+        :return: None
+        :raises StepExecutionError: 导入非白名单模块或使用相对导入时抛出
         """
         allowed_cn = "、".join(sorted(USER_CODE_ALLOWED_IMPORT_ROOTS))
         try:
@@ -708,8 +738,9 @@ class StepExecutionContext:
     @staticmethod
     def normalize_python_code(code: str) -> str:
         """
-        将单行函数形式的代码格式化为多行：提取 import/from，分离 def 与函数体并正确缩进
-        :param code: 原始 Python 代码字符串，可为单行函数定义
+        将单行函数形式的代码格式化为多行：提取import/from，分离def与函数体并正确缩进。
+
+        :param code: 原始Python代码字符串，可为单行函数定义
         :return: 格式化后的多行代码；空串或已有换行则原样返回
         """
         code = code.strip()
@@ -726,16 +757,16 @@ class StepExecutionContext:
             colon_pos = code.find(":")
             func_def = code[:colon_pos + 1].strip()  # "def generate_var():"
             body = code[colon_pos + 1:].strip()  # "import random return {...}"
-            # 提取 import/from 语句（必须在 return 之前）
+            # 提取import/from语句（必须在return之前）
             import_lines = []
             remaining_body = body
-            # 查找所有 import/from 语句
+            # 查找所有import/from语句
             while True:
                 import_pos = remaining_body.find("import ")
                 from_pos = remaining_body.find("from ")
                 if import_pos == -1 and from_pos == -1:
                     break
-                # 找到第一个 import 或 from
+                # 找到第一个import或from
                 if from_pos != -1 and (import_pos == -1 or from_pos < import_pos):
                     pos = from_pos
                     keyword = "from "
@@ -743,7 +774,7 @@ class StepExecutionContext:
                     pos = import_pos
                     keyword = "import "
 
-                # 找到 import 语句的结束位置（下一个关键字或行尾）
+                # 找到import语句的结束位置（下一个关键字或行尾）
                 remaining_after_keyword = remaining_body[pos + len(keyword):]
                 next_keywords = ["return ", "if ", "for ", "while ", "with ", "import ", "from "]
                 end_pos = len(remaining_after_keyword)
@@ -751,7 +782,7 @@ class StepExecutionContext:
                     kw_pos = remaining_after_keyword.find(kw)
                     if kw_pos != -1 and kw_pos < end_pos:
                         end_pos = kw_pos
-                # 提取完整的 import 语句
+                # 提取完整的import语句
                 import_stmt = remaining_body[pos:pos + len(keyword) + end_pos].strip()
                 import_lines.append(import_stmt)
                 # 继续处理剩余部分
@@ -759,14 +790,14 @@ class StepExecutionContext:
 
             # 组合格式化后的代码
             normalized_parts = []
-            # 1. 先添加所有 import 语句（在函数外部）
+            # 1. 先添加所有import语句（在函数外部）
             if import_lines:
                 normalized_parts.extend(import_lines)
             # 2. 添加函数定义
             normalized_parts.append(func_def)
             # 3. 添加函数体（需要缩进）
             if remaining_body:
-                # 处理 return 等语句, 确保有正确的缩进
+                # 处理return等语句, 确保有正确的缩进
                 for keyword in ("return ", "if ", "for ", "while ", "with "):
                     if remaining_body.startswith(keyword):
                         normalized_parts.append(f"    {remaining_body}")
@@ -779,14 +810,16 @@ class StepExecutionContext:
 
     def resolve_code_placeholders(self, code: str) -> str:
         """
-        解析代码中的 ${var}：引号内替换为合法 Python 字面量，拼接形式保留字符串；代码逻辑中替换为 Python 字面量
+        解析代码中的 ${var}：引号内替换为合法 Python 字面量，拼接形式保留字符串；代码逻辑中替换为 Python 字面量。
 
         处理规则：
         1. 字符串字面量中的占位符（如 '${var}'）替换为合法字面量：字符串用 repr 保留引号，数值/布尔/None 裸写
-           例如：dic["k"] = "${name}" -> dic["k"] = '邵刚'；'${idx_1}' == 1 -> 1 == 1（idx_1=1）
+           例如：dic["k"] = "${name}" -> dic["k"] = '张三'；'${idx_1}' == 1 -> 1 == 1（idx_1=1）
         2. 字符串拼接中的占位符（如 '${item}_1001'）替换为实际值，保持字符串格式
            例如：'${item_1}_1001' 会变成 'test_1001'（假设 item_1 = "test"）
         3. 代码逻辑中的占位符（如 if ${var} == 1:）直接替换为实际值的 Python 表示
+        注意：对 f-string 中嵌套占位符的支持度有限，例如 id_card = '${generate_ident_card_number()}' 与
+        birthday = f'${{generate_ident_card_birthday(ident_card_number={id_card})}}' 这类写法可能无法正确解析。
         :param code: 含占位符的 Python 代码字符串
         :return: 占位符替换后的代码；异常时返回原 code
         """
@@ -901,23 +934,21 @@ class StepExecutionContext:
 
     @property
     def current_step_code(self) -> Optional[str]:
-        """
-        当前执行步骤的 step_code，用于日志归属
-        :return: 当前步骤编号，未设置时为 None
-        """
+        """当前执行步骤的step_code，用于日志归属。"""
         return self._current_step_code
 
 
 class BaseStepExecutor:
     """
-    步骤执行器基类：持有 step 与 context，执行后合并 extract_variables 到 session、可选保存明细
+    步骤执行器基类：持有step与context，执行后合并extract_variables到session、可选保存明细。
     """
 
     def __init__(self, step: AutoTestStepTreeUpdateItem, context: StepExecutionContext):
         """
         初始化步骤执行器。
-        :param step: 当前步骤模型，含 step_type、step_code、defined_variables 等
-        :param context: 执行上下文，用于变量、日志、HTTP 请求等
+
+        :param step: 当前步骤模型，含step_type、step_code、defined_variables等
+        :param context: 执行上下文，用于变量、日志、HTTP请求等
         """
         self.step = step
         self.context = context
@@ -959,9 +990,7 @@ class BaseStepExecutor:
 
     @property
     def children(self) -> List[AutoTestStepTreeUpdateItem]:
-        """
-        当前步骤的子步骤列表（children + quote_steps，按 step_no 排序）。
-        """
+        """当前步骤的子步骤列表（children + quote_steps，按 step_no 排序）。"""
         return sorted(
             list(self.step.children or []) + list(self.step.quote_steps or []),
             key=lambda item: (item.step_no or 0),
@@ -975,10 +1004,11 @@ class BaseStepExecutor:
 
     def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:
         """
-        获取当前步骤的执行配置（HTTP请求、TCP请求、SQL请求）
+        获取当前步骤的执行配置（HTTP请求、TCP请求、SQL请求）。
         执行配置KEY组成规则：step_id优先、其次是@@step_name、如果是SQL请求则需要继续拼接操作序号
+
         :param database_operates_index: 数据库多操作时的操作序号（拼接配置 key 后缀）
-        :return: 执行环境配置；未配置或解析失败时返回None
+        :return: 执行配置；未配置或解析失败时返回 None
         """
         step_exec_config_map: Dict[str, Any] = self.context.steps_execute_config
         if not step_exec_config_map or not isinstance(step_exec_config_map, dict):
@@ -1020,7 +1050,25 @@ class BaseStepExecutor:
             body_source: str = "response json",
     ) -> None:
         """
-        统一变量提取 + 断言：构建变量池查找表，调用工具管线，失败转为 StepExecutionError。
+        统一变量提取 + 断言：构建变量池查找表，调用工具管线，失败转为StepExecutionError。
+
+        :param result: 用于追加提取与断言结果的步骤执行结果对象
+        :param step_label: 步骤标签，用于异常信息中标识来源步骤
+        :param response_text: 响应文本
+        :param response_json: 响应JSON对象
+        :param response_headers: 响应头字典
+        :param response_cookies: 响应Cookie字典
+        :param request_text: 请求文本
+        :param request_json: 请求JSON对象
+        :param request_headers: 请求头字典
+        :param request_cookies: 请求Cookie字典
+        :param extract_variables: 变量提取规则，缺省时使用步骤自身的 extract_variables
+        :param assert_validators: 断言校验规则，缺省时使用步骤自身的assert_validators
+        :param step_struct: 步骤结构映射，供提取断言管线解析引用
+        :param session_lookup_extra: 额外并入变量池查找表的会话变量
+        :param body_source: 提取断言所用的响应体来源标识
+        :return: None
+        :raises StepExecutionError: 提取/断言存在失败项或处理异常时抛出
         """
         session_lookup = AutoTestToolService.build_session_lookup(
             self.context.defined_variables,
@@ -1078,11 +1126,10 @@ class BaseStepExecutor:
 
     async def execute(self) -> Optional[StepExecutionResult]:
         """
-        执行当前步骤：注入 defined_variables、调用 _execute、合并 extract_variables、可选保存明细。
+        执行当前步骤：注入defined_variables、调用_execute、合并extract_variables、可选保存明细。
+        若 step_is_skipped 为True，仅打INFO日志并返回None（不写明细、不计入统计、不执行子步骤）。
 
-        若 step_is_skipped 为 True，仅打 INFO 日志并返回 None（不写明细、不计入统计、不执行子步骤）。
-
-        :return: 本步骤执行结果；跳过时返回 None
+        :return: 本步骤执行结果；跳过时返回None
         """
         # 跳过/注释：当作没有该步骤（父跳过时不会进入子步，故无需祖先标记）
         if bool(getattr(self.step, "step_is_skipped", False)):
@@ -1108,7 +1155,7 @@ class BaseStepExecutor:
             quote_case_id=self.quote_case_id,
             success=True,
         )
-        # 设置当前步骤编号（先保存上一级 step_code 以便 finally 中恢复）
+        # 设置当前步骤标识（先保存上一级 step_code 以便 finally 恢复）
         previous_step_code: Optional[str] = self.context.current_step_code
         self.context.set_current_step_code(self.step_code)
         # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
@@ -1187,10 +1234,11 @@ class BaseStepExecutor:
 
     async def _save_step_detail(self, result: StepExecutionResult, step_st_time_str: str, num_cycles: int) -> None:
         """
-        将本步骤执行结果序列化为明细创建体并追加到 context.pending_details，由调用方在短事务内统一落库
+        将本步骤执行结果序列化为明细创建体并追加到context.pending_details，由调用方在短事务内统一落库。
+
         :param result: 本步骤执行结果对象
         :param step_st_time_str: 步骤开始时间字符串
-        :param num_cycles: 循环第几轮（非循环步骤可为 None）
+        :param num_cycles: 循环第几轮（非循环步骤可为None）
         :return: None
         """
         step_end_time: datetime = datetime.now()
@@ -1290,17 +1338,18 @@ class BaseStepExecutor:
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        子类实现：执行当前步骤逻辑，成功/失败写入 result，异常由 execute() 捕获
-        :param result: 用于写入本步骤执行结果的 StepExecutionResult 实例
+        子类实现：执行当前步骤逻辑，成功/失败写入result，异常由execute()捕获。
+
+        :param result: 用于写入本步骤执行结果的StepExecutionResult实例
         :return: None
         """
         raise NotImplementedError
 
     async def _execute_children(self) -> List[StepExecutionResult]:
         """
-        按 step_no 顺序执行所有子步骤（children + quote_steps）。
+        按step_no顺序执行所有子步骤（children + quote_steps）。
 
-        :return: 子步骤结果列表；step_is_skipped 的子步返回 None 会被跳过；异常子步转为失败结果项
+        :return: 子步骤结果列表；step_is_skipped的子步返回None会被跳过；异常子步转为失败结果项
         """
         results: List[StepExecutionResult] = []
         for child in self.children:
@@ -1335,15 +1384,16 @@ class BaseStepExecutor:
 
 class LoopStepExecutor(BaseStepExecutor):
     """
-    循环结构执行器：按 loop_mode 分派次数/列表/字典/条件循环，维护 loop_index 等会话变量并执行子步骤
+    循环结构执行器：按loop_mode分派次数/列表/字典/条件循环，维护loop_index等会话变量并执行子步骤。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        校验循环模式与错误策略后，分派到对应的_execute_*_loop实现
+        校验循环模式与错误策略后，分派到对应的_execute_*_loop实现。
 
         :param result: 用于挂载子步骤结果与成败状态的执行结果对象
         :return: None
+        :raises StepExecutionError: 循环模式/错误策略缺失或非法，或子步骤按策略停止时抛出
         """
         try:
             loop_mode_str = self.step.loop_mode
@@ -1396,10 +1446,12 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        次数循环模式，按 loop_maximums 执行固定次数循环，可选 loop_interval 间隔；超 100 次强制终止
-        :param result: 用于挂载子步骤结果的 StepExecutionResult
+        次数循环模式，按loop_maximums 执行固定次数循环，可选loop_interval间隔；超100次强制终止。
+
+        :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
+        :raises StepExecutionError: loop_maximums为空、子步骤按停止策略失败或循环次数超限时抛出
         """
         loop_maximums = self.step.loop_maximums
         if not loop_maximums:
@@ -1475,11 +1527,13 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_list_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        列表循环模式，对可迭代对象（变量或 JSON 数组）逐项执行子步骤
-        会话变量固定为 loop_index（从 1 起的序号）、loop_value（当前项）
-        :param result:  用于挂载子步骤结果的 StepExecutionResult
+        列表循环模式，对可迭代对象（变量或 JSON 数组）逐项执行子步骤。
+        会话变量固定为loop_index（从 1 起的序号）、loop_value（当前项）
+
+        :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
+        :raises StepExecutionError: loop_iterable为空、数据源非可迭代对象、子步骤按停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1584,11 +1638,13 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_dict_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        字典循环模式，对字典逐 (key, value) 执行子步骤；
-        会话变量固定为 loop_index（从 1 起的序号）、loop_key、loop_value
-        :param result: 用于挂载子步骤结果的 StepExecutionResult
+        字典循环模式，对字典逐 (key, value) 执行子步骤。
+        会话变量固定为loop_index（从 1 起的序号）、loop_key、loop_value
+
+        :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
+        :raises StepExecutionError: loop_iterable为空、数据源非字典、子步骤按停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1698,16 +1754,17 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_condition_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        条件循环：while 语义——每轮**先**根据 conditions 判断是否继续；仅当条件满足时才执行子步骤，
+        条件循环：while语义每轮先根据conditions判断是否继续；仅当条件满足时才执行子步骤，
         再进入间隔与下一轮判断。条件一开始就不满足时，子步骤一轮都不会执行。
-        超时、条件评估异常、或子步骤按策略中断时退出；最多 100 轮（每轮一次子步骤树）防死循环。
+        超时、条件评估异常、或子步骤按策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
 
         约定：conditions与ConditionsBase一致（condition_expr/condition_compare/condition_value），
         经compare_assertion评估；返回True表示继续循环，返回 False 表示结束循环。
 
-        :param result: 用于挂载子步骤结果的 StepExecutionResult
+        :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
+        :raises StepExecutionError: conditions为空、子步骤按停止策略失败或循环轮数超限时抛出
         """
         condition = self.step.conditions
         if not condition:
@@ -1739,7 +1796,7 @@ class LoopStepExecutor(BaseStepExecutor):
                     )
                     break
 
-            # 先评估条件：不满足则不再执行本轮子步骤（while 语义）
+            # 先评估条件：不满足则不再执行本轮子步骤（while语义）
             try:
                 if not self.evaluate_condition(condition):
                     self.context.log(
@@ -1833,7 +1890,11 @@ class LoopStepExecutor(BaseStepExecutor):
 
     def evaluate_condition(self, condition: ConditionsBase) -> bool:
         """
-        评估条件是否成立；condition 为 ConditionsBase 模型实例。
+        评估条件是否成立；condition为ConditionsBase模型实例。
+
+        :param condition: 待评估的条件模型
+        :return: 条件成立返回 True，否则False
+        :raises StepExecutionError: 条件缺少必要字段、变量未定义、占位符解析异常或条件执行异常时抛出
         """
         condition_expr = condition.condition_expr
         condition_compare = condition.condition_compare
@@ -1865,25 +1926,25 @@ class LoopStepExecutor(BaseStepExecutor):
 
     def parse_iterable_source(self, source: Any) -> Any:
         """
-        解析循环数据源：先做占位符替换，再按变量名、JSON 字符串或原值得到可迭代对象
+        解析循环数据源：先做占位符替换，再按变量名、JSON字符串或原值得到可迭代对象。
 
-        :param source: 数据源，可为 ${var}、JSON 字符串或已解析对象
+        :param source: 数据源，可为${var}、JSON字符串或已解析对象
         :return: 可迭代对象（如 list、dict）
         :raises StepExecutionError: 解析失败时
         """
         try:
-            # 占位符解析后再解析 ${var} 或 JSON 字面量
+            # 占位符解析后再解析${var} 或JSON字面量
             resolved_source = self.context.resolve_placeholders(variables=source, step_code=self.step_code)
             # 如果是字符串且以 ${ 开头，尝试获取变量
             if isinstance(resolved_source, str) and resolved_source.startswith("${") and resolved_source.endswith("}"):
                 variable_name = resolved_source[2:-1]
                 obj = self.context.get_variable(variable_name)
             elif isinstance(resolved_source, str):
-                # 尝试解析 JSON 字符串
+                # 尝试解析JSON字符串
                 try:
                     obj = orjson.loads(resolved_source)
                 except (orjson.JSONDecodeError, ValueError):
-                    # 如果不是 JSON，作为普通字符串处理
+                    # 如果不是JSON，作为普通字符串处理
                     obj = resolved_source
             else:
                 obj = resolved_source
@@ -1903,9 +1964,9 @@ class ConditionStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        评估条件表达式，成立则顺序执行子步骤并挂到result.children
+        评估条件表达式，成立则顺序执行子步骤并挂到result.children。
 
-        :param result: 本步执行结果，用于写入 request 快照与子步骤结果
+        :param result: 本步执行结果，用于写入request快照与子步骤结果
         :return: None
         """
         try:
@@ -1951,7 +2012,7 @@ class ConditionStepExecutor(BaseStepExecutor):
             except Exception as e:
                 raise StepExecutionError(f"【条件分支】条件表达式中变量解析异常, 错误描述: {e}") from e
 
-            # 写入 result.request 便于落库与排障, 类型: Dict[str, ConditionsBase]
+            # 写入result.request便于落库与排障, 类型: Dict[str, ConditionsBase]
             result.request = {"conditions": condition.model_copy(update={"condition_expr": actual_value})}
             try:
                 if not AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value):
@@ -1968,7 +2029,7 @@ class ConditionStepExecutor(BaseStepExecutor):
             try:
                 child_results = await self._execute_children()
                 for child in child_results:
-                    # 子步骤成败仅记入 children，不向上传递；用例统计仍按各子 step_code 单独计入
+                    # 子步骤成败仅记入children，不向上传递；用例统计仍按各子step_code单独计入
                     result.append_child(child)
             except Exception as e:
                 result.success = False
@@ -1988,10 +2049,11 @@ class PythonStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        在沙箱中执行步骤代码，合并返回字典并运行变量池断言
+        在沙箱中执行步骤代码，合并返回字典并运行变量池断言。
 
         :param result: 本步执行结果
         :return: None
+        :raises StepExecutionError: 代码执行失败、断言失败或结果提取失败时抛出
         """
         try:
             code = self.step.code
@@ -2062,13 +2124,16 @@ class PythonStepExecutor(BaseStepExecutor):
 
 class WaitStepExecutor(BaseStepExecutor):
     """
-    等待步骤执行器：按step.wait秒数调用context.sleep
+    等待步骤执行器：按step.wait秒数调用context.sleep。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
+        按 step.wait 指定的秒数挂起当前步骤。
+
         :param result: 本步执行结果（等待步骤通常不写入额外字段）
         :return: None
+        :raises StepExecutionError: 等待异常时抛出
         """
         try:
             wait_seconds = self.step.wait
@@ -2087,13 +2152,16 @@ class WaitStepExecutor(BaseStepExecutor):
 
 class UserVariablesStepExecutor(BaseStepExecutor):
     """
-    用户变量步骤执行器：解析step.session_variables后合并到session_variables
+    用户变量步骤执行器：解析step.session_variables后合并到session_variables。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
+        解析step.session_variables中的占位符并合并到会话变量池。
+
         :param result: 本步执行结果
         :return: None
+        :raises StepExecutionError: 变量解析或合并异常时抛出
         """
         try:
             session_variables_raw: List[StepVariablesBase] = self.step.session_variables
@@ -2111,17 +2179,18 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
 class QuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本执行器：加载引用用例根步骤树，按 step_no 顺序执行并挂到 result.children。
+    引用公共脚本执行器：加载引用用例根步骤树，按step_no顺序执行并挂到result.children。
 
-    本步 step_is_skipped 时由 BaseStepExecutor.execute 直接返回，不会进入本执行器。
+    本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        加载并执行引用用例的根步骤树；跳过的子步（execute 返回 None）不挂入 children。
+        加载并执行引用用例的根步骤树；跳过的子步（execute 返回 None）不挂入children。
 
-        :param result: 本步执行结果，子步骤结果写入 children
+        :param result: 本步执行结果，子步骤结果写入children
         :return: None
+        :raises StepExecutionError: 子用例执行异常时抛出
         """
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         try:
@@ -2225,31 +2294,29 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
 
 class TcpStepExecutor(BaseStepExecutor):
     """
-    TCP 步骤执行器：复用 HTTP 步骤的「数据驱动替换 → 占位符解析 → 请求发送 → 变量提取 → 断言」链路。
+    TCP 步骤执行器：复用HTTP步骤的「数据驱动替换 → 占位符解析 → 请求发送 → 变量提取 → 断言」链路。
 
     约定字段（沿用步骤基础字段，避免新增 schema 破坏兼容）：
-    - request_url: TCP host（如 127.0.0.1 或域名），也允许写成 host:port（此时 request_port 可为空）
-    - request_port: TCP port（字符串或数字，范围 1~65535）
-    - request_args_type:
-        - RAW: 发送 request_text（str/bytes）
-        - JSON: 发送 request_body（dict 或 JSON 字符串）
-        - 其它/未配置：优先 request_text，否则 request_body
-    - 额外可选字段（不在 schema 中也可透传到 step dict）：
-        - tcp_frame_mode: "length_prefix_json" | "raw"（对应 TcpFrameMode，默认 length_prefix_json）
-        - tcp_length_field_size: 长度前缀宽度（默认 8）
-        - tcp_encoding: 文本编码（默认 utf-8）
-        - tcp_connect_timeout: 连接超时秒数（float）
-        - tcp_read_timeout: 读写超时秒数（float）
-        - tcp_max_response_bytes: 最大响应体限制（默认 10MB）
-        - tcp_response_type: "json" | "xml" | "text" | "bytes"（默认 text；json/xml 失败会降级为 text）
+        - request_url 为 TCP host（如 127.0.0.1 或域名）
+        - request_port 为 TCP port（字符串或数字，范围 1~65535），二者均必填。
+        - request_args_type 为 RAW 时发送 request_text（str/bytes），为 JSON 时发送 request_body（dict 或 JSON 字符串），其它或未配置时优先 request_text、否则 request_body。
+        - 额外可选字段（不在 schema 中也可透传到 step dict）：
+            - tcp_frame_mode 取 "length_prefix_json" 或 "raw"（对应 TcpFrameMode，默认 length_prefix_json）；
+            - tcp_length_field_size 为长度前缀宽度（默认 8）；
+            - tcp_encoding 为文本编码（默认 utf-8）；
+            - tcp_connect_timeout 为连接超时秒数（float）；
+            - tcp_read_timeout 为读写超时秒数（float）；
+            - tcp_max_response_bytes 为最大响应体限制（默认 10MB）；
+            - tcp_response_type 取 "json"、"xml"、"text" 或 "bytes"（默认 text，json/xml 失败会降级为 text）。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        解析执行环境与报文，发送 TCP 请求并完成变量提取与断言
+        解析执行环境与报文，发送TCP请求并完成变量提取与断言。
 
         :param result: 本步执行结果
         :return: None
+        :raises StepExecutionError: 环境/报文解析或请求异常时抛出
         """
         try:
             env_name: Optional[str] = None
@@ -2269,7 +2336,7 @@ class TcpStepExecutor(BaseStepExecutor):
             if not request_url or not request_port:
                 raise StepExecutionError(f"【TCP请求】请求主机[{request_url!r}]或请求端口[{request_port!r}]不是有效的配置")
 
-            # 参数化驱动：与 HTTP 步骤一致（当存在 dataset_name 且不是引用公共脚本时）
+            # 参数化驱动：与HTTP步骤一致（当存在 dataset_name 且不是引用公共脚本时）
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
             step_struct = await AutoTestToolService.load_dataset_for_request_step(
@@ -2291,7 +2358,7 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.has_dataset_payload(step_struct):
-                # 按 request_args_type 优先判断报文类型，未明确类型时按内容嗅探
+                # 按request_args_type优先判断报文类型，未明确类型时按内容嗅探
                 text_for_detect = request_text if isinstance(request_text, str) else ""
                 if self.step.request_args_type == AutoTestReqArgsType.XML:
                     is_xml = True
@@ -2308,9 +2375,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 else:
                     body_for_replace = request_body
                     if (
-                        body_for_replace is None
-                        or body_for_replace == {}
-                        or body_for_replace == ""
+                            body_for_replace is None
+                            or body_for_replace == {}
+                            or body_for_replace == ""
                     ) and isinstance(request_text, str):
                         stripped = request_text.strip()
                         if stripped.startswith(("{", "[")):
@@ -2338,8 +2405,8 @@ class TcpStepExecutor(BaseStepExecutor):
             )
             text_after_ds = request_text if isinstance(request_text, str) else ""
             use_xml_placeholders = (
-                self.step.request_args_type == AutoTestReqArgsType.XML
-                or text_after_ds.strip().startswith("<")
+                    self.step.request_args_type == AutoTestReqArgsType.XML
+                    or text_after_ds.strip().startswith("<")
             )
             if use_xml_placeholders and request_text:
                 request_text = self.context.resolve_xml_placeholders(
@@ -2364,7 +2431,7 @@ class TcpStepExecutor(BaseStepExecutor):
             else:
                 payload = request_text if request_text not in (None, "") else request_body
 
-            # 写入 result.request，便于落库与排障
+            # 写入result.request，便于落库与排障
             result.request = {
                 "request_url": request_url,
                 "request_port": request_port,
@@ -2392,7 +2459,7 @@ class TcpStepExecutor(BaseStepExecutor):
             response_type = (self.step.tcp_response_type or "text").strip().lower()
 
             def _to_timedelta(v: Any) -> Optional["timedelta"]:
-                """将秒数字符串/数值转为 timedelta；空或非法返回 None。"""
+                """将秒数字符串/数值转为timedelta；空或非法返回None。"""
                 if v is None or v == "":
                     return None
                 try:
@@ -2419,7 +2486,7 @@ class TcpStepExecutor(BaseStepExecutor):
                     connect_timeout=connect_td,
                     read_timeout=read_td,
                 )
-                # 只请求一次：获取原始字节后本地解析，避免解析失败时重发 TCP 请求
+                # 只请求一次：获取原始字节后本地解析，避免解析失败时重发TCP请求
                 resp_bytes = await utils.bytes_resp()
                 try:
                     resp_text = resp_bytes.decode(encoding, errors="ignore")
@@ -2436,7 +2503,7 @@ class TcpStepExecutor(BaseStepExecutor):
                     except Exception:
                         response_json = None
                 elif response_type == "xml":
-                    # 与 xml_resp 行为一致：lxml 格式化
+                    # 与xml_resp行为一致：lxml格式化
                     try:
                         if resp_bytes and resp_bytes.strip():
                             from lxml import etree
@@ -2444,7 +2511,7 @@ class TcpStepExecutor(BaseStepExecutor):
                             root = etree.fromstring(resp_bytes, parser=parser)
                             resp_text = etree.tostring(root, encoding=str, pretty_print=True, xml_declaration=False).strip()
                     except Exception:
-                        pass  # 格式化失败，保留 decode 后的文本
+                        pass  # 格式化失败，保留decode后的文本
                     response_json = None
                 elif response_type == "bytes":
                     response_json = None
@@ -2472,7 +2539,7 @@ class TcpStepExecutor(BaseStepExecutor):
             request_text_for_extract = request_text if request_text not in (None, "") else (
                 payload if isinstance(payload, str) else None
             )
-            # 根据响应类型选择数据驱动 assert_body 的提取来源
+            # 根据响应类型选择数据驱动assert_body的提取来源
             if response_type == "json":
                 tcp_body_source = "response json"
             elif response_type == "xml":
@@ -2502,15 +2569,16 @@ class TcpStepExecutor(BaseStepExecutor):
 
 class DataBaseStepExecutor(BaseStepExecutor):
     """
-    数据库请求步骤：按环境配置连接池执行多条 SQL，解析占位符，结果写入变量池；支持查到即止
+    数据库请求步骤：按环境配置连接池执行多条SQL，解析占位符，结果写入变量池；支持查到即止。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        顺序执行database_operates中的SQL，合并提取结果与断言
+        顺序执行database_operates中的SQL，合并提取结果与断言。
 
         :param result: 本步执行结果
         :return: None
+        :raises StepExecutionError: SQL执行或结果处理异常时抛出
         """
         try:
             merge_operates_env_name: Optional[str] = None
@@ -2527,9 +2595,9 @@ class DataBaseStepExecutor(BaseStepExecutor):
             pool_manager: DBConnPoolFromConfig = get_app_database_pool()
             database_searched: bool = bool(self.step.database_searched)
             executive_st_time: datetime = datetime.now()
-            # 步骤响应：列表，每项对应一条 database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
+            # 步骤响应：列表，每项对应一条database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
             for db_idx, db_operate in enumerate(database_operates):
-                # 清空env_name数据, 避免循环内数据库操作污染
+                # 清空env_name/config_host/config_port，避免循环内数据库操作相互污染
                 env_name: Optional[str] = None
                 config_host: Optional[str] = None
                 config_port: Optional[str] = None
@@ -2573,22 +2641,10 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 operate_result_count: str = f"{operate_variable_name}_count"
                 try:
                     # 处理变量占位符
-                    operate_sql_expr: str = self.context.resolve_placeholders(
-                        variables=operate_sql_expr,
-                        step_code=self.step_code
-                    )
-                    operate_config_name: str = self.context.resolve_placeholders(
-                        variables=operate_config_name,
-                        step_code=self.step_code
-                    )
-                    operate_project_name: str = self.context.resolve_placeholders(
-                        variables=operate_project_name,
-                        step_code=self.step_code
-                    )
-                    operate_database_name: str = self.context.resolve_placeholders(
-                        variables=operate_database_name,
-                        step_code=self.step_code
-                    )
+                    operate_sql_expr: str = self.context.resolve_placeholders(variables=operate_sql_expr, step_code=self.step_code)
+                    operate_config_name: str = self.context.resolve_placeholders(variables=operate_config_name, step_code=self.step_code)
+                    operate_project_name: str = self.context.resolve_placeholders(variables=operate_project_name, step_code=self.step_code)
+                    operate_database_name: str = self.context.resolve_placeholders(variables=operate_database_name, step_code=self.step_code)
                     if not operate_project_id and operate_project_name.strip():
                         database_crud_services = await self.get_services()
                         project_instance = await database_crud_services.project_curd.get_by_name(operate_project_name.strip(), on_error=False)
@@ -2759,16 +2815,16 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
 class RedisStepExecutor(BaseStepExecutor):
     """
-    Redis 请求步骤：按环境配置连接 Redis，顺序执行多条命令，解析占位符；支持查到即止
+    Redis请求步骤：按环境配置连接Redis，顺序执行多条命令，解析占位符；支持查到即止。
     """
 
     @staticmethod
     def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
         """
-        判断 Redis 命令结果列表是否含有效数据（非空/非空白）。
+        判断Redis命令结果列表是否含有效数据（非空/非空白）。
 
         :param command_results: 命令返回值列表
-        :return: 存在有效结果则为 True
+        :return: 存在有效结果则为True
         """
         if not command_results:
             return False
@@ -2784,10 +2840,11 @@ class RedisStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        按环境配置顺序执行 redis_operates，解析占位符并写入结果；支持查到即止。
+        按环境配置顺序执行redis_operates，解析占位符并写入结果；支持查到即止。
 
         :param result: 本步执行结果
         :return: None
+        :raises StepExecutionError: Redis命令执行或结果处理异常时抛出
         """
         try:
             merge_operates_env_name: Optional[str] = None
@@ -3046,16 +3103,17 @@ class RedisStepExecutor(BaseStepExecutor):
 
 class HttpStepExecutor(BaseStepExecutor):
     """
-    HTTP 步骤执行器：发请求、解析占位符、按 request_project_id 取项目下环境补全 URL，并执行变量提取与断言。
-    参数化驱动仅在此执行器内处理：按 dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取数。
+    HTTP 步骤执行器：发请求、解析占位符、按request_project_id取项目下环境补全 URL，并执行变量提取与断言。
+    参数化驱动仅在此执行器内处理：按dataset_name + case_id/step_code查AutoTestApiDataSourceInfo取数。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        拼装 URL 与报文，发送 HTTP 请求并完成变量提取与断言
+        拼装URL与报文，发送HTTP请求并完成变量提取与断言。
 
         :param result: 本步执行结果
         :return: None
+        :raises StepExecutionError: URL/环境非法、请求配置或数据源处理异常、响应解析失败时抛出
         """
         try:
             # 获取当前步骤的执行配置并处理请求URL
@@ -3157,10 +3215,10 @@ class HttpStepExecutor(BaseStepExecutor):
             file_payload: Optional[Any] = None
             data_payload: Optional[Any] = None
             content_payload: Optional[Any] = None
-            # 按 request_args_type 选取请求体类型，仅使用一种方式，避免冲突
+            # 按request_args_type选取请求体类型，仅使用一种方式，避免冲突
             request_args_type: AutoTestReqArgsType = self.step.request_args_type
             if request_args_type is None:
-                # 未配置时保持兼容：优先 raw -> form-data -> urlencoded 作为 data，若有 request_body 则作为 json
+                # 未配置时保持兼容：优先raw -> form-data -> urlencoded作为data，若存在request_body且未产生data载荷，则作为json
                 if request_text:
                     data_payload = request_text
                 elif request_form_data or request_form_file:
@@ -3189,7 +3247,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 file_payload = request_form_file if request_form_file else None
             elif request_args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
                 data_payload = request_form_urlencoded
-            # 先写入实际发往目标服务器的数据，避免后续处理 response 异常时落库拿不到 request
+            # 先写入实际发往目标服务器的数据，避免后续处理response异常时落库拿不到request
             result.request = {
                 "request_url": request_url,
                 "request_method": request_method.value,
@@ -3244,7 +3302,7 @@ class HttpStepExecutor(BaseStepExecutor):
             request_text_for_extract = request_text if request_text not in (None, "") else (
                 data_payload if isinstance(data_payload, str) else None
             )
-            # 合并到 session_variables 由 execute() 的 finally 统一从 result.extract_variables 处理
+            # 合并到session_variables由execute()的finally统一从result.extract_variables处理
             self.apply_extract_and_assert(
                 result,
                 step_label="HTTP请求",
@@ -3269,13 +3327,16 @@ class HttpStepExecutor(BaseStepExecutor):
 
 class DefaultStepExecutor(BaseStepExecutor):
     """
-    默认步骤执行器：仅顺序执行子步骤，作为未知步骤类型或容器步骤的回退
+    默认步骤执行器：仅顺序执行子步骤，作为未知步骤类型或容器步骤的回退。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
+        顺序执行子步骤并将结果写入本步children，任一子步失败则本步失败。
+
         :param result: 本步执行结果，子步骤写入children
         :return: None
+        :raises StepExecutionError: 子步骤执行异常时抛出
         """
         try:
             child_results = await self._execute_children()
@@ -3292,7 +3353,7 @@ class DefaultStepExecutor(BaseStepExecutor):
 
 class StepExecutorFactory:
     """
-    根据步骤类型创建对应执行器实例，未知类型使用DefaultStepExecutor
+    根据步骤类型创建对应执行器实例，未知类型使用DefaultStepExecutor。
     """
 
     EXECUTOR_MAP: Dict[AutoTestStepType, Callable[[AutoTestStepTreeUpdateItem, StepExecutionContext], BaseStepExecutor]] = {
@@ -3311,11 +3372,12 @@ class StepExecutorFactory:
     @classmethod
     def create_executor(cls, step: AutoTestStepTreeUpdateItem, context: StepExecutionContext) -> BaseStepExecutor:
         """
-        根据step.step_type创建对应执行器；未知类型使用DefaultStepExecutor
+        根据step.step_type创建对应执行器；未知类型使用DefaultStepExecutor。
 
         :param step: 步骤树节点
         :param context: 执行上下文
         :return: 步骤执行器实例
+        :raises StepExecutionError: 步骤类型未定义、无法转换或执行器实例化失败时抛出
         """
         try:
             raw_type = step.step_type
@@ -3338,7 +3400,7 @@ class StepExecutorFactory:
 
 class AutoTestStepExecutionEngine:
     """
-    用例执行入口：创建报告、进入上下文、按step_no执行根步骤并汇总统计与日志
+    用例执行入口：创建报告、进入上下文、按step_no执行根步骤并汇总统计与日志。
     """
 
     def __init__(
@@ -3350,6 +3412,7 @@ class AutoTestStepExecutionEngine:
     ) -> None:
         """
         初始化执行引擎。
+
         :param http_client: 可选 HTTP 客户端，不传则上下文内自动创建
         :param save_report: 是否收集报告与步骤明细供调用方落库（执行阶段不写库，由调用方单事务写入）
         :param task_code: 任务编码，写入报告
@@ -3381,25 +3444,22 @@ class AutoTestStepExecutionEngine:
         Optional[List[AutoTestApiDetailCreate]]
     ]:
         """
-        执行单用例：在上下文中按 step_no 执行根步骤，可选收集报告与明细供调用方落库。
+        执行单用例：在上下文中按step_no执行根步骤，可选收集报告与明细供调用方落库。
 
-        参数化时仅传入 dataset_name，HTTP、TCP 步骤按 case_id/step_code 与数据集名称查表取数。
-        step_is_skipped 的步骤不进入 results、不写明细、不计入 statistics。
+        参数化时仅传入dataset_name，HTTP、TCP步骤按case_id/step_code与数据集名称查表取数。
+        step_is_skipped 的步骤不进入results、不写明细、不计入statistics。
 
-        :param case: 用例信息字典，含 case_id、case_code、case_name
+        :param case: 用例信息字典，含case_id、case_code、case_name
         :param steps: 根步骤可迭代对象（已排序按 step_no）
         :param report_type: 报告类型枚举
         :param steps_execute_config: 执行配置
-        :param initial_variables: 初始会话变量列表，每项含 key、value、desc
+        :param initial_variables: 初始会话变量列表，每项含key、value、desc
         :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数
-        :returns: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)。
-            - results 为根步骤执行结果列表（不含已跳过步骤）；
-            - logs 按 step_code 分组；
-            - report_code 未保存时为 None；
-            - statistics 含 total_steps、success_steps、failed_steps、passed_ratio；
-            - session_variables 为执行后变量列表；
-            - 当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表（report_code 已统一），
-              调用方在单事务内依次 create_report、create_detail、update_case
+        :return: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)，
+            results：根步骤执行结果列表（不含已跳过步骤）；logs：按step_code分组；report_code：未保存时为None；
+            statistics：含total_steps、success_steps、failed_steps、passed_ratio；session_variables：执行后变量列表；
+            当_save_report为True时，最后两项为待落库的报告创建体与明细列表（report_code 已统一），
+            调用方在单事务内依次create_report、create_detail、update_case
         """
         report_code: Optional[str] = None
         case_id: int = case.get("case_id")
@@ -3494,9 +3554,10 @@ class AutoTestStepExecutionEngine:
     @staticmethod
     def collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:
         """
-        递归收集所有步骤结果（含子步骤）为扁平列表
+        递归收集所有步骤结果（含子步骤）为扁平列表。
+
         :param results: 根步骤执行结果列表
-        :return: List[StepExecutionResult]: 含所有根步骤及其子步骤的扁平结果列表
+        :return: 含所有根步骤及其子步骤的扁平结果列表
         """
         all_res: List[StepExecutionResult] = []
         for r in results:
@@ -3511,18 +3572,20 @@ class AutoTestStepExecutionEngine:
             root_step_code: str
     ) -> None:
         """
-        将根步骤下所有子步骤的日志按 step_code 收集后，追加到该根步骤在 context.logs 中的日志列表
-        :param context: 执行上下文，其 logs 将被修改
-        :param root_result: 根步骤的执行结果，用于遍历 children
-        :param root_step_code: 根步骤的 step_code，用于写回 context.logs
+        将根步骤下所有子步骤的日志按step_code收集后，追加到该根步骤在context.logs中的日志列表。
+
+        :param context: 执行上下文，其logs将被修改
+        :param root_result: 根步骤的执行结果，用于遍历children
+        :param root_step_code: 根步骤的step_code，用于写回context.logs
         :return: None
         """
 
         def collect_child_step_nos(result: StepExecutionResult) -> List[str]:
             """
-            递归收集该结果及其子结果的 step_code 列表
+            递归收集该结果及其子结果的step_code列表。
+
             :param result: 当前步骤执行结果
-            :return: step_code 列表
+            :return: step_code列表
             """
             step_codes: List[str] = []
             if result.step_code is not None:
