@@ -5,11 +5,6 @@
 @Project : Krun
 @Module  : autotest_data_source_parser.py
 @DateTime: 2026/3/6
-参数化驱动：将 xlsx 解析为约定 JSON 结构。
-输出格式：{ "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }
-xlsx 约定：无表头(header=None)；第 0 行第 2 列起为场景名；第 1 列为分区标签，固定四种：
-HEAD（请求头参数）、BODY（请求体参数）、ASSERT_HEAD（响应头断言）、ASSERT_BODY（响应体断言）。
-文件中某分区可缺省（表示不做对应操作）；落库时四个键始终补齐，缺省分区值为空对象 {}。
 """
 import asyncio
 import math
@@ -23,11 +18,16 @@ import pandas as pd
 
 from backend.configure import LOGGER
 
-_executor = ThreadPoolExecutor(max_workers=4)
+_executor = ThreadPoolExecutor(max_workers=5)
 
 
 def json_safe_value(value: Any) -> Any:
-    """将单元格/字段值转为 JSON 可序列化类型；NaN/Inf/NaT → None。"""
+    """
+    将单元格/字段值递归转为 JSON 可序列化类型。
+
+    :param value: 原始值（可能为 NaN/Inf/NaT/numpy 类型或嵌套结构）
+    :return: JSON 可序列化值，NaN/Inf/NaT 转为 None
+    """
     if value is None:
         return None
     try:
@@ -58,11 +58,10 @@ def json_safe_value(value: Any) -> Any:
 
 def parse_kv_string(text: str) -> Dict[str, str]:
     """
-    把：
-        Ammy:7860000182_x000D_
-        Ccy:CNY
-    转成：
-        {"Ammy": "7860000182", "Ccy": "CNY"}
+    将多行 key:value 文本解析为字典（去除 _x000D_ 回车符）。
+
+    :param text: 形如 "Ammy:7860000182_x000D_\\nCcy:CNY" 的多行文本
+    :return: 解析后的字典，如 {"Ammy": "7860000182", "Ccy": "CNY"}；非字符串入参返回 {}
     """
     if not isinstance(text, str):
         return {}
@@ -91,7 +90,12 @@ AXIS_VERTICAL = 1
 
 
 def _row_has_section_marker(cells: Any) -> bool:
-    """判断一组单元格中是否包含分区标记（HEAD/BODY/ASSERT_HEAD/ASSERT_BODY，大小写不敏感）。"""
+    """
+    判断一组单元格中是否包含分区标记。
+
+    :param cells: 单元格序列（如某一行或某一列）
+    :return: 含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY（大小写不敏感）返回 True，否则 False
+    """
     for cell in cells:
         if isinstance(cell, str) and cell.strip().lower() in _SECTION_LABEL_TO_KEY:
             return True
@@ -100,10 +104,11 @@ def _row_has_section_marker(cells: Any) -> bool:
 
 def detect_matrix_axis(values: Any) -> int:
     """
-    检测二维矩阵方向并校验合法性：
-    - 第 0 行含分区标记 → 水平模式(AXIS_HORIZONTAL)；
-    - 否则第 0 列(row1+)含分区标记 → 垂直模式(AXIS_VERTICAL)；
-    - 两者都不满足 → 抛 ValueError（非合法数据源矩阵）。
+    检测二维矩阵方向并校验合法性。
+
+    :param values: 二维矩阵（DataFrame.values）
+    :return: 方向，水平模式（第 0 行含分区标记）返回 AXIS_HORIZONTAL，垂直模式（第 0 列含分区标记）返回 AXIS_VERTICAL
+    :raises ValueError: 矩阵为空，或第 0 行与第 0 列均不含分区标记（非合法数据源矩阵）
     """
     if values.size == 0:
         raise ValueError("数据矩阵为空，无法识别方向")
@@ -117,7 +122,10 @@ def detect_matrix_axis(values: Any) -> int:
 
 def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
-    规范化单场景结构：仅保留 head/body/assert_head/assert_body，缺失键补 {}。
+    规范化单场景结构，仅保留 head/body/assert_head/assert_body，缺失键补 {}。
+
+    :param step_data: 单场景原始数据（可能非 dict）
+    :return: 含四个分区键的规范化字典
     """
     src = step_data if isinstance(step_data, dict) else {}
     return {
@@ -128,9 +136,10 @@ def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, D
 
 def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     """
-    单 sheet 解析：返回 { 场景名: { head, body, assert_head, assert_body } }。
-    分区标签仅识别 HEAD / BODY / ASSERT_HEAD / ASSERT_BODY（大小写不敏感）；
-    某分区在文件中不存在时，落库仍保留该键且值为 {}。
+    垂直模式解析单个 sheet（第 0 行为场景名，第 0 列为分区标签/字段名）。
+
+    :param df: 无表头（header=None）的 sheet DataFrame
+    :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
     """
     values = df.values
     if values.size == 0:
@@ -199,16 +208,19 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
 def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     """
-    水平模式解析：第 0 行为分区标记 + 字段名（按列排布），第 0 列为场景名（按行排布）。
+    水平模式解析单个 sheet（第 0 行为分区标记+字段名，第 0 列为场景名）。
+
     分区标记（HEAD/BODY/ASSERT_HEAD/ASSERT_BODY）作为列分区切换符，其后的字段列归属该分区，直至下一个标记。
-    返回 { 场景名: { head, body, assert_head, assert_body } }。
+
+    :param df: 无表头（header=None）的 sheet DataFrame
+    :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
     """
     values = df.values
     if values.size == 0:
         return {}
 
-    header = values[0, 1:]        # 第 0 行 col1+：分区标记 + 字段名
-    scene_col = values[1:, 0]     # col0 row1+：场景名
+    header = values[0, 1:]  # 第 0 行 col1+：分区标记 + 字段名
+    scene_col = values[1:, 0]  # col0 row1+：场景名
     data_values = values[1:, 1:]  # 数据块
 
     # 为每个字段列确定 (数据列下标, 分区, 字段名)；分区标记列仅作切换，不作为字段
@@ -245,20 +257,37 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
 
 def _parse_sheet_by_axis(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
-    """按方向分发解析：水平(0)→_parse_sheet_horizontal；垂直(1)→_parse_sheet_fast。"""
+    """
+    按方向分发解析单个 sheet。
+
+    :param df: 无表头（header=None）的 sheet DataFrame
+    :param axis: 矩阵方向，AXIS_HORIZONTAL 走水平解析，否则走垂直解析
+    :return: { 场景名: { head, body, assert_head, assert_body } }
+    """
     if axis == AXIS_HORIZONTAL:
         return _parse_sheet_horizontal(df)
     return _parse_sheet_fast(df)
 
 
 async def _parse_sheet_async(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
-    """在线程池中按方向异步解析单个 sheet，返回 {场景名: {head, body, assert}}。"""
+    """
+    在线程池中按方向异步解析单个 sheet。
+
+    :param df: 无表头（header=None）的 sheet DataFrame
+    :param axis: 矩阵方向
+    :return: { 场景名: { head, body, assert_head, assert_body } }
+    """
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _parse_sheet_by_axis, df, axis)
 
 
 def _cell_is_blank(value: Any) -> bool:
-    """判断单元格是否为空（None / NaN / 空白字符串）。"""
+    """
+    判断单元格是否为空白。
+
+    :param value: 单元格值
+    :return: None/NaN/纯空白字符串返回 True，否则 False
+    """
     if value is None:
         return True
     try:
@@ -272,7 +301,12 @@ def _cell_is_blank(value: Any) -> bool:
 
 
 def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
-    """将 DataFrame 转为二维矩阵（NaN/NaT/Inf 置为 None），剔除子项全为空白(None/NaN/空串)的行与列。"""
+    """
+    将 DataFrame 转为二维矩阵，剔除全空白（None/NaN/空串）的行与列（第 0 列始终保留）。
+
+    :param df: sheet DataFrame
+    :return: 二维列表，NaN/NaT/Inf 置为 None
+    """
     if df is None or df.empty:
         return []
     safe_df = df.where(pd.notna(df), None)
@@ -297,10 +331,10 @@ def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
 
 async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int]]:
     """
-    读 xlsx 全部 sheet(header=None)，逐 sheet 检测方向并异步解析。
-    返回 (parsed_data, sheet_axes)：
-    - parsed_data: { sheet_name: { 场景名: { head, body, assert_head, assert_body } } }
-    - sheet_axes:  { sheet_name: axis }
+    读取 xlsx 全部 sheet（header=None），逐 sheet 检测方向并异步解析。
+
+    :param file_path: xlsx 文件路径
+    :return: (parsed_data, sheet_axes)，parsed_data 为 { sheet_name: { 场景名: { head, body, assert_head, assert_body } } }，sheet_axes 为 { sheet_name: axis }
     """
     sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
     sheet_items = [(name, df) for name, df in sheets.items() if not df.empty]
@@ -318,9 +352,13 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
 
 async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
     """
-    将二维矩阵（与单步骤 xlsx 首 sheet、header=None 结构一致）解析为 dataset / dataset_names / 规范化 matrix / axis。
+    将二维矩阵解析为 dataset/dataset_names/规范化 matrix/axis，自动识别水平/垂直方向。
 
-    供「数据预览」表格保存时与服务端上传解析结果对齐；自动识别水平/垂直方向。
+    供「数据预览」表格保存时与服务端上传解析结果对齐。
+
+    :param matrix: 二维列表（与单步骤 xlsx 首 sheet、header=None 结构一致）
+    :return: (step_data, dataset_names, norm_matrix, axis)
+    :raises ValueError: matrix 非二维列表，或矩阵方向无法识别
     """
     if not isinstance(matrix, list):
         raise ValueError("dataframe 须为二维列表")

@@ -632,6 +632,7 @@ async def get_dataset_scenario_info(
             case_id=case_id,
             step_code=step_code,
             dataset_name=dataset_name,
+            state__not=1
         )
         if scenario is None:
             return SuccessResponse(message="未找到场景数据", data=None, total=0)

@@ -44,7 +44,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
-        根据数据源主键 ID 查询单条记录（排除已软删需调用方传 state__not=1）。
+        根据数据源主键 ID 查询单条记录
 
         :param data_source_id: 数据源主键 ID
         :param on_error: 未找到时是否抛出 NotFoundException
@@ -67,7 +67,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def get_by_code(self, data_source_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
-        根据data_source_code查询单条数据源（排除已软删）。
+        根据data_source_code查询单条数据源
 
         :param data_source_code: 数据驱动标识代码。
         :param on_error: 为 True 时若未找到则抛出 NotFoundException。
@@ -87,9 +87,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_hash(self, file_hash: str, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
         """
-        按文件哈希查询数据源（排除已软删）。
+        按文件哈希查询数据源
 
         :param file_hash: 文件哈希
         :param on_error: 为 True 时未找到则抛出 NotFoundException
@@ -102,7 +102,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(file_hash=file_hash, state__not=1).first()
+        instance = await self.model.filter(file_hash=file_hash, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询数据源信息失败, 数据源(file_hash={file_hash})不存在"
             LOGGER.error(error_message)
@@ -118,7 +118,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             on_error: bool = False,
             **kwargs
     ) -> Optional[Union[AutoTestApiDataSourceInfo, List[AutoTestApiDataSourceInfo]]]:
-        """按用例 + 步骤查询数据源（排除已软删）。
+        """按用例 + 步骤查询数据源
 
         - case_id / case_code 至少传其一；
         - 若同时传入 step_id 或 step_code 之一，则返回单条；
@@ -167,6 +167,49 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(f"{error_message}, 条件明细: {conditions}")
             raise NotFoundException(message=error_message, data=conditions)
         return instances
+
+    async def get_by_case_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
+        """
+        按用例 ID 取最新一条有效数据源
+
+        :param case_id: 用例主键
+        :param on_error: 为 True 时未找到则抛出 NotFoundException
+        :return: 数据源实例或 None
+        :raises ParameterException: case_id 为空时
+        :raises NotFoundException: on_error 为 True 且记录不存在时
+        """
+        if not case_id:
+            error_message: str = "查询数据源失败, 参数(case_id)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        instance = await self.model.filter(case_id=case_id, **kwargs).order_by("-id").first()
+        if not instance and on_error:
+            error_message: str = f"查询数据源失败, 数据源(case_id={case_id})不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
+
+    async def get_dataset_scenario(self, case_id: int, step_code: str, dataset_name: str, **kwargs) -> Optional[Dict[str, Any]]:
+        """
+        根据用例、步骤、数据集名称取该步骤下单个场景的结构化数据。
+
+        :param case_id: 用例主键。
+        :param step_code: 步骤标识代码。
+        :param dataset_name: 场景/数据集名称。
+        :return: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典；无数据时返回 None。
+        """
+        if not (dataset_name or "").strip():
+            return None
+        record = await self.get_by_case_step(
+            case_id=case_id,
+            step_code=(step_code or "").strip(),
+            on_error=False,
+            **kwargs
+        )
+        if not record or not isinstance(record.dataset, dict):
+            return None
+        return record.dataset.get((dataset_name or "").strip())
 
     async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestApiDataSourceInfo:
         """
@@ -293,7 +336,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             step_id: Optional[int] = None,
             step_code: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
-        """软删除数据源（state=1）。
+        """
+        软删除数据源
 
         定位优先级：data_source_id > data_source_code > (case_id|case_code) 且 (step_id|step_code)。
 
@@ -355,50 +399,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def get_by_case_id(self, case_id: int, on_error: bool = False) -> Optional[AutoTestApiDataSourceInfo]:
-        """
-        按用例 ID 取最新一条有效数据源（未软删）。
-
-        :param case_id: 用例主键
-        :param on_error: 为 True 时未找到则抛出 NotFoundException
-        :return: 数据源实例或 None
-        :raises ParameterException: case_id 为空时
-        :raises NotFoundException: on_error 为 True 且记录不存在时
-        """
-        if not case_id:
-            error_message: str = "查询数据源失败, 参数(case_id)不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(case_id=case_id, state__not=1).order_by("-id").first()
-        if not instance and on_error:
-            error_message: str = f"查询数据源失败, 数据源(case_id={case_id})不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def get_dataset_scenario(self, case_id: int, step_code: str, dataset_name: str) -> Optional[Dict[str, Any]]:
-        """
-        根据用例、步骤、数据集名称取该步骤下单个场景的结构化数据。
-
-        :param case_id: 用例主键。
-        :param step_code: 步骤标识代码。
-        :param dataset_name: 场景/数据集名称。
-        :return: 形如 {"head", "body", "assert_head", "assert_body"} 的场景字典；无数据时返回 None。
-        """
-        if not (dataset_name or "").strip():
-            return None
-        record = await self.get_by_case_step(
-            case_id=case_id,
-            step_code=(step_code or "").strip(),
-            on_error=False,
-            state__not=1
-        )
-        if not record or not isinstance(record.dataset, dict):
-            return None
-        return record.dataset.get((dataset_name or "").strip())
-
-    async def query_dataset(self, case_id: str, step_code: str, dataset_name: Optional[str] = None) -> Dict[str, Any]:
+    async def query_dataset(self, case_id: str, step_code: str, dataset_name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """
         按用例与步骤查询 dataset；可再按场景名收窄为单场景。
 
@@ -417,7 +418,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         dataset_name: str = dataset_name.strip()
         condition: Dict[str, Any] = {"case_id": case_id, "step_code": step_code}
         LOGGER.info(f"查询数据源信息条件(此时不判断dataset_name是否存在于dataset中)：{condition}")
-        source_instance: AutoTestApiDataSourceInfo = await self.model.filter(**condition, state__not=1).first()
+        source_instance: AutoTestApiDataSourceInfo = await self.model.filter(**condition, **kwargs).first()
         if not source_instance:
             error_message: str = f"查询数据源信息失败, 暂无满足({condition})查询条件的记录"
             LOGGER.error(error_message)
@@ -552,9 +553,9 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
     def __init__(self):
         super().__init__(model=AutoTestApiDataCreateInfo)
 
-    async def get_by_code(self, create_code: str, on_error: bool = False) -> Optional[AutoTestApiDataCreateInfo]:
+    async def get_by_code(self, create_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataCreateInfo]:
         """
-        按 create_code 查询数据源生成记录（排除已软删）。
+        按 create_code 查询数据源生成记录
 
         :param create_code: 生成任务标识
         :param on_error: 为 True 时未找到则抛出 NotFoundException
@@ -567,14 +568,14 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(create_code=create_code, state__not=1).first()
+        instance = await self.model.filter(create_code=create_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询数据源生成信息失败, 数据源(create_code={create_code})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_step(self, step_code: str, on_error: bool = False) -> List[AutoTestApiDataCreateInfo]:
+    async def get_by_step(self, step_code: str, on_error: bool = False, **kwargs) -> List[AutoTestApiDataCreateInfo]:
         """
         按步骤标识查询最近最多 3 条数据源生成记录（排除已软删）。
 
@@ -589,16 +590,16 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(step_code=step_code, state__not=1).order_by("-id").limit(3)
+        instance = await self.model.filter(step_code=step_code, **kwargs).order_by("-id").limit(3)
         if not instance and on_error:
             error_message: str = f"查询数据源生成信息失败, 数据源(step_code={step_code})不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_hash(self, file_hash: str, on_error: bool = False) -> Optional[AutoTestApiDataCreateInfo]:
+    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataCreateInfo]:
         """
-        按文件哈希查询数据源生成记录（排除已软删）。
+        按文件哈希查询数据源生成记录
 
         :param file_hash: 文件哈希
         :param on_error: 为 True 时未找到则抛出 NotFoundException
@@ -611,7 +612,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance = await self.model.filter(file_hash=file_hash, state__not=1).first()
+        instance = await self.model.filter(file_hash=file_hash, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询数据源生成信息失败, 数据源(file_hash={file_hash})不存在"
             LOGGER.error(error_message)
@@ -627,7 +628,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :raises DataAlreadyExistsException: 持久化异常时
         """
         try:
-            instance = await self.get_by_hash(file_hash=data_in.file_hash)
+            instance = await self.get_by_hash(file_hash=data_in.file_hash, state__not=1)
             if instance:
                 instance = await self.update_data_create(
                     data_in=AutoTestApiDataCreateUpdate(
@@ -678,7 +679,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             raise ParameterException(message=error_message)
 
         # 业务层验证：检查明细信息是否存在
-        instance = await self.get_by_code(create_code=create_code, on_error=False)
+        instance = await self.get_by_code(create_code=create_code, on_error=False, state__not=1)
 
         if not instance:
             error_message: str = (

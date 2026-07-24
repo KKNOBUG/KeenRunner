@@ -64,6 +64,7 @@ class DatasetLoader:
             case_id=case_id,
             step_code=step_code,
             dataset_name=dataset_name,
+            state__not=1
         )
         if not isinstance(step_data, dict):
             return None
