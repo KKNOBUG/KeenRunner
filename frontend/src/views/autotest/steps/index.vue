@@ -2056,6 +2056,18 @@ const validateJsonBodyInSteps = (stepList) => {
           }
         }
       }
+      if (requestArgsType === 'xml') {
+        const raw = config.request_text ?? ''
+        const trimmed = (raw || '').trim()
+        if (trimmed !== '') {
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(trimmed, 'application/xml')
+          const parseError = doc.querySelector('parsererror')
+          if (parseError) {
+            return {valid: false, message: parseError.textContent || 'XML 格式错误', stepName}
+          }
+        }
+      }
     }
 
     if (step.type === 'tcp') {

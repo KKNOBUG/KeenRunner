@@ -1,6 +1,16 @@
 <template>
   <div className="monaco-editor" ref="monacoEditorRef"></div>
 </template>
+<script>
+/**
+ * Monaco 编辑器主题挂载栈（跨组件实例共享的模块级状态）。
+ * Monaco 的主题是全局唯一的（monaco.editor.setTheme 作用于页面上所有编辑器），
+ * 当不同主题的编辑器共存时（如主页面暗色编辑器 + 报告明细抽屉亮色编辑器）会相互覆盖。
+ * 通过挂载栈管理：最近挂载的编辑器主题生效；卸载时回退到上一层主题，
+ * 避免临时浮层（报告详情抽屉）关闭后把主页面编辑器主题"带偏"。
+ */
+const mountedEditorThemes = []
+</script>
 <script setup name="monacoEditor">
 /**
  * 通用 Monaco 编辑器封装
@@ -612,13 +622,27 @@ watch(
     {deep: true}
 )
 
+/** 当前实例挂载时压入的主题（卸载时据此回退） */
+let pushedTheme = null
+
 onMounted(() => {
   initEditor()
+  pushedTheme = props.options?.theme ?? props.theme
+  if (pushedTheme) {
+    mountedEditorThemes.push(pushedTheme)
+    monaco.editor.setTheme(pushedTheme)
+  }
 })
 
 /** 组件卸载时释放编辑器实例，避免内存泄漏 */
 onUnmounted(() => {
   toRaw(editor.value)?.dispose()
+  if (pushedTheme) {
+    const idx = mountedEditorThemes.lastIndexOf(pushedTheme)
+    if (idx !== -1) mountedEditorThemes.splice(idx, 1)
+    const top = mountedEditorThemes[mountedEditorThemes.length - 1]
+    if (top) monaco.editor.setTheme(top)
+  }
 })
 
 /** 供父组件通过 ref 调用的公开 API */

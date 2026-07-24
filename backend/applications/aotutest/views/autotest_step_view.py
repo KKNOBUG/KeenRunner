@@ -717,6 +717,7 @@ async def debug_http_request(
         data_payload: Optional[Any] = None
         json_payload: Optional[Any] = None
         file_payload: Optional[Any] = None
+        content_payload: Optional[Any] = None
         if request_args_type is None:
             # 未配置时保持兼容：优先 raw -> form-data -> urlencoded 作为 data，若有 request_body 则作为 json
             if request_text:
@@ -735,6 +736,13 @@ async def debug_http_request(
             data_payload = request_text
         elif request_args_type == AutoTestReqArgsType.JSON:
             json_payload = request_body
+        elif request_args_type == AutoTestReqArgsType.XML:
+            content_payload = request_text
+            if headers is None:
+                headers = {}
+            has_content_type = any(k.lower() == "content-type" for k in headers)
+            if not has_content_type:
+                headers["Content-Type"] = "application/xml; charset=utf-8"
         elif request_args_type == AutoTestReqArgsType.FORM_DATA:
             data_payload = form_data
             file_payload = form_files if form_files else None
@@ -749,6 +757,8 @@ async def debug_http_request(
 
         if json_payload is not None:
             request_kwargs["json"] = json_payload
+        elif content_payload is not None:
+            request_kwargs["content"] = content_payload
         elif data_payload is not None:
             request_kwargs["data"] = data_payload
         if file_payload is not None:
@@ -872,6 +882,9 @@ async def debug_http_request(
         if json_payload is not None:
             actual_body_type = "json"
             actual_body = json_payload
+        elif content_payload is not None:
+            actual_body_type = "xml"
+            actual_body = content_payload
         elif data_payload is not None:
             if request_args_type == AutoTestReqArgsType.FORM_DATA:
                 actual_body_type = "form-data"
@@ -901,7 +914,8 @@ async def debug_http_request(
                 "headers": headers or {},
                 "params": params,
                 "body_type": actual_body_type,
-                "body": actual_body
+                "body": actual_body,
+                "request_text": request_text
             }
         }
         LOGGER.info(f"HTTP请求调试完成: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")

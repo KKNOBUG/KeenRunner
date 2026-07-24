@@ -394,6 +394,7 @@ class StepExecutionContext:
             params: Optional[Dict[str, Any]] = None,
             data: Optional[Any] = None,
             json_data: Optional[Any] = None,
+            content: Optional[Any] = None,
             files: Optional[Any] = None,
             timeout: Optional[float] = None,
     ) -> httpx.Response:
@@ -405,6 +406,7 @@ class StepExecutionContext:
         :param params: 查询参数字典
         :param data: 请求体（非 JSON）
         :param json_data: JSON 请求体
+        :param content: 原始内容请求体（如 XML）
         :param files: 上传文件
         :param timeout: 超时秒数，None 使用上下文默认
         :return: 响应对象
@@ -416,6 +418,7 @@ class StepExecutionContext:
                 "params": params,
                 "data": data,
                 "json": json_data,
+                "content": content,
                 "files": files,
             }
             if timeout is not None:
@@ -3153,6 +3156,7 @@ class HttpStepExecutor(BaseStepExecutor):
             json_payload: Optional[Any] = None
             file_payload: Optional[Any] = None
             data_payload: Optional[Any] = None
+            content_payload: Optional[Any] = None
             # 按 request_args_type 选取请求体类型，仅使用一种方式，避免冲突
             request_args_type: AutoTestReqArgsType = self.step.request_args_type
             if request_args_type is None:
@@ -3173,6 +3177,13 @@ class HttpStepExecutor(BaseStepExecutor):
                 data_payload = request_text
             elif request_args_type == AutoTestReqArgsType.JSON:
                 json_payload = request_body
+            elif request_args_type == AutoTestReqArgsType.XML:
+                content_payload = request_text
+                if request_header is None:
+                    request_header = {}
+                has_content_type = any(k.lower() == "content-type" for k in request_header)
+                if not has_content_type:
+                    request_header["Content-Type"] = "application/xml; charset=utf-8"
             elif request_args_type == AutoTestReqArgsType.FORM_DATA:
                 data_payload = request_form_data
                 file_payload = request_form_file if request_form_file else None
@@ -3199,6 +3210,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 params=request_params,
                 data=data_payload,
                 json_data=json_payload,
+                content=content_payload,
                 files=file_payload,
             )
             try:

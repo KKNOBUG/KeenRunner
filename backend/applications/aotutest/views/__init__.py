@@ -20,6 +20,7 @@ from .autotest_task_view import autotest_task
 from .autotest_tool_view import autotest_tool
 from .autotest_data_source_view import autotest_data_source
 from .autotest_tcp_test_view import autotest_tcp_test
+from .autotest_http_xml_test_view import autotest_http_xml_test
 
 autotest = APIRouter()
 
@@ -35,3 +36,4 @@ autotest.include_router(autotest_task, prefix="/task", tags=["任务相关"])
 autotest.include_router(autotest_tool, prefix="/tool", tags=["辅助工具相关"])
 autotest.include_router(autotest_data_source, prefix="/data_source", tags=["数据源相关"])
 autotest.include_router(autotest_tcp_test, prefix="/tcp_test", tags=["TCP接口测试"])
+autotest.include_router(autotest_http_xml_test, prefix="/http_xml_test", tags=["HTTP XML接口测试"])

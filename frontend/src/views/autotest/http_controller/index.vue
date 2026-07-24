@@ -161,6 +161,7 @@
               <n-radio value="form-data">form-data</n-radio>
               <n-radio value="x-www-form-urlencoded">x-www-form-urlencoded</n-radio>
               <n-radio value="json">json</n-radio>
+              <n-radio value="xml">xml</n-radio>
               <n-radio value="raw">raw</n-radio>
             </n-space>
           </n-radio-group>
@@ -199,6 +200,16 @@
             <monaco-editor
                 v-model:value="state.form.jsonBody"
                 lang="json"
+                :options="monacoEditorOptionsForBody()"
+                :read-only="props.readonly"
+                class="json-editor"
+                style="min-height: 400px; height: auto; margin-top: 12px;"
+            />
+          </div>
+          <div v-if="state.form.bodyType === 'xml'">
+            <monaco-editor
+                v-model:value="state.form.xmlBody"
+                lang="xml"
                 :options="monacoEditorOptionsForBody()"
                 :read-only="props.readonly"
                 class="json-editor"
@@ -352,9 +363,19 @@
                 <div v-if="isRawRequest" class="request-raw-body">
                   <pre>{{ requestInfo.rawBody || '(空)' }}</pre>
                 </div>
+                <div v-else-if="isXmlRequest">
+                  <monaco-editor
+                      v-model:value="requestInfo.rawBody"
+                      lang="xml"
+                      :options="monacoEditorOptions(true)"
+                      class="json-editor"
+                      style="min-height: 400px; height: auto;"
+                  />
+                </div>
                 <div v-else-if="isJsonRequest">
                   <monaco-editor
                       v-model:value="formattedRequestJson"
+                      lang="json"
                       :options="monacoEditorOptions(true)"
                       class="json-editor"
                       style="min-height: 400px; height: auto;"
@@ -393,6 +414,16 @@
                 <div v-if="isJsonResponse">
                   <monaco-editor
                       v-model:value="formattedResponse"
+                      lang="json"
+                      :options="monacoEditorOptions(true)"
+                      class="json-editor"
+                      style="min-height: 400px; height: auto;"
+                  />
+                </div>
+                <div v-else-if="isXmlResponse">
+                  <monaco-editor
+                      v-model:value="formattedResponseXml"
+                      lang="xml"
                       :options="monacoEditorOptions(true)"
                       class="json-editor"
                       style="min-height: 400px; height: auto;"
@@ -660,6 +691,7 @@ const state = reactive({
     bodyParams: [],
     bodyForm: [],
     jsonBody: '',
+    xmlBody: '',
     rawBody: '',
     step_name: '',
     description: '',
@@ -738,7 +770,14 @@ const initFromConfig = () => {
   } else {
     state.form.bodyType = 'none'
   }
-  state.form.rawBody = cfg.request_text ?? original.request_text ?? ''
+  const requestText = cfg.request_text ?? original.request_text ?? ''
+  if (state.form.bodyType === 'xml') {
+    state.form.xmlBody = requestText
+    state.form.rawBody = ''
+  } else {
+    state.form.rawBody = requestText
+    state.form.xmlBody = ''
+  }
 
   // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc、type（form-data 需 type 供 KeyValueEditor 显示「数据」列）
   const bodyParamsRaw = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
@@ -894,6 +933,9 @@ const buildConfigFromState = () => {
       }
       jsonBodyText = state.form.jsonBody ?? ''
       break
+    case 'xml':
+      request_text = state.form.xmlBody ?? ''
+      break
     case 'raw':
       request_text = state.form.rawBody ?? ''
       break
@@ -935,7 +977,7 @@ watch(
       state.form.step_name, state.form.description, state.form.method,
       state.form.url, state.form.headers, state.form.params,
       state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
-      state.form.jsonBody, state.form.rawBody, state.form.request_project_id,
+      state.form.jsonBody, state.form.xmlBody, state.form.rawBody, state.form.request_project_id,
       state.form.request_config_name,
       state.form.data_source_id, state.form.data_source_name, state.form.data_source_desc,
       state.form.defined_variables, state.form.extract_variables, state.form.assert_validators
@@ -971,6 +1013,8 @@ const getBodyCount = computed(() => {
       return state.form.bodyParams.length
     case 'json':
       return state.form.jsonBody.trim() ? 1 : 0
+    case 'xml':
+      return state.form.xmlBody.trim() ? 1 : 0
     case 'raw':
       return state.form.rawBody.trim() ? 1 : 0
     default:
@@ -992,7 +1036,6 @@ const monacoEditorOptions = (readOnly) => {
   const options = {
     // 基础配置
     theme: 'vs-dark',
-    language: 'json',
     fontSize: 14,
     tabSize: 4,
     // 布局与外观
@@ -1052,6 +1095,9 @@ const contentType = computed(() => {
 const isJsonResponse = computed(() => {
   return contentType.value.includes('json')
 })
+const isXmlResponse = computed(() => {
+  return contentType.value.toLowerCase().includes('xml')
+})
 
 const responseLanguage = computed(() => {
   const ct = contentType.value.toLowerCase()
@@ -1067,6 +1113,11 @@ const formattedResponse = computed(() => {
   } catch {
     return response.value.data
   }
+})
+const formattedResponseXml = computed(() => {
+  const data = response.value?.data
+  if (data == null) return ''
+  return typeof data === 'string' ? data : JSON.stringify(data, null, 2)
 })
 
 const responseHeadersText = computed(() => {
@@ -1126,12 +1177,14 @@ const requestBodyType = computed(() => {
     'form-data': 'Form Data',
     'x-www-form-urlencoded': 'Form URL Encoded',
     'json': 'JSON',
+    'xml': 'XML',
     'raw': 'Raw'
   }
   return typeMap[requestInfo.value.bodyType] || 'Params'
 })
 
 const isJsonRequest = computed(() => requestInfo.value.bodyType === 'json')
+const isXmlRequest = computed(() => requestInfo.value.bodyType === 'xml')
 const isRawRequest = computed(() => requestInfo.value.bodyType === 'raw')
 
 const formattedRequestJson = computed(() => {
@@ -1248,7 +1301,7 @@ const doDebugRequest = async (env_id) => {
       headers: headersObj,
       bodyType: cfg.request_args_type ?? 'none',
       jsonBody: state.form.jsonBody,
-      rawBody: state.form.rawBody ?? '',
+      rawBody: state.form.bodyType === 'xml' ? (state.form.xmlBody ?? '') : (state.form.rawBody ?? ''),
       formData: state.form.bodyType === 'form-data' ? state.form.bodyParams : null,
       formUrlencoded: state.form.bodyType === 'x-www-form-urlencoded' ? state.form.bodyForm : null
     }
@@ -1311,7 +1364,7 @@ const doDebugRequest = async (env_id) => {
           jsonBody: reqInfo.body_type === 'json' && reqInfo.body ? JSON.stringify(reqInfo.body, null, 2) : '',
           formData: reqInfo.body_type === 'form-data' ? reqInfo.body : null,
           formUrlencoded: reqInfo.body_type === 'x-www-form-urlencoded' ? reqInfo.body : null,
-          rawBody: reqInfo.body_type === 'raw' && reqInfo.request_text != null ? reqInfo.request_text : (requestInfo.value.rawBody ?? '')
+          rawBody: (reqInfo.body_type === 'raw' || reqInfo.body_type === 'xml') && reqInfo.request_text != null ? reqInfo.request_text : (requestInfo.value.rawBody ?? '')
         }
       }
       $message.success('调试成功');
