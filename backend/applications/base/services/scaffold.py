@@ -11,13 +11,15 @@ import traceback
 import uuid
 from datetime import datetime, date, time, timedelta
 from decimal import Decimal
-from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, Set
+from typing import Any
+from typing import Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, Set
 
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import core_schema
 from tortoise import fields, models
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
+from tortoise.fields import JSONField
 from tortoise.models import Model
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
@@ -269,6 +271,26 @@ class ReserveFields:
     reserve_1 = fields.CharField(max_length=64, default=None, null=True, description="备用字段1")
     reserve_2 = fields.CharField(max_length=128, default=None, null=True, description="备用字段2")
     reserve_3 = fields.CharField(max_length=255, default=None, null=True, description="备用字段3")
+
+
+class JSONTextField(JSONField):
+    """
+    以 TEXT 列存储 JSON 的字段（保留键顺序）。
+
+    与 JSONField 的唯一区别在于 SQL_TYPE：使用 LONGTEXT 而非 MySQL 的 JSON 列。
+    MySQL 的 JSON 列在落库时会对对象键做归一化（按键长度、字节值排序），导致字段顺序丢失；
+    改用 TEXT 列原样存储 JSON 文本即可保留插入顺序。
+    Python 侧依旧表现为 dict/list：继承 JSONField 的 dict ↔ str 透明转换
+    （安装了 orjson 时默认使用 orjson，序列化/反序列化均保持顺序），
+    空值约定：None → 落库 NULL；空 dict {} → 落库 "{}"。
+    """
+
+    SQL_TYPE = "LONGTEXT"
+
+    def to_python_value(self, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return super().to_python_value(value)
 
 
 # 类型变量定义，用于泛型约束

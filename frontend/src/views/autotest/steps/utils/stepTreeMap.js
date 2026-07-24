@@ -48,6 +48,26 @@ const backendTypeToLocal = (step_type) => {
   }
 }
 
+/**
+ * 归一化请求体：后端 request_body 既可能是对象，也可能是 JSON 字符串（TEXT 列存储），
+ * 统一转换为对象，兼容两种形态，提高健壮性。
+ */
+const normalizeRequestBody = (value) => {
+  if (value == null) return {}
+  if (typeof value === 'object') return value
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return {}
+    try {
+      const parsed = JSON.parse(trimmed)
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
 /** 前序遍历步骤树 */
 export function forEachStep(list, fn) {
   if (!list || !Array.isArray(list)) return
@@ -119,7 +139,7 @@ export function mapBackendStep(step) {
       data_source_desc: step.data_source_desc || '',
       request_args_type: requestArgsType,
       request_text: step.request_text || null,
-      data: step.request_body || {},
+      data: normalizeRequestBody(step.request_body),
       extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
     }
@@ -134,7 +154,7 @@ export function mapBackendStep(step) {
       data_source_name: step.data_source_name || '',
       data_source_desc: step.data_source_desc || '',
       params: Array.isArray(step.request_params) ? step.request_params : [],
-      data: step.request_body || {},
+      data: normalizeRequestBody(step.request_body),
       headers: Array.isArray(step.request_header) ? step.request_header : [],
       form_data: Array.isArray(step.request_form_data) ? step.request_form_data : [],
       form_urlencoded: Array.isArray(step.request_form_urlencoded) ? step.request_form_urlencoded : [],

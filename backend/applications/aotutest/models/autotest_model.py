@@ -14,7 +14,9 @@ from backend.applications.base.services.scaffold import (
     MaintainMixin,
     TimestampMixin,
     StateModel,
-    ReserveFields, unique_identify
+    ReserveFields,
+    unique_identify,
+    JSONTextField
 )
 from backend.enums import (
     AutoTestCaseType,
@@ -214,7 +216,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     """
     request_header = fields.JSONField(null=True, description="请求头信息")
     request_text = fields.TextField(null=True, description="请求体数据")
-    request_body = fields.JSONField(null=True, description="请求体数据")
+    request_body = JSONTextField(null=True, description="请求体数据")
     request_params = fields.JSONField(null=True, description="请求路径参数")
     request_form_data = fields.JSONField(null=True, description="请求表单数据")
     request_form_file = fields.JSONField(null=True, description="请求文件路径")
@@ -355,7 +357,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     request_form_data = fields.JSONField(null=True, description="实际发出的表单数据(列表 key/value/desc)")
     request_form_urlencoded = fields.JSONField(null=True, description="实际发出的 urlencoded(列表 key/value/desc)")
     request_form_file = fields.JSONField(null=True, description="实际发出的表单文件项(列表 key/value/desc)")
-    request_body = fields.JSONField(null=True, description="实际发出的请求体(JSON)")
+    request_body = JSONTextField(null=True, description="实际发出的请求体(JSON)")
     request_text = fields.TextField(null=True, description="实际发出的请求体(Raw)")
     # 响应相关
     response_cookie = fields.JSONField(null=True, description="响应信息(cookies)")
