@@ -211,8 +211,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 parent_step_id__isnull=True,
                 state__not=1
             ).order_by("step_no").all()
-            LOGGER.info(
-                f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)开始 =")
+            LOGGER.info(f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)开始 =")
             step_dict["quote_steps"] = [await build_step_tree(quote, is_quote=True) for quote in quote_case_root_steps]
             step_dict["quote_case"] = await quote_case.to_dict(
                 exclude_fields={
@@ -223,8 +222,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 },
                 replace_fields={"id": "case_id"}
             )
-            LOGGER.info(
-                "= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)完成 =")
+            LOGGER.info("= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)完成 =")
             return step_dict
 
         # 构建所有根步骤的树
@@ -324,12 +322,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         return sorted(project_ids)
 
-    async def get_copy_tree(
-            self,
-            case_id: Optional[int] = None,
-            case_code: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """获取用例步骤树的完整副本（用于复制后编辑，数据未保存）。
+    async def get_copy_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> Dict[str, Any]:
+        """
+        获取用例步骤树的完整副本（用于复制后编辑，数据未保存）。
 
         返回目标脚本的完整树结构，不遗漏任何信息：
         - 根步骤及所有子步骤（children 递归）
@@ -382,7 +377,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         return {"case": case_info or {}, "steps": steps}
 
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestApiStepInfo:
-        """创建单条步骤，校验用例存在、父步骤存在且同用例、同用例下 step_no 唯一。
+        """
+        创建单条步骤，校验用例存在、父步骤存在且同用例、同用例下 step_no 唯一。
 
         :param step_in: 步骤创建 schema。
         :return: 创建后的步骤实例。
@@ -444,7 +440,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_step(self, step_in: AutoTestApiStepUpdate) -> AutoTestApiStepInfo:
-        """更新单条步骤，支持按 step_id 或 step_code 定位；校验 step_no 唯一、父步骤存在且无循环引用。
+        """
+        更新单条步骤，支持按 step_id 或 step_code 定位；校验 step_no 唯一、父步骤存在且无循环引用。
 
         :param step_in: 步骤更新 schema。
         :return: 更新后的步骤实例。
@@ -565,7 +562,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_step(self, step_id: Optional[int] = None, step_code: Optional[str] = None) -> AutoTestApiStepInfo:
-        """软删除单条步骤（state=1），需无子步骤。
+        """
+        软删除单条步骤（state=1），需无子步骤。
 
         :param step_id: 步骤主键 ID，与 step_code 二选一。
         :param step_code: 步骤标识代码，与 step_id 二选一。
@@ -603,7 +601,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: Optional[int] = None,
             exclude_step: Optional[Set[Tuple[Optional[int], Optional[str]]]] = None
     ) -> int:
-        """递归软删除步骤：可按 step_id/step_code 删单步及其子步骤，或按 parent_step_id/case_id 批量删。
+        """
+        递归软删除步骤：可按 step_id/step_code 删单步及其子步骤，或按 parent_step_id/case_id 批量删。
 
         :param step_id: 单步主键 ID，与 step_code 二选一时删除该步及所有子步骤。
         :param step_code: 单步标识代码，与 step_id 二选一。
@@ -675,7 +674,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         return deleted_count
 
     async def select_steps(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiStepInfo]]:
-        """分页查询步骤列表。
+        """
+        分页查询步骤列表。
 
         :param search: Tortoise Q 查询条件。
         :param page: 页码。
@@ -1001,7 +1001,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             batch_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """执行单个用例：创建报告、拉取步骤树、调用执行引擎并写明细。
+        """
+        执行单个用例：创建报告、拉取步骤树、调用执行引擎并写明细。
 
         参数化执行时仅传入 dataset_name，步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取数据。
 
@@ -1106,7 +1107,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             cases_execute_config: Optional[Dict[str, Any]] = None,
             task_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """批量执行多个用例，依次调用 execute_single_case 并汇总成功/失败数与详情。
+        """
+        批量执行多个用例，依次调用 execute_single_case 并汇总成功/失败数与详情。
 
         :param case_ids: 用例主键 ID 列表。
         :param report_type: 报告类型枚举。
@@ -1130,11 +1132,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         for case_id in case_ids:
             try:
-                case_cfg = (
-                        cases_cfg_map.get(str(case_id))
-                        or cases_cfg_map.get(case_id)
-                        or {}
-                )
+                case_cfg = (cases_cfg_map.get(str(case_id)) or cases_cfg_map.get(case_id) or {})
                 if not isinstance(case_cfg, dict):
                     case_cfg = {}
                 per_steps_cfg = case_cfg.get("steps_execute_config") or steps_execute_config
