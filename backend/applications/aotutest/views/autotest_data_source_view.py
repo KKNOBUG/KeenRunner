@@ -28,6 +28,7 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceSelect,
 )
 from backend.applications.aotutest.services.autotest_data_source_parser import (
+    AXIS_VERTICAL,
     _dataframe_to_matrix,
     json_safe_obj,
     parse_dataframe_matrix_async,
@@ -199,7 +200,7 @@ async def update_data_source_info(
         effective = data_in
         if data_in.dataframe is not None:
             try:
-                step_data, dataset_names, norm_matrix = await parse_dataframe_matrix_async(data_in.dataframe)
+                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_in.dataframe)
             except ValueError as e:
                 return BadReqResponse(message=f"解析表格数据失败: {e}")
             updated_user = get_current_username()
@@ -208,6 +209,7 @@ async def update_data_source_info(
                     "dataset": step_data,
                     "dataset_names": dataset_names,
                     "dataframe": norm_matrix,
+                    "axis": axis,
                     "updated_user": updated_user,
                 }
             )
@@ -272,12 +274,13 @@ async def save_or_update_data_source_info(
 
         if data_in.dataframe is not None:
             try:
-                step_data, dataset_names, norm_matrix = await parse_dataframe_matrix_async(data_in.dataframe)
+                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_in.dataframe)
             except ValueError as e:
                 return BadReqResponse(message=f"解析表格数据失败: {e}")
             data_in.dataset = step_data
             data_in.dataset_names = dataset_names
             data_in.dataframe = norm_matrix
+            data_in.axis = axis
 
         if data_source_instance:
             # 已有启用记录 → 更新
@@ -725,7 +728,7 @@ async def single_step_dataset_upload(
         LOGGER.warning(f"计算文件哈希失败: {e}")
 
     try:
-        step_data, dataset_names, dataframe = await parse_xlsx_first_sheet_async(file_path)
+        step_data, dataset_names, dataframe, axis = await parse_xlsx_first_sheet_async(file_path)
     except FileNotFoundError as e:
         return FailureResponse(message=str(e))
     except ValueError as e:
@@ -753,6 +756,7 @@ async def single_step_dataset_upload(
             parsed_data=step_data,
             dataset_names=dataset_names,
             dataframe=dataframe,
+            axis=axis,
             created_user=created_user,
         )
     except (NotFoundException, ParameterException) as e:
@@ -845,7 +849,7 @@ async def batch_step_dataset_upload(
         LOGGER.warning(f"计算文件哈希失败: {e}")
 
     try:
-        full_parsed, _ = await parse_xlsx_to_parsed_data_async(file_path)
+        full_parsed, _, sheet_axes = await parse_xlsx_to_parsed_data_async(file_path)
     except FileNotFoundError as e:
         return FailureResponse(message=str(e))
     except ValueError as e:
@@ -893,6 +897,7 @@ async def batch_step_dataset_upload(
                 parsed_data=step_data,
                 dataset_names=dataset_names,
                 dataframe=dataframe,
+                axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
                 created_user=created_user,
             )
             created.append(await _serialize_data_source(instance))

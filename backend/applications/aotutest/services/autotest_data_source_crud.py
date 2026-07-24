@@ -450,6 +450,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             parsed_data: Optional[Dict[str, Any]] = None,
             dataset_names: Optional[List[str]] = None,
             dataframe: Optional[List[Any]] = None,
+            axis: int = 0,
             created_user: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
@@ -466,7 +467,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param file_desc: 描述。
         :param parsed_data: 解析后的 dataset 字典。
         :param dataset_names: 场景名称列表。
-        dataframe: Optional[List[Any]] = None,
+        :param dataframe: Optional[List[Any]] = None,
+        :param axis:
+        :param dataframe:
         :param created_user: 创建人（更新路径会映射为 updated_user）。
         :return: 数据源实例。
         :raises ParameterException: parsed_data 为空时。
@@ -506,6 +509,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                     dataset=normalized_dataset,
                     dataset_names=dataset_names if dataset_names is not None else (existing.dataset_names or []),
                     dataframe=dataframe if dataframe is not None else (existing.dataframe or []),
+                    axis=axis,
                     updated_user=created_user,
                 ),
             )
@@ -524,15 +528,12 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 dataset=normalized_dataset,
                 dataset_names=dataset_names or [],
                 dataframe=dataframe or [],
+                axis=axis,
                 created_user=created_user,
             )
         )
 
-    async def list_by_case(
-            self,
-            case_id: int,
-            state: int = 0,
-    ) -> List[AutoTestApiDataSourceInfo]:
+    async def list_by_case(self, case_id: int, state: int = 0) -> List[AutoTestApiDataSourceInfo]:
         """
         查询指定用例下的数据源列表。
 
@@ -546,8 +547,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         return await self.model.filter(case_id=case_id, state=state).order_by("-updated_time", "step_id", "step_code").all()
 
 
-class AutoTestApiDataCreateCrud(
-    ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
+class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
     """数据源生成记录 CRUD 与相关业务。"""
 
     def __init__(self):
@@ -664,10 +664,7 @@ class AutoTestApiDataCreateCrud(
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataAlreadyExistsException(message=error_message) from e
 
-    async def delete_data_create(
-            self,
-            create_code: Optional[str] = None,
-    ) -> AutoTestApiDataCreateInfo:
+    async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestApiDataCreateInfo:
         """
         按 create_code 软删除数据源生成记录（state=1）。
 

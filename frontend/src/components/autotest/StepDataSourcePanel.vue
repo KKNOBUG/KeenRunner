@@ -39,6 +39,21 @@
         <n-tabs type="line" animated class="data-source-tabs">
           <n-tab-pane name="preview" tab="数据预览">
             <n-space vertical :size="12">
+              <div class="data-source-axis-row">
+                <span class="data-source-axis-label">矩阵方向：</span>
+                <n-radio-group
+                    v-model:value="axis"
+                    size="small"
+                    :disabled="props.readonly"
+                    @update:value="onAxisChange"
+                >
+                  <n-radio-button :value="1">垂直模式</n-radio-button>
+                  <n-radio-button :value="0">水平模式</n-radio-button>
+                </n-radio-group>
+                <n-text depth="3" class="data-source-axis-tip">
+                  {{ axis === 0 ? '场景为行、字段为列' : '场景为列、字段为行' }}
+                </n-text>
+              </div>
               <div class="luckysheet-wrap">
                 <div class="luckysheet-more-dropdown">
                   <n-dropdown
@@ -158,6 +173,8 @@ import {
   NDropdown,
   NInput,
   NModal,
+  NRadioButton,
+  NRadioGroup,
   NSpace,
   NTabPane,
   NTabs,
@@ -223,6 +240,43 @@ const dataSourceTipText = computed(() => {
 })
 
 const FIXED_KEYWORDS = ['HEAD', 'BODY', 'ASSERT_HEAD', 'ASSERT_BODY']
+const SECTION_MARKER_SET = new Set(FIXED_KEYWORDS)
+
+// 矩阵方向：1=垂直(场景为列)，0=水平(场景为行)，与后端 axis 字段一致；空白模板默认垂直
+const AXIS_HORIZONTAL = 0
+const AXIS_VERTICAL = 1
+const axis = ref(AXIS_VERTICAL)
+
+const isSectionMarker = (cell) =>
+    typeof cell === 'string' && SECTION_MARKER_SET.has(cell.trim().toUpperCase())
+
+/**
+ * 识别二维矩阵方向：第 0 行含分区标记 → 水平(0)；否则第 0 列(row1+)含分区标记 → 垂直(1)；
+ * 两者都不满足返回 null（非合法数据源矩阵）。与后端 detect_matrix_axis 保持一致。
+ */
+const detectMatrixAxis = (matrix) => {
+  if (!Array.isArray(matrix) || !matrix.length) return null
+  if ((matrix[0] || []).some(isSectionMarker)) return AXIS_HORIZONTAL
+  for (let r = 1; r < matrix.length; r++) {
+    if (isSectionMarker(matrix[r]?.[0])) return AXIS_VERTICAL
+  }
+  return null
+}
+
+/** 矩阵转置（水平 ↔ 垂直互换） */
+const transposeMatrix = (matrix) => {
+  if (!Array.isArray(matrix) || !matrix.length) return []
+  const colCount = Math.max(...matrix.map((row) => (Array.isArray(row) ? row.length : 0)))
+  const result = []
+  for (let c = 0; c < colCount; c++) {
+    const row = []
+    for (let r = 0; r < matrix.length; r++) {
+      row.push(matrix[r]?.[c] ?? '')
+    }
+    result.push(row)
+  }
+  return result
+}
 
 /* ========================= Luckysheet 数据状态 ========================= */
 const luckysheetRef = ref(null)
@@ -265,6 +319,19 @@ const normalizeMatrixRow = (row, length) => {
   return result
 }
 
+/** 将二维矩阵载入表格（第 0 行为列头，其余为数据行）；空矩阵回落为空白模板 */
+const applyMatrixToSheet = (matrix) => {
+  if (!Array.isArray(matrix) || !matrix.length) {
+    const { headers, data } = buildBlankTemplate()
+    sheetColumns.value = headers
+    sheetData.value = data
+    return
+  }
+  const maxCol = Math.max(...matrix.map((row) => (Array.isArray(row) ? row.length : 0)))
+  sheetColumns.value = normalizeMatrixRow(matrix[0], maxCol)
+  sheetData.value = matrix.slice(1).map((row) => normalizeMatrixRow(row, maxCol))
+}
+
 const loadStepDataframePreview = async () => {
   if (isLoading.value) return
   const ctx = getStepContext()
@@ -272,9 +339,8 @@ const loadStepDataframePreview = async () => {
   const { caseId, stepId, stepCode } = ctx
 
   if (!caseId) {
-    const { headers, data } = buildBlankTemplate()
-    sheetColumns.value = headers
-    sheetData.value = data
+    applyMatrixToSheet([])
+    axis.value = AXIS_VERTICAL
     hasDbRecord.value = false
     isDirty.value = false
     hasLoaded.value = true
@@ -293,12 +359,12 @@ const loadStepDataframePreview = async () => {
       const { headers, data } = buildBlankTemplate(scenes)
       sheetColumns.value = headers
       sheetData.value = data
+      axis.value = AXIS_VERTICAL
       hasDbRecord.value = false
       isDirty.value = false
     } catch (_) {
-      const { headers, data } = buildBlankTemplate()
-      sheetColumns.value = headers
-      sheetData.value = data
+      applyMatrixToSheet([])
+      axis.value = AXIS_VERTICAL
       hasDbRecord.value = false
       isDirty.value = false
     } finally {
@@ -318,15 +384,8 @@ const loadStepDataframePreview = async () => {
       })
       const info = res?.data || {}
       const matrix = Array.isArray(info.dataframe) ? info.dataframe : []
-      if (matrix.length > 0) {
-        const maxCol = Math.max(...matrix.map((row) => (Array.isArray(row) ? row.length : 0)))
-        sheetColumns.value = normalizeMatrixRow(matrix[0], maxCol)
-        sheetData.value = matrix.slice(1).map((row) => normalizeMatrixRow(row, maxCol))
-      } else {
-        const { headers, data } = buildBlankTemplate()
-        sheetColumns.value = headers
-        sheetData.value = data
-      }
+      applyMatrixToSheet(matrix)
+      axis.value = info.axis === AXIS_HORIZONTAL ? AXIS_HORIZONTAL : AXIS_VERTICAL
       hasDbRecord.value = true
       if (info.file_name != null) dataSourceName.value = String(info.file_name)
       if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
@@ -338,13 +397,13 @@ const loadStepDataframePreview = async () => {
       const { headers, data } = buildBlankTemplate(scenes)
       sheetColumns.value = headers
       sheetData.value = data
+      axis.value = AXIS_VERTICAL
       hasDbRecord.value = false
     }
     isDirty.value = false
   } catch (_) {
-    const { headers, data } = buildBlankTemplate()
-    sheetColumns.value = headers
-    sheetData.value = data
+    applyMatrixToSheet([])
+    axis.value = AXIS_VERTICAL
     hasDbRecord.value = false
     isDirty.value = false
   } finally {
@@ -369,6 +428,14 @@ const onProtectedAction = (action) => {
   if (action === 'delete') {
     $message.warning('HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 所在行不允许删除')
   }
+}
+
+/** 切换矩阵方向：将当前表格内容转置到目标方向（axis 已由 v-model 更新） */
+const onAxisChange = () => {
+  if (props.readonly) return
+  const matrix = getCurrentDataframeMatrix()
+  applyMatrixToSheet(transposeMatrix(matrix))
+  isDirty.value = true
 }
 
 const getCurrentDataframeMatrix = () => {
@@ -421,6 +488,7 @@ const saveWithContext = async (ctx, opts = {}) => {
       step_id: stepId,
       step_code: stepCode,
       dataframe: matrix,
+      axis: axis.value,
     })
     const info = res?.data || {}
     if (info.data_source_id != null) dataSourceId.value = info.data_source_id
@@ -510,11 +578,15 @@ const onImportFileChange = async (ev) => {
       $message.warning('导入文件为空')
       return
     }
-    const maxCol = Math.max(...aoa.map((row) => (Array.isArray(row) ? row.length : 0)))
-    sheetColumns.value = normalizeMatrixRow(aoa[0], maxCol)
-    sheetData.value = aoa.slice(1).map((row) => normalizeMatrixRow(row, maxCol))
+    const detectedAxis = detectMatrixAxis(aoa)
+    if (detectedAxis === null) {
+      $message.error('导入失败：无法识别矩阵方向，第 0 行或第 0 列需包含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 分区标记')
+      return
+    }
+    axis.value = detectedAxis
+    applyMatrixToSheet(aoa)
     isDirty.value = true
-    $message.success('导入成功，请保存后生效')
+    $message.success(`导入成功（${detectedAxis === AXIS_HORIZONTAL ? '水平' : '垂直'}模式），请保存后生效`)
   } catch (e) {
     $message.error(`导入失败：${e?.message || e}`)
   } finally {
@@ -694,6 +766,7 @@ onBeforeUnmount(async () => {
       step_id: stepId,
       step_code: stepCode,
       dataframe: matrix,
+      axis: axis.value,
     })
   } catch (_) {
     /* 静默保存，错误由 http 拦截器统一提示 */
@@ -721,6 +794,20 @@ defineExpose({
 
 .data-source-content {
   padding-top: 4px;
+}
+
+.data-source-axis-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-source-axis-label {
+  font-size: 12px;
+}
+
+.data-source-axis-tip {
+  font-size: 12px;
 }
 
 .data-source-row {

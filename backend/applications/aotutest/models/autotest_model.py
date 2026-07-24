@@ -6,8 +6,8 @@
 @Module  : autotest_model.py
 @DateTime: 2025/12/28 16:15
 """
-
 from tortoise import fields
+from tortoise.validators import MinValueValidator, MaxValueValidator
 
 from backend.applications.base.services.scaffold import (
     ScaffoldModel,
@@ -37,8 +37,6 @@ from backend.enums import (
 
 
 class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试应用（项目）信息模型，对应表 krun_autotest_api_project。"""
-
     project_name = fields.CharField(max_length=128, unique=True, description="应用名称")
     project_desc = fields.CharField(max_length=2048, null=True, description="应用描述")
     project_state = fields.CharField(max_length=64, null=True, description="应用状态")
@@ -66,9 +64,7 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """全局环境枚举（如 UAT/SIT/PP），不关联应用；与应用的关联在 AutoTestApiEnvConfigInfo。"""
-
-    env_name = fields.CharField(max_length=128, unique=True, index=True, description="环境名称(全局唯一)")
+    env_name = fields.CharField(max_length=128, unique=True, index=True, description="环境名称")
     env_desc = fields.CharField(max_length=2048, null=True, description="环境描述")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
@@ -84,16 +80,12 @@ class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试环境配置模型，对应表 tbx_autotest_api_config。"""
-
     env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
-
     config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
     config_type = fields.CharEnumField(AutoTestConfigNodeType, description="配置类型")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
-
     config_host = fields.CharField(max_length=128, description="数据库/服务器主机地址")
     config_port = fields.CharField(max_length=8, null=True, description="数据库/服务器端口")
     database_name = fields.CharField(max_length=128, null=True, description="数据库名称")
@@ -124,8 +116,6 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
 
 
 class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试标签信息模型，对应表 krun_autotest_api_tag。"""
-
     tag_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="标签标识代码")
     tag_type = fields.CharEnumField(AutoTestTagType, description="标签所属类型")
     tag_project = fields.IntField(default=1, ge=1, index=True, description="标签所属应用")
@@ -152,8 +142,6 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
 
 
 class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试用例信息模型，对应表 krun_autotest_api_case。"""
-
     case_name = fields.CharField(max_length=255, index=True, description="用例名称")
     case_desc = fields.CharField(max_length=2048, null=True, description="用例描述")
     case_tags = fields.JSONField(default=list, description="用例所属标签")
@@ -189,8 +177,6 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 
 
 class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试步骤信息模型，对应表 krun_autotest_api_step。"""
-
     step_no = fields.IntField(default=1, ge=1, description="步骤序号")
     step_name = fields.CharField(max_length=255, description="步骤名称")
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤描述")
@@ -204,7 +190,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # 引用公共脚本ID（普通字段，不设外键，业务层验证）
     quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
     # 跳过/注释：执行时当作不存在该步骤（不写明细、不计入统计）；默认不跳过
-    step_is_skipped = fields.BooleanField(default=False, description="是否跳过执行(注释)，默认不跳过")
+    step_is_skipped = fields.BooleanField(default=False, description="步骤是否跳过执行")
 
     # 请求相关字段
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")
@@ -252,15 +238,13 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 
     # 数据库相关
     # database_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr、variable_name
-    database_operates = fields.JSONField(null=True, description="数据库请求操作列表(根据不同的配置进行操作数据库)")
-    database_searched = fields.BooleanField(null=True,
-                                            description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续的数据库请求)")
+    database_operates = fields.JSONField(null=True, description="数据库请求操作列表")
+    database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续请求)")
 
     # Redis相关
     # redis_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr
     redis_operates = fields.JSONField(null=True, description="Redis请求操作列表")
-    redis_searched = fields.BooleanField(null=True,
-                                         description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续Redis请求)")
+    redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续请求)")
 
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -284,8 +268,6 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 
 
 class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试报告信息模型，对应表 krun_autotest_api_report。"""
-
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     case_st_time = fields.CharField(max_length=32, null=True, description="用例执行开始时间")
@@ -323,8 +305,6 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
 
 
 class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试步骤执行明细信息模型，对应表 krun_autotest_api_details。"""
-
     # 用例信息相关
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
@@ -415,8 +395,6 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
 
 
 class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试任务信息模型，对应表 krun_autotest_api_task。"""
-
     task_name = fields.CharField(max_length=255, index=True, description="任务名称")
     task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
@@ -427,21 +405,11 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         description="任务业务类型(扫描过滤)",
     )
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
-    task_kwargs = fields.JSONField(
-        default=dict,
-        null=True,
-        description="轻量扩展参数：case_ids、initial_variables 及未来扩展键；不含 cases_execute_config",
-    )
-    cases_execute_config = fields.JSONField(
-        default=dict,
-        null=True,
-        description="按用例执行配置(权威)：{case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name, execute_count}}",
-    )
-    related_cases_env_id = fields.JSONField(
-        default=list,
-        null=True,
-        description="涉及环境ID列表(由 cases_execute_config 汇总，供筛选)",
-    )
+    # case_ids、initial_variables 及未来扩展键；不含 cases_execute_config
+    task_kwargs = fields.JSONField(default=dict, null=True, description="轻量扩展参数")
+    # cases_execute_config字段数据格式：{case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name, execute_count}}
+    cases_execute_config = fields.JSONField(default=dict, null=True, description="按用例执行配置")
+    related_cases_env_id = fields.JSONField(default=list, null=True, description="涉及环境ID列表(由cases_execute_config汇总)")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     task_crontabs_expr = fields.CharField(max_length=255, null=True, description="Cron 触发表达式")
@@ -471,38 +439,18 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 
 
 class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """
-    任务执行观测记录：支持用户查看每次手动/定时触发的执行详情，
-    并可通过 batch_code / task_code 关联脚本报告。
-    """
-
     task_id = fields.BigIntField(null=True, index=True, description="任务ID")
     task_code = fields.CharField(max_length=64, null=True, index=True, description="任务标识(快照)")
     task_name = fields.CharField(max_length=255, null=True, index=True, description="任务名称(快照)")
     task_type = fields.CharEnumField(AutoTestTaskType, default=None, null=True, index=True, description="任务类型(快照)")
     task_project = fields.IntField(null=True, index=True, description="所属应用(快照)")
-    trigger_type = fields.CharEnumField(
-        AutoTestTaskTriggerType,
-        default=None,
-        null=True,
-        index=True,
-        description="触发来源(手动/定时)",
-    )
-    report_type = fields.CharEnumField(
-        AutoTestReportType,
-        default=None,
-        null=True,
-        description="报告类型(异步执行/定时执行等)",
-    )
-    batch_code = fields.CharField(max_length=64, null=True, index=True, description="批次码(关联脚本报告)")
+    trigger_type = fields.CharEnumField(AutoTestTaskTriggerType, default=None, null=True, index=True, description="触发来源(手动/定时)")
+    report_type = fields.CharEnumField(AutoTestReportType, default=None, null=True, description="报告类型(异步执行/定时执行等)")
+    batch_code = fields.CharField(max_length=64, null=True, index=True, description="批次标识代码(关联脚本报告)")
     case_ids = fields.JSONField(default=list, null=True, description="本次执行的用例ID列表")
-    exec_snapshot = fields.JSONField(
-        default=None,
-        null=True,
-        description="执行入参与调度快照：task_kwargs、cases_execute_config、crontab/periodic 等",
-    )
-    task_summary = fields.JSONField(default=None, null=True, description="任务执行完整响应(对象)")
+    exec_snapshot = fields.JSONField(default=None, null=True, description="执行入参与调度快照")
     task_error = fields.TextField(null=True, description="错误信息")
+    task_summary = fields.JSONField(default=None, null=True, description="任务执行完整响应(对象)")
     celery_id = fields.CharField(max_length=255, index=True, description="Celery 调度ID")
     celery_node = fields.CharField(max_length=512, null=True, index=True, description="Celery 任务节点名")
     celery_trace_id = fields.CharField(max_length=255, null=True, index=True, description="链路追踪ID")
@@ -528,7 +476,6 @@ class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
 
 
 class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """存储颗粒度：一个文件对应多条记录，按 case_id + step_code 联合唯一(每条记录存该步骤下所有场景数据)"""
     case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     step_id = fields.BigIntField(ge=1, index=True, description="步骤ID")
@@ -544,6 +491,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     # 存储格式：“dataset_{case_id}_{step_code}”
     cache_key = fields.CharField(max_length=128, description="获取Redis中该步骤数据的缓存键名")
     dataframe = fields.JSONField(default=list, null=True, description="数据驱动文件解析前的二维矩阵")
+    axis = fields.SmallIntField(default=0, validators=[MinValueValidator(0), MaxValueValidator(1)], description="数据矩阵(0:水平模式, 1:垂直模式)")
     data_source_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
@@ -566,8 +514,6 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
 
 
 class AutoTestApiDataCreateInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """自动化测试接口文件生成记录模型，对应表 tbx_autotest_api_data_create。"""
-
     case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, description="用例标识代码")
     create_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="接口文件标识代码")

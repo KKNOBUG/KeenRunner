@@ -28,6 +28,7 @@ class AutoTestDataSourceBase(BaseModel):
     dataset_names: Optional[List[str]] = Field(None, description="数据驱动文件解析后的场景名称列表")
     cache_key: Optional[str] = Field(None, max_length=128, description="获取Redis中该步骤数据的缓存键名")
     dataframe: Optional[List[Any]] = Field(None, description="数据驱动文件解析前的二维矩阵")
+    axis: Optional[int] = Field(0, ge=0, le=1, description="数据矩阵方向(0:水平模式-场景为行, 1:垂直模式-场景为列)")
 
 
 class AutoTestDataSourceCreate(AutoTestDataSourceBase):
