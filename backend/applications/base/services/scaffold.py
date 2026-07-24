@@ -29,12 +29,7 @@ from backend.core.exceptions import ParameterException, NotFoundException
 
 
 def unique_identify() -> str:
-    """
-    生成唯一标识字符串，由时间戳与 UUID 组合而成。
-
-    :returns: 格式为{timestamp}-{uuid4_hex_upper}的唯一标识字符串。
-    :rtype: str
-    """
+    """生成唯一标识字符串，由时间戳与 UUID 组合而成。"""
     timestamp: int = int(datetime.now().timestamp())
     uuid4_str: str = uuid.uuid4().hex.upper()
     return f"{timestamp}-{uuid4_str}"
@@ -260,7 +255,7 @@ class MaintainMixin:
     维护信息 Mixin，记录数据的创建人和最后更新人。
 
     - created_user: 记录数据的创建者
-    - updated_user: 记录最后修改者（可用于记录软删除操作人）
+    - updated_user: 记录数据的修改者
     """
     created_user = fields.CharField(max_length=16, default=None, null=True, description="创建人员")
     updated_user = fields.CharField(max_length=16, default=None, null=True, description="更新人员")
@@ -275,7 +270,7 @@ class ReserveFields:
 
 class JSONTextField(JSONField):
     """
-    以 TEXT 列存储 JSON 的字段（保留键顺序）。
+    以TEXT类型存储JSON格式的数据字段。
 
     与 JSONField 的唯一区别在于 SQL_TYPE：使用 LONGTEXT 而非 MySQL 的 JSON 列。
     MySQL 的 JSON 列在落库时会对对象键做归一化（按键长度、字节值排序），导致字段顺序丢失；
@@ -381,7 +376,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param kwargs: 查询条件字段
         :return: 单条记录、记录列表或None
         :raises ParameterException: 查询条件字段错误时抛出
-        :raises NotFoundException: 未找到记录且 on_error=True 时抛出
+        :raises NotFoundException: 未找到记录且on_error=True时抛出
         """
         try:
             stmt: QuerySet = self.model.filter(**kwargs)
@@ -483,12 +478,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         LOGGER.info(f"更新成功: {self.model.__name__}(id={id}), 字段: {list(obj_dict.keys())}")
         return obj
 
-    async def batch_update(
-            self,
-            updates: List[Dict[str, Any]],
-            key_field: str = "id",
-            strict: bool = True
-    ) -> int:
+    async def batch_update(self, updates: List[Dict[str, Any]], key_field: str = "id", strict: bool = True) -> int:
         """
         批量更新记录。
 
@@ -562,6 +552,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def hard_delete(self, id: int) -> ModelType:
         """
         硬删除：从数据库中永久移除记录，无论记录是否已软删除（state=1），都将被物理删除。
+
         :param id: 要硬删除的记录ID
         :return: 被删除的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
