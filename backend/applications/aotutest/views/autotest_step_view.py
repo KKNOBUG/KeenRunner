@@ -42,6 +42,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
 )
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
 from backend.common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.configure import LOGGER
@@ -448,6 +449,8 @@ async def batch_update_steps_tree(
                                 f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
                             )
                             await services.step_curd.model.filter(step_code__in=missing_step_codes).delete()
+                            # 同步清理被删步骤关联的数据源与数据生成记录
+                            await delete_step_create(case_id=case_id, step_code_list=list(missing_step_codes))
                 # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")

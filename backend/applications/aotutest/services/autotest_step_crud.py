@@ -572,6 +572,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 软删除
         instance.state = 1
         await instance.save()
+        # 同步软删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
+        from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
+        await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
 
     async def delete_steps_recursive(
@@ -595,6 +598,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         deleted_count: int = 0
         if exclude_step is None:
             exclude_step = set()
+        # 记录本次软删除的步骤，按用例归类，事务提交后同步清理其数据源
+        deleted_by_case: Dict[int, List[str]] = {}
 
         async def delete_step_and_children(step_instance: AutoTestApiStepInfo) -> int:
             """递归软删除当前步骤及其所有子步骤，返回本次删除数量。"""
@@ -608,6 +613,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 step_instance.state = 1
                 await step_instance.save()
                 deleted += 1
+                deleted_by_case.setdefault(step_instance.case_id, []).append(step_instance.step_code)
                 LOGGER.warning(
                     f"警告: 删除步骤(step_id={step_instance.id}, "
                     f"step_no={step_instance.step_no}, step_code={step_instance.step_code})成功"
@@ -651,6 +657,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 for step in existing_steps:
                     if (step.id, step.step_code) not in exclude_step:
                         deleted_count += await delete_step_and_children(step_instance=step)
+
+        # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源与数据生成记录
+        if deleted_by_case:
+            from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
+            for ds_case_id, step_codes in deleted_by_case.items():
+                await delete_step_create(case_id=ds_case_id, step_code_list=step_codes)
 
         return deleted_count
 

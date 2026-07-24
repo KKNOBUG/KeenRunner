@@ -2,17 +2,19 @@
   <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
-        <div class="panel-title">Request</div>
-        <div class="card-header-actions">
-          <n-button text size="tiny" @click="toggleRequestCardCollapsed" class="collapse-tiny-btn">
-            <template #icon>
-              <TheIcon
-                  :icon="requestCardCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
-                  :size="18"
-              />
-            </template>
-            {{ requestCardCollapsed ? '展开' : '收起' }}
-          </n-button>
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="toggleRequestCardCollapsed"
+            @keydown.enter.prevent="toggleRequestCardCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="requestCardCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">Request</div>
         </div>
       </div>
     </template>
