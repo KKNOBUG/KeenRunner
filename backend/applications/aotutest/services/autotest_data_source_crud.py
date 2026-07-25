@@ -551,6 +551,49 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             raise ParameterException(message="参数(case_id)不允许为空")
         return await self.model.filter(case_id=case_id, state=state).order_by("-updated_time", "step_id", "step_code").all()
 
+    async def copy_data_source_for_step(
+            self,
+            case_id: int,
+            case_code: str,
+            step_id: int,
+            step_code: str,
+            source_data_source_id: int,
+    ) -> Optional[int]:
+        """
+        将源数据源复制为新步骤的独立数据源，仅复制解析数据（dataset/dataframe/dataset_names/axis），文件字段全部置空。
+
+        :param case_id: 新步骤所属用例主键
+        :param case_code: 新步骤所属用例标识代码
+        :param step_id: 新步骤主键
+        :param step_code: 新步骤标识代码
+        :param source_data_source_id: 源数据源主键ID
+        :return: 新数据源主键ID；源数据源不存在时返回None
+        :raises ParameterException: case_id或step_code为空时
+        """
+        if not case_id or not (step_code or "").strip():
+            raise ParameterException(message="复制数据源失败, 参数(case_id, step_code)不允许为空")
+        source = await self.get_by_id(data_source_id=source_data_source_id, on_error=False, state__not=1)
+        if not source:
+            return None
+        new_record = await self.create(
+            {
+                "case_id": case_id,
+                "case_code": case_code,
+                "step_id": step_id,
+                "step_code": step_code,
+                "cache_key": make_cache_key(case_id, step_code),
+                "dataset": source.dataset,
+                "dataset_names": source.dataset_names or [],
+                "dataframe": source.dataframe or [],
+                "axis": source.axis,
+                "file_name": None,
+                "file_desc": None,
+                "file_path": None,
+                "file_hash": None,
+            }
+        )
+        return new_record.id
+
 
 class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
 

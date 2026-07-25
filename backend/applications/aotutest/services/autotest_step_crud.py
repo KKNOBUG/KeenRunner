@@ -740,7 +740,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     raise ParameterException(message=error_message)
 
                 # 业务层验证: 检查用例是否存在
-                await case_crud.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
+                case_instance = await case_crud.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
 
                 # 业务层验证: 检查同一用例下步骤序号是否已存在
                 existing_step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_conditions(
@@ -806,6 +806,33 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     error_message: str = f"第({sid})条步骤新增失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
+
+                # 复制来的步骤携带数据源时，同步复制为新步骤的独立数据源（仅复制解析数据，文件字段置空）
+                source_data_source_id = getattr(step_data, "data_source_id", None)
+                if source_data_source_id:
+                    from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+                    new_data_source_id: Optional[int] = None
+                    try:
+                        new_data_source_id = await AutoTestDataSourceCrud().copy_data_source_for_step(
+                            case_id=new_step_instance.case_id,
+                            case_code=case_instance.case_code,
+                            step_id=new_step_instance.id,
+                            step_code=new_step_instance.step_code,
+                            source_data_source_id=source_data_source_id,
+                        )
+                    except Exception as e:
+                        LOGGER.error(
+                            f"复制步骤数据源失败(step_code={new_step_instance.step_code}, "
+                            f"source_data_source_id={source_data_source_id}), 错误描述: {e}\n{traceback.format_exc()}"
+                        )
+                    if new_data_source_id:
+                        new_step_instance.data_source_id = new_data_source_id
+                    else:
+                        # 源数据源不存在或复制失败：清空新步骤数据源指针，避免展开面板查询报错
+                        new_step_instance.data_source_id = None
+                        new_step_instance.data_source_name = None
+                        new_step_instance.data_source_desc = None
+                    await new_step_instance.save()
 
                 processed_step_codes.setdefault(new_step_instance.case_id, set()).add(new_step_instance.step_code)
                 step_dict: Dict[str, Any] = await new_step_instance.to_dict(

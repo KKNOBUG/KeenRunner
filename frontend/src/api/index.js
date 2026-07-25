@@ -190,6 +190,7 @@ export default {
   getApiEnvNames: () => request.get('/autotest/env/get_names'),
 
   // 数据源（HTTP/TCP 请求步骤）
+  getDataSource: (params = {}) => request.get('/autotest/data_source/get', { params }),
   getDataSourceByCaseStep: (params = {}) => request.get('/autotest/data_source/get_by_case_step', { params }),
   getSceneNamesByCase: (params = {}) => request.get('/autotest/data_source/scene_names_by_case', { params }),
   /** Form：case_id */

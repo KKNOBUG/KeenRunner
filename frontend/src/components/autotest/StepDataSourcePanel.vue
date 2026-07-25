@@ -347,19 +347,35 @@ const loadStepDataframePreview = async () => {
     return
   }
 
-  // 新增步骤尚未保存（无 stepId/stepCode）：仍查询当前用例下已落库数据源的场景列名，
-  // 填充到空白模板列上，便于用户直接在已有场景列上录入数据
+  // 新增步骤尚未保存（无 stepId/stepCode）：
+  // - 若携带数据源（复制来的步骤），按 data_source_id 预加载原数据源内容，便于直接查看/编辑；
+  // - 否则查询当前用例下已落库数据源的场景列名，填充到空白模板列上，便于直接录入数据。
   if (!stepId || !stepCode) {
     isLoading.value = true
+    let preloaded = false
     try {
-      const res = await api.getSceneNamesByCase({ case_id: caseId })
-      const scenes = Array.isArray(res?.data?.data_source_scene_name_set)
-          ? res.data.data_source_scene_name_set
-          : []
-      const { headers, data } = buildBlankTemplate(scenes)
-      sheetColumns.value = headers
-      sheetData.value = data
-      axis.value = AXIS_VERTICAL
+      if (dataSourceId.value) {
+        const res = await api.getDataSource({ data_source_id: dataSourceId.value })
+        const info = res?.data || {}
+        const matrix = Array.isArray(info.dataframe) ? info.dataframe : []
+        if (matrix.length > 0) {
+          applyMatrixToSheet(matrix)
+          axis.value = info.axis === AXIS_HORIZONTAL ? AXIS_HORIZONTAL : AXIS_VERTICAL
+          if (info.file_name != null) dataSourceName.value = String(info.file_name)
+          if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
+          preloaded = true
+        }
+      }
+      if (!preloaded) {
+        const res = await api.getSceneNamesByCase({ case_id: caseId })
+        const scenes = Array.isArray(res?.data?.data_source_scene_name_set)
+            ? res.data.data_source_scene_name_set
+            : []
+        const { headers, data } = buildBlankTemplate(scenes)
+        sheetColumns.value = headers
+        sheetData.value = data
+        axis.value = AXIS_VERTICAL
+      }
       hasDbRecord.value = false
       isDirty.value = false
     } catch (_) {
