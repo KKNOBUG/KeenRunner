@@ -17,21 +17,34 @@ import { router } from '@/router'
 import { lStorage } from '@/utils'
 
 /**
- * 将列表中的「工作台」页签排到第一位，其余保持原有相对顺序
+ * 从路由解析「工作台」页签信息（path/name/title），用于在列表缺失工作台时补全
+ * @returns {{ path: string, name?: string, title?: string }}
+ */
+function getWorkbenchTag() {
+  const resolved = router.resolve(WORKBENCH_TAG_PATH)
+  return {
+    name: resolved.name,
+    path: WORKBENCH_TAG_PATH,
+    title: resolved.meta?.title,
+  }
+}
+
+/**
+ * 保证「工作台」页签始终存在并排在第一位，其余保持原有相对顺序
  * @param {Array<{ path: string, name?: string, title?: string }>} tagList - 页签列表
- * @returns {Array} 工作台在前的新数组（不修改原数组）
+ * @returns {Array} 工作台在前的新数组（不修改原数组）；列表无工作台时自动补全
  */
 function sortTagsWithWorkbenchFirst(tagList) {
   const workbench = tagList.filter((t) => t.path === WORKBENCH_TAG_PATH)
   const rest = tagList.filter((t) => t.path !== WORKBENCH_TAG_PATH)
-  return [...workbench, ...rest]
+  return [...(workbench.length ? workbench : [getWorkbenchTag()]), ...rest]
 }
 
 export const useTagsStore = defineStore('tag', {
   state() {
     return {
-      /** 当前打开的页签列表，工作台（若存在）始终在索引 0 */
-      tags: tags ? sortTagsWithWorkbenchFirst(tags) : [],
+      /** 当前打开的页签列表，工作台始终存在且在索引 0 */
+      tags: sortTagsWithWorkbenchFirst(tags || []),
       /** 当前激活的页签路径，与路由 path 一致 */
       activeTag: activeTag || '',
     }

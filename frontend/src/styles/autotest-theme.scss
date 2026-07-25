@@ -181,3 +181,37 @@ pre.log-item,
   background-color: var(--autotest-pre-bg-color);
   color: var(--autotest-pre-text-color);
 }
+
+/* ========== Luckysheet 数据表格：深色模式适配 ==========
+ * luckysheet@2.x 单元格主体为 canvas 绘制，深色模式下覆盖
+ * 容器、行列表头、边框、滚动条等非 canvas 部分，尽量贴近深色外观。
+ */
+html.dark .luckysheet-container {
+  background-color: var(--n-color);
+}
+
+html.dark .luckysheet-container .luckysheet-cell-main,
+html.dark .luckysheet-container .luckysheet-cell-flow {
+  background-color: var(--n-color);
+}
+
+html.dark .luckysheet-container .luckysheet-row-header,
+html.dark .luckysheet-container .luckysheet-col-header,
+html.dark .luckysheet-container .luckysheet-row-count-header,
+html.dark .luckysheet-container .luckysheet-column-count-header {
+  background-color: var(--n-color-embedded);
+  color: var(--n-text-color);
+  border-color: var(--n-border-color);
+}
+
+html.dark .luckysheet-container .luckysheet-grid-window {
+  border-color: var(--n-border-color);
+}
+
+html.dark .luckysheet-container ::-webkit-scrollbar-thumb {
+  background-color: var(--n-scrollbar-color, rgba(255, 255, 255, 0.25));
+}
+
+html.dark .luckysheet-container ::-webkit-scrollbar-track {
+  background-color: transparent;
+}

@@ -1,16 +1,6 @@
 <template>
   <div className="monaco-editor" ref="monacoEditorRef"></div>
 </template>
-<script>
-/**
- * Monaco 编辑器主题挂载栈（跨组件实例共享的模块级状态）。
- * Monaco 的主题是全局唯一的（monaco.editor.setTheme 作用于页面上所有编辑器），
- * 当不同主题的编辑器共存时（如主页面暗色编辑器 + 报告明细抽屉亮色编辑器）会相互覆盖。
- * 通过挂载栈管理：最近挂载的编辑器主题生效；卸载时回退到上一层主题，
- * 避免临时浮层（报告详情抽屉）关闭后把主页面编辑器主题"带偏"。
- */
-const mountedEditorThemes = []
-</script>
 <script setup name="monacoEditor">
 /**
  * 通用 Monaco 编辑器封装
@@ -29,10 +19,16 @@ import cssWorker from '~/node_modules/monaco-editor/esm/vs/language/css/css.work
 import htmlWorker from '~/node_modules/monaco-editor/esm/vs/language/html/html.worker?worker';
 import tsWorker from '~/node_modules/monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 
-import {onMounted, onUnmounted, reactive, ref, toRaw, watch} from 'vue'
+import {computed, onMounted, onUnmounted, reactive, ref, toRaw, watch} from 'vue'
+import {useDark} from '@vueuse/core'
 import SQLSnippets from "./core/sql.js"
 import {getJsonPath} from '@/utils/common/jsonPath'
 import commonFunction from "@/utils/common/commonFunction";
+
+/** 应用是否处于深色模式（与应用全局深/浅色模式共享状态，随其响应式变化） */
+const isDark = useDark()
+/** Monaco 主题跟随应用深/浅色模式：深色→vs-dark，浅色→vs（Monaco 主题全局唯一，全部编辑器统一跟随避免互相覆盖） */
+const resolvedTheme = computed(() => (isDark.value ? 'vs-dark' : 'vs'))
 
 /**
  * Monaco Web Worker 环境配置（须在 create 编辑器之前设置）
@@ -283,6 +279,8 @@ const state = reactive({
  */
 const initEditor = () => {
   let options = {...state.options, ...props.options}
+  // 主题统一跟随应用深/浅色模式（覆盖外部传入的 theme，保证全部编辑器主题一致）
+  options.theme = resolvedTheme.value
   if (props.lang === 'xml') {
     ensureXmlFormattingProviders()
   }
@@ -565,14 +563,12 @@ watch(
     },
     {deep: true}
 )
-/** 主题变更时全局切换 Monaco 主题 */
+/** 应用深/浅色模式切换时全局切换 Monaco 主题 */
 watch(
-    () => props.theme,
+    isDark,
     () => {
-      monaco.editor.setTheme(props.theme)
-
-    },
-    {deep: true}
+      monaco.editor.setTheme(resolvedTheme.value)
+    }
 )
 /** Diff / 普通模式切换时销毁旧实例并重新 initEditor */
 watch(
@@ -622,27 +618,14 @@ watch(
     {deep: true}
 )
 
-/** 当前实例挂载时压入的主题（卸载时据此回退） */
-let pushedTheme = null
-
 onMounted(() => {
   initEditor()
-  pushedTheme = props.options?.theme ?? props.theme
-  if (pushedTheme) {
-    mountedEditorThemes.push(pushedTheme)
-    monaco.editor.setTheme(pushedTheme)
-  }
+  monaco.editor.setTheme(resolvedTheme.value)
 })
 
 /** 组件卸载时释放编辑器实例，避免内存泄漏 */
 onUnmounted(() => {
   toRaw(editor.value)?.dispose()
-  if (pushedTheme) {
-    const idx = mountedEditorThemes.lastIndexOf(pushedTheme)
-    if (idx !== -1) mountedEditorThemes.splice(idx, 1)
-    const top = mountedEditorThemes[mountedEditorThemes.length - 1]
-    if (top) monaco.editor.setTheme(top)
-  }
 })
 
 /** 供父组件通过 ref 调用的公开 API */

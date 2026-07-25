@@ -60,7 +60,7 @@ import api from '@/api'
 import {addDynamicRoutes} from '@/router'
 import {useI18n} from 'vue-i18n'
 import {useRoute, useRouter} from "vue-router";
-import {useUserStore} from "@/store";
+import {useUserStore, useTagsStore} from "@/store";
 
 const router = useRouter()
 const {query} = useRoute()
@@ -102,14 +102,9 @@ async function handleLogin() {
     userStore.setUserInfo(res.data)
 
     await addDynamicRoutes()
-    if (query.redirect) {
-      const path = query.redirect
-      console.log('path', {path, query})
-      Reflect.deleteProperty(query, 'redirect')
-      await router.push({path, query})
-    } else {
-      await router.push('/')
-    }
+    // 重新登录统一进入工作台，并清空其他导航标签（工作台页签始终保留）
+    useTagsStore().resetTags()
+    await router.push('/')
   } catch (e) {
     console.error('登录异常：', e.error)
   }

@@ -4,6 +4,7 @@
 
 <script setup>
 import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useDark} from '@vueuse/core'
 
 /**
  * Luckysheet Vue3 封装组件
@@ -98,7 +99,9 @@ const loadStyles = () => {
   })
 }
 
-const PROTECTED_ROW_BG = '#f0f0f0'
+const isDark = useDark()
+/** 受保护行背景色：跟随应用深/浅色模式（深色用深灰、浅色用浅灰） */
+const PROTECTED_ROW_BG = computed(() => (isDark.value ? '#3a3a3a' : '#f0f0f0'))
 
 const buildLuckysheetData = () => {
   const celldata = []
@@ -128,7 +131,7 @@ const buildLuckysheetData = () => {
 
       const cellObj = {ct: {fa: 'General', t: 'g'}, m: cellValue, v: cellValue, ht: 0, vt: 0}
       if (isProtected) {
-        cellObj.bg = PROTECTED_ROW_BG
+        cellObj.bg = PROTECTED_ROW_BG.value
         cellObj.bl = 1
       }
       celldata.push({r: rowIndex, c, v: cellObj})
