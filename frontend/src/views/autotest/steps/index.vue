@@ -2278,7 +2278,8 @@ const handleSaveAll = async () => {
     }
 
     // 调用后端接口前，先保存当前步骤编辑器中的数据源（如有未提交的编辑）
-    await activeStepEditorRef.value?.saveDataSource?.()
+    // 复制的新步骤此时尚无 step_code，会返回 skipped，待步骤落库获得 step_code 后再补存
+    const dataSourceSavedBefore = await activeStepEditorRef.value?.saveDataSource?.()
 
     // 调用新的后端接口
     const res = await api.updateOrCreateStepTree(payload)
@@ -2289,6 +2290,11 @@ const handleSaveAll = async () => {
       const stepDetail = res?.data?.steps?.success_detail
       if (Array.isArray(stepDetail) && stepDetail.length > 0) {
         mergeStepTreeWithSuccessDetail(steps.value, stepDetail)
+        // 复制的新步骤保存前无 step_code，数据源未保存；步骤落库获得 step_code 后再保存一次数据源（含用户在面板的修改）
+        if (dataSourceSavedBefore?.skipped) {
+          await nextTick()
+          await activeStepEditorRef.value?.saveDataSource?.()
+        }
       }
 
       // 新增用例保存成功后，将 case_id / case_code 写入 URL，以便后续加载和刷新保留
