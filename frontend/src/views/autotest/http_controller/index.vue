@@ -1,4 +1,15 @@
 <template>
+  <StepDataSourcePanel
+      ref="dataSourcePanelRef"
+      :step="props.step"
+      :readonly="props.readonly"
+      :step-name="state.form.step_name"
+      step-type-label="HTTP请求"
+      v-model:data-source-id="state.form.data_source_id"
+      v-model:data-source-name="state.form.data_source_name"
+      v-model:data-source-desc="state.form.data_source_desc"
+  />
+
   <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
     <template #header>
       <div class="card-header-row">
@@ -270,17 +281,6 @@
       </n-tabs>
     </n-collapse-transition>
   </n-card>
-
-  <StepDataSourcePanel
-      ref="dataSourcePanelRef"
-      :step="props.step"
-      :readonly="props.readonly"
-      :step-name="state.form.step_name"
-      step-type-label="HTTP请求"
-      v-model:data-source-id="state.form.data_source_id"
-      v-model:data-source-name="state.form.data_source_name"
-      v-model:data-source-desc="state.form.data_source_desc"
-  />
 
   <!-- 响应结果卡片：在加载中或有响应数据时展示 -->
   <n-card

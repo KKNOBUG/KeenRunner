@@ -1,16 +1,18 @@
 <template>
   <AppPage>
-    <CaseInfoPanel
-        ref="caseInfoPanelRef"
-        :debug-loading="debugLoading"
-        :save-loading="saveLoading"
-        :tree-mode="treeMode"
-        @case-type-change="onCaseTypeChange"
-        @debug="handleDebug"
-        @save="handleSaveAll"
-        @history="openCaseHistory"
-        @request-tree-mode-change="handleTreeModeChange"
-    />
+    <div ref="caseInfoWrapRef">
+      <CaseInfoPanel
+          ref="caseInfoPanelRef"
+          :debug-loading="debugLoading"
+          :save-loading="saveLoading"
+          :tree-mode="treeMode"
+          @case-type-change="onCaseTypeChange"
+          @debug="handleDebug"
+          @save="handleSaveAll"
+          @history="openCaseHistory"
+          @request-tree-mode-change="handleTreeModeChange"
+      />
+    </div>
     <div class="page-container">
       <StepSourceJsonPanel
           v-if="!treeMode"
@@ -242,6 +244,7 @@
 defineOptions({ name: '步骤编辑' })
 import {computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
+import {useElementHover} from '@vueuse/core'
 import {
   NButton,
   NCard,
@@ -358,6 +361,10 @@ const appliedCaseMeta = ref({ case_id: null, case_code: null })
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
+/** 用例信息面板包裹容器 ref：用于检测鼠标是否悬停在面板区域 */
+const caseInfoWrapRef = ref(null)
+/** 鼠标是否悬停在「用例信息」面板区域 */
+const hoveringCaseInfo = useElementHover(caseInfoWrapRef)
 /** 当前步骤编辑器 ref：用于保存步骤树前先保存数据源 */
 const activeStepEditorRef = ref(null)
 /** 执行/调试环境配置弹窗 ref */
@@ -2463,6 +2470,29 @@ const editorComponent = computed(() => {
   const step = currentStep.value
   if (!step) return null
   return editorMap[step.type] || null
+})
+
+/**
+ * 自动折叠「用例信息」面板。
+ * 三个条件需同时满足：用例信息已全部填写完成、用户已激活其他操作（选中了步骤/进入子页面）、鼠标不在用例信息面板区域。
+ */
+const tryAutoCollapseCaseInfo = () => {
+  if (!caseInfoPanelRef.value) return
+  const complete = caseInfoPanelRef.value.validateCaseForm?.().valid === true
+  const activated = selectedKeys.value.length > 0
+  if (complete && activated && !hoveringCaseInfo.value) {
+    caseInfoPanelRef.value.caseInfoCollapsed = true
+  }
+}
+
+/** 选中步骤变化（点击步骤树/进入子页面）时尝试自动折叠用例信息面板 */
+watch(currentStep, () => {
+  nextTick(tryAutoCollapseCaseInfo)
+})
+
+/** 鼠标移出用例信息面板时尝试自动折叠（覆盖「先选中步骤、鼠标随后移出面板」的场景） */
+watch(hoveringCaseInfo, (hovering) => {
+  if (!hovering) tryAutoCollapseCaseInfo()
 })
 
 const currentEditorNeedsProject = computed(() => {

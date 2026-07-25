@@ -503,6 +503,7 @@ defineExpose({
   reloadFromRoute: initCaseInfoFromRoute,
   projectOptions,
   projectLoading,
+  caseInfoCollapsed,
 })
 </script>
 
