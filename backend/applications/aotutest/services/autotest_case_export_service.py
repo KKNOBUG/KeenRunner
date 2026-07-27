@@ -5,10 +5,6 @@
 @Project : Krun
 @Module  : autotest_case_export_service.py
 @DateTime: 2026/7/27
-
-测试用例导出服务：将「公共脚本」用例（单步骤 HTTP/TCP 请求）的请求头与请求体反向构造为
-水平矩阵（HEAD/BODY 两段 + JSONPath 列），并生成 xlsx 工作簿。仅导出请求头与请求体，
-不涉及断言（ASSERT_HEAD/ASSERT_BODY）。
 """
 import re
 from datetime import datetime
@@ -27,18 +23,14 @@ _SECTION_ORDER: Tuple[Tuple[str, str], ...] = (
     ("BODY", "body_pairs"),
 )
 
-# 分栏标记集合（高亮用）：由 _SECTION_ORDER 派生，新增分段时自动纳入
+# 分栏标记集合（高亮用）
 _SECTION_MARKERS = {label for label, _ in _SECTION_ORDER}
-# 分栏标记单元格高亮填充（主题橙）
+# 分栏标记单元格高亮填充
 _MARKER_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
 
 
 def build_export_file_name(username: Optional[str]) -> str:
-    """
-    构造导出文件名：{用户名}_接口数据_{时间戳}.xlsx（同步/异步导出共用，保证一致）。
-
-    用户名做文件系统安全清洗（异步导出需落盘）；为空时省略用户名前缀。
-    """
+    """构造导出文件名：{用户名}_接口数据_{时间戳}.xlsx（同步/异步导出共用，保证一致）。"""
     safe_user = re.sub(r'[\\/:*?"<>|\s]', "_", str(username or "").strip())
     prefix = f"{safe_user}_接口数据" if safe_user else "接口数据"
     return f"{prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
