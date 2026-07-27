@@ -751,7 +751,7 @@ async def single_step_dataset_upload(
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
-@autotest_data_source.get("/export_xlsx", summary="API自动化测试-按用例步骤导出数据源xlsx")
+@autotest_data_source.get("/single_step_dataset_download", summary="API自动化测试-按用例步骤导出数据源xlsx")
 async def export_data_source_xlsx(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
