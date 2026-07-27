@@ -136,7 +136,8 @@
               v-model:value="state.form.description"
               placeholder="请输入步骤描述"
               clearable
-              style="width: 100%; min-height: 6rem;"
+              :autosize="{ minRows: 1 }"
+              style="width: 100%;"
               :disabled="props.readonly"
           />
         </n-form-item>
@@ -1563,10 +1564,10 @@ defineExpose({ saveDataSource })
 <style scoped>
 /* 卡片壳见 styles/autotest-theme.scss .step-editor-card */
 
+/* 行间距统一由 n-form-item 自身的 margin-bottom 提供，与「步骤描述」等后续表单项保持一致 */
 .http-request-rows {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .http-request-row {

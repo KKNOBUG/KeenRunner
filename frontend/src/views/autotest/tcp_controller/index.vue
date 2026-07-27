@@ -96,6 +96,7 @@
               v-model:value="state.form.step_desc"
               placeholder="请输入步骤描述"
               clearable
+              :autosize="{ minRows: 1 }"
               :disabled="props.readonly"
           />
         </n-form-item>
