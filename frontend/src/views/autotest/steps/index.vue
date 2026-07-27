@@ -2669,6 +2669,15 @@ const handleAddStep = (type, parentId) => {
     quotePublicScriptDrawerVisible.value = true
     return
   }
+  // 【数据驱动】后端暂未实现，先给出提示
+  if (type === 'batch_upload_datasource') {
+    window.$message?.info?.('批量上传数据源功能开发中，敬请期待')
+    return
+  }
+  if (type === 'summary_download_datasource') {
+    window.$message?.info?.('汇总下载数据源功能开发中，敬请期待')
+    return
+  }
   const created = insertStep(parentId, type)
   if (created) {
     selectedKeys.value = [created.id]

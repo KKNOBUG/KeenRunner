@@ -91,6 +91,8 @@ const STEP_ICON_CLASS = {
   loop: 'icon-loop',
   quote_public_script: 'icon-quote',
   copy_steps: 'icon-quote',
+  batch_upload_datasource: 'icon-datasource',
+  summary_download_datasource: 'icon-datasource',
 }
 
 const props = defineProps({
@@ -121,6 +123,8 @@ const buildItem = (key, { label, desc, iconName, disabled } = {}) => {
     loop: '循环结构',
     quote_public_script: '引用公共脚本',
     copy_steps: '复制指定脚本',
+    batch_upload_datasource: '批量上传数据源',
+    summary_download_datasource: '汇总下载数据源',
   }
   return {
     key,
@@ -185,6 +189,22 @@ const menuSections = computed(() => {
         }),
         buildItem('loop', {
           desc: '重复执行一组步骤，直到满足退出条件',
+        }),
+      ],
+    },
+    {
+      key: 'data_driven',
+      label: '数据驱动',
+      items: [
+        buildItem('batch_upload_datasource', {
+          desc: '为多个请求步骤上传数据源文件',
+          iconName: 'cuida:upload-outline',
+          disabled: isPublic,
+        }),
+        buildItem('summary_download_datasource', {
+          desc: '下载所有请求步骤的数据源文件',
+          iconName: 'cuida:download-outline',
+          disabled: isPublic,
         }),
       ],
     },
@@ -263,6 +283,7 @@ const handleSelectItem = (item) => {
 .add-step-item-icon.icon-loop,
 .add-step-item-icon.icon-if,
 .add-step-item-icon.icon-wait,
+.add-step-item-icon.icon-datasource,
 .add-step-item-icon.icon-quote {
   color: #F4511E;
 }
