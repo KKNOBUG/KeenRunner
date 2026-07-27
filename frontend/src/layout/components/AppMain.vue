@@ -5,7 +5,7 @@
       <component
           :is="Component"
           v-if="appStore.reloadFlag"
-          :key="appStore.aliveKeys[route.name] || route.fullPath"
+          :key="appStore.aliveKeys[route.name] || (route.meta?.keepAlive ? route.path : route.fullPath)"
       />
     </KeepAlive>
   </router-view>
