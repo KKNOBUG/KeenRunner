@@ -197,12 +197,12 @@ const menuSections = computed(() => {
       label: '数据驱动',
       items: [
         buildItem('batch_upload_datasource', {
-          desc: '为多个请求步骤上传数据源文件',
+          desc: '为多个请求步骤上传数据源文件（以落库数据为准）',
           iconName: 'cuida:upload-outline',
           disabled: isPublic,
         }),
         buildItem('summary_download_datasource', {
-          desc: '下载所有请求步骤的数据源文件',
+          desc: '下载所有请求步骤的数据源文件（以落库数据为准）',
           iconName: 'cuida:download-outline',
           disabled: isPublic,
         }),
