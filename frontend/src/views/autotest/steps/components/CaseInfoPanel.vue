@@ -105,6 +105,7 @@
             <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
               <n-select
                   v-model:value="caseForm.case_type"
+                  v-model:show="caseTypeSelectShow"
                   :options="caseTypeOptions"
                   clearable
                   placeholder="请选择用例类型"
@@ -118,6 +119,7 @@
             <n-form-item label="用例属性" path="case_attr" required :show-feedback="false">
               <n-select
                   v-model:value="caseForm.case_attr"
+                  v-model:show="caseAttrSelectShow"
                   :options="caseAttrOptions"
                   clearable
                   placeholder="请选择用例属性"
@@ -131,6 +133,7 @@
             <n-form-item label="所属应用" path="case_project" required :show-feedback="false">
               <n-select
                   v-model:value="caseForm.case_project"
+                  v-model:show="caseProjectSelectShow"
                   :options="projectOptions"
                   :loading="projectLoading"
                   clearable
@@ -272,6 +275,16 @@ const tagOptions = ref([])
 const tagLoading = ref(false)
 const selectedTagMode = ref(null)
 const tagPopoverShow = ref(false)
+
+/** 三个下拉框的菜单展开状态：菜单 teleport 到 body，鼠标移入菜单即离开面板区域，需据此抑制面板自动折叠 */
+const caseTypeSelectShow = ref(false)
+const caseAttrSelectShow = ref(false)
+const caseProjectSelectShow = ref(false)
+
+/** 任一选择弹层（用例类型/用例属性/所属应用/所属标签）处于展开状态 */
+const anyDropdownOpen = computed(() =>
+    caseTypeSelectShow.value || caseAttrSelectShow.value || caseProjectSelectShow.value || tagPopoverShow.value
+)
 
 const caseAttrOptions = [
   { label: '正用例', value: '正用例' },
@@ -504,6 +517,7 @@ defineExpose({
   projectOptions,
   projectLoading,
   caseInfoCollapsed,
+  anyDropdownOpen,
 })
 </script>
 

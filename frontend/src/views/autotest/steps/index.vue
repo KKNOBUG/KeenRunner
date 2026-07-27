@@ -2474,13 +2474,16 @@ const editorComponent = computed(() => {
 
 /**
  * 自动折叠「用例信息」面板。
- * 三个条件需同时满足：用例信息已全部填写完成、用户已激活其他操作（选中了步骤/进入子页面）、鼠标不在用例信息面板区域。
+ * 四个条件需同时满足：用例信息已全部填写完成、用户已激活其他操作（选中了步骤/进入子页面）、
+ * 鼠标不在用例信息面板区域、面板内没有展开的选择弹层（下拉菜单 teleport 到 body，
+ * 鼠标移入菜单时会离开面板区域，若此时折叠会导致无法继续选择）。
  */
 const tryAutoCollapseCaseInfo = () => {
   if (!caseInfoPanelRef.value) return
   const complete = caseInfoPanelRef.value.validateCaseForm?.().valid === true
   const activated = selectedKeys.value.length > 0
-  if (complete && activated && !hoveringCaseInfo.value) {
+  const dropdownOpen = caseInfoPanelRef.value.anyDropdownOpen === true
+  if (complete && activated && !hoveringCaseInfo.value && !dropdownOpen) {
     caseInfoPanelRef.value.caseInfoCollapsed = true
   }
 }
@@ -2493,6 +2496,11 @@ watch(currentStep, () => {
 /** 鼠标移出用例信息面板时尝试自动折叠（覆盖「先选中步骤、鼠标随后移出面板」的场景） */
 watch(hoveringCaseInfo, (hovering) => {
   if (!hovering) tryAutoCollapseCaseInfo()
+})
+
+/** 选择弹层关闭后重新尝试自动折叠（弹层展开期间鼠标已移出面板，关闭后补一次折叠判定） */
+watch(() => caseInfoPanelRef.value?.anyDropdownOpen, (open) => {
+  if (!open) nextTick(tryAutoCollapseCaseInfo)
 })
 
 const currentEditorNeedsProject = computed(() => {
