@@ -9,7 +9,11 @@
 import traceback
 from typing import Optional, List, Dict, Any
 
+import io
+from urllib.parse import quote
+
 from fastapi import APIRouter, Body, Query, Depends
+from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
@@ -18,6 +22,12 @@ from backend.applications.aotutest.schemas.autotest_case_schema import (
     AutoTestApiCaseSelect,
     AutoTestApiCaseUpdate
 )
+from backend.applications.aotutest.services.autotest_case_export_service import (
+    prepare_export_cases,
+    build_export_workbook,
+    build_export_file_name,
+)
+from backend.celery_scheduler.tasks.task_export_testcase import export_testcases_task
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -32,8 +42,12 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
+from backend.services import get_current_username
 
 autotest_case = APIRouter()
+
+# 导出数量阈值：超过该值走异步 Celery 导出
+EXPORT_ASYNC_THRESHOLD = 10
 
 
 @autotest_case.post("/create", summary="API自动化测试-新增用例")
@@ -315,3 +329,77 @@ async def get_request_step_project_ids(
     except Exception as e:
         LOGGER.error(f"获取步骤树请求步骤应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_case.post("/export_sync", summary="API自动化测试-导出公共脚本用例请求头与请求体为xlsx(同步)")
+async def export_testcases_xlsx(
+        case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    同步导出公共脚本用例的请求头与请求体为 xlsx（数量不超过 EXPORT_ASYNC_THRESHOLD）。
+
+    :param case_ids: 用例主键列表
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: xlsx 文件流
+    """
+    try:
+        if not case_ids:
+            return ParameterResponse(message="请至少选择一个用例")
+        if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
+            return ParameterResponse(message=f"导出数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
+        cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
+        if invalid:
+            return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
+        workbook = build_export_workbook(cases_data=cases_data)
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        file_name = build_export_file_name(get_current_username())
+        headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}"}
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"导出测试用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"导出失败，异常描述: {e}")
+
+
+@autotest_case.post("/export_async", summary="API自动化测试-异步导出公共脚本用例请求头与请求体为xlsx")
+async def export_testcases_async(
+        case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    异步导出公共脚本用例（数量超过 EXPORT_ASYNC_THRESHOLD）：校验通过后下发 Celery 任务，
+    任务生成 xlsx 并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+
+    :param case_ids: 用例主键列表
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应（含 celery_task_id）
+    """
+    try:
+        if not case_ids:
+            return ParameterResponse(message="请至少选择一个用例")
+        _, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
+        if invalid:
+            return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
+        apply_async_result = export_testcases_task.apply_async(
+            kwargs={"case_ids": case_ids, "created_user": get_current_username()},
+            expires=3600,
+        )
+        LOGGER.info(f"异步导出测试用例任务已下发: celery_task_id={apply_async_result.task_id}, 数量={len(case_ids)}")
+        return SuccessResponse(
+            message="导出任务已提交后台执行，请稍后在执行记录中查看结果",
+            data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
+            total=1,
+        )
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"下发异步导出任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")

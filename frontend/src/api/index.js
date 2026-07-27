@@ -118,6 +118,17 @@ export default {
     if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
     return request.delete(`/autotest/case/delete${q.length ? '?' + q.join('&') : ''}`)
   },
+  /** Body：{ case_ids } —— 同步导出公共脚本用例请求头与请求体为 xlsx（≤10），返回 blob；校验失败时返回 JSON */
+  exportTestcasesXlsx: (data = {}) => axios.post(
+      `${import.meta.env.VITE_BASE_API}/autotest/case/export_sync`,
+      data,
+      {
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
+  /** Body：{ case_ids } —— 异步导出公共脚本用例（>10），返回 { celery_task_id } */
+  exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_async', data),
   getAutoTestStepTree: (data = {}) => {
     const params = []
     if (data.case_id) params.push(`case_id=${data.case_id}`)
@@ -199,18 +210,6 @@ export default {
   saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
   /** Body：{ case_id } —— 解绑用例全部数据源（软删记录并清空步骤指针），公共脚本保存时调用 */
   unbindCaseDataSource: (data = {}) => request.post('/autotest/data_source/unbind_case', data),
-  uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
-  exportDataSourceXlsx: (params = {}) => axios.get(
-      `${import.meta.env.VITE_BASE_API}/autotest/data_source/export_xlsx`,
-      {
-        params,
-        responseType: 'blob',
-        headers: {
-          token: getToken() || '',
-        },
-      },
-  ),
-
   downloadHttpStepDatasetImportTemplate: () => axios.get(
       `${import.meta.env.VITE_BASE_API}/autotest/data_source/import_template_xlsx`,
       {

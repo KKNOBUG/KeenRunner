@@ -64,6 +64,61 @@ async function handleBatchDelete() {
   })
 }
 
+/** 拼装不合规用例明细文本 */
+function buildInvalidDetail(invalid) {
+  return (Array.isArray(invalid) ? invalid : [])
+      .map((it) => `${it.case_name}：${it.reason}`)
+      .join('；')
+}
+
+/** 导出勾选用例的请求头与请求体为 xlsx：≤10 同步下载，>10 下发异步任务 */
+async function handleExport() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选要导出的用例')
+    return
+  }
+  const payload = { case_ids: ids }
+  if (ids.length > 10) {
+    try {
+      const res = await api.exportTestcasesAsync(payload)
+      window.$message?.success?.(res?.message || '导出任务已提交后台执行，请稍后在执行记录中查看结果')
+    } catch (err) {
+      // 基础错误信息已由请求拦截器弹出，此处仅补充不合规明细
+      const detail = buildInvalidDetail(err?.error?.data?.invalid)
+      if (detail) window.$message?.error?.(`不合规明细：${detail}`, { keepAliveOnHover: true })
+    }
+    return
+  }
+  // 同步导出走原生 axios 返回 blob；业务错误时后端返回 JSON(HTTP 200)，按 content-type 区分
+  try {
+    const res = await api.exportTestcasesXlsx(payload)
+    const contentType = res?.headers?.['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      const body = JSON.parse(await res.data.text())
+      const detail = buildInvalidDetail(body?.data?.invalid)
+      window.$message?.error?.(
+          detail ? `${body?.message || '存在不合规用例，已取消导出'}（${detail}）` : (body?.message || '导出失败'),
+          { keepAliveOnHover: true },
+      )
+      return
+    }
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : '测试用例导出.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    window.$message?.error?.(e?.message || '导出失败')
+  }
+}
+
 const {
   handleDelete,
 } = useCRUD({
@@ -791,6 +846,11 @@ const columns = computed(() => {
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
+      </template>
+
+      <!--  导出按钮：导出勾选用例的请求头与请求体  -->
+      <template #queryBarAfterActions>
+        <NButton type="primary" @click="handleExport">导出数据</NButton>
       </template>
 
     </CrudTable>
