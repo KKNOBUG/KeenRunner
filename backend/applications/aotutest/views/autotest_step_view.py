@@ -703,11 +703,18 @@ async def debug_http_request(
                 finished_variables=finished_variables
             )
         if request_text is not None:
-            request_text = AutoTestToolService.resolve_placeholders(
-                value=request_text,
-                logger_object=append_debugging_log,
-                finished_variables=finished_variables
-            )
+            if request_args_type == AutoTestReqArgsType.XML:
+                request_text = AutoTestToolService.resolve_xml_placeholders(
+                    xml_text=request_text,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables,
+                )
+            else:
+                request_text = AutoTestToolService.resolve_placeholders(
+                    value=request_text,
+                    logger_object=append_debugging_log,
+                    finished_variables=finished_variables
+                )
 
         # 将列表格式转换为字典格式（用于HTTP请求）
         headers = AutoTestToolService.convert_list_to_dict_for_http(headers_list)

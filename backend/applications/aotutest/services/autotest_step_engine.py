@@ -3170,20 +3170,37 @@ class HttpStepExecutor(BaseStepExecutor):
             request_body: Dict[str, Any] = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text: Optional[str] = self.step.request_text
 
-            # 2）数据驱动：先 JSONPath 替换报文（head 写请求头后与 body 一并写入 body/form/urlencoded），再占位符
+            # 2）数据驱动：先替换报文（XML走XPath、其余走JSONPath），再占位符
             if AutoTestToolService.has_dataset_payload(step_struct):
-                out = AutoTestToolService.replace_json_datagram(
-                    head_map=step_struct.get("head") or {},
-                    body_map=step_struct.get("body") or {},
-                    request_headers=request_header,
-                    request_body=request_body,
-                    form_data=request_form_data,
-                    urlencoded=request_form_urlencoded,
-                )
-                request_header = out["headers"]
-                request_body = out["request_body"]
-                request_form_data = out["form_data"]
-                request_form_urlencoded = out["urlencoded"]
+                head_map = step_struct.get("head") or {}
+                body_map = step_struct.get("body") or {}
+                if self.step.request_args_type == AutoTestReqArgsType.XML:
+                    out = AutoTestToolService.replace_json_datagram(
+                        head_map=head_map,
+                        body_map={},
+                        request_headers=request_header,
+                        request_body=None,
+                        form_data=None,
+                        urlencoded=None,
+                    )
+                    request_header = out["headers"]
+                    request_text = AutoTestToolService.replace_xml_datagram(
+                        body_map=body_map,
+                        request_text=request_text,
+                    )
+                else:
+                    out = AutoTestToolService.replace_json_datagram(
+                        head_map=head_map,
+                        body_map=body_map,
+                        request_headers=request_header,
+                        request_body=request_body,
+                        form_data=request_form_data,
+                        urlencoded=request_form_urlencoded,
+                    )
+                    request_header = out["headers"]
+                    request_body = out["request_body"]
+                    request_form_data = out["form_data"]
+                    request_form_urlencoded = out["urlencoded"]
 
             # 3）再对报文做变量占位符解析
             request_header = self.context.resolve_placeholders(
@@ -3206,17 +3223,23 @@ class HttpStepExecutor(BaseStepExecutor):
                 variables=request_body,
                 step_code=self.step_code
             )
-            request_text = self.context.resolve_placeholders(
-                variables=request_text,
-                step_code=self.step_code
-            )
+            if self.step.request_args_type == AutoTestReqArgsType.XML and request_text:
+                request_text = self.context.resolve_xml_placeholders(
+                    xml_text=request_text,
+                    step_code=self.step_code,
+                )
+            else:
+                request_text = self.context.resolve_placeholders(
+                    variables=request_text,
+                    step_code=self.step_code
+                )
 
             json_payload: Optional[Any] = None
             file_payload: Optional[Any] = None
             data_payload: Optional[Any] = None
             content_payload: Optional[Any] = None
             # 按request_args_type选取请求体类型，仅使用一种方式，避免冲突
-            request_args_type: AutoTestReqArgsType = self.step.request_args_type
+            request_args_type: Optional[AutoTestReqArgsType] = self.step.request_args_type
             if request_args_type is None:
                 # 未配置时保持兼容：优先raw -> form-data -> urlencoded作为data，若存在request_body且未产生data载荷，则作为json
                 if request_text:
