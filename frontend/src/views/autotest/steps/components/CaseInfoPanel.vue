@@ -104,13 +104,14 @@
           <div class="case-field">
             <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
               <n-select
-                  v-model:value="caseForm.case_type"
+                  :value="caseForm.case_type"
                   v-model:show="caseTypeSelectShow"
                   :options="caseTypeOptions"
                   clearable
                   placeholder="请选择用例类型"
                   size="small"
                   class="case-field-input"
+                  @update:value="onCaseTypeSelectChange"
               />
             </n-form-item>
           </div>
@@ -252,6 +253,13 @@ const sourceMode = computed(() => !props.treeMode)
 const onSourceModeSwitch = (sourceOn) => {
   // switch 开启=源数据模式(右)，关闭=步骤树模式(左)
   emit('request-tree-mode-change', !sourceOn)
+}
+
+// 仅用户在下拉框切换用例类型时通知父级（程序化 hydrate 直接写 caseForm.case_type，不触发此回调，避免加载/应用 JSON 时误触发移除与提示）
+const onCaseTypeSelectChange = (newType) => {
+  const oldType = caseForm.case_type
+  caseForm.case_type = newType
+  emit('case-type-change', { newType, oldType })
 }
 
 const route = useRoute()
@@ -494,13 +502,6 @@ watch(
       }
     },
     { immediate: true },
-)
-
-watch(
-    () => caseForm.case_type,
-    (newType, oldType) => {
-      emit('case-type-change', { newType, oldType })
-    },
 )
 
 onMounted(() => {

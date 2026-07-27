@@ -197,6 +197,8 @@ export default {
   queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),
   updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),
   saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
+  /** Body：{ case_id } —— 解绑用例全部数据源（软删记录并清空步骤指针），公共脚本保存时调用 */
+  unbindCaseDataSource: (data = {}) => request.post('/autotest/data_source/unbind_case', data),
   uploadSingleStepDataset: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
   exportDataSourceXlsx: (params = {}) => axios.get(
       `${import.meta.env.VITE_BASE_API}/autotest/data_source/export_xlsx`,

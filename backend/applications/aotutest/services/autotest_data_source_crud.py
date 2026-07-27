@@ -16,7 +16,11 @@ from tortoise.exceptions import FieldError
 from tortoise.exceptions import IntegrityError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiDataCreateInfo, AutoTestApiDataSourceInfo
+from backend.applications.aotutest.models.autotest_model import (
+    AutoTestApiDataCreateInfo,
+    AutoTestApiDataSourceInfo,
+    AutoTestApiStepInfo,
+)
 from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate
 from backend.applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -385,6 +389,31 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         instance.state = 1
         await instance.save()
         return instance
+
+    async def unbind_case_data_sources(self, case_id: int) -> Dict[str, int]:
+        """
+        解绑用例下全部数据源：软删除该用例所有数据源记录，并清空步骤上的数据源指针。
+
+        用于「公共脚本」等不允许使用数据源的用例类型在保存时彻底解除绑定。运行时按
+        (case_id, step_code) 加载数据源、不读步骤指针，故必须软删记录；步骤指针经直连
+        update 写 NULL（常规步骤保存使用 exclude_none，无法清空已有列）。
+
+        :param case_id: 用例主键
+        :return: {"data_source": 软删记录数, "step": 清空指针的步骤数}
+        :raises ParameterException: case_id为空时
+        """
+        if not case_id:
+            error_message: str = "解绑用例数据源失败, 参数(case_id)不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        deleted_count: int = await self.model.filter(case_id=case_id, state=0).update(state=1)
+        cleared_count: int = await AutoTestApiStepInfo.filter(case_id=case_id, state=0).update(
+            data_source_id=None,
+            data_source_name=None,
+            data_source_desc=None,
+        )
+        return {"data_source": deleted_count, "step": cleared_count}
 
     async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataSourceInfo]]:
         """

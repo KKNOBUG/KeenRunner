@@ -478,6 +478,8 @@ const quotePublicScriptReplaceStepId = ref(null)
 const quoteStepsMap = ref({})
 // 从「用户脚本」切到「公共脚本」时暂存的引用步骤，切回「用户脚本」时可恢复
 const stashedQuoteStepsWhenPublic = ref([])
+// 从「用户脚本」切到「公共脚本」时暂存的 HTTP/TCP 步骤数据源指针，切回「用户脚本」时可恢复（保存时才真正解绑）
+const stashedDataSourceWhenPublic = ref([])
 // 复制模式：已选待复制的用例列表
 const selectedForCopy = ref([])
 const quotePublicScriptQueryItems = ref({
@@ -794,28 +796,30 @@ const quotePublicScriptColumns = [
 ]
 
 
-/** 用例类型切换：公共脚本时处理引用步骤的移除/暂存/恢复（与步骤树耦合，保留在编排层） */
+/** 用例类型切换（仅用户下拉触发）：公共脚本时移除/暂存引用步骤，用户脚本时恢复；无论是否有步骤受影响均给出提示 */
 const onCaseTypeChange = ({ newType, oldType }) => {
   if (newType === '公共脚本') {
     const fromUserScript = oldType === '用户脚本'
-    if (fromUserScript) {
-      const toStash = collectQuoteStepsWithPosition()
-      const removedCount = removeAllQuoteSteps()
-      if (removedCount > 0) {
+    const toStash = fromUserScript ? collectQuoteStepsWithPosition() : []
+    const removedCount = removeAllQuoteSteps()
+    // 公共脚本不允许使用数据源：清空各 HTTP/TCP 步骤的数据源指针并暂存（保存时才真正解绑后端记录）
+    stashedDataSourceWhenPublic.value = stashAndClearDataSourceBindings()
+    if (removedCount > 0) {
+      if (fromUserScript) {
         stashedQuoteStepsWhenPublic.value = toStash
         window.$message?.warning?.(`切换为公共脚本，已临时移除${removedCount}个引用公共脚本步骤，若误操作可切回用户脚本恢复`)
-      }
-    } else {
-      const removedCount = removeAllQuoteSteps()
-      if (removedCount > 0) {
+      } else {
         window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本步骤，公共脚本不允许引用其他脚本`)
       }
+    } else {
+      window.$message?.info?.('已切换为公共脚本：公共脚本不支持引用其他脚本，且不支持数据源')
     }
-  } else if (newType === '用户脚本' && stashedQuoteStepsWhenPublic.value.length > 0) {
-    const restoredCount = restoreStashedQuoteSteps()
-    if (restoredCount > 0) {
-      window.$message?.info?.(`已恢复${restoredCount}个引用公共脚本步骤`)
-    }
+  } else if (newType === '用户脚本') {
+    const restoredCount = stashedQuoteStepsWhenPublic.value.length > 0 ? restoreStashedQuoteSteps() : 0
+    restoreStashedDataSourceBindings()
+    window.$message?.info?.(restoredCount > 0
+        ? `已切换为用户脚本，并恢复${restoredCount}个引用公共脚本步骤`
+        : '已切换为用户脚本')
   }
 }
 
@@ -2315,6 +2319,21 @@ const handleSaveAll = async () => {
         }
       }
 
+      // 公共脚本不允许使用数据源：树保存成功后真正解绑（清空步骤指针 + 软删数据源记录）。
+      // 必须在树保存之后执行，否则树保存会用非空指针把已清空的列重新写回。
+      if (isPublicScriptCase.value) {
+        const savedCaseId = toPositiveCaseId(caseId.value)
+            ?? toPositiveCaseId(res?.data?.cases?.success_detail?.[0]?.case_id)
+        if (savedCaseId) {
+          try {
+            await api.unbindCaseDataSource({ case_id: savedCaseId })
+          } catch (e) {
+            console.error('解绑公共脚本数据源失败', e)
+            window.$message?.warning?.('保存成功，但解绑数据源失败，请重试或检查数据源面板')
+          }
+        }
+      }
+
       // 保存成功后清除缓存，确保下次加载获取最新数据
       autotestStore.clearStepTreeCache(caseId.value, caseCode.value)
       // 重新加载数据（URL 已更新，loadSteps 会带上 case_id；若无步骤，CaseInfoPanel 保留当前表单）
@@ -2401,6 +2420,7 @@ const loadStepsFromCopy = (caseInfo) => {
 const loadSteps = async () => {
   stepExpandStates.value = new Map()
   stashedQuoteStepsWhenPublic.value = []
+  stashedDataSourceWhenPublic.value = []
   appliedCaseMeta.value = {
     case_id: toPositiveCaseId(caseId.value),
     case_code: caseCode.value ? String(caseCode.value) : null,
@@ -2528,6 +2548,9 @@ const editorComponentProps = computed(() => {
   }
   if (step.type === 'quote' && !step.isQuoteInner) {
     props.reselectHandler = handleQuoteReselect
+  }
+  if (step.type === 'http' || step.type === 'tcp') {
+    props.hideDataSource = isPublicScriptCase.value
   }
   return props
 })
@@ -2755,6 +2778,41 @@ const restoreStashedQuoteSteps = () => {
   updateStepDisplayNames()
   loadQuoteStepsForAllQuoteSteps()
   return sorted.length
+}
+
+/** 收集并清空所有 HTTP/TCP 步骤的数据源指针（切到公共脚本时调用；返回暂存列表，保存时才真正解绑） */
+const stashAndClearDataSourceBindings = () => {
+  const stashed = []
+  forEachStep(steps.value, (step) => {
+    if (step.type !== 'http' && step.type !== 'tcp') return
+    const cfg = step.config
+    if (!cfg || cfg.data_source_id == null) return
+    stashed.push({
+      stepId: step.id,
+      data_source_id: cfg.data_source_id,
+      data_source_name: cfg.data_source_name || '',
+      data_source_desc: cfg.data_source_desc || '',
+    })
+    cfg.data_source_id = null
+    cfg.data_source_name = ''
+    cfg.data_source_desc = ''
+  })
+  return stashed
+}
+
+/** 将暂存的数据源指针恢复回对应 HTTP/TCP 步骤（切回用户脚本时调用） */
+const restoreStashedDataSourceBindings = () => {
+  const stashed = stashedDataSourceWhenPublic.value
+  if (!stashed || stashed.length === 0) return 0
+  for (const { stepId, data_source_id, data_source_name, data_source_desc } of stashed) {
+    const cfg = findStep(stepId)?.config
+    if (!cfg) continue
+    cfg.data_source_id = data_source_id
+    cfg.data_source_name = data_source_name
+    cfg.data_source_desc = data_source_desc
+  }
+  stashedDataSourceWhenPublic.value = []
+  return stashed.length
 }
 
 /** 条件分支 / 循环结构在步骤树上的固定展示名（与 updateStepConfig 规则一致）；其它类型返回 null */

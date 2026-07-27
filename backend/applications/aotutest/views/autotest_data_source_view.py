@@ -182,6 +182,29 @@ async def delete_data_source_info(
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
+@autotest_data_source.post("/unbind_case", summary="API自动化测试-解绑用例全部数据源")
+async def unbind_case_data_source(
+        case_id: int = Body(..., description="用例ID", embed=True),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    解绑用例下全部数据源：软删除该用例所有数据源记录，并清空步骤上的数据源指针。
+
+    :param case_id: 用例主键 ID
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 统一 HTTP 响应
+    """
+    try:
+        result = await services.data_source_curd.unbind_case_data_sources(case_id=case_id)
+        LOGGER.info(f"解绑用例数据源成功, case_id={case_id}, 结果明细: {result}")
+        return SuccessResponse(message="解绑成功", data=result)
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"解绑用例数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"解绑失败, 异常描述: {e}")
+
+
 @autotest_data_source.post("/update", summary="API自动化测试-更新数据源")
 async def update_data_source_info(
         data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),

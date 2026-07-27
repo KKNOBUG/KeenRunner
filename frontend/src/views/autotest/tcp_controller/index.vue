@@ -1,5 +1,6 @@
 <template>
   <StepDataSourcePanel
+      v-if="!props.hideDataSource"
       ref="dataSourcePanelRef"
       :step="props.step"
       :readonly="props.readonly"
@@ -380,7 +381,8 @@ const props = defineProps({
   step: { type: Object, default: () => ({}) },
   projectOptions: { type: Array, default: () => [] },
   projectLoading: { type: Boolean, default: false },
-  readonly: { type: Boolean, default: false }
+  readonly: { type: Boolean, default: false },
+  hideDataSource: { type: Boolean, default: false }
 })
 const emit = defineEmits(['update:config'])
 
@@ -729,6 +731,21 @@ watch(
     () => props.step?.id,
     () => initFromProps(),
     { immediate: true }
+)
+
+// 父级切换用例类型时会暂存/恢复 data_source 指针并直接改写 step.config；此处把外部对
+// config.data_source_* 的改动同步进表单，保证当前编辑器与步骤树一致。相等性判断避免回写循环
+// （即便触发一次防抖 emit，回写的也是与 config 相同的值，自然收敛）。
+watch(
+    () => [props.config?.data_source_id, props.config?.data_source_name, props.config?.data_source_desc],
+    ([dsId, dsName, dsDesc]) => {
+      if (state.form.data_source_id === dsId
+          && state.form.data_source_name === dsName
+          && state.form.data_source_desc === dsDesc) return
+      state.form.data_source_id = dsId ?? null
+      state.form.data_source_name = dsName ?? ''
+      state.form.data_source_desc = dsDesc ?? ''
+    },
 )
 
 /** 切换模式时排版 + raw 模式冲突处理 */
