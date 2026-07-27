@@ -27,7 +27,7 @@ try:
 except ImportError as e:
     from backend.core.exceptions import NotImplementedException
 
-    raise NotImplementedException(message="导入依赖配置失败,请检查 configure.project_config.py 文件")
+    raise NotImplementedException(message="导入依赖配置失败,请检查 configure.project_config.py 文件") from e
 
 
 @asynccontextmanager
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     try:
         await register_database(app)
     except DBConnectionError as e:
-        raise RuntimeError(f"数据库连接失败, 请检查主机地址是否可达: {e}")
+        raise RuntimeError(f"数据库连接失败, 请检查主机地址是否可达: {e}") from e
     await init_database_table(app)
 
     for route in app.routes:
