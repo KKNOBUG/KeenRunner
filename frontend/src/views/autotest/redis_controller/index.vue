@@ -28,7 +28,7 @@
 
     <n-collapse-transition :show="!mainCardCollapsed">
       <n-form class="step-editor-form" :model="state.form" label-placement="left" label-width="80px" size="small">
-        <n-form-item label="步骤名称" path="step_name" required class="redis-step-name-fi">
+        <n-form-item label="步骤名称" path="step_name" required>
           <div class="redis-step-name-debug">
             <n-input
                 v-model:value="state.form.step_name"
@@ -52,6 +52,7 @@
               v-model:value="state.form.step_desc"
               placeholder="请输入步骤描述"
               clearable
+              :autosize="{ minRows: 1 }"
               :disabled="props.readonly"
           />
         </n-form-item>
@@ -503,7 +504,7 @@ const validatorsCount = computed(() => countDictKeys(state.form.assert_validator
 
 const ensureCollapseKeys = () => {
   opKeys.value.forEach((k) => {
-    if (opCollapseState[k] === undefined) opCollapseState[k] = false
+    if (opCollapseState[k] === undefined) opCollapseState[k] = true
   })
 }
 
@@ -1080,10 +1081,6 @@ const doDebugRequest = async (env_id) => {
   min-width: 0;
 }
 
-.redis-step-name-fi {
-  margin-bottom: 12px;
-}
-
 .json-editor :deep(.monaco-editor) {
   min-height: 90px;
   height: auto !important;
@@ -1181,10 +1178,17 @@ const doDebugRequest = async (env_id) => {
   margin-top: 12px;
 }
 
+.db-op-body :deep(.n-form-item) {
+  margin-bottom: 0;
+}
+
+.db-op-body :deep(.n-form-item-label) {
+  padding-bottom: 0;
+}
+
 .db-op-field-rows {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .db-op-field-row {

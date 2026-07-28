@@ -42,6 +42,7 @@
               v-model:value="state.form.step_desc"
               placeholder="请输入步骤描述"
               clearable
+              :autosize="{ minRows: 1 }"
               :disabled="props.readonly"
           />
         </n-form-item>
@@ -344,7 +345,7 @@ const validatorsCount = computed(() => countDictKeys(state.form.assert_validator
 
 const ensureCollapseKeys = () => {
   opKeys.value.forEach((k) => {
-    if (opCollapseState[k] === undefined) opCollapseState[k] = false
+    if (opCollapseState[k] === undefined) opCollapseState[k] = true
   })
 }
 
@@ -666,10 +667,13 @@ const duplicateOp = (key) => {
   margin-bottom: 0;
 }
 
+.db-op-body :deep(.n-form-item-label) {
+  padding-bottom: 0;
+}
+
 .db-op-field-rows {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .db-op-field-row {
