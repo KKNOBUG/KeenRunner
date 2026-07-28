@@ -658,7 +658,7 @@ async def single_step_dataset_upload(
     :param services: 自动化测试 CRUD 依赖聚合
     :return: 统一 HTTP 响应
     """
-    if not file.filename.endswith(".xlsx"):
+    if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
     try:
@@ -773,9 +773,6 @@ async def single_step_dataset_download(
             on_error=True,
             state__not=1
         )
-        if isinstance(instance, list) or not instance:
-            return ParameterResponse(message="导出失败，未定位到唯一数据源记录")
-
         matrix = instance.dataframe if isinstance(instance.dataframe, list) else []
         df = pd.DataFrame(matrix if matrix else [[]])
         output = io.BytesIO()
@@ -822,7 +819,7 @@ async def batch_step_dataset_upload(
     """
     if not case_id:
         return ParameterResponse(message="case_id 不能为空")
-    if not file.filename.endswith(".xlsx"):
+    if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
     # 获取用例全部步骤（含子步骤），按步骤名建立HTTP/TCP请求步骤映射
@@ -959,7 +956,7 @@ async def batch_step_dataset_download(
     """
     try:
         data_sources = await services.data_source_curd.get_by_case_step(case_id=case_id, state__not=1)
-        if not isinstance(data_sources, list) or not data_sources:
+        if not data_sources:
             return BadReqResponse(message="该用例下没有可导出的数据源")
 
         # 获取用例全部步骤，创建step_code/step_id -> step_name映射
