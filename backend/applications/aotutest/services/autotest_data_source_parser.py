@@ -329,12 +329,15 @@ def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     return rows
 
 
-async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int]]:
+async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int], Dict[str, List[List[Any]]]]:
     """
     读取 xlsx 全部 sheet（header=None），逐 sheet 检测方向并异步解析。
 
     :param file_path: xlsx 文件路径
-    :return: (parsed_data, sheet_axes)，parsed_data 为 { sheet_name: { 场景名: { head, body, assert_head, assert_body } } }，sheet_axes 为 { sheet_name: axis }
+    :return: (parsed_data, sheet_axes, sheet_matrices)：
+             parsed_data 为 { sheet_name: { 场景名: { head, body, assert_head, assert_body } } }，
+             sheet_axes 为 { sheet_name: axis }，
+             sheet_matrices 为 { sheet_name: 原始二维矩阵 }（供落库/导出复用，避免重复读文件）
     """
     sheets: Dict[str, pd.DataFrame] = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
     sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
@@ -347,7 +350,8 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
     results = await asyncio.gather(*[_parse_one(df) for _, df in sheet_items])
     parsed_data: Dict[str, Any] = {name: data for (name, _), (data, _) in zip(sheet_items, results)}
     sheet_axes: Dict[str, int] = {name: axis for (name, _), (_, axis) in zip(sheet_items, results)}
-    return parsed_data, sheet_axes
+    sheet_matrices: Dict[str, List[List[Any]]] = {name: _dataframe_to_matrix(df) for name, df in sheet_items}
+    return parsed_data, sheet_axes, sheet_matrices
 
 
 async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
@@ -400,25 +404,26 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
     return step_data, dataset_names, dataframe, axis
 
 
-async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any], List[str], Dict[str, int]]:
+async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any], List[str], Dict[str, int], Dict[str, List[List[Any]]]]:
     """
     解析 xlsx 全部 sheet 为约定结构并提取数据集名称列表（多步骤数据集上传用），逐 sheet 自动识别方向。
 
     :param file_path: xlsx 文件路径
-    :return: (parsed_data, dataset_names, sheet_axes)，其中 parsed_data 结构为
+    :return: (parsed_data, dataset_names, sheet_axes, sheet_matrices)，其中 parsed_data 结构为
              { "sheet_name_or_step_code": { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }, ... }，
              dataset_names 为所有 sheet 中出现的去重排序后的场景名称列表，
-             sheet_axes 为 { sheet_name: axis }
+             sheet_axes 为 { sheet_name: axis }，
+             sheet_matrices 为 { sheet_name: 原始二维矩阵 }
     :raises FileNotFoundError: 文件不存在
     :raises ValueError: 解析失败或某 sheet 矩阵方向无法识别
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
 
-    parsed_data, sheet_axes = await _excel_to_json_async(file_path)
+    parsed_data, sheet_axes, sheet_matrices = await _excel_to_json_async(file_path)
     all_dataset_names: Set[str] = set()
     for sheet_data in parsed_data.values():
         all_dataset_names.update(sheet_data.keys())
     dataset_names = sorted(all_dataset_names)
     LOGGER.info(f"解析 xlsx 完成: {file_path}, sheets={len(parsed_data)}, dataset_names={dataset_names}")
-    return parsed_data, dataset_names, sheet_axes
+    return parsed_data, dataset_names, sheet_axes, sheet_matrices

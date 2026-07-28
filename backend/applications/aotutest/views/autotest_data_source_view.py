@@ -31,7 +31,6 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
 )
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_VERTICAL,
-    _dataframe_to_matrix,
     json_safe_value,
     parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
@@ -878,7 +877,7 @@ async def batch_step_dataset_upload(
         LOGGER.warning(f"计算文件哈希失败: {e}")
 
     try:
-        full_parsed, _, sheet_axes = await parse_xlsx_to_parsed_data_async(file_path)
+        full_parsed, _, sheet_axes, sheet_dataframes = await parse_xlsx_to_parsed_data_async(file_path)
     except FileNotFoundError as e:
         return FailureResponse(message=str(e))
     except ValueError as e:
@@ -901,16 +900,6 @@ async def batch_step_dataset_upload(
     for name, scenes in scene_lists.items():
         if scenes != reference_scenes:
             return BadReqResponse(message=f"各sheet的场景名称或顺序不一致：sheet[{name}]")
-
-    # 预读所有sheet的原始二维矩阵，任一sheet读取失败则整体失败（不落库）
-    sheet_dataframes: Dict[str, List[list]] = {}
-    try:
-        for sheet_name in full_parsed:
-            df = pd.read_excel(file_path, sheet_name=sheet_name, header=None, engine="openpyxl")
-            sheet_dataframes[sheet_name] = _dataframe_to_matrix(df) if not df.empty else []
-    except Exception as e:
-        LOGGER.error(f"读取数据源文件失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"读取数据源文件失败: {e}")
 
     # 事务内逐步骤创建数据源：一致性操作，任一步骤失败则整体回滚
     created_user = get_current_username()
