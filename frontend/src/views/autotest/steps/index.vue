@@ -250,7 +250,7 @@
  * CaseInfoPanel：用例信息；ExecConfigModal：调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
 defineOptions({ name: '步骤编辑' })
-import {computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
+import {computed, defineComponent, h, nextTick, onActivated, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useElementHover} from '@vueuse/core'
 import {
@@ -366,6 +366,8 @@ const caseCode = computed(() => route.query.case_code || null)
  * 序列化 / 保存时优先路由，其次本字段，再次步骤树 original。
  */
 const appliedCaseMeta = ref({ case_id: null, case_code: null })
+/** 已加载内容对应的路由 case_info 快照：与 appliedCaseMeta 共同判断 keep-alive 重新激活时路由是否变化 */
+const loadedCaseInfo = ref(undefined)
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
@@ -2433,6 +2435,7 @@ const loadSteps = async () => {
     case_id: toPositiveCaseId(caseId.value),
     case_code: caseCode.value ? String(caseCode.value) : null,
   }
+  loadedCaseInfo.value = route.query.case_info
   if (!caseId.value && !caseCode.value) {
     // 检查是否为复制进入：case_info 含 is_copy 和 steps
     const caseInfoStr = route.query.case_info
@@ -2446,6 +2449,8 @@ const loadSteps = async () => {
     selectedKeys.value = []
     appliedCaseMeta.value = { case_id: null, case_code: null }
     caseInfoPanelRef.value?.hydrateFromStepTree?.([])
+    // 新增页展开用例信息面板，便于填写（覆盖上一用例自动折叠后的收起状态）
+    if (caseInfoPanelRef.value) caseInfoPanelRef.value.caseInfoCollapsed = false
     return
   }
   // 缓存：切换页签时使用缓存，不重复请求；从用例管理「编辑」新建页签时需请求
@@ -2516,19 +2521,44 @@ const tryAutoCollapseCaseInfo = () => {
   }
 }
 
-/** 选中步骤变化（点击步骤树/进入子页面）时尝试自动折叠用例信息面板 */
+/** 自动折叠延迟（毫秒）：避免鼠标短暂离开面板时立即折叠 */
+const AUTO_COLLAPSE_DELAY = 500
+let collapseTimer = null
+const scheduleAutoCollapse = () => {
+  if (collapseTimer) clearTimeout(collapseTimer)
+  collapseTimer = setTimeout(() => {
+    collapseTimer = null
+    tryAutoCollapseCaseInfo()
+  }, AUTO_COLLAPSE_DELAY)
+}
+const cancelScheduledCollapse = () => {
+  if (collapseTimer) {
+    clearTimeout(collapseTimer)
+    collapseTimer = null
+  }
+}
+
+/** 选中步骤变化（点击步骤树/进入子页面）时延时尝试自动折叠用例信息面板 */
 watch(currentStep, () => {
-  nextTick(tryAutoCollapseCaseInfo)
+  scheduleAutoCollapse()
 })
 
-/** 鼠标移出用例信息面板时尝试自动折叠（覆盖「先选中步骤、鼠标随后移出面板」的场景） */
+/** 鼠标移出用例信息面板时延时尝试折叠；鼠标移回则取消（覆盖「先选中步骤、鼠标随后移出面板」的场景） */
 watch(hoveringCaseInfo, (hovering) => {
-  if (!hovering) tryAutoCollapseCaseInfo()
+  if (hovering) {
+    cancelScheduledCollapse()
+  } else {
+    scheduleAutoCollapse()
+  }
 })
 
-/** 选择弹层关闭后重新尝试自动折叠（弹层展开期间鼠标已移出面板，关闭后补一次折叠判定） */
+/** 选择弹层展开时取消折叠；关闭后延时补一次折叠判定（弹层展开期间鼠标已移出面板） */
 watch(() => caseInfoPanelRef.value?.anyDropdownOpen, (open) => {
-  if (!open) nextTick(tryAutoCollapseCaseInfo)
+  if (open) {
+    cancelScheduledCollapse()
+  } else {
+    scheduleAutoCollapse()
+  }
 })
 
 const currentEditorNeedsProject = computed(() => {
@@ -3511,8 +3541,17 @@ watch(() => steps.value, () => {
   }, 80)
 }, {deep: true})
 
-// 同页切换用例（仅 query 变化、组件未销毁）时需重新解析 case_info 并拉步骤树
+// 当前路由的 case 上下文（case_id/case_code/case_info）与已加载内容是否不一致（需要重载）
+const isRouteCaseStale = () => {
+  const meta = appliedCaseMeta.value
+  return toPositiveCaseId(caseId.value) !== meta.case_id
+      || (caseCode.value ? String(caseCode.value) : null) !== meta.case_code
+      || route.query.case_info !== loadedCaseInfo.value
+}
+
+// 同页切换用例（仅 query 变化、组件未销毁）时需重新解析 case_info 并拉步骤树；已加载则跳过，避免与 onActivated 重复重载
 watch([() => caseId.value, () => caseCode.value, () => route.query.case_info], () => {
+  if (!isRouteCaseStale()) return
   caseInfoPanelRef.value?.reloadFromRoute?.()
   loadSteps()
 })
@@ -3533,6 +3572,14 @@ onMounted(async () => {
     console.warn('获取辅助函数列表失败', e)
     assistFunctionsList.value = []
   }
+})
+
+// keep-alive 重新激活时，路由的 case 上下文可能已变化但 watch 未触发：
+// 与已加载快照比对，不一致才重载（切到「新增」则清空，切到其它用例则加载）；一致则保持现状，避免丢失未保存的编辑。
+onActivated(() => {
+  if (!isRouteCaseStale()) return
+  caseInfoPanelRef.value?.reloadFromRoute?.()
+  loadSteps()
 })
 
 // 不在 onUpdated 中刷新展示名：每次子编辑器 emit 都会触发父组件 patch，导致输入卡顿/丢字

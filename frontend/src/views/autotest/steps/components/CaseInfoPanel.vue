@@ -447,7 +447,8 @@ const hydrateFromStepTree = (data) => {
     caseForm.case_desc = firstStepCase.case_desc || ''
     caseForm.case_attr = firstStepCase.case_attr || ''
     caseForm.case_type = firstStepCase.case_type || ''
-  } else if (Array.isArray(data) && data.length > 0) {
+  } else {
+    // 无用例信息（新增页传入空数组等）：清空表单，避免 keep-alive 复用时残留上一用例数据
     caseForm.case_project = ''
     caseForm.case_name = ''
     caseForm.case_tags = []
