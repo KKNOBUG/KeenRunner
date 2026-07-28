@@ -210,8 +210,19 @@ export default {
   saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
   /** Body：{ case_id } —— 解绑用例全部数据源（软删记录并清空步骤指针），公共脚本保存时调用 */
   unbindCaseDataSource: (data = {}) => request.post('/autotest/data_source/unbind_case', data),
+  /** FormData：case_id、file —— 多步骤数据源批量上传（sheet 名对应步骤名） */
+  batchStepDatasetUpload: (formData) => request.post('/autotest/data_source/batch_step_dataset_upload', formData),
+  /** params：case_id —— 汇总下载用例所有步骤数据源（blob） */
+  batchStepDatasetDownload: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/autotest/data_source/batch_step_dataset_download`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
   downloadHttpStepDatasetImportTemplate: () => axios.get(
-      `${import.meta.env.VITE_BASE_API}/autotest/data_source/import_template_xlsx`,
+      `${import.meta.env.VITE_BASE_API}/autotest/data_source/import_template_download`,
       {
         responseType: 'blob',
         headers: {

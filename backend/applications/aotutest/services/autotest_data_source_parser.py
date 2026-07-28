@@ -336,8 +336,8 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
     :param file_path: xlsx 文件路径
     :return: (parsed_data, sheet_axes)，parsed_data 为 { sheet_name: { 场景名: { head, body, assert_head, assert_body } } }，sheet_axes 为 { sheet_name: axis }
     """
-    sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
-    sheet_items = [(name, df) for name, df in sheets.items() if not df.empty]
+    sheets: Dict[str, pd.DataFrame] = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
+    sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
 
     async def _parse_one(df: pd.DataFrame) -> Tuple[Dict[str, Dict[str, Any]], int]:
         axis = detect_matrix_axis(df.values)
@@ -345,8 +345,8 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
         return data, axis
 
     results = await asyncio.gather(*[_parse_one(df) for _, df in sheet_items])
-    parsed_data = {name: data for (name, _), (data, _) in zip(sheet_items, results)}
-    sheet_axes = {name: axis for (name, _), (_, axis) in zip(sheet_items, results)}
+    parsed_data: Dict[str, Any] = {name: data for (name, _), (data, _) in zip(sheet_items, results)}
+    sheet_axes: Dict[str, int] = {name: axis for (name, _), (_, axis) in zip(sheet_items, results)}
     return parsed_data, sheet_axes
 
 

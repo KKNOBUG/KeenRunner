@@ -165,6 +165,14 @@
                   :is-public-script-case="isPublicScriptCase"
                   @select="(key) => handleAddStep(key, null)"
               />
+              <!-- 批量上传数据源：隐藏文件选择框，由「添加步骤-数据驱动」触发 -->
+              <input
+                  ref="batchUploadFileRef"
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  style="display: none"
+                  @change="onBatchUploadFileChange"
+              />
             </div>
           </n-card>
         </div>
@@ -2669,19 +2677,90 @@ const handleAddStep = (type, parentId) => {
     quotePublicScriptDrawerVisible.value = true
     return
   }
-  // 【数据驱动】后端暂未实现，先给出提示
+  // 【数据驱动】批量上传数据源：选择 xlsx 后按 sheet 名匹配步骤批量创建
   if (type === 'batch_upload_datasource') {
-    window.$message?.info?.('批量上传数据源功能开发中，敬请期待')
+    handleBatchUploadDatasource()
     return
   }
+  // 【数据驱动】汇总下载数据源：导出该用例所有步骤的数据源
   if (type === 'summary_download_datasource') {
-    window.$message?.info?.('汇总下载数据源功能开发中，敬请期待')
+    void handleSummaryDownloadDatasource()
     return
   }
   const created = insertStep(parentId, type)
   if (created) {
     selectedKeys.value = [created.id]
     updateStepDisplayNames()
+  }
+}
+
+/** 批量上传数据源：隐藏文件选择框，选中 xlsx 后按 sheet 名匹配步骤批量创建数据源 */
+const batchUploadFileRef = ref(null)
+const batchUploadLoading = ref(false)
+const handleBatchUploadDatasource = () => {
+  if (!caseId.value) {
+    window.$message?.warning?.('请先保存用例后再批量上传数据源')
+    return
+  }
+  batchUploadFileRef.value?.click()
+}
+const onBatchUploadFileChange = async (ev) => {
+  const input = ev.target
+  const file = input?.files?.[0]
+  if (input) input.value = ''
+  if (!file) return
+  if (!String(file.name || '').toLowerCase().endsWith('.xlsx')) {
+    window.$message?.warning?.('仅支持 .xlsx 格式的数据驱动文件')
+    return
+  }
+  if (batchUploadLoading.value) return
+  batchUploadLoading.value = true
+  try {
+    const fd = new FormData()
+    fd.append('case_id', String(caseId.value))
+    fd.append('file', file)
+    const res = await api.batchStepDatasetUpload(fd)
+    window.$message?.success?.(res?.message || '批量上传成功')
+  } catch {
+    // 校验/系统错误提示已由请求拦截器统一弹出，避免重复提示
+  } finally {
+    batchUploadLoading.value = false
+  }
+}
+
+/** 汇总下载数据源：导出该用例所有步骤绑定的数据源（每步一个 sheet） */
+const summaryDownloadLoading = ref(false)
+const handleSummaryDownloadDatasource = async () => {
+  if (!caseId.value) {
+    window.$message?.warning?.('请先保存用例后再下载数据源')
+    return
+  }
+  if (summaryDownloadLoading.value) return
+  summaryDownloadLoading.value = true
+  try {
+    const res = await api.batchStepDatasetDownload({ case_id: caseId.value })
+    const contentType = res?.headers?.['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      const body = JSON.parse(await res.data.text())
+      window.$message?.error?.(body?.message || '下载失败')
+      return
+    }
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : '数据源汇总.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    window.$message?.success?.('下载成功')
+  } catch (e) {
+    window.$message?.error?.(e?.message || '下载失败')
+  } finally {
+    summaryDownloadLoading.value = false
   }
 }
 

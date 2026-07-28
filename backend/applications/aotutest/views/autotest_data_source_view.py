@@ -9,9 +9,10 @@
 import hashlib
 import io
 import os.path
+import re
 import traceback
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Union
 from urllib.parse import quote
 
 import pandas as pd
@@ -100,14 +101,18 @@ async def _sync_step_data_source_meta(
         LOGGER.warning(f"同步步骤数据源元信息失败(case_id={case_id}, step_code={step_code}): {e}")
 
 
-async def _get_case_root_steps_async(case_id: int) -> List[Dict[str, Any]]:
-    """获取用例根步骤列表（按 step_no 排序）。"""
-    services: AutoTestApiServices = await get_autotest_api_services()
-    load = await services.step_curd.get_by_case_id(case_id=case_id)
-    root_models = list(load.root_steps)
-    root_steps = [s.model_dump(mode="json") for s in root_models if s.step_no is not None]
-    root_steps.sort(key=lambda x: (x.get("step_no") or 0))
-    return root_steps
+def _safe_sheet_name(name: Any, used: Set[str]) -> str:
+    """清洗为合法 Excel sheet 名（去非法字符、截断31字符、重名追加序号）。"""
+    clean = re.sub(r"[:\\/?*\[\]]", "_", str(name or "").strip()) or "sheet"
+    clean = clean[:31]
+    base = clean
+    index = 1
+    while clean in used:
+        suffix = f"_{index}"
+        clean = base[:31 - len(suffix)] + suffix
+        index += 1
+    used.add(clean)
+    return clean
 
 
 @autotest_data_source.post("/create", summary="API自动化测试-新增数据源")
@@ -615,8 +620,8 @@ async def get_dataset_scenario_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/import_template_xlsx", summary="API自动化测试-下载请求步骤数据集导入模板xlsx")
-async def download_http_step_dataset_import_template():
+@autotest_data_source.get("/import_template_download", summary="API自动化测试-下载请求步骤数据集导入模板xlsx")
+async def import_template_download():
     """分发仓库内置于 output/template 的 xlsx（HTTP/TCP 请求步骤共用）；流式读取，不加 UTF-8 BOM，避免损坏二进制格式。"""
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
@@ -674,7 +679,7 @@ async def single_step_dataset_upload(
     if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤上传数据驱动文件")
 
-    destination = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
+    destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
         upload_file=file,
         destination=destination,
@@ -688,10 +693,9 @@ async def single_step_dataset_upload(
     if not ok:
         return FailureResponse(message=f"数据驱动文件上传失败: {path_or_error}")
 
-    file_path = path_or_error
-    file_name = (getattr(file, "filename", None) or "").strip()[:255]
-
-    file_hash = ""
+    file_hash: str = ""
+    file_path: str = path_or_error
+    file_name: str = (getattr(file, "filename", None) or "").strip()[:255]
     try:
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
@@ -705,10 +709,8 @@ async def single_step_dataset_upload(
         return FailureResponse(message=str(e))
     except ValueError as e:
         return BadReqResponse(message=f"解析失败: {str(e)}")
-
     if not step_data:
-        return BadReqResponse(message="解析结果为空（第 1 个 sheet 无有效数据）")
-
+        return BadReqResponse(message="解析结果为空, 第1个sheet无有效数据")
     try:
         case_instance = await services.case_curd.get_by_id(
             case_id=case_id,
@@ -746,13 +748,12 @@ async def single_step_dataset_upload(
         file_name=file_name,
         file_desc=file_desc,
     )
-
     data = await _serialize_data_source(instance)
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
 @autotest_data_source.get("/single_step_dataset_download", summary="API自动化测试-按用例步骤导出数据源xlsx")
-async def export_data_source_xlsx(
+async def single_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
         step_code: str = Query(..., description="步骤标识代码"),
@@ -780,10 +781,8 @@ async def export_data_source_xlsx(
         safe_base = (instance.file_name or f"dataset_{case_id}_{step_code}").strip()
         safe_base = safe_base[:-5] if safe_base.lower().endswith(".xlsx") else safe_base
         file_name = f"{safe_base}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-        quoted_name = quote(file_name)
-        headers = {
-            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"
-        }
+        quoted_name: str = quote(file_name)
+        headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -796,15 +795,21 @@ async def export_data_source_xlsx(
         return FailureResponse(message=f"导出失败, 异常描述: {e}")
 
 
-@autotest_data_source.post("/batch_step_dataset_upload", summary="参数化驱动-多步骤数据集上传")
+@autotest_data_source.post("/batch_step_dataset_upload", summary="参数化驱动-多步骤数据集批量上传")
 async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
-        file: UploadFile = File(..., description="xlsx 文件（所有 sheet 均为数据集，按 sheet 顺序对应根步骤）"),
+        file: UploadFile = File(..., description="xlsx 文件（每个 sheet 名须对应步骤树中一个 HTTP/TCP 请求步骤的步骤名）"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    参数化驱动-多步骤数据集上传。
+    参数化驱动-多步骤数据集批量上传。
+
+    按 sheet 名匹配步骤树中的 HTTP/TCP 请求步骤（步骤名唯一），校验通过后逐步骤创建数据源。
+    校验规则（任一不满足即整体拒绝，不落库）：
+    - 每个 sheet 名均能匹配到步骤树中的 HTTP/TCP 请求步骤；
+    - 各 sheet 的场景数量一致；
+    - 各 sheet 的场景名称及顺序一致。
 
     :param case_id: 用例主键 ID
     :param file_desc: 文件描述
@@ -814,34 +819,36 @@ async def batch_step_dataset_upload(
     """
     if not case_id:
         return ParameterResponse(message="case_id 不能为空")
-
     if not file.filename.endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
-    root_steps = await _get_case_root_steps_async(case_id)
-    if not root_steps:
-        return BadReqResponse(message="该用例下没有可用的根步骤，请先维护步骤树")
-    case_code = ""
-    for s in root_steps:
-        c = (s or {}).get("case") if isinstance(s, dict) else None
-        if isinstance(c, dict) and c.get("case_code"):
-            case_code = c.get("case_code")
-            break
-    if not case_code:
-        try:
-            case_instance = await services.case_curd.get_by_id(
-                case_id=case_id,
-                on_error=True,
-                state__not=1
-            )
-            case_code = case_instance.case_code
-        except (NotFoundException, ParameterException) as e:
-            return ParameterResponse(message=str(e.message))
-        except Exception as e:
-            LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
-            return FailureResponse(message=str(e))
+    # 获取用例全部步骤（含子步骤），按步骤名建立HTTP/TCP请求步骤映射
+    try:
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+    except Exception as e:
+        LOGGER.error(f"查询步骤树失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=str(e))
 
-    destination = f"{case_id}/batch"
+    step_map: Dict[str, Dict[str, Any]] = {}
+    for step in all_steps:
+        if step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            continue
+        step_name: str = step.step_name
+        if step_name:
+            step_map[step_name] = {"step_id": step.id, "step_code": step.step_code}
+    if not step_map:
+        return BadReqResponse(message="该用例步骤树中没有HTTP/TCP请求步骤，无法批量上传数据源")
+
+    try:
+        case_instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
+        case_code: str = case_instance.case_code
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=str(e))
+
+    destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
         upload_file=file,
         destination=destination,
@@ -854,10 +861,9 @@ async def batch_step_dataset_upload(
     if not ok:
         return FailureResponse(message=f"文件保存失败: {path_or_error}")
 
-    file_path = path_or_error
-    file_name = (getattr(file, "filename", None) or "").strip()[:255]
-
-    file_hash = ""
+    file_hash: str = ""
+    file_path: str = path_or_error
+    file_name: str = (getattr(file, "filename", None) or "").strip()[:255]
     try:
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
@@ -871,37 +877,39 @@ async def batch_step_dataset_upload(
         return FailureResponse(message=str(e))
     except ValueError as e:
         return BadReqResponse(message=f"解析失败: {str(e)}")
-
     if not full_parsed:
         return BadReqResponse(message="解析结果为空")
 
-    sheet_names = list(full_parsed.keys())
+    # 校验一：每个sheet名均须匹配到HTTP/TCP请求步骤
+    unmatched = [str(name) for name in full_parsed if name not in step_map]
+    if unmatched:
+        return BadReqResponse(message=f"以下sheet未匹配到HTTP/TCP请求步骤：{', '.join(unmatched)}")
+
+    # 校验二：各sheet场景数量一致
+    scene_lists = {name: list(scenes.keys()) for name, scenes in full_parsed.items()}
+    if len({len(scenes) for scenes in scene_lists.values()}) > 1:
+        return BadReqResponse(message="各sheet的场景数量不一致，请检查后重新上传")
+
+    # 校验三：各sheet场景名称及顺序一致
+    reference_scenes = next(iter(scene_lists.values()))
+    for name, scenes in scene_lists.items():
+        if scenes != reference_scenes:
+            return BadReqResponse(message=f"各sheet的场景名称或顺序不一致: sheet[{name}]）")
+
     created_user = get_current_username()
     created: List[Dict[str, Any]] = []
-    for i, sheet_name in enumerate(sheet_names):
-        step_data = full_parsed[sheet_name]
-        if not isinstance(step_data, dict):
-            continue
-        dataset_names = sorted(step_data.keys()) if step_data else []
-        dataframe = []
-        if i < len(root_steps):
-            step_id = root_steps[i].get("step_id")
-            step_code = (root_steps[i].get("step_code") or "").strip()
-        else:
-            step_id = None
-            step_code = str(sheet_name).strip()[:64] if sheet_name else f"sheet_{i}"
-
-            try:
-                df = pd.read_excel(file_path, sheet_name=i, header=None, engine="openpyxl")
-                if not df.empty:
-                    dataframe = _dataframe_to_matrix(df)
-            except Exception as e:
-                LOGGER.warning(f"读取 sheet 原始二维矩阵失败(sheet_index={i}, step_code={step_code}): {e}")
-
+    for sheet_name, step_data in full_parsed.items():
+        step_info: Dict[str, Any] = step_map[sheet_name]
+        step_id: int = step_info["step_id"]
+        step_code: str = step_info["step_code"]
+        dataframe: List[list] = []
         try:
-            if not step_id:
-                LOGGER.warning(f"多步骤数据集上传跳过：未获取到 step_id，step_code={step_code}")
-                continue
+            df = pd.read_excel(file_path, sheet_name=sheet_name, header=None, engine="openpyxl")
+            if not df.empty:
+                dataframe = _dataframe_to_matrix(df)
+        except Exception as e:
+            LOGGER.warning(f"读取sheet原始二维矩阵失败(sheet={sheet_name}): {e}")
+        try:
             instance = await services.data_source_curd.create_data_sources_from_parsed(
                 case_id=case_id,
                 case_code=case_code or "",
@@ -912,7 +920,7 @@ async def batch_step_dataset_upload(
                 file_hash=file_hash or None,
                 file_desc=(file_desc or "")[:2048].strip() or None,
                 parsed_data=step_data,
-                dataset_names=dataset_names,
+                dataset_names=sorted(step_data.keys()),
                 dataframe=dataframe,
                 axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
                 created_user=created_user,
@@ -935,7 +943,63 @@ async def batch_step_dataset_upload(
     if not created:
         return BadReqResponse(message="未成功创建任何数据源记录")
     return SuccessResponse(
-        message=f"多步骤数据集上传成功，共 {len(created)} 条数据源",
+        message=f"多步骤数据集批量上传成功，共{len(created)}条数据源",
         data=created,
         total=len(created),
     )
+
+
+@autotest_data_source.get("/batch_step_dataset_download", summary="API自动化测试-按用例汇总导出所有步骤数据源xlsx")
+async def batch_step_dataset_download(
+        case_id: int = Query(..., description="用例ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    汇总导出用例下所有 HTTP/TCP 请求步骤绑定的数据源为单个 xlsx：
+    每个步骤一个 sheet（sheet 名=步骤名，数据=该步骤数据源的 dataframe）。
+
+    :param case_id: 用例主键 ID
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: xlsx 文件流
+    """
+    try:
+        data_sources = await services.data_source_curd.get_by_case_step(case_id=case_id, state__not=1)
+        if not isinstance(data_sources, list) or not data_sources:
+            return BadReqResponse(message="该用例下没有可导出的数据源")
+
+        # 获取用例全部步骤，创建step_code/step_id -> step_name映射
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+        step_name_map: Dict[Union[str, int], str] = {}
+        for step in all_steps:
+            step_id: int = step.id
+            step_name: str = step.step_name
+            if not step_name or step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+                continue
+            if step.step_code:
+                step_name_map[step.step_code] = step_name
+            step_name_map[step_id] = step_name
+
+        output = io.BytesIO()
+        used_names: Set[str] = set()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            for data_source in data_sources:
+                dataset_id: int = data_source.step_id
+                dataset_code: str = data_source.step_code
+                step_name = step_name_map.get(dataset_code) or step_name_map.get(dataset_id)
+                dataset_dataframe = data_source.dataframe if isinstance(data_source.dataframe, list) else []
+                df = pd.DataFrame(dataset_dataframe if dataset_dataframe else [[]])
+                df.to_excel(writer, index=False, header=False, sheet_name=_safe_sheet_name(step_name, used_names))
+        output.seek(0)
+
+        file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}"}
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"汇总导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"导出失败, 异常描述: {e}")
