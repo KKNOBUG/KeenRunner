@@ -2751,6 +2751,8 @@ const onBatchUploadFileChange = async (ev) => {
     fd.append('file', file)
     const res = await api.batchStepDatasetUpload(fd)
     window.$message?.success?.(res?.message || '批量上传成功')
+    // 批量上传为一致性操作：成功后重载步骤树，刷新各步骤的数据源绑定状态
+    await loadSteps()
   } catch {
     // 校验/系统错误提示已由请求拦截器统一弹出，避免重复提示
   } finally {

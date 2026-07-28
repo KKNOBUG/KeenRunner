@@ -19,6 +19,7 @@ import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Form, Body, Query, Depends
 from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
@@ -52,7 +53,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     NotFoundResponse,
 )
-from backend.enums import AutoTestStepType
+from backend.enums import AutoTestStepType, AutoTestCaseType
 from backend.services import get_current_username
 from backend.services.file_transfer import FileTransfer
 
@@ -679,6 +680,16 @@ async def single_step_dataset_upload(
     if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤上传数据驱动文件")
 
+    try:
+        case_instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
+    except (NotFoundException, ParameterException) as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=str(e))
+    if case_instance.case_type == AutoTestCaseType.PUBLIC_SCRIPT:
+        return BadReqResponse(message="公共脚本不允许使用数据源")
+
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
         upload_file=file,
@@ -712,11 +723,6 @@ async def single_step_dataset_upload(
     if not step_data:
         return BadReqResponse(message="解析结果为空, 第1个sheet无有效数据")
     try:
-        case_instance = await services.case_curd.get_by_id(
-            case_id=case_id,
-            on_error=True,
-            state__not=1
-        )
         created_user = get_current_username()
         instance = await services.data_source_curd.create_data_sources_from_parsed(
             case_id=case_id,
@@ -778,9 +784,7 @@ async def single_step_dataset_download(
             df.to_excel(writer, index=False, header=False, sheet_name="Sheet1")
         output.seek(0)
 
-        safe_base = (instance.file_name or f"dataset_{case_id}_{step_code}").strip()
-        safe_base = safe_base[:-5] if safe_base.lower().endswith(".xlsx") else safe_base
-        file_name = f"{safe_base}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         quoted_name: str = quote(file_name)
         headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
         return StreamingResponse(
@@ -847,6 +851,8 @@ async def batch_step_dataset_upload(
     except Exception as e:
         LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=str(e))
+    if case_instance.case_type == AutoTestCaseType.PUBLIC_SCRIPT:
+        return BadReqResponse(message="公共脚本不允许使用数据源，无法批量上传数据源")
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
@@ -883,7 +889,7 @@ async def batch_step_dataset_upload(
     # 校验一：每个sheet名均须匹配到HTTP/TCP请求步骤
     unmatched = [str(name) for name in full_parsed if name not in step_map]
     if unmatched:
-        return BadReqResponse(message=f"以下sheet未匹配到HTTP/TCP请求步骤：{', '.join(unmatched)}")
+        return BadReqResponse(message=f"含sheet未匹配到HTTP/TCP请求步骤：{', '.join(unmatched)}")
 
     # 校验二：各sheet场景数量一致
     scene_lists = {name: list(scenes.keys()) for name, scenes in full_parsed.items()}
@@ -894,54 +900,54 @@ async def batch_step_dataset_upload(
     reference_scenes = next(iter(scene_lists.values()))
     for name, scenes in scene_lists.items():
         if scenes != reference_scenes:
-            return BadReqResponse(message=f"各sheet的场景名称或顺序不一致: sheet[{name}]）")
+            return BadReqResponse(message=f"各sheet的场景名称或顺序不一致：sheet[{name}]")
 
+    # 预读所有sheet的原始二维矩阵，任一sheet读取失败则整体失败（不落库）
+    sheet_dataframes: Dict[str, List[list]] = {}
+    try:
+        for sheet_name in full_parsed:
+            df = pd.read_excel(file_path, sheet_name=sheet_name, header=None, engine="openpyxl")
+            sheet_dataframes[sheet_name] = _dataframe_to_matrix(df) if not df.empty else []
+    except Exception as e:
+        LOGGER.error(f"读取数据源文件失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"读取数据源文件失败: {e}")
+
+    # 事务内逐步骤创建数据源：一致性操作，任一步骤失败则整体回滚
     created_user = get_current_username()
     created: List[Dict[str, Any]] = []
-    for sheet_name, step_data in full_parsed.items():
-        step_info: Dict[str, Any] = step_map[sheet_name]
-        step_id: int = step_info["step_id"]
-        step_code: str = step_info["step_code"]
-        dataframe: List[list] = []
-        try:
-            df = pd.read_excel(file_path, sheet_name=sheet_name, header=None, engine="openpyxl")
-            if not df.empty:
-                dataframe = _dataframe_to_matrix(df)
-        except Exception as e:
-            LOGGER.warning(f"读取sheet原始二维矩阵失败(sheet={sheet_name}): {e}")
-        try:
-            instance = await services.data_source_curd.create_data_sources_from_parsed(
-                case_id=case_id,
-                case_code=case_code or "",
-                step_id=int(step_id),
-                step_code=step_code,
-                file_name=file_name or None,
-                file_path=file_path,
-                file_hash=file_hash or None,
-                file_desc=(file_desc or "")[:2048].strip() or None,
-                parsed_data=step_data,
-                dataset_names=sorted(step_data.keys()),
-                dataframe=dataframe,
-                axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
-                created_user=created_user,
-            )
-            created.append(await _serialize_data_source(instance))
-            await _sync_step_data_source_meta(
-                case_id=case_id,
-                step_code=step_code,
-                data_source_id=instance.id,
-                file_name=file_name,
-                file_desc=file_desc,
-            )
-        except (NotFoundException, ParameterException) as e:
-            LOGGER.error(f"数据源保存失败 step_code={step_code}: {e.message}")
-        except (DataAlreadyExistsException, DataBaseStorageException) as e:
-            LOGGER.error(f"数据源保存失败 step_code={step_code}: {e.message}")
-        except Exception as e:
-            LOGGER.error(f"数据源保存失败 step_code={step_code}: {e}\n{traceback.format_exc()}")
+    try:
+        async with in_transaction():
+            for sheet_name, step_data in full_parsed.items():
+                step_info: Dict[str, Any] = step_map[sheet_name]
+                step_id: int = step_info["step_id"]
+                step_code: str = step_info["step_code"]
+                instance = await services.data_source_curd.create_data_sources_from_parsed(
+                    case_id=case_id,
+                    case_code=case_code,
+                    step_id=int(step_id),
+                    step_code=step_code,
+                    file_name=file_name or None,
+                    file_path=file_path,
+                    file_hash=file_hash or None,
+                    file_desc=(file_desc or "")[:2048].strip() or None,
+                    parsed_data=step_data,
+                    dataset_names=sorted(step_data.keys()),
+                    dataframe=sheet_dataframes[sheet_name],
+                    axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
+                    created_user=created_user,
+                )
+                created.append(await _serialize_data_source(instance))
+                await _sync_step_data_source_meta(
+                    case_id=case_id,
+                    step_code=step_code,
+                    data_source_id=instance.id,
+                    file_name=file_name,
+                    file_desc=file_desc,
+                )
+    except Exception as e:
+        LOGGER.error(f"批量上传数据源失败（已整体回滚）: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"批量上传数据源失败，已全部回滚: {e}")
 
-    if not created:
-        return BadReqResponse(message="未成功创建任何数据源记录")
     return SuccessResponse(
         message=f"多步骤数据集批量上传成功，共{len(created)}条数据源",
         data=created,
