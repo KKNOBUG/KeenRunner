@@ -96,11 +96,13 @@ export const useTagsStore = defineStore('tag', {
     removeTag(path) {
       if (path === WORKBENCH_TAG_PATH) return
       if (path === this.activeTag) {
-        if (this.activeIndex > 0) {
-          router.push(this.tags[this.activeIndex - 1].path)
-        } else {
-          router.push(this.tags[this.activeIndex + 1].path)
-        }
+        const nextPath = this.activeIndex > 0
+            ? this.tags[this.activeIndex - 1].path
+            : this.tags[this.activeIndex + 1].path
+        // 显式更新激活页签：相邻页签与当前页 route.path 相同（仅 query 不同，如多个「步骤编辑」页签）时，
+        // 布局 watch(route.path) 不会触发，activeTag 不会被自动更新，会导致后续关闭页签不再跳转
+        this.setActiveTag(nextPath)
+        router.push(nextPath)
       }
       this.setTags(this.tags.filter((tag) => tag.path !== path))
     },
