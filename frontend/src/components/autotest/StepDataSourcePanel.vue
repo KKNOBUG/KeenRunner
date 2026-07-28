@@ -185,7 +185,6 @@ import {
 import TheIcon from '@/components/icon/TheIcon.vue'
 import Luckysheet from '@/components/common/Luckysheet.vue'
 import api from '@/api'
-import * as XLSX from 'xlsx'
 
 const props = defineProps({
   step: { type: Object, default: () => ({}) },
@@ -240,28 +239,11 @@ const dataSourceTipText = computed(() => {
 })
 
 const FIXED_KEYWORDS = ['HEAD', 'BODY', 'ASSERT_HEAD', 'ASSERT_BODY']
-const SECTION_MARKER_SET = new Set(FIXED_KEYWORDS)
 
 // 矩阵方向：1=垂直(场景为列)，0=水平(场景为行)，与后端 axis 字段一致；空白模板默认垂直
 const AXIS_HORIZONTAL = 0
 const AXIS_VERTICAL = 1
 const axis = ref(AXIS_VERTICAL)
-
-const isSectionMarker = (cell) =>
-    typeof cell === 'string' && SECTION_MARKER_SET.has(cell.trim().toUpperCase())
-
-/**
- * 识别二维矩阵方向：第 0 行含分区标记 → 水平(0)；否则第 0 列(row1+)含分区标记 → 垂直(1)；
- * 两者都不满足返回 null（非合法数据源矩阵）。与后端 detect_matrix_axis 保持一致。
- */
-const detectMatrixAxis = (matrix) => {
-  if (!Array.isArray(matrix) || !matrix.length) return null
-  if ((matrix[0] || []).some(isSectionMarker)) return AXIS_HORIZONTAL
-  for (let r = 1; r < matrix.length; r++) {
-    if (isSectionMarker(matrix[r]?.[0])) return AXIS_VERTICAL
-  }
-  return null
-}
 
 /** 矩阵转置（水平 ↔ 垂直互换） */
 const transposeMatrix = (matrix) => {
@@ -565,14 +547,6 @@ const openImport = () => {
   importFileRef.value?.click()
 }
 
-const readFileAsArrayBuffer = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.onerror = (e) => reject(e)
-      reader.readAsArrayBuffer(file)
-    })
-
 const onImportFileChange = async (ev) => {
   const input = ev.target
   const file = input?.files?.[0]
@@ -582,27 +556,27 @@ const onImportFileChange = async (ev) => {
     $message.warning('仅支持 .xlsx 格式的数据驱动文件')
     return
   }
+  const { caseId, stepId, stepCode } = getStepContext()
+  if (!caseId || !stepId || !stepCode) {
+    $message.warning('请先保存步骤后再导入数据源')
+    return
+  }
   if (importLoading.value) return
   importLoading.value = true
   try {
-    const buffer = await readFileAsArrayBuffer(file)
-    const workbook = XLSX.read(buffer, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const aoa = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' })
-    if (!aoa.length) {
-      $message.warning('导入文件为空')
-      return
-    }
-    const detectedAxis = detectMatrixAxis(aoa)
-    if (detectedAxis === null) {
-      $message.error('导入失败：无法识别矩阵方向，第 0 行或第 0 列需包含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 分区标记')
-      return
-    }
-    axis.value = detectedAxis
-    applyMatrixToSheet(aoa)
-    isDirty.value = true
-    $message.success(`导入成功（${detectedAxis === AXIS_HORIZONTAL ? '水平' : '垂直'}模式），请保存后生效`)
+    const fd = new FormData()
+    fd.append('case_id', String(caseId))
+    fd.append('step_id', String(stepId))
+    fd.append('step_code', stepCode)
+    if (dataSourceDesc.value) fd.append('file_desc', dataSourceDesc.value)
+    fd.append('file', file)
+    const res = await api.singleStepDatasetUpload(fd)
+    const info = res?.data || {}
+    if (info.data_source_id != null) dataSourceId.value = info.data_source_id
+    if (info.file_name != null) dataSourceName.value = String(info.file_name)
+    if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
+    await loadStepDataframePreview()
+    $message.success('导入成功')
   } catch (e) {
     $message.error(`导入失败：${e?.message || e}`)
   } finally {
@@ -610,18 +584,34 @@ const onImportFileChange = async (ev) => {
   }
 }
 
-const dataSourceExport = () => {
+const dataSourceExport = async () => {
   if (exportLoading.value) return
+  const { caseId, stepId, stepCode } = getStepContext()
+  if (!caseId || !stepId || !stepCode) {
+    $message.warning('请先保存步骤后再导出数据源')
+    return
+  }
   exportLoading.value = true
   try {
-    const matrix = getCurrentDataframeMatrix()
-    const worksheet = XLSX.utils.aoa_to_sheet(matrix)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1')
-    const caseId = getCaseId()
+    const res = await api.singleStepDatasetDownload({ case_id: caseId, step_id: stepId, step_code: stepCode })
+    const contentType = res?.headers?.['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      const body = JSON.parse(await res.data.text())
+      $message.error(body?.message || '导出失败')
+      return
+    }
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const m = /filename\*=UTF-8''([^;]+)/i.exec(cd)
     const stepName = String(props.stepName || '').trim() || String(props.stepTypeLabel || '请求').trim()
-    const fileName = `${caseId}_${stepName}_数据源.xlsx`.replace(/[\\/:*?"<>|]/g, '_')
-    XLSX.writeFile(workbook, fileName)
+    link.download = m?.[1] ? decodeURIComponent(m[1]) : `${stepName}_数据源.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
     $message.success('导出成功')
   } catch (e) {
     $message.error(`导出失败：${e?.message || e}`)
