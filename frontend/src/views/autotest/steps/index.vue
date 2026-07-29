@@ -250,7 +250,7 @@
  * CaseInfoPanel：用例信息；ExecConfigModal：调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
 defineOptions({ name: '步骤编辑' })
-import {computed, defineComponent, h, nextTick, onActivated, onMounted, ref, watch} from 'vue'
+import {computed, h, nextTick, onActivated, onMounted, provide, ref, watch} from 'vue'
 import {useRoute, useRouter, onBeforeRouteLeave} from 'vue-router'
 import {useElementHover} from '@vueuse/core'
 import {
@@ -277,6 +277,7 @@ import CaseHistoryDrawer from '@/views/autotest/testcase/components/CaseHistoryD
 import ScriptSelectDrawer from './components/ScriptSelectDrawer.vue'
 import ExecConfigModal from './components/ExecConfigModal.vue'
 import AddStepPopover from './components/AddStepPopover.vue'
+import RecursiveStepChildren from './components/RecursiveStepChildren.vue'
 import ApiLoopEditor from "@/views/autotest/loop_controller/index.vue";
 import ApiCodeEditor from "@/views/autotest/run_code_controller/index.vue";
 import ApiHttpEditor from "@/views/autotest/http_controller/index.vue";
@@ -1968,232 +1969,33 @@ onActivated(() => {
 
 // 不在 onUpdated 中刷新展示名：每次子编辑器 emit 都会触发父组件 patch，导致输入卡顿/丢字
 
-// 递归子步骤组件
-const RecursiveStepChildren = defineComponent({
-  name: 'RecursiveStepChildren',
-  props: {
-    step: {
-      type: Object,
-      required: true
-    }
-  },
-  setup(props) {
-    // 捕获所有需要的变量和函数，确保能够通过闭包访问
-    const capturedStepDefinitions = stepDefinitions
-    const capturedIsStepExpanded = isStepExpanded
-    const capturedToggleStepExpand = toggleStepExpand
-    const capturedSelectedKeys = selectedKeys
-    const capturedGetStepIcon = getStepIcon
-    const capturedGetStepIconClass = getStepIconClass
-    const capturedGetStepDisplayName = getStepDisplayName
-    const capturedGetStepNumber = getStepNumber
-    const capturedHandleSelect = handleSelect
-    const capturedHandleDragStart = handleDragStart
-    const capturedHandleDragOverInChildrenArea = handleDragOverInChildrenArea
-    const capturedHandleDragLeaveInChildrenArea = handleDragLeaveInChildrenArea
-    const capturedHandleDragOverOnChild = handleDragOverOnChild
-    const capturedHandleDragLeaveOnChild = handleDragLeaveOnChild
-    const capturedHandleDrop = handleDrop
-    const capturedHandleCopyStep = handleCopyStep
-    const capturedHandleDeleteStep = handleDeleteStep
-    const capturedToggleSkipStep = toggleSkipStep
-    const capturedIsStepSkipInherited = isStepSkipInherited
-    const capturedIsPublicScriptCase = isPublicScriptCase
-    const capturedHandleAddStep = handleAddStep
-    const capturedDragState = dragState
-
-    return () => {
-      const {step} = props
-      if (!capturedStepDefinitions[step.type]?.allowChildren) return null
-
-      // 局部展开优先于全局状态：如果步骤被局部展开，就显示，不管全局状态如何
-      const shouldShow = capturedIsStepExpanded(step.id)
-      if (!shouldShow) return null
-
-      return h('div', {
-        onDragover: (e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          capturedHandleDragOverInChildrenArea(e, step.id)
-        },
-        onDragleave: (e) => {
-          e.stopPropagation()
-          capturedHandleDragLeaveInChildrenArea(e, step.id)
-        }
-      }, [
-        // 无子女时显示空的拖拽区域
-        (!step.children || step.children.length === 0) ? h('div', {
-          class: ['step-drop-zone', {'is-drag-over': capturedDragState.value.dragOverId === step.id}],
-          onDrop: (e) => {
-            e.stopPropagation()
-            capturedHandleDrop(e, step.id, step.id, 0)
-          }
-        }, [
-          h('div', {
-            class: 'step-drop-zone-hint'
-          }, '拖拽步骤到这里')
-        ]) : null,
-        ...(step.children || []).map((child, childIndex) => [
-          // 插入位置指示器：在子步骤之前
-          h('div', {
-            key: `indicator-before-${child.id}`,
-            class: 'step-insert-indicator',
-            style: {
-              display: capturedDragState.value.draggingId && capturedDragState.value.dragOverId === step.id && capturedDragState.value.insertTargetId === child.id && capturedDragState.value.insertPosition === 'before' ? 'block' : 'none'
-            }
-          }),
-          h('div', {
-            key: child.id,
-            class: [
-              'step-item',
-              {
-                'is-selected': capturedSelectedKeys.value.includes(child.id),
-                'is-skipped': !!child.step_is_skipped,
-                'is-skip-inherited': capturedIsStepSkipInherited(child.id),
-                'is-drag-target': capturedDragState.value.draggingId && capturedStepDefinitions[child.type]?.allowChildren
-              }
-            ],
-            draggable: true,
-            onClick: (e) => {
-              e.stopPropagation()
-              capturedHandleSelect([child.id])
-            },
-            onDragstart: (e) => {
-              e.stopPropagation()
-              capturedHandleDragStart(e, child.id, step.id, childIndex)
-            },
-            onDragover: (e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              capturedHandleDragOverOnChild(e, child.id, step.id, childIndex)
-            },
-            onDragleave: (e) => {
-              e.stopPropagation()
-              capturedHandleDragLeaveOnChild(e, child.id)
-            },
-            onDrop: (e) => {
-              e.stopPropagation()
-              capturedHandleDrop(e, child.id, step.id, childIndex)
-            }
-          }, [
-            h('div', {
-              class: 'step-item-child'
-            }, [
-              h('span', {
-                class: 'step-name',
-                title: child.name
-              }, [
-                h(TheIcon, {
-                  icon: capturedGetStepIcon(child.type),
-                  size: 16,
-                  class: ['step-icon', capturedGetStepIconClass(child.type)]
-                }),
-                h('span', {
-                  class: 'step-name-text'
-                }, capturedGetStepDisplayName(child.name, child.id)),
-                h('span', {
-                  class: 'step-actions'
-                }, [
-                  h('span', {
-                    class: 'step-number'
-                  }, `#${capturedGetStepNumber(child.id)}`),
-                  h(NButton, {
-                    text: true,
-                    size: 'tiny',
-                    class: 'action-btn',
-                    title: child.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)',
-                    onClick: (e) => {
-                      e.stopPropagation()
-                      capturedToggleSkipStep(child.id, e)
-                    }
-                  }, {
-                    icon: () => h(TheIcon, {
-                      icon: child.step_is_skipped ? 'gravity-ui:eye' : 'gravity-ui:eye-slash',
-                      size: 14
-                    })
-                  }),
-                  capturedStepDefinitions[child.type]?.allowChildren ? h(NButton, {
-                    text: true,
-                    size: 'tiny',
-                    class: 'action-btn',
-                    onClick: (e) => {
-                      e.stopPropagation()
-                      capturedToggleStepExpand(child.id, e)
-                    }
-                  }, {
-                    icon: () => h(TheIcon, {
-                      icon: capturedIsStepExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down',
-                      size: 14
-                    })
-                  }) : null,
-                  h(NButton, {
-                    text: true,
-                    size: 'tiny',
-                    class: 'action-btn',
-                    title: '复制当前步骤',
-                    onClick: (e) => {
-                      e.stopPropagation()
-                      capturedHandleCopyStep(child.id)
-                    }
-                  }, {
-                    icon: () => h(TheIcon, {
-                      icon: 'gravity-ui:square-article',
-                      size: 14,
-                    })
-                  }),
-                  h(NPopconfirm, {
-                    onPositiveClick: () => capturedHandleDeleteStep(child.id),
-                    onClick: (e) => e.stopPropagation()
-                  }, {
-                    trigger: () => h(NButton, {
-                      text: true,
-                      size: 'tiny',
-                      type: 'error',
-                      title: '删除当前步骤',
-                      class: 'action-btn'
-                    }, {
-                      icon: () => h(TheIcon, {
-                        icon: 'material-symbols:delete',
-                        size: 14
-                      })
-                    }),
-                    default: () => '确认删除该步骤?'
-                  })
-                ])
-              ]),
-              // 递归渲染子步骤（只有当子步骤允许有子步骤时才渲染）
-              capturedStepDefinitions[child.type]?.allowChildren ? h(RecursiveStepChildren, {
-                step: child
-              }) : null
-            ])
-          ]),
-          // 插入位置指示器：在子步骤之后
-          h('div', {
-            key: `indicator-after-${child.id}`,
-            class: 'step-insert-indicator',
-            style: {
-              display: capturedDragState.value.draggingId && capturedDragState.value.dragOverId === step.id && capturedDragState.value.insertTargetId === child.id && capturedDragState.value.insertPosition === 'after' ? 'block' : 'none'
-            }
-          })
-        ]).flat(),
-        // 插入位置指示器：在最后一个子步骤之后
-        h('div', {
-          class: 'step-insert-indicator',
-          style: {
-            display: capturedDragState.value.draggingId && capturedDragState.value.dragOverId === step.id && capturedDragState.value.insertTargetId === null && capturedDragState.value.insertPosition === 'after' && step.children && step.children.length > 0 ? 'block' : 'none'
-          }
-        }),
-        h('div', {
-          class: 'step-add-btn'
-        }, [
-          h(AddStepPopover, {
-            isPublicScriptCase: capturedIsPublicScriptCase.value,
-            onSelect: (key) => capturedHandleAddStep(key, step.id),
-          }),
-        ])
-      ])
-    }
-  }
+/**
+ * 步骤树上下文：供递归子步骤组件 RecursiveStepChildren 通过 inject 使用。
+ * 递归层级深、共享绑定多，用 provide/inject 替代逐层透传 22 个 props。
+ */
+provide('stepTreeContext', {
+  stepDefinitions,
+  isStepExpanded,
+  toggleStepExpand,
+  selectedKeys,
+  getStepIcon,
+  getStepIconClass,
+  getStepDisplayName,
+  getStepNumber,
+  handleSelect,
+  handleDragStart,
+  handleDragOverInChildrenArea,
+  handleDragLeaveInChildrenArea,
+  handleDragOverOnChild,
+  handleDragLeaveOnChild,
+  handleDrop,
+  handleCopyStep,
+  handleDeleteStep,
+  toggleSkipStep,
+  isStepSkipInherited,
+  isPublicScriptCase,
+  handleAddStep,
+  dragState,
 })
 </script>
 
