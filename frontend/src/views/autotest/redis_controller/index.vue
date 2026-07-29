@@ -357,7 +357,7 @@
 </template>
 
 <script setup>
-import {computed, h, nextTick, reactive, ref, watch} from 'vue'
+import {computed, h, nextTick, ref, watch} from 'vue'
 import {
   NBadge,
   NButton,
@@ -400,7 +400,7 @@ import {
   validateAssertList,
   validateExtractList,
 } from '@/utils/autotestExtractAssert'
-import { useStepEditorForm } from '@/composables/step-editor'
+import { useStepEditorForm, useOperatesListEditor, findProjectNameById, findProjectIdByName } from '@/composables/step-editor'
 
 const props = defineProps({
   config: {type: Object, default: () => ({})},
@@ -413,103 +413,13 @@ const props = defineProps({
 const emit = defineEmits(['update:config'])
 
 const mainCardCollapsed = ref(false)
-const editingRedisOpKey = ref('')
 
 const toggleMainCardCollapsed = () => {
   mainCardCollapsed.value = !mainCardCollapsed.value
 }
 
-const redisOpDefaultTitle = (key) => {
-  const i = opKeys.value.indexOf(Number(key))
-  const n = i >= 0 ? i + 1 : Number(key) + 1
-  return `Redis请求 ${n}`
-}
-
-const nextUniqueRedisOpName = () => {
-  const used = new Set()
-  for (const k of opKeys.value) {
-    const t = String(state.form.redis_operates[k]?.name ?? '').trim()
-    if (t) used.add(t)
-  }
-  let n = 1
-  let candidate = `Redis请求 ${n}`
-  while (used.has(candidate)) {
-    n += 1
-    candidate = `Redis请求 ${n}`
-  }
-  return candidate
-}
-
-const redisOpDisplayTitle = (item, key) => {
-  const n = String(item?.name ?? '').trim()
-  return n || redisOpDefaultTitle(key)
-}
-
-const startEditRedisOpTitle = (key) => {
-  if (props.readonly) return
-  editingRedisOpKey.value = String(key)
-}
-
-const endEditRedisOpTitle = () => {
-  editingRedisOpKey.value = ''
-}
-
-const emptyOp = () => ({
-  name: '',
-  project_id: null,
-  project_name: '',
-  config_name: '',
-  database_name: '0',
-  variable_name: '',
-  expr: '',
-})
-
-const opCollapseState = reactive({})
-const configCache = reactive({})
-const configNameListByProject = reactive({})
-
-const opKeys = computed(() =>
-    Object.keys(state.form.redis_operates || {})
-        .map((k) => parseInt(k, 10))
-        .filter((n) => !isNaN(n))
-        .sort((a, b) => a - b)
-)
-
-/** 「请求」里各条 Redis 操作的存储变量名 variable_name */
-const storageVariableSelectOptions = computed(() => {
-  const seen = new Set()
-  const opts = []
-  for (const k of opKeys.value) {
-    const row = state.form.redis_operates[k] || {}
-    const vn = String(row.variable_name || '').trim()
-    if (!vn || seen.has(vn)) continue
-    seen.add(vn)
-    opts.push({ label: vn, value: vn })
-  }
-  return opts
-})
-
 const extractCount = computed(() => countDictKeys(state.form.extract_variables))
 const validatorsCount = computed(() => countDictKeys(state.form.assert_validators))
-
-const ensureCollapseKeys = () => {
-  opKeys.value.forEach((k) => {
-    if (opCollapseState[k] === undefined) opCollapseState[k] = true
-  })
-}
-
-const projectNameFromId = (id) => {
-  if (id == null || id === '') return ''
-  const o = props.projectOptions.find((x) => x.value === id)
-  return o ? String(o.label ?? '').trim() : ''
-}
-
-const projectIdFromName = (name) => {
-  const s = String(name ?? '').trim()
-  if (!s) return null
-  const o = props.projectOptions.find((x) => String(x.label ?? '').trim() === s)
-  return o ? o.value : null
-}
 
 const buildExtractForBackend = () =>
     buildExtractListFromDict(state.form.extract_variables, EXTRACT_MODE_REDIS)
@@ -546,45 +456,6 @@ const buildConfigFromState = () => {
   }
 }
 
-const loadConfigsForProject = async (projectId, force = false) => {
-  const pid = projectId != null ? Number(projectId) : null
-  if (!pid) return []
-  if (configCache[pid] && !force) return configCache[pid]
-  try {
-    const [resNames, res] = await Promise.all([
-      api.getEnvConfigNameList({project_id: pid, config_type: 'redis'}),
-      api.searchEnvConfig({
-        project_id: pid,
-        config_type: 'redis',
-        page: 1,
-        page_size: 500,
-        state: 0
-      })
-    ])
-    const nameList = Array.isArray(resNames?.data) ? resNames.data : []
-    configNameListByProject[pid] = nameList
-    const rows = Array.isArray(res?.data) ? res.data : []
-    configCache[pid] = rows
-    return rows
-  } catch (e) {
-    console.error('加载Redis配置失败', e)
-    configNameListByProject[pid] = []
-    configCache[pid] = []
-    return []
-  }
-}
-
-const configOptionsForRow = (item) => {
-  const pid = item?.project_id
-  const fromList = configNameListByProject[pid]
-  if (Array.isArray(fromList) && fromList.length) {
-    return fromList.map((name) => ({label: name, value: name}))
-  }
-  const rows = configCache[pid] || []
-  const names = [...new Set(rows.map((r) => r.config_name).filter(Boolean))]
-  return names.map((label) => ({label, value: label}))
-}
-
 const resolveDatabaseNameForRow = (item) => {
   const pid = item?.project_id
   const configName = item?.config_name
@@ -606,8 +477,8 @@ const hydrateRedisForm = (p) => {
   list.forEach((row, index) => {
     next[index] = {
       name: row.name ?? '',
-      project_id: row.project_id ?? projectIdFromName(row.project_name),
-      project_name: String(row.project_name ?? '').trim() || projectNameFromId(row.project_id) || '',
+      project_id: row.project_id ?? findProjectIdByName(p.projectOptions, row.project_name),
+      project_name: String(row.project_name ?? '').trim() || findProjectNameById(p.projectOptions, row.project_id) || '',
       config_name: row.config_name ?? '',
       database_name: row.database_name ?? '0',
       variable_name: row.variable_name ?? '',
@@ -649,6 +520,44 @@ const { form } = useStepEditorForm({
 /** 模板与各 helper 沿用 state.form 访问方式 */
 const state = { form }
 
+/** 操作项列表共享逻辑（CRUD / 折叠 / 标题编辑 / 配置加载 / 应用联动）；别名解构保持原名 */
+const {
+  editingOpKey: editingRedisOpKey,
+  opCollapseState,
+  configCache,
+  opKeys,
+  storageVariableSelectOptions,
+  ensureCollapseKeys,
+  toggleOpCollapse,
+  opDefaultTitle: redisOpDefaultTitle,
+  opDisplayTitle: redisOpDisplayTitle,
+  startEditOpTitle: startEditRedisOpTitle,
+  endEditOpTitle: endEditRedisOpTitle,
+  projectNameFromId,
+  loadConfigsForProject,
+  configOptionsForRow,
+  addOp,
+  removeOp,
+  duplicateOp,
+  onProjectChange,
+  onConfigNameChange,
+} = useOperatesListEditor({
+  props,
+  form,
+  operatesField: 'redis_operates',
+  labelPrefix: 'Redis请求',
+  configType: 'redis',
+  emptyOp: () => ({
+    name: '',
+    project_id: null,
+    project_name: '',
+    config_name: '',
+    database_name: '0',
+    variable_name: '',
+    expr: '',
+  }),
+})
+
 /** 步骤切换后重置折叠态并预加载各操作项所属应用的配置（表单灌入由 useStepEditorForm 完成） */
 watch(
     () => props.step?.id,
@@ -663,61 +572,6 @@ watch(
     },
     {immediate: true}
 )
-
-const toggleOpCollapse = (key) => {
-  opCollapseState[key] = !opCollapseState[key]
-}
-
-const addOp = () => {
-  editingRedisOpKey.value = ''
-  const keys = opKeys.value
-  const newKey = keys.length ? Math.max(...keys) + 1 : 0
-  const row = emptyOp()
-  row.name = nextUniqueRedisOpName()
-  state.form.redis_operates[newKey] = row
-  opCollapseState[newKey] = false
-}
-
-const removeOp = (key) => {
-  const k = String(key)
-  if (editingRedisOpKey.value === k) editingRedisOpKey.value = ''
-  delete state.form.redis_operates[k]
-  delete opCollapseState[k]
-}
-
-const duplicateOp = (key) => {
-  const row = state.form.redis_operates[key]
-  if (!row) return
-  editingRedisOpKey.value = ''
-  const keys = opKeys.value
-  const newKey = keys.length ? Math.max(...keys) + 1 : 0
-  state.form.redis_operates[newKey] = {
-    ...row,
-    name: nextUniqueRedisOpName()
-  }
-  opCollapseState[newKey] = false
-}
-
-const onProjectChange = async (item) => {
-  item.project_name = projectNameFromId(item.project_id) || ''
-  item.config_name = ''
-  item.database_name = '0'
-  if (item.project_id) await loadConfigsForProject(item.project_id, true)
-}
-
-const onConfigNameChange = async (item) => {
-  const pid = item.project_id
-  if (!pid) return
-  const rows = await loadConfigsForProject(pid)
-  const names = [
-    ...new Set(
-        rows.filter((r) => r.config_name === item.config_name).map((r) => r.database_name).filter(Boolean)
-    )
-  ]
-  if (names.length === 1) {
-    item.database_name = names[0]
-  }
-}
 
 /* =================== Debug =================== */
 const response = ref(null)

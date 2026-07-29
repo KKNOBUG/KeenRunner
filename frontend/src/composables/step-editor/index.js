@@ -7,3 +7,4 @@ export { useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, parseQuoteInne
 export { useSourceJsonMode } from './useSourceJsonMode'
 export { useDataSourceBatch } from './useDataSourceBatch'
 export { useStepEditorForm } from './useStepEditorForm'
+export { useOperatesListEditor, findProjectNameById, findProjectIdByName } from './useOperatesListEditor'
