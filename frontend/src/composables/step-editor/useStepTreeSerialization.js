@@ -1,0 +1,375 @@
+import { forEachStep } from '@/views/autotest/steps/utils/stepTreeMap'
+import { toPositiveCaseId } from '@/views/autotest/steps/utils/prepareCaseExecute'
+import {
+    createEmptyStepTreePayloadTemplate,
+    stripIdentityFieldsForNewCase,
+} from '@/views/autotest/steps/utils/stepSourceJson'
+
+const LOCAL_TYPE_TO_BACKEND = {
+    user_variables: '用户变量',
+    tcp: 'TCP请求',
+    http: 'HTTP请求',
+    code: '代码请求(Python)',
+    if: '条件分支',
+    loop: '循环结构',
+    wait: '等待控制',
+    quote: '引用公共脚本',
+    database: '数据库请求',
+    redis: 'Redis请求',
+}
+
+export const localTypeToBackend = (localType) => LOCAL_TYPE_TO_BACKEND[localType] || '代码请求(Python)'
+
+export const assignStepNumbers = (steps) => {
+    const stepNoMap = new Map()
+    let counter = 1
+    const traverse = (step) => {
+        stepNoMap.set(step, counter++)
+        if (step.children && step.children.length > 0) {
+            step.children.forEach(traverse)
+        }
+    }
+    steps.forEach(traverse)
+    return stepNoMap
+}
+
+export const filterKeyValueList = (list) => {
+    if (!Array.isArray(list)) return []
+    return list.filter((item) => item && String(item.key ?? '').trim() !== '')
+}
+
+export const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
+    if (!Array.isArray(detailList) || detailList.length === 0) return
+    let idx = 0
+    const traverse = (list) => {
+        if (!Array.isArray(list)) return
+        for (const step of list) {
+            const detail = detailList[idx]
+            if (detail && (detail.step_id != null || detail.step_code != null)) {
+                if (!step.original) step.original = {}
+                if (detail.step_id != null) step.original.id = detail.step_id
+                if (detail.step_code != null) step.original.step_code = detail.step_code
+            }
+            idx += 1
+            if (step.children && step.children.length > 0) traverse(step.children)
+        }
+    }
+    traverse(stepList)
+}
+
+const resolveArrayField = (config, original, key) => {
+    if (config[key] !== undefined) {
+        return Array.isArray(config[key]) ? config[key] : null
+    }
+    if (original[key] != null) {
+        return Array.isArray(original[key]) ? original[key] : null
+    }
+    return null
+}
+
+/**
+ * 步骤树前后端序列化
+ *
+ * @param {object} deps
+ * @param {import('vue').Ref<Array>} deps.steps - 前端步骤树
+ * @param {import('vue').ComputedRef<string|null>} deps.caseId - 路由 case_id
+ * @param {import('vue').ComputedRef<string|null>} deps.caseCode - 路由 case_code
+ * @param {import('vue').Ref<{case_id, case_code}>} deps.appliedCaseMeta - 已应用源数据的用例标识
+ * @param {import('vue').Ref} deps.caseInfoPanelRef - CaseInfoPanel 组件 ref
+ */
+export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseMeta, caseInfoPanelRef }) {
+
+    const resolveCaseMetaForPayload = () => {
+        const fromRouteId = toPositiveCaseId(caseId.value)
+        const fromRouteCode = caseCode.value ? String(caseCode.value) : null
+        const fromAppliedId = toPositiveCaseId(appliedCaseMeta.value?.case_id)
+        const fromAppliedCode = appliedCaseMeta.value?.case_code
+            ? String(appliedCaseMeta.value.case_code)
+            : null
+
+        let fromStepsId = null
+        let fromStepsCode = null
+        forEachStep(steps.value, (s) => {
+            if (fromStepsId != null && fromStepsCode) return
+            const o = s?.original || {}
+            if (fromStepsId == null) {
+                fromStepsId = toPositiveCaseId(o.case_id ?? o.case?.case_id)
+            }
+            if (!fromStepsCode) {
+                const code = o.case_code ?? o.case?.case_code
+                if (code) fromStepsCode = String(code)
+            }
+        })
+
+        return {
+            case_id: fromRouteId ?? fromAppliedId ?? fromStepsId ?? null,
+            case_code: fromRouteCode || fromAppliedCode || fromStepsCode || null,
+        }
+    }
+
+    const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
+        const stepNo = stepNoMap ? (stepNoMap.get(step) || 1) : 1
+        const original = step.original || {}
+        const config = step.config || {}
+
+        const hasStepId = original.id !== undefined && original.id !== null
+        const hasStepCode = original.step_code !== undefined && original.step_code !== null && original.step_code !== ''
+        const isUpdate = hasStepId && hasStepCode
+
+        const backendStep = {
+            step_name: step.name || original.step_name || '',
+            step_desc: config.step_desc !== undefined ? (config.step_desc ?? '') : (original.step_desc || ''),
+            step_type: localTypeToBackend(step.type),
+            step_no: stepNo,
+            case_id: original.case_id || caseId.value || null,
+            parent_step_id: parentStepId,
+            quote_case_id: original.quote_case_id || null,
+            step_is_skipped: !!step.step_is_skipped,
+            case_type: (caseInfoPanelRef.value?.caseForm?.case_type) || original.case_type || '用户脚本',
+        }
+
+        if (isUpdate) {
+            backendStep.step_id = original.id
+            backendStep.step_code = original.step_code
+        }
+
+        if (step.type === 'tcp') {
+            backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
+            backendStep.request_config_name = config.request_config_name !== undefined
+                ? (config.request_config_name || null)
+                : (original.request_config_name || null)
+            backendStep.request_url = null
+            backendStep.request_port = null
+
+            const argsTypeRaw = (config.request_args_type ?? original.request_args_type ?? 'xml').toString().toLowerCase()
+            backendStep.request_args_type = ['xml', 'json', 'raw'].includes(argsTypeRaw) ? argsTypeRaw : 'xml'
+
+            backendStep.request_body = config.data !== undefined
+                ? (config.data || {})
+                : (original.request_body || {})
+
+            backendStep.request_text = config.request_text != null
+                ? config.request_text
+                : (original.request_text ?? null)
+
+            backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
+            backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+
+            backendStep.data_source_id = config.data_source_id !== undefined
+                ? (config.data_source_id || null)
+                : (original.data_source_id || null)
+            backendStep.data_source_name = config.data_source_name !== undefined
+                ? (config.data_source_name || null)
+                : (original.data_source_name || null)
+            backendStep.data_source_desc = config.data_source_desc !== undefined
+                ? (config.data_source_desc || null)
+                : (original.data_source_desc || null)
+        }
+        if (step.type === 'http') {
+            backendStep.request_method = config.method || original.request_method || 'POST'
+            backendStep.request_url = config.url || original.request_url || ''
+            backendStep.request_args_type = config.request_args_type ?? original.request_args_type ?? 'none'
+            backendStep.request_text = config.request_text ?? original.request_text ?? null
+            backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
+            backendStep.request_config_name = config.request_config_name !== undefined
+                ? (config.request_config_name || null)
+                : (original.request_config_name || null)
+            backendStep.request_header = filterKeyValueList(Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : []))
+            backendStep.request_params = filterKeyValueList(Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : []))
+            backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
+            backendStep.request_form_urlencoded = filterKeyValueList(Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : []))
+            backendStep.request_body = config.data || original.request_body || {}
+            backendStep.data_source_id = config.data_source_id !== undefined
+                ? (config.data_source_id || null)
+                : (original.data_source_id || null)
+            backendStep.data_source_name = config.data_source_name !== undefined
+                ? (config.data_source_name || null)
+                : (original.data_source_name || null)
+            backendStep.data_source_desc = config.data_source_desc !== undefined
+                ? (config.data_source_desc || null)
+                : (original.data_source_desc || null)
+
+            backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
+            backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+
+            backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
+        } else if (step.type === 'code') {
+            backendStep.code = config.code !== undefined ? config.code : (original.code || '')
+            backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+        } else if (step.type === 'loop') {
+            backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
+            backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '中断循环'
+            backendStep.loop_interval = config.loop_interval !== undefined ? Number(config.loop_interval) : (original.loop_interval ? Number(original.loop_interval) : 0)
+
+            if (backendStep.loop_mode === '次数循环') {
+                backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums != null ? Number(original.loop_maximums) : 5)
+            } else if (backendStep.loop_mode === '列表循环') {
+                backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
+            } else if (backendStep.loop_mode === '字典循环') {
+                backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
+            } else if (backendStep.loop_mode === '条件循环') {
+                const fromConfigDict = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
+                    ? config.conditions
+                    : null
+                if (fromConfigDict) {
+                    backendStep.conditions = {
+                        condition_expr: fromConfigDict.condition_expr != null ? String(fromConfigDict.condition_expr) : '',
+                        condition_compare: fromConfigDict.condition_compare || '非空',
+                        condition_value: fromConfigDict.condition_value != null ? String(fromConfigDict.condition_value) : '',
+                    }
+                } else if (
+                    config.condition_expr !== undefined
+                    || config.condition_compare !== undefined
+                    || config.condition_value !== undefined
+                ) {
+                    backendStep.conditions = {
+                        condition_expr: config.condition_expr != null ? String(config.condition_expr) : '',
+                        condition_compare: config.condition_compare || '非空',
+                        condition_value: config.condition_value != null ? String(config.condition_value) : '',
+                    }
+                } else if (original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)) {
+                    const oc = original.conditions
+                    backendStep.conditions = {
+                        condition_expr: oc.condition_expr != null ? String(oc.condition_expr) : '',
+                        condition_compare: oc.condition_compare || '非空',
+                        condition_value: oc.condition_value != null ? String(oc.condition_value) : '',
+                    }
+                } else {
+                    backendStep.conditions = null
+                }
+                backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
+            }
+        } else if (step.type === 'if') {
+            const fromConfig = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
+                ? config.conditions
+                : null
+            const fromOriginal = original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)
+                ? original.conditions
+                : null
+            const conditionObj = fromConfig || fromOriginal
+            backendStep.conditions = conditionObj
+                ? {
+                    condition_expr: conditionObj.condition_expr != null ? String(conditionObj.condition_expr) : '',
+                    condition_compare: conditionObj.condition_compare || '非空',
+                    condition_value: conditionObj.condition_value != null ? String(conditionObj.condition_value) : '',
+                    condition_desc: conditionObj.condition_desc != null ? String(conditionObj.condition_desc) : '',
+                }
+                : {
+                    condition_expr: '',
+                    condition_compare: '非空',
+                    condition_value: '',
+                    condition_desc: '',
+                }
+        } else if (step.type === 'wait') {
+            backendStep.wait = config.seconds || original.wait || 0
+        } else if (step.type === 'user_variables') {
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || '')
+            backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
+            const sv = config.session_variables ?? original.session_variables
+            const list = Array.isArray(sv) ? sv : []
+            backendStep.session_variables = filterKeyValueList(list.map(item => ({
+                key: item.key || '',
+                value: item.value ?? '',
+                desc: item.desc ?? item.description ?? '',
+            })))
+        } else if (step.type === 'quote') {
+            backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本')
+        } else if (step.type === 'database') {
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
+            backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
+            backendStep.database_searched = !!(config.database_searched ?? original.database_searched)
+            const ops = config.database_operates ?? original.database_operates
+            backendStep.database_operates = Array.isArray(ops) ? ops : null
+            backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
+            backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+        } else if (step.type === 'redis') {
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
+            backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
+            backendStep.redis_searched = !!(config.redis_searched ?? original.redis_searched)
+            const ops = config.redis_operates ?? original.redis_operates
+            backendStep.redis_operates = Array.isArray(ops) ? ops : null
+            backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
+            backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+        }
+
+        if (step.children && step.children.length > 0) {
+            const parentIdForChildren = isUpdate ? original.id : null
+            backendStep.children = step.children.map((child) => convertStepToBackend(child, parentIdForChildren, stepNoMap))
+        }
+
+        if (original.case) {
+            backendStep.case = original.case
+        } else {
+            const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
+            const caseMeta = resolveCaseMetaForPayload()
+            backendStep.case = {
+                case_id: caseMeta.case_id,
+                case_code: caseMeta.case_code,
+                ...casePayload,
+            }
+        }
+
+        const cleanedStep = {}
+        for (const key in backendStep) {
+            const value = backendStep[key]
+            if (!isUpdate && (key === 'step_id' || key === 'step_code')) continue
+            if (isUpdate && (key === 'step_id' || key === 'step_code')) {
+                if (value === undefined || value === null) continue
+            }
+            if (value !== undefined) {
+                cleanedStep[key] = value
+            }
+        }
+
+        return cleanedStep
+    }
+
+    const buildUpdateOrCreateTreePayload = () => {
+        const isNewCasePage = toPositiveCaseId(caseId.value) == null && !caseCode.value
+        const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
+        const countTotalSteps = (list) => {
+            let count = 0
+            for (const step of list || []) {
+                count++
+                if (step.children?.length) count += countTotalSteps(step.children)
+            }
+            return count
+        }
+        const totalSteps = countTotalSteps(steps.value)
+
+        let caseInfo
+        if (isNewCasePage) {
+            caseInfo = {
+                case_id: null,
+                case_code: null,
+                ...casePayload,
+                case_steps: totalSteps,
+                session_variables: null,
+            }
+        } else {
+            const caseMeta = resolveCaseMetaForPayload()
+            caseInfo = {
+                case_id: caseMeta.case_id,
+                case_code: caseMeta.case_code,
+                ...casePayload,
+                case_steps: totalSteps,
+                session_variables: null,
+            }
+        }
+
+        if (!steps.value?.length) {
+            return createEmptyStepTreePayloadTemplate(caseInfo)
+        }
+        const stepNoMap = assignStepNumbers(steps.value)
+        const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
+        const payload = { case: caseInfo, steps: backendSteps }
+        return isNewCasePage ? stripIdentityFieldsForNewCase(payload) : payload
+    }
+
+    return {
+        resolveCaseMetaForPayload,
+        convertStepToBackend,
+        buildUpdateOrCreateTreePayload,
+    }
+}
