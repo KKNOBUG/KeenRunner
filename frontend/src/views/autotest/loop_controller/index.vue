@@ -157,12 +157,12 @@
 </template>
 
 <script setup>
-import { reactive, watch, nextTick } from 'vue'
 import { NForm, NFormItem, NInput, NInputNumber, NRadio, NRadioGroup, NSpace, NCard, NSelect } from 'naive-ui'
 import {
   assertionOperationSelectOptions,
   DEFAULT_ASSERTION_OPERATION,
 } from '@/constants/autotestAssertionOperation'
+import { useStepEditorForm } from '@/composables/step-editor'
 
 /** 执行引擎写入会话变量的固定名称（不再落库配置字段） */
 const LOOP_INDEX_NAME = 'loop_index'
@@ -240,7 +240,7 @@ const mergeConfigAndOriginal = (config, original) => {
   return merged
 }
 
-const defaults = {
+const createDefaults = () => ({
   loop_mode: '次数循环',
   loop_on_error: '中断循环',
   loop_maximums: 5,
@@ -250,69 +250,49 @@ const defaults = {
   condition_expr: '',
   condition_compare: DEFAULT_ASSERTION_OPERATION,
   condition_value: ''
-}
-
-const form = reactive({
-  ...defaults,
-  ...mergeConfigAndOriginal(props.config, props.step?.original)
 })
 
-let isExternalUpdate = false
-
-/** 仅在步骤切换时从 props 灌入，避免 config 回写与输入抢值 */
-watch(
-    () => props.step?.id,
-    () => {
-      isExternalUpdate = true
-      Object.assign(form, defaults, mergeConfigAndOriginal(props.config || {}, props.step?.original))
-      nextTick(() => {
-        isExternalUpdate = false
-      })
-    },
-    { immediate: true }
-)
-
-let emitTimer = null
-watch(
-    () => [
-      form.loop_mode,
-      form.loop_on_error,
-      form.loop_interval,
-      form.loop_maximums,
-      form.loop_iterable,
-      form.loop_timeout,
-      form.condition_expr,
-      form.condition_compare,
-      form.condition_value
-    ],
-    () => {
-      if (isExternalUpdate || props.readonly) return
-      if (emitTimer) clearTimeout(emitTimer)
-
-      emitTimer = setTimeout(() => {
-        const config = {
-          loop_mode: form.loop_mode,
-          loop_on_error: form.loop_on_error,
-          loop_interval: form.loop_interval || 0
-        }
-
-        if (form.loop_mode === '次数循环') {
-          config.loop_maximums = form.loop_maximums
-        } else if (form.loop_mode === '列表循环' || form.loop_mode === '字典循环') {
-          config.loop_iterable = form.loop_iterable
-        } else if (form.loop_mode === '条件循环') {
-          config.conditions = {
-            condition_expr: form.condition_expr || '',
-            condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
-            condition_value: form.condition_value || ''
-          }
-          config.loop_timeout = form.loop_timeout || 120
-        }
-
-        emit('update:config', config)
-      }, 300)
+/** payload 按循环模式条件性输出字段 */
+const buildLoopConfig = (f) => {
+  const config = {
+    loop_mode: f.loop_mode,
+    loop_on_error: f.loop_on_error,
+    loop_interval: f.loop_interval || 0
+  }
+  if (f.loop_mode === '次数循环') {
+    config.loop_maximums = f.loop_maximums
+  } else if (f.loop_mode === '列表循环' || f.loop_mode === '字典循环') {
+    config.loop_iterable = f.loop_iterable
+  } else if (f.loop_mode === '条件循环') {
+    config.conditions = {
+      condition_expr: f.condition_expr || '',
+      condition_compare: f.condition_compare || DEFAULT_ASSERTION_OPERATION,
+      condition_value: f.condition_value || ''
     }
-)
+    config.loop_timeout = f.loop_timeout || 120
+  }
+  return config
+}
+
+const { form } = useStepEditorForm({
+  props,
+  emit,
+  defaults: createDefaults,
+  hydrate: (p) => mergeConfigAndOriginal(p.config || {}, p.step?.original),
+  buildConfig: buildLoopConfig,
+  watchFields: (f) => [
+    f.loop_mode,
+    f.loop_on_error,
+    f.loop_interval,
+    f.loop_maximums,
+    f.loop_iterable,
+    f.loop_timeout,
+    f.condition_expr,
+    f.condition_compare,
+    f.condition_value
+  ],
+  debounceMs: 300,
+})
 </script>
 
 <style scoped>

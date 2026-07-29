@@ -26,8 +26,8 @@
 </template>
 
 <script setup>
-import {reactive, watch, nextTick} from 'vue'
 import {NForm, NFormItem, NInputNumber, NCard} from 'naive-ui'
+import {useStepEditorForm} from '@/composables/step-editor'
 
 const props = defineProps({
   config: {
@@ -43,48 +43,19 @@ const props = defineProps({
 
 const emit = defineEmits(['update:config'])
 
-const defaults = {
-  seconds: 2
-}
+const DEFAULT_SECONDS = 2
 
-const mergeConfigAndOriginal = (config, original) => ({
-  seconds: config.seconds !== undefined
-      ? Number(config.seconds)
-      : (original?.wait ? Number(original.wait) : defaults.seconds)
+const { form } = useStepEditorForm({
+  props,
+  emit,
+  defaults: () => ({ seconds: DEFAULT_SECONDS }),
+  hydrate: (p) => ({
+    seconds: p.config?.seconds !== undefined
+        ? Number(p.config.seconds)
+        : (p.step?.original?.wait ? Number(p.step.original.wait) : DEFAULT_SECONDS)
+  }),
+  buildConfig: (f) => ({ seconds: f.seconds || 0 }),
+  watchFields: (f) => [f.seconds],
+  debounceMs: 300,
 })
-
-const form = reactive({
-  ...defaults,
-  ...mergeConfigAndOriginal(props.config, props.step?.original)
-})
-
-let isExternalUpdate = false
-
-/** 仅在步骤切换时从 props 灌入，避免 config 回写与输入抢值 */
-watch(
-    () => props.step?.id,
-    () => {
-      isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(props.config || {}, props.step?.original)
-      Object.assign(form, defaults, merged)
-      nextTick(() => {
-        isExternalUpdate = false
-      })
-    },
-    {immediate: true}
-)
-
-let emitTimer = null
-watch(
-    () => form.seconds,
-    () => {
-      if (isExternalUpdate || props.readonly) return
-      if (emitTimer) clearTimeout(emitTimer)
-      emitTimer = setTimeout(() => {
-        emit('update:config', {
-          seconds: form.seconds || 0
-        })
-      }, 300)
-    }
-)
 </script>

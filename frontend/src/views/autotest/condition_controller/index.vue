@@ -44,12 +44,12 @@
 </template>
 
 <script setup>
-import {reactive, watch, nextTick} from 'vue'
 import {NForm, NFormItem, NInput, NSelect, NCard} from 'naive-ui'
 import {
   assertionOperationSelectOptions,
   DEFAULT_ASSERTION_OPERATION,
 } from '@/constants/autotestAssertionOperation'
+import {useStepEditorForm} from '@/composables/step-editor'
 
 const props = defineProps({
   config: {
@@ -93,56 +93,19 @@ const mergeConfigAndOriginal = (config, original) => {
   return emptyConditionFields()
 }
 
-const buildConditionsPayload = () => ({
-  condition_expr: String(form.condition_expr ?? ''),
-  condition_compare: form.condition_compare || DEFAULT_ASSERTION_OPERATION,
-  condition_value: String(form.condition_value ?? ''),
-  condition_desc: String(form.condition_desc ?? '')
-})
-
-const form = reactive({
-  ...emptyConditionFields(),
-  ...mergeConfigAndOriginal(props.config, props.step?.original)
-})
-
-let isExternalUpdate = false
-
-/**
- * 与 user_variables_controller / run_code 修复方式一致：
- * - 仅在选择步骤（step.id 变化）时从 props 灌入 form
- * - 输入过程中父级会更新 config，但绝不再写回 form（否则与 v-model 抢值 → 卡顿丢字）
- */
-watch(
-    () => props.step?.id,
-    () => {
-      isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(props.config || {}, props.step?.original)
-      form.condition_expr = merged.condition_expr
-      form.condition_compare = merged.condition_compare
-      form.condition_value = merged.condition_value
-      form.condition_desc = merged.condition_desc
-      nextTick(() => {
-        isExternalUpdate = false
-      })
-    },
-    {immediate: true}
-)
-
-/** 立即同步到父级，不做防抖（防抖期间 props 回写曾导致丢字） */
-watch(
-    () => [
-      form.condition_expr,
-      form.condition_compare,
-      form.condition_value,
-      form.condition_desc
-    ],
-    () => {
-      if (isExternalUpdate || props.readonly) {
-        return
-      }
-      emit('update:config', {
-        conditions: buildConditionsPayload()
-      })
+const { form } = useStepEditorForm({
+  props,
+  emit,
+  defaults: emptyConditionFields,
+  hydrate: (p) => mergeConfigAndOriginal(p.config, p.step?.original),
+  buildConfig: (f) => ({
+    conditions: {
+      condition_expr: String(f.condition_expr ?? ''),
+      condition_compare: f.condition_compare || DEFAULT_ASSERTION_OPERATION,
+      condition_value: String(f.condition_value ?? ''),
+      condition_desc: String(f.condition_desc ?? '')
     }
-)
+  }),
+  watchFields: (f) => [f.condition_expr, f.condition_compare, f.condition_value, f.condition_desc],
+})
 </script>

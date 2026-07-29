@@ -135,7 +135,7 @@
 </template>
 
 <script setup>
-import { reactive, watch, nextTick, ref, computed, h } from 'vue'
+import { ref, computed, h } from 'vue'
 import {
   NBadge,
   NButton,
@@ -160,6 +160,7 @@ import {
   validateAssertList,
 } from '@/utils/autotestExtractAssert'
 import api from '@/api'
+import { useStepEditorForm } from '@/composables/step-editor'
 
 const props = defineProps({
   config: {
@@ -174,12 +175,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:config'])
-
-const defaults = {
-  step_name: '',
-  code: '',
-  assert_validators: {}
-}
 
 // 合并config和原始数据
 const mergeConfigAndOriginal = (config, original, stepName) => {
@@ -198,9 +193,17 @@ const mergeConfigAndOriginal = (config, original, stepName) => {
   }
 }
 
-const form = reactive({
-  ...defaults,
-  ...mergeConfigAndOriginal(props.config, props.step?.original, props.step?.name)
+const { form } = useStepEditorForm({
+  props,
+  emit,
+  defaults: () => ({ step_name: '', code: '', assert_validators: {} }),
+  hydrate: (p) => mergeConfigAndOriginal(p.config || {}, p.step?.original, p.step?.name),
+  buildConfig: (f) => ({
+    step_name: f.step_name || '',
+    code: f.code || '',
+    assert_validators: buildAssertListFromDict(f.assert_validators, ASSERT_MODE_PYTHON),
+  }),
+  watchFields: (f) => [f.step_name, f.code, f.assert_validators],
 })
 
 const validatorsCount = computed(() => countDictKeys(form.assert_validators))
@@ -406,42 +409,6 @@ const debugValidatorColumns = [
   },
   { title: '错误信息', key: 'error', ellipsis: { tooltip: true }, render: (row) => row.error || '-' }
 ]
-
-// 标记是否正在从外部更新，避免循环触发
-let isExternalUpdate = false
-
-/** 仅在步骤切换时从 props 灌入，避免 config 回写与输入抢值 */
-watch(
-    () => props.step?.id,
-    () => {
-      isExternalUpdate = true
-      const merged = mergeConfigAndOriginal(
-          props.config || {},
-          props.step?.original,
-          props.step?.name
-      )
-      Object.assign(form, defaults, merged)
-      nextTick(() => {
-        isExternalUpdate = false
-      })
-    },
-    { immediate: true }
-)
-
-// 监听表单变化，发送更新
-watch(
-    () => [form.step_name, form.code, form.assert_validators],
-    () => {
-      if (isExternalUpdate || props.readonly) return
-
-      emit('update:config', {
-        step_name: form.step_name || '',
-        code: form.code || '',
-        assert_validators: buildValidatorsForBackend(),
-      })
-    },
-    { deep: true }
-)
 
 // 调试功能
 const handleDebug = async () => {

@@ -400,6 +400,7 @@ import {
   validateAssertList,
   validateExtractList,
 } from '@/utils/autotestExtractAssert'
+import { useStepEditorForm } from '@/composables/step-editor'
 
 const props = defineProps({
   config: {type: Object, default: () => ({})},
@@ -461,17 +462,6 @@ const emptyOp = () => ({
   database_name: '0',
   variable_name: '',
   expr: '',
-})
-
-const state = reactive({
-  form: {
-    step_name: '',
-    step_desc: '',
-    redis_searched: false,
-    redis_operates: {},
-    extract_variables: {},
-    assert_validators: {}
-  }
 })
 
 const opCollapseState = reactive({})
@@ -605,24 +595,10 @@ const resolveDatabaseNameForRow = (item) => {
   return item?.database_name || '0'
 }
 
-const initExtractAndAssert = (cfg, original) => {
-  state.form.extract_variables = hydrateExtractDictFromBackend(
-      normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
-      EXTRACT_MODE_REDIS
-  )
-  state.form.assert_validators = hydrateAssertDictFromBackend(
-      normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
-      ASSERT_MODE_REDIS
-  )
-}
-
-const initFromProps = () => {
-  const cfg = props.config || {}
-  const original = props.step?.original || {}
-
-  state.form.step_name = cfg.step_name ?? original.step_name ?? ''
-  state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
-  state.form.redis_searched = !!(cfg.redis_searched ?? original.redis_searched)
+/** 从 props 合并出表单值（config 优先、original 兜底）；纯函数，供 useStepEditorForm 灌入 */
+const hydrateRedisForm = (p) => {
+  const cfg = p.config || {}
+  const original = p.step?.original || {}
 
   const src = cfg.redis_operates ?? original.redis_operates
   const list = !src ? [] : Array.isArray(src) ? src : typeof src === 'object' ? Object.values(src) : []
@@ -638,32 +614,54 @@ const initFromProps = () => {
       expr: row.expr ?? '',
     }
   })
-  state.form.redis_operates = next
-  Object.keys(opCollapseState).forEach((k) => delete opCollapseState[k])
-  editingRedisOpKey.value = ''
-  ensureCollapseKeys()
 
-  initExtractAndAssert(cfg, original)
-
-  const preload = new Set(
-      Object.values(state.form.redis_operates).map((r) => r.project_id).filter(Boolean)
-  )
-  preload.forEach((pid) => loadConfigsForProject(pid))
+  return {
+    step_name: cfg.step_name ?? original.step_name ?? '',
+    step_desc: cfg.step_desc ?? original.step_desc ?? '',
+    redis_searched: !!(cfg.redis_searched ?? original.redis_searched),
+    redis_operates: next,
+    extract_variables: hydrateExtractDictFromBackend(
+        normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
+        EXTRACT_MODE_REDIS
+    ),
+    assert_validators: hydrateAssertDictFromBackend(
+        normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
+        ASSERT_MODE_REDIS
+    ),
+  }
 }
 
+const { form } = useStepEditorForm({
+  props,
+  emit,
+  defaults: () => ({
+    step_name: '',
+    step_desc: '',
+    redis_searched: false,
+    redis_operates: {},
+    extract_variables: {},
+    assert_validators: {}
+  }),
+  hydrate: hydrateRedisForm,
+  buildConfig: () => buildConfigFromState(),
+})
+
+/** 模板与各 helper 沿用 state.form 访问方式 */
+const state = { form }
+
+/** 步骤切换后重置折叠态并预加载各操作项所属应用的配置（表单灌入由 useStepEditorForm 完成） */
 watch(
     () => props.step?.id,
-    () => initFromProps(),
-    {immediate: true}
-)
-
-watch(
-    () => state.form,
     () => {
-      if (props.readonly) return
-      emit('update:config', buildConfigFromState())
+      Object.keys(opCollapseState).forEach((k) => delete opCollapseState[k])
+      editingRedisOpKey.value = ''
+      ensureCollapseKeys()
+      const preload = new Set(
+          Object.values(state.form.redis_operates).map((r) => r.project_id).filter(Boolean)
+      )
+      preload.forEach((pid) => loadConfigsForProject(pid))
     },
-    {deep: true}
+    {immediate: true}
 )
 
 const toggleOpCollapse = (key) => {

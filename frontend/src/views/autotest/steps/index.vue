@@ -250,8 +250,8 @@
  * CaseInfoPanel：用例信息；ExecConfigModal：调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
 defineOptions({ name: '步骤编辑' })
-import {computed, defineComponent, h, nextTick, onActivated, onMounted, onUnmounted, ref, watch} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
+import {computed, defineComponent, h, nextTick, onActivated, onMounted, ref, watch} from 'vue'
+import {useRoute, useRouter, onBeforeRouteLeave} from 'vue-router'
 import {useElementHover} from '@vueuse/core'
 import {
   NButton,
@@ -288,17 +288,14 @@ import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
 import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import api from "@/api";
-import { mapBackendStep, forEachStep } from './utils/stepTreeMap'
+import { mapBackendStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
 import {
-  createEmptyStepTreePayloadTemplate,
-  isJsonTextEqual,
-  parseAndValidateStepTreePayload,
   stringifyStepTreePayload,
   stripIdentityFieldsForNewCase,
 } from './utils/stepSourceJson'
-import {useUserStore, useAutotestStore} from '@/store'
-import { validateAssertList, validateExtractList } from '@/utils/autotestExtractAssert';
+import {useUserStore, useAutotestStore, useStepEditorStore} from '@/store'
+import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
 
 const message = useMessage()
 /** 统一错误提示：优先全局 $message，否则 naive useMessage */
@@ -324,18 +321,17 @@ const stepDefinitions = {
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
 }
 
-const STEP_ICON = {
-  user_variables: 'gravity-ui:magic-wand',
-  http: 'streamline-freehand-color:server-api-cloud',
-  tcp: 'streamline-freehand-color:server-api-cloud',
-  code: 'ph:file-py',
-  database: 'ph:file-sql',
-  redis: 'ph:file-rs',
-  wait: 'gravity-ui:stopwatch',
-  if: 'gravity-ui:shuffle',
-  loop: 'gravity-ui:arrows-rotate-right',
-  quote_public_script: 'gravity-ui:link',
-}
+const {
+  validateStepNames: validateStepNamesInSteps,
+  validateHttpTcpStepsRequired,
+  validateJsonBodyInSteps,
+  validateXmlBodyInSteps,
+  validateDatabaseSteps,
+  validateRedisSteps,
+  validateEmptyKeyInSteps,
+  validateExtractAssertInSteps,
+} = useStepTreeValidation({ stepDefinitions })
+
 const editorMap = {
   loop: ApiLoopEditor,
   code: ApiCodeEditor,
@@ -382,89 +378,21 @@ const execConfigModalRef = ref(null)
 /** 引用/复制脚本抽屉 ref */
 const scriptSelectDrawerRef = ref(null)
 
-/** 左侧步骤树面板宽度（可拖拽调整，持久化到 localStorage） */
-const LEFT_PANEL_WIDTH_STORAGE_KEY = 'autotest-steps-left-panel-width'
-const LEFT_PANEL_WIDTH_DEFAULT = 350
-const LEFT_PANEL_WIDTH_MIN = 200
-const LEFT_PANEL_WIDTH_MAX = 600
+const {
+  leftPanelWidth,
+  leftPanelCollapsed,
+  leftPanelResizing,
+  loadLeftPanelWidth,
+  startResizeLeftPanel,
+  collapseLeftPanel,
+  expandLeftPanel,
+} = useLeftPanelResize()
 
-const leftPanelWidth = ref(LEFT_PANEL_WIDTH_DEFAULT)
-/** 步骤树是否折叠（双击分隔条折叠，左侧边缘按钮恢复） */
-const leftPanelCollapsed = ref(false)
-/** 正在拖拽调整步骤树宽度 */
-const leftPanelResizing = ref(false)
-
-/** 将宽度限制在 MIN~MAX 区间 */
-function clampLeftPanelWidth(width) {
-  return Math.min(LEFT_PANEL_WIDTH_MAX, Math.max(LEFT_PANEL_WIDTH_MIN, width))
-}
-
-/** 从 localStorage 恢复左侧面板宽度 */
-function loadLeftPanelWidth() {
-  try {
-    const raw = localStorage.getItem(LEFT_PANEL_WIDTH_STORAGE_KEY)
-    if (raw == null) return
-    const parsed = Number(raw)
-    if (!Number.isFinite(parsed)) return
-    leftPanelWidth.value = clampLeftPanelWidth(parsed)
-  } catch {
-    /* ignore */
-  }
-}
-
-/** 将当前左侧面板宽度写入 localStorage */
-function saveLeftPanelWidth() {
-  try {
-    localStorage.setItem(LEFT_PANEL_WIDTH_STORAGE_KEY, String(leftPanelWidth.value))
-  } catch {
-    /* ignore */
-  }
-}
-
-let resizeLeftPanelStartX = 0
-let resizeLeftPanelStartWidth = LEFT_PANEL_WIDTH_DEFAULT
-
-/** 拖拽中：按鼠标位移更新左侧面板宽度 */
-function onResizeLeftPanelMove(event) {
-  leftPanelWidth.value = clampLeftPanelWidth(
-      resizeLeftPanelStartWidth + event.clientX - resizeLeftPanelStartX
-  )
-}
-
-/** 结束拖拽：落盘宽度并清理全局监听 */
-function stopResizeLeftPanel() {
-  leftPanelResizing.value = false
-  saveLeftPanelWidth()
-  document.removeEventListener('mousemove', onResizeLeftPanelMove)
-  document.removeEventListener('mouseup', stopResizeLeftPanel)
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-}
-
-/** 开始拖拽调整左侧面板宽度（忽略双击的第二次 mousedown） */
-function startResizeLeftPanel(event) {
-  if (event.button !== 0) return
-  // 双击折叠时忽略第二次 mousedown 触发的拖拽
-  if (event.detail > 1) return
-  leftPanelResizing.value = true
-  resizeLeftPanelStartX = event.clientX
-  resizeLeftPanelStartWidth = leftPanelWidth.value
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-  document.addEventListener('mousemove', onResizeLeftPanelMove)
-  document.addEventListener('mouseup', stopResizeLeftPanel)
-}
-
-/** 双击分隔条：折叠步骤树 */
-function collapseLeftPanel() {
-  stopResizeLeftPanel()
-  leftPanelCollapsed.value = true
-}
-
-/** 展开已折叠的步骤树 */
-function expandLeftPanel() {
-  leftPanelCollapsed.value = false
-}
+const {
+  resolveCaseMetaForPayload,
+  convertStepToBackend,
+  buildUpdateOrCreateTreePayload,
+} = useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseMeta, caseInfoPanelRef })
 
 /** 右侧步骤编辑器使用的「所属应用」选项（来自 CaseInfoPanel） */
 const editorProjectOptions = computed(() => {
@@ -484,12 +412,6 @@ const scriptDrawerMode = ref('quote')
 const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
 const quotePublicScriptReplaceStepId = ref(null)
-// 引用步骤内展示的公共脚本步骤（仅展示，不参与保存）：quoteStepId -> 前端树节点数组
-const quoteStepsMap = ref({})
-// 从「用户脚本」切到「公共脚本」时暂存的引用步骤，切回「用户脚本」时可恢复
-const stashedQuoteStepsWhenPublic = ref([])
-// 从「用户脚本」切到「公共脚本」时暂存的 HTTP/TCP 步骤数据源指针，切回「用户脚本」时可恢复（保存时才真正解绑）
-const stashedDataSourceWhenPublic = ref([])
 // 复制模式：已选待复制的用例列表
 const selectedForCopy = ref([])
 const quotePublicScriptQueryItems = ref({
@@ -836,11 +758,6 @@ const onCaseTypeChange = ({ newType, oldType }) => {
 const debugLoading = ref(false)
 const saveLoading = ref(false)
 
-/** true=步骤树模式（默认），false=源数据 JSON 模式 */
-const treeMode = ref(true)
-const sourceJsonText = ref('')
-const sourceJsonApplyLoading = ref(false)
-
 const historyDrawerVisible = ref(false)
 const historyCaseRow = ref(null)
 
@@ -862,15 +779,6 @@ const resolveNumericCaseIdForExecuteApi = () => {
   if (fromApplied != null) return fromApplied
   return resolveCaseIdFromSteps(steps.value, null)
 }
-
-const dragState = ref({
-  draggingId: null,
-  dragOverId: null, // 当前拖拽进入的 loop/if 步骤 ID（焦点高亮）
-  dragOverParent: null,
-  dragOverIndex: null,
-  insertPosition: null, // 'before' | 'after' | null，用于指示插入位置
-  insertTargetId: null // 插入目标步骤 ID（用于显示指示器）
-})
 
 // 计算总步骤数（包括子步骤）
 const totalStepsCount = computed(() => {
@@ -958,6 +866,18 @@ const findStep = (id, list = steps.value) => {
   return null
 }
 
+const {
+  dragState,
+  handleDragStart,
+  handleDragOver,
+  handleDragLeave,
+  handleDragOverInChildrenArea,
+  handleDragLeaveInChildrenArea,
+  handleDragOverOnChild,
+  handleDragLeaveOnChild,
+  handleDrop,
+} = useStepDragDrop({ steps, stepDefinitions, findStep })
+
 /** 查找步骤的父节点；根级步骤返回 null */
 const findStepParent = (id, list = steps.value, parent = null) => {
   for (const step of list) {
@@ -969,6 +889,31 @@ const findStepParent = (id, list = steps.value, parent = null) => {
   }
   return null
 }
+
+const {
+  quoteStepsMap,
+  stashedQuoteStepsWhenPublic,
+  stashedDataSourceWhenPublic,
+  forEachStepWithQuote,
+  loadQuoteStepsForStep,
+  loadQuoteStepsForAllQuoteSteps,
+  loadQuoteStepsForAllQuoteStepsAsync,
+  fillQuoteStepsMapFromRawData,
+  getQuoteInnerStep,
+  removeAllQuoteSteps,
+  collectQuoteStepsWithPosition,
+  restoreStashedQuoteSteps,
+  stashAndClearDataSourceBindings,
+  restoreStashedDataSourceBindings,
+} = useQuoteSteps({
+  steps,
+  findStep,
+  findStepParent,
+  removeStep: (id) => removeStep(id),
+  stepExpandStates,
+  selectedKeys,
+  updateStepDisplayNames: () => updateStepDisplayNames(),
+})
 
 /** 祖先是否被跳过（继承灰显；子开关可保留但不生效） */
 const isStepSkipInherited = (id) => {
@@ -989,122 +934,6 @@ const toggleSkipStep = (id, event) => {
   if (step.original) step.original.step_is_skipped = step.step_is_skipped
 }
 
-/**
- * 前序遍历步骤树，对每个步骤执行 fn（可选：包含「引用公共脚本」加载的内部步骤）。
- * 说明：
- * - 引用脚本内部步骤来自 quoteStepsMap，仅用于聚合/展示，不写入当前用例
- * - 为避免嵌套引用导致循环，这里默认不继续展开「被引用脚本」内部的 quote 步骤
- */
-const forEachStepWithQuote = (list, fn, { includeQuoteInner = true } = {}) => {
-  if (!list || !Array.isArray(list)) return
-  for (const step of list) {
-    fn(step)
-    if (step.children && step.children.length) forEachStepWithQuote(step.children, fn, { includeQuoteInner })
-    if (includeQuoteInner && step?.type === 'quote') {
-      const inner = quoteStepsMap.value?.[step.id] || []
-      if (Array.isArray(inner) && inner.length) {
-        // 被引用脚本内部：不再展开其 quote，避免循环引用
-        forEachStepWithQuote(inner, fn, { includeQuoteInner: false })
-      }
-    }
-  }
-}
-
-/** 加载单个引用步骤对应的公共脚本步骤树（仅用于展示，不写入当前用例） */
-const loadQuoteStepsForStep = async (step) => {
-  if (step.type !== 'quote' || !step.config?.quote_case_id) {
-    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
-    return
-  }
-  try {
-    const res = await api.getAutoTestStepTree({ case_id: step.config.quote_case_id })
-    const data = Array.isArray(res?.data) ? res.data : []
-    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: data.map(mapBackendStep).filter(Boolean) }
-  } catch (e) {
-    console.error('加载引用脚本步骤失败', e)
-    quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
-  }
-}
-
-/** 加载所有引用步骤的公共脚本步骤 */
-const loadQuoteStepsForAllQuoteSteps = () => {
-  forEachStep(steps.value, (step) => {
-    if (step.type === 'quote') loadQuoteStepsForStep(step)
-  })
-}
-
-/**
- * 等待当前页步骤树中所有「引用公共脚本」的内部步骤加载完成（写入 quoteStepsMap）。
- * 脚本执行配置聚合依赖 quoteStepsMap；若不 await，collectDebugRows 会在引用步骤仍为空的时机执行，导致配置名/IP 等缺失。
- */
-const loadQuoteStepsForAllQuoteStepsAsync = async () => {
-  const quoteSteps = []
-  forEachStep(steps.value, (s) => {
-    if (s?.type === 'quote' && s?.config?.quote_case_id) quoteSteps.push(s)
-  })
-  if (!quoteSteps.length) return
-  await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s)))
-}
-
-/**
- * 从缓存的 rawData 中提取 quote_steps 填充 quoteStepsMap，避免为每个引用步骤重复请求
- * 用于切换页签使用缓存时，不再调用 loadQuoteStepsForAllQuoteSteps（会触发接口）
- */
-const fillQuoteStepsMapFromRawData = (rawList, mappedList) => {
-  if (!rawList?.length || !mappedList?.length) return
-  for (let i = 0; i < rawList.length; i++) {
-    const raw = rawList[i]
-    const mapped = mappedList[i]
-    if (!raw || !mapped) continue
-    if (raw.quote_steps?.length) {
-      quoteStepsMap.value = {
-        ...quoteStepsMap.value,
-        [mapped.id]: raw.quote_steps.map(mapBackendStep).filter(Boolean)
-      }
-    }
-    if (raw.children?.length && mapped.children?.length) {
-      fillQuoteStepsMapFromRawData(raw.children, mapped.children)
-    }
-  }
-}
-
-/** 将引用脚本步骤树前序扁平化，得到带层级的列表（用于只读展示，含递归子级） */
-const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
-  if (!list || !Array.isArray(list)) return out
-  for (const step of list) {
-    out.push({ step, depth })
-    if (step.children && step.children.length) {
-      getQuoteStepsFlattened(step.children, depth + 1, out)
-    }
-  }
-  return out
-}
-
-const QUOTE_INNER_PREFIX = 'quote-inner:'
-/** 生成引用内嵌步骤的虚拟选中 key（quote-inner:...） */
-const getQuoteInnerKey = (quoteStepId, flatIndex) => `${QUOTE_INNER_PREFIX}${quoteStepId}:${flatIndex}`
-/** 解析虚拟选中 key 为 quoteStepId 与 flatIndex */
-const parseQuoteInnerKey = (key) => {
-  if (!key || typeof key !== 'string' || !key.startsWith(QUOTE_INNER_PREFIX)) return null
-  const rest = key.slice(QUOTE_INNER_PREFIX.length)
-  const colon = rest.indexOf(':')
-  if (colon === -1) return null
-  const quoteStepId = rest.slice(0, colon)
-  const flatIndex = parseInt(rest.slice(colon + 1), 10)
-  if (Number.isNaN(flatIndex)) return null
-  return { quoteStepId, flatIndex }
-}
-
-/** 根据 quote-inner key 解析出对应的步骤对象（用于右侧只读展示） */
-const getQuoteInnerStep = (key) => {
-  const parsed = parseQuoteInnerKey(key)
-  if (!parsed) return null
-  const list = quoteStepsMap.value[parsed.quoteStepId] || []
-  const flat = getQuoteStepsFlattened(list)
-  const item = flat[parsed.flatIndex]
-  if (!item) return null
-  return { ...item.step, isQuoteInner: true }
-}
 
 /** 前序遍历步骤树，得到扁平列表（用于计算当前步骤之前的可用变量） */
 const flattenStepsPreOrder = (list, out = []) => {
@@ -1190,974 +1019,38 @@ const availableVariableList = computed(() => {
 
 const assistFunctionsList = ref([])
 
-// 将前端类型转换为后端类型
-const localTypeToBackend = (localType) => {
-  const typeMap = {
-    'user_variables': '用户变量',
-    'tcp': 'TCP请求',
-    'http': 'HTTP请求',
-    'code': '代码请求(Python)',
-    'if': '条件分支',
-    'loop': '循环结构',
-    'wait': '等待控制',
-    'quote': '引用公共脚本',
-    'database': '数据库请求',
-    'redis': 'Redis请求'
-  }
-  return typeMap[localType] || '代码请求(Python)'
-}
-
-// 按照树的前序遍历顺序分配 step_no（确保唯一且按顺序递增）
-// 返回一个 Map<step对象, stepNo>，用于在转换时获取正确的 step_no
-const assignStepNumbers = (steps) => {
-  const stepNoMap = new Map()
-  let stepNoCounter = 1
-
-  // 前序遍历函数：先访问节点，再递归访问子节点
-  const traverse = (step) => {
-    // 访问当前节点，分配 step_no
-    stepNoMap.set(step, stepNoCounter++)
-
-    // 递归访问子节点
-    if (step.children && step.children.length > 0) {
-      step.children.forEach(child => {
-        traverse(child)
-      })
-    }
-  }
-
-  // 遍历所有根步骤
-  steps.forEach(step => {
-    traverse(step)
-  })
-
-  return stepNoMap
-}
-
-// 键值对列表去空：只保留 key 非空（trim 后）的项，避免 Key 为空时被保存
-const filterKeyValueList = (list) => {
-  if (!Array.isArray(list)) return []
-  return list.filter((item) => item && String(item.key ?? '').trim() !== '')
-}
-
-// 将前端步骤格式转换为后端格式
-// stepNoMap: Map<step对象, stepNo>，用于获取正确的 step_no
-const convertStepToBackend = (step, parentStepId = null, stepNoMap = null) => {
-  // 从 stepNoMap 获取 step_no，如果没有则使用默认值
-  const stepNo = stepNoMap ? (stepNoMap.get(step) || 1) : 1
-  const original = step.original || {}
-  const config = step.config || {}
-
-  // 判断是新增还是更新：根据后端逻辑
-  // 如果 original.id 和 original.step_code 都存在，则是更新；否则是新增
-  // 注意：original.id 对应后端的 step_id（数据库主键），original.step_code 对应后端的 step_code
-  const hasStepId = original.id !== undefined && original.id !== null
-  const hasStepCode = original.step_code !== undefined && original.step_code !== null && original.step_code !== ''
-  const isUpdate = hasStepId && hasStepCode
-
-  // 基础字段（step_desc 优先用 config，来自 HTTP 等编辑器的 emit）
-  const backendStep = {
-    step_name: step.name || original.step_name || '',
-    step_desc: config.step_desc !== undefined ? (config.step_desc ?? '') : (original.step_desc || ''),
-    step_type: localTypeToBackend(step.type),
-    step_no: stepNo,
-    case_id: original.case_id || caseId.value || null,
-    parent_step_id: parentStepId,
-    quote_case_id: original.quote_case_id || null,
-    step_is_skipped: !!step.step_is_skipped,
-    // case_type 从用例信息中获取，必填字段（新增步骤时）
-    case_type: (caseInfoPanelRef.value?.caseForm?.case_type) || original.case_type || '用户脚本'
-  }
-
-  // 只有更新时才传递 step_id 和 step_code（两个都必须存在）
-  // 新增时不传递这两个字段（设置为undefined，让后端排除）
-  if (isUpdate) {
-    backendStep.step_id = original.id
-    backendStep.step_code = original.step_code
-  }
-  // 新增时不设置 step_id 和 step_code，让它们为 undefined，后端会自动排除
-
-  // 根据类型设置特定字段
-  if (step.type === 'tcp') {
-    // TCP：应用 + 配置名 + 请求体落库；host/port 由执行/调试时环境配置解析，与 tcp_controller 一致不写 request_url/request_port
-    backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
-    backendStep.request_config_name = config.request_config_name !== undefined
-        ? (config.request_config_name || null)
-        : (original.request_config_name || null)
-    backendStep.request_url = null
-    backendStep.request_port = null
-
-    const argsTypeRaw = (config.request_args_type ?? original.request_args_type ?? 'xml').toString().toLowerCase()
-    const argsType = ['xml', 'json', 'raw'].includes(argsTypeRaw) ? argsTypeRaw : 'xml'
-    backendStep.request_args_type = argsType
-
-    // JSON 与 XML/Raw 数据始终双向落库，不再根据当前模式互斥丢弃
-    backendStep.request_body = config.data !== undefined
-        ? (config.data || {})
-        : (original.request_body || {})
-
-    // 发送原值：'' 表示用户清空了（后端 exclude_none 不会排除空字符串），null 表示未设置过
-    const payloadRaw = config.request_text != null
-        ? config.request_text
-        : (original.request_text ?? null)
-    backendStep.request_text = payloadRaw
-
-    if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
-    } else if (original.extract_variables != null) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
-    } else {
-      backendStep.extract_variables = null
-    }
-
-    if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
-    } else if (original.assert_validators != null) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
-    } else {
-      backendStep.assert_validators = null
-    }
-
-    backendStep.data_source_id = config.data_source_id !== undefined
-        ? (config.data_source_id || null)
-        : (original.data_source_id || null)
-    backendStep.data_source_name = config.data_source_name !== undefined
-        ? (config.data_source_name || null)
-        : (original.data_source_name || null)
-    backendStep.data_source_desc = config.data_source_desc !== undefined
-        ? (config.data_source_desc || null)
-        : (original.data_source_desc || null)
-  }
-  if (step.type === 'http') {
-    backendStep.request_method = config.method || original.request_method || 'POST'
-    backendStep.request_url = config.url || original.request_url || ''
-    backendStep.request_args_type = config.request_args_type ?? original.request_args_type ?? 'none'
-    backendStep.request_text = config.request_text ?? original.request_text ?? null
-    backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
-    backendStep.request_config_name = config.request_config_name !== undefined
-        ? (config.request_config_name || null)
-        : (original.request_config_name || null)
-    backendStep.request_header = filterKeyValueList(Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : []))
-    backendStep.request_params = filterKeyValueList(Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : []))
-    backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
-    backendStep.request_form_urlencoded = filterKeyValueList(Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : []))
-    backendStep.request_body = config.data || original.request_body || {}
-    backendStep.data_source_id = config.data_source_id !== undefined
-        ? (config.data_source_id || null)
-        : (original.data_source_id || null)
-    backendStep.data_source_name = config.data_source_name !== undefined
-        ? (config.data_source_name || null)
-        : (original.data_source_name || null)
-    backendStep.data_source_desc = config.data_source_desc !== undefined
-        ? (config.data_source_desc || null)
-        : (original.data_source_desc || null)
-
-    // extract_variables、assert_validators 须为数组，否则为 null
-    if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
-    } else if (original.extract_variables != null) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
-    } else {
-      backendStep.extract_variables = null
-    }
-
-    if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
-    } else if (original.assert_validators != null) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
-    } else {
-      backendStep.assert_validators = null
-    }
-
-    // defined_variables 必须是列表格式，每个元素包含 key、value、desc；Key 为空的项不保存
-    backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
-  } else if (step.type === 'code') {
-    backendStep.code = config.code !== undefined ? config.code : (original.code || '')
-    if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
-    } else if (original.assert_validators != null) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
-    } else {
-      backendStep.assert_validators = null
-    }
-  } else if (step.type === 'loop') {
-    // 循环模式必填（与 loop_controller 默认一致）
-    backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
-    // 错误处理策略必填（默认与 loop_controller 一致：中断循环）
-    backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '中断循环'
-    // 循环间隔（所有模式都需要）
-    backendStep.loop_interval = config.loop_interval !== undefined ? Number(config.loop_interval) : (original.loop_interval ? Number(original.loop_interval) : 0)
-
-    // 根据循环模式设置特定字段
-    if (backendStep.loop_mode === '次数循环') {
-      // 最大循环次数默认 5，与 loop_controller 一致
-      backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums != null ? Number(original.loop_maximums) : 5)
-    } else if (backendStep.loop_mode === '列表循环') {
-      backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
-    } else if (backendStep.loop_mode === '字典循环') {
-      backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
-    } else if (backendStep.loop_mode === '条件循环') {
-      const fromConfigDict = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
-          ? config.conditions
-          : null
-      if (fromConfigDict) {
-        backendStep.conditions = {
-          condition_expr: fromConfigDict.condition_expr != null ? String(fromConfigDict.condition_expr) : '',
-          condition_compare: fromConfigDict.condition_compare || '非空',
-          condition_value: fromConfigDict.condition_value != null ? String(fromConfigDict.condition_value) : ''
-        }
-      } else if (
-          config.condition_expr !== undefined ||
-          config.condition_compare !== undefined ||
-          config.condition_value !== undefined
-      ) {
-        backendStep.conditions = {
-          condition_expr: config.condition_expr != null ? String(config.condition_expr) : '',
-          condition_compare: config.condition_compare || '非空',
-          condition_value: config.condition_value != null ? String(config.condition_value) : ''
-        }
-      } else if (original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)) {
-        const oc = original.conditions
-        backendStep.conditions = {
-          condition_expr: oc.condition_expr != null ? String(oc.condition_expr) : '',
-          condition_compare: oc.condition_compare || '非空',
-          condition_value: oc.condition_value != null ? String(oc.condition_value) : ''
-        }
-      } else {
-        backendStep.conditions = null
-      }
-      backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
-    }
-  } else if (step.type === 'if') {
-    const fromConfig = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
-        ? config.conditions
-        : null
-    const fromOriginal = original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)
-        ? original.conditions
-        : null
-    const conditionObj = fromConfig || fromOriginal
-    backendStep.conditions = conditionObj
-        ? {
-          condition_expr: conditionObj.condition_expr != null ? String(conditionObj.condition_expr) : '',
-          condition_compare: conditionObj.condition_compare || '非空',
-          condition_value: conditionObj.condition_value != null ? String(conditionObj.condition_value) : '',
-          condition_desc: conditionObj.condition_desc != null ? String(conditionObj.condition_desc) : ''
-        }
-        : {
-          condition_expr: '',
-          condition_compare: '非空',
-          condition_value: '',
-          condition_desc: ''
-        }
-  } else if (step.type === 'wait') {
-    backendStep.wait = config.seconds || original.wait || 0
-  } else if (step.type === 'user_variables') {
-    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || '')
-    backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
-    const sv = config.session_variables ?? original.session_variables
-    const list = Array.isArray(sv) ? sv : []
-    backendStep.session_variables = filterKeyValueList(list.map(item => ({
-      key: item.key || '',
-      value: item.value ?? '',
-      desc: item.desc ?? item.description ?? ''
-    })))
-  } else if (step.type === 'quote') {
-    backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
-    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本')
-  } else if (step.type === 'database') {
-    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
-    backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
-    backendStep.database_searched = !!(config.database_searched ?? original.database_searched)
-    const ops = config.database_operates ?? original.database_operates
-    backendStep.database_operates = Array.isArray(ops) ? ops : null
-    if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
-    } else if (original.extract_variables != null) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
-    } else {
-      backendStep.extract_variables = null
-    }
-    if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
-    } else if (original.assert_validators != null) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
-    } else {
-      backendStep.assert_validators = null
-    }
-  } else if (step.type === 'redis') {
-    backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
-    backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
-    backendStep.redis_searched = !!(config.redis_searched ?? original.redis_searched)
-    const ops = config.redis_operates ?? original.redis_operates
-    backendStep.redis_operates = Array.isArray(ops) ? ops : null
-    if (config.extract_variables !== undefined) {
-      backendStep.extract_variables = Array.isArray(config.extract_variables) ? config.extract_variables : null
-    } else if (original.extract_variables != null) {
-      backendStep.extract_variables = Array.isArray(original.extract_variables) ? original.extract_variables : null
-    } else {
-      backendStep.extract_variables = null
-    }
-    if (config.assert_validators !== undefined) {
-      backendStep.assert_validators = Array.isArray(config.assert_validators) ? config.assert_validators : null
-    } else if (original.assert_validators != null) {
-      backendStep.assert_validators = Array.isArray(original.assert_validators) ? original.assert_validators : null
-    } else {
-      backendStep.assert_validators = null
-    }
-  }
-
-  // 处理子步骤（递归处理）
-  if (step.children && step.children.length > 0) {
-    // 如果是更新，使用当前步骤的id作为父步骤id；如果是新增，先传null，后端会处理
-    const parentIdForChildren = isUpdate ? original.id : null
-    // 递归转换子步骤，传递 stepNoMap 以获取正确的 step_no
-    backendStep.children = step.children.map((child) => {
-      return convertStepToBackend(child, parentIdForChildren, stepNoMap)
-    })
-  }
-
-  // 添加 case 信息（每个步骤都需要包含 case 信息）
-  if (original.case) {
-    backendStep.case = original.case
-  } else {
-    const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
-    const caseMeta = resolveCaseMetaForPayload()
-    backendStep.case = {
-      case_id: caseMeta.case_id,
-      case_code: caseMeta.case_code,
-      ...casePayload,
-    }
-  }
-
-  // 清理字段：确保新增时不传递step_id和step_code，更新时必须同时传递
-  // 根据后端逻辑：如果step_id和step_code都不存在，则是新增；如果都存在，则是更新；如果只存在一个，会报错
-  const cleanedStep = {}
-  for (const key in backendStep) {
-    const value = backendStep[key]
-    // 如果是新增步骤，完全排除step_id和step_code字段（不添加到cleanedStep中）
-    if (!isUpdate && (key === 'step_id' || key === 'step_code')) {
-      continue
-    }
-    // 如果是更新步骤，必须同时有step_id和step_code
-    if (isUpdate && (key === 'step_id' || key === 'step_code')) {
-      if (value === undefined || value === null) {
-        // 更新时如果step_id或step_code为空，跳过（不应该发生）
-        continue
-      }
-    }
-    // 保留所有非undefined的值（包括null，因为null可能是有意义的）
-    if (value !== undefined) {
-      cleanedStep[key] = value
-    }
-  }
-
-  return cleanedStep
-}
-
-/** 解析用例 case_id / case_code：路由 > 已应用源数据 > 步骤树 original */
-const resolveCaseMetaForPayload = () => {
-  const fromRouteId = toPositiveCaseId(caseId.value)
-  const fromRouteCode = caseCode.value ? String(caseCode.value) : null
-  const fromAppliedId = toPositiveCaseId(appliedCaseMeta.value?.case_id)
-  const fromAppliedCode = appliedCaseMeta.value?.case_code
-      ? String(appliedCaseMeta.value.case_code)
-      : null
-
-  let fromStepsId = null
-  let fromStepsCode = null
-  forEachStep(steps.value, (s) => {
-    if (fromStepsId != null && fromStepsCode) return
-    const o = s?.original || {}
-    if (fromStepsId == null) {
-      fromStepsId = toPositiveCaseId(o.case_id ?? o.case?.case_id)
-    }
-    if (!fromStepsCode) {
-      const code = o.case_code ?? o.case?.case_code
-      if (code) fromStepsCode = String(code)
-    }
-  })
-
-  return {
-    case_id: fromRouteId ?? fromAppliedId ?? fromStepsId ?? null,
-    case_code: fromRouteCode || fromAppliedCode || fromStepsCode || null,
-  }
-}
-
-/** 构建与 update_or_create_tree 一致的 { case, steps }（内存步骤树序列化） */
-const buildUpdateOrCreateTreePayload = () => {
-  const isNewCasePage = toPositiveCaseId(caseId.value) == null && !caseCode.value
-  const casePayload = caseInfoPanelRef.value?.getCasePayload?.() ?? {}
-  const countTotalSteps = (list) => {
-    let count = 0
-    for (const step of list || []) {
-      count++
-      if (step.children?.length) count += countTotalSteps(step.children)
-    }
-    return count
-  }
-  const totalSteps = countTotalSteps(steps.value)
-
-  let caseInfo
-  if (isNewCasePage) {
-    // 新建：case_id / case_code 置 null，由后端创建
-    caseInfo = {
-      case_id: null,
-      case_code: null,
-      ...casePayload,
-      case_steps: totalSteps,
-      session_variables: null,
-    }
-  } else {
-    const caseMeta = resolveCaseMetaForPayload()
-    caseInfo = {
-      case_id: caseMeta.case_id,
-      case_code: caseMeta.case_code,
-      ...casePayload,
-      case_steps: totalSteps,
-      session_variables: null,
-    }
-  }
-
-  if (!steps.value?.length) {
-    return createEmptyStepTreePayloadTemplate(caseInfo)
-  }
-  const stepNoMap = assignStepNumbers(steps.value)
-  const backendSteps = steps.value.map((step) => convertStepToBackend(step, null, stepNoMap))
-  const payload = { case: caseInfo, steps: backendSteps }
-  // 新建：去掉 steps 上的 step_id/step_code/case_id/case（convert 会带上 case）
-  return isNewCasePage ? stripIdentityFieldsForNewCase(payload) : payload
-}
-
 const buildSourceJsonFromMemoryTree = () => stringifyStepTreePayload(buildUpdateOrCreateTreePayload())
 
-const isSourceJsonDirty = () => !isJsonTextEqual(sourceJsonText.value, buildSourceJsonFromMemoryTree())
+const {
+  treeMode,
+  sourceJsonText,
+  sourceJsonApplyLoading,
+  isSourceJsonDirty,
+  resetSourceJson,
+  applySourceJsonFromEditor,
+  handleTreeModeChange,
+} = useSourceJsonMode({
+  steps,
+  caseId,
+  caseCode,
+  appliedCaseMeta,
+  stepExpandStates,
+  selectedKeys,
+  caseInfoPanelRef,
+  stepDefinitions,
+  buildSourceJsonFromMemoryTree,
+  updateStepDisplayNames: () => updateStepDisplayNames(),
+  loadQuoteStepsForAllQuoteSteps,
+  notifyError,
+})
 
-const markExpandStatesForMappedSteps = (list) => {
-  forEachStep(list, (s) => {
-    if (stepDefinitions[s.type]?.allowChildren) {
-      stepExpandStates.value.set(s.id, true)
-    }
-  })
-}
+const { isDirty, markSaved: markDirtySaved, markLoaded: markDirtyLoaded, reset: resetDirty, confirmIfDirty } = useDirtyCheck(buildSourceJsonFromMemoryTree)
 
-/**
- * 将校验通过的 { case, steps } 写入内存步骤树与用例信息表单。
- * 新建页（路由无 case_id/case_code）：剥离 case/steps 主键后再入库内存，按新增保存。
- * 应用成功后用「内存树再序列化」回写编辑器，避免与脏检查基准不一致而重复弹窗。
- * @returns {{ ok: true } | { ok: false, message: string }}
- */
-const applyValidatedSourcePayload = (payload) => {
-  const isNewCasePage = toPositiveCaseId(caseId.value) == null && !caseCode.value
-  const normalized = isNewCasePage ? stripIdentityFieldsForNewCase(payload) : payload
-
-  const mapped = (normalized.steps || []).map(mapBackendStep).filter(Boolean)
-  if ((normalized.steps || []).length && mapped.length !== normalized.steps.length) {
-    return { ok: false, message: '部分步骤无法转换为步骤树（请检查 step_type 等字段）' }
-  }
-  caseInfoPanelRef.value?.hydrateFromCasePayload?.(normalized.case)
-  if (isNewCasePage) {
-    appliedCaseMeta.value = { case_id: null, case_code: null }
-  } else {
-    appliedCaseMeta.value = {
-      case_id: toPositiveCaseId(caseId.value) ?? toPositiveCaseId(normalized.case?.case_id) ?? null,
-      case_code: (caseCode.value || normalized.case?.case_code)
-          ? String(caseCode.value || normalized.case.case_code)
-          : null,
-    }
-  }
-  steps.value = mapped
-  stepExpandStates.value = new Map()
-  markExpandStatesForMappedSteps(mapped)
-  selectedKeys.value = mapped[0]?.id ? [mapped[0].id] : []
-  updateStepDisplayNames()
-  loadQuoteStepsForAllQuoteSteps()
-  // 与 isSourceJsonDirty 同一套序列化，保证「已应用且未再改」时切回不弹窗
-  sourceJsonText.value = buildSourceJsonFromMemoryTree()
-  return { ok: true }
-}
-
-const tryApplySourceJsonText = (text) => {
-  const parsed = parseAndValidateStepTreePayload(text)
-  if (!parsed.ok) return parsed
-  return applyValidatedSourcePayload(parsed.payload)
-}
-
-const resetSourceJson = () => {
-  sourceJsonText.value = buildSourceJsonFromMemoryTree()
-  window.$message?.success?.('已恢复为当前步骤树数据')
-}
-
-const applySourceJsonFromEditor = () => {
-  sourceJsonApplyLoading.value = true
-  try {
-    const result = tryApplySourceJsonText(sourceJsonText.value)
-    if (!result.ok) {
-      notifyError(result.message || '应用失败')
-      return false
-    }
-    window.$message?.success?.('已应用到步骤树（尚未落库，请切回步骤树模式后点击保存）')
-    return true
-  } finally {
-    sourceJsonApplyLoading.value = false
-  }
-}
-
-const enterSourceMode = () => {
-  sourceJsonText.value = buildSourceJsonFromMemoryTree()
-  treeMode.value = false
-}
-
-const switchToTreeModeDiscardingJson = () => {
-  treeMode.value = true
-}
-
-const handleTreeModeChange = (wantTree) => {
-  if (wantTree === treeMode.value) return
-  if (!wantTree) {
-    enterSourceMode()
-    return
-  }
-  // 源数据 → 步骤树
-  if (!isSourceJsonDirty()) {
-    treeMode.value = true
-    return
-  }
-  window.$dialog?.confirm?.({
-    title: '切回步骤树模式',
-    type: 'warning',
-    content: '当前 JSON 相对步骤树有改动。是否将 JSON 应用到步骤树？选「取消」将丢弃 JSON 改动并直接切回。',
-    positiveText: '应用并切回',
-    negativeText: '不应用，直接切回',
-    confirm() {
-      const result = tryApplySourceJsonText(sourceJsonText.value)
-      if (!result.ok) {
-        notifyError(result.message || '应用失败，请修正 JSON 或点击「重置」')
-        return false
-      }
-      treeMode.value = true
-      window.$message?.success?.('已应用 JSON 并切回步骤树模式')
-    },
-    cancel() {
-      switchToTreeModeDiscardingJson()
-    },
-  })
-}
+onBeforeRouteLeave(async () => {
+  return await confirmIfDirty()
+})
 
 
-// 检查键值对列表中是否存在 key 为空（trim 后）的项
-const hasEmptyKeyInList = (list) => {
-  if (!Array.isArray(list)) return false
-  return list.some((item) => item != null && String(item.key ?? '').trim() === '' && String(item.value ?? '').trim() !== '')
-}
-
-/** 与 database_controller 一致：database_operates / redis_operates 可为数组或「序号→行」对象 */
-const normalizeOperatesList = (ops) => {
-  if (ops == null) return []
-  if (Array.isArray(ops)) return ops
-  if (typeof ops === 'object') {
-    const keys = Object.keys(ops).map((k) => parseInt(k, 10)).filter((n) => !isNaN(n)).sort((a, b) => a - b)
-    return keys.map((k) => ops[k])
-  }
-  return []
-}
-
-const normalizeDatabaseOperatesList = normalizeOperatesList
-const normalizeRedisOperatesList = normalizeOperatesList
-
-/** 校验数据库步骤配置完整性 */
-const validateDatabaseSteps = (stepList) => {
-  for (const step of stepList) {
-    if (step.type === 'database') {
-      const config = step.config || {}
-      const original = step.original || {}
-      const rawOps = config.database_operates ?? original.database_operates
-      const stepName = step.name || original.step_name || '未命名步骤'
-
-      if (rawOps != null && typeof rawOps !== 'object') {
-        return {valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开步骤编辑或删除后添加`}
-      }
-
-      const list = normalizeDatabaseOperatesList(rawOps)
-      if (!list.length) {
-        return {
-          valid: false,
-          message: `步骤：${stepName}：请至少添加一条数据库操作`
-        }
-      }
-
-      for (let i = 0; i < list.length; i++) {
-        const o = list[i] || {}
-        const idxLabel = `第${i + 1}条`
-        const pid = o.project_id
-        const hasApp =
-            String(o.project_name ?? '').trim() !== ''
-            || (pid != null && pid !== '' && String(pid).trim() !== '')
-        if (!hasApp) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择所属应用`
-          }
-        }
-        if (!String(o.config_name ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写配置名称`
-          }
-        }
-        if (!String(o.database_name ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写数据库名称`
-          }
-        }
-        if (!String(o.expr ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写SQL语句`
-          }
-        }
-        if (!String(o.variable_name ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写存储变量`
-          }
-        }
-        const opDisplayName = String(o.name ?? '').trim()
-        if (!opDisplayName) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写操作名称`
-          }
-        }
-      }
-
-      const firstNameIndex = new Map()
-      for (let j = 0; j < list.length; j++) {
-        const nm = String((list[j] || {}).name ?? '').trim()
-        if (firstNameIndex.has(nm)) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，操作名称不允许重复，请修改后再保存或调试`
-          }
-        }
-        firstNameIndex.set(nm, j)
-      }
-    }
-    if (step.children && step.children.length > 0) {
-      const child = validateDatabaseSteps(step.children)
-      if (!child.valid) return child
-    }
-  }
-  return {valid: true}
-}
-
-/** 校验 Redis 步骤配置完整性 */
-const validateRedisSteps = (stepList) => {
-  for (const step of stepList) {
-    if (step.type === 'redis') {
-      const config = step.config || {}
-      const original = step.original || {}
-      const rawOps = config.redis_operates ?? original.redis_operates
-      const stepName = step.name || original.step_name || '未命名步骤'
-
-      if (rawOps != null && typeof rawOps !== 'object') {
-        return {valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开步骤编辑或删除后添加`}
-      }
-
-      const list = normalizeRedisOperatesList(rawOps)
-      if (!list.length) {
-        return {
-          valid: false,
-          message: `步骤：${stepName}：请至少添加一条Redis操作`
-        }
-      }
-
-      for (let i = 0; i < list.length; i++) {
-        const o = list[i] || {}
-        const idxLabel = `第${i + 1}条`
-        const pid = o.project_id
-        const hasApp =
-            String(o.project_name ?? '').trim() !== ''
-            || (pid != null && pid !== '' && String(pid).trim() !== '')
-        if (!hasApp) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择所属应用`
-          }
-        }
-        if (!String(o.config_name ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写配置名称`
-          }
-        }
-        if (!String(o.database_name ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写库编号`
-          }
-        }
-        if (!String(o.expr ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写Redis命令`
-          }
-        }
-        if (!String(o.variable_name ?? '').trim()) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写存储变量`
-          }
-        }
-        const opDisplayName = String(o.name ?? '').trim()
-        if (!opDisplayName) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写操作名称`
-          }
-        }
-      }
-
-      const firstNameIndex = new Map()
-      for (let j = 0; j < list.length; j++) {
-        const nm = String((list[j] || {}).name ?? '').trim()
-        if (firstNameIndex.has(nm)) {
-          return {
-            valid: false,
-            message: `步骤：${stepName}，操作名称不允许重复，请修改后再保存或调试`
-          }
-        }
-        firstNameIndex.set(nm, j)
-      }
-    }
-    if (step.children && step.children.length > 0) {
-      const child = validateRedisSteps(step.children)
-      if (!child.valid) return child
-    }
-  }
-  return {valid: true}
-}
-
-/** HTTP：所属应用、配置名称、请求地址必填；TCP：所属应用、配置名称必填（地址端口由环境/脚本配置解析） */
-const validateHttpTcpStepsRequired = (stepList) => {
-  const walk = (list) => {
-    if (!Array.isArray(list)) return {valid: true}
-    for (const step of list) {
-      const stepLabel = step.name || step.original?.step_name || '未命名步骤'
-      const config = step.config || {}
-      const original = step.original || {}
-
-      if (step.type === 'http') {
-        const projectId = config.request_project_id ?? original.request_project_id ?? null
-        const emptyProject = projectId === null || projectId === undefined || projectId === ''
-
-        let cfgName = ''
-        if (config.request_config_name !== undefined) {
-          cfgName = config.request_config_name == null ? '' : String(config.request_config_name).trim()
-        } else {
-          cfgName = String(original.request_config_name ?? '').trim()
-        }
-
-        const url = String(config.url ?? original.request_url ?? '').trim()
-
-        if (emptyProject) {
-          return {valid: false, message: `步骤：${stepLabel}，请选择所属应用后再保存`}
-        }
-        if (!cfgName) {
-          return {valid: false, message: `步骤：${stepLabel}，请填写配置名称后再保存`}
-        }
-        if (!url) {
-          return {valid: false, message: `步骤：${stepLabel}，请填写请求地址后再保存`}
-        }
-      }
-
-      if (step.type === 'tcp') {
-        const projectId = config.request_project_id ?? original.request_project_id ?? null
-        const emptyProject = projectId === null || projectId === undefined || projectId === ''
-
-        let cfgName = ''
-        if (config.request_config_name !== undefined) {
-          cfgName = config.request_config_name == null ? '' : String(config.request_config_name).trim()
-        } else {
-          cfgName = String(original.request_config_name ?? '').trim()
-        }
-
-        if (emptyProject) {
-          return {valid: false, message: `步骤：${stepLabel}，请选择所属应用后再保存`}
-        }
-        if (!cfgName) {
-          return {valid: false, message: `步骤：${stepLabel}，请填写配置名称后再保存`}
-        }
-      }
-
-      if (step.children && step.children.length > 0) {
-        const child = walk(step.children)
-        if (!child.valid) return child
-      }
-    }
-    return {valid: true}
-  }
-  return walk(stepList)
-}
-
-// 递归校验步骤树中提取/断言配置是否完整（禁止不完整项被静默丢弃后仍提示保存成功）
-const resolveStepListField = (config, original, key) => {
-  // 与 convertStepToBackend 一致：config 显式赋值（含 null）优先，未编辑过才回退 original
-  if (config[key] !== undefined) {
-    return Array.isArray(config[key]) ? config[key] : []
-  }
-  return Array.isArray(original[key]) ? original[key] : []
-}
-
-const validateExtractAssertInSteps = (stepList) => {
-  for (const step of stepList) {
-    const config = step.config || {}
-    const original = step.original || {}
-    const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
-    const extractResult = validateExtractList(resolveStepListField(config, original, 'extract_variables'))
-    if (!extractResult.valid) {
-      return { valid: false, message: `步骤：${stepName}，${extractResult.message}` }
-    }
-    const assertResult = validateAssertList(resolveStepListField(config, original, 'assert_validators'))
-    if (!assertResult.valid) {
-      return { valid: false, message: `步骤：${stepName}，${assertResult.message}` }
-    }
-    if (step.children && step.children.length > 0) {
-      const childResult = validateExtractAssertInSteps(step.children)
-      if (!childResult.valid) return childResult
-    }
-  }
-  return { valid: true }
-}
-
-// 递归校验步骤树中是否存在“键为空”的键值对（请求头/请求体/变量/用户变量等），若存在则不允许保存
-const validateEmptyKeyInSteps = (stepList) => {
-  for (const step of stepList) {
-    const config = step.config || {}
-    const original = step.original || {}
-    const getList = (key) => (Array.isArray(config[key]) ? config[key] : Array.isArray(original[key]) ? original[key] : [])
-    let listName = ''
-    if (step.type === 'http') {
-      if (hasEmptyKeyInList(getList('headers')) || hasEmptyKeyInList(getList('request_header'))) listName = '请求头'
-      else if (hasEmptyKeyInList(getList('params')) || hasEmptyKeyInList(getList('request_params'))) listName = '请求体 params'
-      else if (hasEmptyKeyInList(getList('form_data')) || hasEmptyKeyInList(getList('request_form_data'))) listName = '请求体 form-data'
-      else if (hasEmptyKeyInList(getList('form_urlencoded')) || hasEmptyKeyInList(getList('request_form_urlencoded'))) listName = '请求体 x-www-form-urlencoded'
-      else if (hasEmptyKeyInList(getList('defined_variables'))) listName = '变量'
-    } else if (step.type === 'user_variables') {
-      if (hasEmptyKeyInList(getList('session_variables'))) listName = '用户变量'
-    }
-    if (listName) {
-      return {valid: false, stepName: step.name || step.original?.step_name || '未命名步骤', listName}
-    }
-    if (step.children && step.children.length > 0) {
-      const childResult = validateEmptyKeyInSteps(step.children)
-      if (!childResult.valid) return childResult
-    }
-  }
-  return {valid: true}
-}
-
-// 递归校验步骤树中所有 HTTP/TCP 步骤：若请求体为 json，则校验 JSON 语法
-const validateJsonBodyInSteps = (stepList) => {
-  for (const step of stepList) {
-    const config = step.config || {}
-    const original = step.original || {}
-    const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
-
-    if (step.type === 'http') {
-      const requestArgsType = config.request_args_type ?? 'none'
-      if (requestArgsType === 'json') {
-        const raw = config.jsonBodyText ?? (config.data != null ? JSON.stringify(config.data) : '')
-        const trimmed = (raw || '').trim()
-        if (trimmed !== '') {
-          try {
-            JSON.parse(trimmed)
-          } catch (e) {
-            return {valid: false, message: e.message || 'JSON 格式错误', stepName}
-          }
-        }
-      }
-      if (requestArgsType === 'xml') {
-        const raw = config.request_text ?? ''
-        const trimmed = (raw || '').trim()
-        if (trimmed !== '') {
-          const parser = new DOMParser()
-          const doc = parser.parseFromString(trimmed, 'application/xml')
-          const parseError = doc.querySelector('parsererror')
-          if (parseError) {
-            return {valid: false, message: parseError.textContent || 'XML 格式错误', stepName}
-          }
-        }
-      }
-    }
-
-    if (step.type === 'tcp') {
-      const raw = config.jsonBodyText ?? ''
-      const trimmed = (raw || '').trim()
-      if (trimmed !== '') {
-        try {
-          JSON.parse(trimmed)
-        } catch (e) {
-          return {valid: false, message: e.message || 'JSON 格式错误', stepName}
-        }
-      }
-    }
-
-    if (step.children && step.children.length > 0) {
-      const childResult = validateJsonBodyInSteps(step.children)
-      if (!childResult.valid) return childResult
-    }
-  }
-  return {valid: true}
-}
-
-// 递归校验步骤树中所有 TCP 步骤的 XML 请求体语法
-const validateXmlBodyInSteps = (stepList) => {
-  for (const step of stepList) {
-    if (step.type === 'tcp') {
-      const config = step.config || {}
-      const original = step.original || {}
-      const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
-      const raw = config.xmlBodyText ?? ''
-      const trimmed = (raw || '').trim()
-      if (trimmed !== '') {
-        const doc = new DOMParser().parseFromString(trimmed, 'text/xml')
-        const pe = doc.querySelector('parsererror')
-        if (pe && String(pe.textContent || '').trim()) {
-          return {valid: false, message: 'XML 语法错误', stepName}
-        }
-        if (!doc.documentElement) {
-          return {valid: false, message: 'XML 语法错误', stepName}
-        }
-      }
-    }
-    if (step.children && step.children.length > 0) {
-      const childResult = validateXmlBodyInSteps(step.children)
-      if (!childResult.valid) return childResult
-    }
-  }
-  return {valid: true}
-}
-
-// 将后端返回的 success_detail（前序顺序）写回步骤树，使下次保存走更新而非新增，避免重复保存产生重复步骤
-const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
-  if (!Array.isArray(detailList) || detailList.length === 0) return
-  let idx = 0
-  const traverse = (list) => {
-    if (!Array.isArray(list)) return
-    for (const step of list) {
-      const detail = detailList[idx]
-      if (detail && (detail.step_id != null || detail.step_code != null)) {
-        if (!step.original) step.original = {}
-        if (detail.step_id != null) step.original.id = detail.step_id
-        if (detail.step_code != null) step.original.step_code = detail.step_code
-      }
-      idx += 1
-      if (step.children && step.children.length > 0) traverse(step.children)
-    }
-  }
-  traverse(stepList)
-}
 
 /** 校验用例与步骤树后调用 updateOrCreateStepTree 保存 */
 const handleSaveAll = async () => {
@@ -2442,7 +1335,10 @@ const loadSteps = async () => {
     if (caseInfoStr) {
       try {
         const caseInfo = JSON.parse(caseInfoStr)
-        if (loadStepsFromCopy(caseInfo)) return
+        if (loadStepsFromCopy(caseInfo)) {
+          nextTick(() => markDirtyLoaded())
+          return
+        }
       } catch (_) {}
     }
     steps.value = []
@@ -2451,6 +1347,7 @@ const loadSteps = async () => {
     caseInfoPanelRef.value?.hydrateFromStepTree?.([])
     // 新增页展开用例信息面板，便于填写（覆盖上一用例自动折叠后的收起状态）
     if (caseInfoPanelRef.value) caseInfoPanelRef.value.caseInfoCollapsed = false
+    nextTick(() => markDirtyLoaded())
     return
   }
   // 缓存：切换页签时使用缓存，不重复请求；从用例管理「编辑」新建页签时需请求
@@ -2461,6 +1358,7 @@ const loadSteps = async () => {
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
     quoteStepsMap.value = {}
     fillQuoteStepsMapFromRawData(cached.rawData, steps.value)
+    nextTick(() => markDirtyLoaded())
     return
   }
   try {
@@ -2475,6 +1373,7 @@ const loadSteps = async () => {
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
     loadQuoteStepsForAllQuoteSteps()
     autotestStore.setStepTreeCache(caseId.value, caseCode.value, { rawData: data, steps: mappedSteps })
+    nextTick(() => markDirtyLoaded())
   } catch (error) {
     console.error('Failed to load step tree', error)
     steps.value = []
@@ -2724,77 +1623,15 @@ const handleAddStep = (type, parentId) => {
   }
 }
 
-/** 批量上传数据源：隐藏文件选择框，选中 xlsx 后按 sheet 名匹配步骤批量创建数据源 */
-const batchUploadFileRef = ref(null)
-const batchUploadLoading = ref(false)
-const handleBatchUploadDatasource = () => {
-  if (!caseId.value) {
-    window.$message?.warning?.('请先保存用例后再批量上传数据源')
-    return
-  }
-  batchUploadFileRef.value?.click()
-}
-const onBatchUploadFileChange = async (ev) => {
-  const input = ev.target
-  const file = input?.files?.[0]
-  if (input) input.value = ''
-  if (!file) return
-  if (!String(file.name || '').toLowerCase().endsWith('.xlsx')) {
-    window.$message?.warning?.('仅支持 .xlsx 格式的数据驱动文件')
-    return
-  }
-  if (batchUploadLoading.value) return
-  batchUploadLoading.value = true
-  try {
-    const fd = new FormData()
-    fd.append('case_id', String(caseId.value))
-    fd.append('file', file)
-    const res = await api.batchStepDatasetUpload(fd)
-    window.$message?.success?.(res?.message || '批量上传成功')
-    // 批量上传为一致性操作：成功后重载步骤树，刷新各步骤的数据源绑定状态
-    await loadSteps()
-  } catch {
-    // 校验/系统错误提示已由请求拦截器统一弹出，避免重复提示
-  } finally {
-    batchUploadLoading.value = false
-  }
-}
+const {
+  batchUploadFileRef,
+  batchUploadLoading,
+  summaryDownloadLoading,
+  handleBatchUploadDatasource,
+  onBatchUploadFileChange,
+  handleSummaryDownloadDatasource,
+} = useDataSourceBatch({ caseId, loadSteps: () => loadSteps() })
 
-/** 汇总下载数据源：导出该用例所有步骤绑定的数据源（每步一个 sheet） */
-const summaryDownloadLoading = ref(false)
-const handleSummaryDownloadDatasource = async () => {
-  if (!caseId.value) {
-    window.$message?.warning?.('请先保存用例后再下载数据源')
-    return
-  }
-  if (summaryDownloadLoading.value) return
-  summaryDownloadLoading.value = true
-  try {
-    const res = await api.batchStepDatasetDownload({ case_id: caseId.value })
-    const contentType = res?.headers?.['content-type'] || ''
-    if (contentType.includes('application/json')) {
-      const body = JSON.parse(await res.data.text())
-      window.$message?.error?.(body?.message || '下载失败')
-      return
-    }
-    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
-    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd)
-    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : '数据源汇总.xlsx'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-    window.$message?.success?.('下载成功')
-  } catch (e) {
-    window.$message?.error?.(e?.message || '下载失败')
-  } finally {
-    summaryDownloadLoading.value = false
-  }
-}
 
 /** 从树中递归删除指定 id 的步骤 */
 const removeStep = (id, list = steps.value) => {
@@ -2833,204 +1670,6 @@ const handleDeleteStep = (id) => {
   }
 }
 
-/** 当用例类型改为「公共脚本」时，移除步骤树中所有「引用公共脚本」步骤，防止循环引用。返回被移除的步骤数量。 */
-const removeAllQuoteSteps = () => {
-  const quoteIds = []
-  forEachStep(steps.value, (step) => {
-    if (step.type === 'quote' || step.type === 'quote_public_script') {
-      quoteIds.push(step.id)
-    }
-  })
-  if (quoteIds.length === 0) return 0
-  quoteIds.forEach((id) => {
-    const step = findStep(id)
-    if (step) {
-      stepExpandStates.value.delete(id)
-      removeStep(id)
-    }
-  })
-  quoteIds.forEach((id) => {
-    quoteStepsMap.value = { ...quoteStepsMap.value, [id]: [] }
-  })
-  if (quoteIds.includes(selectedKeys.value?.[0])) {
-    selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
-  }
-  updateStepDisplayNames()
-  return quoteIds.length
-}
-
-/** 收集所有「引用公共脚本」步骤及其位置（用于暂存，切回用户脚本时可恢复） */
-const collectQuoteStepsWithPosition = () => {
-  const list = []
-  forEachStep(steps.value, (step) => {
-    if (step.type !== 'quote' && step.type !== 'quote_public_script') return
-    const parent = findStepParent(step.id)
-    const parentId = parent?.id ?? null
-    const siblings = parentId === null ? steps.value : (parent?.children || [])
-    const index = siblings.findIndex((s) => s.id === step.id)
-    if (index === -1) return
-    list.push({
-      step: JSON.parse(JSON.stringify(step)),
-      parentId,
-      index
-    })
-  })
-  return list
-}
-
-/** 将暂存的引用步骤恢复回步骤树 */
-const restoreStashedQuoteSteps = () => {
-  const stashed = stashedQuoteStepsWhenPublic.value
-  if (!stashed || stashed.length === 0) return 0
-  const sorted = [...stashed].sort((a, b) => {
-    const pa = a.parentId ?? ''
-    const pb = b.parentId ?? ''
-    if (pa !== pb) return String(pa).localeCompare(String(pb))
-    return a.index - b.index
-  })
-  for (const { step, parentId, index } of sorted) {
-    const list = parentId === null ? steps.value : (findStep(parentId)?.children || null)
-    if (!list) continue
-    const safeIndex = Math.min(index, list.length)
-    list.splice(safeIndex, 0, step)
-  }
-  stashedQuoteStepsWhenPublic.value = []
-  updateStepDisplayNames()
-  loadQuoteStepsForAllQuoteSteps()
-  return sorted.length
-}
-
-/** 收集并清空所有 HTTP/TCP 步骤的数据源指针（切到公共脚本时调用；返回暂存列表，保存时才真正解绑） */
-const stashAndClearDataSourceBindings = () => {
-  const stashed = []
-  forEachStep(steps.value, (step) => {
-    if (step.type !== 'http' && step.type !== 'tcp') return
-    const cfg = step.config
-    if (!cfg || cfg.data_source_id == null) return
-    stashed.push({
-      stepId: step.id,
-      data_source_id: cfg.data_source_id,
-      data_source_name: cfg.data_source_name || '',
-      data_source_desc: cfg.data_source_desc || '',
-    })
-    cfg.data_source_id = null
-    cfg.data_source_name = ''
-    cfg.data_source_desc = ''
-  })
-  return stashed
-}
-
-/** 将暂存的数据源指针恢复回对应 HTTP/TCP 步骤（切回用户脚本时调用） */
-const restoreStashedDataSourceBindings = () => {
-  const stashed = stashedDataSourceWhenPublic.value
-  if (!stashed || stashed.length === 0) return 0
-  for (const { stepId, data_source_id, data_source_name, data_source_desc } of stashed) {
-    const cfg = findStep(stepId)?.config
-    if (!cfg) continue
-    cfg.data_source_id = data_source_id
-    cfg.data_source_name = data_source_name
-    cfg.data_source_desc = data_source_desc
-  }
-  stashedDataSourceWhenPublic.value = []
-  return stashed.length
-}
-
-/** 条件分支 / 循环结构在步骤树上的固定展示名（与 updateStepConfig 规则一致）；其它类型返回 null */
-const getFixedBranchStepDisplayName = (step) => {
-  if (!step?.type) return null
-  if (step.type === 'if') {
-    return '条件分支(满足条件时执行)'
-  }
-  if (step.type === 'loop') {
-    const mode = (step.config && step.config.loop_mode) || '次数循环'
-    if (mode === '次数循环') return '循环结构(次数循环)'
-    if (mode === '列表循环') return '循环结构(列表循环)'
-    if (mode === '字典循环') return '循环结构(字典循环)'
-    if (mode === '条件循环') return '循环结构-(条件循环)'
-    return '循环结构'
-  }
-  return null
-}
-
-/** 与 convertStepToBackend 写入后端的 step_name 一致，用于保存前校验重复 */
-const getStepNameAsWillPersist = (step) => {
-  const original = step.original || {}
-  const config = step.config || {}
-  const fixed = getFixedBranchStepDisplayName(step)
-  if (fixed) return String(fixed).trim()
-
-  if (step.type === 'user_variables') {
-    const v = config.step_name !== undefined ? config.step_name : (original.step_name || '')
-    return String(v ?? '').trim()
-  }
-  if (step.type === 'quote' || step.type === 'quote_public_script') {
-    const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本')
-    return String(v ?? '').trim()
-  }
-  if (step.type === 'database') {
-    const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
-    return String(v ?? '').trim()
-  }
-  if (step.type === 'redis') {
-    const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
-    return String(v ?? '').trim()
-  }
-
-  return String(step.name || original.step_name || '').trim()
-}
-
-/** 编辑器已向 config 写入 step_name 且用户清空时视为未填写（HTTP/TCP/代码等） */
-const isStepNameExplicitlyEmptyInEditor = (step) => {
-  const config = step.config || {}
-  if (!Object.prototype.hasOwnProperty.call(config, 'step_name')) return false
-  return String(config.step_name ?? '').trim() === ''
-}
-
-/** 步骤名称必填；除 loop / if 外全局不可重复（前序遍历） */
-const validateStepNamesInSteps = (stepList) => {
-  const usedNames = new Map()
-
-  const walk = (list) => {
-    if (!Array.isArray(list)) return {valid: true}
-    for (const step of list) {
-      const typeLabel = stepDefinitions[step.type]?.label
-          || (step.type === 'quote_public_script' ? '引用公共脚本' : (step.type || '步骤'))
-
-      if (isStepNameExplicitlyEmptyInEditor(step)) {
-        return {
-          valid: false,
-          message: `${typeLabel}：步骤名称不能为空，请填写后再保存`
-        }
-      }
-
-      const name = getStepNameAsWillPersist(step)
-      if (!name) {
-        return {
-          valid: false,
-          message: `${typeLabel}：步骤名称不能为空，请填写后再保存`
-        }
-      }
-
-      const exemptDuplicate = step.type === 'loop' || step.type === 'if'
-      if (!exemptDuplicate) {
-        if (usedNames.has(name)) {
-          return {
-            valid: false,
-            message: `步骤名称重复：${name}，除循环结构、条件分支外步骤名称不可重复，请修改后再保存`
-          }
-        }
-        usedNames.set(name, true)
-      }
-      if (step.children && step.children.length > 0) {
-        const child = walk(step.children)
-        if (!child.valid) return child
-      }
-    }
-    return {valid: true}
-  }
-
-  return walk(stepList)
-}
 
 /** 复制步骤（含子树）并插入到同级下一位置 */
 const handleCopyStep = (id) => {
@@ -3195,262 +1834,6 @@ const getStepIconClass = (type) => {
   return classMap[type] || ''
 }
 
-// 拖拽相关
-const handleDragStart = (event, stepId, parentId, index) => {
-  dragState.value.draggingId = stepId
-  dragState.value.dragOverParent = parentId
-  dragState.value.dragOverIndex = index
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', stepId)
-}
-
-/** 根级步骤拖拽经过 */
-const handleDragOver = (event, targetId, targetParentId) => {
-  event.preventDefault()
-  event.dataTransfer.dropEffect = 'move'
-
-  // 如果正在拖拽，检查目标步骤是否为 if/loop 类型
-  if (dragState.value.draggingId && targetId) {
-    const targetStep = findStep(targetId)
-    if (targetStep && stepDefinitions[targetStep.type]?.allowChildren) {
-      // 如果是 if 或 loop 类型，设置 dragOverId 用于焦点高亮
-      dragState.value.dragOverId = targetId
-      dragState.value.dragOverParent = targetParentId
-    }
-  }
-}
-
-// 处理在 if/loop 步骤的子步骤区域内的拖拽
-const handleDragOverInChildrenArea = (event, parentId) => {
-  event.preventDefault()
-  event.dataTransfer.dropEffect = 'move'
-
-  if (!dragState.value.draggingId || !parentId) {
-    return
-  }
-
-  const parentStep = findStep(parentId)
-  if (!parentStep || !stepDefinitions[parentStep.type]?.allowChildren) {
-    return
-  }
-
-  // 设置焦点高亮
-  dragState.value.dragOverId = parentId
-  dragState.value.dragOverParent = parentId
-
-  // 如果子步骤区域为空，设置插入位置为第一个位置
-  if (!parentStep.children || parentStep.children.length === 0) {
-    dragState.value.insertTargetId = null
-    dragState.value.insertPosition = 'before'
-    dragState.value.dragOverIndex = 0
-    return
-  }
-
-  // 如果子步骤区域不为空，让子步骤的 dragover 事件来处理
-  // 这里不做任何处理，让事件继续传播到子步骤
-}
-
-/** 离开 loop/if 子区域 */
-const handleDragLeaveInChildrenArea = (event, parentId) => {
-  // 当离开子步骤区域时，清除插入位置指示器
-  if (dragState.value.dragOverId === parentId) {
-    setTimeout(() => {
-      // 检查是否真的离开了该区域
-      if (dragState.value.dragOverId === parentId) {
-        dragState.value.insertTargetId = null
-        dragState.value.insertPosition = null
-        dragState.value.dragOverIndex = null
-      }
-    }, 50)
-  }
-}
-
-// 处理在子步骤上的拖拽
-const handleDragOverOnChild = (event, childId, parentId, childIndex) => {
-  event.preventDefault()
-  event.dataTransfer.dropEffect = 'move'
-
-  if (!dragState.value.draggingId || !parentId) {
-    return
-  }
-
-  const parentStep = findStep(parentId)
-  if (!parentStep || !stepDefinitions[parentStep.type]?.allowChildren) {
-    return
-  }
-
-  // 设置焦点高亮
-  dragState.value.dragOverId = parentId
-  dragState.value.dragOverParent = parentId
-
-  // 计算鼠标在子步骤中的相对位置，判断是插入到之前还是之后
-  const rect = event.currentTarget.getBoundingClientRect()
-  const mouseY = event.clientY
-  const stepCenterY = rect.top + rect.height / 2
-
-  // 如果鼠标在步骤的上半部分，插入到之前；否则插入到之后
-  const position = mouseY < stepCenterY ? 'before' : 'after'
-
-  dragState.value.insertTargetId = childId
-  dragState.value.insertPosition = position
-  dragState.value.dragOverIndex = position === 'before' ? childIndex : childIndex + 1
-}
-
-/** 离开子步骤拖拽目标 */
-const handleDragLeaveOnChild = (event, childId) => {
-  // 当离开子步骤时，清除插入位置指示器（延迟清除，避免快速移动时闪烁）
-  if (dragState.value.insertTargetId === childId) {
-    setTimeout(() => {
-      if (dragState.value.insertTargetId === childId) {
-        dragState.value.insertTargetId = null
-        dragState.value.insertPosition = null
-      }
-    }, 3000)
-  }
-}
-
-/** 离开拖拽目标 */
-const handleDragLeave = (event, targetId) => {
-  // 当离开拖拽目标时，清除焦点高亮（延迟清除，避免快速移动时闪烁）
-  if (dragState.value.dragOverId === targetId) {
-    // 使用 setTimeout 延迟清除，避免在移动到子元素时误清除
-    setTimeout(() => {
-      if (dragState.value.dragOverId === targetId) {
-        dragState.value.dragOverId = null
-        dragState.value.insertTargetId = null
-        dragState.value.insertPosition = null
-        dragState.value.dragOverIndex = null
-      }
-    }, 50)
-  }
-}
-
-/** 放置步骤完成移动 */
-const handleDrop = (event, targetId, targetParentId, targetIndex) => {
-  event.preventDefault()
-  const draggingId = dragState.value.draggingId
-  if (!draggingId || draggingId === targetId) {
-    dragState.value = {
-      draggingId: null,
-      dragOverId: null,
-      dragOverParent: null,
-      dragOverIndex: null,
-      insertPosition: null,
-      insertTargetId: null
-    }
-    return
-  }
-
-  const draggingStep = findStep(draggingId)
-  if (!draggingStep) {
-    dragState.value = {
-      draggingId: null,
-      dragOverId: null,
-      dragOverParent: null,
-      dragOverIndex: null,
-      insertPosition: null,
-      insertTargetId: null
-    }
-    return
-  }
-
-  // 从原位置移除
-  const removeFromList = (list, id) => {
-    const idx = list.findIndex(item => item.id === id)
-    if (idx !== -1) {
-      list.splice(idx, 1)
-      return true
-    }
-    for (const item of list) {
-      if (item.children && item.children.length) {
-        if (removeFromList(item.children, id)) return true
-      }
-    }
-    return false
-  }
-  removeFromList(steps.value, draggingId)
-
-  // 如果 dragOverId 存在且是 if/loop 类型，说明是拖拽到 if/loop 步骤的子步骤区域
-  if (dragState.value.dragOverId) {
-    const parentStep = findStep(dragState.value.dragOverId)
-    if (parentStep && stepDefinitions[parentStep.type]?.allowChildren) {
-      // 确保 children 数组存在
-      if (!parentStep.children) {
-        parentStep.children = []
-      }
-
-      // 使用 dragState 中的插入位置信息
-      const insertIndex = dragState.value.dragOverIndex !== null ? dragState.value.dragOverIndex : parentStep.children.length
-      parentStep.children.splice(insertIndex, 0, draggingStep)
-      dragState.value = {
-        draggingId: null,
-        dragOverId: null,
-        dragOverParent: null,
-        dragOverIndex: null,
-        insertPosition: null,
-        insertTargetId: null
-      }
-      return
-    }
-  }
-
-  // 原有的拖拽逻辑：拖拽到其他步骤的位置
-  const targetStep = findStep(targetId)
-  // 如果目标是 if/loop 类型且允许子步骤，且是拖拽到步骤本身的空区域（targetId === targetParentId）
-  if (targetStep && stepDefinitions[targetStep.type]?.allowChildren && targetId === targetParentId) {
-    // 确保 children 数组存在
-    if (!targetStep.children) {
-      targetStep.children = []
-    }
-    // 添加到目标步骤的 children 中
-    targetStep.children.push(draggingStep)
-    dragState.value = {
-      draggingId: null,
-      dragOverId: null,
-      dragOverParent: null,
-      dragOverIndex: null,
-      insertPosition: null,
-      insertTargetId: null
-    }
-    return
-  }
-
-  // 如果 targetParentId 是 if/loop 类型，说明是拖拽到 if/loop 步骤的子步骤位置
-  if (targetParentId) {
-    const parentStep = findStep(targetParentId)
-    if (parentStep && stepDefinitions[parentStep.type]?.allowChildren) {
-      // 确保 children 数组存在
-      if (!parentStep.children) {
-        parentStep.children = []
-      }
-      // 插入到指定位置
-      const insertIndex = targetIndex !== null ? targetIndex : parentStep.children.length
-      parentStep.children.splice(insertIndex, 0, draggingStep)
-      dragState.value = {
-        draggingId: null,
-        dragOverId: null,
-        dragOverParent: null,
-        dragOverIndex: null,
-        insertPosition: null,
-        insertTargetId: null
-      }
-      return
-    }
-  }
-
-  // 插入到新位置（根级别）
-  const insertIndex = targetIndex !== null ? targetIndex : steps.value.length
-  steps.value.splice(insertIndex, 0, draggingStep)
-  dragState.value = {
-    draggingId: null,
-    dragOverId: null,
-    dragOverParent: null,
-    dragOverIndex: null,
-    insertPosition: null,
-    insertTargetId: null
-  }
-}
-
 // 计算步骤编号（按深度优先遍历）
 const stepNumberMap = computed(() => {
   const map = new Map()
@@ -3554,13 +1937,11 @@ const isRouteCaseStale = () => {
 // 同页切换用例（仅 query 变化、组件未销毁）时需重新解析 case_info 并拉步骤树；已加载则跳过，避免与 onActivated 重复重载
 watch([() => caseId.value, () => caseCode.value, () => route.query.case_info], () => {
   if (!isRouteCaseStale()) return
+  resetDirty()
   caseInfoPanelRef.value?.reloadFromRoute?.()
   loadSteps()
 })
 
-onUnmounted(() => {
-  stopResizeLeftPanel()
-})
 
 onMounted(async () => {
   loadLeftPanelWidth()
@@ -3580,6 +1961,7 @@ onMounted(async () => {
 // 与已加载快照比对，不一致才重载（切到「新增」则清空，切到其它用例则加载）；一致则保持现状，避免丢失未保存的编辑。
 onActivated(() => {
   if (!isRouteCaseStale()) return
+  resetDirty()
   caseInfoPanelRef.value?.reloadFromRoute?.()
   loadSteps()
 })

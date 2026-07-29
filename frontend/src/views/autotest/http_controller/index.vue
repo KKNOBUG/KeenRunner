@@ -504,7 +504,7 @@
 </template>
 
 <script setup>
-import {computed, h, nextTick, reactive, ref, watch} from 'vue'
+import {computed, h, nextTick, ref, watch} from 'vue'
 import {
   NBadge,
   NButton,
@@ -520,7 +520,6 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NInputNumber,
   NRadio,
   NRadioGroup,
   NSelect,
@@ -530,7 +529,6 @@ import {
   NTabs,
   NTag,
   NText,
-  NTooltip,
 } from 'naive-ui'
 import api from "@/api";
 import KeyValueEditor from "@/components/common/KeyValueEditor.vue";
@@ -551,6 +549,7 @@ import {
   validateAssertList,
   validateExtractList,
 } from '@/utils/autotestExtractAssert'
+import { useStepEditorForm } from '@/composables/step-editor'
 import {useUserStore} from '@/store';
 import {useRoute} from 'vue-router'
 
@@ -683,9 +682,119 @@ const rules = {
   ]
 }
 
-/* 表单状态管理：从步骤配置初始化，不写死默认值 */
-const state = reactive({
-  form: {
+// 注意：不再使用 kvObjectToList 和 kvListToObject，所有字段都必须是列表格式
+
+/** 从 props 合并出表单值（config 优先、original 兜底）；纯函数，供 useStepEditorForm 灌入 */
+const hydrateHttpForm = (p) => {
+  const cfg = p.config || {}
+  const step = p.step || {}
+  const original = step.original || {}
+
+  // 请求体类型（与后端 request_args_type 枚举一致：none, params, form-data, x-www-form-urlencoded, json, raw）
+  const requestArgsType = cfg.request_args_type ?? original.request_args_type
+  let bodyType
+  if (requestArgsType) {
+    bodyType = requestArgsType
+  } else if (cfg.data) {
+    bodyType = 'json'
+  } else if (cfg.form_data) {
+    bodyType = 'form-data'
+  } else if (cfg.form_urlencoded) {
+    bodyType = 'x-www-form-urlencoded'
+  } else if (cfg.request_text != null && cfg.request_text !== '') {
+    bodyType = 'raw'
+  } else {
+    bodyType = 'none'
+  }
+
+  const requestText = cfg.request_text ?? original.request_text ?? ''
+  let xmlBody
+  let rawBody
+  if (bodyType === 'xml') {
+    xmlBody = requestText
+    rawBody = ''
+  } else if (bodyType === 'raw') {
+    rawBody = requestText
+    xmlBody = ''
+  } else {
+    // 其它类型（json、form-data 等）下报文暂存于 request_text，同时回填 xml 与 raw，避免切换类型后数据丢失
+    xmlBody = requestText
+    rawBody = requestText
+  }
+
+  // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc、type（form-data 需 type 供 KeyValueEditor 显示「数据」列）
+  const bodyParamsRaw = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
+  const bodyParams = bodyParamsRaw.map(item => ({
+    key: item.key || '',
+    value: item.value ?? '',
+    desc: item.desc || '',
+    type: item.type || 'text'
+  }))
+  const bodyFormRaw = Array.isArray(cfg.form_urlencoded) ? cfg.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
+  const bodyForm = bodyFormRaw.map(item => ({
+    key: item.key || '',
+    value: item.value ?? '',
+    desc: item.desc || '',
+    type: item.type || 'text'
+  }))
+
+  // JSON 请求体：优先使用配置中的原始文本，避免格式错误时被清空
+  let jsonBody
+  const jsonBodyText = cfg.jsonBodyText
+  if (jsonBodyText !== undefined && jsonBodyText !== null) {
+    jsonBody = String(jsonBodyText)
+  } else {
+    try {
+      const body = cfg.data ?? original.request_body
+      if (body === null || body === undefined) {
+        jsonBody = ''
+      } else if (typeof body === 'string') {
+        jsonBody = body
+      } else {
+        jsonBody = Object.keys(body).length ? JSON.stringify(body, null, 2) : ''
+      }
+    } catch {
+      jsonBody = ''
+    }
+  }
+
+  return {
+    url: cfg.url || original.request_url || '',
+    method: cfg.method || original.request_method || 'GET',
+    // headers、params 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
+    headers: Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : []),
+    bodyType,
+    params: Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : []),
+    bodyParams,
+    bodyForm,
+    jsonBody,
+    xmlBody,
+    rawBody,
+    // 步骤名称优先 config（含 emit 回写），再回退 step.name / original，避免失焦时被旧 original 覆盖
+    step_name: cfg.step_name !== undefined ? cfg.step_name : (step.name || original.step_name || ''),
+    description: cfg.step_desc !== undefined ? (cfg.step_desc ?? '') : (original.step_desc || ''),
+    request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
+    request_config_name: cfg.request_config_name ?? original.request_config_name ?? null,
+    data_source_id: cfg.data_source_id ?? original.data_source_id ?? null,
+    data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
+    data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
+    // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
+    defined_variables: Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []),
+    extract_variables: hydrateExtractDictFromBackend(
+        normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
+        EXTRACT_MODE_RESPONSE
+    ),
+    assert_validators: hydrateAssertDictFromBackend(
+        normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
+        ASSERT_MODE_RESPONSE
+    ),
+  }
+}
+
+const { form, isExternalUpdate, syncFromExternal } = useStepEditorForm({
+  props,
+  emit,
+  defaults: () => ({
     url: '',
     method: 'GET',
     headers: [],
@@ -698,143 +807,31 @@ const state = reactive({
     rawBody: '',
     step_name: '',
     description: '',
-    request_project_id: null, // 请求项目ID（与 request_args_type 等一致，从 form 读写；无 UI 时由 init 从 config/original 带入）
-    request_config_name: null, // 与 /autotest/config/config_names 中 api 类配置名一致
+    request_project_id: null,
+    request_config_name: null,
     data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
     defined_variables: [],
     extract_variables: {},
     assert_validators: {},
-  }
+  }),
+  hydrate: hydrateHttpForm,
+  buildConfig: () => buildConfigFromState(),
+  watchFields: (f) => [
+    f.step_name, f.description, f.method,
+    f.url, f.headers, f.params,
+    f.bodyType, f.bodyParams, f.bodyForm,
+    f.jsonBody, f.xmlBody, f.rawBody, f.request_project_id,
+    f.request_config_name,
+    f.data_source_id, f.data_source_name, f.data_source_desc,
+    f.defined_variables, f.extract_variables, f.assert_validators
+  ],
+  debounceMs: 300,
 })
 
-// 注意：不再使用 kvObjectToList 和 kvListToObject，所有字段都必须是列表格式
-
-const initFromConfig = () => {
-  const cfg = props.config || {}
-  const step = props.step || {}
-  const original = step.original || {}
-
-  console.log('========== HTTP 控制器 - 接收到的数据 ==========')
-  console.log('1. props.config (配置数据，从 step.config 传递):', cfg)
-  console.log('2. props.step (完整的步骤对象):', step)
-  console.log('3. props.step.original (原始后端步骤数据):', original)
-  console.log('4. props.step.original 的所有 key:', original ? Object.keys(original) : [])
-
-  // 打印原始数据中的关键字段
-  if (original) {
-    console.log('5. 原始步骤数据中的关键字段:')
-    console.log('   - step_code:', original.step_code)
-    console.log('   - step_name:', original.step_name)
-    console.log('   - step_desc:', original.step_desc)
-    console.log('   - step_type:', original.step_type)
-    console.log('   - id:', original.id)
-    console.log('   - case_id:', original.case_id)
-    console.log('   - request_method:', original.request_method)
-    console.log('   - request_url:', original.request_url)
-    console.log('   - extract_variables:', original.extract_variables)
-    console.log('   - assert_validators:', original.assert_validators)
-    console.log('   - defined_variables:', original.defined_variables)
-  }
-  console.log('==================================================')
-
-  // 从原始数据中获取步骤名称和描述
-  // 优先使用 config（含 emit 回写），再回退到 original，避免失焦时被旧 original 覆盖
-  state.form.step_name = cfg.step_name !== undefined
-      ? cfg.step_name
-      : (step.name || original.step_name || '')
-  state.form.description = cfg.step_desc !== undefined ? (cfg.step_desc ?? '') : (original.step_desc || '')
-
-  state.form.method = cfg.method || original.request_method || 'GET'
-  state.form.url = cfg.url || original.request_url || ''
-  // headers、params 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
-  state.form.headers = Array.isArray(cfg.headers) ? cfg.headers : (Array.isArray(original.request_header) ? original.request_header : [])
-  state.form.params = Array.isArray(cfg.params) ? cfg.params : (Array.isArray(original.request_params) ? original.request_params : [])
-  state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
-  state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
-  state.form.data_source_id = cfg.data_source_id ?? original.data_source_id ?? null
-  state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
-  state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
-
-  // 请求体类型（与后端 request_args_type 枚举一致：none, params, form-data, x-www-form-urlencoded, json, raw）
-  // 请求体类型：统一用 request_args_type（与后端枚举一致），form 内用 bodyType 仅作 UI 绑定
-  const requestArgsType = cfg.request_args_type ?? original.request_args_type
-  if (requestArgsType) {
-    state.form.bodyType = requestArgsType
-  } else if (cfg.data) {
-    state.form.bodyType = 'json'
-  } else if (cfg.form_data) {
-    state.form.bodyType = 'form-data'
-  } else if (cfg.form_urlencoded) {
-    state.form.bodyType = 'x-www-form-urlencoded'
-  } else if (cfg.request_text != null && cfg.request_text !== '') {
-    state.form.bodyType = 'raw'
-  } else {
-    state.form.bodyType = 'none'
-  }
-  const requestText = cfg.request_text ?? original.request_text ?? ''
-  if (state.form.bodyType === 'xml') {
-    state.form.xmlBody = requestText
-    state.form.rawBody = ''
-  } else if (state.form.bodyType === 'raw') {
-    state.form.rawBody = requestText
-    state.form.xmlBody = ''
-  } else {
-    // 其它类型（json、form-data 等）下报文暂存于 request_text，同时回填 xml 与 raw，避免切换类型后数据丢失
-    state.form.xmlBody = requestText
-    state.form.rawBody = requestText
-  }
-
-  // form_data、form_urlencoded 必须是列表格式，每个元素包含 key、value、desc、type（form-data 需 type 供 KeyValueEditor 显示「数据」列）
-  const bodyParamsRaw = Array.isArray(cfg.form_data) ? cfg.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : [])
-  state.form.bodyParams = bodyParamsRaw.map(item => ({
-    key: item.key || '',
-    value: item.value ?? '',
-    desc: item.desc || '',
-    type: item.type || 'text'
-  }))
-  const bodyFormRaw = Array.isArray(cfg.form_urlencoded) ? cfg.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : [])
-  state.form.bodyForm = bodyFormRaw.map(item => ({
-    key: item.key || '',
-    value: item.value ?? '',
-    desc: item.desc || '',
-    type: item.type || 'text'
-  }))
-
-  // JSON 请求体：优先使用配置中的原始文本，避免格式错误时被清空
-  const jsonBodyText = cfg.jsonBodyText
-  if (jsonBodyText !== undefined && jsonBodyText !== null) {
-    state.form.jsonBody = String(jsonBodyText)
-  } else {
-    try {
-      const body = cfg.data ?? original.request_body
-      if (body === null || body === undefined) {
-        state.form.jsonBody = ''
-      } else if (typeof body === 'string') {
-        state.form.jsonBody = body
-      } else {
-        state.form.jsonBody = Object.keys(body).length ? JSON.stringify(body, null, 2) : ''
-      }
-    } catch {
-      state.form.jsonBody = state.form.jsonBody ?? ''
-    }
-  }
-
-  // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
-  state.form.defined_variables = Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : [])
-
-  state.form.extract_variables = hydrateExtractDictFromBackend(
-      normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
-      EXTRACT_MODE_RESPONSE
-  )
-  state.form.assert_validators = hydrateAssertDictFromBackend(
-      normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
-      ASSERT_MODE_RESPONSE
-  )
-}
-
-initFromConfig()
+/** 模板与各 helper 沿用 state.form 访问方式 */
+const state = { form }
 
 
 const httpConfigNameOptions = ref([])
@@ -871,44 +868,20 @@ watch(
 )
 
 
-// 标记是否正在从外部更新，避免循环触发
-let isExternalUpdate = false
-
-// 仅在切换步骤或步骤原始数据变化时重新初始化，不监听 props.config，避免用户编辑（如请求地址全选删除/剪切）后被 config 回写覆盖
-watch(
-    () => [props.step?.id, props.step?.original, props.step?.name],
-    ([stepId, original, stepName]) => {
-      isExternalUpdate = true
-      initFromConfig()
-      const cfg = props.config || {}
-      const step = props.step || {}
-      const orig = step.original || {}
-      state.form.step_name = cfg.step_name !== undefined
-          ? cfg.step_name
-          : (stepName || orig.step_name || '')
-      nextTick(() => {
-        isExternalUpdate = false
-      })
-    },
-    {deep: true, immediate: false}
-)
-
 // 父级切换用例类型时会暂存/恢复 data_source 指针并直接改写 step.config；此处把外部对
-// config.data_source_* 的改动同步进表单，保证当前编辑器与步骤树一致。相等性判断 + isExternalUpdate
+// config.data_source_* 的改动同步进表单，保证当前编辑器与步骤树一致。相等性判断 + syncFromExternal
 // 共同抑制防抖 emit 回写循环（即便偶发一次 emit，回写的也是与 config 相同的值，自然收敛）。
 watch(
     () => [props.config?.data_source_id, props.config?.data_source_name, props.config?.data_source_desc],
     ([dsId, dsName, dsDesc]) => {
-      if (isExternalUpdate) return
+      if (isExternalUpdate()) return
       if (state.form.data_source_id === dsId
           && state.form.data_source_name === dsName
           && state.form.data_source_desc === dsDesc) return
-      isExternalUpdate = true
-      state.form.data_source_id = dsId ?? null
-      state.form.data_source_name = dsName ?? ''
-      state.form.data_source_desc = dsDesc ?? ''
-      nextTick(() => {
-        isExternalUpdate = false
+      syncFromExternal(() => {
+        state.form.data_source_id = dsId ?? null
+        state.form.data_source_name = dsName ?? ''
+        state.form.data_source_desc = dsDesc ?? ''
       })
     },
 )
@@ -996,35 +969,6 @@ const buildConfigFromState = () => {
     defined_variables: normalizeList(variablesList)
   }
 }
-
-// 使用防抖，避免频繁触发
-let emitTimer = null
-watch(
-    () => [
-      state.form.step_name, state.form.description, state.form.method,
-      state.form.url, state.form.headers, state.form.params,
-      state.form.bodyType, state.form.bodyParams, state.form.bodyForm,
-      state.form.jsonBody, state.form.xmlBody, state.form.rawBody, state.form.request_project_id,
-      state.form.request_config_name,
-      state.form.data_source_id, state.form.data_source_name, state.form.data_source_desc,
-      state.form.defined_variables, state.form.extract_variables, state.form.assert_validators
-    ],
-    () => {
-      // 如果正在从外部更新，不触发 emit
-      if (isExternalUpdate) return
-
-      // 清除之前的定时器
-      if (emitTimer) {
-        clearTimeout(emitTimer)
-      }
-
-      // 使用防抖，延迟发送更新
-      emitTimer = setTimeout(() => {
-        emit('update:config', buildConfigFromState())
-      }, 300) // 300ms 防抖延迟
-    },
-    {deep: true}
-)
 
 
 /* ======================================= */

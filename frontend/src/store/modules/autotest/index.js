@@ -1,8 +1,11 @@
 /**
  * 自动化测试模块状态
  * - stepTreeCache: 步骤树缓存，按 case_id/case_code 缓存，切换页签时避免重复请求
+ * - stepEditor: 步骤编辑页脏检测基准
  */
 import { defineStore } from 'pinia'
+
+export { useStepEditorStore } from './stepEditor'
 
 export const useAutotestStore = defineStore('autotest', {
     state() {

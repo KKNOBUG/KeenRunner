@@ -331,7 +331,7 @@
 <script setup>
 defineOptions({ name: 'TCP请求控制器' })
 
-import { computed, reactive, ref, watch, h } from 'vue'
+import { computed, ref, watch, h } from 'vue'
 import {
   NBadge,
   NButton,
@@ -375,6 +375,7 @@ import {
   validateAssertList,
   validateExtractList,
 } from '@/utils/autotestExtractAssert'
+import { useStepEditorForm } from '@/composables/step-editor'
 
 const props = defineProps({
   config: { type: Object, default: () => ({}) },
@@ -391,25 +392,6 @@ const requestCardCollapsed = ref(false)
 const toggleRequestCardCollapsed = () => {
   requestCardCollapsed.value = !requestCardCollapsed.value
 }
-
-const state = reactive({
-  form: {
-    step_name: '',
-    step_desc: '',
-    request_project_id: null,
-    request_config_name: null,
-    /** 与后端 request_args_type 一致：xml | json | raw */
-    bodyType: 'xml',
-    xmlBody: '',
-    jsonBody: '',
-    rawBody: '',
-    data_source_id: null,
-    data_source_name: '',
-    data_source_desc: '',
-    extract_variables: {},
-    assert_validators: {},
-  }
-})
 
 const extractCount = computed(() => countDictKeys(state.form.extract_variables))
 const validatorsCount = computed(() => countDictKeys(state.form.assert_validators))
@@ -447,17 +429,6 @@ const xmlBodyError = computed(() => {
   if (!doc) return 'XML 语法错误: 解析失败'
   return ''
 })
-
-const hydrateExtractValidatorsFromSource = (cfg, original) => {
-  state.form.extract_variables = hydrateExtractDictFromBackend(
-      normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
-      EXTRACT_MODE_RESPONSE
-  )
-  state.form.assert_validators = hydrateAssertDictFromBackend(
-      normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
-      ASSERT_MODE_RESPONSE
-  )
-}
 
 const buildExtractForBackend = () =>
     buildExtractListFromDict(state.form.extract_variables, EXTRACT_MODE_RESPONSE)
@@ -668,20 +639,12 @@ const buildConfigFromState = () => {
   }
 }
 
-const initFromProps = () => {
-  const cfg = props.config || {}
-  const original = props.step?.original || {}
-  state.form.step_name = cfg.step_name ?? original.step_name ?? props.step?.name ?? ''
-  state.form.step_desc = cfg.step_desc ?? original.step_desc ?? ''
-  state.form.request_project_id = cfg.request_project_id ?? original.request_project_id ?? null
-  state.form.request_config_name = cfg.request_config_name ?? original.request_config_name ?? null
-  state.form.data_source_id = cfg.data_source_id ?? original.data_source_id ?? null
-  state.form.data_source_name = cfg.data_source_name ?? original.data_source_name ?? ''
-  state.form.data_source_desc = cfg.data_source_desc ?? original.data_source_desc ?? ''
+/** 从 props 合并出表单值（config 优先、original 兜底）；纯函数，供 useStepEditorForm 灌入 */
+const hydrateTcpForm = (p) => {
+  const cfg = p.config || {}
+  const original = p.step?.original || {}
 
   const argsType = normalizeBodyType(cfg.request_args_type ?? original.request_args_type ?? 'xml')
-  state.form.bodyType = argsType
-
   const backendText = cfg.request_text ?? original.request_text ?? ''
   const legacyPayload = typeof cfg.request_payload === 'string' ? cfg.request_payload : ''
 
@@ -692,44 +655,99 @@ const initFromProps = () => {
   const xmlRecoverable = backendText && backendText.trim().startsWith('<')
   const jsonRecoverable = backendText && backendText.trim().startsWith('{')
 
-  state.form.xmlBody = cfg.xmlBodyText != null
+  const xmlBody = cfg.xmlBodyText != null
       ? String(cfg.xmlBodyText)
       : (xmlRecoverable ? backendText : (argsType === 'xml' ? (backendText || legacyPayload || '') : ''))
 
+  let jsonBody
   if (cfg.jsonBodyText != null) {
-    state.form.jsonBody = String(cfg.jsonBodyText)
+    jsonBody = String(cfg.jsonBodyText)
   } else {
     // 无论当前在哪个模式，都从 request_body 恢复 JSON 数据
     const bodyObj = cfg.data ?? original.request_body ?? {}
     try {
       if (typeof bodyObj === 'string') {
-        state.form.jsonBody = bodyObj
+        jsonBody = bodyObj
       } else if (Object.keys(bodyObj || {}).length) {
-        state.form.jsonBody = JSON.stringify(bodyObj, null, 2)
+        jsonBody = JSON.stringify(bodyObj, null, 2)
       } else if (jsonRecoverable) {
         // request_body 为空（JSON 语法错误导致 data={}），从 request_text 恢复原始文本
-        state.form.jsonBody = backendText
+        jsonBody = backendText
       } else {
-        state.form.jsonBody = ''
+        jsonBody = ''
       }
     } catch {
-      state.form.jsonBody = ''
+      jsonBody = ''
     }
   }
 
-  state.form.rawBody = cfg.rawBodyText != null
+  const rawBody = cfg.rawBodyText != null
       ? String(cfg.rawBodyText)
       : (argsType === 'raw' ? (backendText || legacyPayload || '') : '')
 
-  if (argsType === 'xml') autoFormatXmlBody()
-  else if (argsType === 'json') autoFormatJsonBody()
-
-  hydrateExtractValidatorsFromSource(cfg, original)
+  return {
+    step_name: cfg.step_name ?? original.step_name ?? p.step?.name ?? '',
+    step_desc: cfg.step_desc ?? original.step_desc ?? '',
+    request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
+    request_config_name: cfg.request_config_name ?? original.request_config_name ?? null,
+    bodyType: argsType,
+    xmlBody,
+    jsonBody,
+    rawBody,
+    data_source_id: cfg.data_source_id ?? original.data_source_id ?? null,
+    data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
+    data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
+    extract_variables: hydrateExtractDictFromBackend(
+        normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
+        EXTRACT_MODE_RESPONSE
+    ),
+    assert_validators: hydrateAssertDictFromBackend(
+        normalizeBackendList(cfg.assert_validators ?? original.assert_validators),
+        ASSERT_MODE_RESPONSE
+    ),
+  }
 }
 
+const { form } = useStepEditorForm({
+  props,
+  emit,
+  defaults: () => ({
+    step_name: '',
+    step_desc: '',
+    request_project_id: null,
+    request_config_name: null,
+    bodyType: 'xml',
+    xmlBody: '',
+    jsonBody: '',
+    rawBody: '',
+    data_source_id: null,
+    data_source_name: '',
+    data_source_desc: '',
+    extract_variables: {},
+    assert_validators: {},
+  }),
+  hydrate: hydrateTcpForm,
+  buildConfig: () => buildConfigFromState(),
+  watchFields: (f) => [
+    f.step_name, f.step_desc,
+    f.request_project_id, f.request_config_name,
+    f.bodyType, f.xmlBody, f.jsonBody, f.rawBody,
+    f.data_source_id, f.data_source_name, f.data_source_desc,
+    f.extract_variables, f.assert_validators
+  ],
+  debounceMs: 300,
+})
+
+/** 模板与各 helper 沿用 state.form 访问方式 */
+const state = { form }
+
+/** 步骤切换后按当前报文类型排版（表单灌入由 useStepEditorForm 完成） */
 watch(
     () => props.step?.id,
-    () => initFromProps(),
+    () => {
+      if (state.form.bodyType === 'xml') autoFormatXmlBody()
+      else if (state.form.bodyType === 'json') autoFormatJsonBody()
+    },
     { immediate: true }
 )
 
