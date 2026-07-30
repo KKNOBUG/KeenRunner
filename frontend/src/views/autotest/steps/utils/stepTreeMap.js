@@ -163,12 +163,15 @@ export function mapBackendStep(step) {
       validators: step.validators || {},
     }
   } else if (localType === 'if') {
-    const rawBranches = Array.isArray(step.branches) ? step.branches : null
+    // 展示名固定为「条件分支」，忽略历史落库的 IF/ELIF/ELSE 后缀
+    base.name = '条件分支'
+    const rawBranches = Array.isArray(step.branch_items) ? step.branch_items : null
     if (rawBranches && rawBranches.length > 0) {
       base.config = {
-        branches: rawBranches.map(b => ({
+        branch_items: rawBranches.map(b => ({
+          _key: genId(),
           branch_type: b.branch_type || 'if',
-          conditions: b.branch_conditions && typeof b.branch_conditions === 'object' ? {
+          branch_conditions: b.branch_conditions && typeof b.branch_conditions === 'object' ? {
             condition_expr: b.branch_conditions.condition_expr != null ? String(b.branch_conditions.condition_expr) : '',
             condition_compare: b.branch_conditions.condition_compare || '非空',
             condition_value: b.branch_conditions.condition_value != null ? String(b.branch_conditions.condition_value) : '',
@@ -191,13 +194,14 @@ export function mapBackendStep(step) {
       })
       base.children = branchChildren
       base.original.children = branchChildren
-      base.original.branches = step.branches
+      base.original.branch_items = step.branch_items
       return base
     }
     base.config = {
-      branches: [{
+      branch_items: [{
+        _key: genId(),
         branch_type: 'if',
-        conditions: {
+        branch_conditions: {
           condition_expr: '',
           condition_compare: '非空',
           condition_value: '',

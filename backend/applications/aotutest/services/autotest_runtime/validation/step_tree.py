@@ -69,14 +69,14 @@ class StepTreeValidation:
                     if not child_is_valid:
                         return False, child_error_msg
 
-            # 检查条件分支的 branches children
-            if step.branches:
+            # 检查条件分支的 branch_items 子步骤
+            if step.branch_items:
                 if step.step_type != AutoTestStepType.IF:
                     return False, (
                         f"步骤(step_id={step_id}, step_code={step_code or 'N/A'}, "
-                        f"step_type={step.step_type})不允许配置 branches, 仅'条件分支'类型允许"
+                        f"step_type={step.step_type})不允许配置 branch_items, 仅'条件分支'类型允许"
                     )
-                for branch in step.branches:
+                for branch in step.branch_items:
                     branch_children = branch.branch_children if hasattr(branch, "branch_children") else (branch.get("branch_children") if isinstance(branch, dict) else None)
                     for child in (branch_children or []):
                         child_is_valid, child_error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())

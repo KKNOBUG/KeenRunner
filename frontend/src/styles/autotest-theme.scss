@@ -116,6 +116,32 @@
   line-height: 1.5;
 }
 
+/*
+ * 条件分支徽章 / 色条（左侧步骤树与右侧编辑器共用，避免视觉不一致）
+ * IF=#18a058  ELIF=#f0a020  ELSE=#2080f0
+ */
+:root {
+  --branch-color-if: #18a058;
+  --branch-color-elif: #f0a020;
+  --branch-color-else: #2080f0;
+}
+
+.branch-tag {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.branch-tag.tag-if { background: var(--branch-color-if); }
+.branch-tag.tag-elif { background: var(--branch-color-elif); }
+.branch-tag.tag-else { background: var(--branch-color-else); }
+
 /* 工具类 */
 .autotest-muted-text {
   color: var(--n-text-color-3);

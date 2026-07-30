@@ -240,25 +240,25 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
             }
         } else if (step.type === 'if') {
-            const branches = Array.isArray(config.branches) ? config.branches : []
+            const branchItems = Array.isArray(config.branch_items) ? config.branch_items : []
             const childrenByBranch = {}
             for (const child of (step.children || [])) {
                 const bi = child.branch_index ?? 0
                 if (!childrenByBranch[bi]) childrenByBranch[bi] = []
                 childrenByBranch[bi].push(child)
             }
-            backendStep.branches = branches.map((branch, bi) => {
+            backendStep.branch_items = branchItems.map((branch, bi) => {
                 const branchPayload = {
                     branch_type: branch.branch_type || 'if',
                     branch_desc: branch.branch_desc || '',
                     branch_conditions: null,
                 }
-                if (branch.branch_type !== 'else' && branch.conditions) {
+                if (branch.branch_type !== 'else' && branch.branch_conditions) {
                     branchPayload.branch_conditions = {
-                        condition_expr: branch.conditions.condition_expr != null ? String(branch.conditions.condition_expr) : '',
-                        condition_compare: branch.conditions.condition_compare || '非空',
-                        condition_value: branch.conditions.condition_value != null ? String(branch.conditions.condition_value) : '',
-                        condition_desc: branch.conditions.condition_desc != null ? String(branch.conditions.condition_desc) : '',
+                        condition_expr: branch.branch_conditions.condition_expr != null ? String(branch.branch_conditions.condition_expr) : '',
+                        condition_compare: branch.branch_conditions.condition_compare || '非空',
+                        condition_value: branch.branch_conditions.condition_value != null ? String(branch.branch_conditions.condition_value) : '',
+                        condition_desc: branch.branch_conditions.condition_desc != null ? String(branch.branch_conditions.condition_desc) : '',
                     }
                 }
                 const branchChildren = childrenByBranch[bi] || []

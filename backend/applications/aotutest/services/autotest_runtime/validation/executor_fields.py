@@ -140,22 +140,22 @@ class ExecutorFieldsValidation:
                             missing.append("conditions")
 
             elif step_type == AutoTestStepType.IF:
-                if not step.branches:
-                    missing.append("branches")
+                if not step.branch_items:
+                    missing.append("branch_items")
                 else:
-                    for bi, branch in enumerate(step.branches):
+                    for bi, branch in enumerate(step.branch_items):
                         bt = branch.branch_type if hasattr(branch, "branch_type") else branch.get("branch_type")
                         if bt in ("if", "elif"):
                             cond = branch.branch_conditions if hasattr(branch, "branch_conditions") else branch.get("branch_conditions")
                             if not cond:
-                                missing.append(f"branches[{bi}].branch_conditions")
+                                missing.append(f"branch_items[{bi}].branch_conditions")
                             else:
                                 expr = cond.condition_expr if hasattr(cond, "condition_expr") else cond.get("condition_expr")
                                 compare = cond.condition_compare if hasattr(cond, "condition_compare") else cond.get("condition_compare")
                                 if not expr:
-                                    missing.append(f"branches[{bi}].branch_conditions.condition_expr")
+                                    missing.append(f"branch_items[{bi}].branch_conditions.condition_expr")
                                 if not compare:
-                                    missing.append(f"branches[{bi}].branch_conditions.condition_compare")
+                                    missing.append(f"branch_items[{bi}].branch_conditions.condition_compare")
 
             elif step_type == AutoTestStepType.WAIT:
                 if step.wait is None:
@@ -180,8 +180,8 @@ class ExecutorFieldsValidation:
 
             for child in (step.children or []):
                 _check_step(child)
-            if step.branches:
-                for branch in step.branches:
+            if step.branch_items:
+                for branch in step.branch_items:
                     branch_children = branch.branch_children if hasattr(branch, "branch_children") else branch.get("branch_children")
                     for child in (branch_children or []):
                         _check_step(child)

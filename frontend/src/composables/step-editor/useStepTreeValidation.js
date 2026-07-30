@@ -25,12 +25,8 @@ const resolveStepListField = (config, original, key) => {
 export const getFixedBranchStepDisplayName = (step) => {
     if (!step?.type) return null
     if (step.type === 'if') {
-        const branches = step.config?.branches
-        if (Array.isArray(branches) && branches.length > 1) {
-            const types = branches.map(b => b.branch_type?.toUpperCase()).join('/')
-            return `条件分支(${types})`
-        }
-        return '条件分支(IF)'
+        // 条件分支步骤名称固定，不随 IF/ELIF/ELSE 组合变化
+        return '条件分支'
     }
     if (step.type === 'loop') {
         const mode = (step.config && step.config.loop_mode) || '次数循环'
@@ -388,9 +384,7 @@ const validateXmlBodyInSteps = (stepList) => {
 }
 
 const validateStepNamesInSteps = (stepList, stepDefinitions) => {
-    const usedNames = new Map()
-
-    const walk = (list) => {
+    const walk = (list, usedNames) => {
         if (!Array.isArray(list)) return { valid: true }
         for (const step of list) {
             const typeLabel = stepDefinitions[step.type]?.label
@@ -413,14 +407,28 @@ const validateStepNamesInSteps = (stepList, stepDefinitions) => {
                 usedNames.set(name, true)
             }
             if (step.children && step.children.length > 0) {
-                const child = walk(step.children)
-                if (!child.valid) return child
+                if (step.type === 'if') {
+                    // 条件分支各分支互斥执行：分支之间允许重名，每个分支继承外层已用名称单独校验
+                    const byBranch = new Map()
+                    for (const child of step.children) {
+                        const bi = child.branch_index ?? 0
+                        if (!byBranch.has(bi)) byBranch.set(bi, [])
+                        byBranch.get(bi).push(child)
+                    }
+                    for (const branchChildren of byBranch.values()) {
+                        const child = walk(branchChildren, new Map(usedNames))
+                        if (!child.valid) return child
+                    }
+                } else {
+                    const child = walk(step.children, usedNames)
+                    if (!child.valid) return child
+                }
             }
         }
         return { valid: true }
     }
 
-    return walk(stepList)
+    return walk(stepList, new Map())
 }
 
 /**

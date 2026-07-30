@@ -3,101 +3,141 @@
     <template #header>
       <div class="panel-title">条件分支</div>
     </template>
-    <div class="branch-list">
+
+    <n-space vertical :size="8" class="branch-list">
       <div
-          v-for="(branch, index) in form.branches"
-          :key="index"
-          class="branch-card"
-          :class="[`branch-type-${branch.branch_type}`]"
+          v-for="(branch, index) in form.branch_items"
+          :key="branch._key"
+          class="branch-item"
       >
-        <div class="branch-card-header">
-          <n-tag :type="branchTagType(branch.branch_type)" size="small" round>
-            {{ branch.branch_type.toUpperCase() }}
-          </n-tag>
-          <n-input
-              v-model:value="branch.branch_desc"
-              placeholder="分支描述"
-              size="tiny"
-              class="branch-desc-input"
-              :disabled="props.readonly"
-          />
-          <span class="branch-card-actions">
-            <n-button
-                v-if="branch.branch_type === 'elif'"
-                text size="tiny" :disabled="props.readonly || index <= 1"
-                @click="moveBranch(index, -1)"
-            >
-              <template #icon><TheIcon icon="gravity-ui:arrow-up" :size="14"/></template>
-            </n-button>
-            <n-button
-                v-if="branch.branch_type === 'elif'"
-                text size="tiny" :disabled="props.readonly || index >= form.branches.length - 1 || form.branches[index + 1]?.branch_type === 'else' && index + 1 >= form.branches.length - 1"
-                @click="moveBranch(index, 1)"
-            >
-              <template #icon><TheIcon icon="gravity-ui:arrow-down" :size="14"/></template>
-            </n-button>
-            <n-button
-                v-if="branch.branch_type !== 'if'"
-                text size="tiny" type="error" :disabled="props.readonly"
-                @click="removeBranch(index)"
-            >
-              <template #icon><TheIcon icon="material-symbols:delete" :size="14"/></template>
-            </n-button>
-          </span>
-        </div>
-        <n-form
-            v-if="branch.branch_type !== 'else'"
-            class="branch-form"
-            label-placement="left"
-            label-width="90px"
+        <n-card
             size="small"
+            hoverable
+            :bordered="true"
+            class="branch-card"
+            :class="{ 'is-else-only': branch.branch_type === 'else' }"
         >
-          <n-form-item label="条件表达式" required>
-            <n-input
-                v-model:value="branch.conditions.condition_expr"
-                placeholder="${var} 或具体数据"
-                :disabled="props.readonly"
-            />
-          </n-form-item>
-          <n-form-item label="条件比较符" required>
-            <n-select
-                v-model:value="branch.conditions.condition_compare"
-                :options="assertionOperationSelectOptions"
-                placeholder="请选择"
-                :disabled="props.readonly"
-            />
-          </n-form-item>
-          <n-form-item label="条件比对值">
-            <n-input
-                v-model:value="branch.conditions.condition_value"
-                placeholder="${target} 或具体数据 (非空/为空时可不填)"
-                :disabled="props.readonly"
-            />
-          </n-form-item>
-        </n-form>
-        <div v-else class="branch-else-hint">上述分支均未命中时执行</div>
+          <template #header>
+            <div class="branch-card-header">
+              <div class="branch-card-title-wrap">
+                <span class="branch-tag" :class="`tag-${branch.branch_type}`">
+                  {{ branch.branch_type.toUpperCase() }}
+                </span>
+                <span class="branch-card-title">{{ branchTitle(branch.branch_type) }}</span>
+                <span v-if="branch.branch_type === 'else'" class="branch-else-hint">
+                  {{ ELSE_FIXED_DESC }}
+                </span>
+              </div>
+              <n-space :size="4" align="center">
+                <template v-if="branch.branch_type === 'if'">
+                  <n-button
+                      size="tiny"
+                      secondary 
+                      type="primary"
+                      :disabled="props.readonly || elifCount >= 15"
+                      @click="addElif"
+                  >
+                    + 添加 ELIF
+                  </n-button>
+                  <n-button
+                      size="tiny"
+                      secondary 
+                      type="primary"
+                      :disabled="props.readonly || hasElse"
+                      @click="addElse"
+                  >
+                    + 启用 ELSE
+                  </n-button>
+                </template>
+                <n-button
+                    v-if="branch.branch_type === 'elif'"
+                    text
+                    size="small"
+                    title="上移"
+                    :disabled="props.readonly || !canMoveElifUp(index)"
+                    @click="moveBranch(index, -1)"
+                >
+                  <template #icon><TheIcon icon="gravity-ui:arrow-up" :size="16"/></template>
+                </n-button>
+                <n-button
+                    v-if="branch.branch_type === 'elif'"
+                    text
+                    size="small"
+                    title="下移"
+                    :disabled="props.readonly || !canMoveElifDown(index)"
+                    @click="moveBranch(index, 1)"
+                >
+                  <template #icon><TheIcon icon="gravity-ui:arrow-down" :size="16"/></template>
+                </n-button>
+                <n-button
+                    v-if="branch.branch_type !== 'if'"
+                    text
+                    type="error"
+                    size="small"
+                    title="删除分支"
+                    :disabled="props.readonly"
+                    @click="removeBranch(index)"
+                >
+                  <template #icon><TheIcon icon="material-symbols:delete-outline" :size="18"/></template>
+                </n-button>
+              </n-space>
+            </div>
+          </template>
+
+          <n-form
+              v-if="branch.branch_type !== 'else'"
+              label-width="90px"
+              label-placement="left"
+              size="small"
+              class="step-ev-form"
+          >
+            <div class="step-ev-rows">
+              <div class="step-ev-row">
+                <n-form-item label="分支描述" class="step-ev-fi">
+                  <n-input
+                      v-model:value="branch.branch_desc"
+                      placeholder="可添加分支描述, 用于分辨分支用途"
+                      clearable
+                      :disabled="props.readonly"
+                  />
+                </n-form-item>
+              </div>
+
+              <div class="step-ev-row step-ev-row--assert">
+                <n-form-item label="条件表达式" required class="step-ev-fi">
+                  <n-input
+                      v-model:value="branch.branch_conditions.condition_expr"
+                      placeholder="${var} 或具体数据"
+                      :disabled="props.readonly"
+                  />
+                </n-form-item>
+                <n-form-item label="条件比较符" required class="step-ev-fi">
+                  <n-select
+                      v-model:value="branch.branch_conditions.condition_compare"
+                      :options="assertionOperationSelectOptions"
+                      placeholder="请选择"
+                      :disabled="props.readonly"
+                  />
+                </n-form-item>
+                <n-form-item label="条件比较值" class="step-ev-fi">
+                  <n-input
+                      v-model:value="branch.branch_conditions.condition_value"
+                      placeholder="${target} 或具体数据（非空/为空时可不填）"
+                      :disabled="props.readonly"
+                  />
+                </n-form-item>
+              </div>
+            </div>
+          </n-form>
+        </n-card>
       </div>
-    </div>
-    <div class="branch-actions">
-      <n-button
-          size="small" dashed :disabled="props.readonly || elifCount >= 15"
-          @click="addElif"
-      >
-        + 添加 ELIF
-      </n-button>
-      <n-button
-          size="small" dashed :disabled="props.readonly || hasElse"
-          @click="addElse"
-      >
-        + 启用 ELSE
-      </n-button>
-    </div>
+    </n-space>
   </n-card>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { NForm, NFormItem, NInput, NSelect, NCard, NButton, NTag } from 'naive-ui'
+import { NForm, NFormItem, NInput, NSelect, NCard, NButton, NSpace } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import {
   assertionOperationSelectOptions,
@@ -113,6 +153,11 @@ const props = defineProps({
 
 const emit = defineEmits(['update:config'])
 
+const ELSE_FIXED_DESC = '上述IF/ELIF条件均未命中时执行'
+
+let branchKeySeq = 0
+const nextBranchKey = () => `branch-${Date.now()}-${++branchKeySeq}`
+
 const emptyCondition = () => ({
   condition_expr: '',
   condition_compare: DEFAULT_ASSERTION_OPERATION,
@@ -120,133 +165,180 @@ const emptyCondition = () => ({
   condition_desc: '',
 })
 
-const defaultBranches = () => ([
-  { branch_type: 'if', conditions: emptyCondition(), branch_desc: '' },
+const defaultBranchItems = () => ([
+  { _key: nextBranchKey(), branch_type: 'if', branch_conditions: emptyCondition(), branch_desc: '' },
 ])
 
-const hydrateBranches = (config) => {
-  const raw = config?.branches
+const hydrateBranchItems = (config) => {
+  const raw = config?.branch_items
   if (Array.isArray(raw) && raw.length > 0) {
     return raw.map(b => ({
+      // 保留已有 _key：分支结构变化（新增/删除/移动）时父级据此重映射子步骤 branch_index
+      _key: b._key || nextBranchKey(),
       branch_type: b.branch_type || 'if',
-      conditions: b.branch_type !== 'else' && b.conditions ? {
-        condition_expr: b.conditions.condition_expr != null ? String(b.conditions.condition_expr) : '',
-        condition_compare: b.conditions.condition_compare || DEFAULT_ASSERTION_OPERATION,
-        condition_value: b.conditions.condition_value != null ? String(b.conditions.condition_value) : '',
-        condition_desc: b.conditions.condition_desc != null ? String(b.conditions.condition_desc) : '',
+      branch_conditions: b.branch_type !== 'else' && b.branch_conditions ? {
+        condition_expr: b.branch_conditions.condition_expr != null ? String(b.branch_conditions.condition_expr) : '',
+        condition_compare: b.branch_conditions.condition_compare || DEFAULT_ASSERTION_OPERATION,
+        condition_value: b.branch_conditions.condition_value != null ? String(b.branch_conditions.condition_value) : '',
+        condition_desc: b.branch_conditions.condition_desc != null ? String(b.branch_conditions.condition_desc) : '',
       } : emptyCondition(),
-      branch_desc: b.branch_desc || '',
+      branch_desc: b.branch_type === 'else' ? ELSE_FIXED_DESC : (b.branch_desc || ''),
     }))
   }
-  return defaultBranches()
+  return defaultBranchItems()
 }
 
 const { form } = useStepEditorForm({
   props,
   emit,
-  defaults: () => ({ branches: defaultBranches() }),
-  hydrate: (p) => ({ branches: hydrateBranches(p.config) }),
+  defaults: () => ({ branch_items: defaultBranchItems() }),
+  hydrate: (p) => ({ branch_items: hydrateBranchItems(p.config) }),
   buildConfig: (f) => ({
-    branches: f.branches.map(b => ({
+    branch_items: f.branch_items.map(b => ({
+      _key: b._key,
       branch_type: b.branch_type,
-      branch_desc: b.branch_desc || '',
-      conditions: b.branch_type !== 'else' ? {
-        condition_expr: String(b.conditions?.condition_expr ?? ''),
-        condition_compare: b.conditions?.condition_compare || DEFAULT_ASSERTION_OPERATION,
-        condition_value: String(b.conditions?.condition_value ?? ''),
-        condition_desc: String(b.conditions?.condition_desc ?? ''),
+      branch_desc: b.branch_type === 'else' ? ELSE_FIXED_DESC : (b.branch_desc || ''),
+      branch_conditions: b.branch_type !== 'else' ? {
+        condition_expr: String(b.branch_conditions?.condition_expr ?? ''),
+        condition_compare: b.branch_conditions?.condition_compare || DEFAULT_ASSERTION_OPERATION,
+        condition_value: String(b.branch_conditions?.condition_value ?? ''),
+        condition_desc: String(b.branch_conditions?.condition_desc ?? ''),
       } : null,
     })),
   }),
-  watchFields: (f) => [f.branches],
-  debounceMs: 300,
+  watchFields: (f) => [f.branch_items],
 })
 
-const elifCount = computed(() => form.branches.filter(b => b.branch_type === 'elif').length)
-const hasElse = computed(() => form.branches.some(b => b.branch_type === 'else'))
+const elifCount = computed(() => form.branch_items.filter(b => b.branch_type === 'elif').length)
+const hasElse = computed(() => form.branch_items.some(b => b.branch_type === 'else'))
 
-const branchTagType = (type) => {
-  if (type === 'if') return 'success'
-  if (type === 'elif') return 'warning'
-  return 'info'
+const branchTitle = (type) => {
+  if (type === 'if') return '若条件成立'
+  if (type === 'elif') return '否则若条件成立'
+  return '否则'
+}
+
+const canMoveElifUp = (index) => index > 1
+
+const canMoveElifDown = (index) => {
+  const next = form.branch_items[index + 1]
+  return !!next && next.branch_type !== 'else'
 }
 
 const addElif = () => {
-  const elseIndex = form.branches.findIndex(b => b.branch_type === 'else')
-  const newBranch = { branch_type: 'elif', conditions: emptyCondition(), branch_desc: '' }
+  const elseIndex = form.branch_items.findIndex(b => b.branch_type === 'else')
+  const newBranch = {
+    _key: nextBranchKey(),
+    branch_type: 'elif',
+    branch_conditions: emptyCondition(),
+    branch_desc: '',
+  }
   if (elseIndex !== -1) {
-    form.branches.splice(elseIndex, 0, newBranch)
+    form.branch_items.splice(elseIndex, 0, newBranch)
   } else {
-    form.branches.push(newBranch)
+    form.branch_items.push(newBranch)
   }
 }
 
 const addElse = () => {
-  form.branches.push({ branch_type: 'else', conditions: null, branch_desc: '' })
+  form.branch_items.push({
+    _key: nextBranchKey(),
+    branch_type: 'else',
+    branch_conditions: null,
+    branch_desc: ELSE_FIXED_DESC,
+  })
 }
 
 const removeBranch = (index) => {
-  form.branches.splice(index, 1)
+  form.branch_items.splice(index, 1)
 }
 
 const moveBranch = (index, direction) => {
   const target = index + direction
-  if (target < 1 || target >= form.branches.length) return
-  if (form.branches[target].branch_type === 'else' && direction > 0) return
-  const temp = form.branches[index]
-  form.branches[index] = form.branches[target]
-  form.branches[target] = temp
+  if (target < 1 || target >= form.branch_items.length) return
+  if (form.branch_items[target].branch_type === 'else' && direction > 0) return
+  const [item] = form.branch_items.splice(index, 1)
+  form.branch_items.splice(target, 0, item)
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '@/components/autotest/step-extract-assert-panel.scss';
+
 .branch-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  width: 100%;
 }
 
-.branch-card {
+.branch-item {
+  width: 100%;
+}
+
+.branch-item :deep(.n-card) {
   border: 1px solid var(--n-border-color);
-  border-radius: 8px;
-  padding: 12px;
-  border-left: 3px solid var(--n-border-color);
+  background-color: var(--n-color);
 }
 
-.branch-type-if { border-left-color: #18a058; }
-.branch-type-elif { border-left-color: #f0a020; }
-.branch-type-else { border-left-color: #2080f0; }
+.branch-card :deep(.n-card-header) {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 12px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+}
+
+.branch-card :deep(.n-card-header__main) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-card :deep(.n-card__content) {
+  padding: 8px 12px;
+}
+
+.branch-card.is-else-only :deep(.n-card-header) {
+  border-bottom: none;
+}
+
+.branch-card.is-else-only :deep(.n-card__content) {
+  display: none;
+  padding: 0;
+}
 
 .branch-card-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  width: 100%;
+  min-height: 24px;
+  line-height: 1.35;
+  font-size: 13px;
 }
 
-.branch-desc-input {
+.branch-card-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   flex: 1;
 }
 
-.branch-card-actions {
-  display: flex;
-  gap: 2px;
+.branch-card-title {
   flex-shrink: 0;
-}
-
-.branch-form {
-  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .branch-else-hint {
-  color: var(--n-text-color-3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
-  padding: 4px 0;
-}
-
-.branch-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  font-weight: 400;
+  color: var(--n-text-color-3);
 }
 </style>

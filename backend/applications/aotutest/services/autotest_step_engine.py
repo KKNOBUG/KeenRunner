@@ -1957,7 +1957,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
 class ConditionStepExecutor(BaseStepExecutor):
     """
-    条件分支执行器：按 branches 顺序评估 if/elif/else，命中第一个即执行其子步骤。
+    条件分支执行器：按 branch_items 顺序评估 if/elif/else，命中第一个即执行其子步骤。
 
     所有分支均未命中且无 else 时本步 success 仍为 True；子步骤失败不向上传递。
     """
@@ -2018,20 +2018,20 @@ class ConditionStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
-            branches = self.step.branches
-            if not branches:
-                raise StepExecutionError("【条件分支】参数异常: branches 为空，条件分支步骤必须配置 branches")
+            branch_items = self.step.branch_items
+            if not branch_items:
+                raise StepExecutionError("【条件分支】参数异常: branch_items 为空，条件分支步骤必须配置 branch_items")
 
-            result.request = {"branches": [
+            result.request = {"branch_items": [
                 {
                     "branch_type": b.branch_type,
                     "branch_conditions": b.branch_conditions.model_dump() if b.branch_conditions else None,
                     "branch_desc": b.branch_desc,
                 }
-                for b in branches
+                for b in branch_items
             ]}
 
-            for i, branch in enumerate(branches):
+            for i, branch in enumerate(branch_items):
                 if branch.branch_type == "else":
                     matched = True
                 else:

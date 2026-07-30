@@ -313,7 +313,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
     data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
     conditions: Optional[ConditionsBase] = Field(None, description="判断条件(仅循环结构条件循环使用)")
-    branches: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
+    branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
@@ -337,14 +337,14 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
             f"conditions 必须为对象或 null，当前类型: {type(v).__name__}"
         )
 
-    @field_validator("branches", mode="before")
+    @field_validator("branch_items", mode="before")
     @classmethod
-    def _branches_must_be_list_or_none(cls, v: Any) -> Any:
+    def _branch_items_must_be_list_or_none(cls, v: Any) -> Any:
         if v is None:
             return None
         if isinstance(v, list):
             return v
-        raise ValueError(f"branches 必须为数组或 null，当前类型: {type(v).__name__}")
+        raise ValueError(f"branch_items 必须为数组或 null，当前类型: {type(v).__name__}")
 
 
 class AutoTestApiStepChildren(BaseModel):
@@ -544,7 +544,7 @@ def step_variables_list_from_storage(raw: Any) -> List[StepVariablesBase]:
 def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
     """
     唯一推荐入口：将仓储层 ``to_dict`` 得到的单步 JSON 转为 ``AutoTestStepTreeUpdateItem``。
-    已为目标模型时直接返回；递归处理 ``children`` / ``quote_steps`` / ``branches``。
+    已为目标模型时直接返回；递归处理 ``children`` / ``quote_steps`` / ``branch_items``。
     """
     if isinstance(data, AutoTestStepTreeUpdateItem):
         return data
@@ -559,9 +559,9 @@ def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
         raise ValueError("quote_steps 必须为数组或 null")
     payload["children"] = [step_tree_item_from_storage(c) for c in children_raw] if children_raw else []
     payload["quote_steps"] = [step_tree_item_from_storage(q) for q in quotes_raw] if quotes_raw else []
-    branches_raw = payload.get("branches")
-    if branches_raw and isinstance(branches_raw, list):
-        for branch in branches_raw:
+    branch_items_raw = payload.get("branch_items")
+    if branch_items_raw and isinstance(branch_items_raw, list):
+        for branch in branch_items_raw:
             if isinstance(branch, dict) and branch.get("branch_children"):
                 branch["branch_children"] = [step_tree_item_from_storage(c) for c in branch["branch_children"]]
     return AutoTestStepTreeUpdateItem.model_validate(payload)
@@ -577,12 +577,12 @@ def prepare_step_tree_item_for_execution(step: AutoTestStepTreeUpdateItem) -> Au
         "children": children or None,
         "quote_steps": quotes or None,
     }
-    if step.branches:
+    if step.branch_items:
         prepared_branches = []
-        for branch in step.branches:
+        for branch in step.branch_items:
             branch_children = [prepare_step_tree_item_for_execution(c) for c in (branch.branch_children or [])]
             prepared_branches.append(branch.model_copy(update={"branch_children": branch_children or None}))
-        update["branches"] = prepared_branches
+        update["branch_items"] = prepared_branches
     return step.model_copy(update=update)
 
 

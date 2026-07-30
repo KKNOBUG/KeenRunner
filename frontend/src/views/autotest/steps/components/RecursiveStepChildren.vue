@@ -5,21 +5,19 @@
       @dragleave.stop="handleDragLeaveInChildrenArea($event, step.id)"
   >
     <!-- 条件分支: 按分支分组渲染 -->
-    <template v-if="step.type === 'if' && step.config?.branches?.length">
+    <template v-if="step.type === 'if' && step.config?.branch_items?.length">
       <div
-          v-for="(branch, bi) in step.config.branches"
+          v-for="(branch, bi) in step.config.branch_items"
           :key="'branch-' + bi"
           class="branch-group"
-          :class="[`branch-group-${branch.branch_type}`]"
       >
         <div class="branch-group-header">
           <span class="branch-tag" :class="`tag-${branch.branch_type}`">
             {{ branch.branch_type.toUpperCase() }}
           </span>
-          <span v-if="branch.branch_type !== 'else' && branch.conditions" class="branch-condition-summary">
-            {{ branch.conditions.condition_expr }} {{ branch.conditions.condition_compare }} {{ branch.conditions.condition_value }}
+          <span v-if="branch.branch_type !== 'else' && branch.branch_conditions" class="branch-condition-summary">
+            {{ branch.branch_conditions.condition_expr }} {{ branch.branch_conditions.condition_compare }} {{ branch.branch_conditions.condition_value }}
           </span>
-          <span v-if="branch.branch_desc" class="branch-desc-label">{{ branch.branch_desc }}</span>
         </div>
         <div class="branch-group-body">
           <template v-for="(child, childIndex) in getBranchChildren(bi)" :key="child.id">
@@ -77,7 +75,7 @@
               v-if="getBranchChildren(bi).length === 0"
               class="step-drop-zone branch-drop-zone"
               :class="{ 'is-drag-over': dragState.dragOverId === step.id }"
-              @drop.stop="handleDrop($event, step.id, step.id, getBranchInsertIndex(bi))"
+              @drop.stop="handleDrop($event, step.id, step.id, getBranchInsertIndex(bi), bi)"
           >
             <div class="step-drop-zone-hint">拖拽步骤到此分支</div>
           </div>
@@ -235,10 +233,6 @@ const insertIndicatorStyle = (targetId, position, requireChildren = false) => {
   overflow: hidden;
 }
 
-.branch-group-if { border-left: 3px solid #18a058; }
-.branch-group-elif { border-left: 3px solid #f0a020; }
-.branch-group-else { border-left: 3px solid #2080f0; }
-
 .branch-group-header {
   display: flex;
   align-items: center;
@@ -248,18 +242,6 @@ const insertIndicatorStyle = (targetId, position, requireChildren = false) => {
   font-size: 12px;
 }
 
-.branch-tag {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 3px;
-  color: #fff;
-}
-
-.tag-if { background: #18a058; }
-.tag-elif { background: #f0a020; }
-.tag-else { background: #2080f0; }
-
 .branch-condition-summary {
   color: var(--n-text-color-2);
   font-family: monospace;
@@ -267,11 +249,6 @@ const insertIndicatorStyle = (targetId, position, requireChildren = false) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.branch-desc-label {
-  color: var(--n-text-color-3);
-  font-size: 11px;
 }
 
 .branch-group-body {

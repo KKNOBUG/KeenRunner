@@ -84,8 +84,8 @@ class VariableFlowValidation:
                     produced.add(f"{vn}_count")
             for child in (step.children or []):
                 _collect_produced(child)
-            if step.branches:
-                for branch in step.branches:
+            if step.branch_items:
+                for branch in step.branch_items:
                     branch_children = branch.branch_children if hasattr(branch, "branch_children") else (branch.get("branch_children") if isinstance(branch, dict) else None)
                     for child in (branch_children or []):
                         _collect_produced(child)
@@ -124,11 +124,11 @@ class VariableFlowValidation:
                     fields[attr] = val
             if step.conditions is not None:
                 fields["conditions"] = step.conditions
-            if step.branches:
-                for bi, branch in enumerate(step.branches):
+            if step.branch_items:
+                for bi, branch in enumerate(step.branch_items):
                     cond = branch.branch_conditions if hasattr(branch, "branch_conditions") else (branch.get("branch_conditions") if isinstance(branch, dict) else None)
                     if cond is not None:
-                        fields[f"branches[{bi}].branch_conditions"] = cond
+                        fields[f"branch_items[{bi}].branch_conditions"] = cond
             if step.session_variables:
                 fields["session_variables"] = step.session_variables
             if step.defined_variables:
@@ -166,8 +166,8 @@ class VariableFlowValidation:
                         })
             for child in (step.children or []):
                 _check_refs(child)
-            if step.branches:
-                for branch in step.branches:
+            if step.branch_items:
+                for branch in step.branch_items:
                     branch_children = branch.branch_children if hasattr(branch, "branch_children") else (branch.get("branch_children") if isinstance(branch, dict) else None)
                     for child in (branch_children or []):
                         _check_refs(child)

@@ -426,6 +426,10 @@ async def batch_update_steps_tree(
                                     step.case_id = relevant_case_id
                                     if step.children:
                                         recursive_update_case_id(step.children, relevant_case_id)
+                                    if step.branch_items:
+                                        for branch in step.branch_items:
+                                            if branch.branch_children:
+                                                recursive_update_case_id(branch.branch_children, relevant_case_id)
 
                             recursive_update_case_id(steps_data, successful_case_id)
                 # 2.2 批量更新/新增步骤信息（递归处理）

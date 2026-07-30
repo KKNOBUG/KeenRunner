@@ -1519,7 +1519,7 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
   const defaultConfig = type === 'loop'
       ? {loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5}
       : type === 'if'
-          ? {branches: [{branch_type: 'if', conditions: {condition_expr: '', condition_compare: '非空', condition_value: '', condition_desc: ''}, branch_desc: ''}]}
+          ? {branch_items: [{_key: genId(), branch_type: 'if', branch_conditions: {condition_expr: '', condition_compare: '非空', condition_value: '', condition_desc: ''}, branch_desc: ''}]}
           : type === 'wait'
           ? {seconds: 2}
           : type === 'user_variables'
@@ -1547,17 +1547,19 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
                           : {}
   const defaultName = type === 'loop'
       ? '循环结构(次数循环)'
-      : type === 'wait'
-          ? '控制等待(2秒)'
-          : type === 'user_variables'
-              ? '用户定义变量'
-              : type === 'database'
-                  ? '数据库请求'
-                  : type === 'redis'
-                      ? 'Redis请求'
-                      : type === 'quote' && extraConfig?.step_name
-                          ? extraConfig.step_name
-                          : `${def.label}`
+      : type === 'if'
+          ? '条件分支'
+          : type === 'wait'
+              ? '控制等待(2秒)'
+              : type === 'user_variables'
+                  ? '用户定义变量'
+                  : type === 'database'
+                      ? '数据库请求'
+                      : type === 'redis'
+                          ? 'Redis请求'
+                          : type === 'quote' && extraConfig?.step_name
+                              ? extraConfig.step_name
+                              : `${def.label}`
   const config = extraConfig ? {...defaultConfig, ...extraConfig} : defaultConfig
   const newStep = {
     id: genId(),
@@ -1781,11 +1783,41 @@ const handleCopyStep = (id) => {
   selectedKeys.value = [copiedStep.id]
 }
 
-/** 条件分支仅更新 branches 时：就地合并，避免整包替换 config 加剧响应式抖动 */
+/** 条件分支仅更新 branch_items 时：就地合并，避免整包替换 config 加剧响应式抖动 */
 const isIfBranchesOnlyPatch = (step, config) => {
-  if (!step || step.type !== 'if' || !config?.branches) return false
-  if (!Array.isArray(config.branches)) return false
-  return Object.keys(config).length === 1 && Object.keys(config)[0] === 'branches'
+  if (!step || step.type !== 'if' || !config?.branch_items) return false
+  if (!Array.isArray(config.branch_items)) return false
+  return Object.keys(config).length === 1 && Object.keys(config)[0] === 'branch_items'
+}
+
+/**
+ * 分支结构变化（新增ELIF插入/删除/上下移动）后，按分支稳定标识 _key 重映射子步骤 branch_index：
+ * - 分支移动：子步骤跟随分支到新的序号
+ * - 分支删除：其子步骤一并移除（否则会错误并入占用原序号的分支）
+ * - 新旧任一侧缺少 _key 时跳过（保持原状，退化为按序号对齐）
+ */
+const remapBranchChildren = (step, oldItems, newItems) => {
+  const children = step.children
+  if (!Array.isArray(children) || children.length === 0) return
+  if (!Array.isArray(oldItems) || !Array.isArray(newItems) || !newItems.length) return
+  if (!oldItems.every(b => b?._key) || !newItems.every(b => b?._key)) return
+  const newIndexByKey = new Map(newItems.map((b, i) => [b._key, i]))
+  const groups = new Map()
+  let changed = false
+  for (const child of children) {
+    const oldIndex = child.branch_index ?? 0
+    const oldBranch = oldItems[oldIndex]
+    const newIndex = oldBranch ? newIndexByKey.get(oldBranch._key) : undefined
+    if (newIndex === undefined) {
+      changed = true
+      continue
+    }
+    if (newIndex !== oldIndex) changed = true
+    if (!groups.has(newIndex)) groups.set(newIndex, [])
+    groups.get(newIndex).push(newIndex === oldIndex ? child : {...child, branch_index: newIndex})
+  }
+  if (!changed) return
+  step.children = [...groups.keys()].sort((a, b) => a - b).flatMap(k => groups.get(k))
 }
 
 /** 右侧编辑器更新步骤 config 并同步树展示名 */
@@ -1793,7 +1825,9 @@ const updateStepConfig = (id, config) => {
   const step = findStep(id)
   if (step) {
     if (isIfBranchesOnlyPatch(step, config)) {
-      step.config = {...step.config, branches: config.branches}
+      const oldBranchItems = Array.isArray(step.config?.branch_items) ? step.config.branch_items : []
+      step.config = {...step.config, branch_items: config.branch_items}
+      remapBranchChildren(step, oldBranchItems, config.branch_items)
     } else {
       step.config = {...step.config, ...config}
     }
@@ -1842,7 +1876,7 @@ const updateStepConfig = (id, config) => {
         step.name = String(config.step_name).trim() || '引用公共脚本'
       }
     }
-    // 条件分支仅改 branches 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
+    // 条件分支仅改 branch_items 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
     if (!isIfBranchesOnlyPatch(step, config)) {
       updateStepDisplayNames()
     }
@@ -2285,24 +2319,37 @@ provide('stepTreeContext', {
   border: 1px dashed #F4511E;
 }
 
-/* 所有 loop/if 步骤的普通高亮（拖拽时） */
+/* 所有 loop/if 步骤的普通高亮（拖拽时）：outline 不参与布局，避免行高变化引起整树抖动 */
 :deep(.step-item.is-drag-target) {
-  border: 2px solid rgba(244, 81, 30, 0.3);
+  outline: 2px solid rgba(244, 81, 30, 0.3);
+  outline-offset: -2px;
   background-color: rgba(244, 81, 30, 0.05);
 }
 
 /* 焦点高亮（拖拽进入目标区域时） */
 :deep(.step-item.is-drag-over) {
-  border: 2px solid #F4511E;
+  outline: 2px solid #F4511E;
+  outline-offset: -2px;
   background-color: rgba(244, 81, 30, 0.15);
   box-shadow: 0 0 12px rgba(244, 81, 30, 0.4);
 }
 
-/* 插入位置指示器 */
+/* 插入位置指示器：零布局占位，可见线条由 ::before 绝对定位绘制，显示/隐藏不再推动相邻行位移 */
 :deep(.step-insert-indicator) {
+  height: 0;
+  margin: 0;
+  overflow: visible;
+  position: relative;
+}
+
+:deep(.step-insert-indicator)::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -1px;
   height: 2px;
   background-color: #F4511E;
-  margin: 2px 8px;
   border-radius: 1px;
   box-shadow: 0 0 4px rgba(244, 81, 30, 0.6);
 }
