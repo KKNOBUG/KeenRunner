@@ -46,6 +46,7 @@
             </template>
             <div class="step-tree-container overlay-scroll">
               <template v-for="(step, index) in steps" :key="step.id">
+                <div class="step-insert-indicator" :style="rootInsertIndicatorStyle(step.id, 'before')"></div>
                 <div
                     class="step-item"
                     :class="{
@@ -160,6 +161,7 @@
                     </div>
                   </div>
                 </div>
+                <div class="step-insert-indicator" :style="rootInsertIndicatorStyle(step.id, 'after')"></div>
               </template>
               <AddStepPopover
                   :is-public-script-case="isPublicScriptCase"
@@ -879,6 +881,15 @@ const {
   handleDrop,
 } = useStepDragDrop({ steps, stepDefinitions, findStep })
 
+const rootInsertIndicatorStyle = (targetId, position) => {
+  const ds = dragState.value
+  const show = ds.draggingId
+      && ds.insertTargetId === targetId
+      && ds.insertPosition === position
+      && !ds.dragOverParent
+  return { display: show ? 'block' : 'none' }
+}
+
 /** 查找步骤的父节点；根级步骤返回 null */
 const findStepParent = (id, list = steps.value, parent = null) => {
   for (const step of list) {
@@ -1507,7 +1518,9 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
 
   const defaultConfig = type === 'loop'
       ? {loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5}
-      : type === 'wait'
+      : type === 'if'
+          ? {branches: [{branch_type: 'if', conditions: {condition_expr: '', condition_compare: '非空', condition_value: '', condition_desc: ''}, branch_desc: ''}]}
+          : type === 'wait'
           ? {seconds: 2}
           : type === 'user_variables'
               ? {step_name: '用户定义变量'}
@@ -1631,6 +1644,28 @@ const handleAddStep = (type, parentId) => {
   }
 }
 
+const handleAddStepToBranch = (type, parentId, branchIndex) => {
+  if (type === 'quote_public_script' || type === 'copy_steps' || type === 'batch_upload_datasource' || type === 'summary_download_datasource') {
+    handleAddStep(type, parentId)
+    return
+  }
+  const parent = findStep(parentId)
+  if (!parent) return
+  const created = insertStep(parentId, type)
+  if (created) {
+    created.branch_index = branchIndex
+    const children = parent.children || []
+    const branchChildren = children.filter(c => (c.branch_index ?? 0) === branchIndex)
+    if (branchChildren.length > 1) {
+      const last = branchChildren[branchChildren.length - 2]
+      const lastIdx = children.indexOf(last)
+      children.splice(lastIdx + 1, 0, children.pop())
+    }
+    selectedKeys.value = [created.id]
+    updateStepDisplayNames()
+  }
+}
+
 const {
   batchUploadFileRef,
   batchUploadLoading,
@@ -1746,24 +1781,19 @@ const handleCopyStep = (id) => {
   selectedKeys.value = [copiedStep.id]
 }
 
-/** 条件分支仅更新 conditions 时：就地合并，避免整包替换 config 加剧响应式抖动 */
-const isIfConditionsOnlyPatch = (step, config) => {
-  if (!step || step.type !== 'if' || !config?.conditions) return false
-  if (typeof config.conditions !== 'object' || Array.isArray(config.conditions)) return false
-  return Object.keys(config).length === 1 && Object.keys(config)[0] === 'conditions'
+/** 条件分支仅更新 branches 时：就地合并，避免整包替换 config 加剧响应式抖动 */
+const isIfBranchesOnlyPatch = (step, config) => {
+  if (!step || step.type !== 'if' || !config?.branches) return false
+  if (!Array.isArray(config.branches)) return false
+  return Object.keys(config).length === 1 && Object.keys(config)[0] === 'branches'
 }
 
 /** 右侧编辑器更新步骤 config 并同步树展示名 */
 const updateStepConfig = (id, config) => {
   const step = findStep(id)
   if (step) {
-    if (isIfConditionsOnlyPatch(step, config)) {
-      const prev = step.config?.conditions
-      if (prev && typeof prev === 'object' && !Array.isArray(prev)) {
-        Object.assign(prev, config.conditions)
-      } else {
-        step.config = {...step.config, conditions: {...config.conditions}}
-      }
+    if (isIfBranchesOnlyPatch(step, config)) {
+      step.config = {...step.config, branches: config.branches}
     } else {
       step.config = {...step.config, ...config}
     }
@@ -1812,8 +1842,8 @@ const updateStepConfig = (id, config) => {
         step.name = String(config.step_name).trim() || '引用公共脚本'
       }
     }
-    // 条件分支仅改 conditions 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
-    if (!isIfConditionsOnlyPatch(step, config)) {
+    // 条件分支仅改 branches 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
+    if (!isIfBranchesOnlyPatch(step, config)) {
       updateStepDisplayNames()
     }
   }
@@ -2002,6 +2032,7 @@ provide('stepTreeContext', {
   isStepSkipInherited,
   isPublicScriptCase,
   handleAddStep,
+  handleAddStepToBranch,
   dragState,
 })
 </script>

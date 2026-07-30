@@ -179,8 +179,21 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})所属用例信息完成")
 
             # 获取子步骤（递归构建）
-            children: List[AutoTestApiStepInfo] = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("step_no").all()
-            if children:
+            children: List[AutoTestApiStepInfo] = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("branch_index", "step_no").all()
+            if step.step_type == AutoTestStepType.IF and step.branch_items:
+                from collections import defaultdict
+                grouped = defaultdict(list)
+                for child in children:
+                    grouped[child.branch_index if child.branch_index is not None else 0].append(child)
+                branches_with_children = []
+                for i, branch_meta in enumerate(step.branch_items):
+                    branch_dict = dict(branch_meta) if isinstance(branch_meta, dict) else branch_meta
+                    branch_children = grouped.get(i, [])
+                    branch_dict["branch_children"] = [await build_step_tree(c, is_quote=is_quote) for c in branch_children]
+                    branches_with_children.append(branch_dict)
+                step_dict["branches"] = branches_with_children
+                step_dict["children"] = []
+            elif children:
                 LOGGER.info(f"- 获取步骤(step_id={step.id}, step_no={step.step_no})所有子步骤(递归构建)开始 -")
                 step_dict["children"] = [await build_step_tree(child, is_quote=is_quote) for child in children]
                 LOGGER.info(f"- 获取步骤(step_id={step.id}, step_no={step.step_no})所有子步骤(递归构建)完成 -")
@@ -687,13 +700,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
     async def batch_update_or_create_steps(
             self,
             steps_data: List[AutoTestStepTreeUpdateItem],
-            parent_step_id: Optional[int] = None
+            parent_step_id: Optional[int] = None,
+            branch_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        批量新增或更新步骤树：无step_id/step_code则新增，有则更新；递归处理children。
+        批量新增或更新步骤树：无step_id/step_code则新增，有则更新；递归处理children/branches。
 
         :param steps_data: 步骤树项列表，每项可为AutoTestStepTreeUpdateItem
         :param parent_step_id: 当前层级的父步骤ID，用于新增时挂载
+        :param branch_index: 当前层级所属分支序号（条件分支子步骤使用）
         :return: 包含created_count、updated_count、process_detail、success_detail的字典
         :raises ParameterException: 必填字段缺失或父步骤类型不允许子步骤时
         :raises NotFoundException: 用例或父步骤不存在时
@@ -794,11 +809,19 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 create_step_dict: Dict[str, Any] = step_data.model_dump(
                     exclude_none=True,
-                    exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code"},
+                    exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branches"},
                 )
                 create_step_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if final_parent_step_id is not None:
                     create_step_dict["parent_step_id"] = final_parent_step_id
+                if branch_index is not None:
+                    create_step_dict["branch_index"] = branch_index
+
+                if step_data.step_type == AutoTestStepType.IF and step_data.branches:
+                    create_step_dict["branch_items"] = [
+                        b.model_dump(exclude={"branch_children"}) for b in step_data.branches
+                    ]
+                    create_step_dict.pop("conditions", None)
 
                 try:
                     new_step_instance: AutoTestApiStepInfo = await self.create(create_step_dict)
@@ -844,21 +867,34 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 success_detail.append(step_dict)
 
                 # 递归处理子步骤
-                children: List[AutoTestStepTreeUpdateItem] = step_data.children
-                if children:
-                    child_result = await self.batch_update_or_create_steps(
-                        steps_data=children,
-                        parent_step_id=new_step_instance.id,
-                    )
-                    created_count += child_result["created_count"]
-                    updated_count += child_result["updated_count"]
-                    processed_step_codes[case_id].update(child_result["process_detail"][case_id])
-                    success_detail.extend(child_result.get("success_detail", []))
+                if step_data.step_type == AutoTestStepType.IF and step_data.branches:
+                    for bi, branch in enumerate(step_data.branches):
+                        if branch.branch_children:
+                            child_result = await self.batch_update_or_create_steps(
+                                steps_data=branch.branch_children,
+                                parent_step_id=new_step_instance.id,
+                                branch_index=bi,
+                            )
+                            created_count += child_result["created_count"]
+                            updated_count += child_result["updated_count"]
+                            processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                            success_detail.extend(child_result.get("success_detail", []))
+                else:
+                    children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                    if children:
+                        child_result = await self.batch_update_or_create_steps(
+                            steps_data=children,
+                            parent_step_id=new_step_instance.id,
+                        )
+                        created_count += child_result["created_count"]
+                        updated_count += child_result["updated_count"]
+                        processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                        success_detail.extend(child_result.get("success_detail", []))
 
             # 步骤存在，执行更新
             else:
                 update_dict = step_data.model_dump(
-                    exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code"},
+                    exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branches"},
                     exclude_none=True
                 )
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
@@ -870,6 +906,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 elif step_data.parent_step_id is None and parent_step_id is None:
                     # 明确设置为None（根步骤）
                     update_dict["parent_step_id"] = None
+                if branch_index is not None:
+                    update_dict["branch_index"] = branch_index
+
+                if step_data.step_type == AutoTestStepType.IF and step_data.branches:
+                    update_dict["branch_items"] = [
+                        b.model_dump(exclude={"branch_children"}) for b in step_data.branches
+                    ]
+                    update_dict.pop("conditions", None)
 
                 # 业务层验证：如果更新了步骤序号，检查是否冲突
                 if "step_no" in update_dict:
@@ -993,17 +1037,31 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 step_dict["created"] = False
                 step_dict["step_id"] = step_id
                 success_detail.append(step_dict)
-                # 递归处理子步骤
-                children: List[AutoTestStepTreeUpdateItem] = step_data.children
-                if children:
-                    child_result = await self.batch_update_or_create_steps(
-                        steps_data=children,
-                        parent_step_id=step_id,
-                    )
-                    created_count += child_result["created_count"]
-                    updated_count += child_result["updated_count"]
-                    processed_step_codes[case_id].update(child_result["process_detail"][case_id])
-                    success_detail.extend(child_result.get("success_detail", []))
+                # 递归处理子步骤（条件分支: 全量替换; 其他: 增量）
+                if step_data.step_type == AutoTestStepType.IF and step_data.branches:
+                    await self.model.filter(parent_step_id=step_id, state__not=1).update(state=1)
+                    for bi, branch in enumerate(step_data.branches):
+                        if branch.branch_children:
+                            child_result = await self.batch_update_or_create_steps(
+                                steps_data=branch.branch_children,
+                                parent_step_id=step_id,
+                                branch_index=bi,
+                            )
+                            created_count += child_result["created_count"]
+                            updated_count += child_result["updated_count"]
+                            processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                            success_detail.extend(child_result.get("success_detail", []))
+                else:
+                    children: List[AutoTestStepTreeUpdateItem] = step_data.children
+                    if children:
+                        child_result = await self.batch_update_or_create_steps(
+                            steps_data=children,
+                            parent_step_id=step_id,
+                        )
+                        created_count += child_result["created_count"]
+                        updated_count += child_result["updated_count"]
+                        processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                        success_detail.extend(child_result.get("success_detail", []))
 
         return {
             "created_count": created_count,

@@ -163,15 +163,48 @@ export function mapBackendStep(step) {
       validators: step.validators || {},
     }
   } else if (localType === 'if') {
-    const raw = step.conditions
-    const condition = raw != null && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+    const rawBranches = Array.isArray(step.branches) ? step.branches : null
+    if (rawBranches && rawBranches.length > 0) {
+      base.config = {
+        branches: rawBranches.map(b => ({
+          branch_type: b.branch_type || 'if',
+          conditions: b.branch_conditions && typeof b.branch_conditions === 'object' ? {
+            condition_expr: b.branch_conditions.condition_expr != null ? String(b.branch_conditions.condition_expr) : '',
+            condition_compare: b.branch_conditions.condition_compare || '非空',
+            condition_value: b.branch_conditions.condition_value != null ? String(b.branch_conditions.condition_value) : '',
+            condition_desc: b.branch_conditions.condition_desc != null ? String(b.branch_conditions.condition_desc) : '',
+          } : null,
+          branch_desc: b.branch_desc || '',
+        })),
+      }
+      const branchChildren = []
+      rawBranches.forEach((b, bi) => {
+        if (Array.isArray(b.branch_children)) {
+          b.branch_children.forEach(child => {
+            const mapped = mapBackendStep(child)
+            if (mapped) {
+              mapped.branch_index = bi
+              branchChildren.push(mapped)
+            }
+          })
+        }
+      })
+      base.children = branchChildren
+      base.original.children = branchChildren
+      base.original.branches = step.branches
+      return base
+    }
     base.config = {
-      conditions: {
-        condition_expr: condition.condition_expr != null ? String(condition.condition_expr) : '',
-        condition_compare: condition.condition_compare || '非空',
-        condition_value: condition.condition_value != null ? String(condition.condition_value) : '',
-        condition_desc: condition.condition_desc != null ? String(condition.condition_desc) : '',
-      },
+      branches: [{
+        branch_type: 'if',
+        conditions: {
+          condition_expr: '',
+          condition_compare: '非空',
+          condition_value: '',
+          condition_desc: '',
+        },
+        branch_desc: '',
+      }],
     }
     base.children = []
   } else if (localType === 'wait') {

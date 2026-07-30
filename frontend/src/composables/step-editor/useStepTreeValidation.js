@@ -25,7 +25,12 @@ const resolveStepListField = (config, original, key) => {
 export const getFixedBranchStepDisplayName = (step) => {
     if (!step?.type) return null
     if (step.type === 'if') {
-        return '条件分支(满足条件时执行)'
+        const branches = step.config?.branches
+        if (Array.isArray(branches) && branches.length > 1) {
+            const types = branches.map(b => b.branch_type?.toUpperCase()).join('/')
+            return `条件分支(${types})`
+        }
+        return '条件分支(IF)'
     }
     if (step.type === 'loop') {
         const mode = (step.config && step.config.loop_mode) || '次数循环'

@@ -38,10 +38,18 @@ export function useStepDragDrop({ steps, stepDefinitions, findStep }) {
 
         if (dragState.value.draggingId && targetId) {
             const targetStep = findStep(targetId)
-            if (targetStep && stepDefinitions[targetStep.type]?.allowChildren) {
+            if (!targetStep) return
+            if (stepDefinitions[targetStep.type]?.allowChildren) {
                 dragState.value.dragOverId = targetId
                 dragState.value.dragOverParent = targetParentId
             }
+            const rect = event.currentTarget.getBoundingClientRect()
+            const stepCenterY = rect.top + rect.height / 2
+            const position = event.clientY < stepCenterY ? 'before' : 'after'
+            dragState.value.insertTargetId = targetId
+            dragState.value.insertPosition = position
+            const rootIndex = steps.value.findIndex(s => s.id === targetId)
+            dragState.value.dragOverIndex = position === 'before' ? rootIndex : rootIndex + 1
         }
     }
 

@@ -75,6 +75,30 @@ class ConditionsBase(BaseModel):
         return AutoTestAssertionOperation(str(v).strip()).value
 
 
+class BranchItem(BaseModel):
+    """条件分支中的单个分支定义（if / elif / else）。"""
+
+    branch_type: str = Field(..., description="分支类型: if / elif / else")
+    branch_conditions: Optional[ConditionsBase] = Field(None, description="分支条件(else时为null)")
+    branch_desc: Optional[str] = Field(None, max_length=2048, description="分支描述")
+    branch_children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="分支子步骤(传输用)")
+
+    @field_validator("branch_type", mode="before")
+    @classmethod
+    def validate_branch_type(cls, v: Any) -> str:
+        if v not in ("if", "elif", "else"):
+            raise ValueError(f"branch_type 必须为 if/elif/else，当前: {v!r}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_conditions_presence(self):
+        if self.branch_type in ("if", "elif") and not self.branch_conditions:
+            raise ValueError(f"{self.branch_type} 分支必须配置 branch_conditions")
+        if self.branch_type == "else" and self.branch_conditions is not None:
+            raise ValueError("else 分支不允许配置 branch_conditions")
+        return self
+
+
 class StepVariablesBase(BaseModel):
     """步骤变量键值对基础字段模型。"""
 
@@ -288,7 +312,9 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
     data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
-    conditions: Optional[ConditionsBase] = Field(None, description="判断条件(循环结构或条件分支)")
+    conditions: Optional[ConditionsBase] = Field(None, description="判断条件(仅循环结构条件循环使用)")
+    branches: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
+    branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
@@ -310,6 +336,15 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
         raise ValueError(
             f"conditions 必须为对象或 null，当前类型: {type(v).__name__}"
         )
+
+    @field_validator("branches", mode="before")
+    @classmethod
+    def _branches_must_be_list_or_none(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return v
+        raise ValueError(f"branches 必须为数组或 null，当前类型: {type(v).__name__}")
 
 
 class AutoTestApiStepChildren(BaseModel):
@@ -509,7 +544,7 @@ def step_variables_list_from_storage(raw: Any) -> List[StepVariablesBase]:
 def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
     """
     唯一推荐入口：将仓储层 ``to_dict`` 得到的单步 JSON 转为 ``AutoTestStepTreeUpdateItem``。
-    已为目标模型时直接返回；递归处理 ``children`` / ``quote_steps``。
+    已为目标模型时直接返回；递归处理 ``children`` / ``quote_steps`` / ``branches``。
     """
     if isinstance(data, AutoTestStepTreeUpdateItem):
         return data
@@ -524,6 +559,11 @@ def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
         raise ValueError("quote_steps 必须为数组或 null")
     payload["children"] = [step_tree_item_from_storage(c) for c in children_raw] if children_raw else []
     payload["quote_steps"] = [step_tree_item_from_storage(q) for q in quotes_raw] if quotes_raw else []
+    branches_raw = payload.get("branches")
+    if branches_raw and isinstance(branches_raw, list):
+        for branch in branches_raw:
+            if isinstance(branch, dict) and branch.get("branch_children"):
+                branch["branch_children"] = [step_tree_item_from_storage(c) for c in branch["branch_children"]]
     return AutoTestStepTreeUpdateItem.model_validate(payload)
 
 
@@ -531,17 +571,23 @@ def prepare_step_tree_item_for_execution(step: AutoTestStepTreeUpdateItem) -> Au
     """执行前在模型上去除 case/quote_case，并递归子树（不做 model_dump 往返）。"""
     children = [prepare_step_tree_item_for_execution(c) for c in (step.children or [])]
     quotes = [prepare_step_tree_item_for_execution(q) for q in (step.quote_steps or [])]
-    return step.model_copy(
-        update={
-            "case": None,
-            "quote_case": None,
-            "children": children or None,
-            "quote_steps": quotes or None,
-        }
-    )
+    update: Dict[str, Any] = {
+        "case": None,
+        "quote_case": None,
+        "children": children or None,
+        "quote_steps": quotes or None,
+    }
+    if step.branches:
+        prepared_branches = []
+        for branch in step.branches:
+            branch_children = [prepare_step_tree_item_for_execution(c) for c in (branch.branch_children or [])]
+            prepared_branches.append(branch.model_copy(update={"branch_children": branch_children or None}))
+        update["branches"] = prepared_branches
+    return step.model_copy(update=update)
 
 
 # 允许递归引用
 AutoTestApiStepBase.model_rebuild()
+BranchItem.model_rebuild()
 AutoTestStepTreeUpdateItem.model_rebuild()
 AutoTestCaseStepTreeLoadResult.model_rebuild()

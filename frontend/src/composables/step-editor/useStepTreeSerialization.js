@@ -240,26 +240,33 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
             }
         } else if (step.type === 'if') {
-            const fromConfig = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
-                ? config.conditions
-                : null
-            const fromOriginal = original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)
-                ? original.conditions
-                : null
-            const conditionObj = fromConfig || fromOriginal
-            backendStep.conditions = conditionObj
-                ? {
-                    condition_expr: conditionObj.condition_expr != null ? String(conditionObj.condition_expr) : '',
-                    condition_compare: conditionObj.condition_compare || '非空',
-                    condition_value: conditionObj.condition_value != null ? String(conditionObj.condition_value) : '',
-                    condition_desc: conditionObj.condition_desc != null ? String(conditionObj.condition_desc) : '',
+            const branches = Array.isArray(config.branches) ? config.branches : []
+            const childrenByBranch = {}
+            for (const child of (step.children || [])) {
+                const bi = child.branch_index ?? 0
+                if (!childrenByBranch[bi]) childrenByBranch[bi] = []
+                childrenByBranch[bi].push(child)
+            }
+            backendStep.branches = branches.map((branch, bi) => {
+                const branchPayload = {
+                    branch_type: branch.branch_type || 'if',
+                    branch_desc: branch.branch_desc || '',
+                    branch_conditions: null,
                 }
-                : {
-                    condition_expr: '',
-                    condition_compare: '非空',
-                    condition_value: '',
-                    condition_desc: '',
+                if (branch.branch_type !== 'else' && branch.conditions) {
+                    branchPayload.branch_conditions = {
+                        condition_expr: branch.conditions.condition_expr != null ? String(branch.conditions.condition_expr) : '',
+                        condition_compare: branch.conditions.condition_compare || '非空',
+                        condition_value: branch.conditions.condition_value != null ? String(branch.conditions.condition_value) : '',
+                        condition_desc: branch.conditions.condition_desc != null ? String(branch.conditions.condition_desc) : '',
+                    }
                 }
+                const branchChildren = childrenByBranch[bi] || []
+                const parentIdForChildren = isUpdate ? original.id : null
+                branchPayload.branch_children = branchChildren.map((child) => convertStepToBackend(child, parentIdForChildren, stepNoMap))
+                return branchPayload
+            })
+            backendStep.conditions = null
         } else if (step.type === 'wait') {
             backendStep.wait = config.seconds || original.wait || 0
         } else if (step.type === 'user_variables') {
@@ -293,7 +300,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
         }
 
-        if (step.children && step.children.length > 0) {
+        if (step.type !== 'if' && step.children && step.children.length > 0) {
             const parentIdForChildren = isUpdate ? original.id : null
             backendStep.children = step.children.map((child) => convertStepToBackend(child, parentIdForChildren, stepNoMap))
         }

@@ -1957,85 +1957,108 @@ class LoopStepExecutor(BaseStepExecutor):
 
 class ConditionStepExecutor(BaseStepExecutor):
     """
-    条件分支执行器：根据conditions比较结果决定是否执行子步骤。
+    条件分支执行器：按 branches 顺序评估 if/elif/else，命中第一个即执行其子步骤。
 
-    条件不成立时本步success仍为True，且子步骤失败不会将本步标为失败。
+    所有分支均未命中且无 else 时本步 success 仍为 True；子步骤失败不向上传递。
     """
 
-    async def _execute(self, result: StepExecutionResult) -> None:
-        """
-        评估条件表达式，成立则顺序执行子步骤并挂到result.children。
-
-        :param result: 本步执行结果，用于写入request快照与子步骤结果
-        :return: None
-        """
+    def _evaluate_branch_condition(self, condition: ConditionsBase) -> bool:
+        condition_expr = condition.condition_expr
+        condition_compare = condition.condition_compare
+        condition_value = condition.condition_value
+        if condition_expr is None or condition_compare is None:
+            raise StepExecutionError(
+                f"【条件分支】条件缺少必要字段: \n\t"
+                f"条件表达式: {condition_expr!r}\n\t"
+                f"条件操作符: {condition_compare!r}"
+            )
         try:
-            condition: ConditionsBase = self.step.conditions
-            if not condition or not isinstance(condition, ConditionsBase):
-                raise StepExecutionError(
-                    f"【条件分支】参数异常: \n\t"
-                    f"预期类型: ConditionsBase\n\t"
-                    f"实际类型: {type(condition).__name__}"
-                )
-            condition_expr: str = condition.condition_expr
-            condition_compare: str = condition.condition_compare
-            condition_value: Optional[str] = condition.condition_value
-            condition_desc: Optional[str] = condition.condition_desc
-            if condition_expr is None or condition_compare is None:
-                raise StepExecutionError(
-                    f"【条件分支】条件缺少必要字段: \n\t"
-                    f"条件表达式: {condition_expr!r}\n\t"
-                    f"条件操作符: {condition_compare!r}"
-                )
-            try:
-                resolved_value_expr: Any = self.context.resolve_placeholders(
-                    variables=condition_expr,
-                    step_code=self.step_code
-                )
-            except StepExecutionError:
+            resolved = self.context.resolve_placeholders(variables=condition_expr, step_code=self.step_code)
+            if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
+                variable_name = resolved[2:-1]
+                try:
+                    actual_value = self.context.get_variable(variable_name)
+                except KeyError as e:
+                    raise StepExecutionError(f"【条件分支】条件表达式中变量未定义: {variable_name}") from e
+            else:
+                actual_value = resolved
+        except Exception as e:
+            if isinstance(e, StepExecutionError):
                 raise
-            except Exception as e:
-                raise StepExecutionError(f"【条件分支】条件表达式占位符解析异常, 错误详情: {e}") from e
+            raise StepExecutionError(f"【条件分支】条件表达式占位符解析异常, 错误详情: {e}") from e
+        try:
+            return AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value)
+        except ValueError as e:
+            raise StepExecutionError(f"【条件分支】条件表达式执行异常, 错误描述: {e}") from e
 
+    async def _execute_branch_children(self, branch_children: List[AutoTestStepTreeUpdateItem]) -> List[StepExecutionResult]:
+        results: List[StepExecutionResult] = []
+        for child in sorted(branch_children, key=lambda item: (item.step_no or 0)):
             try:
-                isinstance_str: bool = isinstance(resolved_value_expr, str)
-                if isinstance_str and resolved_value_expr.startswith("${") and resolved_value_expr.endswith("}"):
-                    variable_name: str = resolved_value_expr[2:-1]
-                    try:
-                        actual_value: Any = self.context.get_variable(variable_name)
-                    except KeyError as e:
-                        raise StepExecutionError(f"【条件分支】条件表达式中变量未定义: {variable_name}") from e
+                executor: BaseStepExecutor = StepExecutorFactory.create_executor(child, self.context)
+                child_result = await executor.execute()
+                if child_result is not None:
+                    results.append(child_result)
+            except Exception as e:
+                error_message: str = AutoTestToolService.format_step_error_message(step=child, exception=e, is_child_step=True)
+                self.context.log(error_message, step_code=self.step_code)
+                failed_result = StepExecutionResult(
+                    case_id=child.case_id,
+                    step_id=child.step_id,
+                    step_no=child.step_no,
+                    step_code=child.step_code,
+                    step_name=child.step_name,
+                    step_type=AutoTestStepType(child.step_type),
+                    quote_case_id=child.quote_case_id,
+                    success=False,
+                    error=error_message,
+                )
+                results.append(failed_result)
+        return results
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        try:
+            branches = self.step.branches
+            if not branches:
+                raise StepExecutionError("【条件分支】参数异常: branches 为空，条件分支步骤必须配置 branches")
+
+            result.request = {"branches": [
+                {
+                    "branch_type": b.branch_type,
+                    "branch_conditions": b.branch_conditions.model_dump() if b.branch_conditions else None,
+                    "branch_desc": b.branch_desc,
+                }
+                for b in branches
+            ]}
+
+            for i, branch in enumerate(branches):
+                if branch.branch_type == "else":
+                    matched = True
                 else:
-                    actual_value = resolved_value_expr
-            except StepExecutionError:
-                raise
-            except Exception as e:
-                raise StepExecutionError(f"【条件分支】条件表达式中变量解析异常, 错误描述: {e}") from e
+                    if not branch.branch_conditions:
+                        raise StepExecutionError(f"【条件分支】第{i + 1}个分支({branch.branch_type})缺少 branch_conditions")
+                    matched = self._evaluate_branch_condition(branch.branch_conditions)
 
-            # 写入result.request便于落库与排障, 类型: Dict[str, ConditionsBase]
-            result.request = {"conditions": condition.model_copy(update={"condition_expr": actual_value})}
-            try:
-                if not AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value):
+                if matched:
+                    desc = branch.branch_desc or branch.branch_type
                     result.success = True
-                    result.message = f"【条件分支】条件表达式不成立: {condition_expr!r}"
+                    result.message = f"【条件分支】命中分支[{branch.branch_type}]: {desc}"
                     self.context.log(result.message, step_code=self.step_code)
+                    try:
+                        branch_children = branch.branch_children or []
+                        child_results = await self._execute_branch_children(branch_children)
+                        for child in child_results:
+                            result.append_child(child)
+                    except Exception as e:
+                        result.success = False
+                        error_message: str = f"【条件分支】执行分支[{branch.branch_type}]子步骤失败: {e}"
+                        result.error = error_message
+                        self.context.log(error_message, step_code=self.step_code)
                     return
-            except ValueError as e:
-                raise StepExecutionError(f"【条件分支】条件表达式执行异常, 错误描述: {e}") from e
 
             result.success = True
-            result.message = f"【条件分支】条件满足: {condition_desc}"
+            result.message = "【条件分支】所有分支均未命中，跳过执行"
             self.context.log(result.message, step_code=self.step_code)
-            try:
-                child_results = await self._execute_children()
-                for child in child_results:
-                    # 子步骤成败仅记入children，不向上传递；用例统计仍按各子step_code单独计入
-                    result.append_child(child)
-            except Exception as e:
-                result.success = False
-                error_message: str = f"【条件分支】执行条件分支子步骤失败: {e}"
-                result.error = error_message
-                self.context.log(error_message, step_code=self.step_code)
         except Exception as e:
             result.success = False
             result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)

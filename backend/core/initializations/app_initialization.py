@@ -20,12 +20,9 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from tortoise.contrib.fastapi import register_tortoise
-from tortoise.exceptions import DoesNotExist
+from tortoise.exceptions import DoesNotExist, OperationalError
 
 from backend.configure import PROJECT_CONFIG, LOGGER
-from backend.core.middlewares.app_middleware import logging_middleware
-from backend.core.middlewares.auth_middleware import auth_middleware
-from backend.core.middlewares.request_context_middleware import request_context_middleware
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
@@ -33,7 +30,9 @@ from backend.core.exceptions.http_exceptions import (
     null_point_exception_handler,
     app_exception_handler,
 )
-
+from backend.core.middlewares.app_middleware import logging_middleware
+from backend.core.middlewares.auth_middleware import auth_middleware
+from backend.core.middlewares.request_context_middleware import request_context_middleware
 from backend.services import DependPermission
 
 
@@ -98,6 +97,10 @@ async def register_database(app: FastAPI) -> None:
             await command.init_db(safe=True)
         else:
             raise RuntimeError("数据库迁移元数据与本地[migration]不一致, 无法进行迁移, 请手工修复或从备份恢复后再启动应用") from e
+    except OperationalError as e:
+        LOGGER.warning(f"数据库迁移警告, 数据库已有本次迁移字段: {e}")
+        await command.upgrade(run_in_transaction=True, fake=True)
+        return
 
     # 应用迁移
     await command.upgrade(run_in_transaction=True)

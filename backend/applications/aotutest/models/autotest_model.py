@@ -220,7 +220,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     loop_iterable = fields.CharField(max_length=512, null=True, description="循环对象来源(变量名或可迭代对象)")
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="循环执行失败时的处理策略")
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
-    conditions = fields.JSONField(null=True, description="判断条件(循环结构或条件分支)")
+    conditions = fields.JSONField(null=True, description="判断条件(仅循环结构条件循环使用)")
+    branch_items = fields.JSONField(null=True, description="条件分支列表(仅条件分支步骤使用, 存储分支元数据)")
+    branch_index = fields.IntField(null=True, description="所属分支序号(条件分支子步骤归属哪个分支)")
 
     # 变量、断言和逻辑处理
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
