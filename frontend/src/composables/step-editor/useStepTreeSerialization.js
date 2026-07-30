@@ -25,8 +25,9 @@ export const assignStepNumbers = (steps) => {
     let counter = 1
     const traverse = (step) => {
         stepNoMap.set(step, counter++)
-        if (step.children && step.children.length > 0) {
-            step.children.forEach(traverse)
+        const orderedChildren = getBranchOrderedChildren(step)
+        if (orderedChildren.length > 0) {
+            orderedChildren.forEach(traverse)
         }
     }
     steps.forEach(traverse)
@@ -38,20 +39,44 @@ export const filterKeyValueList = (list) => {
     return list.filter((item) => item && String(item.key ?? '').trim() !== '')
 }
 
+/**
+ * 条件分支子步骤按分支序号稳定排序（组内保持原有相对顺序）。
+ * 后端保存与查询均按 branch_index 分组返回（success_detail、branch_children），
+ * 前端所有依赖遍历顺序的环节（step_no 分配、保存后回写 step_id/step_code）
+ * 必须使用同一顺序，否则步骤标识错配，导致 branch_index 标注错乱（多层嵌套时尤为明显）。
+ */
+export const getBranchOrderedChildren = (step) => {
+    const children = step?.children || []
+    if (step?.type !== 'if' || !Array.isArray(step?.config?.branch_items) || children.length === 0) {
+        return children
+    }
+    return children
+        .map((child, index) => ({ child, index }))
+        .sort((a, b) => ((a.child.branch_index ?? 0) - (b.child.branch_index ?? 0)) || (a.index - b.index))
+        .map(item => item.child)
+}
+
 export const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
     if (!Array.isArray(detailList) || detailList.length === 0) return
+    // 已持有 step_code 的步骤按编码精确匹配，防御返回顺序与遍历顺序不一致
+    const detailByCode = new Map()
+    for (const detail of detailList) {
+        if (detail && detail.step_code) detailByCode.set(detail.step_code, detail)
+    }
     let idx = 0
     const traverse = (list) => {
         if (!Array.isArray(list)) return
         for (const step of list) {
-            const detail = detailList[idx]
+            const stepCode = step.original?.step_code
+            const detail = (stepCode && detailByCode.get(stepCode)) || detailList[idx]
             if (detail && (detail.step_id != null || detail.step_code != null)) {
                 if (!step.original) step.original = {}
                 if (detail.step_id != null) step.original.id = detail.step_id
                 if (detail.step_code != null) step.original.step_code = detail.step_code
             }
             idx += 1
-            if (step.children && step.children.length > 0) traverse(step.children)
+            const orderedChildren = getBranchOrderedChildren(step)
+            if (orderedChildren.length > 0) traverse(orderedChildren)
         }
     }
     traverse(stepList)

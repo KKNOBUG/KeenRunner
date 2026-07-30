@@ -1657,12 +1657,19 @@ const handleAddStepToBranch = (type, parentId, branchIndex) => {
   if (created) {
     created.branch_index = branchIndex
     const children = parent.children || []
+    // 始终重定位到所属分支分组的正确位置（分支末尾；空分支则插入到后续分支之前），
+    // 保持 children 数组按分支分组有序：保存时后端按分支序号分组返回 success_detail，
+    // 前端回写 step_id/step_code 依赖两边遍历顺序一致，否则标识错配引发 branch_index 错乱
+    children.splice(children.indexOf(created), 1)
     const branchChildren = children.filter(c => (c.branch_index ?? 0) === branchIndex)
-    if (branchChildren.length > 1) {
-      const last = branchChildren[branchChildren.length - 2]
-      const lastIdx = children.indexOf(last)
-      children.splice(lastIdx + 1, 0, children.pop())
+    let insertIdx
+    if (branchChildren.length > 0) {
+      insertIdx = children.indexOf(branchChildren[branchChildren.length - 1]) + 1
+    } else {
+      const laterChild = children.find(c => (c.branch_index ?? 0) > branchIndex)
+      insertIdx = laterChild ? children.indexOf(laterChild) : children.length
     }
+    children.splice(insertIdx, 0, created)
     selectedKeys.value = [created.id]
     updateStepDisplayNames()
   }
