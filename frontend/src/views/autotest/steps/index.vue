@@ -251,7 +251,7 @@
  */
 defineOptions({ name: '步骤编辑' })
 import {computed, h, nextTick, onActivated, onMounted, provide, ref, watch} from 'vue'
-import {useRoute, useRouter, onBeforeRouteLeave} from 'vue-router'
+import {useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router'
 import {useElementHover} from '@vueuse/core'
 import {
   NButton,
@@ -1047,7 +1047,14 @@ const {
 
 const { isDirty, markSaved: markDirtySaved, markLoaded: markDirtyLoaded, reset: resetDirty, confirmIfDirty } = useDirtyCheck(buildSourceJsonFromMemoryTree)
 
+// 离开「步骤编辑」路由（跳往其他路由，如工作台/测试用例）时拦截未保存改动
 onBeforeRouteLeave(async () => {
+  return await confirmIfDirty()
+})
+
+// 同一路由内切换用例（多个「步骤编辑」标签页之间，仅 query 变化、组件复用）时，
+// 触发的是 onBeforeRouteUpdate 而非 onBeforeRouteLeave，需同样拦截未保存改动
+onBeforeRouteUpdate(async () => {
   return await confirmIfDirty()
 })
 

@@ -40,6 +40,17 @@ function sortTagsWithWorkbenchFirst(tagList) {
   return [...(workbench.length ? workbench : [getWorkbenchTag()]), ...rest]
 }
 
+/**
+ * 尝试导航到目标页签；若被路由守卫拦截（如步骤编辑页脏检查选择「留下」）则返回 false。
+ * 页签的增删/激活只在导航真正成功后进行，避免「页面留下但页签已关闭」的不一致。
+ * @param {string} path - 目标路由 path
+ * @returns {Promise<boolean>} 导航成功返回 true，被拦截返回 false
+ */
+async function navigateIfAllowed(path) {
+  const failure = await router.push(path)
+  return !failure
+}
+
 export const useTagsStore = defineStore('tag', {
   state() {
     return {
@@ -90,36 +101,38 @@ export const useTagsStore = defineStore('tag', {
     /**
      * 关闭指定 path 的页签
      * - 工作台（WORKBENCH_TAG_PATH）不允许关闭，直接 return
-     * - 若关闭的是当前激活页签，则跳转到左侧或右侧页签
+     * - 若关闭的是当前激活页签，先导航到相邻页签；导航被守卫拦截（如脏检查「留下」）时保留该页签
      * @param {string} path - 要关闭的页签 path
      */
-    removeTag(path) {
+    async removeTag(path) {
       if (path === WORKBENCH_TAG_PATH) return
       if (path === this.activeTag) {
         const nextPath = this.activeIndex > 0
             ? this.tags[this.activeIndex - 1].path
             : this.tags[this.activeIndex + 1].path
+        // 先导航（可能被脏检查守卫拦截）；成功后再更新激活页签与列表，避免「页面留下但页签已关闭」。
         // 显式更新激活页签：相邻页签与当前页 route.path 相同（仅 query 不同，如多个「步骤编辑」页签）时，
         // 布局 watch(route.path) 不会触发，activeTag 不会被自动更新，会导致后续关闭页签不再跳转
+        if (!await navigateIfAllowed(nextPath)) return
         this.setActiveTag(nextPath)
-        router.push(nextPath)
       }
       this.setTags(this.tags.filter((tag) => tag.path !== path))
     },
 
     /**
      * 关闭除「当前页签」和「工作台」以外的全部页签
-     * 工作台始终保留且排在第一位
+     * 工作台始终保留并排在第一位
      * @param {string} [curPath=this.activeTag] - 要保留的当前页 path
      */
-    removeOther(curPath = this.activeTag) {
+    async removeOther(curPath = this.activeTag) {
       const keep = this.tags.filter(
           (tag) => tag.path === curPath || tag.path === WORKBENCH_TAG_PATH
       )
-      this.setTags(keep)
       if (curPath !== this.activeTag) {
-        router.push(this.tags[this.tags.length - 1].path)
+        // 将离开当前激活页签：先导航（可能被脏检查拦截），成功后再裁剪列表
+        if (!await navigateIfAllowed(keep[keep.length - 1].path)) return
       }
+      this.setTags(keep)
     },
 
     /**
@@ -127,16 +140,17 @@ export const useTagsStore = defineStore('tag', {
      * 若当前为工作台则不做任何操作
      * @param {string} curPath - 作为分界线的页签 path
      */
-    removeLeft(curPath) {
+    async removeLeft(curPath) {
       if (curPath === WORKBENCH_TAG_PATH) return
       const curIndex = this.tags.findIndex((item) => item.path === curPath)
       const filterTags = this.tags.filter(
           (item, index) => index >= curIndex || item.path === WORKBENCH_TAG_PATH
       )
-      this.setTags(filterTags)
       if (!filterTags.find((item) => item.path === this.activeTag)) {
-        router.push(filterTags[filterTags.length - 1].path)
+        // 当前激活页签将被移除：先导航（可能被脏检查拦截），成功后再裁剪列表
+        if (!await navigateIfAllowed(filterTags[filterTags.length - 1].path)) return
       }
+      this.setTags(filterTags)
     },
 
     /**
@@ -144,16 +158,17 @@ export const useTagsStore = defineStore('tag', {
      * 若当前为工作台则不做任何操作
      * @param {string} curPath - 作为分界线的页签 path
      */
-    removeRight(curPath) {
+    async removeRight(curPath) {
       if (curPath === WORKBENCH_TAG_PATH) return
       const curIndex = this.tags.findIndex((item) => item.path === curPath)
       const filterTags = this.tags.filter(
           (item, index) => index <= curIndex || item.path === WORKBENCH_TAG_PATH
       )
-      this.setTags(filterTags)
       if (!filterTags.find((item) => item.path === this.activeTag)) {
-        router.push(filterTags[filterTags.length - 1].path)
+        // 当前激活页签将被移除：先导航（可能被脏检查拦截），成功后再裁剪列表
+        if (!await navigateIfAllowed(filterTags[filterTags.length - 1].path)) return
       }
+      this.setTags(filterTags)
     },
 
     /**

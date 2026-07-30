@@ -72,9 +72,11 @@ watch(
     { immediate: true },
 )
 
-const handleTagClick = (path) => {
+const handleTagClick = async (path) => {
+  // 先导航（可能被脏检查守卫拦截）；成功后再激活页签，避免「页面留下但激活页签已切换」
+  const failure = await router.push(path)
+  if (failure) return
   tagsStore.setActiveTag(path)
-  router.push(path)
 }
 
 function showContextMenu() {

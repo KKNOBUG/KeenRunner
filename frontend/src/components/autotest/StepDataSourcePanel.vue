@@ -314,11 +314,13 @@ const applyMatrixToSheet = (matrix) => {
   sheetData.value = matrix.slice(1).map((row) => normalizeMatrixRow(row, maxCol))
 }
 
-const loadStepDataframePreview = async () => {
+const loadStepDataframePreview = async (dataSourceIdOverride) => {
   if (isLoading.value) return
   const ctx = getStepContext()
   lastStepContext.value = ctx
   const { caseId, stepId, stepCode } = ctx
+  // 导入刚完成时 props.dataSourceId 尚未回流到本组件，用显式传入的新 id 兜底，避免误载空白模板
+  const effectiveDataSourceId = dataSourceIdOverride != null ? dataSourceIdOverride : dataSourceId.value
 
   if (!caseId) {
     applyMatrixToSheet([])
@@ -336,8 +338,8 @@ const loadStepDataframePreview = async () => {
     isLoading.value = true
     let preloaded = false
     try {
-      if (dataSourceId.value) {
-        const res = await api.getDataSource({ data_source_id: dataSourceId.value })
+      if (effectiveDataSourceId) {
+        const res = await api.getDataSource({ data_source_id: effectiveDataSourceId })
         const info = res?.data || {}
         const matrix = Array.isArray(info.dataframe) ? info.dataframe : []
         if (matrix.length > 0) {
@@ -374,7 +376,7 @@ const loadStepDataframePreview = async () => {
 
   isLoading.value = true
   try {
-    if (dataSourceId.value) {
+    if (effectiveDataSourceId) {
       const res = await api.getDataSourceByCaseStep({
         case_id: caseId,
         step_id: stepId,
@@ -575,7 +577,7 @@ const onImportFileChange = async (ev) => {
     if (info.data_source_id != null) dataSourceId.value = info.data_source_id
     if (info.file_name != null) dataSourceName.value = String(info.file_name)
     if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
-    await loadStepDataframePreview()
+    await loadStepDataframePreview(info.data_source_id)
     $message.success('导入成功')
   } catch (e) {
     $message.error(`导入失败：${e?.message || e}`)
