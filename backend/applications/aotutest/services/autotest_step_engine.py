@@ -1327,10 +1327,10 @@ class BaseStepExecutor:
             response_body=response_body or None,
             response_text=response_text or None,
             response_elapsed=response_elapsed,
-            # 变量相关
-            session_variables=session_variables,
-            defined_variables=defined_variables,
-            extract_variables=extract_variables,
+            # 变量相关(快照空池统一落NULL，与「有或没有」两态语义一致)
+            session_variables=session_variables or None,
+            defined_variables=defined_variables or None,
+            extract_variables=extract_variables or None,
             assert_validators=result.assert_validators or None
         )
         if self.context.pending_details is not None:

@@ -31,7 +31,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     step_tree_item_from_storage,
     step_variables_list_from_storage,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud, _readd_explicit_null_fields
 from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
 from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -45,6 +45,14 @@ from backend.core.exceptions import (
     DataAlreadyExistsException,
 )
 from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, PUBLIC_CASE_TYPES
+
+# 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表「显式清空」，需回补以落库NULL
+# 注意：branch_items由更新路径单独处理（仅条件分支步骤），不在此集合内
+STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
+    "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file",
+    "request_body", "session_variables", "defined_variables", "extract_variables", "assert_validators",
+    "database_operates", "redis_operates", "conditions",
+)
 
 
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
@@ -461,6 +469,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             exclude_unset=True,
             exclude={"step_id", "step_code"}
         )
+        _readd_explicit_null_fields(step_in, update_dict, STEP_CLEARABLE_JSON_FIELDS)
         if not update_dict:
             return instance
 
@@ -987,6 +996,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
                     exclude_none=True
                 )
+                _readd_explicit_null_fields(step_data, update_dict, STEP_CLEARABLE_JSON_FIELDS)
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
                 update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if "parent_step_id" not in step_data.model_dump(exclude_unset=True) and parent_step_id is not None:

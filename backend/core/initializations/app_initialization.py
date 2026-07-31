@@ -97,7 +97,7 @@ async def register_database(app: FastAPI) -> None:
             await command.init_db(safe=True)
         else:
             raise RuntimeError("数据库迁移元数据与本地[migration]不一致, 无法进行迁移, 请手工修复或从备份恢复后再启动应用") from e
-    except OperationalError as e:
+    except Exception as e:
         LOGGER.warning(f"数据库迁移警告, 数据库已有本次迁移字段: {e}")
         await command.upgrade(run_in_transaction=True, fake=True)
         return

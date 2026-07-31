@@ -35,8 +35,10 @@ export const assignStepNumbers = (steps) => {
 }
 
 export const filterKeyValueList = (list) => {
-    if (!Array.isArray(list)) return []
-    return list.filter((item) => item && String(item.key ?? '').trim() !== '')
+    // 空列表归一为null：与后端「有数据或NULL」两态语义对齐，不再产出空数组
+    if (!Array.isArray(list)) return null
+    const filtered = list.filter((item) => item && String(item.key ?? '').trim() !== '')
+    return filtered.length > 0 ? filtered : null
 }
 
 /**
@@ -83,11 +85,12 @@ export const mergeStepTreeWithSuccessDetail = (stepList, detailList) => {
 }
 
 const resolveArrayField = (config, original, key) => {
+    // 空数组归一为null：只保留「有数据」或「null」两态
     if (config[key] !== undefined) {
-        return Array.isArray(config[key]) ? config[key] : null
+        return Array.isArray(config[key]) && config[key].length > 0 ? config[key] : null
     }
     if (original[key] != null) {
-        return Array.isArray(original[key]) ? original[key] : null
+        return Array.isArray(original[key]) && original[key].length > 0 ? original[key] : null
     }
     return null
 }
@@ -170,8 +173,8 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.request_args_type = ['xml', 'json', 'raw'].includes(argsTypeRaw) ? argsTypeRaw : 'xml'
 
             backendStep.request_body = config.data !== undefined
-                ? (config.data || {})
-                : (original.request_body || {})
+                ? (config.data ?? null)
+                : (original.request_body ?? null)
 
             backendStep.request_text = config.request_text != null
                 ? config.request_text
@@ -203,7 +206,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.request_params = filterKeyValueList(Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : []))
             backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
             backendStep.request_form_urlencoded = filterKeyValueList(Array.isArray(config.form_urlencoded) ? config.form_urlencoded : (Array.isArray(original.request_form_urlencoded) ? original.request_form_urlencoded : []))
-            backendStep.request_body = config.data || original.request_body || {}
+            backendStep.request_body = config.data !== undefined ? (config.data ?? null) : (original.request_body ?? null)
             backendStep.data_source_id = config.data_source_id !== undefined
                 ? (config.data_source_id || null)
                 : (original.data_source_id || null)
@@ -312,7 +315,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
             backendStep.database_searched = !!(config.database_searched ?? original.database_searched)
             const ops = config.database_operates ?? original.database_operates
-            backendStep.database_operates = Array.isArray(ops) ? ops : null
+            backendStep.database_operates = Array.isArray(ops) && ops.length > 0 ? ops : null
             backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
         } else if (step.type === 'redis') {
@@ -320,7 +323,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
             backendStep.redis_searched = !!(config.redis_searched ?? original.redis_searched)
             const ops = config.redis_operates ?? original.redis_operates
-            backendStep.redis_operates = Array.isArray(ops) ? ops : null
+            backendStep.redis_operates = Array.isArray(ops) && ops.length > 0 ? ops : null
             backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
         }
@@ -377,7 +380,6 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 case_code: null,
                 ...casePayload,
                 case_steps: totalSteps,
-                session_variables: null,
             }
         } else {
             const caseMeta = resolveCaseMetaForPayload()
@@ -386,7 +388,6 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 case_code: caseMeta.case_code,
                 ...casePayload,
                 case_steps: totalSteps,
-                session_variables: null,
             }
         }
 

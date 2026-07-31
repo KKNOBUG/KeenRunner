@@ -588,7 +588,8 @@ const buildConfigFromState = () => {
   const rawBodyText = state.form.rawBody ?? ''
 
   let request_text = null
-  let data = {}
+  // JSON草稿为空时保持null：只有用户显式输入的JSON（含"{}"）才会落库
+  let data = null
 
   // 始终解析 JSON（无论当前在哪个模式），用于落库到 request_body
   const jsonStr = jsonBodyText.trim()

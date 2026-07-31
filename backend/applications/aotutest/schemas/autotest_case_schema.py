@@ -8,51 +8,67 @@
 """
 from typing import Optional, List, Dict, Any, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import AutoTestCaseType, AutoTestCaseAttr
 
 
-class AutoTestApiCaseCreate(BaseModel):
+class AutoTestApiCaseMeta(BaseModel):
+    """用例公共字段（更新/查询共用）。"""
+
+    case_id: Optional[int] = Field(None, description="用例ID")
+    case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
+    case_types: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型集合")
+    case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
+    case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
+    case_last_time: Optional[str] = Field(None, description="用例执行时间")
+    case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
+
+
+class AutoTestApiCaseBase(BaseModel):
+    """用例公共字段（更新/查询共用）。"""
+
+    case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
+    case_tags: Optional[List[int]] = Field(None, description="用例所属标签")
+    case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
+    case_attr: Optional[AutoTestCaseAttr] = Field(None, description="用例所属属性")
+    case_project: Optional[int] = Field(None, ge=1, description="用例所属应用")
+    session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
+
+    @field_validator("case_tags", "session_variables", mode="before")
+    @classmethod
+    def _empty_list_to_none(cls, v: Any) -> Any:
+        """
+        case_tags/session_variables字段空数组时归一为null值。
+
+        :param v: 原始值
+        :return: 空数组时返回None，其余原样返回
+        """
+        if isinstance(v, list) and not v:
+            return None
+        return v
+
+
+class AutoTestApiCaseCreate(AutoTestApiCaseBase):
     """创建用例入参。"""
 
     case_name: str = Field(..., max_length=255, description="用例名称")
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
-    case_tags: List[int] = Field(..., description="用例所属标签")
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
-    session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiCaseBase(BaseModel):
-    """用例公共字段（创建/更新/查询共用）。"""
-
-    case_id: Optional[int] = Field(None, description="用例ID")
-    case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
-    case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
-    case_tags: Optional[List[int]] = Field(None, description="用例所属标签")
-    case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
-    case_types: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型集合")
-    case_attr: Optional[AutoTestCaseAttr] = Field(None, description="用例所属属性")
-    case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
-    case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
-    case_project: Optional[int] = Field(None, ge=1, description="用例所属应用")
-    case_last_time: Optional[str] = Field(None, description="用例执行时间")
-    session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
-    case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
-
-
-class AutoTestApiCaseUpdate(AutoTestApiCaseBase):
+class AutoTestApiCaseUpdate(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     """更新用例入参。"""
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiCaseSelect(AutoTestApiCaseBase):
+class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     """分页查询用例入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")

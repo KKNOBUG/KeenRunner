@@ -86,9 +86,9 @@ class BranchItem(BaseModel):
     @field_validator("branch_type", mode="before")
     @classmethod
     def validate_branch_type(cls, v: Any) -> str:
-        if v not in ("if", "elif", "else"):
+        if v not in ("if", "elif", "else", "IF", "ELIF", "ELSE"):
             raise ValueError(f"branch_type 必须为 if/elif/else，当前: {v!r}")
-        return v
+        return v.lower()
 
     @model_validator(mode="after")
     def validate_conditions_presence(self):
@@ -162,6 +162,22 @@ class AutoTestApiStepReqBase(BaseModel):
     tcp_max_response_bytes: Optional[int] = Field(None, ge=1, description="最大读取字节数")
     tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析：json|xml|text|bytes")
 
+    @field_validator(
+        "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file",
+        mode="before"
+    )
+    @classmethod
+    def _empty_request_list_to_none(cls, v: Any) -> Any:
+        """
+        request_header/request_params/request_form_data/request_form_urlencoded/request_form_file字段空数组时归一为null值。
+
+        :param v: 原始值
+        :return: 空数组时返回None，其余原样返回
+        """
+        if isinstance(v, list) and not v:
+            return None
+        return v
+
 
 class AutoTestApiStepDbBase(BaseModel):
     """步骤数据库操作基础字段模型。"""
@@ -183,7 +199,7 @@ class AutoTestApiStepDbBase(BaseModel):
         if isinstance(v, dict):
             return [v]
         if isinstance(v, list):
-            return v
+            return v or None
         raise ValueError(
             f"database_operates 必须为 null、单条对象或对象数组，当前类型: {type(v).__name__}"
         )
@@ -207,9 +223,9 @@ class AutoTestApiStepRedisBase(BaseModel):
         if v is None:
             return None
         if isinstance(v, dict):
-            return list(v.values()) if v else []
+            return list(v.values()) if v else None
         if isinstance(v, list):
-            return v
+            return v or None
         raise ValueError(
             f"redis_operates 必须为 null、单条对象或对象数组，当前类型: {type(v).__name__}"
         )
@@ -227,61 +243,61 @@ class AutoTestApiStepVarBase(BaseModel):
     @classmethod
     def _session_variables_list_shape(cls, v: Any) -> Any:
         """
-        校验 session_variables 为数组或 null。
+        校验 session_variables 为数组或 null；空数组归一为 null。
 
         :param v: 原始值
-        :return: 原值（合法时）
+        :return: 原值（合法且非空时），空数组返回None
         """
         if v is None:
             return None
         if not isinstance(v, list):
             raise ValueError(f"session_variables 必须为数组或 null，当前类型: {type(v).__name__}")
-        return v
+        return v or None
 
     @field_validator("defined_variables", mode="before")
     @classmethod
     def _defined_variables_list_shape(cls, v: Any) -> Any:
         """
-        校验 defined_variables 为数组或 null。
+        校验 defined_variables 为数组或 null；空数组归一为 null。
 
         :param v: 原始值
-        :return: 原值（合法时）
+        :return: 原值（合法且非空时），空数组返回None
         """
         if v is None:
             return None
         if not isinstance(v, list):
             raise ValueError(f"defined_variables 必须为数组或 null，当前类型: {type(v).__name__}")
-        return v
+        return v or None
 
     @field_validator("extract_variables", mode="before")
     @classmethod
     def _extract_variables_list_shape(cls, v: Any) -> Any:
         """
-        校验 extract_variables 为数组或 null。
+        校验 extract_variables 为数组或 null；空数组归一为 null。
 
         :param v: 原始值
-        :return: 原值（合法时）
+        :return: 原值（合法且非空时），空数组返回None
         """
         if v is None:
             return None
         if not isinstance(v, list):
             raise ValueError(f"extract_variables 必须为数组或 null，当前类型: {type(v).__name__}")
-        return v
+        return v or None
 
     @field_validator("assert_validators", mode="before")
     @classmethod
     def _assert_validators_list_shape(cls, v: Any) -> Any:
         """
-        校验 assert_validators 为数组或 null。
+        校验 assert_validators 为数组或 null；空数组归一为 null。
 
         :param v: 原始值
-        :return: 原值（合法时）
+        :return: 原值（合法且非空时），空数组返回None
         """
         if v is None:
             return None
         if not isinstance(v, list):
             raise ValueError(f"assert_validators 必须为数组或 null，当前类型: {type(v).__name__}")
-        return v
+        return v or None
 
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepRedisBase, AutoTestApiStepVarBase):
@@ -340,10 +356,16 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     @field_validator("branch_items", mode="before")
     @classmethod
     def _branch_items_must_be_list_or_none(cls, v: Any) -> Any:
+        """
+        校验 branch_items 为数组或 null；空数组归一为 null（条件分支至少存在一个分支）。
+
+        :param v: 原始值
+        :return: 原值（合法且非空时），空数组返回None
+        """
         if v is None:
             return None
         if isinstance(v, list):
-            return v
+            return v or None
         raise ValueError(f"branch_items 必须为数组或 null，当前类型: {type(v).__name__}")
 
 

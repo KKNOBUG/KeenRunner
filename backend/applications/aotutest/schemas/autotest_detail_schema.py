@@ -103,20 +103,27 @@ class AutoTestApiDetailVarBase(BaseModel):
     """步骤执行明细变量/断言/操作快照基础字段模型。"""
 
     conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件/循环判断条件")
-    session_variables: Optional[List[StepVariablesBase]] = Field(
-        default=None, description="会话变量(包含提取变量，以及前后code设置的变量), 项为 key/value/desc"
-    )
-    defined_variables: Optional[List[StepVariablesBase]] = Field(
-        default=None, description="定义变量(自定义变量，如编写指定值或引用随机函数), 项为 key/value/desc"
-    )
-    extract_variables: NON_LIST_DICT_TYPE = Field(
-        default=None, description="提取结果(与步骤 extract 配置对应；使用 scope 表示 ALL/SOME)"
-    )
-    assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对各类数据对象进行不同表达式的断言验证)")
-    database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="本次执行数据库操作明细快照(解析后的数据库请求操作列表)")
-    redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="本次执行Redis操作明细快照")
+    session_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(所有步骤的执行结果持续累积)")
+    defined_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="定义变量(用户自定义、引用函数的结果)")
+    extract_variables: NON_LIST_DICT_TYPE = Field(default=None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
+    assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
+    database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="数据库请求操作列表")
+    redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="Redis请求操作列表")
     step_exec_logger: Optional[List[str]] = Field(default=None, description="步骤执行日志(字符串列表)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
+
+    @field_validator("session_variables", "defined_variables", "extract_variables", "assert_validators", mode="before")
+    @classmethod
+    def _empty_list_to_none(cls, v: Any) -> Any:
+        """
+        session_variables/defined_variables/extract_variables/assert_validators字段空数组时归一为null值。
+
+        :param v: 原始值
+        :return: 空数组时返回None，其余原样返回
+        """
+        if isinstance(v, list) and not v:
+            return None
+        return v
 
     @field_validator("step_exec_logger", mode="before")
     @classmethod
@@ -148,7 +155,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         if isinstance(v, dict):
             return [v]
         if isinstance(v, list):
-            return v
+            return v or None
         return v
 
     @field_validator('redis_operates', mode='before')
@@ -165,7 +172,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         if isinstance(v, dict):
             return [v]
         if isinstance(v, list):
-            return v
+            return v or None
         return v
 
     @model_validator(mode='before')
@@ -191,7 +198,10 @@ class AutoTestApiDetailVarBase(BaseModel):
         session_variables_value: Optional[List[StepVariablesBase]] = v.get("session_variables")
         if session_variables_value:
             try:
-                v["session_variables"] = [item.model_dump() for item in session_variables_value]
+                v["session_variables"] = [
+                    item.model_dump() if hasattr(item, "model_dump") else item
+                    for item in session_variables_value
+                ]
             except Exception as e:
                 v["session_variables"] = None
                 executive_logger.append(f"字段[session_variables]标准化失败, 已置空, 错误描述: {e}")
@@ -199,7 +209,10 @@ class AutoTestApiDetailVarBase(BaseModel):
         defined_variables_value: Optional[List[StepVariablesBase]] = v.get("defined_variables")
         if defined_variables_value:
             try:
-                v["defined_variables"] = [item.model_dump() for item in defined_variables_value]
+                v["defined_variables"] = [
+                    item.model_dump() if hasattr(item, "model_dump") else item
+                    for item in defined_variables_value
+                ]
             except Exception as e:
                 v["defined_variables"] = None
                 executive_logger.append(f"字段[defined_variables]标准化失败, 已置空, 错误描述: {e}")
@@ -263,8 +276,8 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
-    dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称(参数化)")
-    dataset_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
+    dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称")
+    dataset_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="本步骤执行使用的数据快照")
 
 
 class AutoTestApiDetailCreate(AutoTestApiDetailBase):

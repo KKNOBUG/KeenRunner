@@ -144,7 +144,8 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
 class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     case_name = fields.CharField(max_length=255, index=True, description="用例名称")
     case_desc = fields.CharField(max_length=2048, null=True, description="用例描述")
-    case_tags = fields.JSONField(default=list, description="用例所属标签")
+    # case_tags 存储为List[int]格式；空标签统一落NULL，不使用空数组占位
+    case_tags = fields.JSONField(default=None, null=True, description="用例所属标签")
     case_type = fields.CharEnumField(AutoTestCaseType, default=None, null=True, description="用例所属类型")
     case_attr = fields.CharEnumField(AutoTestCaseAttr, default=None, null=True, description="用例所属属性")
     case_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="用例标识代码")
@@ -153,8 +154,8 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_version = fields.IntField(default=1, ge=1, description="用例更新版本(修改次数)")
     case_project = fields.IntField(default=1, ge=1, index=True, description="用例所属应用")
     case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
-    # session_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
-    session_variables = fields.JSONField(default=list, null=True, description="会话变量(初始变量池)")
+    # session_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项；空池统一落NULL，不使用空数组占位
+    session_variables = fields.JSONField(default=None, null=True, description="会话变量(初始变量池)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
@@ -371,8 +372,8 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照(head/body/assert)，记录在明细更贴合「每步细节」
-    dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称(参数化)")
-    dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照(该步骤的 head/body/assert)")
+    dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称")
+    dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照")
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 

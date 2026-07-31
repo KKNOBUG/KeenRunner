@@ -939,6 +939,7 @@ const buildConfigFromState = () => {
   const form_urlencoded = Array.isArray(state.form.bodyForm) ? normalizeList(state.form.bodyForm) : []
 
   // JSON 报文：无论当前请求体类型为何都尽量保留，避免切换类型后保存导致 JSON 数据丢失
+  // 空文本/纯空白归一为null：只有用户显式输入的JSON（含"{}"）才会落库
   let jsonBodyText = state.form.jsonBody ?? ''
   if (state.form.jsonBody && state.form.jsonBody.trim()) {
     try {
@@ -946,8 +947,6 @@ const buildConfigFromState = () => {
     } catch {
       data = {}
     }
-  } else if (state.form.bodyType === 'json') {
-    data = {}
   }
 
   // XML / raw 报文：当前类型优先；切换到其它类型（json、form-data 等）时保留已填写的报文，避免保存后丢失

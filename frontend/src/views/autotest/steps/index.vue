@@ -1236,7 +1236,6 @@ const handleSaveAll = async () => {
         case_code: null,
         ...casePayload,
         case_steps: totalSteps,
-        session_variables: null,
         updated_user: currentUser,
       }
     } else {
@@ -1246,7 +1245,6 @@ const handleSaveAll = async () => {
         case_code: caseMeta.case_code,
         ...casePayload,
         case_steps: totalSteps,
-        session_variables: null,
         updated_user: currentUser,
       }
     }
