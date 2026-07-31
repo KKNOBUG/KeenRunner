@@ -10,16 +10,35 @@
           v-for="(branch, bi) in step.config.branch_items"
           :key="'branch-' + bi"
           class="branch-group"
+          :class="`branch-depth-${Math.min(depth, 3)}`"
       >
         <div class="branch-group-header">
+          <span
+              class="branch-collapse-btn"
+              :title="isBranchCollapsed(step.id, bi) ? '展开该分支' : '折叠该分支'"
+              @click.stop="toggleBranchCollapse(step.id, bi, $event)"
+          >
+            <TheIcon
+                :icon="isBranchCollapsed(step.id, bi) ? 'gravity-ui:chevron-down' : 'gravity-ui:chevron-up'"
+                :size="12"
+            />
+          </span>
           <span class="branch-tag" :class="`tag-${branch.branch_type}`">
             {{ branch.branch_type.toUpperCase() }}
           </span>
-          <span v-if="branch.branch_type !== 'else' && branch.branch_conditions" class="branch-condition-summary">
+          <span
+              v-if="branch.branch_type !== 'else' && branch.branch_conditions"
+              class="branch-condition-summary"
+              :title="`${branch.branch_conditions.condition_expr} ${branch.branch_conditions.condition_compare} ${branch.branch_conditions.condition_value}`"
+          >
             {{ branch.branch_conditions.condition_expr }} {{ branch.branch_conditions.condition_compare }} {{ branch.branch_conditions.condition_value }}
           </span>
+          <span v-if="branch.branch_type === 'else'" class="branch-else-hint">上述条件均未命中时执行</span>
+          <span v-if="isBranchCollapsed(step.id, bi)" class="branch-collapsed-count">
+            {{ getBranchChildren(bi).length }} 个步骤
+          </span>
         </div>
-        <div class="branch-group-body">
+        <div v-if="!isBranchCollapsed(step.id, bi)" class="branch-group-body">
           <template v-for="(child, childIndex) in getBranchChildren(bi)" :key="child.id">
             <div class="step-insert-indicator" :style="insertIndicatorStyle(child.id, 'before')"></div>
             <div
@@ -37,7 +56,7 @@
                 @dragleave.stop="handleDragLeaveOnChild($event, child.id)"
                 @drop.stop="handleDrop($event, child.id, step.id, getGlobalChildIndex(child.id))"
             >
-              <div class="step-item-child">
+              <div class="step-item-child" :class="{ 'has-children-guide': stepDefinitions[child.type]?.allowChildren && isStepExpanded(child.id) }">
                 <span class="step-name" :title="child.name">
                   <TheIcon :icon="getStepIcon(child.type)" :size="16" class="step-icon" :class="getStepIconClass(child.type)"/>
                   <span class="step-name-text">{{ getStepDisplayName(child.name, child.id) }}</span>
@@ -65,7 +84,7 @@
                     </n-popconfirm>
                   </span>
                 </span>
-                <RecursiveStepChildren v-if="stepDefinitions[child.type]?.allowChildren" :step="child"/>
+                <RecursiveStepChildren v-if="stepDefinitions[child.type]?.allowChildren" :step="child" :depth="depth + 1"/>
               </div>
             </div>
             <div class="step-insert-indicator" :style="insertIndicatorStyle(child.id, 'after')"></div>
@@ -114,7 +133,7 @@
             @dragleave.stop="handleDragLeaveOnChild($event, child.id)"
             @drop.stop="handleDrop($event, child.id, step.id, childIndex)"
         >
-          <div class="step-item-child">
+          <div class="step-item-child" :class="{ 'has-children-guide': stepDefinitions[child.type]?.allowChildren && isStepExpanded(child.id) }">
             <span class="step-name" :title="child.name">
               <TheIcon :icon="getStepIcon(child.type)" :size="16" class="step-icon" :class="getStepIconClass(child.type)"/>
               <span class="step-name-text">{{ getStepDisplayName(child.name, child.id) }}</span>
@@ -142,7 +161,7 @@
                 </n-popconfirm>
               </span>
             </span>
-            <RecursiveStepChildren v-if="stepDefinitions[child.type]?.allowChildren" :step="child"/>
+            <RecursiveStepChildren v-if="stepDefinitions[child.type]?.allowChildren" :step="child" :depth="depth + 1"/>
           </div>
         </div>
         <div class="step-insert-indicator" :style="insertIndicatorStyle(child.id, 'after')"></div>
@@ -164,13 +183,17 @@ import AddStepPopover from './AddStepPopover.vue'
 defineOptions({ name: 'RecursiveStepChildren' })
 
 const props = defineProps({
-  step: { type: Object, required: true }
+  step: { type: Object, required: true },
+  /** 当前子树层级（根级调用为 1，每递归一层 +1），用于分支组的深度样式 */
+  depth: { type: Number, default: 1 }
 })
 
 const {
   stepDefinitions,
   isStepExpanded,
   toggleStepExpand,
+  isBranchCollapsed,
+  toggleBranchCollapse,
   selectedKeys,
   getStepIcon,
   getStepIconClass,
@@ -226,33 +249,83 @@ const insertIndicatorStyle = (targetId, position, requireChildren = false) => {
 </script>
 
 <style scoped>
+/* 分支组框：外左边线对齐 16px 缩进网格，组内行因框体自然内凹（容器语义）；
+   上下 margin 3px 与行 padding 3px 组成 6px 等距节奏（相邻组框 margin 折叠为 3px，形成紧凑堆叠） */
 .branch-group {
-  margin: 4px 0;
-  border-radius: 6px;
+  margin: 3px 0;
+  border-radius: 8px;
   border: 1px dashed var(--n-border-color);
   overflow: hidden;
 }
 
+/* 组头：背景与步骤行名称药丸共用同一浅灰 token，内容左边线与组内行对齐 */
 .branch-group-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  background: var(--n-color-modal);
+  padding: 4px 6px;
+  background: color-mix(in srgb, var(--n-border-color) 35%, transparent);
   font-size: 12px;
 }
 
+/* 深度色阶：组头背景随层级加深渐次变淡（后退感），降低深层嵌套的视觉噪音 */
+.branch-depth-2 .branch-group-header {
+  background: color-mix(in srgb, var(--n-border-color) 28%, transparent);
+}
+
+.branch-depth-3 .branch-group-header {
+  background: color-mix(in srgb, var(--n-border-color) 22%, transparent);
+}
+
+/* 深度 ≥3：组框降级为左侧引导线，避免"盒子套盒子"的视觉堆积（层级归属由缩进参考线承担） */
+.branch-depth-3.branch-group {
+  border: none;
+  border-left: 1px solid color-mix(in srgb, var(--n-border-color) 60%, transparent);
+  border-radius: 0;
+}
+
+.branch-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.branch-collapse-btn:hover {
+  opacity: 1;
+}
+
 .branch-condition-summary {
+  flex: 1;
+  min-width: 0;
   color: var(--n-text-color-2);
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.branch-else-hint {
+  flex: 1;
+  min-width: 0;
+  color: var(--n-text-color-3);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-collapsed-count {
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
+  font-size: 12px;
+}
+
 .branch-group-body {
-  padding: 4px 4px 4px 8px;
+  padding: 2px 6px;
 }
 
 .branch-drop-zone {

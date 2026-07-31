@@ -44,7 +44,12 @@
                 </n-button>
               </div>
             </template>
-            <div class="step-tree-container overlay-scroll">
+            <div
+                class="step-tree-container overlay-scroll"
+                @dragover="handleDragOverOnRootSpace"
+                @dragleave="handleDragLeaveOnRootSpace"
+                @drop="handleDropOnRootSpace"
+            >
               <template v-for="(step, index) in steps" :key="step.id">
                 <div class="step-insert-indicator" :style="rootInsertIndicatorStyle(step.id, 'before')"></div>
                 <div
@@ -63,7 +68,7 @@
                     @drop="handleDrop($event, step.id, null, index)"
                     @click="handleSelect([step.id])"
                 >
-                  <div class="step-item-distance">
+                  <div class="step-item-distance" :class="{ 'has-children-guide': stepDefinitions[step.type]?.allowChildren && isStepExpanded(step.id) }">
                     <!-- 父级步骤名称-->
                     <span class="step-name" :title="step.name">
                     <TheIcon
@@ -130,6 +135,7 @@
                     <RecursiveStepChildren
                         v-if="stepDefinitions[step.type]?.allowChildren"
                         :step="step"
+                        :depth="1"
                     />
                     <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存） -->
                     <div v-if="step.type === 'quote'" class="quote-inner-steps">
@@ -142,7 +148,7 @@
                               'is-selected': selectedKeys.includes(getQuoteInnerKey(step.id, idx)),
                               'is-skipped': !!item.step.step_is_skipped || !!step.step_is_skipped,
                             }"
-                            :style="{ marginLeft: (item.depth * 10) + 'px' }"
+                            :style="{ marginLeft: (item.depth * 16) + 'px' }"
                             @click.stop="handleSelect([getQuoteInnerKey(step.id, idx)])"
                         >
                           <span class="step-name">
@@ -840,6 +846,19 @@ const toggleStepExpand = (stepId, event) => {
   stepExpandStates.value.set(stepId, !currentState)
 }
 
+// 条件分支单个分支(IF/ELIF/ELSE)的折叠状态，key = `${stepId}:${branchIndex}`，默认展开
+const branchCollapseStates = ref(new Map())
+
+const isBranchCollapsed = (stepId, branchIndex) => {
+  return branchCollapseStates.value.get(`${stepId}:${branchIndex}`) ?? false
+}
+
+const toggleBranchCollapse = (stepId, branchIndex, event) => {
+  event?.stopPropagation()
+  const key = `${stepId}:${branchIndex}`
+  branchCollapseStates.value.set(key, !isBranchCollapsed(stepId, branchIndex))
+}
+
 // 初始化所有允许子步骤的步骤的展开状态（默认为展开）
 const initializeStepExpandStates = () => {
   const initializeStates = (list) => {
@@ -878,6 +897,9 @@ const {
   handleDragLeaveInChildrenArea,
   handleDragOverOnChild,
   handleDragLeaveOnChild,
+  handleDragOverOnRootSpace,
+  handleDragLeaveOnRootSpace,
+  handleDropOnRootSpace,
   handleDrop,
 } = useStepDragDrop({ steps, stepDefinitions, findStep })
 
@@ -2055,6 +2077,8 @@ provide('stepTreeContext', {
   stepDefinitions,
   isStepExpanded,
   toggleStepExpand,
+  isBranchCollapsed,
+  toggleBranchCollapse,
   selectedKeys,
   getStepIcon,
   getStepIconClass,
@@ -2296,7 +2320,7 @@ provide('stepTreeContext', {
 
 :deep(.step-add-btn .add-step-trigger-btn) {
   width: 99%;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   border-radius: 8px;
 }
 
@@ -2322,8 +2346,15 @@ provide('stepTreeContext', {
   opacity: 0.85;
 }
 
+/* 选中态：虚线框 + 淡橙底（仅作用于本行的名称药丸，子步骤不联动变色——外层边框已足够标注选中范围） */
 :deep(.step-item.is-selected) {
   border: 1px dashed #F4511E;
+}
+
+:deep(.step-item.is-selected > .step-item-distance > .step-name),
+:deep(.step-item.is-selected > .step-item-child > .step-name),
+:deep(.quote-inner-item.is-selected > .step-name) {
+  background-color: rgba(244, 81, 30, 0.1);
 }
 
 /* 所有 loop/if 步骤的普通高亮（拖拽时）：outline 不参与布局，避免行高变化引起整树抖动 */
@@ -2365,16 +2396,17 @@ provide('stepTreeContext', {
   cursor: move;
 }
 
+/* 拖放目标区：1px 虚线与分支组框统一；背景色与步骤行同一灰色 token */
 :deep(.step-drop-zone) {
   min-height: 28px;
-  border: 2px dashed var(--n-border-color);
+  border: 1px dashed var(--n-border-color);
   border-radius: 8px;
-  margin: 4px 8px;
+  margin: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  background-color: var(--n-color-embedded);
+  background-color: color-mix(in srgb, var(--n-border-color) 35%, transparent);
 }
 
 :deep(.step-drop-zone.is-drag-over) {
@@ -2385,7 +2417,7 @@ provide('stepTreeContext', {
 
 :deep(.step-drop-zone-hint) {
   color: var(--n-text-color-3);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
   padding: 4px;
 }
@@ -2394,11 +2426,39 @@ provide('stepTreeContext', {
   color: #F4511E;
 }
 
+/* 层次缩进的唯一机制：每层 = margin-left 8px + padding-left 8px = 16px，全树统一 */
 :deep(.step-item-child) {
   padding-left: 8px;
   margin-left: 8px;
+  position: relative;
 }
 
+/* 缩进参考线：含展开子级的行在其父级缩进槽中央绘制 1px 竖线，贯穿整个子树高度，
+   深层嵌套时可沿竖线追踪步骤归属（同级相邻行的线段自动首尾相接形成连续参考线） */
+:deep(.step-item-child.has-children-guide)::before,
+.step-item-distance.has-children-guide::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--n-border-color) 45%, transparent);
+  pointer-events: none;
+}
+
+:deep(.step-item-child.has-children-guide)::before {
+  left: 0;
+}
+
+.step-item-distance {
+  position: relative;
+}
+
+.step-item-distance.has-children-guide::before {
+  left: 8px;
+}
+
+/* 名称药丸：浅灰底（全局唯一的浅灰面板 token），hover 文字+底色同时转主题色 */
 :deep(.step-name) {
   display: flex;
   align-items: center;
@@ -2412,10 +2472,12 @@ provide('stepTreeContext', {
   box-sizing: border-box;
   position: relative;
   min-width: 0;
+  transition: background-color 0.2s;
 }
 
 :deep(.step-name:hover) {
   color: #F4511E;
+  background-color: rgba(244, 81, 30, 0.08);
 }
 
 :deep(.step-name-text) {
@@ -2507,20 +2569,20 @@ provide('stepTreeContext', {
 }
 
 :deep(.step-add-btn) {
-  padding-top: 5px;
+  padding-top: 3px;
   padding-left: 8px;
 }
 
-/* 引用步骤内嵌树：与主步骤树共用 .step-item / .step-name 样式，仅保留结构缩进 */
+/* 引用步骤内嵌树：与主步骤树共用 .step-item / .step-name 样式，仅保留结构缩进与左侧引导线 */
 :deep(.quote-inner-steps) {
-  margin: 2px 0 2px 8px;
+  margin: 3px 0 3px 8px;
   border-left: 2px solid #F4511E;
-  border-radius: 12px;
+  border-radius: 8px;
   padding-left: 6px;
 }
 
 :deep(.quote-inner-list) {
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 :deep(.quote-inner-item) {
@@ -2535,7 +2597,7 @@ provide('stepTreeContext', {
 }
 
 :deep(.quote-inner-empty) {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--n-text-color-3);
   padding: 4px 0;

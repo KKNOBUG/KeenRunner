@@ -42,9 +42,9 @@ export function useDirtyCheck(getSnapshot) {
         if (!isDirty.value) return true
         return new Promise((resolve) => {
             window.$dialog?.confirm?.({
-                title: '未保存的更改',
+                title: '提示',
                 type: 'warning',
-                content: '当前步骤树有未保存的修改，确定要离开吗？',
+                content: '步骤树有未保存的修改，确定要离开吗？',
                 positiveText: '离开',
                 negativeText: '留下',
                 confirm: () => resolve(true),

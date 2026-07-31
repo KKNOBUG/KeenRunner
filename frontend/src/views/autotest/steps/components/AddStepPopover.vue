@@ -229,7 +229,7 @@ const handleSelectItem = (item) => {
 <style scoped>
 .add-step-trigger-btn {
   font-size: 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   width: 99%;
 }
 
