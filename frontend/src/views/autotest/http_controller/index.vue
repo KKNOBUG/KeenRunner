@@ -111,7 +111,7 @@
                   clearable
                   filterable
                   class="request-toolbar-select"
-                  :disabled="props.readonly"
+                  :disabled="props.readonly || props.lockProject"
               />
             </n-form-item>
             <n-form-item label="配置名称" path="request_config_name" required class="http-field-config">
@@ -604,7 +604,10 @@ const props = defineProps({
     default: () => []
   },
   readonly: {type: Boolean, default: false},
-  hideDataSource: {type: Boolean, default: false}
+  hideDataSource: {type: Boolean, default: false},
+  /** 公共接口用例：Request 面板「所属应用」锁定（只读），值为用例所属应用 */
+  lockProject: {type: Boolean, default: false},
+  caseProjectId: {type: [Number, String], default: null}
 })
 
 const emit = defineEmits(['update:config'])
@@ -833,6 +836,18 @@ const { form, isExternalUpdate, syncFromExternal } = useStepEditorForm({
 /** 模板与各 helper 沿用 state.form 访问方式 */
 const state = { form }
 
+// 公共接口（lockProject）：所属应用锁定为用例所属应用，外部变化时静默回填（不触发 emit 回写循环）
+watch(
+    () => props.caseProjectId,
+    (pid) => {
+      if (!props.lockProject || pid == null || pid === '') return
+      if (Number(state.form.request_project_id) !== Number(pid)) {
+        syncFromExternal(() => {
+          state.form.request_project_id = Number(pid)
+        })
+      }
+    },
+)
 
 const httpConfigNameOptions = ref([])
 const httpConfigNameLoading = ref(false)

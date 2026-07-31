@@ -1201,6 +1201,12 @@ const handleSaveAll = async () => {
         notifyError('公共接口用例有且仅允许 1 个 HTTP/TCP 请求步骤，请调整后再保存')
         return
       }
+      // 所属应用兜底同步：用户可能从未点开步骤子页面（监听未覆盖），保存前强制对齐用例所属应用
+      const casePid = caseInfoPanelRef.value?.caseForm?.case_project
+      const onlyStep = steps.value[0]
+      if (casePid != null && casePid !== '' && Number(onlyStep.config?.request_project_id) !== Number(casePid)) {
+        updateStepConfig(onlyStep.id, { request_project_id: Number(casePid) })
+      }
     }
 
     // 获取当前用户信息（用于 updated_user 字段）
@@ -1559,9 +1565,27 @@ const editorComponentProps = computed(() => {
   }
   if (step.type === 'http' || step.type === 'tcp') {
     props.hideDataSource = isPublicFamilyCase.value
+    // 公共接口：Request 面板「所属应用」锁定为用例所属应用（只读），由父级监听强制同步
+    props.lockProject = isPublicApiCase.value
+    props.caseProjectId = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_project ?? null) : null
   }
   return props
 })
+
+/** 公共接口：请求步骤「所属应用」强制同步用例所属应用（新建/切换用例应用/切换步骤时兜底） */
+watch(
+    [isPublicApiCase, () => caseInfoPanelRef.value?.caseForm?.case_project, () => currentStep.value?.id],
+    () => {
+      if (!isPublicApiCase.value) return
+      const step = currentStep.value
+      const casePid = caseInfoPanelRef.value?.caseForm?.case_project
+      if (!step || (step.type !== 'http' && step.type !== 'tcp') || casePid == null || casePid === '') return
+      if (Number(step.config?.request_project_id) !== Number(casePid)) {
+        updateStepConfig(step.id, { request_project_id: Number(casePid) })
+      }
+    },
+    { immediate: true }
+)
 
 /** 在根或父步骤下插入新步骤节点 */
 const insertStep = (parentId, type, index = null, extraConfig = null) => {

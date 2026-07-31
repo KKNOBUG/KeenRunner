@@ -121,6 +121,27 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
+    @staticmethod
+    async def _cascade_public_api_step_project(case_instance: AutoTestApiCaseInfo) -> None:
+        """
+        公共接口用例的请求步骤所属应用级联对齐用例所属应用。
+        在类型切换为公共接口或修改用例所属应用后调用，保证「步骤应用=用例应用」不变式对纯接口调用同样成立。
+
+        :param case_instance: 更新后的用例实例（非公共接口或无应用时静默跳过）
+        """
+        if case_instance.case_type != AutoTestCaseType.PUBLIC_API or not case_instance.case_project:
+            return
+        updated_count: int = await AutoTestApiStepInfo.filter(
+            case_id=case_instance.id, state__not=1
+        ).exclude(request_project_id=case_instance.case_project).update(
+            request_project_id=case_instance.case_project
+        )
+        if updated_count:
+            LOGGER.info(
+                f"公共接口用例(id={case_instance.id})级联对齐请求步骤所属应用为({case_instance.case_project}), "
+                f"更新({updated_count})条"
+            )
+
     async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
         """
         更新用例，根据case_id或case_code定位并递增case_version。
@@ -141,6 +162,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         else:
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id: int = instance.id
+        original_case_type: Optional[AutoTestCaseType] = instance.case_type
         update_dict = case_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
@@ -169,9 +191,19 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
+        # 业务层验证：切换为公共接口时，存量步骤树形态必须合规（与批量路径一致的阻断策略）
+        if case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API:
+            await self._validate_switch_to_public_api(instance)
+
         try:
             update_dict["case_version"] = instance.case_version + 1
             instance = await self.update(id=case_id, obj_in=update_dict)
+            # 公共接口所属应用一致性：切换类型或修改所属应用后，级联对齐其唯一请求步骤
+            if "case_project" in update_dict or (
+                    case_type == AutoTestCaseType.PUBLIC_API
+                    and original_case_type != AutoTestCaseType.PUBLIC_API
+            ):
+                await self._cascade_public_api_step_project(instance)
             return instance
         except DoesNotExist as e:
             error_message: str = f"更新用例信息失败, 用例(id={case_id}或code={case_code})不存在, 错误描述: {e}"
@@ -404,6 +436,13 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     error_message: str = f"第({cid})条用例更新失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
+
+                # 公共接口所属应用一致性：切换类型或修改所属应用后，级联对齐其唯一请求步骤
+                if "case_project" in update_case_dict or (
+                        case_type == AutoTestCaseType.PUBLIC_API
+                        and case_instance.case_type != AutoTestCaseType.PUBLIC_API
+                ):
+                    await self._cascade_public_api_step_project(updated_instance)
 
                 processed_case.add((case_id, case_code))
                 case_dict: Dict[str, Any] = await updated_instance.to_dict(

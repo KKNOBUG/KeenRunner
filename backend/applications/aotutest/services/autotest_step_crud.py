@@ -714,6 +714,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             cls,
             steps_data: List["AutoTestStepTreeUpdateItem"],
             case_type: "AutoTestCaseType",
+            case_project: Optional[int] = None,
     ) -> None:
         """
         公共家族(公共脚本/公共接口)步骤树约束：全树不允许存在引用步骤、不允许绑定数据源；
@@ -721,10 +722,20 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param steps_data: 根级步骤树项列表
         :param case_type: 当前用例目标类型（必为公共家族成员）
+        :param case_project: 当前用例所属应用ID（公共接口一致性校验使用）
         :raises ParameterException: 任一约束不满足时（调用方事务回滚）
         """
         if case_type == AutoTestCaseType.PUBLIC_API:
             cls._validate_public_api_tree(steps_data)
+            # 所属应用自动对齐用例（前端已只读锁定；API 直调无论入参缺失或不一致，在此强制一致）
+            if case_project and len(steps_data) == 1:
+                only_step = steps_data[0]
+                if getattr(only_step, "request_project_id", None) != case_project:
+                    LOGGER.info(
+                        f"公共接口请求步骤所属应用自动对齐用例所属应用: "
+                        f"{getattr(only_step, 'request_project_id', None)} -> {case_project}"
+                    )
+                    only_step.request_project_id = case_project
         for step_data in cls._iter_tree_steps(steps_data):
             if step_data.step_type == AutoTestStepType.QUOTE:
                 error_message: str = f"用例类型为({case_type.value})时不允许引用其他脚本"
@@ -739,6 +750,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
     def _validate_public_api_tree(steps_data: List["AutoTestStepTreeUpdateItem"]) -> None:
         """
         公共接口用例步骤树约束：有且仅有 1 个根步骤、类型仅 HTTP/TCP、无子级结构、无数据源绑定。
+        （请求步骤所属应用由 _validate_public_family_tree 在形态校验通过后自动对齐用例所属应用）
 
         :param steps_data: 根级步骤树项列表
         :raises ParameterException: 任一约束不满足时（调用方事务回滚）
@@ -794,7 +806,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             if root_case_id:
                 root_case = await case_crud.get_by_id(case_id=root_case_id, on_error=False, state__not=1)
                 if root_case and root_case.case_type in PUBLIC_CASE_TYPES:
-                    self._validate_public_family_tree(steps_data, root_case.case_type)
+                    self._validate_public_family_tree(steps_data, root_case.case_type, root_case.case_project)
 
         for sid, step_data in enumerate(steps_data, start=1):
             case_id: Optional[int] = step_data.case_id
