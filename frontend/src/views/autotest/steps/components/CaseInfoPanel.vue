@@ -147,7 +147,7 @@
           </div>
 
           <div class="case-field">
-            <n-form-item label="所属标签" path="case_tags" required :show-feedback="false">
+            <n-form-item label="所属标签" path="case_tags" :required="caseForm.case_type !== '公共接口'" :show-feedback="false">
               <n-popover
                   v-model:show="tagPopoverShow"
                   trigger="click"
@@ -427,7 +427,8 @@ const validateCaseForm = () => {
   if (!caseForm.case_name || !String(caseForm.case_name).trim()) {
     return { valid: false, message: '请输入用例名称' }
   }
-  if (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0) {
+  // 所属标签必填, 公共接口类型豁免(与后端口径一致)
+  if (caseForm.case_type !== '公共接口' && (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0)) {
     return { valid: false, message: '请选择所属标签' }
   }
   if (!caseForm.case_attr) {

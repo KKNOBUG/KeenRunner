@@ -101,7 +101,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param case_in: 用例创建 schema
         :return: 创建后的用例实例
-        :raises ParameterException: 标签列表为空或格式非法
+        :raises ParameterException: 标签列表为空(公共接口类型豁免)或格式非法
         :raises NotFoundException: 标签不存在
         :raises DataAlreadyExistsException: 同项目下用例名重复
         :raises DataBaseStorageException: 违反数据库约束
@@ -111,14 +111,15 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         case_tags: Optional[List[int]] = case_in.case_tags
         case_type: Optional[AutoTestCaseType] = case_in.case_type
 
-        # 业务层验证: 标签为必填项且不允许为空(与批量新增路径口径一致)
-        if not case_tags:
+        # 业务层验证: 标签必填(公共接口类型豁免)且不允许为空(与批量新增路径口径一致)
+        if not case_tags and case_type != AutoTestCaseType.PUBLIC_API:
             error_message: str = "新增用例信息失败, 用例所属标签(case_tags)字段不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 业务层验证: 检查标签是否全部存在
-        await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+        # 业务层验证: 检查标签是否全部存在(get_by_ids不接受空列表, 无标签时跳过)
+        if case_tags:
+            await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         # 业务层验证: 检查用例信息是否已经存在
         existing_case = await self.get_by_conditions(
@@ -194,10 +195,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         )
         _readd_explicit_null_fields(case_in, update_dict, CASE_CLEARABLE_JSON_FIELDS)
 
-        # 业务层验证：检查标签是否全部存在
+        # 业务层验证：检查标签是否全部存在(get_by_ids不接受空列表, 显式清空为None时跳过)
         if "case_tags" in update_dict:
             case_tags = update_dict.get("case_tags", instance.case_tags)
-            await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags or [], on_error=True, state__not=1)
+            if case_tags:
+                await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         # 业务层验证：检查应用ID和用例名称是否唯一
         if "case_name" in update_dict or "case_project" in update_dict:
@@ -359,9 +361,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     state__not=1
                 )
 
-            # 用例不存在，执行新增，及验证必填字段
+            # 用例不存在，执行新增，及验证必填字段(标签必填, 公共接口类型豁免)
             if not case_instance:
-                if not case_tags:
+                if not case_tags and case_type != AutoTestCaseType.PUBLIC_API:
                     error_message: str = f"第({cid})条用例新增失败, 用例所属标签(case_tags)字段不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
@@ -436,10 +438,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     success_detail.append(case_dict)
                     continue
 
-                # 业务层验证：检查标签是否全部存在
+                # 业务层验证：检查标签是否全部存在(get_by_ids不接受空列表, 显式清空为None时跳过)
                 if "case_tags" in update_case_dict:
                     case_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags or [], on_error=True, state__not=1)
+                    if case_tags:
+                        await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
                 # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:

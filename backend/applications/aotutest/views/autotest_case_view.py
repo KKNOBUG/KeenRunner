@@ -192,7 +192,8 @@ async def get_case(
             },
             replace_fields={"id": "project_id"}
         )
-        tag_ids: List[int] = data.pop("case_tags")
+        tag_ids: List[int] = data.pop("case_tags") or []
+        # 无标签用例(公共接口允许)跳过标签查询, get_by_ids不接受空列表
         data["case_tags"] = [
             await obj.to_dict(
                 exclude_fields={
@@ -203,7 +204,7 @@ async def get_case(
                 },
                 replace_fields={"id": "tag_id"}
             ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
-        ]
+        ] if tag_ids else []
         LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
@@ -281,7 +282,8 @@ async def search_cases(
                 },
                 replace_fields={"id": "project_id"}
             )
-            tag_ids: List[int] = serialize.pop("case_tags")
+            tag_ids: List[int] = serialize.pop("case_tags") or []
+            # 无标签用例(公共接口允许)跳过标签查询, get_by_ids不接受空列表
             serialize["case_tags"] = [
                 await obj.to_dict(
                     exclude_fields={
@@ -292,7 +294,7 @@ async def search_cases(
                     },
                     replace_fields={"id": "tag_id"}
                 ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
-            ]
+            ] if tag_ids else []
             case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
