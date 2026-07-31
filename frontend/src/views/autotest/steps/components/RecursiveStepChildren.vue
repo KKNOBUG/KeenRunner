@@ -99,7 +99,7 @@
             <div class="step-drop-zone-hint">拖拽步骤到此分支</div>
           </div>
           <div class="step-add-btn">
-            <AddStepPopover :is-public-script-case="isPublicScriptCase" @select="(key) => handleAddStepToBranch(key, step.id, bi)"/>
+            <AddStepPopover :is-public-family-case="isPublicFamilyCase" @select="(key) => handleAddStepToBranch(key, step.id, bi)"/>
           </div>
         </div>
       </div>
@@ -168,7 +168,7 @@
       </template>
       <div class="step-insert-indicator" :style="insertIndicatorStyle(null, 'after', true)"></div>
       <div class="step-add-btn">
-        <AddStepPopover :is-public-script-case="isPublicScriptCase" @select="(key) => handleAddStep(key, step.id)"/>
+        <AddStepPopover :is-public-family-case="isPublicFamilyCase" @select="(key) => handleAddStep(key, step.id)"/>
       </div>
     </template>
   </div>
@@ -210,7 +210,7 @@ const {
   handleDeleteStep,
   toggleSkipStep,
   isStepSkipInherited,
-  isPublicScriptCase,
+  isPublicFamilyCase,
   handleAddStep,
   handleAddStepToBranch,
   dragState,

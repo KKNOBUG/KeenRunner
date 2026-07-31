@@ -52,7 +52,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     NotFoundResponse,
 )
-from backend.enums import AutoTestStepType, AutoTestCaseType
+from backend.enums import AutoTestStepType, PUBLIC_CASE_TYPES
 from backend.services import get_current_username
 from backend.services.file_transfer import FileTransfer
 
@@ -686,8 +686,8 @@ async def single_step_dataset_upload(
     except Exception as e:
         LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=str(e))
-    if case_instance.case_type == AutoTestCaseType.PUBLIC_SCRIPT:
-        return BadReqResponse(message="公共脚本不允许使用数据源")
+    if case_instance.case_type in PUBLIC_CASE_TYPES:
+        return BadReqResponse(message="公共脚本/公共接口不允许使用数据源")
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
@@ -847,8 +847,8 @@ async def batch_step_dataset_upload(
     except Exception as e:
         LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=str(e))
-    if case_instance.case_type == AutoTestCaseType.PUBLIC_SCRIPT:
-        return BadReqResponse(message="公共脚本不允许使用数据源，无法批量上传数据源")
+    if case_instance.case_type in PUBLIC_CASE_TYPES:
+        return BadReqResponse(message="公共脚本/公共接口不允许使用数据源，无法批量上传数据源")
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(

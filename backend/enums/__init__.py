@@ -10,6 +10,7 @@ from .app_enum import Code, Message, Status
 from .autotest_enum import (
     AutoTestCaseAttr,
     AutoTestCaseType,
+    PUBLIC_CASE_TYPES,
     AutoTestTagType,
     AutoTestReportType,
     AutoTestStepType,
@@ -37,6 +38,7 @@ __all__ = (
     Status,
     AutoTestCaseAttr,
     AutoTestCaseType,
+    PUBLIC_CASE_TYPES,
     AutoTestTagType,
     AutoTestReportType,
     AutoTestStepType,

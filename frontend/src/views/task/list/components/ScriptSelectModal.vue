@@ -185,7 +185,8 @@ const columns = computed(() => {
       width: 100,
       align: 'center',
       render(row) {
-        const mode = row.case_type === '公共脚本' ? 'warning' : 'info'
+        const typeColorMap = { '公共脚本': 'warning', '公共接口': 'success' }
+        const mode = typeColorMap[row.case_type] || 'info'
         return h(NTag, { type: mode, round: true, bordered: true }, { default: () => row.case_type })
       },
     },

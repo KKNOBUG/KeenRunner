@@ -281,6 +281,7 @@ const caseAttrOptions = [
 // 用例类型选项（与后端 AutoTestCaseType 一致）
 const caseTypeOptions = [
   { label: '公共脚本', value: '公共脚本' },
+  { label: '公共接口', value: '公共接口' },
   { label: '用户脚本', value: '用户脚本' }
 ]
 // 标签相关
@@ -478,6 +479,8 @@ const columns = computed(() => {
         let bordered = true
         if (row.case_type === '公共脚本') {
           mode = 'warning'
+        } else if (row.case_type === '公共接口') {
+          mode = 'success'
         }
         return h(
             NTag,

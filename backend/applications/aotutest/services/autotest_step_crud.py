@@ -44,7 +44,7 @@ from backend.core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType
+from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, PUBLIC_CASE_TYPES
 
 
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
@@ -179,7 +179,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})所属用例信息完成")
 
             # 获取子步骤（递归构建）
-            children: List[AutoTestApiStepInfo] = await self.model.filter(parent_step_id=step.id, state__not=1).order_by("branch_index", "step_no").all()
+            children: List[AutoTestApiStepInfo] = await self.model.filter(
+                parent_step_id=step.id,
+                state__not=1
+            ).order_by("branch_index", "step_no").all()
             if step.step_type == AutoTestStepType.IF and step.branch_items:
                 from collections import defaultdict
                 grouped = defaultdict(list)
@@ -528,18 +531,18 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         break
                     current_parent_id = parent.parent_step_id
 
-        # 业务层验证：如果更新了引用脚本ID，检查引用公共脚本是否存在
+        # 业务层验证：如果更新了引用脚本ID，检查引用公共用例是否存在（公共脚本/公共接口均可被引用）
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
             quote_case_id: int = update_dict["quote_case_id"]
             quote_case = await AutoTestApiCaseCrud().get_by_conditions(
                 only_one=True,
                 on_error=False,
                 id=quote_case_id,
-                case_type=AutoTestCaseType.PUBLIC_SCRIPT.value,
+                case_type__in=[t.value for t in PUBLIC_CASE_TYPES],
                 state__not=1,
             )
             if not quote_case:
-                error_message: str = f"根据(id={quote_case_id}, case_type=公共脚本)条件检查用例信息失败, 引用公共脚本信息不存在"
+                error_message: str = f"根据(id={quote_case_id}, case_type=公共脚本/公共接口)条件检查用例信息失败, 引用公共用例信息不存在"
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
@@ -697,6 +700,67 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
+    @classmethod
+    def _iter_tree_steps(cls, steps_data):
+        """深度优先遍历步骤树全部节点（含 children 与 branch_items.branch_children）。"""
+        for step_data in steps_data or []:
+            yield step_data
+            yield from cls._iter_tree_steps(getattr(step_data, "children", None))
+            for branch in getattr(step_data, "branch_items", None) or []:
+                yield from cls._iter_tree_steps(getattr(branch, "branch_children", None))
+
+    @classmethod
+    def _validate_public_family_tree(
+            cls,
+            steps_data: List["AutoTestStepTreeUpdateItem"],
+            case_type: "AutoTestCaseType",
+    ) -> None:
+        """
+        公共家族(公共脚本/公共接口)步骤树约束：全树不允许存在引用步骤、不允许绑定数据源；
+        公共接口另有形态约束（有且仅有 1 个 HTTP/TCP 根步骤，见 _validate_public_api_tree）。
+
+        :param steps_data: 根级步骤树项列表
+        :param case_type: 当前用例目标类型（必为公共家族成员）
+        :raises ParameterException: 任一约束不满足时（调用方事务回滚）
+        """
+        if case_type == AutoTestCaseType.PUBLIC_API:
+            cls._validate_public_api_tree(steps_data)
+        for step_data in cls._iter_tree_steps(steps_data):
+            if step_data.step_type == AutoTestStepType.QUOTE:
+                error_message: str = f"用例类型为({case_type.value})时不允许引用其他脚本"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+            if getattr(step_data, "data_source_id", None):
+                error_message: str = f"用例类型为({case_type.value})时不允许绑定数据源"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+
+    @staticmethod
+    def _validate_public_api_tree(steps_data: List["AutoTestStepTreeUpdateItem"]) -> None:
+        """
+        公共接口用例步骤树约束：有且仅有 1 个根步骤、类型仅 HTTP/TCP、无子级结构、无数据源绑定。
+
+        :param steps_data: 根级步骤树项列表
+        :raises ParameterException: 任一约束不满足时（调用方事务回滚）
+        """
+        if len(steps_data) != 1:
+            error_message: str = f"公共接口用例有且仅需 1 个请求步骤，当前提交({len(steps_data)})步"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        only_step = steps_data[0]
+        if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            error_message: str = f"公共接口用例仅支持HTTP/TCP请求步骤，当前步骤类型为({only_step.step_type})"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        if getattr(only_step, "children", None) or getattr(only_step, "branch_items", None):
+            error_message: str = "公共接口用例的请求步骤不允许携带子级结构"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        if getattr(only_step, "data_source_id", None):
+            error_message: str = "公共接口用例不允许绑定数据源"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
     async def batch_update_or_create_steps(
             self,
             steps_data: List[AutoTestStepTreeUpdateItem],
@@ -721,6 +785,17 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         processed_step_codes: Dict[int, Set[str]] = {}
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
         case_crud = AutoTestApiCaseCrud()
+
+        # 公共家族约束（仅根级调用校验）：公共脚本/公共接口均不可引用其他脚本、全树不可绑定数据源；
+        # 公共接口另有形态约束（有且仅有 1 个 HTTP/TCP 根步骤）。
+        # 与用例保存同事务执行（用例更新在前），此处读到的是目标类型，校验失败抛异常由上层事务回滚。
+        if parent_step_id is None and branch_index is None and steps_data:
+            root_case_id: Optional[int] = steps_data[0].case_id
+            if root_case_id:
+                root_case = await case_crud.get_by_id(case_id=root_case_id, on_error=False, state__not=1)
+                if root_case and root_case.case_type in PUBLIC_CASE_TYPES:
+                    self._validate_public_family_tree(steps_data, root_case.case_type)
+
         for sid, step_data in enumerate(steps_data, start=1):
             case_id: Optional[int] = step_data.case_id
             step_id: Optional[int] = step_data.step_id

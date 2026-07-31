@@ -6,10 +6,9 @@
 @Module  : autotest_case_view.py
 @DateTime: 2025/4/28
 """
+import io
 import traceback
 from typing import Optional, List, Dict, Any
-
-import io
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Query, Depends
@@ -239,7 +238,9 @@ async def search_cases(
         if case_in.case_tags:
             for tag_id in case_in.case_tags:
                 q |= Q(case_tags__contains=tag_id)
-        if case_in.case_type:
+        if case_in.case_types:
+            q &= Q(case_type__in=[t.value for t in case_in.case_types])
+        elif case_in.case_type:
             q &= Q(case_type=case_in.case_type.value)
         if case_in.case_steps:
             q &= Q(case_steps__gte=case_in.case_steps)
@@ -331,7 +332,7 @@ async def get_request_step_project_ids(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.post("/export_sync", summary="API自动化测试-导出公共脚本用例请求头与请求体为xlsx(同步)")
+@autotest_case.post("/export_sync", summary="API自动化测试-导出公共接口用例请求头与请求体为xlsx(同步)")
 async def export_testcases_xlsx(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -369,7 +370,7 @@ async def export_testcases_xlsx(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_async", summary="API自动化测试-异步导出公共脚本用例请求头与请求体为xlsx")
+@autotest_case.post("/export_async", summary="API自动化测试-异步导出公共接口用例请求头与请求体为xlsx")
 async def export_testcases_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

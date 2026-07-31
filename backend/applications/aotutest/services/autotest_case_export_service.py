@@ -110,8 +110,9 @@ async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List
     """
     加载并校验待导出用例，拆分为请求矩阵键值对。
 
-    校验规则（任一不满足即列入不合规清单）：用例存在、用例类型为公共脚本、用例步骤有且仅有 1 步、
+    校验规则（任一不满足即列入不合规清单）：用例存在、用例类型为公共接口、用例步骤有且仅有 1 步、
     该步骤为 HTTP/TCP 请求步骤、步骤无数据源绑定。
+    （公共接口的类型约束在保存入口已前置强制，后三项为防御性断言，正常数据不会触发。）
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试 CRUD 依赖聚合
@@ -126,8 +127,8 @@ async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List
         if not case:
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "用例不存在"})
             continue
-        if getattr(case, "case_type", None) != AutoTestCaseType.PUBLIC_SCRIPT:
-            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "非公共脚本用例"})
+        if getattr(case, "case_type", None) != AutoTestCaseType.PUBLIC_API:
+            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "非公共接口用例"})
             continue
         load_result = await services.step_curd.get_by_case_id(case_id=case_id)
         own_steps = _collect_own_steps(getattr(load_result, "root_steps", None))

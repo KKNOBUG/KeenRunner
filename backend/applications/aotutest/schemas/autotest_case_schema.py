@@ -35,6 +35,7 @@ class AutoTestApiCaseBase(BaseModel):
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
     case_tags: Optional[List[int]] = Field(None, description="用例所属标签")
     case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
+    case_types: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型集合")
     case_attr: Optional[AutoTestCaseAttr] = Field(None, description="用例所属属性")
     case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")

@@ -15,8 +15,13 @@ class AutoTestCaseAttr(StringEnum):
 
 
 class AutoTestCaseType(StringEnum):
+    PUBLIC_API = "公共接口"
     PUBLIC_SCRIPT = "公共脚本"
     PRIVATE_SCRIPT = "用户脚本"
+
+
+# 公共标识：不可引用其他脚本、不可绑定数据源
+PUBLIC_CASE_TYPES = (AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PUBLIC_API)
 
 
 class AutoTestTagType(StringEnum):
@@ -64,8 +69,7 @@ class AutoTestLoopErrorStrategy(StringEnum):
 
 class AutoTestAssertionOperation(StringEnum):
     """
-    断言 / 条件分支 / 条件循环中 ``conditions.condition_compare`` 的合法取值，
-    与 ``AutoTestToolService.compare_assertion`` 支持集一致；新增比较方式时在此扩展成员即可。
+    断言/条件分支/条件循环中conditions.condition_compare的合法取值，与AutoTestToolService.compare_assertion支持集一致；新增比较方式时在此扩展成员即可。
     """
     EQUAL = "等于"
     NOT_EQUAL = "不等于"

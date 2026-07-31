@@ -61,7 +61,7 @@ from backend.enums import (
     AutoTestStepType,
     AutoTestReportType,
     AutoTestLoopMode,
-    AutoTestCaseType,
+    PUBLIC_CASE_TYPES,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
     AutoTestConfigNodeType, HTTPMethod
@@ -2229,7 +2229,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
-                    case_type=AutoTestCaseType.PUBLIC_SCRIPT.value,
+                    case_type__in=[t.value for t in PUBLIC_CASE_TYPES],
                     state__not=1,
                 )
             except (ParameterException, NotFoundException) as e:

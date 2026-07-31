@@ -170,7 +170,9 @@
                 <div class="step-insert-indicator" :style="rootInsertIndicatorStyle(step.id, 'after')"></div>
               </template>
               <AddStepPopover
-                  :is-public-script-case="isPublicScriptCase"
+                  v-if="!isPublicApiCase || steps.length === 0"
+                  :is-public-family-case="isPublicFamilyCase"
+                  :is-public-api-case="isPublicApiCase"
                   @select="(key) => handleAddStep(key, null)"
               />
               <!-- 批量上传数据源：隐藏文件选择框，由「添加步骤-数据驱动」触发 -->
@@ -413,8 +415,11 @@ const editorProjectLoading = computed(() => {
   return p?.value ?? p ?? false
 })
 
-/** 当前用例是否为「公共脚本」（禁用树内「引用公共脚本」入口） */
-const isPublicScriptCase = computed(() => caseInfoPanelRef.value?.caseForm?.case_type === '公共脚本')
+/** 当前用例是否属于「公共家族」（公共脚本/公共接口：禁用树内「引用公共脚本」入口、不支持数据源） */
+const isPublicFamilyCase = computed(() => ['公共脚本', '公共接口'].includes(caseInfoPanelRef.value?.caseForm?.case_type))
+
+/** 当前用例是否为「公共接口」（仅允许 1 个 HTTP/TCP 请求步骤） */
+const isPublicApiCase = computed(() => caseInfoPanelRef.value?.caseForm?.case_type === '公共接口')
 
 
 const scriptDrawerMode = ref('quote')
@@ -425,22 +430,24 @@ const quotePublicScriptReplaceStepId = ref(null)
 const selectedForCopy = ref([])
 const quotePublicScriptQueryItems = ref({
   case_name: '',
-  case_type: '公共脚本',
+  case_type: '',
   created_user: ''
 })
 
-// 复制模式用例类型选项（支持全部、公共脚本、用户脚本）
+// 复制模式用例类型选项（支持全部、公共脚本、公共接口、用户脚本）
 const caseTypeOptionsForCopy = [
   { label: '全部', value: '' },
   { label: '公共脚本', value: '公共脚本' },
+  { label: '公共接口', value: '公共接口' },
   { label: '用户脚本', value: '用户脚本' }
 ]
 
-// 请求前规范化入参：quote 模式仅查公共脚本；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
+// 请求前规范化入参：quote 模式查公共家族（公共脚本+公共接口）；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
 const getScriptListForDrawer = (params) => {
   const body = {...params}
   if (scriptDrawerMode.value === 'quote') {
-    body.case_type = '公共脚本'
+    delete body.case_type
+    body.case_types = ['公共脚本', '公共接口']
   }
   if (scriptDrawerMode.value === 'copy' && caseId.value) {
     body.exclude_case_id = Number(caseId.value)
@@ -575,7 +582,7 @@ const handleQuoteReselect = () => {
   scriptDrawerMode.value = 'quote'
   quotePublicScriptReplaceStepId.value = currentStep.value.id
   quotePublicScriptParentId.value = null
-  quotePublicScriptQueryItems.value.case_type = '公共脚本'
+  quotePublicScriptQueryItems.value.case_type = ''
   quotePublicScriptDrawerVisible.value = true
 }
 
@@ -737,7 +744,7 @@ const quotePublicScriptColumns = [
 ]
 
 
-/** 用例类型切换（仅用户下拉触发）：公共脚本时移除/暂存引用步骤，用户脚本时恢复；无论是否有步骤受影响均给出提示 */
+/** 用例类型切换（仅用户下拉触发）：公共家族时移除/暂存引用步骤与数据源，用户脚本时恢复；公共接口还需步骤树合规，不合规则阻断并回退选择 */
 const onCaseTypeChange = ({ newType, oldType }) => {
   if (newType === '公共脚本') {
     const fromUserScript = oldType === '用户脚本'
@@ -753,8 +760,22 @@ const onCaseTypeChange = ({ newType, oldType }) => {
         window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本步骤，公共脚本不允许引用其他脚本`)
       }
     } else {
-      window.$message?.info?.('已切换为公共脚本：公共脚本不支持引用其他脚本，且不支持数据源')
+      window.$message?.info?.('已切换为公共脚本')
     }
+  } else if (newType === '公共接口') {
+    // 合规校验：至多 1 个根步骤且必须为 HTTP/TCP（容器/引用/变量等其他类型一律不合规），不合规则阻断切换并回退下拉选择
+    const nonCompliant = steps.value.length > 1
+        || (steps.value.length === 1 && !['http', 'tcp'].includes(steps.value[0].type))
+    if (nonCompliant) {
+      if (caseInfoPanelRef.value?.caseForm) {
+        caseInfoPanelRef.value.caseForm.case_type = oldType
+      }
+      window.$message?.error?.('不允许切换为公共接口：公共接口有且仅允许 1 个 HTTP/TCP 请求步骤')
+      return
+    }
+    // 与公共脚本一致：暂存并清空数据源绑定（引用步骤已被合规校验拦截，无需移除）
+    stashedDataSourceWhenPublic.value = stashAndClearDataSourceBindings()
+    window.$message?.info?.('已切换为公共接口')
   } else if (newType === '用户脚本') {
     const restoredCount = stashedQuoteStepsWhenPublic.value.length > 0 ? restoreStashedQuoteSteps() : 0
     restoreStashedDataSourceBindings()
@@ -1173,6 +1194,15 @@ const handleSaveAll = async () => {
       return
     }
 
+    // 公共接口约束（与后端 _validate_public_api_tree 对齐，前置拦截提升体验）：仅 1 步且为 HTTP/TCP
+    if (isPublicApiCase.value) {
+      const nonCompliant = steps.value.length !== 1 || !['http', 'tcp'].includes(steps.value[0]?.type)
+      if (nonCompliant) {
+        notifyError('公共接口用例有且仅允许 1 个 HTTP/TCP 请求步骤，请调整后再保存')
+        return
+      }
+    }
+
     // 获取当前用户信息（用于 updated_user 字段）
     const userStore = useUserStore()
     const currentUser = userStore.username || ''
@@ -1263,9 +1293,9 @@ const handleSaveAll = async () => {
         }
       }
 
-      // 公共脚本不允许使用数据源：树保存成功后真正解绑（清空步骤指针 + 软删数据源记录）。
+      // 公共家族(公共脚本/公共接口)不允许使用数据源：树保存成功后真正解绑（清空步骤指针 + 软删数据源记录）。
       // 必须在树保存之后执行，否则树保存会用非空指针把已清空的列重新写回。
-      if (isPublicScriptCase.value) {
+      if (isPublicFamilyCase.value) {
         const savedCaseId = toPositiveCaseId(caseId.value)
             ?? toPositiveCaseId(res?.data?.cases?.success_detail?.[0]?.case_id)
         if (savedCaseId) {
@@ -1528,7 +1558,7 @@ const editorComponentProps = computed(() => {
     props.reselectHandler = handleQuoteReselect
   }
   if (step.type === 'http' || step.type === 'tcp') {
-    props.hideDataSource = isPublicScriptCase.value
+    props.hideDataSource = isPublicFamilyCase.value
   }
   return props
 })
@@ -1637,7 +1667,7 @@ const handleAddStep = (type, parentId) => {
     scriptDrawerMode.value = 'quote'
     quotePublicScriptParentId.value = parentId
     quotePublicScriptReplaceStepId.value = null
-    quotePublicScriptQueryItems.value.case_type = '公共脚本'
+    quotePublicScriptQueryItems.value.case_type = ''
     quotePublicScriptDrawerVisible.value = true
     return
   }
@@ -2095,7 +2125,7 @@ provide('stepTreeContext', {
   handleDeleteStep,
   toggleSkipStep,
   isStepSkipInherited,
-  isPublicScriptCase,
+  isPublicFamilyCase,
   handleAddStep,
   handleAddStepToBranch,
   dragState,

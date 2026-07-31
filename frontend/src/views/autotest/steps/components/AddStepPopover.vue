@@ -96,8 +96,10 @@ const STEP_ICON_CLASS = {
 }
 
 const props = defineProps({
-  /** 当前用例为「公共脚本」时禁用「引用公共脚本」 */
-  isPublicScriptCase: { type: Boolean, default: false },
+  /** 当前用例属于「公共家族」（公共脚本/公共接口）时禁用「引用公共脚本」与数据驱动 */
+  isPublicFamilyCase: { type: Boolean, default: false },
+  /** 当前用例为「公共接口」时仅可添加 HTTP/TCP 请求步骤 */
+  isPublicApiCase: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['select'])
@@ -137,7 +139,9 @@ const buildItem = (key, { label, desc, iconName, disabled } = {}) => {
 }
 
 const menuSections = computed(() => {
-  const isPublic = props.isPublicScriptCase
+  const isPublic = props.isPublicFamilyCase
+  // 公共接口：有且仅允许 1 个 HTTP/TCP 请求步骤，其余类型一律禁用
+  const onlyHttpTcp = props.isPublicApiCase
   return [
     {
       key: 'basic',
@@ -145,6 +149,7 @@ const menuSections = computed(() => {
       items: [
         buildItem('user_variables', {
           desc: '创建全局变量，支持调用内置函数，供后续步骤引用',
+          disabled: onlyHttpTcp,
         }),
         buildItem('http', {
           desc: '发送 HTTP/HTTPS 协议请求，验证或提取响应数据',
@@ -154,12 +159,15 @@ const menuSections = computed(() => {
         }),
         buildItem('code', {
           desc: '运行自定义的Python脚本，实现复杂的逻辑扩展',
+          disabled: onlyHttpTcp,
         }),
         buildItem('database', {
           desc: '执行 SQL 语句，验证数据状态与完整性',
+          disabled: onlyHttpTcp,
         }),
         buildItem('redis', {
           desc: '执行Redis命令操作以验证数据完整性',
+          disabled: onlyHttpTcp,
         }),
       ],
     },
@@ -174,6 +182,7 @@ const menuSections = computed(() => {
         buildItem('copy_steps', {
           desc: '复制指定脚本，快速复用并创建自定义逻辑',
           iconName: 'material-symbols:content-copy-outline',
+          disabled: onlyHttpTcp,
         }),
       ],
     },
@@ -183,12 +192,15 @@ const menuSections = computed(() => {
       items: [
         buildItem('wait', {
           desc: '等待指定时间，再继续执行后续的步骤',
+          disabled: onlyHttpTcp,
         }),
         buildItem('if', {
           desc: '根据条件判断结果，选择不同的执行路径',
+          disabled: onlyHttpTcp,
         }),
         buildItem('loop', {
           desc: '重复执行一组步骤，直到满足退出条件',
+          disabled: onlyHttpTcp,
         }),
       ],
     },

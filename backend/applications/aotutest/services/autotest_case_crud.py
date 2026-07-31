@@ -23,7 +23,7 @@ from backend.core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestCaseType
+from backend.enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES
 
 
 class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
@@ -200,8 +200,8 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             case_id: int = instance.id
 
         case_type: AutoTestCaseType = instance.case_type
-        if case_type == AutoTestCaseType.PUBLIC_SCRIPT:
-            # 业务层验证：检查用例是否被引用
+        if case_type in PUBLIC_CASE_TYPES:
+            # 业务层验证：公共用例(脚本/接口)删除前检查是否被引用
             quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
             if quote_steps_count > 0:
                 error_message: str = (
@@ -233,6 +233,36 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             error_message: str = f"查询用例信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+
+    @staticmethod
+    async def _validate_switch_to_public_api(case_instance: AutoTestApiCaseInfo) -> None:
+        """
+        切换用例类型为公共接口的前置校验：存量步骤树形态必须合规（仅1个根步骤、HTTP/TCP）。
+        不满足时抛出 ParameterException 阻断切换，防止出现类型与形态不一致的脏数据。
+        注意：不校验数据源指针——本校验在用例更新阶段执行（步骤树保存之前），存量数据源指针
+        由同一事务后续的树保存清空（前端暂存机制），最终态由 _validate_public_family_tree 强制。
+
+        :param case_instance: 待切换的用例实例
+        :raises ParameterException: 存量步骤树形态不满足公共接口约束时
+        """
+        root_steps: List[AutoTestApiStepInfo] = await AutoTestApiStepInfo.filter(
+            case_id=case_instance.id, parent_step_id=None, state__not=1
+        )
+        if len(root_steps) != 1:
+            error_message: str = (
+                f"用例({case_instance.case_name})不允许切换为公共接口, "
+                f"公共接口有且仅需1个请求步骤, 当前根步骤数为({len(root_steps)})"
+            )
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        only_step: AutoTestApiStepInfo = root_steps[0]
+        if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            error_message: str = (
+                f"用例({case_instance.case_name})不允许切换为公共接口, "
+                f"公共接口仅支持HTTP/TCP请求步骤, 当前步骤类型为({only_step.step_type})"
+            )
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
 
     async def batch_update_or_create_cases(self, cases_data: List[AutoTestApiCaseUpdate]) -> Dict[str, Any]:
         """
@@ -328,6 +358,10 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
             # 用例存在，执行更新
             else:
+                # 业务层验证：切换为公共接口时，存量步骤树必须合规（仅1步、HTTP/TCP、无数据源），否则阻断切换
+                if case_type == AutoTestCaseType.PUBLIC_API and case_instance.case_type != AutoTestCaseType.PUBLIC_API:
+                    await self._validate_switch_to_public_api(case_instance)
+
                 # 如果没有任何可更新的字段，跳过
                 update_case_dict: Dict[str, Any] = case_data.model_dump(
                     exclude_none=True,

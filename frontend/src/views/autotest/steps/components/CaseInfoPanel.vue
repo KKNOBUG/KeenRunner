@@ -302,6 +302,7 @@ const caseAttrOptions = [
 const caseTypeOptions = [
   { label: '用户脚本', value: '用户脚本' },
   { label: '公共脚本', value: '公共脚本' },
+  { label: '公共接口', value: '公共接口' },
 ]
 
 const tagModeGroups = computed(() => {
