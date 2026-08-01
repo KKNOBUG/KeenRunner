@@ -82,8 +82,15 @@ class AutoTestAssertionOperation(StringEnum):
 
 
 class AutoTestTaskType(StringEnum):
-    """任务业务类型：扫描过滤与扩展路由均按此枚举区分。"""
-    AUTOTEST_API = "autotest_api"
+    """
+    任务业务类型：Task 定义分类、Beat 扫描过滤、执行记录分类均按此区分。
+    AUTOTEST_API 保留历史值 autotest_api，与存量任务行兼容。
+    """
+    AUTOTEST_API = "autotest_api"  # 用例编排（任务列表定时/手动）
+    CASE_STEP_EXEC = "用例执行"  # 单用例步骤树异步执行
+    EXPORT_CASE_DATA = "导出用例数据"  # 公共接口 HEAD/BODY 导出
+    EXPORT_CASE_SCRIPT = "导出公共接口"  # 公共接口脚本模板导出
+    SCHEDULE_SCAN = "调度扫描"  # Beat 扫描派发（通常不写 Record）
 
 
 class AutoTestTaskTriggerType(StringEnum):

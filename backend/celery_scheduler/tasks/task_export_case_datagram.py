@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : task_export_testcase.py
+@Module  : task_export_case_datagram.py
 @DateTime: 2026/7/27
 
 测试用例异步导出任务：导出数量超过阈值时由视图层下发，生成请求头与请求体的 xlsx 落盘，
@@ -31,7 +31,7 @@ async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号（仅作元信息随结果落入执行记录）
-    :return: 含 file_name/file_path/case_count 等的结果字典
+    :return: 含file_name/file_path/case_count等的结果字典
     :raises ValueError: 无合规用例可导出时
     """
     services = await get_autotest_api_services()
@@ -57,21 +57,26 @@ async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str
     }
 
 
-@celery.task(name="backend.celery_scheduler.tasks.task_export_testcase.export_testcases_task")
+@celery.task(name="backend.celery_scheduler.tasks.task_export_case_datagram.export_testcases_task")
 def export_testcases_task(
         case_ids: List[int],
         created_user: Optional[str] = None,
+        report_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery 同步入口：后台导出测试用例请求头与请求体为 xlsx。
+    Celery 同步入口：后台导出测试用例请求头与请求体为xlsx。
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号
+    :param report_type: 报告类型快照（供 Worker 写执行记录；任务体本身不消费）
     :return: 导出结果字典（落入 task_summary）
     :raises Exception: 导出失败时向上抛出，供 Celery on_failure 处理
     """
     try:
-        LOGGER.info(f"【Celery-Worker】开始导出测试用例任务: 数量={len(case_ids or [])}, created_user={created_user}")
+        LOGGER.info(
+            f"【Celery-Worker】开始导出测试用例任务: 数量={len(case_ids or [])}, "
+            f"created_user={created_user}, report_type={report_type}"
+        )
         result = run_async(_export_testcases_impl(case_ids=case_ids or [], created_user=created_user))
         LOGGER.info(
             f"【Celery-Worker】导出测试用例任务完成: file_name={result.get('file_name')}, "

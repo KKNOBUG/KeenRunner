@@ -5,9 +5,6 @@
 @Project : Krun
 @Module  : task_export_case_script.py
 @DateTime: 2026/8/1
-
-公共接口脚本异步导出任务：导出数量超过阈值时由视图层下发，复制模板副本写入数据行并落盘，
-并将文件名/路径写入任务返回值（经 Worker on_success 落入 task_summary，供执行记录展示）。
 """
 from __future__ import annotations
 
@@ -31,7 +28,7 @@ async def _export_case_scripts_impl(case_ids: List[int], created_user: Optional[
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号（仅作元信息随结果落入执行记录）
-    :return: 含 file_name/file_path/case_count 等的结果字典
+    :return: 含file_name/file_path/case_count等的结果字典
     :raises ValueError: 无合规用例可导出时
     """
     services = await get_autotest_api_services()
@@ -61,17 +58,22 @@ async def _export_case_scripts_impl(case_ids: List[int], created_user: Optional[
 def export_case_scripts_task(
         case_ids: List[int],
         created_user: Optional[str] = None,
+        report_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery 同步入口：后台导出公共接口脚本为模板 xlsx。
+    Celery同步入口：后台导出公共接口脚本为模板xlsx。
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号
-    :return: 导出结果字典（落入 task_summary）
-    :raises Exception: 导出失败时向上抛出，供 Celery on_failure 处理
+    :param report_type: 报告类型快照（供 Worker写执行记录；任务体本身不消费）
+    :return: 导出结果字典（落入task_summary）
+    :raises Exception: 导出失败时向上抛出，供Celery on_failure处理
     """
     try:
-        LOGGER.info(f"【Celery-Worker】开始导出公共接口脚本任务: 数量={len(case_ids or [])}, created_user={created_user}")
+        LOGGER.info(
+            f"【Celery-Worker】开始导出公共接口脚本任务: 数量={len(case_ids or [])}, "
+            f"created_user={created_user}, report_type={report_type}"
+        )
         result = run_async(_export_case_scripts_impl(case_ids=case_ids or [], created_user=created_user))
         LOGGER.info(
             f"【Celery-Worker】导出公共接口脚本任务完成: file_name={result.get('file_name')}, "

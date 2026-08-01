@@ -121,6 +121,11 @@ const formatJsonBrief = (val, maxLen = 50) => {
   const s = JSON.stringify(val)
   return s.length > maxLen ? s.slice(0, maxLen) + '...' : s
 }
+
+/** 信封展示 raw；旧记录整包展示 */
+const resultPayloadOf = (summary) => (
+  summary && typeof summary === 'object' && 'raw' in summary ? summary.raw : summary
+)
 const logRecordColumns = [
   { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true }, render: (row) => h('span', row.record_id ?? row.id ?? '-') },
   { title: '任务标识', key: 'task_code', width: 160, ellipsis: { tooltip: true } },
@@ -155,7 +160,10 @@ const logRecordColumns = [
     key: 'task_summary',
     width: 220,
     ellipsis: { tooltip: true },
-    render: (row) => h('span', { title: row.task_summary ? JSON.stringify(row.task_summary) : '' }, formatJsonBrief(row.task_summary, 40)),
+    render: (row) => {
+      const payload = resultPayloadOf(row.task_summary)
+      return h('span', { title: payload ? JSON.stringify(payload) : '' }, formatJsonBrief(payload, 40))
+    },
   },
   {
     title: '执行状态',

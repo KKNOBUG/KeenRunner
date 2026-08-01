@@ -120,7 +120,7 @@ export default {
   },
   /** Body：{ case_ids } —— 同步导出公共接口用例请求头与请求体为 xlsx（≤10），返回 blob；校验失败时返回 JSON */
   exportTestcasesXlsx: (data = {}) => axios.post(
-      `${import.meta.env.VITE_BASE_API}/autotest/case/export_sync`,
+      `${import.meta.env.VITE_BASE_API}/autotest/case/export_datagram_sync`,
       data,
       {
         responseType: 'blob',
@@ -128,7 +128,7 @@ export default {
       },
   ),
   /** Body：{ case_ids } —— 异步导出公共接口用例（>10），返回 { celery_task_id } */
-  exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_async', data),
+  exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_datagram_async', data),
   /** Body：{ case_ids } —— 同步导出公共接口脚本为模板xlsx（≤10），返回 blob；校验失败时返回 JSON */
   exportCaseScriptsXlsx: (data = {}) => axios.post(
       `${import.meta.env.VITE_BASE_API}/autotest/case/export_script_sync`,
@@ -208,6 +208,14 @@ export default {
   stopApiTask: (data = {}) => request.post('/autotest/task/stop', data),
   // 任务执行记录
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
+  /** params：record_id、key —— 下载执行记录附件（blob） */
+  downloadApiTaskRecordAttachment: (recordId, key = 'main') => axios.get(
+      `${import.meta.env.VITE_BASE_API}/autotest/task/record/${recordId}/attachments/${encodeURIComponent(key)}/download`,
+      {
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
   // 辅助函数列表（用户变量/占位符解析）
   getAssistFuncList: (params = {}) => request.get('/autotest/tool/get', { params }),
   // 环境相关：查询环境名称列表(去重)，用于执行/调试时选择执行环境

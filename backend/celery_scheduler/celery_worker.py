@@ -142,6 +142,7 @@ async def _ensure_tortoise_then_create_task_record(
         trigger_type=None,
         report_type=None,
         created_user=None,
+        request_kwargs: Optional[Dict[str, Any]] = None,
 ):
     """
     同一协程内先初始化 Tortoise，再写入执行记录，保证同 loop。
@@ -154,6 +155,7 @@ async def _ensure_tortoise_then_create_task_record(
     :param trigger_type: 触发类型枚举（手动/调度）
     :param report_type: 报告类型枚举
     :param created_user: 触发用户账号（可选）
+    :param request_kwargs: Celery 任务入参快照
     :return: None
     """
     await init_tortoise_orm()
@@ -166,12 +168,16 @@ async def _ensure_tortoise_then_create_task_record(
         trigger_type=trigger_type,
         report_type=report_type,
         created_user=created_user,
+        request_kwargs=request_kwargs,
     )
 
 
 def _resolve_trigger_and_report(task: Task):
     """
     从 Celery request 解析触发来源与报告类型。
+
+    约定：手动异步下发须在 kwargs（或 args[1]）携带 report_type=异步执行；
+    其余按定时执行落库。
 
     :param task: 当前 Celery Task 实例
     :return: (trigger_type, report_type) 元组
@@ -199,7 +205,7 @@ def _to_jsonable(value: Any) -> Any:
     将任意对象转为可 JSON 落库结构（保留完整内容）。
 
     :param value: 原始对象
-    :return: dict/list/基础类型，或 ``{"raw": str}`` 兜底
+    :return: dict/list/基础类型，或兜底包装
     """
     import json
 
@@ -209,8 +215,8 @@ def _to_jsonable(value: Any) -> Any:
         try:
             return json.loads(json.dumps(value, ensure_ascii=False, default=str))
         except Exception:
-            return {"raw": str(value)}
-    return {"raw": str(value)}
+            return {"value": str(value)}
+    return {"value": str(value)}
 
 
 async def _create_task_record(
@@ -222,6 +228,7 @@ async def _create_task_record(
         trigger_type=None,
         report_type=None,
         created_user=None,
+        request_kwargs: Optional[Dict[str, Any]] = None,
 ):
     """
     创建任务执行观测记录（RUNNING），并写入完整执行入参快照。
@@ -234,10 +241,12 @@ async def _create_task_record(
     :param trigger_type: 触发类型
     :param report_type: 报告类型
     :param created_user: 触发用户；为空时回退任务创建人
+    :param request_kwargs: Celery 任务入参快照
     :return: None
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
     from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from backend.celery_scheduler.celery_task_contract import resolve_task_meta
     from backend.enums import AutoTestTaskStatus
 
     def _normalize_username(raw: Any) -> Optional[str]:
@@ -250,6 +259,8 @@ async def _create_task_record(
 
     report_val = getattr(report_type, "value", report_type)
     username = _normalize_username(created_user)
+    task_meta = resolve_task_meta(celery_task_name)
+    req_kwargs = request_kwargs if isinstance(request_kwargs, dict) else {}
     data: Dict[str, Any] = {
         "task_id": task_id,
         "celery_id": celery_id,
@@ -260,6 +271,16 @@ async def _create_task_record(
         "trigger_type": trigger_type,
         "report_type": report_type,
     }
+    if task_meta.get("task_type") is not None:
+        data["task_type"] = task_meta["task_type"]
+    if task_meta.get("task_name"):
+        data["task_name"] = task_meta["task_name"]
+
+    if isinstance(req_kwargs.get("case_ids"), list):
+        data["case_ids"] = req_kwargs.get("case_ids")
+    elif req_kwargs.get("case_id") is not None:
+        data["case_ids"] = [req_kwargs.get("case_id")]
+
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
         task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
         if task_instance:
@@ -280,7 +301,7 @@ async def _create_task_record(
             data.update({
                 "task_code": getattr(task_instance, "task_code", None),
                 "task_name": getattr(task_instance, "task_name", None),
-                "task_type": getattr(task_instance, "task_type", None),
+                "task_type": getattr(task_instance, "task_type", None) or task_meta.get("task_type"),
                 "task_project": getattr(task_instance, "task_project", None),
                 "case_ids": case_ids,
                 "exec_snapshot": _to_jsonable({
@@ -299,6 +320,14 @@ async def _create_task_record(
                     "task_enabled": getattr(task_instance, "task_enabled", None),
                 }),
             })
+    elif req_kwargs:
+        data["exec_snapshot"] = _to_jsonable({
+            "report_type": report_val,
+            "kwargs": {
+                k: v for k, v in req_kwargs.items()
+                if k in ("case_ids", "case_id", "created_user", "report_type", "batch_code")
+            },
+        })
     if username:
         data["created_user"] = username
     await AutoTestApiTaskRecordCrud().create_record(data)
@@ -320,20 +349,21 @@ async def _update_task_record_on_end(
         batch_code: str = None,
 ):
     """
-    将执行记录更新为终态；``task_summary`` 保存完整响应对象。
+    将执行记录更新为终态；``task_summary`` 写入信封契约（含 raw 原文）。
 
     更新前会先确保 Tortoise 可用，避免长任务后连接失效导致状态卡在「正在执行」。
 
     :param celery_id: Celery 任务 UUID
     :param success: 是否按成功终态落库
-    :param task_summary: 任务返回摘要（完整对象）
+    :param task_summary: 任务返回值（将规范化为信封）
     :param traceback_str: 失败时的堆栈文本
-    :param batch_code: 批次号（可选）
+    :param batch_code: 批次号（可选；缺省时从信封抽取）
     :return: None
     """
     if not celery_id:
         return
     from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from backend.celery_scheduler.celery_task_contract import normalize_task_summary
     from backend.enums import AutoTestTaskStatus
 
     # 长任务后连接可能失效；与 create 一样先 init/探活，避免终态写库失败导致永远「正在执行」
@@ -341,20 +371,22 @@ async def _update_task_record_on_end(
 
     now = datetime.now()
     status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE
-    summary_obj = _to_jsonable(task_summary)
+    summary_obj = normalize_task_summary(task_summary, pipeline_ok=success)
     error_text = None
     if not success:
-        if isinstance(task_summary, dict) and task_summary.get("error"):
-            error_text = str(task_summary.get("error"))
-        error_text = traceback_str or error_text or "执行失败"
+        error_text = summary_obj.get("error") or traceback_str or "执行失败"
+        if traceback_str and not summary_obj.get("error"):
+            summary_obj["error"] = str(error_text) if not isinstance(error_text, str) else error_text
+    resolved_batch = batch_code or summary_obj.get("batch_code")
     data = {
         "celery_status": status_enum,
         "celery_end_time": now,
         "task_summary": summary_obj,
         "task_error": error_text,
     }
-    if batch_code:
-        data["batch_code"] = batch_code
+    if resolved_batch:
+        data["batch_code"] = resolved_batch
+        summary_obj["batch_code"] = resolved_batch
     record_crud = AutoTestApiTaskRecordCrud()
     record = await record_crud.get_by_celery_id(celery_id=celery_id, state__not=1)
     if not record:
@@ -372,7 +404,7 @@ async def _update_task_record_on_end(
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录成功: "
         f"celery_id={celery_id}, status={getattr(status_enum, 'value', status_enum)}, "
-        f"batch_code={batch_code}, duration={data.get('celery_duration')}"
+        f"batch_code={resolved_batch}, duration={data.get('celery_duration')}"
     )
 
 
@@ -423,6 +455,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
                         trigger_type=trigger_type,
                         report_type=report_type,
                         created_user=req_kwargs.get("created_user"),
+                        request_kwargs=req_kwargs,
                     )
                 )
             except Exception as e:
@@ -719,10 +752,10 @@ def create_celery():
             if isinstance(retval, dict):
                 summary_bits = (
                     f", batch_code={retval.get('batch_code')}, "
-                    f"execute_count={retval.get('execute_count')}, "
-                    f"success_count={retval.get('success_count')}, "
-                    f"failed_count={retval.get('failed_count')}, "
-                    f"passed_ratio={retval.get('passed_ratio')}"
+                    f"total_cases={retval.get('total_cases')}, "
+                    f"success_cases={retval.get('success_cases')}, "
+                    f"failed_cases={retval.get('failed_cases')}, "
+                    f"success_rate={retval.get('success_rate')}"
                 )
             LOGGER.info(
                 f"{_LOG_PREFIX}【span_id={get_span_id()}】任务体结束: "
@@ -730,6 +763,7 @@ def create_celery():
             )
             batch_code = retval.get("batch_code") if isinstance(retval, dict) else None
             summary = retval if retval is not None else {"success": True}
+            # task_summary 在 _update_task_record_on_end 内规范化为信封
             self.handel_task_record(pipeline_ok, summary, batch_code=batch_code)
             return super(ContextTask, self).on_success(retval, task_id, args, kwargs)
 

@@ -6,10 +6,12 @@
 @Module  : autotest_task_view
 @DateTime: 2026/1/31 12:42
 """
+import os
 import traceback
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query, Depends, Path
+from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
@@ -18,6 +20,10 @@ from backend.applications.aotutest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
     AutoTestApiTaskSelect,
     AutoTestApiTaskUpdate,
+)
+from backend.celery_scheduler.celery_task_contract import (
+    list_attachments_from_summary,
+    resolve_storage_path,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -377,3 +383,52 @@ async def search_task_records(
     except Exception as e:
         LOGGER.error(f"查询任务执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")
+
+
+@autotest_task.get(
+    "/record/{record_id}/attachments/{key}/download",
+    summary="API自动化测试-下载执行记录附件",
+)
+async def download_task_record_attachment(
+        record_id: int = Path(..., description="执行记录主键"),
+        key: str = Path(..., description="附件 key，默认 main"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按执行记录 attachments 项下载文件（兼容旧 task_summary 仅含 file_path）。
+
+    :param record_id: 执行记录主键
+    :param key: 附件标识（信封 attachments[].key）
+    :param services: 自动化测试 CRUD 依赖聚合
+    :return: 文件流或统一错误响应
+    """
+    try:
+        record = await services.record_curd.get_or_none(id=record_id, state__not=1)
+        if not record:
+            return ParameterResponse(message=f"执行记录不存在: record_id={record_id}")
+        attachments = list_attachments_from_summary(getattr(record, "task_summary", None))
+        want = (key or "main").strip()
+        item = next((a for a in attachments if str(a.get("key") or "") == want), None)
+        # 仅一项且未带 key 的旧数据：允许用 main 取唯一附件
+        if item is None and want == "main" and len(attachments) == 1:
+            item = attachments[0]
+        if not item or not item.get("storage_key"):
+            return ParameterResponse(message=f"附件不存在: key={want}")
+        file_path = resolve_storage_path(str(item["storage_key"]))
+        if not os.path.isfile(file_path):
+            return ParameterResponse(message="附件文件不存在或已过期清理")
+        file_name = str(item.get("name") or os.path.basename(file_path))
+        LOGGER.info(
+            f"下载执行记录附件: record_id={record_id}, key={want}, "
+            f"storage_key={item['storage_key']}, file_name={file_name}"
+        )
+        return FileResponse(
+            path=file_path,
+            media_type=str(item.get("content_type") or "application/octet-stream"),
+            filename=file_name,
+        )
+    except ValueError as e:
+        return ParameterResponse(message=str(e))
+    except Exception as e:
+        LOGGER.error(f"下载执行记录附件失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下载失败, 异常描述: {str(e)}")

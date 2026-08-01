@@ -32,7 +32,7 @@ from backend.applications.aotutest.services.autotest_case_excel_service import (
     parse_script_workbook,
     import_script_rows,
 )
-from backend.celery_scheduler.tasks.task_export_testcase import export_testcases_task
+from backend.celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
 from backend.celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -49,6 +49,7 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse,
 )
+from backend.enums import AutoTestReportType
 from backend.services import get_current_username
 
 autotest_case = APIRouter()
@@ -353,7 +354,7 @@ async def get_request_step_project_ids(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.post("/export_sync", summary="API自动化测试-导出公共接口用例请求头与请求体为xlsx(同步)")
+@autotest_case.post("/export_datagram_sync", summary="API自动化测试-导出公共接口用例请求头与请求体为xlsx(同步)")
 async def export_testcases_xlsx(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -392,7 +393,7 @@ async def export_testcases_xlsx(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_async", summary="API自动化测试-异步导出公共接口用例请求头与请求体为xlsx")
+@autotest_case.post("/export_datagram_async", summary="API自动化测试-异步导出公共接口用例请求头与请求体为xlsx")
 async def export_testcases_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -412,7 +413,11 @@ async def export_testcases_async(
         if invalid:
             return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
         apply_async_result = export_testcases_task.apply_async(
-            kwargs={"case_ids": case_ids, "created_user": get_current_username()},
+            kwargs={
+                "case_ids": case_ids,
+                "created_user": get_current_username(),
+                "report_type": AutoTestReportType.ASYNC_EXEC.value,
+            },
             expires=3600,
         )
         LOGGER.info(f"异步导出测试用例任务已下发: celery_task_id={apply_async_result.task_id}, 数量={len(case_ids)}")
@@ -488,7 +493,11 @@ async def export_case_scripts_async(
         if invalid:
             return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
         apply_async_result = export_case_scripts_task.apply_async(
-            kwargs={"case_ids": case_ids, "created_user": get_current_username()},
+            kwargs={
+                "case_ids": case_ids,
+                "created_user": get_current_username(),
+                "report_type": AutoTestReportType.ASYNC_EXEC.value,
+            },
             expires=3600,
         )
         LOGGER.info(f"异步导出公共接口脚本任务已下发: celery_task_id={apply_async_result.task_id}, 数量={len(case_ids)}")

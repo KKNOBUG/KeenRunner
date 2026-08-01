@@ -5,12 +5,6 @@
 @Project : Krun
 @Module  : autotest_http_xml_test_view
 @DateTime: 2026/7/23 10:00:00
-
-HTTP XML 接口测试服务：提供 HTTP 接口供 HTTP 请求步骤（XML 报文）调试使用。
-
-- POST /xml       ：接收 XML 格式请求报文（保险理赔申请），返回 XML 格式响应
-- GET  /sample/request  ：获取 XML 请求示例报文
-- GET  /sample/response ：预览 XML 响应报文
 """
 import datetime
 from typing import Optional

@@ -23,13 +23,11 @@ from backend.enums import AutoTestReportType
 from backend.services.ctx import CTX_USERNAME
 
 
-def _normalize_initial_variables(
-        raw: Optional[List[Dict[str, Any]]],
-) -> List[StepVariablesBase]:
+def _normalize_initial_variables(raw: Optional[List[Dict[str, Any]]]) -> List[StepVariablesBase]:
     """
-    将初始变量规范为 ``StepVariablesBase`` 列表。
+    将初始变量规范为StepVariablesBase列表。
 
-    :param raw: 原始变量列表（dict 或已是 schema）
+    :param raw: 原始变量列表（dict或已是schema）
     :return: StepVariablesBase 列表；空入参返回 []
     """
     if not raw:
@@ -64,16 +62,17 @@ async def _execute_step_tree_impl(
     """
     后台执行单用例步骤树（支持多数据源参数化）。
 
-    Worker 无 HTTP 鉴权上下文时，用 ``created_user`` 写入 CTX_USERNAME 埋点。
+    Worker无HTTP鉴权上下文时，用created_user写入CTX_USERNAME埋点。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param initial_variables: 初始会话变量列表
     :param report_type: 报告类型枚举
     :param batch_code: 批次号；为空时自动生成
     :param selected_dataset_names: 选中的数据源名称列表；空则单次执行
     :param steps_execute_config: 步骤执行环境配置覆盖
     :param created_user: 提交任务的用户账号
-    :return: 含 parameterized、batch_code、执行统计与 details 的结果字典
+    :return: 批次字段 total_cases/success_cases/failed_cases/success_rate(%)；
+             details[] 为各轮 execute_single_case（含步骤级 *_steps/passed_ratio）
     """
     # Worker 进程无 HTTP 鉴权上下文，用提交任务时传入的用户账号埋点
     if created_user:
@@ -81,7 +80,6 @@ async def _execute_step_tree_impl(
     if selected_dataset_names is None:
         selected_dataset_names = []
     initial_variables = _normalize_initial_variables(initial_variables)
-    # 兜底：调用方未传时仍生成，保证多数据源报告可归为同一次执行
     if not batch_code:
         batch_code = _new_batch_code()
 
@@ -95,22 +93,20 @@ async def _execute_step_tree_impl(
             batch_code=batch_code,
             dataset_name=None,
         )
-        result["parameterized"] = False
         result["dataset_name"] = None
+        case_ok = bool(result.get("success"))
         return {
             "parameterized": False,
             "batch_code": batch_code,
-            "execute_count": 1,
-            "success_count": 1 if result.get("success") else 0,
-            "failed_count": 0 if result.get("success") else 1,
-            "passed_ratio": result.get("passed_ratio", 0.0),
+            "total_cases": 1,
+            "success_cases": 1 if case_ok else 0,
+            "failed_cases": 0 if case_ok else 1,
+            "success_rate": 100.0 if case_ok else 0.0,
+            "execute_runs": 1,
             "details": [result],
-            "summary": {
-                "all_success": bool(result.get("success")),
-            },
         }
 
-    parameterized_execute_results: List[Dict[str, Any]] = []
+    details: List[Dict[str, Any]] = []
     for dataset_name in selected_dataset_names:
         single_data = await step_crud.execute_single_case(
             case_id=case_id,
@@ -121,24 +117,20 @@ async def _execute_step_tree_impl(
             dataset_name=dataset_name,
         )
         single_data["dataset_name"] = dataset_name
-        parameterized_execute_results.append(single_data)
+        details.append(single_data)
 
-    execute_count = len(parameterized_execute_results)
-    success_count = sum(1 for r in parameterized_execute_results if r.get("success"))
-    failed_count = execute_count - success_count
-    passed_ratio = round((success_count / execute_count * 100), 2) if execute_count > 0 else 0.0
-
+    execute_runs = len(details)
+    success_runs = sum(1 for r in details if r.get("success"))
+    case_ok = execute_runs > 0 and success_runs == execute_runs
     return {
         "parameterized": True,
         "batch_code": batch_code,
-        "execute_count": execute_count,
-        "success_count": success_count,
-        "failed_count": failed_count,
-        "passed_ratio": passed_ratio,
-        "details": parameterized_execute_results,
-        "summary": {
-            "all_success": failed_count == 0,
-        },
+        "total_cases": 1,
+        "success_cases": 1 if case_ok else 0,
+        "failed_cases": 0 if case_ok else 1,
+        "success_rate": 100.0 if case_ok else 0.0,
+        "execute_runs": execute_runs,
+        "details": details,
     }
 
 
@@ -153,19 +145,19 @@ def execute_step_tree_task(
         created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery 同步入口：后台执行单用例步骤树（默认 SCHEDULE_EXEC）。
+    Celery同步入口：后台执行单用例步骤树（默认SCHEDULE_EXEC）。
 
-    内部通过 ``run_async`` 进入 Worker 池执行协程。
+    内部通过run_async进入Worker池执行协程。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param initial_variables: 初始会话变量列表
-    :param report_type: 报告类型字符串或枚举；非法时回退 SCHEDULE_EXEC
+    :param report_type: 报告类型字符串或枚举；非法时回退SCHEDULE_EXEC
     :param batch_code: 批次号
     :param selected_dataset_names: 数据源名称列表
     :param steps_execute_config: 步骤执行环境配置
     :param created_user: 提交用户账号
     :return: 执行结果字典
-    :raises Exception: 执行失败时向上抛出，供 Celery on_failure 处理
+    :raises Exception: 执行失败时向上抛出，供Celery on_failure处理
     """
     try:
         rt = AutoTestReportType.SCHEDULE_EXEC
@@ -194,9 +186,11 @@ def execute_step_tree_task(
         LOGGER.info(
             f"【Celery-Worker】步骤树任务完成: case_id={case_id}, "
             f"batch_code={result.get('batch_code') if isinstance(result, dict) else batch_code}, "
-            f"execute_count={result.get('execute_count') if isinstance(result, dict) else None}, "
-            f"success_count={result.get('success_count') if isinstance(result, dict) else None}, "
-            f"failed_count={result.get('failed_count') if isinstance(result, dict) else None}"
+            f"total_cases={result.get('total_cases') if isinstance(result, dict) else None}, "
+            f"success_cases={result.get('success_cases') if isinstance(result, dict) else None}, "
+            f"failed_cases={result.get('failed_cases') if isinstance(result, dict) else None}, "
+            f"success_rate={result.get('success_rate') if isinstance(result, dict) else None}, "
+            f"execute_runs={result.get('execute_runs') if isinstance(result, dict) else None}"
         )
         return result
     except Exception as e:

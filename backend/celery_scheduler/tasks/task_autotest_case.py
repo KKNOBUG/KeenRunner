@@ -5,8 +5,6 @@
 @Project : Krun
 @Module  : task_autotest_case
 @DateTime: 2026/2/1 16:10
-
-自动化任务扫描与执行：Beat 扫描到期 Cron 任务，并下发/执行 run_autotest_task。
 """
 from __future__ import annotations
 
@@ -36,32 +34,29 @@ _LOG_PREFIX = "【Celery-Worker】"
 
 def _is_only_once(task: Any) -> bool:
     """
-    判断任务是否配置为「执行 1 次」周期策略。
+    判断任务周期策略是不是ONLY_ONCE
 
     :param task: 自动化任务模型实例
-    :return: 为 ONLY_ONCE 时返回 True
+    :return: 为ONLY_ONCE时返回 True
     """
     expr = getattr(task, "task_periodic_expr", None)
     value = getattr(expr, "value", None) or expr
     return (str(value).strip() if value is not None else "") == AutoTestTaskPeriodicSwitch.ONLY_ONCE.value
 
 
-async def _run_autotest_task_impl(
-    task_id: int,
-    report_type: Optional[AutoTestReportType] = None,
-) -> Dict[str, Any]:
+async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None) -> Dict[str, Any]:
     """
     执行单个自动化任务的核心逻辑。
 
-    - 手动「执行」：ASYNC_EXEC，不因「执行 1 次」关闭调度
-    - 扫描触发：SCHEDULE_EXEC；若 task_periodic_expr=执行1次，执行后关闭调度
-    - 返回 success：表示任务体是否无异常跑完（非用例业务全通过）
-    - 业务成败写入 last_execute_state（列表「最后执行结果」），并体现在 summary.all_success
+    - 手动执行：ASYNC_EXEC，不因ONLY_ONCE关闭调度
+    - 扫描触发：SCHEDULE_EXEC；若task_periodic_expr=执行1次，执行后关闭调度
+    - 返回success：表示任务体是否无异常跑完，非用例业务全通过
+    - 业务成败写入last_execute_state，最后执行结果
 
-    :param task_id: 自动化任务主键 ID
-    :param report_type: 报告类型；为 ASYNC_EXEC 或「异步执行」时按手动执行处理
-    :return: 含 success、task_id 及批次执行汇总的字典
-    :raises Exception: 执行过程异常时重新抛出，供 Celery on_failure 更新记录
+    :param task_id: 自动化任务主键ID
+    :param report_type: 报告类型；为ASYNC_EXEC或「异步执行」时按手动执行处理
+    :return: 含success、task_id及批次执行汇总的字典
+    :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """
     span_id = get_span_id_for_log()
     task = await AutoTestApiTaskInfo.get_or_none(id=task_id)
@@ -89,7 +84,7 @@ async def _run_autotest_task_impl(
 
     exec_report_type = AutoTestReportType.SCHEDULE_EXEC
     if report_type == AutoTestReportType.ASYNC_EXEC or (
-        isinstance(report_type, str) and report_type.strip() == "异步执行"
+            isinstance(report_type, str) and report_type.strip() == "异步执行"
     ):
         exec_report_type = AutoTestReportType.ASYNC_EXEC
 
@@ -113,8 +108,13 @@ async def _run_autotest_task_impl(
             task_code=task_code,
         )
         elapsed = (datetime.now() - started).total_seconds()
-        all_ok = result.get("summary", {}).get("all_success", False)
-        task.last_execute_state = AutoTestTaskStatus.SUCCESS if all_ok else AutoTestTaskStatus.FAILURE
+        case_all_ok = (
+            int(result.get("total_cases") or 0) > 0
+            and int(result.get("failed_cases") or 0) == 0
+        )
+        task.last_execute_state = (
+            AutoTestTaskStatus.SUCCESS if case_all_ok else AutoTestTaskStatus.FAILURE
+        )
         await task.save(update_fields=["last_execute_state"])
         if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _is_only_once(task):
             task.task_enabled = False
@@ -127,13 +127,13 @@ async def _run_autotest_task_impl(
             f"{_LOG_PREFIX}【span_id={span_id}】自动化任务执行完成: "
             f"task_id={task_id}, task_code={task_code}, task_name={task_name}, "
             f"report_type={report_val}, batch_code={result.get('batch_code')}, "
-            f"execute_count={result.get('execute_count')}, "
-            f"success_count={result.get('success_count')}, "
-            f"failed_count={result.get('failed_count')}, "
-            f"passed_ratio={result.get('passed_ratio')}, "
-            f"all_success={all_ok}, elapsed={elapsed:.2f}s"
+            f"total_cases={result.get('total_cases')}, "
+            f"success_cases={result.get('success_cases')}, "
+            f"failed_cases={result.get('failed_cases')}, "
+            f"success_rate={result.get('success_rate')}, "
+            f"elapsed={elapsed:.2f}s"
         )
-        # success=True：任务体未抛异常、流程跑完（业务是否全通过看 summary / last_execute_state）
+        # 任务体未抛异常、流程跑完
         return {"success": True, "task_id": task_id, **result}
     except Exception as e:
         LOGGER.error(
@@ -154,9 +154,9 @@ async def _run_autotest_task_impl(
 
 async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     """
-    扫描到期的定时自动化任务，并下发 ``run_autotest_task``。
+    扫描到期的定时自动化任务，并下发run_autotest_task。
 
-    :return: ``{"scanned": int, "dispatched": int}`` 扫描与下发统计
+    :return: {"scanned": int, "dispatched": int}扫描与下发统计
     """
     span_id = get_span_id_for_log()
     tasks = await get_scheduled_tasks(task_type=AutoTestTaskType.AUTOTEST_API)
@@ -201,7 +201,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
 @celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
 def scan_and_dispatch_autotest_tasks():
     """
-    Beat 入口：扫描启用中的 Cron 任务，到期则下发 ``run_autotest_task``。
+    Beat 入口：扫描启用中的 Cron 任务，到期则下发run_autotest_task。
 
     :return: 扫描与下发统计字典
     """
@@ -215,16 +215,15 @@ def run_autotest_task(
         created_user: Optional[str] = None,
 ):
     """
-    执行单个自动化任务（由扫描或 API 触发）。
+    执行单个自动化任务，由扫描或API触发。
 
-    执行观测记录由 Worker 信号维护；``created_user`` 随 kwargs 传到 Worker，
-    供 ``task_prerun`` 写入执行记录，本函数不参与业务执行。
+    执行观测记录由Worker信号维护；created_user随kwargs传到Worker，供task_prerun`写入执行记录，本函数不参与业务执行。
 
-    :param task_id: 自动化任务主键 ID
-    :param report_type: 报告类型（手动异步 / 调度）
+    :param task_id: 自动化任务主键ID
+    :param report_type: 报告类型（手动异步/调度）
     :param created_user: 触发用户账号（可选）
     :return: 任务执行结果字典
     """
-    # created_user 随 kwargs 传到 Worker，供 task_prerun 写入执行记录；此处不参与业务执行
+    # created_user 随kwargs传到Worker，供task_prerun写入执行记录；此处不参与业务执行
     _ = created_user
     return run_async(_run_autotest_task_impl(task_id, report_type=report_type))

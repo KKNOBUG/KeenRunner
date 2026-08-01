@@ -1209,7 +1209,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param task_code: 任务标识代码，可选
         :param batch_code: 批次标识代码，可选
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由HTTP步骤执行器内查表获取
-        :return: 包含报告与执行结果的字典（如report_code、case_state、details等）
+        :return: 含 success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code 等
         :raises NotFoundException: 用例不存在时
         :raises ParameterException: 用例无可执行步骤时
         """
@@ -1280,8 +1280,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 case_state=case_state,
                 case_last_time=case_last_time,
             ))
-        # 返回运行模式的简化结果
-        result_data: Dict[str, Any] = {
+        # 单次用例结果：步骤级指标用 *_steps / passed_ratio；success 表示本轮用例是否通过
+        return {
             "success": statistics.get("failed_steps", 0) == 0,
             "total_steps": statistics.get("total_steps", 0),
             "success_steps": statistics.get("success_steps", 0),
@@ -1293,7 +1293,53 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             "case_code": case_dict.get("case_code"),
             "case_name": case_dict.get("case_name"),
         }
-        return result_data
+
+    @staticmethod
+    def _aggregate_case_runs(
+            case_id: int,
+            case_results: List[Dict[str, Any]],
+            *,
+            case_ok: bool,
+            empty_error: str,
+    ) -> Dict[str, Any]:
+        """
+        将同一用例的多轮 execute_single_case 结果收成统一字段（三分支共用）。
+
+        步骤指标按各轮累计；passed_ratio 为累计步骤通过率(%)；success 为用例级（各轮全通过）。
+        """
+        if not case_results:
+            return {
+                "case_id": case_id,
+                "case_code": None,
+                "case_name": None,
+                "success": False,
+                "error": empty_error,
+                "saved_to_database": False,
+                "execute_runs": 0,
+                "total_steps": 0,
+                "success_steps": 0,
+                "failed_steps": 0,
+                "passed_ratio": 0.0,
+                "report_code": None,
+            }
+        last = case_results[-1]
+        total_steps = sum(int(r.get("total_steps") or 0) for r in case_results)
+        success_steps = sum(int(r.get("success_steps") or 0) for r in case_results)
+        failed_steps = sum(int(r.get("failed_steps") or 0) for r in case_results)
+        return {
+            "case_id": last.get("case_id", case_id),
+            "case_code": last.get("case_code"),
+            "case_name": last.get("case_name"),
+            "success": case_ok,
+            "error": "",
+            "saved_to_database": all(bool(r.get("saved_to_database")) for r in case_results),
+            "execute_runs": len(case_results),
+            "total_steps": total_steps,
+            "success_steps": success_steps,
+            "failed_steps": failed_steps,
+            "passed_ratio": round(success_steps / total_steps * 100, 2) if total_steps > 0 else 0.0,
+            "report_code": last.get("report_code"),
+        }
 
     async def batch_execute_cases(
             self,
@@ -1305,7 +1351,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             task_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        批量执行多个用例，依次调用execute_single_case并汇总成功/失败数与详情。
+        批量执行多个用例，依次调用 execute_single_case 并汇总。
+
+        批次级字段：total_cases / success_cases / failed_cases / success_rate(%)。
+        results[] 各元素字段与三分支对齐（含步骤级 total_steps/success_steps/failed_steps/passed_ratio）。
 
         :param case_ids: 用例主键ID列表
         :param report_type: 报告类型枚举
@@ -1313,7 +1362,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param steps_execute_config: 全部用例共用的执行配置
         :param cases_execute_config: 根据case_id的执行配置，优先于steps_execute_config
         :param task_code: 任务标识代码，可选
-        :return: 包含 total_cases、success_cases、failed_cases、results 等汇总信息的字典
+        :return: 批次汇总字典
         """
         if not initial_variables or not isinstance(initial_variables, list):
             initial_variables = []
@@ -1345,15 +1394,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     execute_count = 1
                 execute_count = max(1, min(execute_count, 9999))
 
-                # 每个用例独立开启事务执行
-                # 有数据源时：总次数 = 执行次数 * 数据源数量；无数据源时：根据根据执行次数循环
                 LOGGER.info(
                     f"==========> 执行用例ID: {case_id} 开始 "
                     f"(execute_count={execute_count}, datasets={len(dataset_names)})"
                 )
+                case_results: List[Dict[str, Any]] = []
                 if dataset_names:
-                    case_results: List[Dict[str, Any]] = []
-                    case_ok = True
+                    # 总轮次 = 执行次数 × 数据源数
                     total_runs = execute_count * len(dataset_names)
                     run_idx = 0
                     for _ in range(execute_count):
@@ -1369,23 +1416,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                                 dataset_name=ds_name,
                             )
                             case_results.append(one)
-                            if not one.get("success", False):
-                                case_ok = False
                             LOGGER.info(
                                 f"用例ID: {case_id} 第 {run_idx}/{total_runs} 次执行完成 "
                                 f"(dataset={ds_name}), success={one.get('success', False)}"
                             )
-                    result = case_results[-1] if case_results else {
-                        "case_id": case_id,
-                        "success": False,
-                        "error": "未执行任何数据集",
-                    }
-                    result["success"] = case_ok
-                    result["dataset_runs"] = len(case_results)
-                    result["execute_runs"] = len(case_results)
+                    empty_error = "未执行任何数据集"
                 elif execute_count > 1:
-                    case_results = []
-                    case_ok = True
                     for run_idx in range(execute_count):
                         one = await self.execute_single_case(
                             case_id=case_id,
@@ -1396,55 +1432,46 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                             batch_code=batch_code,
                         )
                         case_results.append(one)
-                        if not one.get("success", False):
-                            case_ok = False
                         LOGGER.info(
                             f"用例ID: {case_id} 第 {run_idx + 1}/{execute_count} 次执行完成, "
                             f"success={one.get('success', False)}"
                         )
-                    result = case_results[-1] if case_results else {
-                        "case_id": case_id,
-                        "success": False,
-                        "error": "未执行任何次数",
-                    }
-                    result["success"] = case_ok
-                    result["execute_runs"] = len(case_results)
+                    empty_error = "未执行任何次数"
                 else:
-                    result = await self.execute_single_case(
+                    case_results.append(await self.execute_single_case(
                         case_id=case_id,
                         initial_variables=initial_variables,
                         steps_execute_config=per_steps_cfg,
                         report_type=report_type,
                         task_code=task_code,
                         batch_code=batch_code,
-                    )
-                result["error"] = ""
+                    ))
+                    empty_error = "未执行"
+
+                case_ok = bool(case_results) and all(r.get("success") for r in case_results)
+                result = self._aggregate_case_runs(
+                    case_id, case_results, case_ok=case_ok, empty_error=empty_error,
+                )
                 results.append(result)
-                if result.get("success", False):
+                if result.get("success"):
                     success_cases += 1
                 else:
                     failed_cases += 1
             except Exception as e:
-                # 记录失败信息，但不影响其他用例的执行
                 error_message: str = f"执行用例ID: {case_id} 异常, 错误描述: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 failed_cases += 1
-                results.append({
-                    "case_id": case_id,
-                    "success": False,
-                    "error": error_message,
-                    "saved_to_database": False
-                })
+                results.append(self._aggregate_case_runs(
+                    case_id, [], case_ok=False, empty_error=error_message,
+                ))
             LOGGER.info(f"==========> 执行用例ID: {case_id} 结束")
         LOGGER.info(f"{'= ' * 20}批量执行结束{'= ' * 20}")
+        success_rate = round(success_cases / total_cases * 100, 2) if total_cases > 0 else 0.0
         return {
             "batch_code": batch_code,
             "total_cases": total_cases,
             "success_cases": success_cases,
             "failed_cases": failed_cases,
+            "success_rate": success_rate,
             "results": results,
-            "summary": {
-                "success_rate": success_cases / total_cases if total_cases > 0 else 0.0,
-                "all_success": failed_cases == 0
-            }
         }

@@ -7,7 +7,7 @@
         :remote="true"
         :columns="columns"
         :get-data="getTaskRecordList"
-        :scroll-x="2900"
+        :scroll-x="3050"
         :single-line="true"
     >
       <template #queryBar>
@@ -113,7 +113,7 @@
 
 <script setup>
 import { h, ref } from 'vue'
-import { NButton, NInput, NModal, NSelect, NTag } from 'naive-ui'
+import { NButton, NDropdown, NInput, NModal, NSelect, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -225,6 +225,88 @@ const renderJsonCell = (title, val) => {
   )
 }
 
+/** 列展示用：信封取 raw（任务原文），旧数据直接展示整包 */
+const resultPayloadOf = (summary) => (
+  summary && typeof summary === 'object' && 'raw' in summary ? summary.raw : summary
+)
+
+/** 附件列表：信封 attachments，或旧格式顶层 file_path/file_name */
+const attachmentsOf = (summary) => {
+  if (!summary || typeof summary !== 'object') return []
+  if (Array.isArray(summary.attachments) && summary.attachments.length) {
+    return summary.attachments.filter((a) => a && typeof a === 'object')
+  }
+  if (summary.file_path || summary.file_name) {
+    return [{ key: 'main', name: summary.file_name || 'download.bin' }]
+  }
+  return []
+}
+
+const downloadAttachment = async (row, att) => {
+  const recordId = row.record_id ?? row.id
+  if (recordId == null) {
+    window.$message?.warning?.('缺少记录ID')
+    return
+  }
+  try {
+    const res = await api.downloadApiTaskRecordAttachment(recordId, att?.key || 'main')
+    const blob = new Blob([res.data], { type: att?.content_type || 'application/octet-stream' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd) || /filename="?([^";]+)"?/i.exec(cd)
+    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : (att?.name || 'download.bin')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    window.$message?.error?.(e?.message || '下载失败')
+  }
+}
+
+/** 单文件直接下；多文件下拉选文件后下 */
+const renderAttachmentCell = (row) => {
+  const items = attachmentsOf(row.task_summary)
+  if (!items.length) return h('span', '-')
+  if (items.length === 1) {
+    const att = items[0]
+    const label = att.name || att.key || '下载'
+    return h(
+      NButton,
+      {
+        size: 'tiny',
+        type: 'primary',
+        quaternary: true,
+        onClick: () => downloadAttachment(row, att),
+      },
+      () => (label.length > 18 ? `${label.slice(0, 18)}...` : label),
+    )
+  }
+  return h(
+    NDropdown,
+    {
+      trigger: 'click',
+      options: items.map((att, idx) => ({
+        label: att.name || att.key || `文件${idx + 1}`,
+        key: String(att.key ?? idx),
+      })),
+      onSelect: (key) => {
+        const att = items.find((a, idx) => String(a.key ?? idx) === String(key))
+        if (att) downloadAttachment(row, att)
+      },
+    },
+    {
+      default: () => h(
+        NButton,
+        { size: 'tiny', type: 'primary', quaternary: true },
+        () => `附件(${items.length})`,
+      ),
+    },
+  )
+}
+
 const formatCaseIds = (ids) => {
   if (!Array.isArray(ids) || !ids.length) return '-'
   const s = ids.join(', ')
@@ -290,8 +372,15 @@ const columns = [
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
-      return renderJsonCell('执行结果', row.task_summary)
+      return renderJsonCell('执行结果', resultPayloadOf(row.task_summary))
     },
+  },
+  {
+    title: '附件',
+    key: 'attachments',
+    width: 140,
+    align: 'center',
+    render: renderAttachmentCell,
   },
   { title: '执行耗时', key: 'celery_duration', width: 90, align: 'center', ellipsis: { tooltip: true } },
   {

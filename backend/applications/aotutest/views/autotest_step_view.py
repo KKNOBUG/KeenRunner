@@ -1820,18 +1820,21 @@ async def execute_step_tree(
                         report_type=AutoTestReportType.SYNC_EXEC,
                         batch_code=batch_code,
                     )
-                    total_steps: int = result_data.get("total_steps")
-                    success_steps: int = result_data.get("success_steps")
-                    failed_steps: int = result_data.get("failed_steps")
-                    passed_ratio: float = round((success_steps / total_steps * 100), 2) if total_steps > 0 else 0.0
+                    total_steps: int = int(result_data.get("total_steps") or 0)
+                    success_steps: int = int(result_data.get("success_steps") or 0)
+                    failed_steps: int = int(result_data.get("failed_steps") or 0)
+                    passed_ratio: float = float(result_data.get("passed_ratio") or 0.0)
                     return SuccessResponse(
-                        message=f"执行完成, 共{total_steps}步骤, 成功{success_steps}步, 失败{failed_steps}步, 成功率: {passed_ratio}%",
+                        message=(
+                            f"执行完成, 共{total_steps}步骤, 成功{success_steps}步, "
+                            f"失败{failed_steps}步, 步骤通过率: {passed_ratio}%"
+                        ),
                         data=result_data,
-                        total=1
+                        total=1,
                     )
 
-                # 参数化驱动执行（选中数据）
-                parameterized_execute_results: List[Dict[str, Any]] = []
+                # 参数化驱动执行（选中数据）；批次级用用例指标，details 内为各轮步骤指标
+                details: List[Dict[str, Any]] = []
                 batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                 for dataset_name in selected_dataset_names:
                     single_data = await services.step_curd.execute_single_case(
@@ -1842,22 +1845,29 @@ async def execute_step_tree(
                         batch_code=batch_code,
                         dataset_name=dataset_name,
                     )
-                    parameterized_execute_results.append(single_data)
-                execute_count: int = len(parameterized_execute_results)
-                success_count: int = sum(1 for r in parameterized_execute_results if r.get("success"))
-                failed_count: int = execute_count - success_count
-                passed_ratio: float = round((success_count / execute_count * 100), 2) if execute_count > 0 else 0.0
+                    single_data["dataset_name"] = dataset_name
+                    details.append(single_data)
+                execute_runs: int = len(details)
+                success_runs: int = sum(1 for r in details if r.get("success"))
+                failed_runs: int = execute_runs - success_runs
+                case_ok: bool = execute_runs > 0 and failed_runs == 0
+                success_rate: float = 100.0 if case_ok else 0.0
                 return SuccessResponse(
-                    message=f"参数化执行完成, 共{execute_count}次, 成功{success_count}次, 失败{failed_count}次, 成功率: {passed_ratio}%",
+                    message=(
+                        f"参数化执行完成, 共{execute_runs}次运行, 成功{success_runs}次, "
+                        f"失败{failed_runs}次, 用例成功率: {success_rate}%"
+                    ),
                     data={
                         "parameterized": True,
-                        "execute_count": execute_count,
-                        "success_count": success_count,
-                        "failed_count": failed_count,
-                        "passed_ratio": passed_ratio,
-                        "details": parameterized_execute_results,
+                        "batch_code": batch_code,
+                        "total_cases": 1,
+                        "success_cases": 1 if case_ok else 0,
+                        "failed_cases": 0 if case_ok else 1,
+                        "success_rate": success_rate,
+                        "execute_runs": execute_runs,
+                        "details": details,
                     },
-                    total=execute_count,
+                    total=execute_runs,
                 )
             except NotFoundException as e:
                 return NotFoundResponse(message=str(e.message))
@@ -1962,9 +1972,9 @@ async def execute_step_tree(
             passed_ratio: float = statistics.get("passed_ratio", 0.0)
             result_data = {
                 "total_steps": total_steps,
+                "success_steps": success_steps,
                 "failed_steps": failed_steps,
                 "passed_ratio": passed_ratio,
-                "success_steps": success_steps,
                 "success": failed_steps == 0,
                 "results": [serialize_result(r) for r in results],
                 "logs": {str(k): v for k, v in logs.items()},
@@ -1974,9 +1984,12 @@ async def execute_step_tree(
                 "report_code": report_code,
             }
             return SuccessResponse(
-                message=f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, 失败{failed_steps}步, 成功率: {passed_ratio}%",
+                message=(
+                    f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, "
+                    f"失败{failed_steps}步, 步骤通过率: {passed_ratio}%"
+                ),
                 data=result_data,
-                total=total_steps
+                total=total_steps,
             )
 
         return BadReqResponse(message=f"不支持的执行类型: {execute_type}")
