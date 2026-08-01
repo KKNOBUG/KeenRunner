@@ -21,7 +21,7 @@ from backend.core.responses import FailureResponse, SuccessResponse
 audit = APIRouter()
 
 
-@audit.get("/list", summary="审计日志-按条件分页查询日志(Query方式)")
+@audit.get("/list", summary="根据条件分页查询日志(Query方式)")
 async def list_audit(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -76,7 +76,7 @@ async def list_audit(
     return SuccessResponse(data=data, total=total)
 
 
-@audit.post("/search", summary="审计日志-按条件分页查询日志(Body方式)")
+@audit.post("/search", summary="按条件分页查询日志(Body方式)")
 async def search_audit(
         audit_in: AuditSelect = Body(..., description="查询条件"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -115,7 +115,7 @@ async def search_audit(
     return SuccessResponse(data=data, total=total)
 
 
-@audit.get("/get", summary="审计日志-按id查询日志")
+@audit.get("/get", summary="按id查询日志")
 async def get_audit(
         audit_id: int = Query(..., description="日志ID"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -138,7 +138,7 @@ async def get_audit(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@audit.get("/byUser", summary="审计日志-获取指定用户的所有日志")
+@audit.get("/byUser", summary="获取指定用户的所有日志")
 async def get_audit_by_user(
         user_id: int = Query(..., description="用户ID"),
         page: int = Query(default=1, ge=1, description="页码"),
@@ -164,7 +164,7 @@ async def get_audit_by_user(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@audit.get("/recent", summary="审计日志-按条件获取最近日志")
+@audit.get("/recent", summary="按条件获取最近日志")
 async def get_recent_audits(
         limit: int = Query(default=10, ge=1, le=100, description="返回数量"),
         user_id: int = Query(default=None, description="用户ID"),
@@ -187,7 +187,7 @@ async def get_recent_audits(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@audit.get("/statistics", summary="审计日志-获取指定用户的日志统计信息")
+@audit.get("/statistics", summary="获取指定用户的日志统计信息")
 async def get_audit_statistics(
         user_id: int = Query(..., description="用户ID"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -207,7 +207,7 @@ async def get_audit_statistics(
         return FailureResponse(message=f"统计失败，异常描述: {e}")
 
 
-@audit.delete("/delete", summary="审计日志-按id删除日志")
+@audit.delete("/delete", summary="按id删除日志")
 async def delete_audit(
         audit_id: int = Query(..., description="审计日志ID"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -231,7 +231,7 @@ async def delete_audit(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@audit.post("/delete", summary="审计日志-按ids删除日志")
+@audit.post("/delete", summary="按ids删除日志")
 async def delete_audits_batch(
         body_in: AuditBatchDelete = Body(..., description="审计日志ID列表"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -252,7 +252,7 @@ async def delete_audits_batch(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@audit.delete("/deleteByUser", summary="审计日志-删除指定用户的所有日志")
+@audit.delete("/deleteByUser", summary="删除指定用户的所有日志")
 async def delete_audits_by_user(
         user_id: int = Query(..., description="用户ID"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -273,7 +273,7 @@ async def delete_audits_by_user(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@audit.delete("/deleteByTime", summary="审计日志-删除指定时间范围内的日志")
+@audit.delete("/deleteByTime", summary="删除指定时间范围内的日志")
 async def delete_audits_by_time(
         start_time: str = Query(..., description="开始时间"),
         end_time: str = Query(..., description="结束时间"),
@@ -296,7 +296,7 @@ async def delete_audits_by_time(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@audit.delete("/clearAll", summary="审计日志-清空所有审计日志(危险操作)")
+@audit.delete("/clearAll", summary="清空所有审计日志(危险操作)")
 async def clear_all_audits(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):

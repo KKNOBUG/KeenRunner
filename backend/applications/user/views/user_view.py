@@ -35,7 +35,7 @@ from backend.core.responses import (
     ParameterResponse,
     DataAlreadyExistsResponse,
 )
-from backend.services import CTX_USER_ID, DependAuth, verify_password, get_password_hash
+from backend.services import CTX_USER_ID, verify_password, get_password_hash
 
 user_public = APIRouter()
 user_secure = APIRouter()
@@ -87,7 +87,7 @@ async def delete_user(
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@user_secure.post("/deletes", summary="按id列表删除用户")
+@user_secure.post("/deletes", summary="删除用户", description="根据id列表批量删除用户信息")
 async def delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -308,7 +308,7 @@ async def get_users(
     return SuccessResponse(message="查询成功", data=data, total=total)
 
 
-@user_secure.post("/update_password", summary="修改密码", dependencies=[DependAuth])
+@user_secure.post("/update_password", summary="修改密码", description="根据当前登录用户ID修改密码")
 async def update_user_password(
         req_in: UpdatePassword,
         user_crud: UserCrud = Depends(get_user_crud),
@@ -347,7 +347,7 @@ async def reset_password(
     return SuccessResponse(message="重置密码", data=data, total=1)
 
 
-@user_secure.post("/logout", summary="用户登出")
+@user_secure.post("/logout", summary="用户登出", description="退出当前登录用户")
 async def logout(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
