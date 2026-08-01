@@ -23,10 +23,10 @@ _executor = ThreadPoolExecutor(max_workers=5)
 
 def json_safe_value(value: Any) -> Any:
     """
-    将单元格/字段值递归转为 JSON 可序列化类型。
+    将单元格/字段值递归转为JSON可序列化类型。
 
-    :param value: 原始值（可能为 NaN/Inf/NaT/numpy 类型或嵌套结构）
-    :return: JSON 可序列化值，NaN/Inf/NaT 转为 None
+    :param value: 原始值(可能为NaN/Inf/NaT/numpy类型或嵌套结构)
+    :return: JSON可序列化值，NaN/Inf/NaT转为None
     """
     if value is None:
         return None
@@ -58,9 +58,9 @@ def json_safe_value(value: Any) -> Any:
 
 def parse_kv_string(text: str) -> Dict[str, str]:
     """
-    将多行 key:value 文本解析为字典（去除 _x000D_ 回车符）。
+    将多行key:value文本解析为字典(去除_x000D_回车符)。
 
-    :param text: 形如 "Ammy:7860000182_x000D_\\nCcy:CNY" 的多行文本
+    :param text: 形如 "Ammy:7860000182_x000D_\nCcy:CNY" 的多行文本
     :return: 解析后的字典，如 {"Ammy": "7860000182", "Ccy": "CNY"}；非字符串入参返回 {}
     """
     if not isinstance(text, str):
@@ -93,8 +93,8 @@ def _row_has_section_marker(cells: Any) -> bool:
     """
     判断一组单元格中是否包含分区标记。
 
-    :param cells: 单元格序列（如某一行或某一列）
-    :return: 含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY（大小写不敏感）返回 True，否则 False
+    :param cells: 单元格序列(如某一行或某一列)
+    :return: 含HEAD/BODY/ASSERT_HEAD/ASSERT_BODY(大小写不敏感)返回True，否则False
     """
     for cell in cells:
         if isinstance(cell, str) and cell.strip().lower() in _SECTION_LABEL_TO_KEY:
@@ -106,9 +106,9 @@ def detect_matrix_axis(values: Any) -> int:
     """
     检测二维矩阵方向并校验合法性。
 
-    :param values: 二维矩阵（DataFrame.values）
-    :return: 方向，水平模式（第 0 行含分区标记）返回 AXIS_HORIZONTAL，垂直模式（第 0 列含分区标记）返回 AXIS_VERTICAL
-    :raises ValueError: 矩阵为空，或第 0 行与第 0 列均不含分区标记（非合法数据源矩阵）
+    :param values: 二维矩阵(DataFrame.values)
+    :return: 方向，水平模式(第0行含分区标记)返回AXIS_HORIZONTAL，垂直模式(第0列含分区标记)返回AXIS_VERTICAL
+    :raises ValueError: 矩阵为空，或第0行与第0列均不含分区标记(非合法数据源矩阵)
     """
     if values.size == 0:
         raise ValueError("数据矩阵为空，无法识别方向")
@@ -122,9 +122,9 @@ def detect_matrix_axis(values: Any) -> int:
 
 def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
-    规范化单场景结构，仅保留 head/body/assert_head/assert_body，缺失键补 {}。
+    规范化单场景结构，仅保留head/body/assert_head/assert_body，缺失键补 {}。
 
-    :param step_data: 单场景原始数据（可能非 dict）
+    :param step_data: 单场景原始数据(可能非dict)
     :return: 含四个分区键的规范化字典
     """
     src = step_data if isinstance(step_data, dict) else {}
@@ -136,9 +136,9 @@ def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, D
 
 def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     """
-    垂直模式解析单个 sheet（第 0 行为场景名，第 0 列为分区标签/字段名）。
+    垂直模式解析单个sheet(第0行为场景名，第0列为分区标签/字段名)。
 
-    :param df: 无表头（header=None）的 sheet DataFrame
+    :param df: 无表头(header=None)的sheet DataFrame
     :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
     """
     values = df.values
@@ -208,11 +208,9 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
 def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     """
-    水平模式解析单个 sheet（第 0 行为分区标记+字段名，第 0 列为场景名）。
+    水平模式解析单个sheet：第0行为分区标记与字段名，第0列为场景名。
 
-    分区标记（HEAD/BODY/ASSERT_HEAD/ASSERT_BODY）作为列分区切换符，其后的字段列归属该分区，直至下一个标记。
-
-    :param df: 无表头（header=None）的 sheet DataFrame
+    :param df: 无表头(header=None)的sheet DataFrame
     :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
     """
     values = df.values
@@ -258,10 +256,10 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
 def _parse_sheet_by_axis(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
     """
-    按方向分发解析单个 sheet。
+    按方向分发解析单个sheet。
 
-    :param df: 无表头（header=None）的 sheet DataFrame
-    :param axis: 矩阵方向，AXIS_HORIZONTAL 走水平解析，否则走垂直解析
+    :param df: 无表头(header=None)的sheet DataFrame
+    :param axis: 矩阵方向，AXIS_HORIZONTAL走水平解析，否则走垂直解析
     :return: { 场景名: { head, body, assert_head, assert_body } }
     """
     if axis == AXIS_HORIZONTAL:
@@ -271,9 +269,9 @@ def _parse_sheet_by_axis(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any
 
 async def _parse_sheet_async(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
     """
-    在线程池中按方向异步解析单个 sheet。
+    在线程池中按方向异步解析单个sheet。
 
-    :param df: 无表头（header=None）的 sheet DataFrame
+    :param df: 无表头(header=None)的sheet DataFrame
     :param axis: 矩阵方向
     :return: { 场景名: { head, body, assert_head, assert_body } }
     """
@@ -286,7 +284,7 @@ def _cell_is_blank(value: Any) -> bool:
     判断单元格是否为空白。
 
     :param value: 单元格值
-    :return: None/NaN/纯空白字符串返回 True，否则 False
+    :return: None/NaN/纯空白字符串返回True，否则False
     """
     if value is None:
         return True
@@ -302,10 +300,10 @@ def _cell_is_blank(value: Any) -> bool:
 
 def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     """
-    将 DataFrame 转为二维矩阵，剔除全空白（None/NaN/空串）的行与列（第 0 列始终保留）。
+    将DataFrame转为二维矩阵，剔除全空白(None/NaN/空串)的行与列(第0列始终保留)。
 
     :param df: sheet DataFrame
-    :return: 二维列表，NaN/NaT/Inf 置为 None
+    :return: 二维列表，NaN/NaT/Inf置为None
     """
     if df is None or df.empty:
         return []
@@ -331,13 +329,10 @@ def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
 
 async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int], Dict[str, List[List[Any]]]]:
     """
-    读取 xlsx 全部 sheet（header=None），逐 sheet 检测方向并异步解析。
+    读取xlsx全部sheet，逐sheet检测方向并异步解析。
 
-    :param file_path: xlsx 文件路径
-    :return: (parsed_data, sheet_axes, sheet_matrices)：
-             parsed_data 为 { sheet_name: { 场景名: { head, body, assert_head, assert_body } } }，
-             sheet_axes 为 { sheet_name: axis }，
-             sheet_matrices 为 { sheet_name: 原始二维矩阵 }（供落库/导出复用，避免重复读文件）
+    :param file_path: xlsx文件路径
+    :return: (parsed_data, sheet_axes, sheet_matrices)，分别为各sheet场景数据、方向与原始二维矩阵
     """
     sheets: Dict[str, pd.DataFrame] = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
     sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
@@ -356,13 +351,11 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
 
 async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
     """
-    将二维矩阵解析为 dataset/dataset_names/规范化 matrix/axis，自动识别水平/垂直方向。
+    将二维矩阵解析为dataset结构，自动识别水平或垂直方向。
 
-    供「数据预览」表格保存时与服务端上传解析结果对齐。
-
-    :param matrix: 二维列表（与单步骤 xlsx 首 sheet、header=None 结构一致）
+    :param matrix: 二维列表(与单步骤xlsx首sheet、header=None结构一致)
     :return: (step_data, dataset_names, norm_matrix, axis)
-    :raises ValueError: matrix 非二维列表，或矩阵方向无法识别
+    :raises ValueError: matrix非二维列表，或矩阵方向无法识别
     """
     if not isinstance(matrix, list):
         raise ValueError("dataframe 须为二维列表")
@@ -380,13 +373,10 @@ async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[st
 
 async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
     """
-    仅解析 xlsx 的第一个 sheet 页（单步骤数据集上传用），自动识别水平/垂直方向。
+    仅解析xlsx首个sheet，自动识别矩阵方向。
 
-    :param file_path: xlsx 文件路径
-    :return: (step_data, dataset_names, dataframe, axis)，其中 step_data 为单 sheet 解析结果
-             { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }，
-             dataset_names 为该 sheet 中的场景名称列表（已排序），
-             dataframe 为该 sheet 原始二维矩阵（NaN 已转为 None），axis 为识别出的矩阵方向
+    :param file_path: xlsx文件路径
+    :return: (step_data, dataset_names, dataframe, axis)，dataframe为原始二维矩阵，axis为矩阵方向
     :raises FileNotFoundError: 文件不存在
     :raises ValueError: 解析失败或矩阵方向无法识别
     """
@@ -406,16 +396,12 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
 
 async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any], List[str], Dict[str, int], Dict[str, List[List[Any]]]]:
     """
-    解析 xlsx 全部 sheet 为约定结构并提取数据集名称列表（多步骤数据集上传用），逐 sheet 自动识别方向。
+    解析xlsx全部sheet为约定结构并提取数据集名称列表。
 
-    :param file_path: xlsx 文件路径
-    :return: (parsed_data, dataset_names, sheet_axes, sheet_matrices)，其中 parsed_data 结构为
-             { "sheet_name_or_step_code": { "场景1": { "head": {...}, "body": {...}, "assert_head": {...}, "assert_body": {...} }, ... }, ... }，
-             dataset_names 为所有 sheet 中出现的去重排序后的场景名称列表，
-             sheet_axes 为 { sheet_name: axis }，
-             sheet_matrices 为 { sheet_name: 原始二维矩阵 }
+    :param file_path: xlsx文件路径
+    :return: (parsed_data, dataset_names, sheet_axes, sheet_matrices)，dataset_names为去重排序后的场景名列表
     :raises FileNotFoundError: 文件不存在
-    :raises ValueError: 解析失败或某 sheet 矩阵方向无法识别
+    :raises ValueError: 解析失败或某sheet矩阵方向无法识别
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")

@@ -80,12 +80,16 @@ _SCRIPT_TEMPLATE = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共�
 # ---------------------------------------------------------------------------
 
 def _display_text_width(text: str) -> int:
-    """估算单元格显示宽度：ASCII 计 1，宽字符计 2。"""
+    """
+    估算单元格显示宽度：ASCII计1，宽字符计2。
+    """
     return sum(2 if ord(ch) > 127 else 1 for ch in text)
 
 
 def _auto_size_sheet_columns(sheet) -> None:
-    """按单元格内容自适应列宽（含多行文本取最长行）。"""
+    """
+    按单元格内容自适应列宽，多行文本取最长行。
+    """
     max_column = sheet.max_column or 0
     max_row = sheet.max_row or 0
     for col_idx in range(1, max_column + 1):
@@ -101,7 +105,9 @@ def _auto_size_sheet_columns(sheet) -> None:
 
 
 def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float] = _ROW_HEIGHT) -> None:
-    """数据区水平/垂直居中；可选统一行高。"""
+    """
+    数据区水平/垂直居中；可选统一行高。
+    """
     max_row = sheet.max_row or 0
     max_column = sheet.max_column or 0
     if max_row < start_row or max_column < 1:
@@ -120,7 +126,9 @@ def _file_name(username: Optional[str], label: str) -> str:
 
 
 def _get(item: Any, name: str, default: Any = None) -> Any:
-    """兼容 dict / schema 对象字段读取。"""
+    """
+    兼容dict / schema对象字段读取。
+    """
     return item.get(name, default) if isinstance(item, dict) else getattr(item, name, default)
 
 
@@ -140,7 +148,9 @@ def _collect_own_steps(steps: Optional[List[Any]]) -> List[Any]:
 
 
 async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """两通道共用：公共接口 + 唯一步骤 HTTP/TCP + 无数据源。"""
+    """
+    两通道共用：公共接口 + 唯一步骤HTTP/TCP + 无数据源。
+    """
     valid: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
     project_names: Dict[Any, str] = {}
@@ -255,7 +265,9 @@ async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List
 
 
 def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
-    """一用例一 sheet；多于 1 个时前置「目录」sheet（接口名称列超链接）。"""
+    """
+    按一用例一sheet构建导出工作簿，多于1个时前置目录sheet。
+    """
     workbook = Workbook()
     workbook.remove(workbook.active)
     used_names: set = set()
@@ -317,8 +329,7 @@ def _kv_to_lines(
         kv_list: Optional[List[Any]], *, column: str = "", problems: Optional[List[str]] = None
 ) -> str:
     """
-    [{key,value,desc}] → 多行 "key:value[:desc];"。
-    若传入 problems，同时做往返安全检测（冒号/换行）。
+    将[{key,value,desc}]转为多行key:value[:desc];文本，可选做往返安全检测。
     """
     lines: List[str] = []
     for item in kv_list or []:
@@ -686,8 +697,7 @@ async def import_script_rows(
         rows: List[Dict[str, Any]], services: Any
 ) -> Tuple[Dict[str, int], List[Dict[str, Any]]]:
     """
-    按「所属应用+接口名称」匹配公共接口：存在则更新、不存在则新增（类型=公共接口、属性=正用例）。
-    全部行校验通过后单事务落库；文件内同键重复行拒绝。
+    按所属应用与接口名称匹配公共接口，存在则更新、不存在则新增，校验通过后单事务落库。
     """
     prepared: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
