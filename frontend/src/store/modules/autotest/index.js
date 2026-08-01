@@ -1,7 +1,7 @@
 /**
  * 自动化测试模块状态
  * - stepTreeCache: 步骤树缓存，按 case_id/case_code 缓存，切换页签时避免重复请求
- * - stepEditorFreshLoadKeys: 关闭页签/丢弃未保存后，下次进入该用例强制走接口
+ * - stepEditorFreshLoadKeys: 关闭页签或外部批量改库后，下次进入该用例强制走接口
  * - stepEditor: 步骤编辑页脏检测基准
  */
 import { defineStore } from 'pinia'
@@ -17,7 +17,7 @@ export const useAutotestStore = defineStore('autotest', {
         return {
             /** 步骤树缓存：key = `id:${caseId}_code:${caseCode}`，value = { rawData, steps } */
             stepTreeCache: {},
-            /** 需要强制重新拉取的用例 key 集合（关闭页签或丢弃脏数据时写入） */
+            /** 需要强制重新拉取的用例 key 集合（关闭页签 / 导入脚本等写入） */
             stepEditorFreshLoadKeys: {},
         }
     },
@@ -34,7 +34,7 @@ export const useAutotestStore = defineStore('autotest', {
             const key = stepTreeCacheKey(caseId, caseCode)
             if (key) delete this.stepTreeCache[key]
         },
-        /** 导入脚本等批量变更后清空全部缓存，避免已打开页签读到旧步骤树 */
+        /** 清空步骤树内存缓存；KeepAlive 实例需另配合 markStepEditorFreshLoad 才会强制重载 */
         clearAllStepTreeCache() {
             this.stepTreeCache = {}
         },

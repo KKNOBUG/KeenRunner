@@ -382,7 +382,7 @@ function parseCaseFromTagPath(path) {
   }
 }
 
-/** 丢弃未保存或关闭页签后：清内存缓存并标记下次进入强制拉接口 */
+/** 关闭页签后：清内存缓存并标记下次进入强制拉接口 */
 function markCaseNeedsFreshLoad(cid, ccode) {
   autotestStore.clearStepTreeCache(cid, ccode)
   autotestStore.markStepEditorFreshLoad(cid, ccode)
@@ -1497,7 +1497,7 @@ const loadSteps = async ({ force = false } = {}) => {
     nextTick(() => markDirtyLoaded())
     return
   }
-  // 关闭页签/丢弃未保存后强制走接口；普通切换页签仍可用缓存
+  // 关闭页签或外部标记 freshLoad 后强制走接口；普通切换页签仍可用缓存
   const forceRefresh = force || autotestStore.consumeStepEditorFreshLoad(caseId.value, caseCode.value)
   if (!forceRefresh) {
     const cached = autotestStore.getStepTreeCache(caseId.value, caseCode.value)
@@ -2210,7 +2210,7 @@ onMounted(async () => {
 
 // keep-alive 重新激活：
 // - 切换页签回来且用例未变：保活，不重载
-// - 关闭页签后再打开 / 丢弃未保存：hasFreshLoad → 强制拉接口
+// - 关闭页签后再打开 / 外部 markFreshLoad：hasFreshLoad → 强制拉接口
 // - 路由 case 上下文变化：重载
 onActivated(() => {
   const needFresh = autotestStore.hasStepEditorFreshLoad(caseId.value, caseCode.value)

@@ -5,20 +5,6 @@
 @Project : Krun
 @Module  : autotest_case_excel_service.py
 @DateTime: 2026/8/1
-
-公共接口 Excel 服务（导出数据 + 导出/导入脚本）。
-
-对外 API：
-  - 导出数据：prepare_export_cases / build_export_workbook / build_export_file_name
-  - 导出脚本：prepare_script_export_rows / build_script_workbook / build_script_file_name
-  - 导入脚本：parse_script_workbook / import_script_rows
-
-脚本格式契约（与模板「帮助」sheet 一致）：
-  - 键值：key:value:描述;（key/value 禁止冒号与换行）
-  - 提取：变量名:来源:整个返回数据; 或 变量名:来源:提取部分:表达式[:索引];
-  - 断言：名称:对象:表达式:匹配规则:预期值;（预期值允许冒号）
-  - 请求体：json=报文；xml/raw=文本；表单/params=键值行；none=空
-  - TCP：请求方式/路径/请求头勿填；请求体类型仅 xml/json/raw
 """
 from __future__ import annotations
 
@@ -98,7 +84,7 @@ def _display_text_width(text: str) -> int:
     return sum(2 if ord(ch) > 127 else 1 for ch in text)
 
 
-def _autosize_sheet_columns(sheet) -> None:
+def _auto_size_sheet_columns(sheet) -> None:
     """按单元格内容自适应列宽（含多行文本取最长行）。"""
     max_column = sheet.max_column or 0
     max_row = sheet.max_row or 0
@@ -153,9 +139,7 @@ def _collect_own_steps(steps: Optional[List[Any]]) -> List[Any]:
     return collected
 
 
-async def _load_public_api_cases(
-        case_ids: List[int], services: Any
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """两通道共用：公共接口 + 唯一步骤 HTTP/TCP + 无数据源。"""
     valid: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
@@ -195,7 +179,6 @@ async def _load_public_api_cases(
             "case_name": case_name,
             "step": step,
             "is_http": step_type == AutoTestStepType.HTTP,
-            "project_id": project_id,
             "project_name": project_names[project_id],
         })
     return valid, invalid
@@ -256,9 +239,7 @@ def _body_to_pairs(step: Any) -> List[Tuple[str, Any]]:
     return _kv_to_pairs(getattr(step, attr, None)) if attr else []
 
 
-async def prepare_export_cases(
-        case_ids: List[int], services: Any
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     loaded, invalid = await _load_public_api_cases(case_ids, services)
     valid = [{
         "case_name": item["case_name"],
@@ -320,7 +301,7 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
                 if cell.value in ("HEAD", "BODY"):
                     cell.fill = _MARKER_FILL
         _style_sheet_cells(sheet, start_row=1, row_height=_ROW_HEIGHT)
-        _autosize_sheet_columns(sheet)
+        _auto_size_sheet_columns(sheet)
     return workbook
 
 
@@ -404,9 +385,7 @@ def _step_body_cell(step: Any) -> str:
     return _kv_to_lines(getattr(step, attr, None)) if attr else ""
 
 
-async def prepare_script_export_rows(
-        case_ids: List[int], services: Any
-) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
+async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
     loaded, invalid = await _load_public_api_cases(case_ids, services)
     rows: List[Dict[str, str]] = []
     for item in loaded:
@@ -443,7 +422,6 @@ async def prepare_script_export_rows(
             "所属应用": item["project_name"],
             "协议类型": _HTTP if is_http else _TCP,
             "接口描述": getattr(case, "case_desc", None) or "",
-            # 公共接口：步骤名称与接口名称一致，导出时写回接口名称保证往返对齐
             "请求名称": case_name,
             "请求方式": method if is_http else "",
             "配置名称": getattr(step, "request_config_name", None) or "",
@@ -467,14 +445,14 @@ def build_script_workbook(rows: List[Dict[str, str]]) -> Workbook:
     sheet = workbook[workbook.sheetnames[0]]
     header = [cell.value for cell in sheet[1][: len(_SCRIPT_COLUMNS)]]
     if header != list(_SCRIPT_COLUMNS):
-        raise RuntimeError(f"模板表头已被改动，与程序定义不一致: 模板={header}, 期望={list(_SCRIPT_COLUMNS)}")
+        raise RuntimeError(f"模板表头已被改动，与预定义不一致: 模板={header}, 期望={list(_SCRIPT_COLUMNS)}")
     for row_index, row in enumerate(rows, start=_DATA_START_ROW):
         for col_index, column in enumerate(_SCRIPT_COLUMNS, start=1):
             sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
-    # 数据区从第 3 行起：行高 30、居中；列宽按全表内容自适应
+    # 数据区从第 3 行起：居中 + 统一行高；列宽按全表内容自适应
     if rows:
         _style_sheet_cells(sheet, start_row=_DATA_START_ROW, row_height=_ROW_HEIGHT)
-    _autosize_sheet_columns(sheet)
+    _auto_size_sheet_columns(sheet)
     return workbook
 
 
@@ -632,14 +610,15 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
 
         errors: List[str] = []
         case_name, project_name = cells["接口名称"], cells["所属应用"]
-        protocol = cells["协议类型"].upper()
+        protocol_raw = cells["协议类型"]
+        protocol = protocol_raw.upper()
         if not case_name:
             errors.append("「接口名称」不允许为空")
         if not project_name:
             errors.append("「所属应用」不允许为空")
         if protocol not in (_HTTP, _TCP):
-            invalid.append({"row": row_no, "reason": f"「协议类型」({cells['协议类型']})须为HTTP或TCP"})
-            continue
+            errors.append(f"「协议类型」({protocol_raw})须为HTTP或TCP")
+            protocol = None
 
         method, request_url, header_text = cells["请求方式"].upper(), cells["请求路径"], cells["请求头"]
         if protocol == _HTTP:
@@ -649,7 +628,7 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
                 errors.append(f"「请求方式」({method})非法, 合法集: {'/'.join(sorted(_HTTP_METHODS))}")
             if not request_url:
                 errors.append("HTTP协议时「请求路径」不允许为空")
-        else:
+        elif protocol == _TCP:
             if method:
                 errors.append("TCP协议时「请求方式」勿填")
             if request_url:
@@ -665,8 +644,12 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
         elif protocol == _TCP and args_type not in _TCP_ARGS:
             errors.append(f"TCP协议时「请求体类型」({args_type})仅支持: {'/'.join(sorted(_TCP_ARGS))}")
 
-        # args 非法时跳过请求体解析；其余列继续解析，保证单行错误一次给全
-        args_ok = args_type in _ARGS_TYPES and (protocol == _HTTP or args_type in _TCP_ARGS)
+        # 协议/请求体类型非法时跳过依赖项解析；其余列继续解析，保证单行错误一次给全
+        args_ok = (
+                protocol in (_HTTP, _TCP)
+                and args_type in _ARGS_TYPES
+                and (protocol == _HTTP or args_type in _TCP_ARGS)
+        )
         body_fields = _parse_body(args_type, cells["请求体"], errors) if args_ok else {}
         request_header = _parse_kv(header_text, errors, "请求头") if protocol == _HTTP else None
         defined_variables = _parse_kv(cells["变量"], errors, "变量")
@@ -805,9 +788,15 @@ async def import_script_rows(
                 await services.step_curd.create(obj_in={"case_id": new_case.id, "step_no": 1, **step_payload})
                 created += 1
             else:
+                existing_case = item["existing_case"]
                 await services.case_curd.update(
-                    id=item["existing_case"].id,
-                    obj_in={"case_desc": item["case_desc"], "case_tags": None},
+                    id=existing_case.id,
+                    obj_in={
+                        "case_desc": item["case_desc"],
+                        "case_tags": None,
+                        # 与 update_case 对齐：导入更新同样递增版本
+                        "case_version": (getattr(existing_case, "case_version", None) or 1) + 1,
+                    },
                 )
                 await services.step_curd.update(id=item["existing_step"].id, obj_in=step_payload)
                 updated += 1

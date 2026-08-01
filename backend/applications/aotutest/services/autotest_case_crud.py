@@ -121,7 +121,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param case_in: 用例创建 schema
         :return: 创建后的用例实例
-        :raises ParameterException: 标签列表为空(公共接口类型豁免)或格式非法
+        :raises ParameterException: 用户脚本未填标签，或公共脚本/公共接口误填标签，或标签格式非法
         :raises NotFoundException: 标签不存在
         :raises DataAlreadyExistsException: 同项目下用例名重复
         :raises DataBaseStorageException: 违反数据库约束

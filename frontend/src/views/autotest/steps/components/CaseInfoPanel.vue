@@ -538,7 +538,7 @@ watch(
     { immediate: true },
 )
 
-// 公共家族：正用例锁定 + 清空标签（与后端口径一致）
+// 公共接口：锁定正用例；公共脚本/公共接口：清空标签（与后端口径一致）
 watch(
     () => caseForm.case_type,
     (caseType) => {

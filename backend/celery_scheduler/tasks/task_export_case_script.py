@@ -36,6 +36,7 @@ async def _export_case_scripts_impl(case_ids: List[int], created_user: Optional[
     """
     services = await get_autotest_api_services()
     rows, invalid = await prepare_script_export_rows(case_ids=case_ids, services=services)
+    # 视图层下发前已全量校验；此处防御任务排队期间用例被改类型/步骤
     if invalid:
         LOGGER.warning(f"【Celery-Worker】异步导出脚本跳过不合规用例: {invalid}")
     if not rows:

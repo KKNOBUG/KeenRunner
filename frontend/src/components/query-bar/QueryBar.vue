@@ -76,7 +76,7 @@ const props = defineProps({
   },
   /**
    * dropdown 模式下追加的自定义项：[{ label, key, icon?, disabled? }]
-   * 选中后通过 action 事件回传 key（仅测试用例等页面扩展用）
+   * 选中后通过 action 事件回传 key
    */
   extraActions: {
     type: Array,

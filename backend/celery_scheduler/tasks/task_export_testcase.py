@@ -36,6 +36,7 @@ async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str
     """
     services = await get_autotest_api_services()
     cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
+    # 视图层下发前已全量校验；此处防御任务排队期间用例被改类型/步骤
     if invalid:
         LOGGER.warning(f"【Celery-Worker】异步导出跳过不合规用例: {invalid}")
     if not cases_data:

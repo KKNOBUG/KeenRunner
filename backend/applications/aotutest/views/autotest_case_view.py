@@ -359,7 +359,7 @@ async def export_testcases_xlsx(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    同步导出公共脚本用例的请求头与请求体为 xlsx（数量不超过 EXPORT_ASYNC_THRESHOLD）。
+    同步导出公共接口用例的请求头与请求体为 xlsx（数量不超过 EXPORT_ASYNC_THRESHOLD）。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试 CRUD 依赖聚合
@@ -398,7 +398,7 @@ async def export_testcases_async(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共脚本用例（数量超过 EXPORT_ASYNC_THRESHOLD）：校验通过后下发 Celery 任务，
+    异步导出公共接口用例（数量超过 EXPORT_ASYNC_THRESHOLD）：校验通过后下发 Celery 任务，
     任务生成 xlsx 并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表

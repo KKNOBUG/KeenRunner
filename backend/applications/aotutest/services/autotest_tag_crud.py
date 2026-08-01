@@ -121,11 +121,11 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         # 业务层验证：检查应用是否存在
         from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
         await AutoTestApiProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
-        # 业务层验证：同应用下相同大类及名称仅可存在一个状态为启用的标签信息
+        # 业务层验证：同应用下相同大类及名称仅允许一条记录（含已禁用，命中则恢复启用）
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
         existing_tag = await self.model.filter(
-            tag_project=tag_project, 
-            tag_mode=tag_mode, 
+            tag_project=tag_project,
+            tag_mode=tag_mode,
             tag_name=tag_name,
         ).first()
         if not existing_tag:

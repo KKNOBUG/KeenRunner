@@ -245,8 +245,14 @@ async function submitImportScript() {
   try {
     const res = await api.importCaseScript(formData)
     window.$message?.success?.(res?.message || '导入成功')
-    // 步骤树按 case 缓存；导入已改库，清空避免已打开编辑页继续展示旧树
-    useAutotestStore().clearAllStepTreeCache()
+    // 导入已改库：清步骤树缓存，并为仍打开的步骤编辑页签标记强制重载（KeepAlive 内存态不会仅靠清缓存失效）
+    const autotestStore = useAutotestStore()
+    autotestStore.clearAllStepTreeCache()
+    for (const tag of tagsStore.tags || []) {
+      if (!String(tag.path || '').startsWith('/autotest/steps')) continue
+      const { caseId, caseCode } = parseCaseFromPath(tag.path)
+      if (caseId || caseCode) autotestStore.markStepEditorFreshLoad(caseId, caseCode)
+    }
     importScriptShow.value = false
     $table.value?.handleSearch?.()
   } catch (err) {
@@ -273,25 +279,15 @@ const {
 const router = useRouter()
 const tagsStore = useTagsStore()
 
-/** 从页签 path 中解析 case_id（用于步骤编辑页签） */
-function getCaseIdFromPath(path) {
+/** 从页签 path 解析 case_id / case_code */
+function parseCaseFromPath(path) {
   try {
-    const idx = path.indexOf('?')
-    if (idx === -1) return null
-    return new URLSearchParams(path.slice(idx + 1)).get('case_id')
+    const idx = String(path).indexOf('?')
+    if (idx === -1) return { caseId: null, caseCode: null }
+    const q = new URLSearchParams(String(path).slice(idx + 1))
+    return { caseId: q.get('case_id'), caseCode: q.get('case_code') }
   } catch {
-    return null
-  }
-}
-
-/** 从页签 path 中解析 case_code */
-function getCaseCodeFromPath(path) {
-  try {
-    const idx = path.indexOf('?')
-    if (idx === -1) return null
-    return new URLSearchParams(path.slice(idx + 1)).get('case_code')
-  } catch {
-    return null
+    return { caseId: null, caseCode: null }
   }
 }
 
@@ -339,14 +335,14 @@ function openCaseEdit(row) {
     const match = (row.case_id != null && row.case_id !== '')
         ? tagsStore.tags.find((t) => {
           if (!t.path.startsWith('/autotest/steps')) return false
-          const cid = getCaseIdFromPath(t.path)
-          return cid != null && String(cid) === String(row.case_id)
+          const { caseId } = parseCaseFromPath(t.path)
+          return caseId != null && String(caseId) === String(row.case_id)
         })
         : row.case_code
             ? tagsStore.tags.find((t) => {
               if (!t.path.startsWith('/autotest/steps')) return false
-              const code = getCaseCodeFromPath(t.path)
-              return code != null && String(code) === String(row.case_code)
+              const { caseCode } = parseCaseFromPath(t.path)
+              return caseCode != null && String(caseCode) === String(row.case_code)
             })
             : null
     return match ? match.path : null
@@ -809,7 +805,7 @@ const columns = computed(() => {
               h(
                   NPopconfirm,
                   {
-                    onPositiveClick: () => handleDelete({case_id: row.case_id}, false),
+                    onPositiveClick: () => handleDelete({case_id: row.case_id}),
                     onNegativeClick: () => {},
                   },
                   {
