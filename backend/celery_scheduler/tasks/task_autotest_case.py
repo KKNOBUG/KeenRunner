@@ -34,10 +34,10 @@ _LOG_PREFIX = "【Celery-Worker】"
 
 def _is_only_once(task: Any) -> bool:
     """
-    判断任务周期策略是不是ONLY_ONCE
+    判断任务周期策略是否为ONLY_ONCE。
 
     :param task: 自动化任务模型实例
-    :return: 为ONLY_ONCE时返回 True
+    :return: 为ONLY_ONCE时返回True
     """
     expr = getattr(task, "task_periodic_expr", None)
     value = getattr(expr, "value", None) or expr
@@ -46,15 +46,10 @@ def _is_only_once(task: Any) -> bool:
 
 async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None) -> Dict[str, Any]:
     """
-    执行单个自动化任务的核心逻辑。
-
-    - 手动执行：ASYNC_EXEC，不因ONLY_ONCE关闭调度
-    - 扫描触发：SCHEDULE_EXEC；若task_periodic_expr=执行1次，执行后关闭调度
-    - 返回success：表示任务体是否无异常跑完，非用例业务全通过
-    - 业务成败写入last_execute_state，最后执行结果
+    执行单个自动化任务的核心逻辑，区分手动与扫描触发并写回执行状态。
 
     :param task_id: 自动化任务主键ID
-    :param report_type: 报告类型；为ASYNC_EXEC或「异步执行」时按手动执行处理
+    :param report_type: 报告类型；为ASYNC_EXEC或异步执行时按手动执行处理
     :return: 含success、task_id及批次执行汇总的字典
     :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """
@@ -201,7 +196,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
 @celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
 def scan_and_dispatch_autotest_tasks():
     """
-    Beat 入口：扫描启用中的 Cron 任务，到期则下发run_autotest_task。
+    Beat入口，扫描启用中的Cron任务，到期则下发run_autotest_task。
 
     :return: 扫描与下发统计字典
     """
@@ -217,11 +212,9 @@ def run_autotest_task(
     """
     执行单个自动化任务，由扫描或API触发。
 
-    执行观测记录由Worker信号维护；created_user随kwargs传到Worker，供task_prerun`写入执行记录，本函数不参与业务执行。
-
     :param task_id: 自动化任务主键ID
-    :param report_type: 报告类型（手动异步/调度）
-    :param created_user: 触发用户账号（可选）
+    :param report_type: 报告类型(手动异步/调度)
+    :param created_user: 触发用户账号(可选)
     :return: 任务执行结果字典
     """
     # created_user 随kwargs传到Worker，供task_prerun写入执行记录；此处不参与业务执行

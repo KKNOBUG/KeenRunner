@@ -5,8 +5,6 @@
 @Project : Krun
 @Module  : task_example
 @DateTime: 2026/1/27 16:25
-
-Celery 示例任务：用于验证 Worker 异步执行与文件写入。
 """
 import random
 import time
@@ -20,12 +18,12 @@ from backend.configure import GLOBAL_CONFIG
 @celery.task
 async def task_example(write_number: int = 100, write_message: Optional[str] = None):
     """
-    示例异步任务：向 task_example.txt 写入若干行文本，并模拟随机中断/异常。
+    示例异步任务，向task_example.txt写入若干行文本，并模拟随机中断/异常。
 
-    :param write_number: 计划写入行数，须为 1–100 的正整数
+    :param write_number: 计划写入行数，须为1–100的正整数
     :param write_message: 每行附加文案；为空时使用默认测试文案
     :return: None
-    :raises ValueError: write_number 非法
+    :raises ValueError: write_number非法
     :raises RuntimeError: 模拟意外事件触发时抛出
     """
     if not write_number or (0 > write_number > 100):

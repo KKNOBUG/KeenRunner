@@ -24,10 +24,10 @@ from backend.configure import LOGGER, PROJECT_CONFIG
 
 async def _export_case_scripts_impl(case_ids: List[int], created_user: Optional[str]) -> Dict[str, Any]:
     """
-    异步导出实现：加载校验合规用例 → 复制模板副本写入数据行 → 落盘到下载目录。
+    异步导出实现，加载合规用例后写入模板副本并落盘到下载目录。
 
     :param case_ids: 用例主键列表
-    :param created_user: 提交用户账号（仅作元信息随结果落入执行记录）
+    :param created_user: 提交用户账号(仅作元信息随结果落入执行记录)
     :return: 含file_name/file_path/case_count等的结果字典
     :raises ValueError: 无合规用例可导出时
     """
@@ -61,12 +61,12 @@ def export_case_scripts_task(
         report_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery同步入口：后台导出公共接口脚本为模板xlsx。
+    Celery同步入口，后台导出公共接口脚本为模板xlsx。
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号
-    :param report_type: 报告类型快照（供 Worker写执行记录；任务体本身不消费）
-    :return: 导出结果字典（落入task_summary）
+    :param report_type: 报告类型快照(供Worker写执行记录；任务体本身不消费)
+    :return: 导出结果字典(落入task_summary)
     :raises Exception: 导出失败时向上抛出，供Celery on_failure处理
     """
     try:

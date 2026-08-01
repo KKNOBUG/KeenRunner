@@ -5,9 +5,6 @@
 @Project : Krun
 @Module  : task_export_case_datagram.py
 @DateTime: 2026/7/27
-
-测试用例异步导出任务：导出数量超过阈值时由视图层下发，生成请求头与请求体的 xlsx 落盘，
-并将文件名/路径写入任务返回值（经 Worker on_success 落入 task_summary，供执行记录展示）。
 """
 from __future__ import annotations
 
@@ -27,10 +24,10 @@ from backend.configure import LOGGER, PROJECT_CONFIG
 
 async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str]) -> Dict[str, Any]:
     """
-    异步导出实现：加载校验合规用例 → 构建工作簿 → 落盘到下载目录。
+    异步导出实现，加载合规用例后构建工作簿并落盘到下载目录。
 
     :param case_ids: 用例主键列表
-    :param created_user: 提交用户账号（仅作元信息随结果落入执行记录）
+    :param created_user: 提交用户账号(仅作元信息随结果落入执行记录)
     :return: 含file_name/file_path/case_count等的结果字典
     :raises ValueError: 无合规用例可导出时
     """
@@ -64,13 +61,13 @@ def export_testcases_task(
         report_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery 同步入口：后台导出测试用例请求头与请求体为xlsx。
+    Celery同步入口，后台导出测试用例请求头与请求体为xlsx。
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号
-    :param report_type: 报告类型快照（供 Worker 写执行记录；任务体本身不消费）
-    :return: 导出结果字典（落入 task_summary）
-    :raises Exception: 导出失败时向上抛出，供 Celery on_failure 处理
+    :param report_type: 报告类型快照(供Worker写执行记录；任务体本身不消费)
+    :return: 导出结果字典(落入task_summary)
+    :raises Exception: 导出失败时向上抛出，供Celery on_failure处理
     """
     try:
         LOGGER.info(

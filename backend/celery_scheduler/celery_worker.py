@@ -97,13 +97,9 @@ _LOG_PREFIX = "【Celery-Worker】"
 @worker_process_init.connect
 def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     """
-    prefork 子进程初始化：清空事件循环池与 Tortoise 状态。
+    prefork子进程初始化，清空事件循环池与Tortoise状态。
 
-    子进程 fork 后只继承父进程内存，池的 loop_runner 线程不会在子进程中存在；
-    若沿用父进程池单例和 ``_tortoise_orm_initialized``，会导致
-    "attached to a different loop"。清空后子进程首次任务会重新建池并 init Tortoise。
-
-    :param kwargs: Celery signal 透传参数
+    :param kwargs: Celery signal透传参数
     :return: None
     """
     global _async_event_loop_pool
@@ -120,12 +116,9 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
 
 def get_async_event_loop_pool():
     """
-    惰性获取异步事件循环池，仅在 Worker 执行任务时创建。
+    惰性获取异步事件循环池，仅在Worker执行任务时创建。
 
-    避免 Web 进程 import celery_worker 时创建事件循环；prefork 子进程内由
-    ``worker_process_init`` 清空后，每个子进程在首次执行任务时再创建自己的池。
-
-    :return: AsyncEventLoopContextIOPool 单例实例
+    :return: AsyncEventLoopContextIOPool单例实例
     """
     global _async_event_loop_pool
     if _async_event_loop_pool is None:
@@ -145,17 +138,17 @@ async def _ensure_tortoise_then_create_task_record(
         request_kwargs: Optional[Dict[str, Any]] = None,
 ):
     """
-    同一协程内先初始化 Tortoise，再写入执行记录，保证同 loop。
+    同一协程内先初始化Tortoise，再写入执行记录，保证同loop。
 
-    :param celery_id: Celery 任务 UUID
-    :param celery_node: Celery 任务名（节点标识）
-    :param celery_trace_id: 链路 trace_id
-    :param task_id: 业务任务主键（来自 apply_async 的 __task_id）
-    :param celery_task_name: Celery 注册任务名
-    :param trigger_type: 触发类型枚举（手动/调度）
+    :param celery_id: Celery任务UUID
+    :param celery_node: Celery任务名(节点标识)
+    :param celery_trace_id: 链路trace_id
+    :param task_id: 业务任务主键(来自apply_async的__task_id)
+    :param celery_task_name: Celery注册任务名
+    :param trigger_type: 触发类型枚举(手动/调度)
     :param report_type: 报告类型枚举
-    :param created_user: 触发用户账号（可选）
-    :param request_kwargs: Celery 任务入参快照
+    :param created_user: 触发用户账号(可选)
+    :param request_kwargs: Celery任务入参快照
     :return: None
     """
     await init_tortoise_orm()
@@ -174,13 +167,10 @@ async def _ensure_tortoise_then_create_task_record(
 
 def _resolve_trigger_and_report(task: Task):
     """
-    从 Celery request 解析触发来源与报告类型。
+    从Celery request解析触发来源与报告类型。
 
-    约定：手动异步下发须在 kwargs（或 args[1]）携带 report_type=异步执行；
-    其余按定时执行落库。
-
-    :param task: 当前 Celery Task 实例
-    :return: (trigger_type, report_type) 元组
+    :param task: 当前Celery Task实例
+    :return: (trigger_type, report_type)元组
     """
     from backend.enums import AutoTestReportType, AutoTestTaskTriggerType
 
@@ -192,8 +182,8 @@ def _resolve_trigger_and_report(task: Task):
             report_type = args[1]
     report_val = getattr(report_type, "value", report_type)
     is_manual = (
-        report_type == AutoTestReportType.ASYNC_EXEC
-        or (isinstance(report_val, str) and report_val.strip() == AutoTestReportType.ASYNC_EXEC.value)
+            report_type == AutoTestReportType.ASYNC_EXEC
+            or (isinstance(report_val, str) and report_val.strip() == AutoTestReportType.ASYNC_EXEC.value)
     )
     if is_manual:
         return AutoTestTaskTriggerType.MANUAL, AutoTestReportType.ASYNC_EXEC
@@ -202,7 +192,7 @@ def _resolve_trigger_and_report(task: Task):
 
 def _to_jsonable(value: Any) -> Any:
     """
-    将任意对象转为可 JSON 落库结构（保留完整内容）。
+    将任意对象转为可JSON落库结构，保留完整内容。
 
     :param value: 原始对象
     :return: dict/list/基础类型，或兜底包装
@@ -231,17 +221,17 @@ async def _create_task_record(
         request_kwargs: Optional[Dict[str, Any]] = None,
 ):
     """
-    创建任务执行观测记录（RUNNING），并写入完整执行入参快照。
+    创建任务执行观测记录(RUNNING)，并写入完整执行入参快照。
 
-    :param celery_id: Celery 任务 UUID
-    :param celery_node: Celery 任务名（节点标识）
-    :param celery_trace_id: 链路 trace_id
+    :param celery_id: Celery任务UUID
+    :param celery_node: Celery任务名(节点标识)
+    :param celery_trace_id: 链路trace_id
     :param task_id: 业务任务主键
-    :param celery_task_name: Celery 注册任务名
+    :param celery_task_name: Celery注册任务名
     :param trigger_type: 触发类型
     :param report_type: 报告类型
     :param created_user: 触发用户；为空时回退任务创建人
-    :param request_kwargs: Celery 任务入参快照
+    :param request_kwargs: Celery任务入参快照
     :return: None
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
@@ -349,15 +339,13 @@ async def _update_task_record_on_end(
         batch_code: str = None,
 ):
     """
-    将执行记录更新为终态；``task_summary`` 写入信封契约（含 raw 原文）。
+    将执行记录更新为终态，task_summary写入信封契约(含raw原文)。
 
-    更新前会先确保 Tortoise 可用，避免长任务后连接失效导致状态卡在「正在执行」。
-
-    :param celery_id: Celery 任务 UUID
+    :param celery_id: Celery任务UUID
     :param success: 是否按成功终态落库
-    :param task_summary: 任务返回值（将规范化为信封）
+    :param task_summary: 任务返回值(将规范化为信封)
     :param traceback_str: 失败时的堆栈文本
-    :param batch_code: 批次号（可选；缺省时从信封抽取）
+    :param batch_code: 批次号(可选；缺省时从信封抽取)
     :return: None
     """
     if not celery_id:
@@ -411,14 +399,11 @@ async def _update_task_record_on_end(
 @task_prerun.connect
 def receiver_task_pre_run(task: Task, *args, **kwargs):
     """
-    任务执行前：按任务类型初始化 Tortoise，并写入执行记录（RUNNING）。
+    任务执行前按任务类型初始化Tortoise，并写入RUNNING执行记录。
 
-    扫描任务不写记录；非扫描任务通过单次
-    ``run(_ensure_tortoise_then_create_task_record)`` 保证 init 与写记录在同一 loop。
-
-    :param task: 即将执行的 Celery Task
-    :param args: signal 位置参数
-    :param kwargs: signal 关键字参数
+    :param task: 即将执行的Celery Task
+    :param args: signal位置参数
+    :param kwargs: signal关键字参数
     :return: None
     """
     try:
@@ -479,15 +464,11 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
 @setup_logging.connect
 def setup_loggers(loglevel=None, logfile=None, **kwargs):
     """
-    接管 Celery 日志：stdlib → InterceptHandler → Loguru。
+    接管Celery日志，将stdlib经InterceptHandler接入Loguru。
 
-    连接 setup_logging 后 Celery 不会再自己写 ``--logfile``，因此本函数负责：
-    1) 挂载 celery 专用文件 sink（--logfile / CELERY_LOGFILE / 本地默认路径）
-    2) 前台启动时挂载控制台 sink，避免本地命令行看不到日志
-
-    :param loglevel: 日志级别（int 或 Celery 传入值）
-    :param logfile: Celery --logfile 路径
-    :param kwargs: signal 其余参数
+    :param loglevel: 日志级别(int或Celery传入值)
+    :param logfile: Celery --logfile路径
+    :param kwargs: signal其余参数
     :return: None
     """
     global _celery_logfile_sink_id, _celery_console_sink_id
@@ -524,9 +505,9 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         return os.path.join(log_dir, name)
 
     target = (
-        (logfile or "").strip()
-        or (os.environ.get("CELERY_LOGFILE") or "").strip()
-        or _default_celery_logfile()
+            (logfile or "").strip()
+            or (os.environ.get("CELERY_LOGFILE") or "").strip()
+            or _default_celery_logfile()
     )
 
     if target:
@@ -576,9 +557,7 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
 
 def _ensure_celery_logfile_sink_after_fork():
     """
-    prefork 子进程重建 celery 文件/控制台 sink。
-
-    ``loguru_logging()`` 会 remove 全部 sink，需在 fork 后重新挂载。
+    prefork子进程重建celery文件与控制台sink。
 
     :return: None
     """
@@ -588,14 +567,16 @@ def _ensure_celery_logfile_sink_after_fork():
 
 
 class TaskRequest(Request):
-    """自定义 Request：从消息头恢复 Trace/Span，供 task_prerun 与日志 patcher 使用。"""
+    """
+    自定义Request，从消息头恢复Trace/Span供task_prerun与日志使用。
+    """
 
     def __init__(self, *args, **kwargs):
         """
-        构造 Request 并恢复追踪上下文。
+        构造Request并恢复追踪上下文。
 
-        :param args: Request 位置参数
-        :param kwargs: Request 关键字参数
+        :param args: Request位置参数
+        :param kwargs: Request关键字参数
         :return: None
         """
         super(TaskRequest, self).__init__(*args, **kwargs)
@@ -603,7 +584,7 @@ class TaskRequest(Request):
 
     def _restore_trace_context(self):
         """
-        从消息头绑定追踪上下文（无 span_id 时为本任务新建）。
+        从消息头绑定追踪上下文，无span_id时为本任务新建。
 
         :return: None
         """
@@ -613,31 +594,28 @@ class TaskRequest(Request):
 
 def create_celery():
     """
-    创建支持 async 任务体的 Celery 应用。
+    创建支持async任务体的Celery应用。
 
-    通过自定义 ``Task.__call__`` 将 async 任务投递到 ``AsyncEventLoopContextIOPool``
-    的 loop 执行，保证 Tortoise 与任务体在同一 loop（见模块头原理说明）。
-
-    :return: 配置完成的 Celery 应用实例
+    :return: 配置完成的Celery应用实例
     """
 
     class NewCelery(Celery):
         def __init__(self, *args, **kwargs):
             """
-            初始化 NewCelery。
+            初始化NewCelery。
 
-            :param args: Celery 位置参数
-            :param kwargs: Celery 关键字参数
+            :param args: Celery位置参数
+            :param kwargs: Celery关键字参数
             :return: None
             """
             super().__init__(*args, **kwargs)
 
         def send_task(self, *args, **kwargs):
             """
-            发送任务时注入 trace_id / span_id / parent_span_id 到 headers。
+            发送任务时注入trace_id/span_id/parent_span_id到headers。
 
-            :param args: send_task 位置参数
-            :param kwargs: send_task 关键字参数
+            :param args: send_task位置参数
+            :param kwargs: send_task关键字参数
             :return: AsyncResult
             """
             headers = {
@@ -650,13 +628,15 @@ def create_celery():
             return super().send_task(*args, **kwargs)
 
     class ContextTask(Task, ABC):
-        """自定义 Task：支持异步 run、apply_async 注入追踪头，结束时更新任务记录。"""
+        """
+        自定义Task，支持异步run、apply_async注入追踪头，结束时更新任务记录。
+        """
 
         Request = TaskRequest
 
         def delay(self, *args, **kwargs):
             """
-            便捷下发任务（等价于 apply_async）。
+            便捷下发任务，等价于apply_async。
 
             :param args: 任务位置参数
             :param kwargs: 任务关键字参数
@@ -667,18 +647,16 @@ def create_celery():
         def apply_async(self, args=None, kwargs=None, task_id=None, producer=None,
                         link=None, link_error=None, shadow=None, **options):
             """
-            下发任务时注入追踪头与 ``__task_id``（业务任务主键）。
-
-            Worker 侧 ``task_prerun`` 用 ``__task_id`` 写入执行记录。
+            下发任务时注入追踪头与__task_id(业务任务主键)。
 
             :param args: 任务位置参数
             :param kwargs: 任务关键字参数
-            :param task_id: Celery 任务 UUID（可选）
+            :param task_id: Celery任务UUID(可选)
             :param producer: 生产者
             :param link: 成功回调
             :param link_error: 失败回调
             :param shadow: 影子任务名
-            :param options: 其余选项（可含 __task_id）
+            :param options: 其余选项(可含__task_id)
             :return: AsyncResult
             """
 
@@ -699,14 +677,14 @@ def create_celery():
             )
 
         def handel_task_record(
-            self,
-            success: bool,
-            task_summary: Any = None,
-            traceback_str: str = None,
-            batch_code: str = None,
+                self,
+                success: bool,
+                task_summary: Any = None,
+                traceback_str: str = None,
+                batch_code: str = None,
         ):
             """
-            更新观测记录终态；扫描任务跳过。
+            更新观测记录终态，扫描任务跳过。
 
             :param success: 是否按成功终态落库
             :param task_summary: 完整响应对象
@@ -736,16 +714,13 @@ def create_celery():
 
         def on_success(self, retval, task_id, args, kwargs):
             """
-            Celery 任务体未抛异常时回调。
-
-            业务侧可能 return ``{"success": False}``（流程跑完但业务失败/早退），
-            此时记录状态应按失败落库，不能一律标「成功」。
+            Celery任务体未抛异常时回调，业务返回success为False时按失败落库。
 
             :param retval: 任务返回值
-            :param task_id: Celery 任务 UUID
+            :param task_id: Celery任务UUID
             :param args: 任务位置参数
             :param kwargs: 任务关键字参数
-            :return: 父类 on_success 返回值
+            :return: 父类on_success返回值
             """
             pipeline_ok = not (isinstance(retval, dict) and retval.get("success") is False)
             summary_bits = ""
@@ -769,14 +744,14 @@ def create_celery():
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):
             """
-            任务抛异常：完整错误写入 task_summary，堆栈写入 task_error，状态=失败。
+            任务抛异常时完整错误写入task_summary，堆栈写入task_error，状态为失败。
 
             :param exc: 异常实例
-            :param task_id: Celery 任务 UUID
+            :param task_id: Celery任务UUID
             :param args: 任务位置参数
             :param kwargs: 任务关键字参数
             :param einfo: ExceptionInfo
-            :return: 父类 on_failure 返回值
+            :return: 父类on_failure返回值
             """
             LOGGER.error(
                 f"{_LOG_PREFIX}【span_id={get_span_id()}】任务执行失败: "
@@ -799,10 +774,7 @@ def create_celery():
 
         def __call__(self, *args, **kwargs):
             """
-            执行任务：绑定 Trace/Span，async 任务投递到池的 loop。
-
-            非扫描任务在 task_prerun 里已通过 ``_ensure_tortoise_then_create_task_record``
-            完成 init+写记录；此处 ``ensure_tortoise_orm_initialized()`` 用于扫描任务或兜底。
+            执行任务，绑定Trace/Span，async任务投递到池的loop。
 
             :param args: 任务位置参数
             :param kwargs: 任务关键字参数

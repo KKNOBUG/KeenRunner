@@ -5,8 +5,6 @@
 @Project : Krun
 @Module  : task_execute_assign_case.py
 @DateTime: 2026/3/20
-
-指定用例步骤树异步执行任务（支持多数据源参数化与批次号归并）。
 """
 from __future__ import annotations
 
@@ -27,8 +25,8 @@ def _normalize_initial_variables(raw: Optional[List[Dict[str, Any]]]) -> List[St
     """
     将初始变量规范为StepVariablesBase列表。
 
-    :param raw: 原始变量列表（dict或已是schema）
-    :return: StepVariablesBase 列表；空入参返回 []
+    :param raw: 原始变量列表(dict或已是schema)
+    :return: StepVariablesBase列表；空入参返回[]
     """
     if not raw:
         return []
@@ -43,7 +41,7 @@ def _normalize_initial_variables(raw: Optional[List[Dict[str, Any]]]) -> List[St
 
 def _new_batch_code() -> str:
     """
-    生成一次执行的批次号（时间戳-UUID）。
+    生成一次执行的批次号(时间戳-UUID)。
 
     :return: 批次号字符串
     """
@@ -60,9 +58,7 @@ async def _execute_step_tree_impl(
         created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    后台执行单用例步骤树（支持多数据源参数化）。
-
-    Worker无HTTP鉴权上下文时，用created_user写入CTX_USERNAME埋点。
+    后台执行单用例步骤树，支持多数据源参数化。
 
     :param case_id: 用例主键ID
     :param initial_variables: 初始会话变量列表
@@ -71,8 +67,7 @@ async def _execute_step_tree_impl(
     :param selected_dataset_names: 选中的数据源名称列表；空则单次执行
     :param steps_execute_config: 步骤执行环境配置覆盖
     :param created_user: 提交任务的用户账号
-    :return: 批次字段 total_cases/success_cases/failed_cases/success_rate(%)；
-             details[] 为各轮 execute_single_case（含步骤级 *_steps/passed_ratio）
+    :return: 批次字段total_cases/success_cases/failed_cases/success_rate(%)；details[]为各轮execute_single_case(含步骤级*_steps/passed_ratio)
     """
     # Worker 进程无 HTTP 鉴权上下文，用提交任务时传入的用户账号埋点
     if created_user:
@@ -145,9 +140,7 @@ def execute_step_tree_task(
         created_user: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Celery同步入口：后台执行单用例步骤树（默认SCHEDULE_EXEC）。
-
-    内部通过run_async进入Worker池执行协程。
+    Celery同步入口，后台执行单用例步骤树(默认SCHEDULE_EXEC)。
 
     :param case_id: 用例主键ID
     :param initial_variables: 初始会话变量列表

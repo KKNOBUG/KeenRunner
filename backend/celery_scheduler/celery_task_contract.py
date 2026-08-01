@@ -35,14 +35,18 @@ CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
 
 
 def resolve_task_meta(celery_task_name: Optional[str]) -> Dict[str, Any]:
-    """按Celery任务名解析task_type/默认task_name。"""
+    """
+    按Celery任务名解析task_type与默认task_name。
+    """
     if not celery_task_name:
         return {}
     return dict(CELERY_TASK_META.get(celery_task_name) or {})
 
 
 def path_to_storage_key(file_path: str) -> str:
-    """绝对路径 → 相对 OUTPUT_DOWNLOAD_DIR 的 storage_key。"""
+    """
+    将绝对路径转为相对OUTPUT_DOWNLOAD_DIR的storage_key。
+    """
     if not file_path:
         return ""
     abs_path = os.path.abspath(file_path)
@@ -53,7 +57,9 @@ def path_to_storage_key(file_path: str) -> str:
 
 
 def resolve_storage_path(storage_key: str) -> str:
-    """storage_key → 绝对路径（限制在下载根目录内）。"""
+    """
+    将storage_key解析为下载根目录内的绝对路径。
+    """
     key = (storage_key or "").strip().lstrip("/").replace("\\", "/")
     if not key or ".." in key.split("/"):
         raise ValueError("非法 storage_key")
@@ -145,7 +151,9 @@ def _attachments_from_raw(raw: Any) -> List[Dict[str, Any]]:
 
 
 def normalize_task_summary(retval: Any, *, pipeline_ok: bool = True) -> Dict[str, Any]:
-    """将任务返回值规范为信封；原文进入raw。"""
+    """
+    将任务返回值规范为信封结构，原文进入raw。
+    """
     data = _to_jsonable(retval)
     if _is_envelope(data):
         attachments = data.get("attachments")
@@ -186,7 +194,9 @@ def normalize_task_summary(retval: Any, *, pipeline_ok: bool = True) -> Dict[str
 
 
 def list_attachments_from_summary(task_summary: Any) -> List[Dict[str, Any]]:
-    """从已落库task_summary取attachments。"""
+    """
+    从已落库task_summary提取attachments。
+    """
     if not isinstance(task_summary, dict):
         return []
     items = task_summary.get("attachments")
