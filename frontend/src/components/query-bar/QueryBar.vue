@@ -74,9 +74,17 @@ const props = defineProps({
     default: 'inline',
     validator: (v) => ['inline', 'dropdown'].includes(v),
   },
+  /**
+   * dropdown 模式下追加的自定义项：[{ label, key, icon?, disabled? }]
+   * 选中后通过 action 事件回传 key（仅测试用例等页面扩展用）
+   */
+  extraActions: {
+    type: Array,
+    default: () => [],
+  },
 })
 
-const emit = defineEmits(['search', 'reset', 'create', 'delete'])
+const emit = defineEmits(['search', 'reset', 'create', 'delete', 'action'])
 
 /** 与 naive common heightSmall（28px）一致，使默认 medium 的输入/选择与 small 按钮同高 */
 const queryBarThemeOverrides = {
@@ -91,7 +99,12 @@ const queryBarThemeOverrides = {
 }
 
 const hasAnyAction = computed(
-    () => props.addReset || props.addSearch || props.addCreate || props.addDelete
+    () =>
+      props.addReset ||
+      props.addSearch ||
+      props.addCreate ||
+      props.addDelete ||
+      (Array.isArray(props.extraActions) && props.extraActions.length > 0)
 )
 
 const dropdownOptions = computed(() => {
@@ -124,6 +137,15 @@ const dropdownOptions = computed(() => {
       icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
     })
   }
+  for (const item of props.extraActions || []) {
+    if (!item?.key || !item?.label) continue
+    opts.push({
+      label: item.label,
+      key: item.key,
+      icon: item.icon,
+      disabled: item.disabled,
+    })
+  }
   return opts
 })
 
@@ -132,5 +154,6 @@ function onDropdownSelect(key) {
   else if (key === 'search') emit('search')
   else if (key === 'create') emit('create')
   else if (key === 'delete') emit('delete')
+  else emit('action', key)
 }
 </script>

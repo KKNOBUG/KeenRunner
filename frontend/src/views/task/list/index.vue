@@ -8,6 +8,7 @@ import {
   NInput,
   NModal,
   NPagination,
+  NPopconfirm,
   NSelect,
   NSpin,
   NTag,
@@ -514,7 +515,7 @@ const columns = computed(() => {
   {
     title: '操作',
     key: 'actions',
-    width: 80,
+    width: 120,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -550,16 +551,9 @@ const columns = computed(() => {
           icon: renderIcon('material-symbols:history', {size: 16}),
           onClick: () => openHistory(row),
         },
-        {
-          label: '删除',
-          key: 'delete',
-          icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-          onClick: () => {
-            if (window.confirm('确定删除该任务吗？')) handleDelete({task_id: row.task_id}, false)
-          },
-        },
       ]
-      return [
+      // 删除：NPopconfirm（对齐用户管理 / 测试用例），独立按钮触发，不放在「更多」内
+      const actions = [
         h(
             NButton,
             {
@@ -571,6 +565,29 @@ const columns = computed(() => {
             {
               default: () => '执行',
               icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+            },
+        ),
+        h(
+            NPopconfirm,
+            {
+              onPositiveClick: () => handleDelete({task_id: row.task_id}),
+              onNegativeClick: () => {},
+            },
+            {
+              trigger: () =>
+                  h(
+                      NButton,
+                      {
+                        size: 'tiny',
+                        quaternary: true,
+                        type: 'error',
+                      },
+                      {
+                        default: () => '删除',
+                        icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                      },
+                  ),
+              default: () => h('div', {}, '确定删除该任务吗?'),
             },
         ),
         h(
@@ -597,6 +614,7 @@ const columns = computed(() => {
             },
         ),
       ]
+      return actions
     },
   },
 ]

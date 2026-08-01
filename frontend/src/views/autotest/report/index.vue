@@ -363,7 +363,7 @@ const batchColumns = computed(() => [
         h(
           NButton,
           {
-            size: 'small',
+            size: 'tiny',
             type: 'info',
             quaternary: true,
             onClick: () => openBatchDetail(row),
@@ -388,7 +388,7 @@ const batchColumns = computed(() => [
               withDirectives(
                 h(
                   NButton,
-                  { size: 'small', type: 'error', quaternary: true },
+                  { size: 'tiny', type: 'error', quaternary: true },
                   {
                     default: () => '删除',
                     icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
@@ -505,7 +505,7 @@ const datasetColumns = [
         h(
           NButton,
           {
-            size: 'small',
+            size: 'tiny',
             type: 'info',
             quaternary: true,
             onClick: () => openDetailDrawer(row),
@@ -525,7 +525,7 @@ const datasetColumns = [
               withDirectives(
                 h(
                   NButton,
-                  { size: 'small', type: 'error', quaternary: true },
+                  { size: 'tiny', type: 'error', quaternary: true },
                   {
                     default: () => '删除',
                     icon: renderIcon('material-symbols:delete-outline', { size: 16 }),

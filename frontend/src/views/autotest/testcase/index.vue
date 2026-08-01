@@ -1,7 +1,7 @@
 <script setup>
 import {h, onMounted, ref, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NAlert, NSpace} from 'naive-ui'
+import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NAlert, NSpace, NDatePicker, NPopconfirm} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
@@ -19,8 +19,37 @@ defineOptions({name: '测试用例'})
 
 const $table = ref(null)
 const queryItems = ref({
-  case_tags: [] // 初始化为空数组
+  case_tags: [], // 初始化为空数组
+  date_from: null,
+  date_to: null,
 })
+
+/** 创建日期范围（对齐测试报告「执行日期」：daterange → date_from / date_to） */
+const createdDateRange = ref(null)
+const formatDateForQuery = (ts) => {
+  if (ts == null) return null
+  const d = new Date(ts)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+const handleCreatedDateRangeChange = (value) => {
+  if (value == null) {
+    queryItems.value.date_from = null
+    queryItems.value.date_to = null
+  } else {
+    queryItems.value.date_from = formatDateForQuery(value[0])
+    queryItems.value.date_to = formatDateForQuery(value[1])
+  }
+}
+// CrudTable 重置后同步清空日期选择器
+watch(
+    () => [queryItems.value.date_from, queryItems.value.date_to],
+    ([from, to]) => {
+      if (from == null && to == null) {
+        createdDateRange.value = null
+      }
+    },
+)
 
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
@@ -35,7 +64,31 @@ const queryBarProps = computed(() => ({
   addCreate: canCreateCase.value,
   addDelete: true,
   actionMode: 'dropdown',
+  /** 仅测试用例：导出/导入收纳进「操作」下拉 */
+  extraActions: [
+    {
+      label: '导出报文',
+      key: 'exportData',
+      icon: renderIcon('material-symbols:download', { size: 16 }),
+    },
+    {
+      label: '导出接口',
+      key: 'exportScript',
+      icon: renderIcon('material-symbols:download', { size: 16 }),
+    },
+    {
+      label: '导入接口',
+      key: 'importScript',
+      icon: renderIcon('material-symbols:upload', { size: 16 }),
+    },
+  ],
 }))
+
+function onQueryBarAction(key) {
+  if (key === 'exportData') handleExport()
+  else if (key === 'exportScript') handleExportScript()
+  else if (key === 'importScript') handleImportScript()
+}
 
 const checkedRowKeys = ref([])
 
@@ -564,10 +617,9 @@ const columns = computed(() => {
         let mode = "info"
         let round = true
         let bordered = true
-        if (row.case_type === '公共脚本') {
+        // 公共脚本 / 公共接口徽章对齐为 warning
+        if (row.case_type === '公共脚本' || row.case_type === '公共接口') {
           mode = 'warning'
-        } else if (row.case_type === '公共接口') {
-          mode = 'success'
         }
         return h(
             NTag,
@@ -708,7 +760,7 @@ const columns = computed(() => {
     {
       title: '操作',
       key: 'actions',
-      width: 80,
+      width: 120,
       align: 'center',
       fixed: 'right',
       render(row) {
@@ -734,19 +786,8 @@ const columns = computed(() => {
           icon: renderIcon('material-symbols:history', {size: 16}),
           onClick: () => openHistoryDrawer(row),
         })
-        if (hasCaseApiPermission('delete', '/autotest/case/delete')) {
-          dropdownOptions.push({
-            label: '删除',
-            key: 'delete',
-            icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-            onClick: () => {
-              if (window.confirm('确定删除该用例吗?')) {
-                handleDelete({case_id: row.case_id}, false)
-              }
-            },
-          })
-        }
-        return [
+        // 删除使用 NPopconfirm（对齐用户管理）；需独立按钮作触发器，故不放在「更多」内
+        const actions = [
           h(
               NButton,
               {
@@ -762,35 +803,65 @@ const columns = computed(() => {
                 icon: renderIcon('material-symbols:play-arrow', {size: 16}),
               }
           ),
-          h(
-              NDropdown,
-              {
-                trigger: 'click',
-                options: dropdownOptions.map((opt) => ({
-                  label: opt.label,
-                  key: opt.key,
-                  icon: opt.icon,
-                  disabled: opt.disabled,
-                })),
-                onSelect: (key) => dropdownOptions.find((o) => o.key === key)?.onClick?.(),
-              },
-              {
-                default: () =>
-                    h(
-                        NButton,
-                        {
-                          size: 'tiny',
-                          quaternary: true,
-                          type: 'default',
-                        },
-                        {
-                          default: () => '更多',
-                          icon: renderIcon('material-symbols:more-horiz', {size: 16}),
-                        }
-                    ),
-              }
-          ),
         ]
+        if (hasCaseApiPermission('delete', '/autotest/case/delete')) {
+          actions.push(
+              h(
+                  NPopconfirm,
+                  {
+                    onPositiveClick: () => handleDelete({case_id: row.case_id}, false),
+                    onNegativeClick: () => {},
+                  },
+                  {
+                    trigger: () =>
+                        h(
+                            NButton,
+                            {
+                              size: 'tiny',
+                              quaternary: true,
+                              type: 'error',
+                            },
+                            {
+                              default: () => '删除',
+                              icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                            }
+                        ),
+                    default: () => h('div', {}, '确定删除该用例吗?'),
+                  }
+              )
+          )
+        }
+        actions.push(
+            h(
+                NDropdown,
+                {
+                  trigger: 'click',
+                  options: dropdownOptions.map((opt) => ({
+                    label: opt.label,
+                    key: opt.key,
+                    icon: opt.icon,
+                    disabled: opt.disabled,
+                  })),
+                  onSelect: (key) => dropdownOptions.find((o) => o.key === key)?.onClick?.(),
+                },
+                {
+                  default: () =>
+                      h(
+                          NButton,
+                          {
+                            size: 'tiny',
+                            quaternary: true,
+                            type: 'default',
+                          },
+                          {
+                            default: () => '更多',
+                            icon: renderIcon('material-symbols:more-horiz', {size: 16}),
+                          }
+                      ),
+                }
+            )
+        )
+        return actions
       },
     },
   ]
@@ -817,6 +888,7 @@ const columns = computed(() => {
         @pagination-meta="onListPaginationMeta"
         @query-bar-create="customHandleAdd"
         @query-bar-delete="handleBatchDelete"
+        @query-bar-action="onQueryBarAction"
     >
 
       <!--  搜索  -->
@@ -916,6 +988,16 @@ const columns = computed(() => {
             </template>
           </NPopover>
         </QueryBarItem>
+        <QueryBarItem label="创建日期：">
+          <NDatePicker
+              v-model:value="createdDateRange"
+              type="daterange"
+              clearable
+              class="query-input"
+              placeholder="请选择创建日期范围"
+              @update:value="handleCreatedDateRangeChange"
+          />
+        </QueryBarItem>
         <QueryBarItem label="创建人员：">
           <NInput
               v-model:value="queryItems.created_user"
@@ -936,13 +1018,6 @@ const columns = computed(() => {
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
-      </template>
-
-      <!--  导出按钮：导出勾选用例的请求头与请求体  -->
-      <template #queryBarAfterActions>
-        <NButton type="primary" @click="handleExport">导出数据</NButton>
-        <NButton type="primary" style="margin-left: 12px" @click="handleExportScript">导出脚本</NButton>
-        <NButton type="primary" style="margin-left: 12px" @click="handleImportScript">导入脚本</NButton>
       </template>
 
     </CrudTable>

@@ -263,6 +263,17 @@ async def search_cases(
             q &= Q(created_user__iexact=case_in.created_user)
         if case_in.updated_user:
             q &= Q(updated_user__iexact=case_in.updated_user)
+        # 创建时间范围：按 created_time 筛选，仅日期时补全为当天起止
+        if case_in.date_from:
+            date_from = case_in.date_from.strip()
+            if len(date_from) == 10:  # YYYY-MM-DD
+                date_from = f"{date_from} 00:00:00"
+            q &= Q(created_time__gte=date_from)
+        if case_in.date_to:
+            date_to = case_in.date_to.strip()
+            if len(date_to) == 10:
+                date_to = f"{date_to} 23:59:59"
+            q &= Q(created_time__lte=date_to)
         q &= Q(state=case_in.state)
         total, instances = await services.case_curd.select_cases(
             search=q,

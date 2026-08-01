@@ -8,6 +8,7 @@
         @reset="handleReset"
         @create="emit('queryBarCreate')"
         @delete="emit('queryBarDelete')"
+        @action="emit('queryBarAction', $event)"
     >
       <slot name="queryBar" />
       <template #afterActions>
@@ -102,6 +103,7 @@ const emit = defineEmits([
   'onDataChange',
   'queryBarCreate',
   'queryBarDelete',
+  'queryBarAction',
   'update:checkedRowKeys',
   /** 远程分页数据加载完成后发出，便于父组件渲染跨页「序号」列 */
   'paginationMeta',
