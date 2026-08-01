@@ -29,13 +29,13 @@ file_transfer = APIRouter()
 
 @file_transfer.post("/upload", summary="上传文件")
 async def upload_file(
-        file: UploadFile = File(..., title="文件对象"),
-        path: Union[str, Path] = Form(..., title="文件上传目的地"),
-        add_timestamp: bool = Form(default=True, title="是否为上传的文件添加时间戳"),
-        check_filename: bool = Form(default=True, title="是否检查文件名称是否符合规范"),
-        check_filetype: bool = Form(default=True, title="是否检查文件后缀是否符合规范"),
-        check_filesize: bool = Form(default=True, title="是否检查文件体积是否符合规范"),
-        upload_file_size: FileSizeEum = Form(default=FileSizeEum.TINY.value, title="文件的体积限制"),
+        file: UploadFile = File(..., description="文件对象"),
+        path: Union[str, Path] = Form(..., description="文件上传目的地"),
+        add_timestamp: bool = Form(default=True, description="是否为上传的文件添加时间戳"),
+        check_filename: bool = Form(default=True, description="是否检查文件名称是否符合规范"),
+        check_filetype: bool = Form(default=True, description="是否检查文件后缀是否符合规范"),
+        check_filesize: bool = Form(default=True, description="是否检查文件体积是否符合规范"),
+        upload_file_size: FileSizeEum = Form(default=FileSizeEum.TINY.value, description="文件的体积限制"),
 ):
     """
     上传文件。
@@ -65,7 +65,7 @@ async def upload_file(
 
 
 @file_transfer.post("/download", summary="下载文件")
-async def download_file(path: Union[str, Path] = Form(..., title="文件下载路径")):
+async def download_file(path: Union[str, Path] = Form(..., description="文件下载路径")):
     """
     下载文件。
 
@@ -85,7 +85,7 @@ async def download_file(path: Union[str, Path] = Form(..., title="文件下载�
 
 
 @file_transfer.post("/read", summary="读取文件")
-async def read_file(path: Union[str, Path] = Form(..., title="文件读取路径")):
+async def read_file(path: Union[str, Path] = Form(..., description="文件读取路径")):
     """
     读取文件。
 
@@ -105,8 +105,8 @@ async def read_file(path: Union[str, Path] = Form(..., title="文件读取路径
 
 @file_transfer.post("/move", summary="移动文件")
 async def move_file(
-        src_path: Union[str, Path] = Form(..., title="文件原始路径"),
-        dst_path: Union[str, Path] = Form(..., title="文件目标路径"),
+        src_path: Union[str, Path] = Form(..., description="文件原始路径"),
+        dst_path: Union[str, Path] = Form(..., description="文件目标路径"),
 ):
     """
     移动文件。

@@ -58,7 +58,7 @@ autotest_case = APIRouter()
 EXPORT_ASYNC_THRESHOLD = 10
 
 
-@autotest_case.post("/create", summary="API自动化测试-新增用例")
+@autotest_case.post("/create", summary="新增用例")
 async def create_case(
         case_in: AutoTestApiCaseCreate = Body(..., description="用例信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -92,7 +92,7 @@ async def create_case(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_case.delete("/delete", summary="API自动化测试-按id或code删除用例")
+@autotest_case.delete("/delete", summary="删除用例", description="根据id或code删除用例信息")
 async def delete_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -128,7 +128,7 @@ async def delete_case(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_case.post("/update", summary="API自动化测试-按id或code更新除用例")
+@autotest_case.post("/update", summary="更新用例", description="根据id或code更新用例信息")
 async def update_case(
         case_in: AutoTestApiCaseUpdate = Body(..., description="用例信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -162,7 +162,7 @@ async def update_case(
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
-@autotest_case.get("/get", summary="API自动化测试-按id或code查询用例")
+@autotest_case.get("/get", summary="查询用例", description="根据id或code查询用例信息")
 async def get_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -223,7 +223,7 @@ async def get_case(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_case.post("/search", summary="API自动化测试-按条件查询用例")
+@autotest_case.post("/search", summary="查询用例列表", description="根据条件分页查询用例列表信息(Body)")
 async def search_cases(
         case_in: AutoTestApiCaseSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -325,7 +325,7 @@ async def search_cases(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.get("/request_step_selected_project", summary="API自动化测试-按id或code获取步骤树中请求步骤选择的应用ID列表", )
+@autotest_case.get("/request_step_selected_project", summary="查询请求步骤应用", description="根据id或code获取步骤树中请求步骤选择的应用ID列表")
 async def get_request_step_project_ids(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -354,7 +354,7 @@ async def get_request_step_project_ids(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.post("/export_datagram_sync", summary="API自动化测试-导出公共接口用例请求头与请求体为xlsx(同步)")
+@autotest_case.post("/export_datagram_sync", summary="导出公共接口报文", description="导出公共接口用例请求头与请求体为xlsx(同步)")
 async def export_testcases_xlsx(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -393,7 +393,7 @@ async def export_testcases_xlsx(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_datagram_async", summary="API自动化测试-异步导出公共接口用例请求头与请求体为xlsx")
+@autotest_case.post("/export_datagram_async", summary="异步导出公共接口报文", description="异步导出公共接口用例请求头与请求体为xlsx")
 async def export_testcases_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -433,7 +433,7 @@ async def export_testcases_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_script_sync", summary="API自动化测试-导出公共接口脚本为模板xlsx(同步)")
+@autotest_case.post("/export_script_sync", summary="导出公共接口脚本", description="导出公共接口脚本为模板xlsx(同步)")
 async def export_case_scripts_xlsx(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -473,7 +473,7 @@ async def export_case_scripts_xlsx(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_script_async", summary="API自动化测试-异步导出公共接口脚本为模板xlsx")
+@autotest_case.post("/export_script_async", summary="异步导出公共接口脚本", description="异步导出公共接口脚本为模板xlsx")
 async def export_case_scripts_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -513,7 +513,7 @@ async def export_case_scripts_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/import_script", summary="API自动化测试-导入公共接口脚本(模板xlsx)")
+@autotest_case.post("/import_script", summary="导入公共接口脚本", description="从模板xlsx导入公共接口脚本")
 async def import_case_scripts(
         file: UploadFile = File(..., description="公共接口导入导出模板xlsx(仅读取第1个sheet页)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

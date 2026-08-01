@@ -53,7 +53,7 @@ async def create_role(
 
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
 async def delete_role_one(
-        role_id: int = Query(..., description="角色ID"),
+        role_id: int = Query(..., description="角色id"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
@@ -75,9 +75,9 @@ async def delete_role_one(
         return FailureResponse(message=f"新增失败，异常描述:{e}")
 
 
-@role.post("/deletes", summary="批量删除角色", description="根据角色ID或代码列表删除")
+@role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
 async def delete_roles_batch(
-        body_in: RoleBatchDelete = Body(..., description="批量删除参数"),
+        body_in: RoleBatchDelete = Body(..., description="id或code列表"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
@@ -120,7 +120,7 @@ async def update_role(
     return SuccessResponse(data=data)
 
 
-@role.get("/get", summary="查看角色")
+@role.get("/get", summary="查看角色", description="根据角色id或code查看角色信息")
 async def get_role_by(
         code: str = Form(default=None, description="角色名称"),
         name: str = Form(default=None, description="角色代码"),
@@ -144,12 +144,12 @@ async def get_role_by(
     return SuccessResponse(data=data)
 
 
-@role.get("/list", summary="查看角色列表")
+@role.get("/list", summary="查看角色列表", description="根据角色id或code查看角色信息")
 async def list_role(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
-        name: str = Query(default="", description="角色名称，用于查询"),
+        name: str = Query(default="", description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
@@ -172,9 +172,9 @@ async def list_role(
     return SuccessResponse(data=data, total=total)
 
 
-@role.get("/authorized", summary="查看角色权限")
+@role.get("/authorized", summary="查看角色权限", description="根据角色id查看角色权限")
 async def get_role_authorized(
-        id: int = Query(..., description="角色ID"),
+        id: int = Query(..., description="角色id"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
@@ -189,7 +189,7 @@ async def get_role_authorized(
     return SuccessResponse(data=data)
 
 
-@role.post("/authorized", summary="更新角色权限")
+@role.post("/authorized", summary="更新角色权限", description="根据角色id修改角色权限")
 async def update_role_authorized(
         role_in: RoleUpdateMenusRouters,
         role_crud: RoleCrud = Depends(get_role_crud),

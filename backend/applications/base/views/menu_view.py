@@ -61,10 +61,10 @@ def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     return out
 
 
-@menu.post("/list", summary="查看菜单列表")
+@menu.post("/list", summary="查看菜单列表", description="根据name或type查询菜单信息")
 async def list_menu(
-        name: str = Query(default="", description="菜单名称（子串匹配）"),
-        menu_type: str = Query(default="", description="菜单类型：catalog / menu"),
+        name: str = Query(default="", description="菜单名称(子串匹配)"),
+        menu_type: str = Query(default="", description="菜单类型：catalog/menu"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
@@ -75,6 +75,7 @@ async def list_menu(
     :param menu_crud: 菜单 CRUD 服务
     :return: 统一 HTTP 响应
     """
+
     async def get_menu_with_children(menu_id: int):
         """
         递归获取菜单及其子菜单。

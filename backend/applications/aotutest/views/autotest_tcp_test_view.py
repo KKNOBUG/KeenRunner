@@ -5,14 +5,6 @@
 @Project : Krun
 @Module  : autotest_tcp_test_view
 @DateTime: 2026/7/21 10:00:00
-
-TCP 接口测试服务器：提供两个独立的 TCP 服务端口，供 TCP 请求步骤调试使用。
-
-- JSON 端口（默认 9999）：接收 JSON 格式请求报文（银行账户交易查询），返回 XML 格式响应
-- XML  端口（默认 9998）：接收 XML  格式请求报文（贷款申请），       返回 XML 格式响应
-
-两个端口的响应均为 XML 格式，包含 10+ 字段且存在数组形式属性。
-帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或 RAW（无前缀）。
 """
 import asyncio
 import datetime
@@ -55,12 +47,7 @@ class _TcpTestServer:
 
     # -- 生命周期 ----------------------------------------------------------
 
-    async def start(
-        self,
-        host: str = "0.0.0.0",
-        json_port: int = 9999,
-        xml_port: int = 9998,
-    ) -> None:
+    async def start(self, host: str = "0.0.0.0", json_port: int = 9999, xml_port: int = 9998) -> None:
         if self._is_running:
             await self.stop()
         self._host = host
@@ -100,9 +87,9 @@ class _TcpTestServer:
     # -- JSON 端口处理（银行账户交易查询）------------------------------------
 
     async def _handle_json_client(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
+            self,
+            reader: asyncio.StreamReader,
+            writer: asyncio.StreamWriter,
     ) -> None:
         self._json_conn_count += 1
         peer = writer.get_extra_info("peername")
@@ -111,11 +98,7 @@ class _TcpTestServer:
 
     # -- XML 端口处理（贷款申请）---------------------------------------------
 
-    async def _handle_xml_client(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-    ) -> None:
+    async def _handle_xml_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self._xml_conn_count += 1
         peer = writer.get_extra_info("peername")
         LOGGER.info(f"TCP-XML收到连接: {peer}, 第{self._xml_conn_count}次")
@@ -123,12 +106,7 @@ class _TcpTestServer:
 
     # -- 通用连接处理 --------------------------------------------------------
 
-    async def _process_connection(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-        build_response: Any,
-    ) -> None:
+    async def _process_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, build_response: Any) -> None:
         try:
             response_xml, is_length_prefixed = await self._read_and_detect(reader, build_response)
             response_bytes = response_xml.encode("utf-8")
@@ -312,8 +290,8 @@ class _TcpTestServer:
 
         if repayment_method == "等额本息" and term > 0 and approved_amount > 0:
             monthly_payment = (
-                approved_amount * monthly_rate * (1 + monthly_rate) ** term
-                / ((1 + monthly_rate) ** term - 1)
+                    approved_amount * monthly_rate * (1 + monthly_rate) ** term
+                    / ((1 + monthly_rate) ** term - 1)
             )
         else:
             monthly_payment = approved_amount / term
@@ -348,7 +326,7 @@ class _TcpTestServer:
         etree.SubElement(approval, "TotalRepayment").text = f"{total_repayment:.2f}"
         etree.SubElement(approval, "ApprovalDate").text = datetime.datetime.now().strftime("%Y-%m-%d")
         etree.SubElement(approval, "ExpiryDate").text = (
-            datetime.datetime.now() + datetime.timedelta(days=30)
+                datetime.datetime.now() + datetime.timedelta(days=30)
         ).strftime("%Y-%m-%d")
 
         # 前 12 期还款计划（数组）
@@ -360,7 +338,7 @@ class _TcpTestServer:
             principal = monthly_payment - interest
             remaining -= principal
             due_date = (
-                datetime.datetime.now().replace(day=20) + datetime.timedelta(days=30 * period)
+                    datetime.datetime.now().replace(day=20) + datetime.timedelta(days=30 * period)
             ).strftime("%Y-%m-%d")
             inst = etree.SubElement(plan, "Installment")
             etree.SubElement(inst, "Period").text = str(period)
@@ -407,14 +385,22 @@ class _TcpTestServer:
     def _generate_transactions(count: int) -> list:
         base_date = datetime.date(2026, 7, 19)
         templates = [
-            {"date_offset": 0,  "time": "09:30:00", "amount": 5000.00,  "type": "存入", "sub_type": "工资",   "description": "7月工资入账",   "counterparty": "某科技有限公司", "channel": "企业网银"},
-            {"date_offset": 1,  "time": "14:20:30", "amount": 3200.00,  "type": "支出", "sub_type": "消费",   "description": "商场购物",       "counterparty": "某商场",         "channel": "手机银行"},
-            {"date_offset": 4,  "time": "10:15:00", "amount": 20000.00, "type": "存入", "sub_type": "转账",   "description": "李四转账",       "counterparty": "李四",           "channel": "手机银行"},
-            {"date_offset": 9,  "time": "16:45:20", "amount": 1500.00,  "type": "支出", "sub_type": "水电费", "description": "7月水电费",      "counterparty": "供电局",         "channel": "自动扣款"},
-            {"date_offset": 14, "time": "11:00:00", "amount": 800.00,   "type": "支出", "sub_type": "取现",   "description": "ATM取现",       "counterparty": "ATM-001",        "channel": "ATM"},
-            {"date_offset": 19, "time": "08:50:00", "amount": 12000.00, "type": "存入", "sub_type": "理财收益","description": "理财产品到期",   "counterparty": "某基金公司",     "channel": "网银"},
-            {"date_offset": 24, "time": "15:30:00", "amount": 680.00,   "type": "支出", "sub_type": "通讯费", "description": "手机话费充值",   "counterparty": "中国移动",       "channel": "手机银行"},
-            {"date_offset": 29, "time": "12:00:00", "amount": 3000.00,  "type": "支出", "sub_type": "转账",   "description": "转账给王五",     "counterparty": "王五",           "channel": "手机银行"},
+            {"date_offset": 0, "time": "09:30:00", "amount": 5000.00, "type": "存入", "sub_type": "工资", "description": "7月工资入账",
+             "counterparty": "某科技有限公司", "channel": "企业网银"},
+            {"date_offset": 1, "time": "14:20:30", "amount": 3200.00, "type": "支出", "sub_type": "消费", "description": "商场购物",
+             "counterparty": "某商场", "channel": "手机银行"},
+            {"date_offset": 4, "time": "10:15:00", "amount": 20000.00, "type": "存入", "sub_type": "转账", "description": "李四转账",
+             "counterparty": "李四", "channel": "手机银行"},
+            {"date_offset": 9, "time": "16:45:20", "amount": 1500.00, "type": "支出", "sub_type": "水电费", "description": "7月水电费",
+             "counterparty": "供电局", "channel": "自动扣款"},
+            {"date_offset": 14, "time": "11:00:00", "amount": 800.00, "type": "支出", "sub_type": "取现", "description": "ATM取现",
+             "counterparty": "ATM-001", "channel": "ATM"},
+            {"date_offset": 19, "time": "08:50:00", "amount": 12000.00, "type": "存入", "sub_type": "理财收益", "description": "理财产品到期",
+             "counterparty": "某基金公司", "channel": "网银"},
+            {"date_offset": 24, "time": "15:30:00", "amount": 680.00, "type": "支出", "sub_type": "通讯费", "description": "手机话费充值",
+             "counterparty": "中国移动", "channel": "手机银行"},
+            {"date_offset": 29, "time": "12:00:00", "amount": 3000.00, "type": "支出", "sub_type": "转账", "description": "转账给王五",
+             "counterparty": "王五", "channel": "手机银行"},
         ]
         result = []
         balance = 125680.50
@@ -459,11 +445,11 @@ _tcp_test_server = _TcpTestServer()
 # 路由（仅用于启动/停止/状态/获取示例，实际 TCP 通信不走 HTTP）
 # ---------------------------------------------------------------------------
 
-@autotest_tcp_test.post("/start", summary="启动TCP测试服务器（双端口）")
+@autotest_tcp_test.post("/start", summary="启动TCP测试服务器", description="启动双端口TCP测试服务器")
 async def start_tcp_test_server(
         host: str = Body("0.0.0.0", embed=True, description="监听地址"),
-        json_port: int = Body(9999, embed=True, description="JSON请求端口（接收JSON报文，返回XML响应）"),
-        xml_port: int = Body(9998, embed=True, description="XML请求端口（接收XML报文，返回XML响应）"),
+        json_port: int = Body(9999, embed=True, description="JSON请求端口(接收JSON报文，返回XML响应)"),
+        xml_port: int = Body(9998, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
 ):
     """
     启动 TCP 测试服务器，同时监听两个端口：

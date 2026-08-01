@@ -69,7 +69,7 @@ from backend.services.ctx import get_current_username
 autotest_step = APIRouter()
 
 
-@autotest_step.post("/create", summary="API自动化测试-新增步骤")
+@autotest_step.post("/create", summary="新增步骤")
 async def create_step(
         step_in: AutoTestApiStepCreate = Body(..., description="步骤信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -103,7 +103,7 @@ async def create_step(
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
-@autotest_step.delete("/delete", summary="API自动化测试-按id或code删除步骤")
+@autotest_step.delete("/delete", summary="删除步骤", description="根据id或code删除步骤信息")
 async def delete_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
@@ -139,7 +139,7 @@ async def delete_step(
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/update", summary="API自动化测试-按id或code更新步骤")
+@autotest_step.post("/update", summary="更新步骤", description="根据id或code更新步骤信息")
 async def update_step(
         step_in: AutoTestApiStepUpdate = Body(..., description="步骤信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -173,7 +173,7 @@ async def update_step(
         return FailureResponse(message=f"修改失败，异常描述: {e}")
 
 
-@autotest_step.get("/get", summary="API自动化测试-按id或code查询步骤")
+@autotest_step.get("/get", summary="查询步骤", description="根据id或code查询步骤信息")
 async def get_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
@@ -210,7 +210,7 @@ async def get_step(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/search", summary="API自动化测试-按条件查询步骤")
+@autotest_step.post("/search", summary="查询步骤列表", description="根据条件分页查询步骤列表信息(Body)")
 async def search_steps(
         step_in: AutoTestApiStepSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -268,7 +268,7 @@ async def search_steps(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_step.get("/tree", summary="API自动化测试-按id或code查询步骤树")
+@autotest_step.get("/tree", summary="查询步骤树", description="根据用例id或code查询步骤树")
 async def get_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -300,7 +300,7 @@ async def get_step_tree(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_step.get("/copy_tree", summary="API自动化测试-复制用例步骤树（返回未保存的副本）")
+@autotest_step.get("/copy_tree", summary="复制步骤树", description="复制用例步骤树(返回未保存的副本)")
 async def copy_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -327,7 +327,7 @@ async def copy_step_tree(
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/update_or_create_tree", summary="API自动化测试-更新用例级步骤树")
+@autotest_step.post("/update_or_create_tree", summary="更新步骤树", description="更新或创建用例级步骤树")
 async def batch_update_steps_tree(
         data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -497,10 +497,10 @@ async def batch_update_steps_tree(
         return FailureResponse(message=f"更新用例及步骤树异常", data=str(e))
 
 
-@autotest_step.post("/validate_tree", summary="API自动化测试-校验步骤树JSON合法性")
+@autotest_step.post("/validate_tree", summary="校验步骤树", description="校验步骤树JSON合法性")
 async def validate_step_tree(
         steps: List[AutoTestStepTreeUpdateItem] = Body(..., description="待校验的步骤树根步骤列表"),
-        deep_validate: bool = Query(True, description="是否做深度校验（执行器字段+变量引用链）"),
+        deep_validate: bool = Query(True, description="是否做深度校验(执行器字段+变量引用链)"),
 ):
     """
     校验步骤树JSON合法性。
@@ -575,7 +575,7 @@ async def validate_step_tree(
         return FailureResponse(message=f"校验步骤树异常, 异常描述: {e}")
 
 
-@autotest_step.post("/http_debugging", summary="API自动化测试-HTTP请求调试")
+@autotest_step.post("/http_debugging", summary="调试HTTP请求")
 async def debug_http_request(
         step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -940,7 +940,7 @@ async def debug_http_request(
         return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/tcp_debugging", summary="API自动化测试-TCP请求调试")
+@autotest_step.post("/tcp_debugging", summary="调试TCP请求")
 async def debug_tcp_request(
         step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -1226,7 +1226,7 @@ async def debug_tcp_request(
         return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/python_code_debugging", summary="API自动化测试-Python代码调试")
+@autotest_step.post("/python_code_debugging", summary="调试Python代码")
 async def debug_python_code(
         step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -1351,7 +1351,7 @@ def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
     return False
 
 
-@autotest_step.post("/redis_debugging", summary="API自动化测试-Redis请求调试")
+@autotest_step.post("/redis_debugging", summary="调试Redis请求")
 async def debug_redis_request(
         step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -1721,7 +1721,7 @@ def _serialize_for_celery_steps_execute_config(
     return serialized
 
 
-@autotest_step.post("/execute_or_debugging", summary="API自动化测试-执行或调试步骤树")
+@autotest_step.post("/execute_or_debugging", summary="执行步骤树", description="执行或调试步骤树")
 async def execute_step_tree(
         request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -2000,7 +2000,7 @@ async def execute_step_tree(
         return FailureResponse(message=f"执行或调试步骤树失败, 异常描述: {e}")
 
 
-@autotest_step.post("/batch_execute", summary="API自动化测试-批量执行用例")
+@autotest_step.post("/batch_execute", summary="批量执行用例")
 async def batch_execute_cases_endpoint(
         request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

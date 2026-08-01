@@ -42,7 +42,7 @@ from backend.core.responses import (
 autotest_task = APIRouter()
 
 
-@autotest_task.post("/create", summary="API自动化测试-新增任务")
+@autotest_task.post("/create", summary="新增任务")
 async def create_task_info(
         task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -76,7 +76,7 @@ async def create_task_info(
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
 
 
-@autotest_task.delete("/delete", summary="API自动化测试-按id或code删除任务")
+@autotest_task.delete("/delete", summary="删除任务", description="根据id或code删除任务信息")
 async def delete_task_info(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
@@ -110,7 +110,7 @@ async def delete_task_info(
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_task.post("/update", summary="API自动化测试-按id或code更新任务")
+@autotest_task.post("/update", summary="更新任务", description="根据id或code更新任务信息")
 async def update_task_info(
         task_in: AutoTestApiTaskUpdate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -144,7 +144,7 @@ async def update_task_info(
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
-@autotest_task.get("/get", summary="API自动化测试-按id或code查询任务")
+@autotest_task.get("/get", summary="查询任务", description="根据id或code查询任务信息")
 async def get_task_info(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
@@ -181,7 +181,7 @@ async def get_task_info(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_task.post("/search", summary="API自动化测试-按条件查询任务")
+@autotest_task.post("/search", summary="查询任务列表", description="根据条件分页查询任务列表信息(Body)")
 async def search_tasks_info(
         task_in: AutoTestApiTaskSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -244,7 +244,7 @@ async def search_tasks_info(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_task.post("/run", summary="API自动化测试-立即执行任务")
+@autotest_task.post("/run", summary="立即执行任务")
 async def run_task_info(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -285,7 +285,7 @@ async def run_task_info(
         return FailureResponse(message=f"执行失败, 异常描述: {e}")
 
 
-@autotest_task.post("/start", summary="API自动化测试-启动任务（启用调度）")
+@autotest_task.post("/start", summary="启动任务", description="启用任务调度")
 async def start_task_info(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -320,7 +320,7 @@ async def start_task_info(
         return FailureResponse(message=f"启动失败, 异常描述: {e}")
 
 
-@autotest_task.post("/stop", summary="API自动化测试-停止任务（关闭调度）")
+@autotest_task.post("/stop", summary="停止任务", description="关闭任务调度")
 async def stop_task_info(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -355,7 +355,7 @@ async def stop_task_info(
         return FailureResponse(message=f"停止失败, 异常描述: {e}")
 
 
-@autotest_task.post("/record/search", summary="API自动化测试-任务执行记录查询")
+@autotest_task.post("/record/search", summary="查询执行记录", description="根据条件分页查询任务执行记录(Body)")
 async def search_task_records(
         record_in: AutoTestApiRecordSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -385,10 +385,7 @@ async def search_task_records(
         return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")
 
 
-@autotest_task.get(
-    "/record/{record_id}/attachments/{key}/download",
-    summary="API自动化测试-下载执行记录附件",
-)
+@autotest_task.get("/record/{record_id}/attachments/{key}/download", summary="下载执行记录附件", description="根据记录id与附件key下载附件")
 async def download_task_record_attachment(
         record_id: int = Path(..., description="执行记录主键"),
         key: str = Path(..., description="附件 key，默认 main"),

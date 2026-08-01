@@ -87,7 +87,7 @@ async def delete_user(
         return FailureResponse(message=f"删除失败，异常描述:{e}")
 
 
-@user_secure.post("/deletes", summary="删除用户", description="根据id列表批量删除用户信息")
+@user_secure.post("/deletes", summary="批量删除用户", description="根据id列表批量删除用户信息")
 async def delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -175,7 +175,7 @@ async def get_user_by_username(
     return SuccessResponse(message="查询成功", data=data, total=1)
 
 
-@user_secure.get("/list", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Query）")
+@user_secure.get("/list", summary="查询用户列表", description="根据条件分页查询用户列表信息(Query)")
 async def list_user(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -247,7 +247,7 @@ async def list_user(
     return SuccessResponse(data=data, total=total)
 
 
-@user_secure.post("/search", summary="查询用户列表", description="支持分页按条件查询用户列表信息（Body）")
+@user_secure.post("/search", summary="查询用户列表", description="根据条件分页查询用户列表信息(Body)")
 async def get_users(
         user_in: UserSelect = Body(),
         user_crud: UserCrud = Depends(get_user_crud),

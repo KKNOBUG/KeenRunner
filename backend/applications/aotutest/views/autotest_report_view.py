@@ -36,7 +36,7 @@ from backend.core.responses import (
 autotest_report = APIRouter()
 
 
-@autotest_report.post("/create", summary="API自动化测试-新增报告")
+@autotest_report.post("/create", summary="新增报告")
 async def create_report(
         report_in: AutoTestApiReportCreate = Body(..., description="报告信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -70,7 +70,7 @@ async def create_report(
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
 
 
-@autotest_report.delete("/delete", summary="API自动化测试-按id或code删除报告")
+@autotest_report.delete("/delete", summary="删除报告", description="根据id或code删除报告信息")
 async def delete_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告代码"),
@@ -104,7 +104,7 @@ async def delete_report(
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/update", summary="API自动化测试-按id或code更新报告")
+@autotest_report.post("/update", summary="更新报告", description="根据id或code更新报告信息")
 async def update_report(
         report_in: AutoTestApiReportUpdate = Body(..., description="报告信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -138,7 +138,7 @@ async def update_report(
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
-@autotest_report.get("/get", summary="API自动化测试-按id或code查询报告")
+@autotest_report.get("/get", summary="查询报告", description="根据id或code查询报告信息")
 async def get_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
@@ -175,7 +175,7 @@ async def get_report(
         return FailureResponse(message=f"查询测试报告失败，异常描述: {e}")
 
 
-@autotest_report.post("/search", summary="API自动化测试-按条件查询报告")
+@autotest_report.post("/search", summary="查询报告列表", description="根据条件分页查询报告列表信息(Body)")
 async def search_reports(
         report_in: AutoTestApiReportSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

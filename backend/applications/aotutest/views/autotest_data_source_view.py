@@ -60,7 +60,7 @@ autotest_data_source = APIRouter()
 
 
 async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[str, Any]:
-    """序列化单条数据源（与 env 视图 replace id 为业务主键字段风格一致）。"""
+    """序列化单条数据源(与 env 视图 replace id 为业务主键字段风格一致）。"""
     data = await instance.to_dict(
         exclude_fields={
             "state",
@@ -115,7 +115,7 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
     return clean
 
 
-@autotest_data_source.post("/create", summary="API自动化测试-新增数据源")
+@autotest_data_source.post("/create", summary="新增数据源")
 async def create_data_source_info(
         data_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -141,7 +141,7 @@ async def create_data_source_info(
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
-@autotest_data_source.delete("/delete", summary="API自动化测试-删除数据源(软删)")
+@autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源信息")
 async def delete_data_source_info(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
@@ -182,7 +182,7 @@ async def delete_data_source_info(
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
-@autotest_data_source.post("/unbind_case", summary="API自动化测试-解绑用例全部数据源")
+@autotest_data_source.post("/unbind_case", summary="解绑用例数据源", description="解绑用例下全部数据源")
 async def unbind_case_data_source(
         case_id: int = Body(..., description="用例ID", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -205,7 +205,7 @@ async def unbind_case_data_source(
         return FailureResponse(message=f"解绑失败, 异常描述: {e}")
 
 
-@autotest_data_source.post("/update", summary="API自动化测试-更新数据源")
+@autotest_data_source.post("/update", summary="更新数据源")
 async def update_data_source_info(
         data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -247,7 +247,7 @@ async def update_data_source_info(
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
-@autotest_data_source.post("/save_or_update", summary="API自动化测试-保存或更新数据源")
+@autotest_data_source.post("/save_or_update", summary="保存数据源", description="保存或更新数据源信息")
 async def save_or_update_data_source_info(
         data_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -335,7 +335,7 @@ async def save_or_update_data_source_info(
         return FailureResponse(message=f"保存失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/get", summary="API自动化测试-查询单条数据源")
+@autotest_data_source.get("/get", summary="查询数据源", description="根据条件查询单条数据源信息")
 async def get_data_source_info(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
@@ -378,7 +378,7 @@ async def get_data_source_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.post(path="/query_dataset_names", summary="API自动化测试-案例数据场景查询")
+@autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询案例数据场景名称")
 async def query_case_name(
         case_id: int = Form(..., title="案例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -410,7 +410,7 @@ async def query_case_name(
     return SuccessResponse(message="查询数据源成功", data=merged_names)
 
 
-@autotest_data_source.post("/search", summary="API自动化测试-按条件分页查询数据源")
+@autotest_data_source.post("/search", summary="查询数据源列表", description="根据条件分页查询数据源列表信息(Body)")
 async def search_data_source_info(
         sel_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -460,7 +460,7 @@ async def search_data_source_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/get_by_case_step", summary="API自动化测试-按用例与步骤查询数据源(单条或列表)")
+@autotest_data_source.get("/get_by_case_step", summary="查询步骤数据源", description="按用例与步骤查询数据源(单条或列表)")
 async def get_data_source_by_case_step(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -491,7 +491,7 @@ async def get_data_source_by_case_step(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/scene_names_by_case", summary="API自动化测试-按用例查询已落库数据源场景列名")
+@autotest_data_source.get("/scene_names_by_case", summary="查询数据源场景列名", description="按用例查询已落库数据源场景列名")
 async def get_scene_names_by_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -589,7 +589,7 @@ async def get_scene_names_by_case(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/dataset_scenario", summary="API自动化测试-查询某步骤下单个数据集场景")
+@autotest_data_source.get("/dataset_scenario", summary="查询数据集场景", description="查询某步骤下单个数据集场景")
 async def get_dataset_scenario_info(
         case_id: int = Query(..., description="用例ID"),
         step_code: str = Query(..., description="步骤标识代码"),
@@ -620,7 +620,7 @@ async def get_dataset_scenario_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/import_template_download", summary="API自动化测试-下载请求步骤数据集导入模板xlsx")
+@autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据集导入模板xlsx")
 async def import_template_download():
     """分发仓库内置于 output/template 的 xlsx（HTTP/TCP 请求步骤共用）；流式读取，不加 UTF-8 BOM，避免损坏二进制格式。"""
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
@@ -638,7 +638,7 @@ async def import_template_download():
     )
 
 
-@autotest_data_source.post("/single_step_dataset_upload", summary="参数化驱动-单步骤数据集上传")
+@autotest_data_source.post("/single_step_dataset_upload", summary="上传单步骤数据源")
 async def single_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         step_id: str = Form(..., description="步骤ID"),
@@ -757,7 +757,7 @@ async def single_step_dataset_upload(
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
-@autotest_data_source.get("/single_step_dataset_download", summary="API自动化测试-按用例步骤导出数据源xlsx")
+@autotest_data_source.get("/single_step_dataset_download", summary="导出步骤数据源", description="按用例步骤导出数据源xlsx")
 async def single_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
@@ -795,11 +795,11 @@ async def single_step_dataset_download(
         return FailureResponse(message=f"导出失败, 异常描述: {e}")
 
 
-@autotest_data_source.post("/batch_step_dataset_upload", summary="参数化驱动-多步骤数据集批量上传")
+@autotest_data_source.post("/batch_step_dataset_upload", summary="批量上传步骤数据源")
 async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
-        file: UploadFile = File(..., description="xlsx 文件（每个 sheet 名须对应步骤树中一个 HTTP/TCP 请求步骤的步骤名）"),
+        file: UploadFile = File(..., description="xlsx 文件(每个 sheet 名须对应步骤树中一个 HTTP/TCP 请求步骤的步骤名)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -941,7 +941,7 @@ async def batch_step_dataset_upload(
     )
 
 
-@autotest_data_source.get("/batch_step_dataset_download", summary="API自动化测试-按用例汇总导出所有步骤数据源xlsx")
+@autotest_data_source.get("/batch_step_dataset_download", summary="汇总导出步骤数据源", description="按用例汇总导出所有步骤数据源xlsx")
 async def batch_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

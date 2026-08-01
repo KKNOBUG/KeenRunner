@@ -39,7 +39,7 @@ from backend.enums import AutoTestConfigNodeType
 autotest_env_config = APIRouter()
 
 
-@autotest_env_config.post("/create", summary="API自动化测试-新增环境配置")
+@autotest_env_config.post("/create", summary="新增环境配置")
 async def create_env_config(
         config_in: AutoTestApiConfigCreate = Body(..., description="环境配置"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -73,7 +73,7 @@ async def create_env_config(
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
-@autotest_env_config.delete("/delete", summary="API自动化测试-按id或code删除环境配置")
+@autotest_env_config.delete("/delete", summary="删除环境配置", description="根据id或code删除环境配置信息")
 async def delete_env_config(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
@@ -107,7 +107,7 @@ async def delete_env_config(
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
-@autotest_env_config.post("/delete", summary="API自动化测试-按id或code列表删除环境")
+@autotest_env_config.post("/delete", summary="批量删除环境配置", description="根据id或code列表删除环境配置信息")
 async def delete_env_config_batch(
         config_in: AutoTestApiConfigDelete = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -128,7 +128,7 @@ async def delete_env_config_batch(
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
-@autotest_env_config.post("/update", summary="API自动化测试-按id或code更新环境配置")
+@autotest_env_config.post("/update", summary="更新环境配置", description="根据id或code更新环境配置信息")
 async def update_env_config(
         config_in: AutoTestApiConfigUpdate = Body(..., description="环境配置"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -162,7 +162,7 @@ async def update_env_config(
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
-@autotest_env_config.get("/get", summary="API自动化测试-按id或code查询环境配置")
+@autotest_env_config.get("/get", summary="查询环境配置", description="根据id或code查询环境配置信息")
 async def get_env_info(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
@@ -199,7 +199,7 @@ async def get_env_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env_config.post("/search", summary="API自动化测试-按条件查询环境配置")
+@autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
 async def search_env_info(
         config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -284,7 +284,7 @@ async def search_env_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env_config.post("/query", summary="API自动化测试-按应用列表查询环境配置并分类")
+@autotest_env_config.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
 async def query_classify_env_config(
         body: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -314,7 +314,7 @@ async def query_classify_env_config(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env_config.get("/config_names", summary="API自动化测试-获取去重后的配置名称列表")
+@autotest_env_config.get("/config_names", summary="查询配置名称", description="获取去重后的配置名称列表")
 async def get_unique_env_config_name_list(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),

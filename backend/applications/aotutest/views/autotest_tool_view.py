@@ -143,7 +143,7 @@ def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
     return result
 
 
-@autotest_tool.get("/get", summary="API自动化测试-辅助函数查询")
+@autotest_tool.get("/get", summary="查询辅助函数")
 async def get_func_info():
     """
     辅助函数查询。

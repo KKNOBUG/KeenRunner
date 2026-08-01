@@ -28,7 +28,7 @@ auth_public = APIRouter()
 auth_secure = APIRouter()
 
 
-@auth_public.post("/access_token", summary="用户鉴权-验证用户密码和状态并生成令牌")
+@auth_public.post("/access_token", summary="生成访问令牌", description="验证用户密码和状态并生成令牌")
 async def get_login_access_token(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -78,7 +78,7 @@ async def get_login_access_token(
     return SuccessResponse(data=data.model_dump())
 
 
-@auth_secure.post("/usermenu", summary="用户鉴权-查看当前用户菜单")
+@auth_secure.post("/usermenu", summary="查看当前用户菜单")
 async def get_user_menu():
     """
     查看当前用户菜单。
@@ -111,7 +111,7 @@ async def get_user_menu():
     return SuccessResponse(data=res)
 
 
-@auth_secure.post("/userinfo", summary="用户鉴权-查看当前用户信息")
+@auth_secure.post("/userinfo", summary="查看当前用户信息")
 async def get_userinfo(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -129,7 +129,7 @@ async def get_userinfo(
     return SuccessResponse(data=data)
 
 
-@auth_secure.post("/getUserRouters", summary="用户鉴权-查看当前用户路由")
+@auth_secure.post("/getUserRouters", summary="查看当前用户路由")
 async def get_user_router():
     """
     查看当前用户路由。

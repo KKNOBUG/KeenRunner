@@ -36,7 +36,7 @@ from backend.core.responses import (
 autotest_env = APIRouter()
 
 
-@autotest_env.post("/create", summary="API自动化测试-新增环境")
+@autotest_env.post("/create", summary="新增环境")
 async def create_env_info(
         env_in: AutoTestApiEnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -70,7 +70,7 @@ async def create_env_info(
         return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
-@autotest_env.delete("/delete", summary="API自动化测试-按id或code删除环境")
+@autotest_env.delete("/delete", summary="删除环境", description="根据id或code删除环境信息")
 async def delete_env_info(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
@@ -104,7 +104,7 @@ async def delete_env_info(
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
-@autotest_env.post("/delete", summary="API自动化测试-按id或code列表删除环境")
+@autotest_env.post("/delete", summary="批量删除环境", description="根据id或code列表删除环境信息")
 async def delete_env_batch(
         env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -125,7 +125,7 @@ async def delete_env_batch(
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
-@autotest_env.post("/update", summary="API自动化测试-按id或code更新环境")
+@autotest_env.post("/update", summary="更新环境", description="根据id或code更新环境信息")
 async def update_env_info(
         env_in: AutoTestApiEnvUpdate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -159,7 +159,7 @@ async def update_env_info(
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
-@autotest_env.get("/get", summary="API自动化测试-按id或code查询环境")
+@autotest_env.get("/get", summary="查询环境", description="根据id或code查询环境信息")
 async def get_env_info(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
@@ -196,7 +196,7 @@ async def get_env_info(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env.get("/get_names", summary="API自动化测试-查询环境名称(去重)")
+@autotest_env.get("/get_names", summary="查询环境名称", description="查询去重后的环境名称列表")
 async def get_env_name_list(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -217,7 +217,7 @@ async def get_env_name_list(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env.post("/search", summary="API自动化测试-按条件查询环境")
+@autotest_env.post("/search", summary="查询环境列表", description="根据条件分页查询环境列表信息(Body)")
 async def search_env_info(
         env_in: AutoTestApiEnvSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

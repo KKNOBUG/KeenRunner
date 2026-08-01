@@ -35,7 +35,7 @@ from backend.core.responses import (
 autotest_detail = APIRouter()
 
 
-@autotest_detail.post("/create", summary="API自动化测试-新增明细")
+@autotest_detail.post("/create", summary="新增明细")
 async def create_step_detail(
         detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -69,7 +69,7 @@ async def create_step_detail(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_detail.delete("/delete", summary="API自动化测试-按id或code删除明细")
+@autotest_detail.delete("/delete", summary="删除明细", description="根据id或code删除明细信息")
 async def delete_report(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
@@ -109,7 +109,7 @@ async def delete_report(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_detail.post("/update", summary="API自动化测试-按id或code更新明细")
+@autotest_detail.post("/update", summary="更新明细", description="根据id或code更新明细信息")
 async def update_report(
         detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -143,7 +143,7 @@ async def update_report(
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
-@autotest_detail.get("/get", summary="API自动化测试-按id或code查询明细")
+@autotest_detail.get("/get", summary="查询明细", description="根据id或code查询明细信息")
 async def get_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
@@ -186,7 +186,7 @@ async def get_step_detail(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_detail.post("/search", summary="API自动化测试-按条件查询明细")
+@autotest_detail.post("/search", summary="查询明细列表", description="根据条件分页查询明细列表信息(Body)")
 async def search_step_details(
         detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
