@@ -305,7 +305,7 @@ import {
   stringifyStepTreePayload,
   stripIdentityFieldsForNewCase,
 } from './utils/stepSourceJson'
-import {useUserStore, useAutotestStore, useStepEditorStore} from '@/store'
+import {useUserStore, useAutotestStore, useStepEditorStore, useTagsStore, useAppStore} from '@/store'
 import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
 
 const message = useMessage()
@@ -365,8 +365,28 @@ const selectedKeys = ref([])
 const route = useRoute()
 const router = useRouter()
 const autotestStore = useAutotestStore()
+const tagsStore = useTagsStore()
+const appStore = useAppStore()
 const caseId = computed(() => route.query.case_id || null)
 const caseCode = computed(() => route.query.case_code || null)
+
+/** 从页签 fullPath 解析 case_id / case_code */
+function parseCaseFromTagPath(path) {
+  try {
+    const idx = String(path).indexOf('?')
+    if (idx === -1) return { caseId: null, caseCode: null }
+    const q = new URLSearchParams(String(path).slice(idx + 1))
+    return { caseId: q.get('case_id'), caseCode: q.get('case_code') }
+  } catch {
+    return { caseId: null, caseCode: null }
+  }
+}
+
+/** 丢弃未保存或关闭页签后：清内存缓存并标记下次进入强制拉接口 */
+function markCaseNeedsFreshLoad(cid, ccode) {
+  autotestStore.clearStepTreeCache(cid, ccode)
+  autotestStore.markStepEditorFreshLoad(cid, ccode)
+}
 
 /**
  * 源数据「应用」带入的用例标识（路由可能尚无 case_id/case_code）。
@@ -1101,16 +1121,48 @@ const {
 
 const { isDirty, markSaved: markDirtySaved, markLoaded: markDirtyLoaded, reset: resetDirty, confirmIfDirty } = useDirtyCheck(buildSourceJsonFromMemoryTree)
 
-// 离开「步骤编辑」路由（跳往其他路由，如工作台/测试用例）时拦截未保存改动
+// 离开「步骤编辑」路由时拦截未保存改动。
+// 注意：仅「切换标签」选离开时必须保活内存态，不可在此强制刷新/resetDirty，
+// 否则回来后编辑内容会被接口数据覆盖；强制拉数只在「关闭页签」时由下方 watch 处理。
 onBeforeRouteLeave(async () => {
+  // 保存流程中会 replace query 写入 case_id，此时不应弹「未保存」确认
+  if (saveLoading.value) return true
   return await confirmIfDirty()
 })
 
 // 同一路由内切换用例（多个「步骤编辑」标签页之间，仅 query 变化、组件复用）时，
 // 触发的是 onBeforeRouteUpdate 而非 onBeforeRouteLeave，需同样拦截未保存改动
 onBeforeRouteUpdate(async () => {
+  if (saveLoading.value) return true
   return await confirmIfDirty()
 })
+
+/**
+ * 关闭「步骤编辑」导航页签：清该用例缓存并标记强制刷新。
+ * 若已无任何步骤编辑页签，重置 KeepAlive（组件名/路由名「步骤编辑」），避免共用 path key 的缓存实例残留。
+ * 仅切换页签（页签仍在列表中）不会触发，保持保活。
+ */
+watch(
+    () => tagsStore.tags.map((t) => ({ path: t.path, name: t.name })),
+    (tagList, prevTagList) => {
+      if (!Array.isArray(prevTagList)) return
+      const paths = tagList.map((t) => t.path)
+      const removed = prevTagList.filter(
+          (t) => !paths.includes(t.path) && String(t.path).startsWith('/autotest/steps'),
+      )
+      if (!removed.length) return
+      for (const t of removed) {
+        const { caseId: cid, caseCode: ccode } = parseCaseFromTagPath(t.path)
+        markCaseNeedsFreshLoad(cid, ccode)
+      }
+      const stepsTagLeft = paths.some((p) => String(p).startsWith('/autotest/steps'))
+      if (!stepsTagLeft) {
+        // 此时路由可能已切到其它页，不能用当前 route.name；与 defineOptions/菜单名对齐
+        const aliveName = removed[0]?.name || '步骤编辑'
+        appStore.setAliveKeys(aliveName, String(Date.now()))
+      }
+    },
+)
 
 
 
@@ -1143,11 +1195,12 @@ const handleSaveAll = async () => {
       return
     }
 
-    // 公共接口：所属应用/步骤描述兜底同步（用户可能从未点开步骤子页面，watch未覆盖时在此强制对齐）；
+    // 公共接口：所属应用/步骤描述/步骤名称兜底同步（用户可能从未点开步骤子页面，watch未覆盖时在此强制对齐）；
     // 必须在 required 校验之前执行：应用变化需同步清空配置名称，由校验拦截强制用户重新选择
     if (isPublicApiCase.value && steps.value.length === 1 && ['http', 'tcp'].includes(steps.value[0]?.type)) {
       const casePid = caseInfoPanelRef.value?.caseForm?.case_project
       const caseDesc = caseInfoPanelRef.value?.caseForm?.case_desc ?? ''
+      const caseName = caseInfoPanelRef.value?.caseForm?.case_name ?? ''
       const onlyStep = steps.value[0]
       const syncConfig = {}
       if (casePid != null && casePid !== '' && Number(onlyStep.config?.request_project_id) !== Number(casePid)) {
@@ -1156,6 +1209,9 @@ const handleSaveAll = async () => {
       }
       if ((onlyStep.config?.step_desc ?? '') !== caseDesc) {
         syncConfig.step_desc = caseDesc
+      }
+      if ((onlyStep.config?.step_name ?? '') !== caseName) {
+        syncConfig.step_name = caseName
       }
       if (Object.keys(syncConfig).length) {
         updateStepConfig(onlyStep.id, syncConfig)
@@ -1299,6 +1355,9 @@ const handleSaveAll = async () => {
         }
       }
 
+      // 先刷新脏检测基准，再改 URL：新建保存会 replace case_id，否则 onBeforeRouteUpdate 会误判未保存
+      markDirtySaved()
+
       // 新增用例保存成功后，将 case_id / case_code 写入 URL，以便后续加载和刷新保留
       if (res?.data?.cases?.success_detail && res.data.cases.success_detail.length > 0) {
         const savedCase = res.data.cases.success_detail[0]
@@ -1408,7 +1467,7 @@ const loadStepsFromCopy = (caseInfo) => {
   return true
 }
 
-const loadSteps = async () => {
+const loadSteps = async ({ force = false } = {}) => {
   stepExpandStates.value = new Map()
   stashedQuoteStepsWhenPublic.value = []
   stashedDataSourceWhenPublic.value = []
@@ -1438,16 +1497,19 @@ const loadSteps = async () => {
     nextTick(() => markDirtyLoaded())
     return
   }
-  // 缓存：切换页签时使用缓存，不重复请求；从用例管理「编辑」新建页签时需请求
-  const cached = autotestStore.getStepTreeCache(caseId.value, caseCode.value)
-  if (cached) {
-    caseInfoPanelRef.value?.hydrateFromStepTree?.(cached.rawData)
-    steps.value = JSON.parse(JSON.stringify(cached.steps)).filter(Boolean)
-    selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
-    quoteStepsMap.value = {}
-    fillQuoteStepsMapFromRawData(cached.rawData, steps.value)
-    nextTick(() => markDirtyLoaded())
-    return
+  // 关闭页签/丢弃未保存后强制走接口；普通切换页签仍可用缓存
+  const forceRefresh = force || autotestStore.consumeStepEditorFreshLoad(caseId.value, caseCode.value)
+  if (!forceRefresh) {
+    const cached = autotestStore.getStepTreeCache(caseId.value, caseCode.value)
+    if (cached) {
+      caseInfoPanelRef.value?.hydrateFromStepTree?.(cached.rawData)
+      steps.value = JSON.parse(JSON.stringify(cached.steps)).filter(Boolean)
+      selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
+      quoteStepsMap.value = {}
+      fillQuoteStepsMapFromRawData(cached.rawData, steps.value)
+      nextTick(() => markDirtyLoaded())
+      return
+    }
   }
   try {
     const params = {}
@@ -1582,16 +1644,20 @@ const editorComponentProps = computed(() => {
     // 公共接口：Request 面板「步骤描述」锁定为用例描述（只读），由父级监听强制同步
     props.lockStepDesc = isPublicApiCase.value
     props.caseDesc = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_desc ?? '') : null
+    // 公共接口：Request 面板「步骤名称」锁定为用例名称（只读），由父级监听强制同步
+    props.lockStepName = isPublicApiCase.value
+    props.caseName = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_name ?? '') : null
   }
   return props
 })
 
-/** 公共接口：请求步骤「所属应用/步骤描述」强制同步用例信息（新建/切换应用/编辑用例描述/切换步骤时兜底） */
+/** 公共接口：请求步骤「所属应用/步骤描述/步骤名称」强制同步用例信息（新建/切换应用/编辑用例名/切换步骤时兜底） */
 watch(
     [
       isPublicApiCase,
       () => caseInfoPanelRef.value?.caseForm?.case_project,
       () => caseInfoPanelRef.value?.caseForm?.case_desc,
+      () => caseInfoPanelRef.value?.caseForm?.case_name,
       () => currentStep.value?.id,
     ],
     () => {
@@ -1600,6 +1666,7 @@ watch(
       if (!step || (step.type !== 'http' && step.type !== 'tcp')) return
       const casePid = caseInfoPanelRef.value?.caseForm?.case_project
       const caseDesc = caseInfoPanelRef.value?.caseForm?.case_desc ?? ''
+      const caseName = caseInfoPanelRef.value?.caseForm?.case_name ?? ''
       const syncConfig = {}
       if (casePid != null && casePid !== '' && Number(step.config?.request_project_id) !== Number(casePid)) {
         // 应用变化后配置名称必然失效（配置按应用隔离），同步清空强制用户重新选择
@@ -1608,6 +1675,9 @@ watch(
       }
       if ((step.config?.step_desc ?? '') !== caseDesc) {
         syncConfig.step_desc = caseDesc
+      }
+      if ((step.config?.step_name ?? '') !== caseName) {
+        syncConfig.step_name = caseName
       }
       if (Object.keys(syncConfig).length) {
         updateStepConfig(step.id, syncConfig)
@@ -1948,12 +2018,9 @@ const updateStepConfig = (id, config) => {
     if (branchFixed) {
       step.name = branchFixed
     } else if (step.type === 'http') {
-      // 如果提供了 step_name，使用用户输入的步骤名称
-      if (config.step_name !== undefined && config.step_name.length > 0) {
-        step.name = String(config.step_name).trim() || 'HTTP请求(发送请求并验证响应数据)'
-      } else {
-        // 否则自动生成步骤名称
-        step.name = `HTTP请求(发送请求并验证响应数据)`
+      // 仅在显式携带 step_name 时同步树展示名；公共接口兜底同步 step_desc/request_project_id 等补丁不含该字段，不得覆盖已有名称
+      if (config.step_name !== undefined && config.step_name !== null) {
+        step.name = String(config.step_name).trim() || 'HTTP请求'
       }
     } else if (step.type === 'tcp') {
       if (config.step_name !== undefined && config.step_name !== null) {
@@ -2141,13 +2208,18 @@ onMounted(async () => {
   }
 })
 
-// keep-alive 重新激活时，路由的 case 上下文可能已变化但 watch 未触发：
-// 与已加载快照比对，不一致才重载（切到「新增」则清空，切到其它用例则加载）；一致则保持现状，避免丢失未保存的编辑。
+// keep-alive 重新激活：
+// - 切换页签回来且用例未变：保活，不重载
+// - 关闭页签后再打开 / 丢弃未保存：hasFreshLoad → 强制拉接口
+// - 路由 case 上下文变化：重载
 onActivated(() => {
-  if (!isRouteCaseStale()) return
-  resetDirty()
-  caseInfoPanelRef.value?.reloadFromRoute?.()
-  loadSteps()
+  const needFresh = autotestStore.hasStepEditorFreshLoad(caseId.value, caseCode.value)
+  if (!needFresh && !isRouteCaseStale()) return
+  if (isRouteCaseStale()) {
+    resetDirty()
+    caseInfoPanelRef.value?.reloadFromRoute?.()
+  }
+  loadSteps({ force: needFresh })
 })
 
 // 不在 onUpdated 中刷新展示名：每次子编辑器 emit 都会触发父组件 patch，导致输入卡顿/丢字

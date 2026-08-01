@@ -13,7 +13,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import {apiPermissionKey, formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 import api from '@/api'
-import {usePermissionStore, useTagsStore, useUserStore} from '@/store'
+import {useAutotestStore, usePermissionStore, useTagsStore, useUserStore} from '@/store'
 
 defineOptions({name: '测试用例'})
 
@@ -192,6 +192,8 @@ async function submitImportScript() {
   try {
     const res = await api.importCaseScript(formData)
     window.$message?.success?.(res?.message || '导入成功')
+    // 步骤树按 case 缓存；导入已改库，清空避免已打开编辑页继续展示旧树
+    useAutotestStore().clearAllStepTreeCache()
     importScriptShow.value = false
     $table.value?.handleSearch?.()
   } catch (err) {
@@ -436,7 +438,6 @@ const loadTags = async (projectId = null) => {
     const res = await api.getTagList({
       page: 1,
       page_size: 1000,
-      tag_type: "脚本",
       state: 0
     })
     if (res?.data) {

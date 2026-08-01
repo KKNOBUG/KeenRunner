@@ -224,8 +224,6 @@ async def search_tags_info(
             q &= Q(id=tag_in.tag_id)
         if tag_in.tag_code:
             q &= Q(tag_code=tag_in.tag_code)
-        if tag_in.tag_type:
-            q &= Q(tag_type=tag_in.tag_type.value)
         if tag_in.tag_mode:
             q &= Q(tag_mode__contains=tag_in.tag_mode)
         if tag_in.tag_project:

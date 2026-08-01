@@ -149,23 +149,30 @@
           </div>
 
           <div class="case-field">
-            <n-form-item label="所属标签" path="case_tags" :required="caseForm.case_type !== '公共接口'" :show-feedback="false">
+            <n-form-item
+                label="所属标签"
+                path="case_tags"
+                :required="caseForm.case_type === '用户脚本'"
+                :show-feedback="false"
+            >
               <n-popover
                   v-model:show="tagPopoverShow"
                   trigger="click"
                   placement="bottom-start"
                   :style="{ width: '400px' }"
+                  :disabled="isPublicFamilyCase"
               >
                 <template #trigger>
                   <n-input
                       :value="getSelectedTagNames()"
-                      clearable
+                      :clearable="!isPublicFamilyCase"
                       readonly
-                      placeholder="请选择所属标签"
+                      :placeholder="isPublicFamilyCase ? '' : '请选择所属标签'"
                       size="small"
                       class="case-field-input"
+                      :disabled="isPublicFamilyCase"
                       @clear="caseForm.case_tags = []"
-                      @click="tagPopoverShow = !tagPopoverShow"
+                      @click="!isPublicFamilyCase && (tagPopoverShow = !tagPopoverShow)"
                   />
                 </template>
                 <template #default>
@@ -277,6 +284,9 @@ const caseForm = reactive({
   case_attr: '',
   case_type: '',
 })
+
+/** 公共脚本/公共接口：不允许打标签，仅用户脚本需要所属标签 */
+const isPublicFamilyCase = computed(() => ['公共脚本', '公共接口'].includes(caseForm.case_type))
 
 const projectOptions = ref([])
 const projectLoading = ref(false)
@@ -445,8 +455,8 @@ const validateCaseForm = () => {
   if (!caseForm.case_name || !String(caseForm.case_name).trim()) {
     return { valid: false, message: '请输入用例名称' }
   }
-  // 所属标签必填, 公共接口类型豁免(与后端口径一致)
-  if (caseForm.case_type !== '公共接口' && (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0)) {
+  // 所属标签：仅用户脚本必填；公共脚本/公共接口禁止打标
+  if (caseForm.case_type === '用户脚本' && (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0)) {
     return { valid: false, message: '请选择所属标签' }
   }
   if (!caseForm.case_attr) {
@@ -499,8 +509,10 @@ const hydrateFromCasePayload = (caseInfo) => {
 const getCasePayload = () => ({
   case_name: caseForm.case_name || '',
   case_project: caseForm.case_project || null,
-  // 快照拷贝：payload 构建到 axios 序列化之间存在 await 窗口，拷贝后不受后续表单变动影响
-  case_tags: Array.isArray(caseForm.case_tags) ? [...caseForm.case_tags] : [],
+  // 公共类型强制不传标签；用户脚本快照拷贝（payload 构建到 axios 序列化之间存在 await 窗口）
+  case_tags: isPublicFamilyCase.value
+      ? null
+      : (Array.isArray(caseForm.case_tags) ? [...caseForm.case_tags] : []),
   case_type: caseForm.case_type || null,
   case_attr: caseForm.case_attr || null,
   case_desc: caseForm.case_desc ?? '',
@@ -526,12 +538,16 @@ watch(
     { immediate: true },
 )
 
-// 公共接口：用例属性固定为「正用例」并置灰（与导入脚本/后端公共接口口径一致），切回其他类型后用户可改
+// 公共家族：正用例锁定 + 清空标签（与后端口径一致）
 watch(
     () => caseForm.case_type,
     (caseType) => {
       if (caseType === '公共接口') {
         caseForm.case_attr = '正用例'
+      }
+      if (['公共脚本', '公共接口'].includes(caseType)) {
+        caseForm.case_tags = []
+        tagPopoverShow.value = false
       }
     },
 )

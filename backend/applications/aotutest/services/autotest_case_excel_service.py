@@ -38,7 +38,6 @@ from backend.applications.aotutest.models.autotest_model import (
     AutoTestApiCaseInfo,
     AutoTestApiProjectInfo,
     AutoTestApiStepInfo,
-    AutoTestApiTagInfo,
 )
 from backend.common.convert_utils import Convert
 from backend.configure import LOGGER, PROJECT_CONFIG
@@ -57,10 +56,14 @@ from backend.enums import (
 
 _HTTP, _TCP = "HTTP", "TCP"
 _MARKER_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
+_CENTER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_ROW_HEIGHT = 40
+_COL_WIDTH_MIN, _COL_WIDTH_MAX = 8, 60
 
 _SCRIPT_COLUMNS: Tuple[str, ...] = (
-    "接口名称", "所属应用", "协议类型", "接口描述", "请求名称", "请求方式", "配置名称", "请求路径",
-    "请求体类型", "请求体", "请求头", "变量", "提取", "断言", "所属人员", "所属标签",
+    "接口名称", "所属应用", "协议类型", "接口描述",
+    "请求名称", "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
+    "变量", "提取", "断言", "所属人员",
 )
 _DATA_START_ROW = 3
 _SCOPE_ALL, _SCOPE_SOME = "整个返回数据", "提取部分"
@@ -89,6 +92,40 @@ _SCRIPT_TEMPLATE = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共�
 # ---------------------------------------------------------------------------
 # 公共工具
 # ---------------------------------------------------------------------------
+
+def _display_text_width(text: str) -> int:
+    """估算单元格显示宽度：ASCII 计 1，宽字符计 2。"""
+    return sum(2 if ord(ch) > 127 else 1 for ch in text)
+
+
+def _autosize_sheet_columns(sheet) -> None:
+    """按单元格内容自适应列宽（含多行文本取最长行）。"""
+    max_column = sheet.max_column or 0
+    max_row = sheet.max_row or 0
+    for col_idx in range(1, max_column + 1):
+        max_len = 0
+        for row_idx in range(1, max_row + 1):
+            value = sheet.cell(row=row_idx, column=col_idx).value
+            if value is None:
+                continue
+            for line in str(value).splitlines() or [""]:
+                max_len = max(max_len, _display_text_width(line))
+        width = min(_COL_WIDTH_MAX, max(_COL_WIDTH_MIN, max_len + 2))
+        sheet.column_dimensions[get_column_letter(col_idx)].width = width
+
+
+def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float] = _ROW_HEIGHT) -> None:
+    """数据区水平/垂直居中；可选统一行高。"""
+    max_row = sheet.max_row or 0
+    max_column = sheet.max_column or 0
+    if max_row < start_row or max_column < 1:
+        return
+    for row in sheet.iter_rows(min_row=start_row, max_row=max_row, max_col=max_column):
+        if row_height is not None:
+            sheet.row_dimensions[row[0].row].height = row_height
+        for cell in row:
+            cell.alignment = _CENTER_ALIGN
+
 
 def _file_name(username: Optional[str], label: str) -> str:
     safe = re.sub(r'[\\/:*?"<>|\s]', "_", str(username or "").strip())
@@ -279,17 +316,16 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
 
     for sheet in workbook.worksheets:
         for row in sheet.iter_rows():
-            sheet.row_dimensions[row[0].row].height = 30
             for cell in row:
                 if cell.value in ("HEAD", "BODY"):
                     cell.fill = _MARKER_FILL
-        for col_idx in range(1, sheet.max_column + 1):
-            sheet.column_dimensions[get_column_letter(col_idx)].width = 30
+        _style_sheet_cells(sheet, start_row=1, row_height=_ROW_HEIGHT)
+        _autosize_sheet_columns(sheet)
     return workbook
 
 
 # ---------------------------------------------------------------------------
-# 通道 B：导出/导入脚本（16 列模板）
+# 通道 B：导出/导入脚本（15 列模板）
 # ---------------------------------------------------------------------------
 
 def build_script_file_name(username: Optional[str]) -> str:
@@ -402,21 +438,13 @@ async def prepare_script_export_rows(
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "；".join(problems)})
             continue
 
-        tag_ids = getattr(case, "case_tags", None) or []
-        tag_names: List[str] = []
-        if tag_ids:
-            name_map = {
-                tag.id: (tag.tag_name or "")
-                for tag in await AutoTestApiTagInfo.filter(id__in=tag_ids, state__not=1)
-            }
-            tag_names = [name_map[tid] for tid in tag_ids if tid in name_map]
-
         rows.append({
             "接口名称": case_name,
             "所属应用": item["project_name"],
             "协议类型": _HTTP if is_http else _TCP,
             "接口描述": getattr(case, "case_desc", None) or "",
-            "请求名称": getattr(step, "step_name", None) or case_name,
+            # 公共接口：步骤名称与接口名称一致，导出时写回接口名称保证往返对齐
+            "请求名称": case_name,
             "请求方式": method if is_http else "",
             "配置名称": getattr(step, "request_config_name", None) or "",
             "请求路径": (getattr(step, "request_url", None) or "") if is_http else "",
@@ -427,7 +455,6 @@ async def prepare_script_export_rows(
             "提取": _extract_to_lines(getattr(step, "extract_variables", None)),
             "断言": _assert_to_lines(getattr(step, "assert_validators", None)),
             "所属人员": getattr(case, "created_user", None) or "",
-            "所属标签": "\n".join(tag_names),
         })
     LOGGER.info(f"导出脚本准备完成: 有效{len(rows)}个, 不合规{len(invalid)}个")
     return rows, invalid
@@ -441,11 +468,13 @@ def build_script_workbook(rows: List[Dict[str, str]]) -> Workbook:
     header = [cell.value for cell in sheet[1][: len(_SCRIPT_COLUMNS)]]
     if header != list(_SCRIPT_COLUMNS):
         raise RuntimeError(f"模板表头已被改动，与程序定义不一致: 模板={header}, 期望={list(_SCRIPT_COLUMNS)}")
-    wrap = Alignment(wrap_text=True, vertical="top")
     for row_index, row in enumerate(rows, start=_DATA_START_ROW):
         for col_index, column in enumerate(_SCRIPT_COLUMNS, start=1):
-            cell = sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
-            cell.alignment = wrap
+            sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
+    # 数据区从第 3 行起：行高 30、居中；列宽按全表内容自适应
+    if rows:
+        _style_sheet_cells(sheet, start_row=_DATA_START_ROW, row_height=_ROW_HEIGHT)
+    _autosize_sheet_columns(sheet)
     return workbook
 
 
@@ -643,8 +672,6 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
         defined_variables = _parse_kv(cells["变量"], errors, "变量")
         extract_variables = _parse_extract(cells["提取"], errors)
         assert_validators = _parse_assert(cells["断言"], errors)
-        tag_names = list(dict.fromkeys(s.strip() for s in cells["所属标签"].splitlines() if s.strip()))
-
         if errors:
             invalid.append({"row": row_no, "reason": "；".join(errors)})
             continue
@@ -654,7 +681,8 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
             "project_name": project_name,
             "protocol": protocol,
             "case_desc": cells["接口描述"] or None,
-            "step_name": cells["请求名称"] or case_name,
+            # 公共接口：步骤名称与接口名称一致（前端 Request 面板同步锁定）
+            "step_name": case_name,
             "request_method": method or None,
             "request_config_name": cells["配置名称"] or None,
             "request_url": request_url or None,
@@ -663,7 +691,6 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
             "defined_variables": defined_variables,
             "extract_variables": extract_variables,
             "assert_validators": assert_validators,
-            "tag_names": tag_names,
             **body_fields,
         })
     if not rows and not invalid:
@@ -682,7 +709,6 @@ async def import_script_rows(
     prepared: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
     project_cache: Dict[str, Optional[int]] = {}
-    tag_cache: Dict[Tuple[int, str], Tuple[Optional[int], int]] = {}
 
     seen: Dict[Tuple[str, str], int] = {}
     duplicates: set = set()
@@ -708,27 +734,6 @@ async def import_script_rows(
         project_id = project_cache[project_name]
         if project_id is None:
             errors.append(f"所属应用({project_name})不存在")
-
-        tag_ids: List[int] = []
-        if project_id is not None:
-            for tag_name in row["tag_names"]:
-                cache_key = (project_id, tag_name)
-                if cache_key not in tag_cache:
-                    matched = await AutoTestApiTagInfo.filter(
-                        tag_project=project_id, tag_name=tag_name, state__not=1
-                    ).all()
-                    tag_cache[cache_key] = (
-                        matched[0].id if len(matched) == 1 else None,
-                        len(matched),
-                    )
-                tag_id, count = tag_cache[cache_key]
-                if tag_id is None:
-                    errors.append(
-                        f"所属标签({tag_name})在应用({project_name})下"
-                        f"{'不存在' if count == 0 else '存在多条同名, 无法定位'}"
-                    )
-                else:
-                    tag_ids.append(tag_id)
 
         existing_case: Optional[AutoTestApiCaseInfo] = None
         existing_step: Optional[AutoTestApiStepInfo] = None
@@ -757,7 +762,6 @@ async def import_script_rows(
         prepared.append({
             **row,
             "project_id": project_id,
-            "tag_ids": tag_ids or None,
             "existing_case": existing_case,
             "existing_step": existing_step,
         })
@@ -794,7 +798,7 @@ async def import_script_rows(
                     "case_type": AutoTestCaseType.PUBLIC_API,
                     "case_attr": AutoTestCaseAttr.TRUE_CASE,
                     "case_desc": item["case_desc"],
-                    "case_tags": item["tag_ids"],
+                    "case_tags": None,
                     "session_variables": None,
                     "case_steps": 1,
                 })
@@ -803,7 +807,7 @@ async def import_script_rows(
             else:
                 await services.case_curd.update(
                     id=item["existing_case"].id,
-                    obj_in={"case_desc": item["case_desc"], "case_tags": item["tag_ids"]},
+                    obj_in={"case_desc": item["case_desc"], "case_tags": None},
                 )
                 await services.step_curd.update(id=item["existing_step"].id, obj_in=step_payload)
                 updated += 1

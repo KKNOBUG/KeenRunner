@@ -29,6 +29,26 @@ from backend.enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES
 CASE_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = ("case_tags", "session_variables")
 
 
+def _normalize_case_tags(
+        case_type: Optional[AutoTestCaseType],
+        case_tags: Optional[List[int]],
+        *,
+        context: str = "用例",
+) -> Optional[List[int]]:
+    """
+    所属标签口径：仅「用户脚本」允许且必填；「公共脚本/公共接口」禁止打标（统一落 NULL）。
+    """
+    if case_type in PUBLIC_CASE_TYPES:
+        if case_tags:
+            raise ParameterException(
+                message=f"{context}所属标签不允许填写：公共脚本/公共接口不支持打标签"
+            )
+        return None
+    if not case_tags:
+        raise ParameterException(message=f"{context}所属标签(case_tags)字段不允许为空")
+    return case_tags
+
+
 def _readd_explicit_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
     """
     回补「显式置空」字段：model_dump(exclude_none=True) 会丢弃None值，
@@ -108,14 +128,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
-        case_tags: Optional[List[int]] = case_in.case_tags
         case_type: Optional[AutoTestCaseType] = case_in.case_type
-
-        # 业务层验证: 标签必填(公共接口类型豁免)且不允许为空(与批量新增路径口径一致)
-        if not case_tags and case_type != AutoTestCaseType.PUBLIC_API:
-            error_message: str = "新增用例信息失败, 用例所属标签(case_tags)字段不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+        try:
+            case_tags = _normalize_case_tags(case_type, case_in.case_tags, context="新增用例信息失败, 用例")
+        except ParameterException as e:
+            LOGGER.error(str(e.message))
+            raise
 
         # 业务层验证: 检查标签是否全部存在(get_by_ids不接受空列表, 无标签时跳过)
         if case_tags:
@@ -138,6 +156,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise DataAlreadyExistsException(message=error_message)
         try:
             case_dict = case_in.model_dump(exclude_none=True, exclude_unset=True)
+            case_dict["case_tags"] = case_tags
             case_dict["case_version"] = 1
             instance = await self.create(case_dict)
             return instance
@@ -195,11 +214,28 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         )
         _readd_explicit_null_fields(case_in, update_dict, CASE_CLEARABLE_JSON_FIELDS)
 
-        # 业务层验证：检查标签是否全部存在(get_by_ids不接受空列表, 显式清空为None时跳过)
-        if "case_tags" in update_dict:
-            case_tags = update_dict.get("case_tags", instance.case_tags)
-            if case_tags:
-                await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+        effective_type = update_dict.get("case_type", instance.case_type)
+        if effective_type in PUBLIC_CASE_TYPES:
+            # 公共脚本/公共接口：无论是否传 case_tags，一律清空
+            if update_dict.get("case_tags"):
+                error_message = "更新用例信息失败, 用例所属标签不允许填写：公共脚本/公共接口不支持打标签"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+            update_dict["case_tags"] = None
+        elif "case_tags" in update_dict or (
+            "case_type" in update_dict and original_case_type in PUBLIC_CASE_TYPES
+        ):
+            # 用户脚本：显式改标签，或从公共类型切过来时必须具备标签
+            raw_tags = update_dict.get("case_tags", instance.case_tags)
+            try:
+                normalized_tags = _normalize_case_tags(
+                    effective_type, raw_tags, context="更新用例信息失败, 用例"
+                )
+            except ParameterException as e:
+                LOGGER.error(str(e.message))
+                raise
+            update_dict["case_tags"] = normalized_tags
+            await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
         # 业务层验证：检查应用ID和用例名称是否唯一
         if "case_name" in update_dict or "case_project" in update_dict:
@@ -361,12 +397,17 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     state__not=1
                 )
 
-            # 用例不存在，执行新增，及验证必填字段(标签必填, 公共接口类型豁免)
+            # 用例不存在，执行新增，及验证必填字段(仅用户脚本要求标签)
             if not case_instance:
-                if not case_tags and case_type != AutoTestCaseType.PUBLIC_API:
-                    error_message: str = f"第({cid})条用例新增失败, 用例所属标签(case_tags)字段不允许为空"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
+                try:
+                    case_tags = _normalize_case_tags(
+                        case_type, case_tags, context=f"第({cid})条用例新增失败, 用例"
+                    )
+                except ParameterException as e:
+                    LOGGER.error(str(e.message))
+                    raise
+                if case_tags:
+                    await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
                 if not case_name:
                     error_message: str = f"第({cid})条用例新增失败, 用例名称(case_name)字段不允许为空"
                     LOGGER.error(error_message)
@@ -399,6 +440,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     exclude_unset=True,
                     exclude={"case_id", "case_code", "case_version"}
                 )
+                create_case_dict["case_tags"] = case_tags
                 try:
                     new_case_instance: AutoTestApiCaseInfo = await self.create(obj_in=create_case_dict)
                 except Exception as e:
@@ -438,11 +480,28 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     success_detail.append(case_dict)
                     continue
 
-                # 业务层验证：检查标签是否全部存在(get_by_ids不接受空列表, 显式清空为None时跳过)
-                if "case_tags" in update_case_dict:
-                    case_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    if case_tags:
-                        await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+                effective_type = update_case_dict.get("case_type", case_instance.case_type)
+                if effective_type in PUBLIC_CASE_TYPES:
+                    if update_case_dict.get("case_tags"):
+                        error_message = (
+                            f"第({cid})条用例更新失败, 用例所属标签不允许填写：公共脚本/公共接口不支持打标签"
+                        )
+                        LOGGER.error(error_message)
+                        raise ParameterException(message=error_message)
+                    update_case_dict["case_tags"] = None
+                elif "case_tags" in update_case_dict or (
+                    "case_type" in update_case_dict and case_instance.case_type in PUBLIC_CASE_TYPES
+                ):
+                    raw_tags = update_case_dict.get("case_tags", case_instance.case_tags)
+                    try:
+                        normalized_tags = _normalize_case_tags(
+                            effective_type, raw_tags, context=f"第({cid})条用例更新失败, 用例"
+                        )
+                    except ParameterException as e:
+                        LOGGER.error(str(e.message))
+                        raise
+                    update_case_dict["case_tags"] = normalized_tags
+                    await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
                 # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:

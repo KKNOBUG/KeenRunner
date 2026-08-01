@@ -145,6 +145,8 @@ export function mapBackendStep(step) {
     }
   } else if (localType === 'http') {
     base.config = {
+      step_name: step.step_name || '',
+      step_desc: step.step_desc || '',
       method: step.request_method || 'POST',
       url: step.request_url || '',
       request_args_type: step.request_args_type || 'none',
@@ -159,8 +161,9 @@ export function mapBackendStep(step) {
       form_data: Array.isArray(step.request_form_data) ? step.request_form_data : [],
       form_urlencoded: Array.isArray(step.request_form_urlencoded) ? step.request_form_urlencoded : [],
       request_text: step.request_text || null,
-      extract: step.extract_variables || {},
-      validators: step.validators || {},
+      defined_variables: Array.isArray(step.defined_variables) ? step.defined_variables : [],
+      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
+      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
     }
   } else if (localType === 'if') {
     // 展示名固定为「条件分支」，忽略历史落库的 IF/ELIF/ELSE 后缀

@@ -107,14 +107,13 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def create_tag(self, tag_in: AutoTestApiTagCreate) -> AutoTestApiTagInfo:
         """
-        创建标签；同type/mode/name已存在则恢复并更新。
+        创建标签；同应用下同大类/名称已存在则恢复并更新。
 
         :param tag_in: 标签创建schema
         :return: 创建或恢复后的标签实例
         :raises NotFoundException: 应用不存在
         :raises DataBaseStorageException: 违反数据库约束
         """
-        tag_type: str = tag_in.tag_type.value
         tag_mode: str = tag_in.tag_mode
         tag_name: str = tag_in.tag_name
         tag_project: int = tag_in.tag_project
@@ -122,9 +121,13 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         # 业务层验证：检查应用是否存在
         from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
         await AutoTestApiProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
-        # 业务层验证：同应用下相同类型、大类及名称仅可存在一个状态为启用的标签信息
+        # 业务层验证：同应用下相同大类及名称仅可存在一个状态为启用的标签信息
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
-        existing_tag = await self.model.filter(tag_type=tag_type, tag_mode=tag_mode, tag_name=tag_name).first()
+        existing_tag = await self.model.filter(
+            tag_project=tag_project, 
+            tag_mode=tag_mode, 
+            tag_name=tag_name,
+        ).first()
         if not existing_tag:
             try:
                 instance: AutoTestApiTagInfo = await self.create(obj_in=tag_dict)
@@ -145,12 +148,12 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestApiTagInfo:
         """
-        更新标签，根据tag_id或tag_code定位并校验 (tag_type, tag_mode, tag_name) 唯一。
+        更新标签，根据tag_id或tag_code定位并校验 (tag_project, tag_mode, tag_name) 唯一。
 
         :param tag_in: 标签更新schema
         :return: 更新后的标签实例
         :raises NotFoundException: 标签不存在
-        :raises DataAlreadyExistsException: 同类型同模式同名标签已存在
+        :raises DataAlreadyExistsException: 同应用同大类同名标签已存在
         :raises DataBaseStorageException: 违反约束
         """
         tag_id: Optional[int] = tag_in.tag_id
@@ -166,18 +169,20 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             exclude_unset=True,
             exclude={"tag_id", "tag_code"}
         )
-        if "tag_type" in update_dict or "tag_mode" in update_dict or "tag_name" in update_dict:
-            tag_type: str = update_dict.get("tag_type", instance.tag_type)
+        if "tag_project" in update_dict or "tag_mode" in update_dict or "tag_name" in update_dict:
+            tag_project: int = update_dict.get("tag_project", instance.tag_project)
             tag_mode: str = update_dict.get("tag_mode", instance.tag_mode)
             tag_name: str = update_dict.get("tag_name", instance.tag_name)
             existing_tag = await self.model.filter(
-                tag_type=tag_type,
+                tag_project=tag_project,
                 tag_mode=tag_mode,
                 tag_name=tag_name,
                 state__not=1
             ).exclude(id=tag_id).first()
             if existing_tag:
-                error_message: str = f"标签(tag_type={tag_type}, tag_mode={tag_mode}, tag_name={tag_name})已存在"
+                error_message: str = (
+                    f"标签(tag_project={tag_project}, tag_mode={tag_mode}, tag_name={tag_name})已存在"
+                )
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 

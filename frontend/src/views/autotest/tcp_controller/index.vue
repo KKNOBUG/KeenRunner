@@ -46,10 +46,10 @@
           <n-form-item label="步骤名称" path="step_name" required class="tcp-field-step-name">
             <n-input
                 v-model:value="state.form.step_name"
-                placeholder="请输入步骤名称"
-                clearable
+                :placeholder="props.lockStepName ? '公共接口：与用例名称保持一致' : '请输入步骤名称'"
+                :clearable="!props.lockStepName"
                 class="request-step-name-input"
-                :disabled="props.readonly"
+                :disabled="props.readonly || props.lockStepName"
             />
           </n-form-item>
           <n-form-item label="所属应用" path="request_project_id" required class="tcp-field-project">
@@ -390,7 +390,10 @@ const props = defineProps({
   caseProjectId: { type: [Number, String], default: null },
   /** 公共接口用例：Request 面板「步骤描述」锁定（只读），值为用例描述 */
   lockStepDesc: { type: Boolean, default: false },
-  caseDesc: { type: String, default: null }
+  caseDesc: { type: String, default: null },
+  /** 公共接口用例：Request 面板「步骤名称」锁定（只读），值为用例名称 */
+  lockStepName: { type: Boolean, default: false },
+  caseName: { type: String, default: null }
 })
 const emit = defineEmits(['update:config'])
 
@@ -770,6 +773,19 @@ watch(
       if ((state.form.step_desc ?? '') !== desc) {
         syncFromExternal(() => {
           state.form.step_desc = desc
+        })
+      }
+    },
+)
+
+// 公共接口（lockStepName）：步骤名称锁定为用例名称，外部变化时静默回填（不触发 emit 回写循环）
+watch(
+    () => props.caseName,
+    (name) => {
+      if (!props.lockStepName || name == null) return
+      if ((state.form.step_name ?? '') !== name) {
+        syncFromExternal(() => {
+          state.form.step_name = name
         })
       }
     },

@@ -20,7 +20,6 @@ from backend.applications.base.services.scaffold import (
 )
 from backend.enums import (
     AutoTestCaseType,
-    AutoTestTagType,
     AutoTestStepType,
     AutoTestReportType,
     AutoTestLoopMode,
@@ -117,7 +116,6 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
 
 class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     tag_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="标签标识代码")
-    tag_type = fields.CharEnumField(AutoTestTagType, description="标签所属类型")
     tag_project = fields.IntField(default=1, ge=1, index=True, description="标签所属应用")
     tag_mode = fields.CharField(max_length=64, null=True, description="标签大类")
     tag_name = fields.CharField(max_length=64, null=True, description="标签名称")
@@ -128,10 +126,10 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
         table = "krun_autotest_api_tag"
         table_description = "自动化测试-标签信息表"
         unique_together = (
-            ("tag_project", "tag_type", "tag_mode", "tag_name"),
+            ("tag_project", "tag_mode", "tag_name"),
         )
         indexes = (
-            ("tag_type", "tag_mode", "tag_name"),
+            ("tag_mode", "tag_name"),
             ("tag_project", "state", "updated_time"),
         )
         ordering = ["-updated_time"]

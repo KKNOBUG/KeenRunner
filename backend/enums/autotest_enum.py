@@ -20,13 +20,8 @@ class AutoTestCaseType(StringEnum):
     PRIVATE_SCRIPT = "用户脚本"
 
 
-# 公共标识：不可引用其他脚本、不可绑定数据源
+# 公共标识：不可引用其他脚本、不可绑定数据源、不允许打标签
 PUBLIC_CASE_TYPES = (AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PUBLIC_API)
-
-
-class AutoTestTagType(StringEnum):
-    API = "接口"
-    SCRIPT = "脚本"
 
 
 class AutoTestReportType(StringEnum):

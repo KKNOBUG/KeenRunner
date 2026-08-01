@@ -7,7 +7,6 @@ import {
   NInput,
   NPopconfirm,
   NSelect,
-  NTag,
   NText,
 } from 'naive-ui'
 
@@ -23,8 +22,8 @@ import api from '@/api'
 defineOptions({ name: '标签管理' })
 
 /**
- * 标签心智模型（与用例选标一致）：
- * 应用 × 类型(接口/脚本) × 大类(tag_mode) × 名称(tag_name)
+ * 标签心智模型（仅供用户脚本打标）：
+ * 应用 × 大类(tag_mode) × 名称(tag_name)
  * 唯一约束同后端 unique_together。
  */
 
@@ -38,19 +37,14 @@ function onListPaginationMeta(meta) {
 const checkedRowKeys = ref([])
 const queryItems = ref({
   tag_project: null,
-  tag_type: null,
   tag_mode: null,
   tag_name: '',
 })
 const projectOptions = ref([])
 const projectLoading = ref(false)
-const tagTypeOptions = [
-  { label: '接口', value: '接口' },
-  { label: '脚本', value: '脚本' },
-]
-/** 查询区「大类」下拉（随应用/类型变化） */
+/** 查询区「大类」下拉（随应用变化） */
 const queryModeOptions = ref([])
-/** 表单「大类」下拉（可新建，随应用/类型变化） */
+/** 表单「大类」下拉（可新建，随应用变化） */
 const formModeOptions = ref([])
 const modeOptionsLoading = ref(false)
 const vPermission = resolveDirective('permission')
@@ -69,7 +63,6 @@ const {
 } = useCRUD({
   name: '标签',
   initForm: {
-    tag_type: '脚本',
     tag_project: null,
     tag_mode: null,
     tag_name: '',
@@ -77,7 +70,6 @@ const {
   },
   doCreate: (form) =>
       api.createTag({
-        tag_type: form.tag_type,
         tag_project: form.tag_project,
         tag_mode: String(form.tag_mode ?? '').trim(),
         tag_name: String(form.tag_name ?? '').trim(),
@@ -88,7 +80,6 @@ const {
       api.updateTag({
         tag_id: form.tag_id,
         tag_code: form.tag_code,
-        tag_type: form.tag_type,
         tag_project: form.tag_project,
         tag_mode: String(form.tag_mode ?? '').trim(),
         tag_name: String(form.tag_name ?? '').trim(),
@@ -106,21 +97,15 @@ const queryBarProps = {
   actionMode: 'dropdown',
 }
 
-function tagTypeTagType(type) {
-  if (type === '接口') return 'info'
-  if (type === '脚本') return 'success'
-  return 'default'
-}
-
 function projectLabel(projectId) {
   const opt = projectOptions.value.find((p) => p.value === projectId)
   return opt?.label ?? (projectId != null ? String(projectId) : '-')
 }
 
 /**
- * 拉取某应用（可选类型）下已有大类，供查询/表单复用，减少「冒烟 / 冒烟测试」分裂。
+ * 拉取某应用下已有大类，供查询/表单复用，减少「冒烟 / 冒烟测试」分裂。
  */
-async function loadModeOptions({ projectId, tagType, target }) {
+async function loadModeOptions({ projectId, target }) {
   if (!projectId) {
     if (target === 'query' || target === 'both') queryModeOptions.value = []
     if (target === 'form' || target === 'both') formModeOptions.value = []
@@ -133,7 +118,6 @@ async function loadModeOptions({ projectId, tagType, target }) {
       page_size: 9999,
       state: 0,
       tag_project: projectId,
-      tag_type: tagType || undefined,
     })
     const modes = [
       ...new Set(
@@ -172,7 +156,6 @@ async function handleBatchDelete() {
       if (queryItems.value.tag_project) {
         loadModeOptions({
           projectId: queryItems.value.tag_project,
-          tagType: queryItems.value.tag_type,
           target: 'query',
         })
       }
@@ -184,7 +167,6 @@ function buildSearchBody(overrides = {}) {
   return {
     state: 0,
     tag_project: queryItems.value.tag_project || undefined,
-    tag_type: queryItems.value.tag_type || undefined,
     tag_mode: queryItems.value.tag_mode || undefined,
     tag_name: queryItems.value.tag_name || undefined,
     ...overrides,
@@ -195,17 +177,6 @@ function onQueryProjectChange(projectId) {
   queryItems.value.tag_mode = null
   loadModeOptions({
     projectId,
-    tagType: queryItems.value.tag_type,
-    target: 'query',
-  })
-  $table.value?.handleSearch?.()
-}
-
-function onQueryTypeChange(tagType) {
-  queryItems.value.tag_mode = null
-  loadModeOptions({
-    projectId: queryItems.value.tag_project,
-    tagType,
     target: 'query',
   })
   $table.value?.handleSearch?.()
@@ -217,9 +188,6 @@ function customHandleAdd() {
   if (queryItems.value.tag_project) {
     modalForm.value.tag_project = queryItems.value.tag_project
   }
-  if (queryItems.value.tag_type) {
-    modalForm.value.tag_type = queryItems.value.tag_type
-  }
   if (queryItems.value.tag_mode) {
     modalForm.value.tag_mode = queryItems.value.tag_mode
   }
@@ -230,10 +198,10 @@ function customHandleEdit(row) {
 }
 
 watch(
-    () => [modalVisible.value, modalForm.value.tag_project, modalForm.value.tag_type],
-    ([visible, projectId, tagType]) => {
+    () => [modalVisible.value, modalForm.value.tag_project],
+    ([visible, projectId]) => {
       if (!visible) return
-      loadModeOptions({ projectId, tagType, target: 'form' })
+      loadModeOptions({ projectId, target: 'form' })
     }
 )
 
@@ -243,7 +211,6 @@ function customHandleSave(...args) {
     if (queryItems.value.tag_project) {
       loadModeOptions({
         projectId: queryItems.value.tag_project,
-        tagType: queryItems.value.tag_type,
         target: 'query',
       })
     }
@@ -288,21 +255,6 @@ const columns = computed(() => {
       ellipsis: { tooltip: true },
       render(row) {
         return projectLabel(row.tag_project)
-      },
-    },
-    {
-      title: '标签类型',
-      key: 'tag_type',
-      width: 100,
-      align: 'center',
-      render(row) {
-        const t = row.tag_type
-        if (!t) return '-'
-        return h(
-            NTag,
-            { size: 'small', type: tagTypeTagType(t), bordered: false },
-            { default: () => t }
-        )
       },
     },
     {
@@ -472,16 +424,6 @@ const columns = computed(() => {
               @update:value="onQueryProjectChange"
           />
         </QueryBarItem>
-        <QueryBarItem label="标签类型：">
-          <NSelect
-              v-model:value="queryItems.tag_type"
-              :options="tagTypeOptions"
-              clearable
-              placeholder="全部类型"
-              style="width: 120px"
-              @update:value="onQueryTypeChange"
-          />
-        </QueryBarItem>
         <QueryBarItem label="标签大类：">
           <NSelect
               v-model:value="queryItems.tag_mode"
@@ -523,17 +465,6 @@ const columns = computed(() => {
       >
         <NFormItem v-if="modalAction === 'edit'" label="标签代码" path="tag_code">
           <NInput :value="modalForm.tag_code" disabled placeholder="系统自动生成" />
-        </NFormItem>
-        <NFormItem
-            label="标签类型"
-            path="tag_type"
-            :rule="{ required: true, message: '请选择标签类型', trigger: ['change', 'blur'] }"
-        >
-          <NSelect
-              v-model:value="modalForm.tag_type"
-              :options="tagTypeOptions"
-              placeholder="接口 / 脚本"
-          />
         </NFormItem>
         <NFormItem
             label="所属应用"
