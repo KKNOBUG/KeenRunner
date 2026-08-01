@@ -126,6 +126,7 @@
                   placeholder="请选择用例属性"
                   size="small"
                   class="case-field-input"
+                  :disabled="caseForm.case_type === '公共接口'"
               />
             </n-form-item>
           </div>
@@ -142,6 +143,7 @@
                   placeholder="所属应用"
                   size="small"
                   class="case-field-input"
+                  @update:value="onCaseProjectUserChange"
               />
             </n-form-item>
           </div>
@@ -280,6 +282,8 @@ const projectOptions = ref([])
 const projectLoading = ref(false)
 
 const tagOptions = ref([])
+/** 全量标签（不按应用过滤）：用于已选标签的名称解析与跨应用归属判定，保证显示与落库一致 */
+const allTagOptions = ref([])
 const tagLoading = ref(false)
 const selectedTagMode = ref(null)
 const tagPopoverShow = ref(false)
@@ -377,6 +381,7 @@ const loadTags = async (projectId = null) => {
       state: 0,
     })
     if (res?.data) {
+      allTagOptions.value = res.data
       if (projectId) {
         tagOptions.value = res.data.filter((tag) => tag.tag_project === projectId)
       } else {
@@ -397,10 +402,23 @@ const getSelectedTagNames = () => {
   if (!Array.isArray(tags) || tags.length === 0) {
     return ''
   }
+  // 用全量标签解析名称：跨应用的已选标签（历史残留）也要如实显示，不做"显示为空但仍携带落库"
   const names = tags
-      .map((tagId) => tagOptions.value.find((t) => t.tag_id === tagId)?.tag_name)
+      .map((tagId) => allTagOptions.value.find((t) => t.tag_id === tagId)?.tag_name)
       .filter((name) => name)
   return names.join(', ')
+}
+
+/** 用户在下拉框切换所属应用（水化赋值不触发）：剔除不属于新应用的已选标签，避免跨应用残留静默落库 */
+const onCaseProjectUserChange = (newProjectId) => {
+  if (newProjectId == null || newProjectId === '') return
+  if (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0) return
+  const pid = Number(newProjectId)
+  caseForm.case_tags = caseForm.case_tags.filter((tagId) => {
+    const tag = allTagOptions.value.find((t) => t.tag_id === tagId)
+    // 标签不在全量清单中（已停用等）时保留，不做无法判定的剔除
+    return tag ? tag.tag_project === pid : true
+  })
 }
 
 const isTagSelected = (tagId) => {
@@ -481,7 +499,8 @@ const hydrateFromCasePayload = (caseInfo) => {
 const getCasePayload = () => ({
   case_name: caseForm.case_name || '',
   case_project: caseForm.case_project || null,
-  case_tags: Array.isArray(caseForm.case_tags) ? caseForm.case_tags : [],
+  // 快照拷贝：payload 构建到 axios 序列化之间存在 await 窗口，拷贝后不受后续表单变动影响
+  case_tags: Array.isArray(caseForm.case_tags) ? [...caseForm.case_tags] : [],
   case_type: caseForm.case_type || null,
   case_attr: caseForm.case_attr || null,
   case_desc: caseForm.case_desc ?? '',
@@ -505,6 +524,16 @@ watch(
       }
     },
     { immediate: true },
+)
+
+// 公共接口：用例属性固定为「正用例」并置灰（与导入脚本/后端公共接口口径一致），切回其他类型后用户可改
+watch(
+    () => caseForm.case_type,
+    (caseType) => {
+      if (caseType === '公共接口') {
+        caseForm.case_attr = '正用例'
+      }
+    },
 )
 
 onMounted(() => {

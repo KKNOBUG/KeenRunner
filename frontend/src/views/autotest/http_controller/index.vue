@@ -130,16 +130,16 @@
           </div>
         </div>
 
-        <!-- 步骤描述 -->
+        <!-- 步骤描述（公共接口：锁定为用例描述） -->
         <n-form-item label="步骤描述" path="description">
           <n-input
               type="textarea"
               v-model:value="state.form.description"
-              placeholder="请输入步骤描述"
-              clearable
+              :placeholder="props.lockStepDesc ? '公共接口：与用例描述保持一致' : '请输入步骤描述'"
+              :clearable="!props.lockStepDesc"
               :autosize="{ minRows: 1 }"
               style="width: 100%;"
-              :disabled="props.readonly"
+              :disabled="props.readonly || props.lockStepDesc"
           />
         </n-form-item>
       </n-form>
@@ -607,7 +607,10 @@ const props = defineProps({
   hideDataSource: {type: Boolean, default: false},
   /** 公共接口用例：Request 面板「所属应用」锁定（只读），值为用例所属应用 */
   lockProject: {type: Boolean, default: false},
-  caseProjectId: {type: [Number, String], default: null}
+  caseProjectId: {type: [Number, String], default: null},
+  /** 公共接口用例：Request 面板「步骤描述」锁定（只读），值为用例描述 */
+  lockStepDesc: {type: Boolean, default: false},
+  caseDesc: {type: String, default: null}
 })
 
 const emit = defineEmits(['update:config'])
@@ -844,6 +847,19 @@ watch(
       if (Number(state.form.request_project_id) !== Number(pid)) {
         syncFromExternal(() => {
           state.form.request_project_id = Number(pid)
+        })
+      }
+    },
+)
+
+// 公共接口（lockStepDesc）：步骤描述锁定为用例描述，外部变化时静默回填（不触发 emit 回写循环）
+watch(
+    () => props.caseDesc,
+    (desc) => {
+      if (!props.lockStepDesc || desc == null) return
+      if ((state.form.description ?? '') !== desc) {
+        syncFromExternal(() => {
+          state.form.description = desc
         })
       }
     },

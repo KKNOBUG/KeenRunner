@@ -129,6 +129,19 @@ export default {
   ),
   /** Body：{ case_ids } —— 异步导出公共接口用例（>10），返回 { celery_task_id } */
   exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_async', data),
+  /** Body：{ case_ids } —— 同步导出公共接口脚本为模板xlsx（≤10），返回 blob；校验失败时返回 JSON */
+  exportCaseScriptsXlsx: (data = {}) => axios.post(
+      `${import.meta.env.VITE_BASE_API}/autotest/case/export_script_sync`,
+      data,
+      {
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
+  /** Body：{ case_ids } —— 异步导出公共接口脚本（>10），返回 { celery_task_id } */
+  exportCaseScriptsAsync: (data = {}) => request.post('/autotest/case/export_script_async', data),
+  /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增） */
+  importCaseScript: (formData) => request.post('/autotest/case/import_script', formData),
   getAutoTestStepTree: (data = {}) => {
     const params = []
     if (data.case_id) params.push(`case_id=${data.case_id}`)

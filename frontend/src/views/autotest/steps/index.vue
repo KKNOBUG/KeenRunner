@@ -1143,6 +1143,25 @@ const handleSaveAll = async () => {
       return
     }
 
+    // 公共接口：所属应用/步骤描述兜底同步（用户可能从未点开步骤子页面，watch未覆盖时在此强制对齐）；
+    // 必须在 required 校验之前执行：应用变化需同步清空配置名称，由校验拦截强制用户重新选择
+    if (isPublicApiCase.value && steps.value.length === 1 && ['http', 'tcp'].includes(steps.value[0]?.type)) {
+      const casePid = caseInfoPanelRef.value?.caseForm?.case_project
+      const caseDesc = caseInfoPanelRef.value?.caseForm?.case_desc ?? ''
+      const onlyStep = steps.value[0]
+      const syncConfig = {}
+      if (casePid != null && casePid !== '' && Number(onlyStep.config?.request_project_id) !== Number(casePid)) {
+        syncConfig.request_project_id = Number(casePid)
+        syncConfig.request_config_name = null
+      }
+      if ((onlyStep.config?.step_desc ?? '') !== caseDesc) {
+        syncConfig.step_desc = caseDesc
+      }
+      if (Object.keys(syncConfig).length) {
+        updateStepConfig(onlyStep.id, syncConfig)
+      }
+    }
+
     const httpTcpRequired = validateHttpTcpStepsRequired(steps.value)
     if (!httpTcpRequired.valid) {
       notifyError(httpTcpRequired.message)
@@ -1200,12 +1219,6 @@ const handleSaveAll = async () => {
       if (nonCompliant) {
         notifyError('公共接口用例有且仅允许 1 个 HTTP/TCP 请求步骤，请调整后再保存')
         return
-      }
-      // 所属应用兜底同步：用户可能从未点开步骤子页面（监听未覆盖），保存前强制对齐用例所属应用
-      const casePid = caseInfoPanelRef.value?.caseForm?.case_project
-      const onlyStep = steps.value[0]
-      if (casePid != null && casePid !== '' && Number(onlyStep.config?.request_project_id) !== Number(casePid)) {
-        updateStepConfig(onlyStep.id, { request_project_id: Number(casePid) })
       }
     }
 
@@ -1566,20 +1579,38 @@ const editorComponentProps = computed(() => {
     // 公共接口：Request 面板「所属应用」锁定为用例所属应用（只读），由父级监听强制同步
     props.lockProject = isPublicApiCase.value
     props.caseProjectId = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_project ?? null) : null
+    // 公共接口：Request 面板「步骤描述」锁定为用例描述（只读），由父级监听强制同步
+    props.lockStepDesc = isPublicApiCase.value
+    props.caseDesc = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_desc ?? '') : null
   }
   return props
 })
 
-/** 公共接口：请求步骤「所属应用」强制同步用例所属应用（新建/切换用例应用/切换步骤时兜底） */
+/** 公共接口：请求步骤「所属应用/步骤描述」强制同步用例信息（新建/切换应用/编辑用例描述/切换步骤时兜底） */
 watch(
-    [isPublicApiCase, () => caseInfoPanelRef.value?.caseForm?.case_project, () => currentStep.value?.id],
+    [
+      isPublicApiCase,
+      () => caseInfoPanelRef.value?.caseForm?.case_project,
+      () => caseInfoPanelRef.value?.caseForm?.case_desc,
+      () => currentStep.value?.id,
+    ],
     () => {
       if (!isPublicApiCase.value) return
       const step = currentStep.value
+      if (!step || (step.type !== 'http' && step.type !== 'tcp')) return
       const casePid = caseInfoPanelRef.value?.caseForm?.case_project
-      if (!step || (step.type !== 'http' && step.type !== 'tcp') || casePid == null || casePid === '') return
-      if (Number(step.config?.request_project_id) !== Number(casePid)) {
-        updateStepConfig(step.id, { request_project_id: Number(casePid) })
+      const caseDesc = caseInfoPanelRef.value?.caseForm?.case_desc ?? ''
+      const syncConfig = {}
+      if (casePid != null && casePid !== '' && Number(step.config?.request_project_id) !== Number(casePid)) {
+        // 应用变化后配置名称必然失效（配置按应用隔离），同步清空强制用户重新选择
+        syncConfig.request_project_id = Number(casePid)
+        syncConfig.request_config_name = null
+      }
+      if ((step.config?.step_desc ?? '') !== caseDesc) {
+        syncConfig.step_desc = caseDesc
+      }
+      if (Object.keys(syncConfig).length) {
+        updateStepConfig(step.id, syncConfig)
       }
     },
     { immediate: true }

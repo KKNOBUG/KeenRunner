@@ -1,7 +1,7 @@
 <script setup>
 import {h, onMounted, ref, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip} from 'naive-ui'
+import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NAlert, NSpace} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
@@ -116,6 +116,92 @@ async function handleExport() {
     window.URL.revokeObjectURL(url)
   } catch (e) {
     window.$message?.error?.(e?.message || '导出失败')
+  }
+}
+
+/** 导出勾选公共接口为模板脚本 xlsx：≤10 同步下载，>10 下发异步任务；产出文件可直接用于导入脚本 */
+async function handleExportScript() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选要导出的公共接口')
+    return
+  }
+  const payload = { case_ids: ids }
+  if (ids.length > 10) {
+    try {
+      const res = await api.exportCaseScriptsAsync(payload)
+      window.$message?.success?.(res?.message || '导出任务已提交后台执行，请稍后在执行记录中查看结果')
+    } catch (err) {
+      // 基础错误信息已由请求拦截器弹出，此处仅补充不合规明细
+      const detail = buildInvalidDetail(err?.error?.data?.invalid)
+      if (detail) window.$message?.error?.(`不合规明细：${detail}`, { keepAliveOnHover: true })
+    }
+    return
+  }
+  // 同步导出走原生 axios 返回 blob；业务错误时后端返回 JSON(HTTP 200)，按 content-type 区分
+  try {
+    const res = await api.exportCaseScriptsXlsx(payload)
+    const contentType = res?.headers?.['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      const body = JSON.parse(await res.data.text())
+      const detail = buildInvalidDetail(body?.data?.invalid)
+      window.$message?.error?.(
+          detail ? `${body?.message || '存在不合规用例，已取消导出'}（${detail}）` : (body?.message || '导出失败'),
+          { keepAliveOnHover: true },
+      )
+      return
+    }
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
+    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : '公共接口脚本.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    window.$message?.error?.(e?.message || '导出失败')
+  }
+}
+
+/** 导入脚本对话框状态；importErrors 为后端返回的不合规行明细([{row, reason}])，展示在对话框内便于修稿后重试 */
+const importScriptShow = ref(false)
+const importFileList = ref([])
+const importLoading = ref(false)
+const importErrors = ref([])
+
+function handleImportScript() {
+  importFileList.value = []
+  importErrors.value = []
+  importScriptShow.value = true
+}
+
+async function submitImportScript() {
+  const rawFile = importFileList.value?.[0]?.file
+  if (!rawFile) {
+    window.$message?.warning?.('请先选择要导入的模板文件')
+    return
+  }
+  const formData = new FormData()
+  formData.append('file', rawFile)
+  importLoading.value = true
+  importErrors.value = []
+  try {
+    const res = await api.importCaseScript(formData)
+    window.$message?.success?.(res?.message || '导入成功')
+    importScriptShow.value = false
+    $table.value?.handleSearch?.()
+  } catch (err) {
+    // 基础错误信息已由请求拦截器弹出，此处仅补充不合规行明细
+    const invalid = err?.error?.data?.invalid
+    if (Array.isArray(invalid) && invalid.length) {
+      importErrors.value = invalid
+    }
+  } finally {
+    importLoading.value = false
   }
 }
 
@@ -854,9 +940,39 @@ const columns = computed(() => {
       <!--  导出按钮：导出勾选用例的请求头与请求体  -->
       <template #queryBarAfterActions>
         <NButton type="primary" @click="handleExport">导出数据</NButton>
+        <NButton type="primary" style="margin-left: 12px" @click="handleExportScript">导出脚本</NButton>
+        <NButton type="primary" style="margin-left: 12px" @click="handleImportScript">导入脚本</NButton>
       </template>
 
     </CrudTable>
+
+    <!-- 导入公共接口脚本对话框：选择模板xlsx上传；不合规行明细在框内展示便于修稿后重试 -->
+    <NModal v-model:show="importScriptShow" preset="card" title="导入公共接口脚本" style="width: 640px">
+      <NUpload
+          v-model:file-list="importFileList"
+          :max="1"
+          accept=".xlsx"
+          :default-upload="false"
+      >
+        <NButton>选择模板文件(.xlsx)</NButton>
+      </NUpload>
+      <NAlert
+          v-if="importErrors.length"
+          type="error"
+          title="存在不合规行，已取消导入"
+          style="margin-top: 12px"
+      >
+        <div class="import-error-list">
+          <div v-for="(item, index) in importErrors" :key="index">第{{ item.row }}行：{{ item.reason }}</div>
+        </div>
+      </NAlert>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="importScriptShow = false">取消</NButton>
+          <NButton type="primary" :loading="importLoading" @click="submitImportScript">开始导入</NButton>
+        </NSpace>
+      </template>
+    </NModal>
 
     <ExecConfigModal ref="execConfigModalRef" v-model:run-loading="runLoading" />
     <CaseHistoryDrawer
@@ -868,6 +984,12 @@ const columns = computed(() => {
 
 
 <style scoped>
+.import-error-list {
+  max-height: 240px;
+  overflow-y: auto;
+  line-height: 1.8;
+}
+
 .env-fields {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
