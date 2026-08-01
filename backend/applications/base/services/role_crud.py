@@ -102,7 +102,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
     async def create_role(self, role_in: RoleCreate, created_user: Optional[str] = None) -> Role:
         """
-        创建角色：校验 code/name 唯一性后落库，可选写入创建人。
+        创建角色：校验code/name唯一性后落库，可选写入创建人。
 
         :param role_in: 新增角色入参
         :param created_user: 创建人；非None时覆盖写入created_user

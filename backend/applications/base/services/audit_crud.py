@@ -148,7 +148,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         """
         统计指定用户的审计日志：总量、按请求方式、按响应代码分布。
 
-        :param user_id: 用户 ID
+        :param user_id: 用户ID
         :return: 含user_id、total_count、method_statistics、code_statistics的字典
         :raises ParameterException: user_id 为空
         """

@@ -68,11 +68,11 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     async def create_menu(self, menu_in: MenuCreate) -> Menu:
         """
-        创建菜单：校验 name/path 唯一性后落库。
+        创建菜单：校验name/path唯一性后落库。
 
         :param menu_in: 新增菜单入参
         :return: 新建的菜单实例
-        :raises DataAlreadyExistsException: name 或 path 已存在
+        :raises DataAlreadyExistsException: name或path已存在
         """
         name = menu_in.name
         path = menu_in.path
