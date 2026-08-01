@@ -63,7 +63,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         根据celery_id更新执行记录；仅写入模型已有字段，部分键允许置空。
 
         :param celery_id: Celery任务ID
-        :param data: 更新入参 Schema或字段字典
+        :param data: 更新入参Schema或字段字典
         :return: 更新后的记录；不存在则返回None
         """
         record = await self.get_by_celery_id(celery_id=celery_id, state__not=1)
@@ -99,7 +99,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         """
         根据条件分页查询任务执行记录。
 
-        :param record_in: 查询条件（含分页、排序与时间区间）
+        :param record_in: 查询条件(含分页、排序与时间区间)
         :return: (总数, 记录列表)
         :raises ParameterException: 查询字段非法时
         """

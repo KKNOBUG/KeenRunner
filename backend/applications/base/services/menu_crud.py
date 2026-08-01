@@ -52,7 +52,7 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 菜单实例或None
-        :raises ParameterException: path 为空
+        :raises ParameterException: path为空
         :raises NotFoundException: on_error为True且菜单不存在
         """
         if not path:

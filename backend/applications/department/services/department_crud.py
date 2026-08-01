@@ -73,13 +73,15 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         按部门名称精确查询，可能返回多条。
 
         :param name: 部门名称
-        :return: 匹配的部门列表（无匹配时为空列表）
+        :return: 匹配的部门列表(无匹配时为空列表)
         """
         result = await self.get_by_conditions(only_one=False, on_error=False, name=name)
         return result if isinstance(result, list) else ([] if result is None else [result])
 
     async def _validate_parent_id(self, parent_id: int, *, department_id: Optional[int] = None) -> None:
-        """部门最多两级：parent_id 只能为 0 或顶级部门 id。"""
+        """
+        部门最多两级：parent_id只能为 0 或顶级部门id。
+        """
         if parent_id == 0:
             return
         if department_id is not None and parent_id == department_id:
@@ -131,7 +133,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def update_department(self, department_in: DepartmentUpdate, updated_user: Optional[str] = None) -> Department:
         """
-        更新部门：可变更父级（重建闭包表）及基础字段。
+        更新部门：可变更父级(重建闭包表)及基础字段。
 
         :param department_in: 更新入参
         :param updated_user: 可选，写入updated_user
@@ -170,7 +172,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:
         """
-        构建未删除部门的树形结构（从 parent_id=0 递归）。
+        构建未删除部门的树形结构(从parent_id=0 递归)。
 
         :param name: 可选，按名称模糊过滤后再建树
         :return: 顶级部门节点列表，每节点含children
@@ -185,9 +187,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         # 辅助函数，用于递归构建部门树
         def build_tree(parent_id: int) -> List[dict]:
             """
-            递归组装指定 parent_id 下的子树节点。
+            递归组装指定parent_id下的子树节点。
 
-            :param parent_id: 父部门 ID，0 表示顶级
+            :param parent_id: 父部门ID，0 表示顶级
             :return: 子节点字典列表
             """
             fmt = lambda x: datetime.datetime.strftime(x, "%Y-%m-%d %H:%M:%S") if isinstance(x, datetime.datetime) else x
@@ -218,7 +220,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         """
         为部门节点重建闭包表记录：继承父级祖先链并追加自身。
 
-        :param obj: 已落库的部门实例（含 id、parent_id）
+        :param obj: 已落库的部门实例(含id、parent_id)
         :return: None
         """
         parent_depts = await DeptStruct.filter(descendant=obj.parent_id).all()
@@ -233,7 +235,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def delete_departments(self, department_ids: Optional[List[int]]) -> int:
         """
-        根据ID列表软删除部门（与单笔 delete_department 行为一致）。
+        根据ID列表软删除部门(与单笔delete_department行为一致)。
 
         :param department_ids: 部门ID列表
         :return: 实际删除成功的条数

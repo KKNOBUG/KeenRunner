@@ -145,7 +145,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """
         软删除报告，并同步软删除该报告下所有明细。
 
-        :param report_id: 报告主键 ID，与report_code二选一
+        :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
         :return: 软删除后的报告实例
         :raises NotFoundException: 报告不存在
@@ -171,7 +171,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """
         根据条件分页查询报告列表。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表

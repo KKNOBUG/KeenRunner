@@ -48,13 +48,13 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
     async def get_by_path(self, path: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
         """
-        根据路径查询路由列表（同一 path 可能对应多种 method）。
+        根据路径查询路由列表(同一path可能对应多种method)。
 
         :param path: 路由路径
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: path 为空
+        :raises ParameterException: path为空
         :raises NotFoundException: on_error为True且无匹配路由
         """
         if not path:
@@ -72,7 +72,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         """
         根据HTTP方法查询路由列表。
 
-        :param method: HTTP 方法（如 GET、POST）
+        :param method: HTTP方法(如GET、POST)
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
@@ -116,7 +116,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         """
         根据标签字符串查询路由列表。
 
-        :param tags: 标签（库内逗号拼接存储）
+        :param tags: 标签(库内逗号拼接存储)
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
@@ -136,7 +136,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
     async def create_router(self, router_in: RouterCreate) -> Router:
         """
-        创建路由：校验path+method 唯一性后落库。
+        创建路由：校验path+method唯一性后落库。
 
         :param router_in: 新增路由入参
         :return: 新建的路由实例
@@ -185,7 +185,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         """
         根据FastAPI应用当前路由同步数据库：删除废弃项，新增或更新现有项。
 
-        :param app: FastAPI 应用实例
+        :param app: FastAPI应用实例
         :return: 同步后的全部路由列表
         """
         # 获取全部路由数据

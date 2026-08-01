@@ -31,7 +31,7 @@ from backend.core.exceptions import DataBaseStorageException
 
 def make_cache_key(case_id: int, step_code: str) -> str:
     """
-    生成 Redis 等使用的缓存键名。
+    生成Redis等使用的缓存键名。
 
     :param case_id: 用例主键
     :param step_code: 步骤标识代码
@@ -124,11 +124,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             **kwargs
     ) -> Optional[Union[AutoTestApiDataSourceInfo, List[AutoTestApiDataSourceInfo]]]:
         """
-        根据用例ID或用例标识 + 步骤ID或步骤标识查询数据源。
-
-        - case_id与case_code至少传其一；
-        - 若同时传入step_id或step_code之一则返回单条记录，
-        - 若未传任何step条件则返回该用例下的数据源列表。
+        根据用例与步骤标识查询数据源，可返回单条或列表。
 
         :param case_id: 用例主键
         :param case_code: 用例标识代码
@@ -221,13 +217,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestApiDataSourceInfo:
         """
-        创建数据源。
+        创建数据源，按用例与步骤定位，已删除则恢复，已启用则拒绝。
 
-        - 根据(case_id, case_code, step_id, step_code)定位记录，无记录则新增；
-        - 已存在且state=1则根据入参更新并恢复 state=0；
-        - 已存在且为启用状态则抛出DataAlreadyExistsException。
-
-        :param data_source_in: 创建 schema（data_source_code 由模型默认值生成，无需传入）
+        :param data_source_in: 创建schema(data_source_code由模型默认值生成，无需传入)
         :return: 新建或恢复后的数据源实例
         :raises DataAlreadyExistsException: 同键已存在且为启用状态时
         :raises DataBaseStorageException: 违反数据库约束时
@@ -273,10 +265,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def update_data_source(self, data_source_in: AutoTestDataSourceUpdate) -> AutoTestApiDataSourceInfo:
         """
-        更新数据源。
-
-        - 定位优先级为data_source_id > data_source_code > (case_id|case_code)且(step_id|step_code)
-        - 定位字段及case_id / case_code / step_id / step_code / cache_key不会写入更新字典。
+        更新数据源，按id/code或用例步骤组合定位。
 
         :param data_source_in: 更新schema
         :return: 更新后的数据源实例
@@ -346,13 +335,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             step_code: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
-        软删除数据源。
-
-        - 定位优先级为data_source_id > data_source_code > (case_id|case_code)且(step_id|step_code)。
+        软删除数据源，按id/code或用例步骤组合定位。
 
         :param data_source_id: 主键ID
         :param data_source_code: 数据驱动标识代码
-        :param case_id: 用例主键（与step组合定位）
+        :param case_id: 用例主键(与step组合定位)
         :param case_code: 用例标识代码
         :param step_id: 步骤主键
         :param step_code: 步骤标识代码
@@ -392,11 +379,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def unbind_case_data_sources(self, case_id: int) -> Dict[str, int]:
         """
-        解绑用例下全部数据源：软删除该用例所有数据源记录，并清空步骤上的数据源指针。
-
-        用于「公共脚本」等不允许使用数据源的用例类型在保存时彻底解除绑定。运行时按
-        (case_id, step_code) 加载数据源、不读步骤指针，故必须软删记录；步骤指针经直连
-        update 写 NULL（常规步骤保存使用 exclude_none，无法清空已有列）。
+        解绑用例下全部数据源：软删记录并清空步骤上的数据源指针。
 
         :param case_id: 用例主键
         :return: {"data_source": 软删记录数, "step": 清空指针的步骤数}
@@ -419,12 +402,12 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         """
         根据条件分页查询数据源列表。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)元组
-        :raises ParameterException: 查询条件非法导致 FieldError 时
+        :raises ParameterException: 查询条件非法导致FieldError时
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -441,7 +424,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_code: 步骤标识代码
         :param dataset_name: 场景名；为空则返回完整dataset
         :param kwargs: 额外过滤条件
-        :return: 含 dataset 字段的字典
+        :return: 含dataset字段的字典
         :raises ParameterException: case_id或step_code为空时
         :raises NotFoundException: 无匹配记录或指定场景不存在时
         """
@@ -500,13 +483,13 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param file_path: 存储路径
         :param file_hash: 文件哈希
         :param file_desc: 描述
-        :param parsed_data: 解析后的 dataset 字典
+        :param parsed_data: 解析后的dataset字典
         :param dataset_names: 场景名称列表
         :param dataframe: 原始二维矩阵
         :param axis: 数据矩阵方向(0:水平模式, 1:垂直模式)
-        :param created_user: 创建人（更新路径会映射为 updated_user）
+        :param created_user: 创建人(更新路径会映射为updated_user)
         :return: 数据源实例
-        :raises ParameterException: parsed_data 为空时
+        :raises ParameterException: parsed_data为空时
         """
         if not parsed_data:
             raise ParameterException(message="参数 parsed_data 不能为空")
@@ -572,9 +555,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         查询指定用例下的数据源列表。
 
         :param case_id: 用例主键
-        :param state: 状态过滤，默认0（启用）
+        :param state: 状态过滤，默认0(启用)
         :return: 根据updated_time倒序及步骤字段排序的列表
-        :raises ParameterException: case_id 为空时
+        :raises ParameterException: case_id为空时
         """
         if not case_id:
             raise ParameterException(message="参数(case_id)不允许为空")
@@ -589,7 +572,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             source_data_source_id: int,
     ) -> Optional[int]:
         """
-        将源数据源复制为新步骤的独立数据源，仅复制解析数据（dataset/dataframe/dataset_names/axis），文件字段全部置空。
+        将源数据源复制为新步骤的独立数据源，仅复制解析数据(dataset/dataframe/dataset_names/axis)，文件字段全部置空。
 
         :param case_id: 新步骤所属用例主键
         :param case_code: 新步骤所属用例标识代码
@@ -701,7 +684,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
     async def create_data_create(self, data_in: AutoTestApiDataCreateCreate) -> AutoTestApiDataCreateInfo:
         """
-        创建数据源生成记录；若同 file_hash 已存在则重置状态并更新路径。
+        创建数据源生成记录；若同file_hash已存在则重置状态并更新路径。
 
         :param data_in: 创建入参
         :return: 创建或更新后的生成记录
@@ -777,7 +760,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         """
         根据条件分页查询数据源生成记录。
 
-        :param search: Tortoise Q 条件
+        :param search: Tortoise Q条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
@@ -796,7 +779,7 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     软删除指定步骤的数据源与生成记录，并清理关联本地文件。
 
-    :param case_id: 用例主键（用于定位上传目录）
+    :param case_id: 用例主键(用于定位上传目录)
     :param step_code_list: 待清理的步骤标识列表
     :return: None
     """

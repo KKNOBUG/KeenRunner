@@ -36,7 +36,7 @@ def _normalize_case_tags(
         context: str = "用例",
 ) -> Optional[List[int]]:
     """
-    所属标签口径：仅「用户脚本」允许且必填；「公共脚本/公共接口」禁止打标（统一落 NULL）。
+    所属标签口径：仅「用户脚本」允许且必填；「公共脚本/公共接口」禁止打标(统一落NULL)。
     """
     if case_type in PUBLIC_CASE_TYPES:
         if case_tags:
@@ -51,11 +51,10 @@ def _normalize_case_tags(
 
 def _readd_explicit_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
     """
-    回补「显式置空」字段：model_dump(exclude_none=True) 会丢弃None值，
-    但payload中明确提供的None（含空数组归一结果）代表用户显式清空，必须落库NULL，否则旧值残留。
+    回补显式置空字段到更新载荷，避免exclude_none丢弃None导致旧值残留。
 
     :param payload: 更新入参schema实例
-    :param update_dict: model_dump产出的更新字典（就地修改）
+    :param update_dict: model_dump产出的更新字典(就地修改)
     :param field_names: 需要回补语义的字段名集合
     :return: None
     """
@@ -119,7 +118,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         创建用例，校验标签存在及同项目下用例名唯一。
 
-        :param case_in: 用例创建 schema
+        :param case_in: 用例创建schema
         :return: 创建后的用例实例
         :raises ParameterException: 用户脚本未填标签，或公共脚本/公共接口误填标签，或标签格式非法
         :raises NotFoundException: 标签不存在
@@ -168,10 +167,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
     @staticmethod
     async def _cascade_public_api_step_project(case_instance: AutoTestApiCaseInfo) -> None:
         """
-        公共接口用例的请求步骤所属应用级联对齐用例所属应用。
-        在类型切换为公共接口或修改用例所属应用后调用，保证「步骤应用=用例应用」不变式对纯接口调用同样成立。
+        将公共接口请求步骤所属应用级联对齐为用例所属应用。
 
-        :param case_instance: 更新后的用例实例（非公共接口或无应用时静默跳过）
+        :param case_instance: 更新后的用例实例(非公共接口或无应用时静默跳过)
         """
         if case_instance.case_type != AutoTestCaseType.PUBLIC_API or not case_instance.case_project:
             return
@@ -315,7 +313,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         根据条件分页查询用例。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
@@ -332,10 +330,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
     @staticmethod
     async def _validate_switch_to_public_api(case_instance: AutoTestApiCaseInfo) -> None:
         """
-        切换用例类型为公共接口的前置校验：存量步骤树形态必须合规（仅1个根步骤、HTTP/TCP）。
-        不满足时抛出 ParameterException 阻断切换，防止出现类型与形态不一致的脏数据。
-        注意：不校验数据源指针——本校验在用例更新阶段执行（步骤树保存之前），存量数据源指针
-        由同一事务后续的树保存清空（前端暂存机制），最终态由 _validate_public_family_tree 强制。
+        校验切换为公共接口前存量步骤树形态是否合规。
 
         :param case_instance: 待切换的用例实例
         :raises ParameterException: 存量步骤树形态不满足公共接口约束时
@@ -363,7 +358,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         批量新增或更新用例：无case_id/case_code则新增，有则更新。
 
-        :param cases_data: 用例更新 schema 列表
+        :param cases_data: 用例更新schema列表
         :return: 含created_count、updated_count、success_detail的字典
         :raises NotFoundException: 关联标签不存在
         :raises ParameterException: 必填字段缺失

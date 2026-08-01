@@ -61,7 +61,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         """
         根据报告标识代码查询明细。
 
-        :param detail_code: 报告标识代码 report_code
+        :param detail_code: 报告标识代码report_code
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
@@ -82,10 +82,10 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestApiDetailInfo:
         """
-        创建执行明细，校验用例与报告存在（可跳过报告校验）。
+        创建执行明细，校验用例与报告存在(可跳过报告校验)。
 
-        :param detail_in: 明细创建 schema
-        :param skip_report_check: 为 True 时不校验报告是否存在
+        :param detail_in: 明细创建schema
+        :param skip_report_check: 为True时不校验报告是否存在
         :return: 创建后的明细实例
         :raises NotFoundException: 用例或报告不存在
         :raises DataBaseStorageException: 违反唯一约束
@@ -129,9 +129,9 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
         """
-        更新明细，需提供 detail_id 或 (report_code, step_code) 定位。
+        更新明细，需提供detail_id或 (report_code, step_code) 定位。
 
-        :param detail_in: 明细更新 schema
+        :param detail_in: 明细更新schema
         :return: 更新后的明细实例
         :raises ParameterException: 定位参数缺失
         :raises NotFoundException: 用例、报告或明细不存在
@@ -198,7 +198,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             report_code: Optional[str] = None
     ) -> AutoTestApiDetailInfo:
         """
-        软删除明细，需提供 detail_id或(report_code, step_code)。
+        软删除明细，需提供detail_id或(report_code, step_code)。
 
         :param detail_id: 明细主键ID，与(report_code, step_code)二选一
         :param step_code: 步骤标识代码
@@ -231,7 +231,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         """
         根据条件分页查询明细列表。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表

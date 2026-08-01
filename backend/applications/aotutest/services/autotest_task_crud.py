@@ -28,12 +28,10 @@ from backend.core.exceptions import (
 
 def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
     """
-    从 cases_execute_config 汇总去重后的环境 ID 列表。
-
-    优先取每个用例的 global_env_id；步骤配置中的env_id一并纳入。
+    从cases_execute_config汇总去重后的环境ID列表。
 
     :param cases_execute_config: 用例执行配置字典
-    :return: 升序环境 ID 列表
+    :return: 升序环境ID列表
     """
     if not isinstance(cases_execute_config, dict):
         return []
@@ -64,10 +62,10 @@ def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
 
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
-    解析用例执行配置
+    解析用例执行配置。
 
     :param task_dict: 任务字段字典
-    :return: cases_execute_config 或None
+    :return: cases_execute_config或None
     """
     cases_cfg = task_dict.get("cases_execute_config")
     if isinstance(cases_cfg, dict) and cases_cfg:
@@ -85,7 +83,7 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     压缩task_kwargs：保留case_ids/initial_variables及未知扩展键，剔除cases_execute_config。
 
     :param task_kwargs: 原始task_kwargs
-    :return: 清洗后的字典；输入 None时返回None
+    :return: 清洗后的字典；输入None时返回None
     """
     if task_kwargs is None:
         return None
@@ -103,7 +101,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
     @staticmethod
     def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        将任务字典中的枚举字段（task_type 等）转为原始值。
+        将任务字典中的枚举字段(task_type等)转为原始值。
 
         :param data: 任务字段字典
         :return: 原地转换后的字典
@@ -137,7 +135,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         根据主键ID查询任务。
 
-        :param task_id: 任务主键 ID
+        :param task_id: 任务主键ID
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 任务实例或None
@@ -295,7 +293,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:
         """
-        设置任务是否启用调度（仅切换 task_enabled，触发依赖 crontab）。
+        设置任务是否启用调度(仅切换task_enabled，触发依赖crontab)。
 
         :param task_id: 任务主键ID
         :param enabled: 是否启用
@@ -311,7 +309,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         """
         根据条件分页查询任务列表；默认根据最后执行时间倒序，未执行过的排在后面。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表

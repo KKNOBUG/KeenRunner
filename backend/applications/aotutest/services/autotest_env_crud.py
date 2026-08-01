@@ -30,9 +30,7 @@ from backend.enums import AutoTestConfigNodeType
 
 async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tuple[str, Optional[str]]:
     """
-    根据全局环境枚举名 + 应用解析host/port。
-
-    - 先查 AutoTestApiEnvEnumInfo（env_name），再查 AutoTestApiEnvConfigInfo（project_id + env_id，config_type=api）。
+    根据全局环境枚举名与应用解析API的host/port。
 
     :param project_id: 应用主键ID
     :param env_name: 环境枚举名称
@@ -254,7 +252,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         """
         根据条件分页查询环境枚举列表。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表

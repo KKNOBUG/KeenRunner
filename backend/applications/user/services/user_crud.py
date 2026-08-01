@@ -80,7 +80,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def get_by_alias(self, alias: str, on_error: bool = False, **kwargs) -> Optional[User]:
         """
-        根据用户姓名（alias）查询单条用户。
+        根据用户姓名(alias)查询单条用户。
 
         :param alias: 用户姓名
         :param on_error: 未找到时是否抛出NotFoundException
@@ -104,7 +104,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         校验用户名与密码，返回可登录用户。
 
-        :param credentials: 登录凭证（username、password）
+        :param credentials: 登录凭证(username、password)
         :return: 用户实例
         :raises NotFoundException: 用户不存在或密码错误
         :raises NoPermissionException: 用户已禁用
@@ -184,7 +184,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def update_user(self, user_in: UserUpdate) -> User:
         """
-        根据user_id更新用户基础字段（不含角色，角色由 update_roles 单独处理）。
+        根据user_id更新用户基础字段(不含角色，角色由update_roles单独处理)。
 
         :param user_in: 更新入参
         :return: 更新后的用户实例
@@ -205,7 +205,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         重置用户角色关联：先清空再根据role_ids重新绑定。
 
         :param user: 用户实例
-        :param role_ids: 角色 ID 列表；空列表表示清空
+        :param role_ids: 角色ID列表；空列表表示清空
         :return: None
         :raises DoesNotExist: 角色不存在
         """
@@ -237,7 +237,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         用户修改密码：更新密码并吊销所有Token。
 
         :param user_id: 用户ID
-        :param new_password: 新密码（明文）
+        :param new_password: 新密码(明文)
         :return: 更新后的用户实例
         :raises NotFoundException: 用户不存在
         """

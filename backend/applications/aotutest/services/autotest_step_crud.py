@@ -58,7 +58,9 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
 
     def __init__(self):
-        """初始化 CRUD，绑定模型 AutoTestApiStepInfo。"""
+        """
+        初始化CRUD，绑定模型AutoTestApiStepInfo。
+        """
         super().__init__(model=AutoTestApiStepInfo)
 
     async def get_by_id(self, step_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
@@ -108,11 +110,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def get_by_case_id(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseStepTreeLoadResult:
         """
-        根据用例ID或case_code获取该用例的步骤树（含引用脚本步骤及统计）。
+        根据用例ID或case_code获取该用例的步骤树(含引用脚本步骤及统计)。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
-        :return: AutoTestCaseStepTreeLoadResult（根步骤为AutoTestStepTreeUpdateItem）
+        :return: AutoTestCaseStepTreeLoadResult(根步骤为AutoTestStepTreeUpdateItem)
         :raises NotFoundException: 用例不存在
         """
         # 业务层验证：检查用例是否存在
@@ -279,13 +281,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def get_request_step_project_ids(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> List[int]:
         """
-        根据用例ID或case_code从步骤树中提取请求相关步骤所选择的应用ID并去重返回。
-
-        - 递归遍历children与quote_steps（引用公共脚本展开后的步骤）收集HTTP与TCP步骤的request_project_id、数据库步骤database_operates各项的project_id以及Redis步骤redis_operates各项的project_id。
+        从步骤树提取请求相关步骤所选应用ID并去重。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
-        :return: 去重后的 project_id 列表（升序）
+        :return: 去重后的project_id列表(升序)
         """
         load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
         project_ids: Set[int] = set()
@@ -302,7 +302,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 return None
 
         def recursive_require_project_ids(step: AutoTestStepTreeUpdateItem) -> None:
-            """递归收集HTTP/TCP/DB/Redis 步骤上的 project_id到外层集合。"""
+            """
+            递归收集HTTP/TCP/DB/Redis步骤上的project_id到外层集合。
+            """
             st_e = _norm_step_type(step.step_type)
             if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
                 request_project_id = step.request_project_id
@@ -339,18 +341,18 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     async def get_copy_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> Dict[str, Any]:
         """
-        获取用例步骤树的完整副本，用于复制后编辑，数据尚未保存。
-
-        返回目标脚本的完整树结构而不遗漏任何信息，涵盖根步骤及所有递归子步骤、引用脚本步骤（quote_steps 递归，含嵌套引用）、引用脚本用例信息（quote_case）以及步骤业务字段（step_name、request_url、code、conditions、extract_variables、assert_validators 等）。实现上复用get_by_case_id获取含引用脚本递归展开的完整步骤树，并递归移除每步的step_id、step_code、parent_step_id等更新标识使前端保存时根据新增逻辑处理，同时保留quote_steps与quote_case并对引用脚本内步骤递归移除标识，确保引用脚本下的步骤完整返回。
+        获取用例步骤树完整副本，用于复制后编辑且尚未落库。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
-        :return: {"case": {...}, "steps": [...]}，case 中 case_id/case_code 置空
+        :return: {"case": {...}, "steps": [...]}，case中case_id/case_code置空
         """
         load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
 
         def strip_step_for_copy_model(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
-            """在模型上递归移除step_id、step_code、parent_step_id、step_no；case 内 case_id/case_code置空。"""
+            """
+            在模型上递归移除step_id、step_code、parent_step_id、step_no；case内case_id/case_code置空。
+            """
             case_block = step.case
             if isinstance(case_block, dict):
                 case_block = {**case_block, "case_id": None, "case_code": None}
@@ -615,8 +617,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param step_id: 单步主键ID，与step_code二选一时删除该步及所有子步骤
         :param step_code: 单步标识代码，与step_id二选一
-        :param parent_step_id: 指定父步骤 ID 时，删除该父步骤下所有子步骤
-        :param case_id: 指定用例 ID 时，删除该用例下所有根步骤（及子步骤）
+        :param parent_step_id: 指定父步骤ID时，删除该父步骤下所有子步骤
+        :param case_id: 指定用例ID时，删除该用例下所有根步骤(及子步骤)
         :param exclude_step: 不删除的 (step_id, step_code) 集合
         :return: 实际软删除的步骤数量
         """
@@ -695,7 +697,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """
         根据条件分页查询步骤列表。
 
-        :param search: Tortoise Q 查询条件
+        :param search: Tortoise Q查询条件
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
@@ -711,7 +713,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
     @classmethod
     def _iter_tree_steps(cls, steps_data):
-        """深度优先遍历步骤树全部节点（含 children 与 branch_items.branch_children）。"""
+        """
+        深度优先遍历步骤树全部节点(含children与branch_items.branch_children)。
+        """
         for step_data in steps_data or []:
             yield step_data
             yield from cls._iter_tree_steps(getattr(step_data, "children", None))
@@ -726,13 +730,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_project: Optional[int] = None,
     ) -> None:
         """
-        公共家族(公共脚本/公共接口)步骤树约束：全树不允许存在引用步骤、不允许绑定数据源；
-        公共接口另有形态约束（有且仅有 1 个 HTTP/TCP 根步骤，见 _validate_public_api_tree）。
+        校验公共家族步骤树约束：全树不允许引用步骤与数据源绑定。
 
         :param steps_data: 根级步骤树项列表
-        :param case_type: 当前用例目标类型（必为公共家族成员）
-        :param case_project: 当前用例所属应用ID（公共接口一致性校验使用）
-        :raises ParameterException: 任一约束不满足时（调用方事务回滚）
+        :param case_type: 当前用例目标类型(必为公共家族成员)
+        :param case_project: 当前用例所属应用ID(公共接口一致性校验使用)
+        :raises ParameterException: 任一约束不满足时(调用方事务回滚)
         """
         if case_type == AutoTestCaseType.PUBLIC_API:
             cls._validate_public_api_tree(steps_data)
@@ -758,11 +761,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
     @staticmethod
     def _validate_public_api_tree(steps_data: List["AutoTestStepTreeUpdateItem"]) -> None:
         """
-        公共接口用例步骤树约束：有且仅有 1 个根步骤、类型仅 HTTP/TCP、无子级结构、无数据源绑定。
-        （请求步骤所属应用由 _validate_public_family_tree 在形态校验通过后自动对齐用例所属应用）
+        校验公共接口步骤树形态：仅1个HTTP/TCP根步骤且无子级与数据源。
 
         :param steps_data: 根级步骤树项列表
-        :raises ParameterException: 任一约束不满足时（调用方事务回滚）
+        :raises ParameterException: 任一约束不满足时(调用方事务回滚)
         """
         if len(steps_data) != 1:
             error_message: str = f"公共接口用例有且仅需 1 个请求步骤，当前提交({len(steps_data)})步"
@@ -793,7 +795,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param steps_data: 步骤树项列表，每项可为AutoTestStepTreeUpdateItem
         :param parent_step_id: 当前层级的父步骤ID，用于新增时挂载
-        :param branch_index: 当前层级所属分支序号（条件分支子步骤使用）
+        :param branch_index: 当前层级所属分支序号(条件分支子步骤使用)
         :return: 包含created_count、updated_count、process_detail、success_detail的字典
         :raises ParameterException: 必填字段缺失或父步骤类型不允许子步骤时
         :raises NotFoundException: 用例或父步骤不存在时
@@ -1200,16 +1202,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """
         执行单个用例：创建报告、拉取步骤树、调用执行引擎并写明细。
 
-        参数化执行时仅传入dataset_name，步骤执行器内根据case_id/step_no/step_code/dataset_name查表获取数据。
-
-        :param case_id: 用例主键 ID
+        :param case_id: 用例主键ID
         :param report_type: 报告类型枚举
         :param initial_variables: 初始变量列表，每项含key、value、desc
         :param steps_execute_config: 执行配置
         :param task_code: 任务标识代码，可选
         :param batch_code: 批次标识代码，可选
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由HTTP步骤执行器内查表获取
-        :return: 含 success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code 等
+        :return: 含success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code等
         :raises NotFoundException: 用例不存在时
         :raises ParameterException: 用例无可执行步骤时
         """
@@ -1303,9 +1303,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             empty_error: str,
     ) -> Dict[str, Any]:
         """
-        将同一用例的多轮 execute_single_case 结果收成统一字段（三分支共用）。
+        将同一用例多轮执行结果汇总为统一字段。
 
-        步骤指标按各轮累计；passed_ratio 为累计步骤通过率(%)；success 为用例级（各轮全通过）。
         """
         if not case_results:
             return {
@@ -1351,10 +1350,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             task_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        批量执行多个用例，依次调用 execute_single_case 并汇总。
-
-        批次级字段：total_cases / success_cases / failed_cases / success_rate(%)。
-        results[] 各元素字段与三分支对齐（含步骤级 total_steps/success_steps/failed_steps/passed_ratio）。
+        批量执行多个用例并汇总成功失败与明细。
 
         :param case_ids: 用例主键ID列表
         :param report_type: 报告类型枚举
