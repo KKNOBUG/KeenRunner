@@ -126,8 +126,6 @@ async def update_role(
         data: dict = await instance.to_dict()
         LOGGER.info(f"更新角色成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (ParameterException, NotFoundException) as e:
-        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
@@ -212,8 +210,6 @@ async def get_role_authorized(
         data = await role_obj.to_dict(m2m=True)
         LOGGER.info(f"查看角色权限成功, role_id={id}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (ParameterException, NotFoundException) as e:
-        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查看角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
@@ -236,8 +232,6 @@ async def update_role_authorized(
         await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
         LOGGER.info(f"更新角色权限成功, role_id={role_in.id}")
         return SuccessResponse(message="更新成功")
-    except (ParameterException, NotFoundException) as e:
-        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")

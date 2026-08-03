@@ -30,7 +30,9 @@ from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
+    NotFoundResponse,
     DataBaseStorageResponse,
+    DataAlreadyExistsResponse
 )
 
 autotest_project = APIRouter()
@@ -61,9 +63,7 @@ async def create_project_info(
         )
         LOGGER.info(f"新增应用成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
-        return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增应用失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -97,9 +97,11 @@ async def delete_project_info(
         )
         LOGGER.info(f"根据id或code删除应用成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除应用失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -122,6 +124,12 @@ async def delete_projects_batch(
         count = await services.project_curd.delete_projects(project_in=project_in)
         LOGGER.info(f"根据id或code列表删除项目成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除项目失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
@@ -152,9 +160,13 @@ async def update_project_info(
         )
         LOGGER.info(f"根据id或code更新应用成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新应用失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -191,7 +203,9 @@ async def get_project_info(
         )
         LOGGER.info(f"根据id或code查询应用成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询应用失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -212,8 +226,6 @@ async def get_env_name_list(
         names: List[str] = await services.project_curd.model.filter(state__not=1).distinct().values_list("project_name", flat=True)
         LOGGER.info(f"查询应用名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
-    except (NotFoundException, ParameterException) as e:
-        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询应用名称(去重)失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")

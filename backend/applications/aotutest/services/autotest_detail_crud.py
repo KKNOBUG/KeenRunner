@@ -25,7 +25,6 @@ from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
-    DataAlreadyExistsException,
 )
 
 
@@ -88,8 +87,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param skip_report_check: 为True时不校验报告是否存在
         :return: 创建后的明细实例
         :raises NotFoundException: 用例或报告不存在
-        :raises DataBaseStorageException: 违反约束规则
-        :raises DataAlreadyExistsException: 其他写入冲突
+        :raises DataBaseStorageException: 违反约束规则或其他写入异常
         """
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
@@ -125,7 +123,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         except Exception as e:
             error_message: str = f"新增明细信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataAlreadyExistsException(message=error_message) from e
+            raise DataBaseStorageException(message=error_message) from e
 
     async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
         """

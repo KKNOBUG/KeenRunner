@@ -270,15 +270,18 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param config_in: 环境配置删除schema
         :return: 更新条数
+        :raises ParameterException: config_ids与config_codes均未传
         """
         config_ids: Optional[List[int]] = config_in.config_ids
         config_codes: Optional[List[str]] = config_in.config_codes
+        if not config_ids and not config_codes:
+            error_message: str = "删除配置信息失败, 参数[config_ids]或[config_codes]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if config_ids:
             count = await self.model.filter(id__in=config_ids).update(state=1)
-        elif config_codes:
-            count = await self.model.filter(config_code__in=config_codes).update(state=1)
         else:
-            count = 0
+            count = await self.model.filter(config_code__in=config_codes).update(state=1)
         return count
 
     async def select_config(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvConfigInfo]]:

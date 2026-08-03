@@ -46,11 +46,12 @@ from backend.core.exceptions import (
 from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
-    BadReqResponse,
     ParameterResponse,
-    FileExtensionResponse,
-    DataBaseStorageResponse,
     NotFoundResponse,
+    DataBaseStorageResponse,
+    DataAlreadyExistsResponse,
+    BadReqResponse,
+    FileExtensionResponse
 )
 from backend.enums import AutoTestStepType, PUBLIC_CASE_TYPES
 from backend.services import get_current_username
@@ -127,9 +128,11 @@ async def create_data_source_info(
         data = await _serialize_data_source(instance)
         LOGGER.info(f"新增数据源成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
-        return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增数据源失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -170,7 +173,9 @@ async def delete_data_source_info(
         data = await _serialize_data_source(instance)
         LOGGER.info(f"删除数据源成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"删除数据源失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -193,7 +198,7 @@ async def unbind_case_data_source(
         result = await services.data_source_curd.unbind_case_data_sources(case_id=case_id)
         LOGGER.info(f"解绑用例数据源成功, case_id={case_id}, 结果明细: {result}")
         return SuccessResponse(message="解绑成功", data=result)
-    except (NotFoundException, ParameterException) as e:
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"解绑用例数据源失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -233,9 +238,11 @@ async def update_data_source_info(
         data = await _serialize_data_source(instance)
         LOGGER.info(f"更新数据源成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -320,9 +327,11 @@ async def save_or_update_data_source_info(
         data = await _serialize_data_source(instance)
         LOGGER.info(f"保存或更新数据源成功, 结果明细: {data}")
         return SuccessResponse(message="保存成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"保存或更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -483,7 +492,9 @@ async def get_data_source_by_case_step(
         data = await _serialize_data_source(result)
         LOGGER.info(f"根据case_step查询数据源成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据case_step查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -581,7 +592,9 @@ async def get_scene_names_by_case(
             },
             total=len(data_source_info),
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据用例查询数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -669,7 +682,9 @@ async def single_step_dataset_upload(
             case_id=case_id,
             step_code=step_code,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -680,7 +695,9 @@ async def single_step_dataset_upload(
 
     try:
         case_instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -737,9 +754,13 @@ async def single_step_dataset_upload(
             axis=axis,
             created_user=created_user,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"数据源保存失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -788,7 +809,9 @@ async def single_step_dataset_download(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers=headers,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -842,7 +865,9 @@ async def batch_step_dataset_upload(
     try:
         case_instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
         case_code: str = case_instance.case_code
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -991,7 +1016,9 @@ async def batch_step_dataset_download(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers=headers,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"汇总导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")

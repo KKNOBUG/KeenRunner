@@ -29,10 +29,10 @@ from backend.core.exceptions import (
 from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
-    DataAlreadyExistsResponse,
     ParameterResponse,
     NotFoundResponse,
     DataBaseStorageResponse,
+    DataAlreadyExistsResponse
 )
 
 autotest_tag = APIRouter()
@@ -63,10 +63,12 @@ async def create_tag_info(
         )
         LOGGER.info(f"新增标签成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
@@ -124,6 +126,8 @@ async def delete_tag_batch(
         count = await services.tag_curd.delete_tags(tag_in=tag_in)
         LOGGER.info(f"根据id或code列表删除标签成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")

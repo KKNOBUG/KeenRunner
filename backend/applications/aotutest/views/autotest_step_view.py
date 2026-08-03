@@ -40,9 +40,9 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepAssertValidatorItem,
     StepsExecuteConfigBase,
 )
+from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
 from backend.common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.configure import LOGGER
@@ -55,13 +55,13 @@ from backend.core.exceptions import (
     ReqInvalidException,
 )
 from backend.core.responses import (
-    BadReqResponse,
     SuccessResponse,
     FailureResponse,
-    NotFoundResponse,
     ParameterResponse,
+    NotFoundResponse,
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
+    BadReqResponse
 )
 from backend.enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, AutoTestConfigNodeType
 from backend.services.ctx import get_current_username
@@ -94,9 +94,13 @@ async def create_step(
         )
         LOGGER.info(f"新增步骤成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增步骤失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -130,9 +134,13 @@ async def delete_step(
         )
         LOGGER.info(f"根据id或code删除步骤成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除步骤失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -164,9 +172,13 @@ async def update_step(
         )
         LOGGER.info(f"根据id或code更新步骤成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新步骤失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -203,7 +215,9 @@ async def get_step(
         )
         LOGGER.info(f"根据id或code查询步骤成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -293,7 +307,9 @@ async def get_step_tree(
             data = []
         total = load.step_counter.total_steps
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -320,7 +336,9 @@ async def copy_step_tree(
         copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code)
         LOGGER.info("复制用例步骤树成功")
         return SuccessResponse(message="复制成功", data=copy_data)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"复制用例步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -473,8 +491,9 @@ async def batch_update_steps_tree(
                 )
                 # 6. 构建返回结果
                 return SuccessResponse(message="更新用例及步骤树成功", data={"cases": case_result, "steps": step_result})
-        except (TypeRejectException, NotFoundException, ParameterException, DataBaseStorageException, DataAlreadyExistsException) as e:
-            return FailureResponse(message=str(e.message))
+        except (TypeRejectException, NotFoundException, ParameterException, DataBaseStorageException, DataAlreadyExistsException):
+            # 业务异常交由外层统一映射为对应 Response，此处仅触发事务回滚
+            raise
         except Exception as e:
             # 事务会自动回滚
             LOGGER.error(
@@ -488,13 +507,15 @@ async def batch_update_steps_tree(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
-        return DataBaseStorageResponse(message=str(e.message))
+    except TypeRejectException as e:
+        return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"更新用例及步骤树异常，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新用例及步骤树异常", data=str(e))
+        LOGGER.error(f"更新用例及步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新用例及步骤树失败，异常描述: {e}")
 
 
 @autotest_step.post("/validate_tree", summary="校验步骤树", description="校验步骤树JSON合法性")
@@ -1088,10 +1109,10 @@ async def debug_tcp_request(
 
         start_time = time.time()
         async with AioTcpClient(
-            timeout=read_td or timedelta(seconds=30),
-            connect_timeout=connect_td,
-            length_field_size=int(length_field_size),
-            max_response_bytes=int(max_response_bytes),
+                timeout=read_td or timedelta(seconds=30),
+                connect_timeout=connect_td,
+                length_field_size=int(length_field_size),
+                max_response_bytes=int(max_response_bytes),
         ) as client:
             try:
                 utils: AsyncTcpUtils = await client.tcp(
@@ -1993,7 +2014,9 @@ async def execute_step_tree(
             )
 
         return BadReqResponse(message=f"不支持的执行类型: {execute_type}")
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"执行或调试步骤树失败，异常描述: {e}\n{traceback.format_exc()}")

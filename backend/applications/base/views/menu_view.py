@@ -14,8 +14,18 @@ from backend.applications.base.dependencies import get_menu_crud
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
 from backend.applications.base.services.menu_crud import MenuCrud
 from backend.configure import LOGGER
-from backend.core.exceptions import ParameterException, NotFoundException
-from backend.core.responses import NotFoundResponse, SuccessResponse, FailureResponse, ParameterResponse
+from backend.core.exceptions import (
+    ParameterException,
+    NotFoundException,
+    DataAlreadyExistsException
+)
+from backend.core.responses import (
+    NotFoundResponse,
+    SuccessResponse,
+    FailureResponse,
+    ParameterResponse,
+    DataAlreadyExistsResponse
+)
 
 menu = APIRouter()
 
@@ -151,10 +161,8 @@ async def create_menu(
         data = await instance.to_dict()
         LOGGER.info(f"创建菜单成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"创建菜单失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")

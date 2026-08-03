@@ -236,20 +236,33 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
     async def delete_projects(self, project_in: AutoTestApiProjectDelete) -> int:
         """
-        根据ID或code列表批量软删除应用。
+        根据ID或code列表批量软删除应用；逐条复用单删关联校验。
 
         :param project_in: 应用删除schema
         :return: 更新条数
+        :raises ParameterException: project_ids与project_codes均未传
+        :raises NotFoundException: 应用不存在
+        :raises DataBaseStorageException: 存在关联数据
         """
         project_ids: Optional[List[int]] = project_in.project_ids
         project_codes: Optional[List[str]] = project_in.project_codes
+        if not project_ids and not project_codes:
+            error_message: str = "删除应用信息失败, 参数[project_ids]或[project_codes]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        targets: List[AutoTestApiProjectInfo] = []
         if project_ids:
-            count = await self.model.filter(id__in=project_ids).update(state=1)
-        elif project_codes:
-            count = await self.model.filter(project_code__in=project_codes).update(state=1)
+            for pid in project_ids:
+                targets.append(await self.get_by_id(project_id=pid, on_error=True, state__not=1))
         else:
-            count = 0
-        return count
+            for pcode in project_codes:
+                targets.append(await self.get_by_code(project_code=pcode, on_error=True, state__not=1))
+
+        for instance in targets:
+            await self.delete_project(project_id=instance.id)
+
+        return len(targets)
 
     async def select_projects(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiProjectInfo]]:
         """

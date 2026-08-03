@@ -240,15 +240,18 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         :param env_in: 环境枚举删除schema
         :return: 更新条数
+        :raises ParameterException: env_ids与env_codes均未传
         """
         env_ids: Optional[List[int]] = env_in.env_ids
         env_codes: Optional[List[str]] = env_in.env_codes
+        if not env_ids and not env_codes:
+            error_message: str = "删除环境枚举信息失败, 参数[env_ids]或[env_codes]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if env_ids:
             count = await self.model.filter(id__in=env_ids).update(state=1)
-        elif env_codes:
-            count = await self.model.filter(env_code__in=env_codes).update(state=1)
         else:
-            count = 0
+            count = await self.model.filter(env_code__in=env_codes).update(state=1)
         return count
 
     async def select_envs(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvEnumInfo]]:

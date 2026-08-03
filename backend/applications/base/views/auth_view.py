@@ -21,7 +21,13 @@ from backend.applications.user.models.user_model import User
 from backend.applications.user.services.user_crud import UserCrud
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException
-from backend.core.responses import SuccessResponse, NotFoundResponse, FailureResponse
+from backend.core.responses import (
+    SuccessResponse,
+    NotFoundResponse,
+    FailureResponse,
+    ParameterResponse,
+    ForbiddenResponse
+)
 from backend.services import CTX_USER_ID
 from backend.services import create_access_token
 
@@ -44,12 +50,15 @@ async def get_login_access_token(
     try:
         try:
             user: User = await user_crud.authenticate(credentials)
-        except (NotFoundException, NoPermissionException) as e:
+        except NotFoundException as e:
             return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
-
+        except NoPermissionException as e:
+            return ForbiddenResponse(message=str(e.message), data=credentials.model_dump())
         try:
             await user_crud.update_last_login(user_id=user.id)
-        except (ParameterException, NotFoundException) as e:
+        except ParameterException as e:
+            return ParameterResponse(message=str(e.message), data=credentials.model_dump())
+        except NotFoundException as e:
             return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
 
         access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)

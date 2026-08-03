@@ -45,9 +45,10 @@ from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
+    NotFoundResponse,
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
-    FileExtensionResponse,
+    FileExtensionResponse
 )
 from backend.enums import AutoTestReportType
 from backend.services import get_current_username
@@ -83,9 +84,13 @@ async def create_case(
         )
         LOGGER.info(f"新增用例成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增用例失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -119,7 +124,9 @@ async def delete_case(
         )
         LOGGER.info(f"根据id或code删除用例成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -153,9 +160,13 @@ async def update_case(
         )
         LOGGER.info(f"根据id或code更新用例成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新用例失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -216,7 +227,9 @@ async def get_case(
         ] if tag_ids else []
         LOGGER.info(f"根据id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -315,7 +328,9 @@ async def search_cases(
             case_serializes.append(serialize)
         LOGGER.info(f"根据条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -344,7 +359,9 @@ async def get_request_step_project_ids(
         project_ids_len: int = len(project_ids)
         LOGGER.info(f"获取步骤树请求步骤应用ID列表成功, case_id={case_id}, case_code={case_code}, 数量={project_ids_len}, 数据={project_ids}")
         return SuccessResponse(message="查询成功", data=project_ids, total=project_ids_len)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"获取步骤树请求步骤应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -383,7 +400,9 @@ async def export_testcases_xlsx(
             filename=build_export_file_name(get_current_username()),
             background=BackgroundTask(os.remove, temp_path),
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"导出公共接口报文失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -422,7 +441,9 @@ async def export_testcases_async(
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
             total=1,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"下发异步导出任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -461,7 +482,9 @@ async def export_case_scripts_xlsx(
             filename=build_script_file_name(get_current_username()),
             background=BackgroundTask(os.remove, temp_path),
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"导出公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -500,7 +523,9 @@ async def export_case_scripts_async(
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
             total=1,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"下发异步导出脚本任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -534,7 +559,9 @@ async def import_case_scripts(
             data=result,
             total=1,
         )
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"导入公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")

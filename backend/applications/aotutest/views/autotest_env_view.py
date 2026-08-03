@@ -22,7 +22,6 @@ from backend.applications.aotutest.schemas.autotest_env_schema import (
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
-    DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
 )
@@ -30,6 +29,7 @@ from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
+    NotFoundResponse,
     DataBaseStorageResponse
 )
 
@@ -61,9 +61,7 @@ async def create_env_info(
         )
         LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
-        return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增环境失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -97,7 +95,9 @@ async def delete_env_info(
         )
         LOGGER.info(f"根据id或code删除环境成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -120,6 +120,8 @@ async def delete_env_batch(
         count = await services.env_enum_curd.delete_envs(env_in=env_in)
         LOGGER.info(f"根据id或code列表删除环境成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
@@ -150,9 +152,11 @@ async def update_env_info(
         )
         LOGGER.info(f"根据id或code更新环境成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新环境失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -189,7 +193,9 @@ async def get_env_info(
         )
         LOGGER.info(f"根据id或code查询环境成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -210,8 +216,6 @@ async def get_env_name_list(
         names: List[str] = await services.env_enum_curd.model.filter(state__not=1).distinct().values_list("env_name", flat=True)
         LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
-    except (NotFoundException, ParameterException) as e:
-        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询环境名称(去重)环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")

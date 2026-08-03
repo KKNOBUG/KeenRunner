@@ -14,10 +14,7 @@ from fastapi import APIRouter
 
 from backend.common.generate_utils import GenerateUtils
 from backend.configure import LOGGER
-from backend.core.responses import (
-    SuccessResponse,
-    FailureResponse,
-)
+from backend.core.responses import SuccessResponse, FailureResponse
 
 autotest_tool = APIRouter()
 

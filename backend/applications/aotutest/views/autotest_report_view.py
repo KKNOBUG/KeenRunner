@@ -21,7 +21,6 @@ from backend.applications.aotutest.schemas.autotest_report_schema import (
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
-    DataAlreadyExistsException,
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
@@ -30,7 +29,8 @@ from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
-    DataBaseStorageResponse,
+    NotFoundResponse,
+    DataBaseStorageResponse
 )
 
 autotest_report = APIRouter()
@@ -61,9 +61,11 @@ async def create_report(
         )
         LOGGER.info(f"新增报告成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增报告失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -97,7 +99,9 @@ async def delete_report(
         )
         LOGGER.info(f"根据id或code删除报告成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除报告失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -129,9 +133,11 @@ async def update_report(
         )
         LOGGER.info(f"根据id或code更新报告成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新报告失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -168,11 +174,13 @@ async def get_report(
         )
         LOGGER.info(f"根据id或code查询报告成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询测试报告失败，异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_report.post("/search", summary="查询报告列表", description="根据条件分页查询报告列表信息(Body)")
@@ -268,6 +276,10 @@ async def search_reports(
         ]
         LOGGER.info(f"根据条件查询报告成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

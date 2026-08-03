@@ -234,15 +234,18 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
         :param tag_in: 标签删除schema
         :return: 更新条数
+        :raises ParameterException: tag_ids与tag_codes均未传
         """
         tag_ids: Optional[List[int]] = tag_in.tag_ids
         tag_codes: Optional[List[str]] = tag_in.tag_codes
+        if not tag_ids and not tag_codes:
+            error_message: str = "删除标签信息失败, 参数[tag_ids]或[tag_codes]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if tag_ids:
             count = await self.model.filter(id__in=tag_ids).update(state=1)
-        elif tag_codes:
-            count = await self.model.filter(tag_code__in=tag_codes).update(state=1)
         else:
-            count = 0
+            count = await self.model.filter(tag_code__in=tag_codes).update(state=1)
         return count
 
     async def select_tags(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTagInfo]]:

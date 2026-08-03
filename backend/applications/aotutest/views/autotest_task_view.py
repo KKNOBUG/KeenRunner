@@ -37,6 +37,8 @@ from backend.core.responses import (
     FailureResponse,
     ParameterResponse,
     DataBaseStorageResponse,
+    NotFoundResponse,
+    DataAlreadyExistsResponse,
 )
 
 autotest_task = APIRouter()
@@ -67,9 +69,13 @@ async def create_task_info(
         )
         LOGGER.info(f"新增任务成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -103,7 +109,9 @@ async def delete_task_info(
         )
         LOGGER.info(f"根据id或code删除任务成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -135,9 +143,13 @@ async def update_task_info(
         )
         LOGGER.info(f"根据id或code更新任务成功, 结果明细: {data}")
         return SuccessResponse(data=data, message="更新成功", total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except (DataAlreadyExistsException, DataBaseStorageException) as e:
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -174,7 +186,9 @@ async def get_task_info(
         )
         LOGGER.info(f"根据id或code查询任务成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -278,7 +292,9 @@ async def run_task_info(
         )
         LOGGER.info(f"已下发执行任务 task_id={task_id}")
         return SuccessResponse(message="已下发执行，请稍后在报告中查看结果", data={"task_id": task_id}, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"执行任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -313,7 +329,9 @@ async def start_task_info(
         )
         LOGGER.info(f"已启动任务 task_id={task_id}")
         return SuccessResponse(message="任务已启动，将根据调度执行", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"启动任务失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -348,7 +366,9 @@ async def stop_task_info(
         )
         LOGGER.info(f"已停止任务 task_id={task_id}")
         return SuccessResponse(message="任务已停止，将不再根据调度执行", data=data, total=1)
-    except (NotFoundException, ParameterException) as e:
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"停止任务失败，异常描述: {e}\n{traceback.format_exc()}")
