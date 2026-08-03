@@ -139,7 +139,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             instance: AutoTestApiProjectInfo = await self.update(id=existing_project.id, obj_in=project_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)应用信息异常, 违反约束规则或空指针异常: {e}"
+            error_message: str = f"更新应用信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -202,7 +202,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """
         # 业务层验证：检查应用是否存在, project_id与project_code二选一，不能都为空
         if not project_id and not project_code:
-            error_message: str = "查询应用信息失败, 参数[project_id, project_code]至少传一个"
+            error_message: str = "查询应用信息失败, 参数[project_id, project_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if project_id:
@@ -214,19 +214,19 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         # 业务层验证：检查是否存在关联用例
         cases_count = await AutoTestApiCaseCrud().model.filter(case_project=pid, state__not=1).count()
         if cases_count > 0:
-            msg = f"应用[name={instance.project_name}]下存在{cases_count}个用例, 无法直接删除, 请先解除关联"
+            msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
         # 业务层验证：检查是否存在关联环境配置明细（应用+环境枚举下的配置）
         config_count = await AutoTestApiEnvConfigInfo.filter(project_id=pid, state__not=1).count()
         if config_count > 0:
-            msg = f"应用[name={instance.project_name}]下存在{config_count}条环境配置明细, 无法直接删除，请先解除关联"
+            msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
         # 业务层验证：检查是否存在关联标签
         tag_count = await AutoTestApiTagCrud().model.filter(tag_project=pid, state__not=1).count()
         if tag_count > 0:
-            msg = f"应用[name={instance.project_name}]下存在{tag_count}个标签, 无法直接删除，请先解除关联"
+            msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
 
