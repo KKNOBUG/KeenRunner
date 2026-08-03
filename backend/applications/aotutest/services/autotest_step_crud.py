@@ -134,8 +134,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         LOGGER.info(f"获取用例[case_id={case_id}]根步骤成功, 共计: {len(root_steps)}个, 根步骤序号: {root_index}")
 
         # 步骤计数器：用于统计该用例拥有的步骤总数
-        # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id 为 None）
-        # child_steps: 所有子步骤数（递归统计, 不包括根步骤, parent_step_id 不为 None）
+        # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id为None）
+        # child_steps: 所有子步骤数（递归统计, 不包括根步骤, parent_step_id不为None）
         # quote_steps: 引用脚本的步骤数
         # total_step: 总步骤数（direct_steps + child_steps + quote_steps）
         step_counter = {
@@ -172,7 +172,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 },
                 replace_fields={"id": "step_id"}
             )
-            LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})基本信息完成")
+            LOGGER.info(f"获取步骤[step_id={step.id}, step_no={step.step_no}]基本信息完成")
             # 获取用例信息（业务层手动查询）
             if step.case_id:
                 case = await case_crud.get_by_id(case_id=step.case_id, on_error=True, state__not=1)
@@ -185,7 +185,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     },
                     replace_fields={"id": "case_id"}
                 )
-                LOGGER.info(f"获取步骤(step_id={step.id}, step_no={step.step_no})所属用例信息完成")
+                LOGGER.info(f"获取步骤[step_id={step.id}, step_no={step.step_no}]所属用例信息完成")
 
             # 获取子步骤（递归构建）
             children: List[AutoTestApiStepInfo] = await self.model.filter(
@@ -206,9 +206,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 step_dict["branch_items"] = branches_with_children
                 step_dict["children"] = []
             elif children:
-                LOGGER.info(f"- 获取步骤(step_id={step.id}, step_no={step.step_no})所有子步骤(递归构建)开始 -")
+                LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]所有子步骤(递归构建)开始 ==*==")
                 step_dict["children"] = [await build_step_tree(child, is_quote=is_quote) for child in children]
-                LOGGER.info(f"- 获取步骤(step_id={step.id}, step_no={step.step_no})所有子步骤(递归构建)完成 -")
+                LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]所有子步骤(递归构建)完成 ==*==")
             else:
                 step_dict["children"] = []
 
@@ -231,7 +231,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 parent_step_id__isnull=True,
                 state__not=1
             ).order_by("step_no").all()
-            LOGGER.info(f"= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)开始 =")
+            LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]引用脚本的所有步骤(包含子步骤, 递归构建)开始 ==*==")
             step_dict["quote_steps"] = [await build_step_tree(quote, is_quote=True) for quote in quote_case_root_steps]
             step_dict["quote_case"] = await quote_case.to_dict(
                 exclude_fields={
@@ -242,16 +242,16 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 },
                 replace_fields={"id": "case_id"}
             )
-            LOGGER.info("= 获取步骤(step_id={step.id}, step_no={step.step_no})引用脚本的所有步骤(包含子步骤, 递归构建)完成 =")
+            LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]引用脚本的所有步骤(包含子步骤, 递归构建)完成 ==*==")
             return step_dict
 
         # 构建所有根步骤的树
         result = []
         for root_id, root_step in enumerate(root_steps, start=1):
-            LOGGER.info(f">>>>>>>>>>>>>>> 构建第{root_id}个根步骤树结构: ")
+            LOGGER.info(f"==> 构建第{root_id}个根步骤树结构: ")
             result.append(await build_step_tree(root_step))
 
-        # 没有测试步骤明细时将测试用例本身添加到返回结果（历史：单节点仅含 case）
+        # 没有测试步骤明细时将测试用例本身添加到返回结果（历史：单节点仅含case）
         if not result:
             result.append({
                 "case": await case_instance.to_dict(
@@ -839,15 +839,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             # 步骤不存在，执行新增，及验证必填字段
             if not step_instance:
                 if not case_id:
-                    error_message: str = f"第({sid})条步骤新增失败, 步骤所属用例(case_id)字段不允许为空"
+                    error_message: str = f"第{sid}条步骤新增失败, 步骤所属用例(case_id)字段不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
                 if not step_no:
-                    error_message: str = f"第({sid})条步骤新增失败, 步骤序号(step_no)字段不允许为空"
+                    error_message: str = f"第{sid}条步骤新增失败, 步骤序号(step_no)字段不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
                 if not step_data.step_type:
-                    error_message: str = f"第({sid})条步骤新增失败, 步骤类型(step_type)字段不允许为空"
+                    error_message: str = f"第{sid}条步骤新增失败, 步骤类型(step_type)字段不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 
@@ -863,7 +863,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 )
                 if existing_step_instance:
                     error_message: str = (
-                        f"第({sid})步骤新增失败, "
+                        f"第{sid}步骤新增失败, "
                         f"根据(case_id={case_id}, step_no={step_no})条件查询步骤信息失败, "
                         f"用一用例下步骤序号不允许重复"
                     )
@@ -880,7 +880,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     )
                     if not parent_step:
                         error_message: str = (
-                            f"第({sid})步骤新增失败, "
+                            f"第{sid}步骤新增失败, "
                             f"根据(step_id={final_parent_step_id})条件查询步骤信息失败, "
                             f"父级步骤不存在"
                         )
@@ -896,7 +896,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     # 业务层验证: 验证父步骤类型(只有循环结构和条件分支允许拥有子级步骤)
                     if parent_step.step_type not in allowed_children_types:
                         error_message: str = (
-                            f"第({sid})步骤新增失败, "
+                            f"第{sid}步骤新增失败, "
                             f"父级步骤(id={final_parent_step_id})的类型({parent_step.step_type})不允许包含子步骤"
                             f"(仅允许'循环结构'和'条件分支'类型的步骤包含子步骤)"
                         )
@@ -926,7 +926,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 try:
                     new_step_instance: AutoTestApiStepInfo = await self.create(create_step_dict)
                 except Exception as e:
-                    error_message: str = f"第({sid})条步骤新增失败, 错误描述: {e}"
+                    error_message: str = f"第{sid}条步骤新增失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 
@@ -1034,7 +1034,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     ).exclude(step_code=step_code).first()
                     if existing_step_instance:
                         error_message: str = (
-                            f"第({sid})步骤更新失败, "
+                            f"第{sid}步骤更新失败, "
                             f"根据(case_id={case_id}, step_no={step_no}, step_code={step_code})条件查询步骤信息失败, "
                             f"同一用例下步骤序号不允许重复"
                         )
@@ -1051,7 +1051,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     )
                     if not case:
                         error_message: str = (
-                            f"第({sid})步骤更新失败, "
+                            f"第{sid}步骤更新失败, "
                             f"根据(case_id={case_id})条件查询用例信息失败, "
                             f"所属用例信息不存在"
                         )
@@ -1064,7 +1064,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     parent_step = await self.get_by_id(step_id=parent_step_id, on_error=False, state__not=1)
                     if not parent_step:
                         error_message: str = (
-                            f"第({sid})步骤更新失败, "
+                            f"第{sid}步骤更新失败, "
                             f"根据(step_id={parent_step_id})条件查询步骤信息失败, "
                             f"父级步骤信息不存在"
                         )
@@ -1075,7 +1075,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     case_id = update_dict.get("case_id", step_instance.case_id)
                     if parent_step.case_id != case_id:
                         error_message: str = (
-                            f"第({sid})步骤更新失败, "
+                            f"第{sid}步骤更新失败, "
                             f"父级步骤(id={parent_step_id})和当前步骤(id={case_id})不一致"
                         )
                         LOGGER.error(error_message)
@@ -1084,7 +1084,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     # 业务层验证：验证父步骤类型(只有循环结构和条件分支允许拥有子级步骤)
                     if parent_step.step_type not in allowed_children_types:
                         error_message: str = (
-                            f"第({sid})步骤更新失败, "
+                            f"第{sid}步骤更新失败, "
                             f"父级步骤(id={parent_step_id})的类型({parent_step.step_type})不允许包含子步骤"
                             f"(仅允许'循环结构'和'条件分支'类型的步骤包含子步骤)"
                         )
@@ -1094,7 +1094,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     # 业务层验证：检查是否形成循环引用（包括深层循环引用）
                     if parent_step.id == step_id:
                         error_message: str = (
-                            f"第({sid})步骤更新失败, "
+                            f"第{sid}步骤更新失败, "
                             f"父级步骤(id={parent_step_id})和当前步骤(id={step_id})冲突, "
                             f"不能将自身设置为父步骤"
                         )
@@ -1107,7 +1107,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     while current_parent_id:
                         if current_parent_id == step_id:
                             error_message: str = (
-                                f"第({sid})步骤更新失败, "
+                                f"第{sid}步骤更新失败, "
                                 f"父级步骤(id={parent_step_id})和当前步骤(id={step_id})冲突, "
                                 f"不能将自身设置为父步骤"
                             )
@@ -1132,7 +1132,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 try:
                     updated_instance = await self.update(id=step_id, obj_in=update_dict)
                 except Exception as e:
-                    error_message: str = f"第({sid})步骤更新失败, 错误描述: {e}"
+                    error_message: str = f"第{sid}步骤更新失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 
@@ -1223,17 +1223,17 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             include_fields={"id", "case_code", "case_name"},
             replace_fields={"id": "case_id"}
         )
-        LOGGER.info(f"查询用例信息(case_id={case_id})成功, 结果: {case_dict}")
+        LOGGER.info(f"查询用例[id={case_id}]成功, 结果: {case_dict}")
 
         # 2. 查询步骤树数据（边界层已 model_validate）
         load: AutoTestCaseStepTreeLoadResult = await self.get_by_case_id(case_id)
         tree_data_count: Dict[str, int] = load.step_counter.model_dump()
         if load.step_counter.total_steps == 0:
-            error_message: str = f"查询步骤为空, 用例(case_id={case_id})没有任何可执行的根步骤"
+            error_message: str = f"查询步骤为空, 用例[id={case_id}]没有任何可执行的根步骤"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        LOGGER.info(f"查询步骤树数据(case_id={case_id})成功, 结果: {tree_data_count}")
+        LOGGER.info(f"查询用例[id={case_id}]步骤树数据成功, 结果: {tree_data_count}")
 
         def _merge_session_variables(*parts: List[StepVariablesBase]) -> List[StepVariablesBase]:
             """根据key合并多段会话变量，后者覆盖前者。"""
@@ -1249,12 +1249,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             AutoTestToolService.collect_session_variables(load.root_steps),
             list(initial_variables or []),
         )
-        LOGGER.info("步骤树数据规范检查成功, 收集会话变量成功")
+        LOGGER.info(f"检查用例[id={case_id}]步骤树数据规范成功, 收集会话变量成功")
 
         # 5. 获取根步骤（执行前在引擎内统一 prepare）
         root_steps: List[AutoTestStepTreeUpdateItem] = [s for s in load.root_steps if s.parent_step_id is None]
         if not root_steps:
-            error_message: str = f"获取用例(case_id={case_id})根步骤失败, 没有任何可执行的根步骤"
+            error_message: str = f"获取用例[id={case_id}]根步骤失败, 没有任何可执行的根步骤"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -1390,8 +1390,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 execute_count = max(1, min(execute_count, 9999))
 
                 LOGGER.info(
-                    f"==========> 执行用例ID: {case_id} 开始 "
-                    f"(execute_count={execute_count}, datasets={len(dataset_names)})"
+                    f"==> 执行[id={case_id}]开始: "
+                    f"[execute_count={execute_count}, datasets={len(dataset_names)}]"
                 )
                 case_results: List[Dict[str, Any]] = []
                 if dataset_names:
@@ -1412,8 +1412,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                             )
                             case_results.append(one)
                             LOGGER.info(
-                                f"用例ID: {case_id} 第 {run_idx}/{total_runs} 次执行完成 "
-                                f"(dataset={ds_name}), success={one.get('success', False)}"
+                                f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                                f"[dataset={ds_name}, success={one.get('success', False)}]"
                             )
                     empty_error = "未执行任何数据集"
                 elif execute_count > 1:
@@ -1428,8 +1428,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         )
                         case_results.append(one)
                         LOGGER.info(
-                            f"用例ID: {case_id} 第 {run_idx + 1}/{execute_count} 次执行完成, "
-                            f"success={one.get('success', False)}"
+                            f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                            f"[success={one.get('success', False)}]"
                         )
                     empty_error = "未执行任何次数"
                 else:
@@ -1453,13 +1453,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 else:
                     failed_cases += 1
             except Exception as e:
-                error_message: str = f"执行用例ID: {case_id} 异常, 错误描述: {e}"
+                error_message: str = f"执行用例[id={case_id}]异常, 错误描述: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 failed_cases += 1
                 results.append(self._aggregate_case_runs(
                     case_id, [], case_ok=False, empty_error=error_message,
                 ))
-            LOGGER.info(f"==========> 执行用例ID: {case_id} 结束")
+            LOGGER.info(f"==> 执行用例[id={case_id}]结束")
         LOGGER.info(f"{'= ' * 20}批量执行结束{'= ' * 20}")
         success_rate = round(success_cases / total_cases * 100, 2) if total_cases > 0 else 0.0
         return {
