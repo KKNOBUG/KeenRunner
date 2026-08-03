@@ -36,12 +36,12 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :raises NotFoundException: on_error为True且路由不存在
         """
         if not router_id:
-            error_message: str = "查询路由信息失败, 参数(router_id)不允许为空"
+            error_message: str = "查询路由信息失败, 参数[router_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=router_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 路由(id={router_id})不存在"
+            error_message: str = f"查询路由信息失败, 记录[id={router_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -58,12 +58,12 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :raises NotFoundException: on_error为True且无匹配路由
         """
         if not path:
-            error_message: str = "查询路由信息失败, 参数(path)不允许为空"
+            error_message: str = "查询路由信息失败, 参数[path]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(path=path, **kwargs).all()
         if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 路由(path={path})不存在"
+            error_message: str = f"查询路由信息失败, 记录[path={path}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -80,12 +80,12 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :raises NotFoundException: on_error为True且无匹配路由
         """
         if not method:
-            error_message: str = "查询路由信息失败, 参数(method)不允许为空"
+            error_message: str = "查询路由信息失败, 参数[method]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(method=method, **kwargs).all()
         if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 路由(method={method})不存在"
+            error_message: str = f"查询路由信息失败, 记录[method={method}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -102,12 +102,12 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :raises NotFoundException: on_error为True且无匹配路由
         """
         if not summary:
-            error_message: str = "查询路由信息失败, 参数(summary)不允许为空"
+            error_message: str = "查询路由信息失败, 参数[summary]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(summary=summary, **kwargs).all()
         if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 路由(summary={summary})不存在"
+            error_message: str = f"查询路由信息失败, 记录[summary={summary}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -124,12 +124,12 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :raises NotFoundException: on_error为True且无匹配路由
         """
         if not tags:
-            error_message: str = "查询路由信息失败, 参数(tags)不允许为空"
+            error_message: str = "查询路由信息失败, 参数[tags]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(tags=tags, **kwargs).all()
         if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 路由(tags={tags})不存在"
+            error_message: str = f"查询路由信息失败, 记录[tags={tags}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -146,7 +146,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         method = router_in.method
         instances = await self.get_by_conditions(only_one=False, on_error=False, path=path, method=method)
         if instances:
-            raise DataAlreadyExistsException(message=f"接口(path={path},method={method})信息已存在")
+            raise DataAlreadyExistsException(message=f"新增路由信息失败, 记录[path={path}, method={method}]信息已存在")
 
         instance = await self.create(router_in)
         return instance
@@ -177,7 +177,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         try:
             instance = await self.update(id=router_id, obj_in=router_if)
         except DoesNotExist as e:
-            raise NotFoundException(message=f"接口(id={router_id})信息不存在")
+            raise NotFoundException(message=f"更新路由信息失败, 记录[id={router_id}]信息不存在")
 
         return instance
 

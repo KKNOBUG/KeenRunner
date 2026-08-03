@@ -36,7 +36,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :raises NotFoundException: on_error为True且角色不存在
         """
         if not role_id:
-            error_message: str = "查询角色信息失败, 参数(role_id)不允许为空"
+            error_message: str = "查询角色信息失败, 参数[role_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=role_id, **kwargs)
@@ -58,12 +58,12 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :raises NotFoundException: on_error为True且角色不存在
         """
         if not role_code:
-            error_message: str = "查询角色信息失败, 参数(role_code)不允许为空"
+            error_message: str = "查询角色信息失败, 参数[role_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_by_conditions(only_one=True, on_error=False, code=role_code, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询角色信息失败, 角色(code={role_code})不存在"
+            error_message: str = f"查询角色信息失败, 记录[code={role_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -80,12 +80,12 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :raises NotFoundException: on_error为True且角色不存在
         """
         if not role_name:
-            error_message: str = "查询角色信息失败, 参数(role_name)不允许为空"
+            error_message: str = "查询角色信息失败, 参数[role_name]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_by_conditions(only_one=True, on_error=False, name=role_name, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询角色信息失败, 角色(name={role_name})不存在"
+            error_message: str = f"查询角色信息失败, 记录[name={role_name}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -113,7 +113,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         name = role_in.name
         instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
         if instances:
-            raise DataAlreadyExistsException(message=f"角色(code={code},name={name})信息已存在")
+            raise DataAlreadyExistsException(message=f"创建角色信息失败, 记录[code={code}, name={name}]信息已存在")
 
         instance = await self.create(role_in)
         if created_user is not None:
