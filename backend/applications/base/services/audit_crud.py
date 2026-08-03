@@ -33,12 +33,12 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not audit_id:
-            error_message: str = "查询审计日志失败, 参数(audit_id)不允许为空"
+            error_message: str = "查询审计日志失败, 参数[audit_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=audit_id)
         if not instance and on_error:
-            error_message: str = f"查询审计日志失败, 审计日志(id={audit_id})不存在"
+            error_message: str = f"查询审计日志失败, 记录[id={audit_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -54,12 +54,12 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :raises NotFoundException: on_error为True且该用户无审计日志
         """
         if not user_id:
-            error_message: str = "查询审计日志失败, 参数(user_id)不允许为空"
+            error_message: str = "查询审计日志失败, 参数[user_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instances = await self.model.filter(user_id=user_id).all()
         if not instances and on_error:
-            error_message: str = f"查询审计日志失败, 用户(user_id={user_id})没有审计日志"
+            error_message: str = f"查询审计日志失败, 记录[user_id={user_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instances
@@ -124,7 +124,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :raises ParameterException: user_id为空
         """
         if not user_id:
-            error_message: str = "删除审计日志失败, 参数(user_id)不允许为空"
+            error_message: str = "删除审计日志失败, 参数[user_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         return int(await self.model.filter(user_id=user_id).delete())
@@ -139,7 +139,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :raises ParameterException: start_time或end_time为空
         """
         if not start_time or not end_time:
-            error_message: str = "删除审计日志失败, 时间范围参数不允许为空"
+            error_message: str = "删除审计日志失败, 参数[start_time, end_time]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         return int(await self.model.filter(created_time__range=[start_time, end_time]).delete())
@@ -153,7 +153,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :raises ParameterException: user_id为空
         """
         if not user_id:
-            error_message: str = "统计审计日志失败, 参数(user_id)不允许为空"
+            error_message: str = "统计审计日志失败, 参数[user_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
