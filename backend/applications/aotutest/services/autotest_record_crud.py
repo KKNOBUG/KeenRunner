@@ -31,12 +31,12 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
 
     async def get_by_id(self, record_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiRecordInfo]:
         """
-        根据主键ID查询应用。
+        根据主键ID查询执行记录。
 
         :param record_id: 执行记录主键ID
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
-        :return: 应用实例或None
+        :return: 执行记录实例或None
         :raises ParameterException: record_id为空
         :raises NotFoundException: on_error为True且记录不存在
         """

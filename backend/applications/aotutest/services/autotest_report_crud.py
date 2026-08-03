@@ -51,7 +51,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         instance = await self.model.filter(id=report_id, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询报告信息失败, 记录[code={report_id}]不存在"
+            error_message: str = f"查询报告信息失败, 记录[id={report_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance

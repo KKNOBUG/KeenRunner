@@ -41,11 +41,15 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     pid = int(project_id)
     name = (env_name or "").strip()
     if not name:
-        raise ParameterException(message="参数[env_name]不允许为空")
+        error_message: str = "参数[env_name]不允许为空"
+        LOGGER.error(error_message)
+        raise ParameterException(message=error_message)
 
     env_row = await AutoTestApiEnvEnumInfo.filter(env_name__iexact=name, state__not=1).first()
     if not env_row:
-        raise NotFoundException(message=f"查询环境枚举失败, 记录[env_name={name}]不存在")
+        error_message: str = f"查询环境枚举失败, 记录[env_name={name}]不存在"
+        LOGGER.error(error_message)
+        raise NotFoundException(message=error_message)
 
     cfg = (
         await AutoTestApiEnvConfigInfo.filter(
@@ -58,9 +62,11 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
         .first()
     )
     if not cfg or not str(cfg.config_host or "").strip():
-        raise NotFoundException(
-            message=f"未找到可用的API环境配置, 查询条件: [project_id={pid}, env_id={env_row.id}, config_type={AutoTestConfigNodeType.API.value}]"
+        error_message: str = (
+            f"未找到可用的API环境配置, 查询条件: [project_id={pid}, env_id={env_row.id}, config_type={AutoTestConfigNodeType.API.value}]"
         )
+        LOGGER.error(error_message)
+        raise NotFoundException(message=error_message)
     host = str(cfg.config_host).strip().rstrip("/").rstrip(":")
     port_raw = getattr(cfg, "config_port", None)
     if port_raw is None or str(port_raw).strip() == "":

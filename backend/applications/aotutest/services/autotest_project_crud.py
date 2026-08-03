@@ -202,7 +202,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """
         # 业务层验证：检查应用是否存在, project_id与project_code二选一，不能都为空
         if not project_id and not project_code:
-            error_message: str = "查询应用信息失败, 参数[project_id, project_code]不允许为空"
+            error_message: str = "删除应用信息失败, 参数[project_id]或[project_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if project_id:

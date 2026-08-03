@@ -264,7 +264,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             instance = await self.update(id=task_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新任务信息失败, 任务[id={task_id}]或[code={task_code}]不存在, 错误描述: {e}"
+            error_message: str = f"更新任务信息失败, 记录[id={task_id}]或[code={task_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:

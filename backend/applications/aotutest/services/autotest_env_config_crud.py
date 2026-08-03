@@ -114,23 +114,33 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         if not existing_config:
             # 业务层验证: 根据配置类型进行检查参数是否匹配
             if config_type not in AutoTestConfigNodeType.get_values():
-                raise ParameterException(message=f"参数[config_type]枚举值[{config_type}]不被允许")
+                error_message: str = f"参数[config_type]枚举值[{config_type}]不被允许"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
             if config_type == AutoTestConfigNodeType.API.value:
                 if not config_in.config_host:
-                    raise ParameterException(message=f"参数[config_type]枚举值为API时, 参数[config_host]不允许为空")
+                    error_message: str = "参数[config_type]枚举值为API时, 参数[config_host]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
             elif config_type == AutoTestConfigNodeType.DB.value:
                 missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
                 if missing_fields:
-                    raise ParameterException(message=f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空")
+                    error_message: str = f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
             elif config_type == AutoTestConfigNodeType.FILE.value:
                 missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
                 if getattr(config_in, "is_authorization", None) is None:
                     missing_fields.append("is_authorization")
                 if missing_fields:
-                    raise ParameterException(message=f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空")
+                    error_message: str = f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
             elif config_type == AutoTestConfigNodeType.REDIS.value:
                 if not config_in.config_host:
-                    raise ParameterException(message="参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空")
+                    error_message: str = "参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
 
             try:
                 instance: AutoTestApiEnvConfigInfo = await self.create(config_dict)
@@ -197,28 +207,38 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         # 业务层验证: 根据配置类型进行检查参数是否匹配
         if config_type not in AutoTestConfigNodeType.get_values():
-            raise ParameterException(message=f"参数[config_type]枚举值[{config_type}]不被允许")
+            error_message: str = f"参数[config_type]枚举值[{config_type}]不被允许"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if config_type == AutoTestConfigNodeType.API.value:
             if not config_in.config_host:
-                raise ParameterException(message=f"参数[config_type]枚举值为API时, 参数[config_host]不允许为空")
+                error_message: str = "参数[config_type]枚举值为API时, 参数[config_host]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
         elif config_type == AutoTestConfigNodeType.DB.value:
             missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
             if missing_fields:
-                raise ParameterException(message=f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空")
+                error_message: str = f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
         elif config_type == AutoTestConfigNodeType.FILE.value:
             missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
             if getattr(config_in, "is_authorization", None) is None:
                 missing_fields.append("is_authorization")
             if missing_fields:
-                raise ParameterException(message=f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空")
+                error_message: str = f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
         elif config_type == AutoTestConfigNodeType.REDIS.value:
             if not config_in.config_host:
-                raise ParameterException(message="参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空")
+                error_message: str = "参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
         try:
             instance = await self.update(id=config_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新配置信息失败, 用例[id={config_id}或code={config_code}]不存在, 错误描述: {e}"
+            error_message: str = f"更新配置信息失败, 记录[id={config_id}]或[code={config_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:

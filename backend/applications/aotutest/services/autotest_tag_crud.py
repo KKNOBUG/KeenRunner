@@ -67,8 +67,12 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :raises ParameterException: tag_ids为空或非列表
         :raises NotFoundException: 存在缺失ID且on_error为True
         """
-        if not tag_ids or not isinstance(tag_ids, list):
-            error_message: str = "查询标签信息失败, 参数[tag_id]不允许为空, 且必须是List[int]类型"
+        if not tag_ids:
+            error_message: str = "查询标签信息失败, 参数[tag_ids]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        if not isinstance(tag_ids, list):
+            error_message: str = "查询标签信息失败, 参数[tag_ids]必须是List[int]类型"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -94,7 +98,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not tag_code:
-            error_message: str = "查询标签信息失败, 参数[tag_id]不允许为空"
+            error_message: str = "查询标签信息失败, 参数[tag_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -190,7 +194,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             instance = await self.update(id=tag_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新标签信息失败, 标签[id={tag_id}或code={tag_code}]不存在, 错误描述: {e}"
+            error_message: str = f"更新标签信息失败, 记录[id={tag_id}]或[code={tag_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
@@ -216,7 +220,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
         cases_count = await AutoTestApiCaseCrud().model.filter(case_tags__contains=[tag_id], state__not=1).count()
         if cases_count > 0:
-            error_message: str = f"删除标签信息失败, 标签[id={instance.id}]被{cases_count}个用例关联"
+            error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
