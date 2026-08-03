@@ -34,12 +34,12 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         :raises NotFoundException: on_error为True且菜单不存在
         """
         if not menu_id:
-            error_message: str = "查询菜单信息失败, 参数(menu_id)不允许为空"
+            error_message: str = "查询菜单信息失败, 参数[menu_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=menu_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询菜单信息失败, 菜单(id={menu_id})不存在"
+            error_message: str = f"查询菜单信息失败, 记录[id={menu_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -56,12 +56,12 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         :raises NotFoundException: on_error为True且菜单不存在
         """
         if not path:
-            error_message: str = "查询菜单信息失败, 参数(path)不允许为空"
+            error_message: str = "查询菜单信息失败, 参数[path]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(path=path, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询菜单信息失败, 菜单(path={path})不存在"
+            error_message: str = f"查询菜单信息失败, 记录[path={path}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -109,6 +109,6 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         try:
             instance = await self.update(id=menu_id, obj_in=menu_if)
         except DoesNotExist as e:
-            raise NotFoundException(message=f"菜单(id={menu_id})信息不存在")
+            raise NotFoundException(message=f"更新菜单信息失败, 记录[id={menu_id}]不存在")
 
         return instance
