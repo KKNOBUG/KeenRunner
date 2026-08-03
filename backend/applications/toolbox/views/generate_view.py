@@ -12,6 +12,7 @@ from fastapi import APIRouter, Body
 
 from backend.applications.toolbox.schemas.generate_schema import GenerateVirtualInfo
 from backend.common import GENERATE
+from backend.configure import LOGGER
 from backend.core.responses import SuccessResponse
 
 generate = APIRouter()
@@ -106,4 +107,5 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
         elif z == "random":
             data[z] = [GENERATE.generate_string(length=GENERATE.generate_random_int(6, 30))]
 
-    return SuccessResponse(data=data)
+    LOGGER.info(f"随机生成虚拟信息成功, number: {number}")
+    return SuccessResponse(message="生成成功", data=data)

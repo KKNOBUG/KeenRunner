@@ -78,7 +78,9 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         path = menu_in.path
         instances = await self.get_by_conditions(only_one=True, on_error=False, name=name, path=path)
         if instances:
-            raise DataAlreadyExistsException(message=f"新增菜单信息失败, 记录[name={name}, path={path}]已存在")
+            error_message: str = f"新增菜单信息失败, 记录[name={name}, path={path}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
         instance = await self.create(menu_in)
         return instance
@@ -109,6 +111,8 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         try:
             instance = await self.update(id=menu_id, obj_in=menu_if)
         except DoesNotExist as e:
-            raise NotFoundException(message=f"更新菜单信息失败, 记录[id={menu_id}]不存在")
+            error_message: str = f"更新菜单信息失败, 记录[id={menu_id}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
 
         return instance

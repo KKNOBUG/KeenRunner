@@ -7,6 +7,7 @@
 @DateTime: 2025/4/7 09:10
 """
 import os.path
+import traceback
 from pathlib import Path
 from typing import Union
 from urllib.parse import quote
@@ -14,15 +15,15 @@ from urllib.parse import quote
 from fastapi import APIRouter, UploadFile, File, Form
 from starlette.responses import StreamingResponse
 
-from backend.services.file_transfer import FileTransfer
 from backend.common import FileUtils
-from backend.configure import PROJECT_CONFIG
+from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     NotFoundResponse
 )
 from backend.enums import FileSizeEum
+from backend.services.file_transfer import FileTransfer
 
 file_transfer = APIRouter()
 
@@ -49,19 +50,25 @@ async def upload_file(
     :param upload_file_size: 文件的体积限制
     :return: 统一HTTP响应
     """
-    state, detail = await FileTransfer.save_upload_file_chunks(
-        upload_file=file,
-        destination=path,
-        add_timestamp=add_timestamp,
-        check_filename=check_filename,
-        check_filetype=check_filetype,
-        check_filesize=check_filesize,
-        upload_file_size=upload_file_size.value
-    )
+    try:
+        state, detail = await FileTransfer.save_upload_file_chunks(
+            upload_file=file,
+            destination=path,
+            add_timestamp=add_timestamp,
+            check_filename=check_filename,
+            check_filetype=check_filetype,
+            check_filesize=check_filesize,
+            upload_file_size=upload_file_size.value
+        )
 
-    if not state:
-        return FailureResponse(message=f"上传失败，错误描述: {detail}")
-    return SuccessResponse(message="上传成功", data=detail)
+        if not state:
+            LOGGER.error(f"上传文件失败，异常描述: {detail}")
+            return FailureResponse(message=f"上传失败，异常描述: {detail}")
+        LOGGER.info(f"上传文件成功, path: {path}")
+        return SuccessResponse(message="上传成功", data=detail)
+    except Exception as e:
+        LOGGER.error(f"上传文件失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"上传失败，异常描述: {e}")
 
 
 @file_transfer.post("/download", summary="下载文件")
@@ -96,11 +103,13 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
     try:
         with open(file=filepath, mode="r", encoding="utf-8") as fp:
             content: str = fp.read()
+        LOGGER.info(f"读取文件成功, path: {path}")
         return SuccessResponse(data=content, message="文件读取成功")
     except FileNotFoundError:
         return NotFoundResponse(message=f"文件:{filepath}未找到")
     except Exception as e:
-        return FailureResponse(message=f"发生错误: {str(e)}", data={"error": str(e)})
+        LOGGER.error(f"读取文件失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"读取失败，异常描述: {e}", data={"error": str(e)})
 
 
 @file_transfer.post("/move", summary="移动文件")
@@ -119,6 +128,8 @@ async def move_file(
     dst_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, dst_path)
     try:
         state: bool = FileUtils.move_directory(src_file_path, dst_file_path)
-        return SuccessResponse(message="文件移动成功", data={"src_path": src_file_path, "dst_path": dst_file_path})
+        LOGGER.info(f"移动文件成功, src_path: {src_path}, dst_path: {dst_path}")
+        return SuccessResponse(message="文件移动成功", data={"src_path": src_file_path, "dst_path": dst_file_path, "state": state})
     except Exception as e:
-        return FailureResponse(message=f"发生错误: {str(e)}", data={"error": str(e)})
+        LOGGER.error(f"移动文件失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"移动失败，异常描述: {e}", data={"error": str(e)})

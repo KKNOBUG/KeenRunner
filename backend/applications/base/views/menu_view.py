@@ -6,12 +6,14 @@
 @Module  : menu_view.py
 @DateTime: 2025/2/19 12:46
 """
+import traceback
 
 from fastapi import APIRouter, Query, Depends
 
 from backend.applications.base.dependencies import get_menu_crud
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
 from backend.applications.base.services.menu_crud import MenuCrud
+from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException, NotFoundException
 from backend.core.responses import NotFoundResponse, SuccessResponse, FailureResponse, ParameterResponse
 
@@ -92,14 +94,19 @@ async def list_menu(
         menu_dict["children"] = [await get_menu_with_children(child.id) for child in child_menus]
         return menu_dict
 
-    parent_menus = await menu_crud.model.filter(parent_id=0).order_by("order")
-    res_menu = [await get_menu_with_children(menu.id) for menu in parent_menus]
-    res_menu = [m for m in res_menu if isinstance(m, dict)]
-    nk = name.strip() if name else ""
-    tk = menu_type.strip() if menu_type else ""
-    if nk or tk:
-        res_menu = _filter_menu_tree(res_menu, name_kw=nk, type_kw=tk)
-    return SuccessResponse(message="查询成功", data=res_menu, total=len(res_menu))
+    try:
+        parent_menus = await menu_crud.model.filter(parent_id=0).order_by("order")
+        res_menu = [await get_menu_with_children(menu.id) for menu in parent_menus]
+        res_menu = [m for m in res_menu if isinstance(m, dict)]
+        nk = name.strip() if name else ""
+        tk = menu_type.strip() if menu_type else ""
+        if nk or tk:
+            res_menu = _filter_menu_tree(res_menu, name_kw=nk, type_kw=tk)
+        LOGGER.info(f"查询菜单列表成功, 数量: {len(res_menu)}")
+        return SuccessResponse(message="查询成功", data=res_menu, total=len(res_menu))
+    except Exception as e:
+        LOGGER.error(f"查询菜单列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @menu.get("/get", summary="查看菜单", description="根据id查询菜单信息")
@@ -116,13 +123,15 @@ async def get_menu(
     """
     try:
         result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)
+        LOGGER.info(f"查询菜单成功, 结果明细: {result}")
         return SuccessResponse(message="查询成功", data=result, total=1)
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
-        return NotFoundResponse(message=e.message)
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"查询失败，异常描述:{e}")
+        LOGGER.error(f"查询菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @menu.post("/create", summary="创建菜单")
@@ -140,13 +149,15 @@ async def create_menu(
     try:
         instance = await menu_crud.create_menu(menu_in=menu_in)
         data = await instance.to_dict()
+        LOGGER.info(f"创建菜单成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
-        return NotFoundResponse(message=e.message)
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"新增失败，异常描述:{e}")
+        LOGGER.error(f"创建菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
 @menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
@@ -164,11 +175,13 @@ async def update_menu(
     try:
         instance = await menu_crud.update_menu(menu_in=menu_in)
         data = await instance.to_dict()
+        LOGGER.info(f"更新菜单成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
-        return NotFoundResponse(message=e.message)
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"更新失败，异常描述:{e}")
+        LOGGER.error(f"更新菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @menu.delete("/delete", summary="删除菜单", description="根据id删除菜单信息")
@@ -189,8 +202,12 @@ async def delete_menu(
     try:
         instance = await menu_crud.delete_menu(menu_id=id)
         data = await instance.to_dict()
+        LOGGER.info(f"删除菜单成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
-        return NotFoundResponse(message=e.message)
+        return NotFoundResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"删除菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")

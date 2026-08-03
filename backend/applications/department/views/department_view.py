@@ -58,13 +58,15 @@ async def create_dept(
             created_user=current_user.username,
         )
         data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        LOGGER.info(f"新增部门成功, 结果明细: {data}")
+        return SuccessResponse(message="新增成功", data=data)
     except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=e.__str__())
+        return DataAlreadyExistsResponse(message=str(e.message))
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"新增失败，异常描述:{e}")
+        LOGGER.error(f"新增部门失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
@@ -82,11 +84,13 @@ async def delete_dept_one(
     try:
         instance = await dept_crud.delete_department(department_id)
         data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        LOGGER.info(f"删除部门成功, 结果明细: {data}")
+        return SuccessResponse(message="删除成功", data=data)
     except NotFoundException as e:
-        return NotFoundResponse(message=e.__str__())
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"删除失败，异常描述:{e}")
+        LOGGER.error(f"删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @dept.post("/delete", summary="批量删除部门", description="根据id列表批量删除部门信息")
@@ -107,7 +111,7 @@ async def delete_depts_batch(
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
         LOGGER.error(f"批量删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述:{e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
@@ -130,13 +134,15 @@ async def update_dept(
             updated_user=current_user.username,
         )
         data = await instance.to_dict()
-        return SuccessResponse(data=data)
+        LOGGER.info(f"更新部门成功, 结果明细: {data}")
+        return SuccessResponse(message="更新成功", data=data)
     except NotFoundException as e:
-        return NotFoundResponse(message=e.__str__())
+        return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
-        return FailureResponse(message=f"更新失败，异常描述:{e}")
+        LOGGER.error(f"更新部门失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
@@ -151,12 +157,17 @@ async def get_dept(
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
-    instance = await dept_crud.get_or_none(id=department_id)
-    if not instance:
-        return NotFoundResponse(message=f"记录[id={department_id}]不存在")
+    try:
+        instance = await dept_crud.get_or_none(id=department_id)
+        if not instance:
+            return NotFoundResponse(message=f"记录[id={department_id}]不存在")
 
-    data: dict = await instance.to_dict()
-    return SuccessResponse(data=data)
+        data: dict = await instance.to_dict()
+        LOGGER.info(f"查询部门成功, department_id: {department_id}")
+        return SuccessResponse(message="查询成功", data=data)
+    except Exception as e:
+        LOGGER.error(f"查询部门失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
@@ -171,8 +182,13 @@ async def list_dept(
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
-    dept_tree = await dept_crud.get_dept_tree(name)
-    return SuccessResponse(data=dept_tree)
+    try:
+        dept_tree = await dept_crud.get_dept_tree(name)
+        LOGGER.info(f"查询部门列表成功, 数量: {len(dept_tree)}")
+        return SuccessResponse(message="查询成功", data=dept_tree)
+    except Exception as e:
+        LOGGER.error(f"查询部门列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @dept.post("/search", summary="查询部门列表", description="根据条件分页查询部门列表信息(Body)")
@@ -187,33 +203,38 @@ async def search_dept(
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
-    page = department_in.page
-    page_size = department_in.page_size
-    order = department_in.order
-    code = department_in.code
-    name = department_in.name
-    is_deleted = department_in.is_deleted
-    created_user = department_in.created_user
-    updated_user = department_in.updated_user
+    try:
+        page = department_in.page
+        page_size = department_in.page_size
+        order = department_in.order
+        code = department_in.code
+        name = department_in.name
+        is_deleted = department_in.is_deleted
+        created_user = department_in.created_user
+        updated_user = department_in.updated_user
 
-    q = Q()
-    if code:
-        q &= Q(code__contains=code)
-    if name:
-        q &= Q(name__contains=name)
-    if is_deleted is not None:
-        q &= Q(is_deleted=is_deleted)
-    else:
-        q &= Q(is_deleted=False)
-    if created_user:
-        q &= Q(created_user__contains=created_user)
-    if updated_user:
-        q &= Q(updated_user__contains=updated_user)
+        q = Q()
+        if code:
+            q &= Q(code__contains=code)
+        if name:
+            q &= Q(name__contains=name)
+        if is_deleted is not None:
+            q &= Q(is_deleted=is_deleted)
+        else:
+            q &= Q(is_deleted=False)
+        if created_user:
+            q &= Q(created_user__contains=created_user)
+        if updated_user:
+            q &= Q(updated_user__contains=updated_user)
 
-    total, instances = await dept_crud.list(
-        page=page, page_size=page_size, search=q, order=order
-    )
-    data = [
-        await obj.to_dict() for obj in instances
-    ]
-    return SuccessResponse(data=data, total=total)
+        total, instances = await dept_crud.list(
+            page=page, page_size=page_size, search=q, order=order
+        )
+        data = [
+            await obj.to_dict() for obj in instances
+        ]
+        LOGGER.info(f"查询部门列表成功, 数量: {total}")
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except Exception as e:
+        LOGGER.error(f"查询部门列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")

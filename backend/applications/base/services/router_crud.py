@@ -146,7 +146,9 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         method = router_in.method
         instances = await self.get_by_conditions(only_one=False, on_error=False, path=path, method=method)
         if instances:
-            raise DataAlreadyExistsException(message=f"新增路由信息失败, 记录[path={path}, method={method}]信息已存在")
+            error_message: str = f"新增路由信息失败, 记录[path={path}, method={method}]信息已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
         instance = await self.create(router_in)
         return instance
@@ -177,7 +179,9 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         try:
             instance = await self.update(id=router_id, obj_in=router_if)
         except DoesNotExist as e:
-            raise NotFoundException(message=f"更新路由信息失败, 记录[id={router_id}]信息不存在")
+            error_message: str = f"更新路由信息失败, 记录[id={router_id}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
 
         return instance
 

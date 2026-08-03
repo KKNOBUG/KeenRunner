@@ -111,12 +111,18 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         user = await self.model.filter(username=credentials.username).first()
         if not user:
-            raise NotFoundException(message="用户名不存在")
+            error_message: str = "用户名不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
         verified = verify_password(credentials.password, user.password)
         if not verified:
-            raise NotFoundException(message="用户名或密码错误")
+            error_message: str = "用户名或密码错误"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
         if user.state == 1:
-            raise NoPermissionException(message="用户待岗或已离职")
+            error_message: str = "用户待岗或已离职"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
         return user
 
     async def update_last_login(self, user_id: int) -> None:
@@ -143,7 +149,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         username = user_in.username
         instances = await self.get_by_conditions(only_one=True, on_error=False, email=email, username=username)
         if instances:
-            raise DataAlreadyExistsException(message=f"新增用户信息失败, 记录[email={email}, username={username}]已存在")
+            error_message: str = f"新增用户信息失败, 记录[email={email}, username={username}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
         user_in.password = get_password_hash(password=user_in.password)
         instance = await self.create(user_in)
@@ -195,7 +203,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         try:
             instance = await self.update(id=user_id, obj_in=user_if)
         except DoesNotExist as e:
-            raise NotFoundException(message=f"更新用户信息失败, 记录[id={user_id}]不存在")
+            error_message: str = f"更新用户信息失败, 记录[id={user_id}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
 
         return instance
 

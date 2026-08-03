@@ -85,12 +85,18 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         if parent_id == 0:
             return
         if department_id is not None and parent_id == department_id:
-            raise ParameterException(message="父级部门不能为自身")
+            error_message: str = "校验父级部门失败, 父级部门不能为自身"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         parent = await self.get_by_id(parent_id, on_error=True)
         if parent.is_deleted:
-            raise ParameterException(message=f"父级部门[id={parent_id}]不存在或已删除")
+            error_message: str = f"校验父级部门失败, 记录[id={parent_id}]不存在或已删除"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if parent.parent_id != 0:
-            raise ParameterException(message="子部门不允许再添加子部门, 父级只能选择顶级部门")
+            error_message: str = "校验父级部门失败, 子部门不允许再添加子部门, 父级只能选择顶级部门"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
 
     async def create_department(self, department_in: DepartmentCreate, created_user: Optional[str] = None) -> Department:
         """
@@ -107,7 +113,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         name = department_in.name
         instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
         if instances:
-            raise DataAlreadyExistsException(message=f"创建部门信息失败, 记录[code={code},name={name}]信息已存在")
+            error_message: str = f"创建部门信息失败, 记录[code={code},name={name}]信息已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
         instance = await self.create(department_in)
         if created_user is not None:
@@ -155,7 +163,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
                     parent_id=department_id, is_deleted=False
                 ).count()
                 if child_count > 0 and new_parent_id != 0:
-                    raise ParameterException(message="含有子部门的顶级部门不能设置为子部门")
+                    error_message: str = "更新部门信息失败, 含有子部门的顶级部门不能设置为子部门"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
                 await DeptStruct.filter(ancestor=instance.id).delete()
                 await DeptStruct.filter(descendant=instance.id).delete()
                 instance.parent_id = new_parent_id
@@ -168,7 +178,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             await instance.save()
             return instance
         except DoesNotExist as e:
-            raise NotFoundException(message=f"更新部门信息失败, 记录[id={department_id}]信息不存在")
+            error_message: str = f"更新部门信息失败, 记录[id={department_id}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
 
     async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:
         """
