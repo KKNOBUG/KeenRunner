@@ -64,13 +64,8 @@ async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[st
     data = await instance.to_dict(
         exclude_fields={
             "state",
-            "created_user",
-            "updated_user",
-            "created_time",
-            "updated_time",
-            "reserve_1",
-            "reserve_2",
-            "reserve_3",
+            "created_user", "updated_user", "created_time", "updated_time",
+            "reserve_1", "reserve_2", "reserve_3",
         },
         replace_fields={"id": "data_source_id"},
     )
@@ -98,7 +93,7 @@ async def _sync_step_data_source_meta(
             data_source_desc=(file_desc or "")[:2048] or None,
         )
     except Exception as e:
-        LOGGER.warning(f"同步步骤数据源元信息失败(case_id={case_id}, step_code={step_code}): {e}")
+        LOGGER.warning(f"同步步骤数据源元信息失败[case_id={case_id}, step_code={step_code}]: {e}")
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
@@ -253,10 +248,7 @@ async def save_or_update_data_source_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    保存或更新数据源（合并 create/update 为单一入口）。
-
-    按 (case_id, step_id, step_code) 定位：存在则更新，不存在则新增。
-    case_code 缺失时自动查询用例表补齐。
+    保存或更新数据源, 根据case_id, step_id, step_code定位：存在则更新，不存在则新增; case_code 缺失时自动查询用例表补齐。
 
     :param data_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
@@ -362,10 +354,10 @@ async def get_data_source_info(
             )
         else:
             return ParameterResponse(
-                message="查询参数缺失, 需提供data_source_id或data_source_code或(case_id|case_code)+(step_id|step_code)进行查询"
+                message="请提供参数[data_source_id, data_source_code]或[case_id, case_code, step_id, step_code]进行查询"
             )
         if isinstance(instance, list):
-            return ParameterResponse(message="当前条件匹配多条记录，请使用 get_by_case_step 或 search 接口")
+            return ParameterResponse(message="当前条件匹配多条记录，请使用get_by_case_step或search接口")
         data = await _serialize_data_source(instance)
         LOGGER.info(f"查询数据源成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
@@ -386,17 +378,19 @@ async def query_case_name(
     """
     案例数据场景查询。
 
-    合并当前用例下所有数据源的 dataset_names，去重并保持出现顺序。
+    合并当前用例下所有数据源的dataset_names，去重并保持出现顺序。
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     if not case_id:
-        return ParameterResponse(message="查询失败, 参数(case_id)不允许为空")
+        return ParameterResponse(message="参数[case_id]不允许为空")
 
-    data_source_instances = await services.data_source_curd.model.filter(case_id=case_id, state__not=1).order_by("created_time").all()
-
+    data_source_instances = await services.data_source_curd.model.filter(
+        case_id=case_id,
+        state__not=1
+    ).order_by("created_time").all()
     merged_names: List[str] = []
     seen: Set[str] = set()
     for ds in data_source_instances:
@@ -416,7 +410,7 @@ async def search_data_source_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件分页查询数据源。
+    根据条件分页查询数据源。
 
     :param sel_in: 数据源查询入参
     :param services: 自动化测试CRUD依赖聚合
@@ -451,16 +445,16 @@ async def search_data_source_info(
         serializes: List[Dict[str, Any]] = []
         for inst in instances:
             serializes.append(await _serialize_data_source(inst))
-        LOGGER.info(f"按条件查询数据源成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询数据源成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/get_by_case_step", summary="查询步骤数据源", description="按用例与步骤查询数据源(单条或列表)")
+@autotest_data_source.get("/get_by_case_step", summary="查询步骤数据源", description="根据用例与步骤查询数据源(单条或列表)")
 async def get_data_source_by_case_step(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -487,11 +481,11 @@ async def get_data_source_by_case_step(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按 case_step 查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据case_step查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_data_source.get("/scene_names_by_case", summary="查询数据源场景列名", description="按用例查询已落库数据源场景列名")
+@autotest_data_source.get("/scene_names_by_case", summary="查询数据源场景列名", description="根据用例查询已落库数据源场景列名")
 async def get_scene_names_by_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -507,7 +501,7 @@ async def get_scene_names_by_case(
     """
     try:
         if not case_id and not (case_code or "").strip():
-            return ParameterResponse(message="查询失败, 参数(case_id或case_code)必须二选一传递")
+            return ParameterResponse(message="参数[case_id, case_code)不允许为空")
 
         # 定位用例，优先使用 case_id
         effective_case_id: Optional[int] = case_id
@@ -585,7 +579,7 @@ async def get_scene_names_by_case(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按用例查询数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据用例查询数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
@@ -757,7 +751,7 @@ async def single_step_dataset_upload(
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
-@autotest_data_source.get("/single_step_dataset_download", summary="导出步骤数据源", description="按用例步骤导出数据源xlsx")
+@autotest_data_source.get("/single_step_dataset_download", summary="导出步骤数据源", description="根据用例步骤导出数据源xlsx")
 async def single_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
@@ -805,7 +799,7 @@ async def batch_step_dataset_upload(
     """
     参数化驱动-多步骤数据集批量上传。
 
-    按 sheet 名匹配步骤树中的HTTP/TCP请求步骤（步骤名唯一），校验通过后逐步骤创建数据源。
+    根据 sheet 名匹配步骤树中的HTTP/TCP请求步骤（步骤名唯一），校验通过后逐步骤创建数据源。
     校验规则（任一不满足即整体拒绝，不落库）：
     - 每个sheet名均能匹配到步骤树中的HTTP/TCP请求步骤；
     - 各sheet的场景数量一致；
@@ -822,7 +816,7 @@ async def batch_step_dataset_upload(
     if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
-    # 获取用例全部步骤（含子步骤），按步骤名建立HTTP/TCP请求步骤映射
+    # 获取用例全部步骤（含子步骤），根据步骤名建立HTTP/TCP请求步骤映射
     try:
         all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
     except Exception as e:
@@ -931,7 +925,7 @@ async def batch_step_dataset_upload(
                     file_desc=file_desc,
                 )
     except Exception as e:
-        LOGGER.error(f"批量上传数据源失败（已整体回滚）: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"批量上传数据源失败, 已全部回滚: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"批量上传数据源失败，已全部回滚: {e}")
 
     return SuccessResponse(
@@ -941,7 +935,7 @@ async def batch_step_dataset_upload(
     )
 
 
-@autotest_data_source.get("/batch_step_dataset_download", summary="汇总导出步骤数据源", description="按用例汇总导出所有步骤数据源xlsx")
+@autotest_data_source.get("/batch_step_dataset_download", summary="汇总导出步骤数据源", description="根据用例汇总导出所有步骤数据源xlsx")
 async def batch_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

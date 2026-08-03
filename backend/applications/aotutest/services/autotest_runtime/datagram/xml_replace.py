@@ -15,7 +15,7 @@ from backend.common.xpath_utils import XPathUtils
 
 
 class XmlDatagram:
-    """按XPath映射更新XML请求报文。"""
+    """根据XPath映射更新XML请求报文。"""
 
     @staticmethod
     def replace_xml_datagram(
@@ -24,7 +24,7 @@ class XmlDatagram:
             request_text: Optional[str] = None,
     ) -> Optional[str]:
         """
-        数据驱动报文替换（XML）：按XPath将body_map写入请求XML。
+        数据驱动报文替换（XML）：根据XPath将body_map写入请求XML。
 
         通过'XPathUtils.update'逐项替换；匹配规则与提取侧XPath语义对齐。
         空路径跳过；匹配不到时由XPathUtils决定（通常忽略），非法XML/执行失败抛ValueError。

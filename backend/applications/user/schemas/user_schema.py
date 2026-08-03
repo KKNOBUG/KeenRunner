@@ -47,7 +47,7 @@ class UserCreate(UserBase):
 
     def create_dict(self):
         """
-        转为落库字典：排除未设置字段，并移除 role_ids（角色单独绑定）。
+        转为落库字典：排除未设置字段，并移除role_ids（角色单独绑定）。
 
         :return: 可直接传入 UserCrud.create 的字段字典
         """

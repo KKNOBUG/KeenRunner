@@ -69,12 +69,12 @@ class ExtractAssertPipeline:
         :param log_callback: 可选日志回调(str) -> None
         :param finished_variables: 断言期望值占位符解析上下文；引擎传StepExecutionContext
         :param is_core_engine: True时finished_variables需提供get_variable；
-            False时按StepVariablesBase列表解析（调试视图）
+            False时根据StepVariablesBase列表解析（调试视图）
         :param step_struct: 数据驱动结构；非None时追加assert_head/assert_body
             （即使内部各块为空也会进入追加逻辑，仅在结构非法时直接跳过）
         :param raise_on_failure: True时提取或断言存在失败项即抛ValueError（文案与历史引擎一致）；
             False时仅返回结果列表，由调用方自行判断
-        :param body_source: 保留参数，当前未生效；assert_body来源按表达式前缀自动识别
+        :param body_source: 保留参数，当前未生效；assert_body来源根据表达式前缀自动识别
             （$. → response json，./或// → response xml，其他 → response text）
         :return: (extract_results_list, assert_results_list)，元素为结果dict
             （含name/source/expr/success/error等字段）

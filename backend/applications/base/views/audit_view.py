@@ -36,7 +36,7 @@ async def list_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    按条件分页查询审计日志（Query 方式）。
+    根据条件分页查询审计日志（Query 方式）。
 
     :param page: 页码
     :param page_size: 每页条数
@@ -48,7 +48,7 @@ async def list_audit(
     :param response_code: 响应代码
     :param start_time: 开始时间
     :param end_time: 结束时间
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     q = Q()
@@ -82,10 +82,10 @@ async def search_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    按条件分页查询审计日志（Body 方式）。
+    根据条件分页查询审计日志（Body 方式）。
 
     :param audit_in: 审计日志查询入参
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     q = Q()
@@ -121,10 +121,10 @@ async def get_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    按 id 查询审计日志。
+    根据 id 查询审计日志。
 
-    :param audit_id: 审计日志 ID
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_id: 审计日志ID
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -148,10 +148,10 @@ async def get_audit_by_user(
     """
     获取指定用户的所有审计日志。
 
-    :param user_id: 用户 ID
+    :param user_id: 用户ID
     :param page: 页码
     :param page_size: 每页条数
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -164,18 +164,18 @@ async def get_audit_by_user(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@audit.get("/recent", summary="查询最近日志", description="按条件获取最近日志信息")
+@audit.get("/recent", summary="查询最近日志", description="根据条件获取最近日志信息")
 async def get_recent_audits(
         limit: int = Query(default=10, ge=1, le=100, description="返回数量"),
         user_id: int = Query(default=None, description="用户ID"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    按条件获取最近审计日志。
+    根据条件获取最近审计日志。
 
     :param limit: 返回数量
-    :param user_id: 用户 ID
-    :param audit_crud: 审计日志 CRUD 服务
+    :param user_id: 用户ID
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -195,8 +195,8 @@ async def get_audit_statistics(
     """
     获取指定用户的审计日志统计信息。
 
-    :param user_id: 用户 ID
-    :param audit_crud: 审计日志 CRUD 服务
+    :param user_id: 用户ID
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -213,10 +213,10 @@ async def delete_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    按 id 删除审计日志。
+    根据 id 删除审计日志。
 
-    :param audit_id: 审计日志 ID
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_id: 审计日志ID
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -237,10 +237,10 @@ async def delete_audits_batch(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    按 id 列表删除审计日志。
+    根据 id 列表删除审计日志。
 
     :param body_in: 审计日志批量删除入参
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -260,16 +260,16 @@ async def delete_audits_by_user(
     """
     删除指定用户的所有审计日志。
 
-    :param user_id: 用户 ID
-    :param audit_crud: 审计日志 CRUD 服务
+    :param user_id: 用户ID
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
         count = await audit_crud.delete_by_user_id(user_id=user_id)
-        LOGGER.info(f"按用户删除审计日志成功, user_id: {user_id}, 数量: {count}")
+        LOGGER.info(f"根据用户删除审计日志成功, user_id: {user_id}, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count})
     except Exception as e:
-        LOGGER.error(f"按用户删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据用户删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -284,15 +284,15 @@ async def delete_audits_by_time(
 
     :param start_time: 开始时间
     :param end_time: 结束时间
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
         count = await audit_crud.delete_by_time_range(start_time=start_time, end_time=end_time)
-        LOGGER.info(f"按时间删除审计日志成功, 范围: {start_time} ~ {end_time}, 数量: {count}")
+        LOGGER.info(f"根据时间删除审计日志成功, 范围: {start_time} ~ {end_time}, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count})
     except Exception as e:
-        LOGGER.error(f"按时间删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据时间删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -303,7 +303,7 @@ async def clear_all_audits(
     """
     清空所有审计日志（危险操作）。
 
-    :param audit_crud: 审计日志 CRUD 服务
+    :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:

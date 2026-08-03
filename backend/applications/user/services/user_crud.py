@@ -46,12 +46,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :raises NotFoundException: on_error为True且用户不存在
         """
         if not user_id:
-            error_message: str = "查询用户信息失败, 参数(user_id)不允许为空"
+            error_message: str = "查询用户信息失败, 参数[user_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=user_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询用户信息失败, 用户(id={user_id})不存在"
+            error_message: str = f"查询用户信息失败, 记录[id={user_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -68,12 +68,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :raises NotFoundException: on_error为True且用户不存在
         """
         if not username:
-            error_message: str = "查询用户信息失败, 参数(username)不允许为空"
+            error_message: str = "查询用户信息失败, 参数[username]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(username=username, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询用户信息失败, 用户(username={username})不存在"
+            error_message: str = f"查询用户信息失败, 记录[username={username}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -90,12 +90,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :raises NotFoundException: on_error为True且用户不存在
         """
         if not alias:
-            error_message: str = "查询用户信息失败, 参数(alias)不允许为空"
+            error_message: str = "查询用户信息失败, 参数[alias]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(alias=alias, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询用户信息失败, 用户(alias={alias})不存在"
+            error_message: str = f"查询用户信息失败, 记录[alias={alias}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -143,7 +143,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         username = user_in.username
         instances = await self.get_by_conditions(only_one=True, on_error=False, email=email, username=username)
         if instances:
-            raise DataAlreadyExistsException(message=f"用户(email={email},username={username})信息已存在")
+            raise DataAlreadyExistsException(message=f"新增用户信息失败, 记录[email={email}, username={username}]已存在")
 
         user_in.password = get_password_hash(password=user_in.password)
         instance = await self.create(user_in)
@@ -195,7 +195,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         try:
             instance = await self.update(id=user_id, obj_in=user_if)
         except DoesNotExist as e:
-            raise NotFoundException(message=f"用户(id={user_id})信息不存在")
+            raise NotFoundException(message=f"更新用户信息失败, 记录[id={user_id}]不存在")
 
         return instance
 

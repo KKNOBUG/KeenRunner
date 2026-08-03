@@ -49,7 +49,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
     执行单个自动化任务的核心逻辑，区分手动与扫描触发并写回执行状态。
 
     :param task_id: 自动化任务主键ID
-    :param report_type: 报告类型；为ASYNC_EXEC或异步执行时按手动执行处理
+    :param report_type: 报告类型；为ASYNC_EXEC或异步执行时根据手动执行处理
     :return: 含success、task_id及批次执行汇总的字典
     :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """

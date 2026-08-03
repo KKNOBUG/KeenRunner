@@ -46,13 +46,13 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_id:
-            error_message: str = "查询明细信息失败, 参数(detail_id)不允许为空"
+            error_message: str = "查询明细信息失败, 参数[detail_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.get_or_none(id=detail_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询明细信息失败, 明细(id={detail_id})不存在"
+            error_message: str = f"查询明细信息失败, 记录[id={detail_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -69,13 +69,13 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_code:
-            error_message: str = "查询明细信息失败, 参数(detail_code)不允许为空"
+            error_message: str = "查询明细信息失败, 参数[detail_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(report_code=detail_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询明细信息失败, 明细(detail_code={detail_code})不存在"
+            error_message: str = f"查询明细信息失败, 记录[detail_code={detail_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -119,7 +119,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增明细信息失败, 违反联合唯一约束规则(report_code, case_code, step_code, num_cycles)"
+            error_message: str = f"新增明细信息失败, 违反联合唯一约束规则[report_code, case_code, step_code, num_cycles]"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
@@ -164,7 +164,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         detail_id: Optional[int] = detail_in.detail_id
         step_code: Optional[str] = detail_in.step_code
         if not detail_id and (not report_code or not step_code):
-            error_message: str = f"参数缺失, 更新明细信息时必须传递(detail_id)或(report_code, step_code)字段"
+            error_message: str = f"参数缺失, 更新明细信息时必须传递[detail_id]或[report_code, step_code]参数"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if detail_id:
@@ -208,7 +208,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :raises NotFoundException: 明细不存在
         """
         if not detail_id and (not report_code or not step_code):
-            error_message: str = f"参数缺失, 删除明细信息时必须传递(detail_id)或(report_code, step_code)字段"
+            error_message: str = f"参数缺失, 删除明细信息时必须传递[detail_id]或[report_code, step_code]参数"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 

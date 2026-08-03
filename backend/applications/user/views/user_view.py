@@ -50,7 +50,7 @@ async def create_user(
     新增用户。
 
     :param user_in: 用户入参
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -71,8 +71,8 @@ async def delete_user(
     """
     删除用户。
 
-    :param user_id: 用户 ID
-    :param user_crud: 用户 CRUD 服务
+    :param user_id: 用户ID
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -93,19 +93,19 @@ async def delete_users(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    按id列表删除用户。
+    根据id列表删除用户。
 
     :param user_in: 用户入参
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     try:
         deleted_ids = await user_crud.delete_users(user_in=user_in)
         deleted_num = len(deleted_ids)
-        LOGGER.info(f"按id列表删除用户成功, 数量: {deleted_num}")
+        LOGGER.info(f"根据id列表删除用户成功, 数量: {deleted_num}")
         return SuccessResponse(message="删除成功", data={"deleted_ids": deleted_ids}, total=deleted_num)
     except Exception as e:
-        LOGGER.error(f"按id列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -118,7 +118,7 @@ async def update_user(
     更新用户。
 
     :param user_in: 用户入参
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     user_id: int = user_in.user_id
@@ -142,9 +142,9 @@ async def get_user(
     """
     查询用户信息。
 
-    :param user_id: 用户 ID
-    :param user_crud: 用户 CRUD 服务
-    :param dept_crud: 部门 CRUD 服务
+    :param user_id: 用户ID
+    :param user_crud: 用户CRUD服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
@@ -165,7 +165,7 @@ async def get_user_by_username(
     查询用户信息。
 
     :param username: 用户账号
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     instance = await user_crud.get_by_username(username=username)
@@ -207,8 +207,8 @@ async def list_user(
     :param is_active: 查询参数
     :param is_superuser: 查询参数
     :param dept_id: 主键 ID
-    :param user_crud: 用户 CRUD 服务
-    :param dept_crud: 部门 CRUD 服务
+    :param user_crud: 用户CRUD服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     q = Q()
@@ -257,8 +257,8 @@ async def get_users(
     查询用户列表。
 
     :param user_in: 用户入参
-    :param user_crud: 用户 CRUD 服务
-    :param dept_crud: 部门 CRUD 服务
+    :param user_crud: 用户CRUD服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     q = Q()
@@ -317,7 +317,7 @@ async def update_user_password(
     修改密码。
 
     :param req_in: 修改密码入参
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
@@ -339,8 +339,8 @@ async def reset_password(
     """
     重置密码。
 
-    :param user_id: 用户 ID
-    :param user_crud: 用户 CRUD 服务
+    :param user_id: 用户ID
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     data = await user_crud.reset_password(user_id)
@@ -354,7 +354,7 @@ async def logout(
     """
     用户登出。
 
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()

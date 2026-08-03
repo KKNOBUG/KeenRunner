@@ -85,6 +85,6 @@ class AutoTestApiReportSelect(BaseModel):
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
-    # 执行时间范围（按用例执行开始时间case_st_time筛选，格式YYYY-MM-DD或YYYY-MM-DD HH:mm:ss）
+    # 执行时间范围（根据用例执行开始时间case_st_time筛选，格式YYYY-MM-DD或YYYY-MM-DD HH:mm:ss）
     date_from: Optional[str] = Field(None, description="执行开始时间-起")
     date_to: Optional[str] = Field(None, description="执行开始时间-止")

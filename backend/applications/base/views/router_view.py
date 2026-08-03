@@ -33,7 +33,7 @@ async def create_router(
     新增路由信息。
 
     :param router_in: 路由入参
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -55,7 +55,7 @@ async def delete_router(
     删除路由信息。
 
     :param router_id: 路由ID
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -77,7 +77,7 @@ async def update_user(
     更新路由信息。
 
     :param router_in: 路由入参
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -99,12 +99,12 @@ async def get_user(
     查询路由信息。
 
     :param router_id: 路由ID
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     instance = await router_crud.get_or_none(id=router_id)
     if not instance:
-        return NotFoundResponse(message=f"接口(id={router_id})信息不存在")
+        return NotFoundResponse(message=f"记录[id={router_id}]信息不存在")
 
     data: dict = await instance.to_dict()
     return SuccessResponse(message="查询成功", data=data, total=1)
@@ -119,7 +119,7 @@ async def get_routers(
     查询路由列表。
 
     :param router_in: 路由查询入参
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     page = router_in.page
@@ -167,7 +167,7 @@ async def list_router(
     :param path: 路由请求路径
     :param summary: 路由作用简介
     :param tags: 路由所属标签
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     q = Q()
@@ -193,7 +193,7 @@ async def refresh_router(
     刷新路由列表。
 
     :param request: HTTP 请求对象
-    :param router_crud: 路由 CRUD 服务
+    :param router_crud: 路由CRUD服务
     :return: 统一HTTP响应
     """
     app = request.app

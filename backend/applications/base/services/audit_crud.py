@@ -81,7 +81,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             order: Optional[list] = None
     ) -> Tuple[int, List[Audit]]:
         """
-        根据条件分页查询审计日志列表，默认按创建时间倒序。
+        根据条件分页查询审计日志列表，默认根据创建时间倒序。
 
         :param page: 页码，从1开始
         :param page_size: 每页记录数
@@ -93,7 +93,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
     async def delete_by_id(self, audit_id: int) -> Audit:
         """
-        按ID物理删除单条审计日志。
+        根据ID物理删除单条审计日志。
 
         :param audit_id: 审计日志ID
         :return: 被删除的审计日志实例
@@ -146,7 +146,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
     async def get_statistics_by_user(self, user_id: int) -> Dict[str, Any]:
         """
-        统计指定用户的审计日志：总量、按请求方式、按响应代码分布。
+        统计指定用户的审计日志：总量、根据请求方式、根据响应代码分布。
 
         :param user_id: 用户ID
         :return: 含user_id、total_count、method_statistics、code_statistics的字典
@@ -159,13 +159,13 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
         total_count = await self.model.filter(user_id=user_id).count()
 
-        # 按请求方式统计
+        # 根据请求方式统计
         method_stats = {}
         methods = await self.model.filter(user_id=user_id).values_list("request_method", flat=True)
         for method in methods:
             method_stats[method] = method_stats.get(method, 0) + 1
 
-        # 按响应代码统计
+        # 根据响应代码统计
         code_stats = {}
         codes = await self.model.filter(user_id=user_id).values_list("response_code", flat=True)
         for code in codes:
@@ -181,7 +181,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
     async def get_recent_audits(self, limit: int = 10, user_id: Optional[int] = None) -> List[Audit]:
         """
-        按创建时间倒序获取最近的审计日志。
+        根据创建时间倒序获取最近的审计日志。
 
         :param limit: 返回条数上限，默认10
         :param user_id: 可选，仅查询该用户的日志

@@ -409,7 +409,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # case_ids、initial_variables 及未来扩展键；不含 cases_execute_config
     task_kwargs = fields.JSONField(default=dict, null=True, description="轻量扩展参数")
     # cases_execute_config字段数据格式：{case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name, execute_count}}
-    cases_execute_config = fields.JSONField(default=dict, null=True, description="按用例执行配置")
+    cases_execute_config = fields.JSONField(default=dict, null=True, description="根据用例执行配置")
     related_cases_env_id = fields.JSONField(default=list, null=True, description="涉及环境ID列表(由cases_execute_config汇总)")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")

@@ -15,7 +15,7 @@ from backend.enums.autotest_enum import AutoTestAssertionOperation
 
 
 class AssertionCompare:
-    """对实际值与期望值按断言操作符执行比较。"""
+    """对实际值与期望值根据断言操作符执行比较。"""
 
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:

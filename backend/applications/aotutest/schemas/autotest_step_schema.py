@@ -506,7 +506,7 @@ class AutoTestStepTreeExecute(BaseModel):
     @model_validator(mode='after')
     def validate_execute_request(self):
         """
-        按execute_type校验steps是否必填或禁止传递。
+        根据execute_type校验steps是否必填或禁止传递。
 
         :return: 当前模型实例
         """

@@ -25,7 +25,7 @@ class DepartmentCreate(BaseModel):
         """
         转为落库字典，仅包含请求中显式设置的字段。
 
-        :return: 可直接传入 DepartmentCrud.create 的字段字典
+        :return: 可直接传入DepartmentCrud.create的字段字典
         """
         return self.model_dump(exclude_unset=True)
 
@@ -45,7 +45,7 @@ class DepartmentUpdate(BaseModel):
         """
         转为更新字典，排除 id 与未设置字段。
 
-        :return: 可直接用于 update_from_dict 的字段字典
+        :return: 可直接用于update_from_dict的字段字典
         """
         return self.model_dump(exclude_unset=True, exclude={"id"})
 

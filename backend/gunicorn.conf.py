@@ -42,11 +42,11 @@ class UvicornWorker(_BaseUvicornWorker):
     }
 
 
-# --- Gunicorn 识别的配置项（字符串形式便于 Gunicorn 按路径动态加载类） ---
+# --- Gunicorn 识别的配置项（字符串形式便于 Gunicorn 根据路径动态加载类） ---
 worker_class = f"{__name__}.UvicornWorker"
 logger_class = f"{__name__}.InterceptGunicornLogger"
 
-# 进程与并发（可按机器 CPU 与业务调整）
+# 进程与并发（可根据机器 CPU 与业务调整）
 workers = 4
 threads = 4
 bind = f"{PROJECT_CONFIG.SERVER_HOST}:{PROJECT_CONFIG.SERVER_PORT}"

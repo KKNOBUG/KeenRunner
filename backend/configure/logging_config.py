@@ -5,21 +5,6 @@
 @Project : Krun
 @Module  : logging_config.py
 @DateTime: 2025/1/16 15:33
-
-统一日志方案：Loguru（LOGGER）+ InterceptHandler 接管标准库 logging。
-
-架构说明
---------
-1. 应用与第三方库仍使用 logging.getLogger(...) 或 uvicorn/gunicorn 内置 logger
-2. InterceptHandler 将上述记录转发到 Loguru，控制台/文件均使用 LOG_FORMAT
-3. 文件落盘经 ConcurrentRotatingFileHandler：多 Gunicorn worker 可共写同一文件
-   按 PROJECT_CONFIG.LOGGER_ROTATION 大小轮转，保留 LOGGER_ROTATION_BACKUP_COUNT 个
-   备份 xxx.log.1 不压缩。
-
-落盘文件命名规则：
---------------------
-INFO 及以上、低于 ERROR： {OUTPUT_LOGS_DIR}/{YYYYMMDD}_INFO_执行日志.log
-ERROR 及以上： {OUTPUT_LOGS_DIR}/{YYYYMMDD}_ERROR_执行日志.log
 """
 import logging
 import os
@@ -100,7 +85,7 @@ def rotation_to_max_bytes(rotation: str) -> int:
 
 def build_log_path(level_label: str) -> str:
     """
-    按日期与级别标签生成当日日志文件路径
+    根据日期与级别标签生成当日日志文件路径
     :param level_label: 文件名中的级别段，如 INFO、ERROR
     :return:
     """
@@ -111,7 +96,7 @@ def build_log_path(level_label: str) -> str:
 
 def registry_file_handler(*, level_label: str, min_level: str, max_level: Optional[str] = None) -> None:
     """
-    注册一个按级别分流的文件处理器
+    注册一个根据级别分流的文件处理器
 
     :param level_label: 文件名中的级别段，如 INFO、ERROR
     :param min_level: Loguru 最低级别

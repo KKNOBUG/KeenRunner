@@ -163,7 +163,7 @@ def parse_kv_string(text: str, requests_body_key: Optional[str]) -> Dict[str, st
 
 def parse_sheet_fast(df: pd.DataFrame, sheet_name: str, requests_body_key: Dict[str, List[str]]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    同步解析单个 sheet 为按场景组织的 head/body/assert 结构。
+    同步解析单个 sheet 为根据场景组织的 head/body/assert 结构。
 
     :param df: sheet DataFrame（header=None）
     :param sheet_name: sheet 名，用于匹配 requests_body_key
@@ -313,7 +313,7 @@ async def save_upload_file(upload_file: Any, destination: Path) -> None:
 
 async def xlsx_to_json_async(file_path: str, requests_body_key: Dict[str, List[str]], first_sheet_only: bool = False) -> Dict[str, Any]:
     """
-    异步读取 xlsx，校验结构后解析为按 sheet/场景组织的 JSON。
+    异步读取 xlsx，校验结构后解析为根据 sheet/场景组织的 JSON。
 
     :param file_path: Excel 路径
     :param requests_body_key: sheet 到 body 路径键的映射

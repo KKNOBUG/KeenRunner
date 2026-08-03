@@ -77,7 +77,7 @@ async def delete_report(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除报告。
+    根据id或code删除报告。
 
     :param report_id: 报告主键ID
     :param report_code: 报告业务标识
@@ -95,12 +95,12 @@ async def delete_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"按id或code删除报告成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除报告成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除报告失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -110,7 +110,7 @@ async def update_report(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新报告。
+    根据id或code更新报告。
 
     :param report_in: 报告入参
     :param services: 自动化测试CRUD依赖聚合
@@ -127,14 +127,14 @@ async def update_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"按id或code更新报告成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新报告成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新报告失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -145,7 +145,7 @@ async def get_report(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询报告。
+    根据id或code查询报告。
 
     :param report_id: 报告主键ID
     :param report_code: 报告业务标识
@@ -166,12 +166,12 @@ async def get_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"按id或code查询报告成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询报告成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询测试报告失败，异常描述: {e}")
 
 
@@ -181,7 +181,7 @@ async def search_reports(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询报告。
+    根据条件查询报告。
 
     :param report_in: 报告入参
     :param services: 自动化测试CRUD依赖聚合
@@ -194,7 +194,7 @@ async def search_reports(
         if report_in.case_code:
             q &= Q(case_code=report_in.case_code)
         if report_in.case_name:
-            # 报告表无 case_name，先按用例名称查出 case_id 再过滤
+            # 报告表无case_name，先根据用例名称查出case_id再过滤
             matched_case_ids = await services.case_curd.model.filter(
                 case_name__contains=report_in.case_name.strip(),
                 state__not=1,
@@ -223,7 +223,7 @@ async def search_reports(
             q &= Q(updated_user__iexact=report_in.updated_user)
         if report_in.step_pass_ratio:
             q &= Q(step_pass_ratio__gte=report_in.step_pass_ratio)
-        # 执行时间范围：按 case_st_time 筛选，仅日期时补全为当天起止
+        # 执行时间范围：根据case_st_time筛选，仅日期时补全为当天起止
         if report_in.date_from:
             date_from = report_in.date_from.strip()
             if len(date_from) == 10:  # YYYY-MM-DD
@@ -241,7 +241,7 @@ async def search_reports(
             page_size=report_in.page_size,
             order=report_in.order
         )
-        # 批量获取 case_id 并查询 case_name
+        # 批量获取case_id并查询case_name
         data = []
         case_ids = [obj.case_id for obj in instances]
         unique_case_ids = list(set(case_ids))
@@ -253,7 +253,7 @@ async def search_reports(
                     state__not=1
                 ).values_list("id", "case_name")
             )
-        # 并发执行所有 to_dict 操作（核心：用gather批量处理异步任务）
+        # 并发执行所有to_dict操作（核心：用gather批量处理异步任务）
         report_instances = await asyncio.gather(*[
             obj.to_dict(
                 exclude_fields={"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"},
@@ -266,8 +266,8 @@ async def search_reports(
             {**item, "case_name": case_name_map.get(item["case_id"], "")}
             for item in report_instances
         ]
-        LOGGER.info(f"按条件查询报告成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询报告成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
-        LOGGER.error(f"按条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")

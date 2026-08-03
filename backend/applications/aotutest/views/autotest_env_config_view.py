@@ -80,7 +80,7 @@ async def delete_env_config(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除环境配置。
+    根据id或code删除环境配置。
 
     :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
@@ -98,12 +98,12 @@ async def delete_env_config(
             },
             replace_fields={"id": "config_id"}
         )
-        LOGGER.info(f"按id或code删除环境配置成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除环境配置成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -113,7 +113,7 @@ async def delete_env_config_batch(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code列表删除环境。
+    根据id或code列表删除环境。
 
     :param config_in: 环境配置入参
     :param services: 自动化测试CRUD依赖聚合
@@ -121,10 +121,10 @@ async def delete_env_config_batch(
     """
     try:
         count = await services.env_config_curd.delete_configs(config_in=config_in)
-        LOGGER.info(f"按id或code列表删除环境配置成功, 数量: {count}")
+        LOGGER.info(f"根据id或code列表删除环境配置成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
-        LOGGER.error(f"按id或code列表删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code列表删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -134,7 +134,7 @@ async def update_env_config(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新环境配置。
+    根据id或code更新环境配置。
 
     :param config_in: 环境配置入参
     :param services: 自动化测试CRUD依赖聚合
@@ -151,14 +151,14 @@ async def update_env_config(
             },
             replace_fields={"id": "env_id"}
         )
-        LOGGER.info(f"按id或code更新环境配置成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新环境配置成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
@@ -169,7 +169,7 @@ async def get_env_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询环境配置。
+    根据id或code查询环境配置。
 
     :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
@@ -190,12 +190,12 @@ async def get_env_info(
             },
             replace_fields={"id": "env_id"}
         )
-        LOGGER.info(f"按id或code查询环境配置成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询环境配置成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
@@ -205,7 +205,7 @@ async def search_env_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询环境配置。
+    根据条件查询环境配置。
 
     :param config_in: 环境配置入参
     :param services: 自动化测试CRUD依赖聚合
@@ -275,12 +275,12 @@ async def search_env_info(
             }
             for item in report_instances
         ]
-        LOGGER.info(f"按条件查询环境配置成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询环境配置成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
@@ -304,13 +304,13 @@ async def query_classify_env_config(
             for names in buckets.values()
         )
         LOGGER.info(
-            f"按应用列表查询环境配置并分类成功, project_ids={body.project_ids}, 配置条数: {total_configs}"
+            f"根据应用列表查询环境配置并分类成功, project_ids={body.project_ids}, 配置条数: {total_configs}"
         )
         return SuccessResponse(message="查询成功", data=data, total=total_configs)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 

@@ -80,7 +80,7 @@ class AutoTestDataSourceSelect(BaseModel):
 
 
 class AutoTestDataSourceConditionQuery(BaseModel):
-    """按任意模型字段条件查询"""
+    """根据任意模型字段条件查询"""
 
     conditions: Dict[str, Any] = Field(..., description="与模型字段一致的等值条件")
     only_one: bool = Field(default=True, description="为 True 返回单条，否则返回列表")

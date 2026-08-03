@@ -77,7 +77,7 @@ async def delete_report(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除明细。
+    根据id或code删除明细。
 
     :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
@@ -100,12 +100,12 @@ async def delete_report(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"按id或code删除明细成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除明细成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除明细失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -115,7 +115,7 @@ async def update_report(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新明细。
+    根据id或code更新明细。
 
     :param detail_in: 明细入参
     :param services: 自动化测试CRUD依赖聚合
@@ -132,14 +132,14 @@ async def update_report(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"按id或code更新明细成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新明细成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新明细失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -151,7 +151,7 @@ async def get_step_detail(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询明细。
+    根据id或code查询明细。
 
     :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
@@ -177,12 +177,12 @@ async def get_step_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"按id或code查询明细成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询明细成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询明细失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -192,7 +192,7 @@ async def search_step_details(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询明细。
+    根据条件查询明细。
 
     :param detail_in: 明细入参
     :param services: 自动化测试CRUD依赖聚合
@@ -241,10 +241,10 @@ async def search_step_details(
                 replace_fields={"id": "detail_id"}
             )
             detail_serializes.append(serialize)
-        LOGGER.info(f"按条件查询明细成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询明细成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=detail_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询明细失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

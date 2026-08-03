@@ -40,7 +40,7 @@ async def create_role(
 
     :param role_in: 角色入参
     :param current_user: 当前登录用户
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -60,7 +60,7 @@ async def delete_role_one(
     删除角色。
 
     :param role_id: 角色 ID
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -84,7 +84,7 @@ async def delete_roles_batch(
     批量删除角色。
 
     :param body_in: 角色批量删除入参
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -110,7 +110,7 @@ async def update_role(
 
     :param role_in: 角色入参
     :param current_user: 当前登录用户
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     update_dict = role_in.model_dump(exclude_unset=True, exclude={"id"})
@@ -131,7 +131,7 @@ async def get_role_by(
 
     :param code: 角色代码
     :param name: 角色名称
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     where: dict = {}
@@ -159,7 +159,7 @@ async def list_role(
     :param page_size: 每页条数
     :param order: 排序字段
     :param name: 角色名称
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     q = Q()
@@ -181,7 +181,7 @@ async def get_role_authorized(
     查看角色权限。
 
     :param id: 角色 ID
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     role_obj = await role_crud.get_or_error(id=id)
@@ -198,7 +198,7 @@ async def update_role_authorized(
     更新角色权限。
 
     :param role_in: 角色菜单与路由权限入参
-    :param role_crud: 角色 CRUD 服务
+    :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     role_obj = await role_crud.get_or_none(id=role_in.id)

@@ -13,7 +13,7 @@ from backend.applications.base.services.scaffold import ScaffoldModel, MaintainM
 
 
 class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
-    """菜单模型，对应表 krun_menu。"""
+    """菜单模型。"""
 
     name = fields.CharField(max_length=32, index=True, description="菜单名称")
     remark = fields.JSONField(null=True, description="保留字段")

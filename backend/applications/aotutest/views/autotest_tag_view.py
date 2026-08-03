@@ -79,7 +79,7 @@ async def delete_tag_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除标签。
+    根据id或code删除标签。
 
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
@@ -97,14 +97,14 @@ async def delete_tag_info(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"按id或code删除标签成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除标签成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -114,7 +114,7 @@ async def delete_tag_batch(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code列表删除标签。
+    根据id或code列表删除标签。
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
@@ -122,10 +122,10 @@ async def delete_tag_batch(
     """
     try:
         count = await services.tag_curd.delete_tags(tag_in=tag_in)
-        LOGGER.info(f"按id或code列表删除标签成功, 数量: {count}")
+        LOGGER.info(f"根据id或code列表删除标签成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
-        LOGGER.error(f"按id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -135,7 +135,7 @@ async def update_tag_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新标签。
+    根据id或code更新标签。
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
@@ -152,7 +152,7 @@ async def update_tag_info(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"按id或code更新标签成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新标签成功, 结果明细: {data}")
         return SuccessResponse(data=data, message="更新成功", total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -163,7 +163,7 @@ async def update_tag_info(
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -174,7 +174,7 @@ async def get_tag_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询标签。
+    根据id或code查询标签。
 
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
@@ -195,14 +195,14 @@ async def get_tag_info(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"按id或code查询标签成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询标签成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -212,7 +212,7 @@ async def search_tags_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询标签。
+    根据条件查询标签。
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
@@ -252,10 +252,10 @@ async def search_tags_info(
                 replace_fields={"id": "tag_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"按条件查询标签成功, 结果明细: {data}")
+        LOGGER.info(f"根据条件查询标签成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=e.message)
     except Exception as e:
-        LOGGER.error(f"按条件查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

@@ -19,7 +19,7 @@ class ExecutorFieldsValidation:
     @classmethod
     def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:
         """
-        按步骤类型校验各执行器的必填字段组合（第三层校验）。
+        根据步骤类型校验各执行器的必填字段组合（第三层校验）。
 
         :param steps: 根步骤列表
         :return: 错误项列表，每项含step_code、step_name、step_type、missing（缺失字段名列表）、message
@@ -40,7 +40,7 @@ class ExecutorFieldsValidation:
                 return None
 
         def _check_step(step: AutoTestStepTreeUpdateItem) -> None:
-            """按步骤类型校验必填字段，缺失则写入errors。"""
+            """根据步骤类型校验必填字段，缺失则写入errors。"""
             step_type = _norm_step_type(step.step_type)
             step_code = step.step_code
             step_name = step.step_name

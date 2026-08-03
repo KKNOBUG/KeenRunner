@@ -34,7 +34,7 @@ class ExtractPipeline:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        按StepExtractVariableItem列表从请求/响应/变量池中提取变量。
+        根据StepExtractVariableItem列表从请求/响应/变量池中提取变量。
 
         不完整规则（缺name/source，或SOME模式缺expr）会跳过该项并可选记日志，
         不中断其余项；单条提取异常记入该项error/success=False，不向外抛出。

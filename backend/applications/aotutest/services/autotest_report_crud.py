@@ -45,13 +45,13 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not report_id:
-            error_message: str = "查询报告信息失败, 参数(report_id)不允许为空"
+            error_message: str = "查询报告信息失败, 参数[report_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(id=report_id, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询报告信息失败, 报告(code={report_id})不存在"
+            error_message: str = f"查询报告信息失败, 记录[code={report_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -68,13 +68,13 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not report_code:
-            error_message: str = "查询报告信息失败, 参数(report_code)不允许为空"
+            error_message: str = "查询报告信息失败, 参数[report_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(report_code=report_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询报告信息失败, 报告(code={report_code})不存在"
+            error_message: str = f"查询报告信息失败, 记录[code={report_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -161,7 +161,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             report_code = instance.report_code
             from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
             count = await AutoTestApiDetailCrud().model.filter(report_code=report_code, state__not=1).update(state=1)
-            LOGGER.warning(f"成功删除报告(report_code={report_code})关联的{count}条明细信息")
+            LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
 
         instance.state = 1
         await instance.save()

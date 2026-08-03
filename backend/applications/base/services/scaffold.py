@@ -141,7 +141,7 @@ class ScaffoldModel(models.Model):
 
         支持的类型转换：
         - Decimal -> str(避免JSON序列化错误)
-        - datetime/date/time -> str(按全局配置格式化)
+        - datetime/date/time -> str(根据全局配置格式化)
         - bytes -> str(UTF-8 解码)
         - timedelta -> str
         """
@@ -285,7 +285,7 @@ class JSONTextField(JSONField):
     以TEXT类型存储JSON格式的数据字段。
 
     与JSONField的唯一区别在于SQL_TYPE：使用LONGTEXT而非MySQL的JSON列。
-    MySQL的JSON列在落库时会对对象键做归一化(按键长度、字节值排序)，导致字段顺序丢失；
+    MySQL的JSON列在落库时会对对象键做归一化(根据键长度、字节值排序)，导致字段顺序丢失；
     改用TEXT列原样存储JSON文本即可保留插入顺序。
     Python侧依旧表现为dict/list：继承JSONField的dict ↔ str透明转换
     (安装了orjson时默认使用orjson，序列化/反序列化均保持顺序)，
@@ -422,7 +422,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 搜索条件，使用Q对象组合复杂查询
-        :param order: 排序字段列表，如["-created_time"]表示按创建时间倒序
+        :param order: 排序字段列表，如["-created_time"]表示根据创建时间倒序
         :param related: 预加载的关联字段列表
         :return: (总记录数, 当前页记录列表)
         """
@@ -855,7 +855,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 额外的搜索条件
-        :param order: 排序字段列表，默认按updated_time倒序
+        :param order: 排序字段列表，默认根据updated_time倒序
         :return: (总记录数, 已删除记录列表)
         :raises ParameterException: 模型未继承StateModel时抛出
         """

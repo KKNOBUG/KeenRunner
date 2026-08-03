@@ -88,7 +88,7 @@ def _display_text_width(text: str) -> int:
 
 def _auto_size_sheet_columns(sheet) -> None:
     """
-    按单元格内容自适应列宽，多行文本取最长行。
+    根据单元格内容自适应列宽，多行文本取最长行。
     """
     max_column = sheet.max_column or 0
     max_row = sheet.max_row or 0
@@ -266,7 +266,7 @@ async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List
 
 def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
     """
-    按一用例一sheet构建导出工作簿，多于1个时前置目录sheet。
+    根据一用例一sheet构建导出工作簿，多于1个时前置目录sheet。
     """
     workbook = Workbook()
     workbook.remove(workbook.active)
@@ -460,7 +460,7 @@ def build_script_workbook(rows: List[Dict[str, str]]) -> Workbook:
     for row_index, row in enumerate(rows, start=_DATA_START_ROW):
         for col_index, column in enumerate(_SCRIPT_COLUMNS, start=1):
             sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
-    # 数据区从第 3 行起：居中 + 统一行高；列宽按全表内容自适应
+    # 数据区从第 3 行起：居中 + 统一行高；列宽根据全表内容自适应
     if rows:
         _style_sheet_cells(sheet, start_row=_DATA_START_ROW, row_height=_ROW_HEIGHT)
     _auto_size_sheet_columns(sheet)
@@ -697,7 +697,7 @@ async def import_script_rows(
         rows: List[Dict[str, Any]], services: Any
 ) -> Tuple[Dict[str, int], List[Dict[str, Any]]]:
     """
-    按所属应用与接口名称匹配公共接口，存在则更新、不存在则新增，校验通过后单事务落库。
+    根据所属应用与接口名称匹配公共接口，存在则更新、不存在则新增，校验通过后单事务落库。
     """
     prepared: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []

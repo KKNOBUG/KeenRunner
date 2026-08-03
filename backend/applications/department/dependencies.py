@@ -10,5 +10,5 @@ from backend.applications.department.services.department_crud import DepartmentC
 
 
 async def get_dept_crud() -> DepartmentCrud:
-    """获取部门 CRUD 服务实例"""
+    """获取部门CRUD服务实例"""
     return DepartmentCrud()

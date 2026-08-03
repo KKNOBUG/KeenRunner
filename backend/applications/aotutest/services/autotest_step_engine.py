@@ -80,18 +80,18 @@ class StepExecutionResult:
     """
     单步执行结果；容器步骤可通过children挂载子步骤结果树。
 
-    :ivar case_id: 用例 ID
-    :ivar step_id: 步骤 ID
+    :ivar case_id: 用例ID
+    :ivar step_id: 步骤ID
     :ivar step_no: 步骤序号
     :ivar step_code: 步骤标识，用于日志与统计去重
     :ivar step_name: 步骤名称
     :ivar step_type: 步骤类型枚举
-    :ivar success: 本步是否成功（条件分支未执行子步骤时仍为 True）
+    :ivar success: 本步是否成功（条件分支未执行子步骤时仍为True）
     :ivar message: 补充说明（如条件不成立时的提示）
     :ivar error: 失败时的错误信息
     :ivar elapsed: 耗时（秒）
     :ivar dataset_name: 参数化数据集名称
-    :ivar quote_case_id: 引用公共脚本时的用例 ID
+    :ivar quote_case_id: 引用公共脚本时的用例ID
     :ivar request: 请求快照，供明细落库
     :ivar response: 响应快照
     :ivar dataset_snapshot: 数据驱动替换用的数据集快照
@@ -147,7 +147,7 @@ class HttpClientProtocol(Protocol):
 
 class StepExecutionContext:
     """
-    步骤执行上下文：维护用例/报告标识、变量池、日志、HTTP 客户端及占位符解析。
+    步骤执行上下文：维护用例/报告标识、变量池、日志、HTTP客户端及占位符解析。
     """
 
     def __init__(
@@ -279,7 +279,7 @@ class StepExecutionContext:
 
     def log(self, message: str, step_code: Optional[str] = None) -> None:
         """
-        按步骤编号记录一条带时间戳的日志。
+        根据步骤编号记录一条带时间戳的日志。
 
         :param message: 日志内容
         :param step_code: 步骤编号，用于归属；未传则使用当前步骤编号
@@ -316,7 +316,7 @@ class StepExecutionContext:
             scope: str = "defined_variables"
     ) -> None:
         """
-        按作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加。
+        根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加。
 
         :param variables: 待更新的变量列表
         :param scope: 目标作用域（defined_variables 或 session_variables）
@@ -358,7 +358,7 @@ class StepExecutionContext:
 
     def get_variable(self, name: str) -> Any:
         """
-        按优先级从defined_variables、session_variables中取名为name的变量值。
+        根据优先级从defined_variables、session_variables中取名为name的变量值。
 
         变量作用域说明：defined_variables 为当前步骤的临时变量（从步骤配置中获取），
         session_variables 为持续累积已执行的步骤产生的变量（所有步骤共享）。
@@ -990,7 +990,7 @@ class BaseStepExecutor:
 
     @property
     def children(self) -> List[AutoTestStepTreeUpdateItem]:
-        """当前步骤的子步骤列表（children + quote_steps，按 step_no 排序）。"""
+        """当前步骤的子步骤列表（children + quote_steps，根据 step_no 排序）。"""
         return sorted(
             list(self.step.children or []) + list(self.step.quote_steps or []),
             key=lambda item: (item.step_no or 0),
@@ -998,7 +998,7 @@ class BaseStepExecutor:
 
     @classmethod
     async def get_services(cls) -> AutoTestApiServices:
-        """获取自动化测试依赖注入的 CRUD 服务聚合。"""
+        """获取自动化测试依赖注入的CRUD服务聚合。"""
         from backend.applications.aotutest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
@@ -1347,7 +1347,7 @@ class BaseStepExecutor:
 
     async def _execute_children(self) -> List[StepExecutionResult]:
         """
-        按step_no顺序执行所有子步骤（children + quote_steps）。
+        根据step_no顺序执行所有子步骤（children + quote_steps）。
 
         :return: 子步骤结果列表；step_is_skipped的子步返回None会被跳过；异常子步转为失败结果项
         """
@@ -1384,7 +1384,7 @@ class BaseStepExecutor:
 
 class LoopStepExecutor(BaseStepExecutor):
     """
-    循环结构执行器：按loop_mode分派次数/列表/字典/条件循环，维护loop_index等会话变量并执行子步骤。
+    循环结构执行器：根据loop_mode分派次数/列表/字典/条件循环，维护loop_index等会话变量并执行子步骤。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -1393,7 +1393,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param result: 用于挂载子步骤结果与成败状态的执行结果对象
         :return: None
-        :raises StepExecutionError: 循环模式/错误策略缺失或非法，或子步骤按策略停止时抛出
+        :raises StepExecutionError: 循环模式/错误策略缺失或非法，或子步骤根据策略停止时抛出
         """
         try:
             loop_mode_str = self.step.loop_mode
@@ -1446,12 +1446,12 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        次数循环模式，按loop_maximums 执行固定次数循环，可选loop_interval间隔；超100次强制终止。
+        次数循环模式，根据loop_maximums 执行固定次数循环，可选loop_interval间隔；超100次强制终止。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_maximums为空、子步骤按停止策略失败或循环次数超限时抛出
+        :raises StepExecutionError: loop_maximums为空、子步骤根据停止策略失败或循环次数超限时抛出
         """
         loop_maximums = self.step.loop_maximums
         if not loop_maximums:
@@ -1533,7 +1533,7 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_iterable为空、数据源非可迭代对象、子步骤按停止策略失败或循环执行异常时抛出
+        :raises StepExecutionError: loop_iterable为空、数据源非可迭代对象、子步骤根据停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1644,7 +1644,7 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_iterable为空、数据源非字典、子步骤按停止策略失败或循环执行异常时抛出
+        :raises StepExecutionError: loop_iterable为空、数据源非字典、子步骤根据停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1756,7 +1756,7 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         条件循环：while语义每轮先根据conditions判断是否继续；仅当条件满足时才执行子步骤，
         再进入间隔与下一轮判断。条件一开始就不满足时，子步骤一轮都不会执行。
-        超时、条件评估异常、或子步骤按策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
+        超时、条件评估异常、或子步骤根据策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
 
         约定：conditions与ConditionsBase一致（condition_expr/condition_compare/condition_value），
         经compare_assertion评估；返回True表示继续循环，返回 False 表示结束循环。
@@ -1764,7 +1764,7 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: conditions为空、子步骤按停止策略失败或循环轮数超限时抛出
+        :raises StepExecutionError: conditions为空、子步骤根据停止策略失败或循环轮数超限时抛出
         """
         condition = self.step.conditions
         if not condition:
@@ -1926,7 +1926,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
     def parse_iterable_source(self, source: Any) -> Any:
         """
-        解析循环数据源：先做占位符替换，再按变量名、JSON字符串或原值得到可迭代对象。
+        解析循环数据源：先做占位符替换，再根据变量名、JSON字符串或原值得到可迭代对象。
 
         :param source: 数据源，可为${var}、JSON字符串或已解析对象
         :return: 可迭代对象（如 list、dict）
@@ -1957,7 +1957,7 @@ class LoopStepExecutor(BaseStepExecutor):
 
 class ConditionStepExecutor(BaseStepExecutor):
     """
-    条件分支执行器：按 branch_items 顺序评估 if/elif/else，命中第一个即执行其子步骤。
+    条件分支执行器：根据 branch_items 顺序评估 if/elif/else，命中第一个即执行其子步骤。
 
     所有分支均未命中且无 else 时本步 success 仍为 True；子步骤失败不向上传递。
     """
@@ -2147,12 +2147,12 @@ class PythonStepExecutor(BaseStepExecutor):
 
 class WaitStepExecutor(BaseStepExecutor):
     """
-    等待步骤执行器：按step.wait秒数调用context.sleep。
+    等待步骤执行器：根据step.wait秒数调用context.sleep。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        按 step.wait 指定的秒数挂起当前步骤。
+        根据 step.wait 指定的秒数挂起当前步骤。
 
         :param result: 本步执行结果（等待步骤通常不写入额外字段）
         :return: None
@@ -2202,7 +2202,7 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
 class QuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本执行器：加载引用用例根步骤树，按step_no顺序执行并挂到result.children。
+    引用公共脚本执行器：加载引用用例根步骤树，根据step_no顺序执行并挂到result.children。
 
     本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
     """
@@ -2381,7 +2381,7 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.has_dataset_payload(step_struct):
-                # 按request_args_type优先判断报文类型，未明确类型时按内容嗅探
+                # 根据request_args_type优先判断报文类型，未明确类型时根据内容嗅探
                 text_for_detect = request_text if isinstance(request_text, str) else ""
                 if self.step.request_args_type == AutoTestReqArgsType.XML:
                     is_xml = True
@@ -2592,7 +2592,7 @@ class TcpStepExecutor(BaseStepExecutor):
 
 class DataBaseStepExecutor(BaseStepExecutor):
     """
-    数据库请求步骤：按环境配置连接池执行多条SQL，解析占位符，结果写入变量池；支持查到即止。
+    数据库请求步骤：根据环境配置连接池执行多条SQL，解析占位符，结果写入变量池；支持查到即止。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -2618,7 +2618,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
             pool_manager: DBConnPoolFromConfig = get_app_database_pool()
             database_searched: bool = bool(self.step.database_searched)
             executive_st_time: datetime = datetime.now()
-            # 步骤响应：列表，每项对应一条database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」按存储变量名匹配
+            # 步骤响应：列表，每项对应一条database_operates 执行结果（含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」根据存储变量名匹配
             for db_idx, db_operate in enumerate(database_operates):
                 # 清空env_name/config_host/config_port，避免循环内数据库操作相互污染
                 env_name: Optional[str] = None
@@ -2838,7 +2838,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
 class RedisStepExecutor(BaseStepExecutor):
     """
-    Redis请求步骤：按环境配置连接Redis，顺序执行多条命令，解析占位符；支持查到即止。
+    Redis请求步骤：根据环境配置连接Redis，顺序执行多条命令，解析占位符；支持查到即止。
     """
 
     @staticmethod
@@ -2863,7 +2863,7 @@ class RedisStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        按环境配置顺序执行redis_operates，解析占位符并写入结果；支持查到即止。
+        根据环境配置顺序执行redis_operates，解析占位符并写入结果；支持查到即止。
 
         :param result: 本步执行结果
         :return: None
@@ -3126,8 +3126,8 @@ class RedisStepExecutor(BaseStepExecutor):
 
 class HttpStepExecutor(BaseStepExecutor):
     """
-    HTTP 步骤执行器：发请求、解析占位符、按request_project_id取项目下环境补全 URL，并执行变量提取与断言。
-    参数化驱动仅在此执行器内处理：按dataset_name + case_id/step_code查AutoTestApiDataSourceInfo取数。
+    HTTP 步骤执行器：发请求、解析占位符、根据request_project_id取项目下环境补全 URL，并执行变量提取与断言。
+    参数化驱动仅在此执行器内处理：根据dataset_name + case_id/step_code查AutoTestApiDataSourceInfo取数。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -3261,7 +3261,7 @@ class HttpStepExecutor(BaseStepExecutor):
             file_payload: Optional[Any] = None
             data_payload: Optional[Any] = None
             content_payload: Optional[Any] = None
-            # 按request_args_type选取请求体类型，仅使用一种方式，避免冲突
+            # 根据request_args_type选取请求体类型，仅使用一种方式，避免冲突
             request_args_type: Optional[AutoTestReqArgsType] = self.step.request_args_type
             if request_args_type is None:
                 # 未配置时保持兼容：优先raw -> form-data -> urlencoded作为data，若存在request_body且未产生data载荷，则作为json
@@ -3446,7 +3446,7 @@ class StepExecutorFactory:
 
 class AutoTestStepExecutionEngine:
     """
-    用例执行入口：创建报告、进入上下文、按step_no执行根步骤并汇总统计与日志。
+    用例执行入口：创建报告、进入上下文、根据step_no执行根步骤并汇总统计与日志。
     """
 
     def __init__(
@@ -3490,19 +3490,19 @@ class AutoTestStepExecutionEngine:
         Optional[List[AutoTestApiDetailCreate]]
     ]:
         """
-        执行单用例：在上下文中按step_no执行根步骤，可选收集报告与明细供调用方落库。
+        执行单用例：在上下文中根据step_no执行根步骤，可选收集报告与明细供调用方落库。
 
-        参数化时仅传入dataset_name，HTTP、TCP步骤按case_id/step_code与数据集名称查表取数。
+        参数化时仅传入dataset_name，HTTP、TCP步骤根据case_id/step_code与数据集名称查表取数。
         step_is_skipped 的步骤不进入results、不写明细、不计入statistics。
 
         :param case: 用例信息字典，含case_id、case_code、case_name
-        :param steps: 根步骤可迭代对象（已排序按 step_no）
+        :param steps: 根步骤可迭代对象（已排序根据 step_no）
         :param report_type: 报告类型枚举
         :param steps_execute_config: 执行配置
         :param initial_variables: 初始会话变量列表，每项含key、value、desc
         :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数
         :return: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)，
-            results：根步骤执行结果列表（不含已跳过步骤）；logs：按step_code分组；report_code：未保存时为None；
+            results：根步骤执行结果列表（不含已跳过步骤）；logs：根据step_code分组；report_code：未保存时为None；
             statistics：含total_steps、success_steps、failed_steps、passed_ratio；session_variables：执行后变量列表；
             当_save_report为True时，最后两项为待落库的报告创建体与明细列表（report_code 已统一），
             调用方在单事务内依次create_report、create_detail、update_case
@@ -3544,7 +3544,7 @@ class AutoTestStepExecutionEngine:
                     if root_step_code is not None:
                         self.aggregate_root_step_logs(context, result, root_step_code)
 
-            # 统计（按 step_code 去重合并）
+            # 统计（根据 step_code 去重合并）
             all_results: List[StepExecutionResult] = self.collect_all_results(results)
             unique_states: Dict[str, bool] = {}
             for r in all_results:
@@ -3618,7 +3618,7 @@ class AutoTestStepExecutionEngine:
             root_step_code: str
     ) -> None:
         """
-        将根步骤下所有子步骤的日志按step_code收集后，追加到该根步骤在context.logs中的日志列表。
+        将根步骤下所有子步骤的日志根据step_code收集后，追加到该根步骤在context.logs中的日志列表。
 
         :param context: 执行上下文，其logs将被修改
         :param root_result: 根步骤的执行结果，用于遍历children
@@ -3645,7 +3645,7 @@ class AutoTestStepExecutionEngine:
         for child in root_result.children:
             child_step_codes.extend(collect_child_step_nos(child))
 
-        # 汇总所有子步骤的日志（按步骤编号排序）
+        # 汇总所有子步骤的日志（根据步骤编号排序）
         aggregated_logs: List[str] = []
         for step_code in sorted(child_step_codes):
             if step_code in context.logs:

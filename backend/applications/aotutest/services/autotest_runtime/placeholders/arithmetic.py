@@ -27,9 +27,9 @@ class PlaceholderArithmetic:
         判断value能否作为数值参与算术表达式计算, 用于区分「算术计算」与「字符串拼接」逻辑。
 
         返回float对象：可参与算术计算
-        返回None：应按字符串拼接处理, 不参与算术计算
+        返回None：应根据字符串拼接处理, 不参与算术计算
         :param value: 目标值
-        :return: 可参与算术的float；否则None（按字符串拼接处理）
+        :return: 可参与算术的float；否则None（根据字符串拼接处理）
         """
         if value is None:
             return None
@@ -56,7 +56,7 @@ class PlaceholderArithmetic:
         """
         判断当前占位符模板是否应进入「纯算术表达式」计算路径。
 
-        模板中占位符之外的文本只能包含算术字符, 否则按普通字符串拼接。单占位符场景下, 若结果是字符串, 直接按字符串返回, 避免如"00123"被数值化后丢失前导0
+        模板中占位符之外的文本只能包含算术字符, 否则根据普通字符串拼接。单占位符场景下, 若结果是字符串, 直接根据字符串返回, 避免如"00123"被数值化后丢失前导0
         :param content: 待解析的占位符模板字符串
         :param regularly_slots: 占位符匹配与解析结果列表
         :return: 是否应进入纯算术表达式计算路径
@@ -130,7 +130,7 @@ class PlaceholderArithmetic:
             to_string: Callable[[Any], str],
     ) -> str:
         """
-        按占位符顺序拼接content, regularly_slots每项为(match, value, failed_content)。
+        根据占位符顺序拼接content, regularly_slots每项为(match, value, failed_content)。
 
         failed_content非None：解析失败, 插入该原文(一般为match.group(0))；failed_content为None：解析成功, 插入to_string(value)(value可为None, 如变量值为空)
         :param content: 待解析对象

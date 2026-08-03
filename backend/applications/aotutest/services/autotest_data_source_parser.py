@@ -256,7 +256,7 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
 
 def _parse_sheet_by_axis(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
     """
-    按方向分发解析单个sheet。
+    根据方向分发解析单个sheet。
 
     :param df: 无表头(header=None)的sheet DataFrame
     :param axis: 矩阵方向，AXIS_HORIZONTAL走水平解析，否则走垂直解析
@@ -269,7 +269,7 @@ def _parse_sheet_by_axis(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any
 
 async def _parse_sheet_async(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
     """
-    在线程池中按方向异步解析单个sheet。
+    在线程池中根据方向异步解析单个sheet。
 
     :param df: 无表头(header=None)的sheet DataFrame
     :param axis: 矩阵方向

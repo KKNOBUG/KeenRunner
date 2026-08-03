@@ -83,7 +83,7 @@ async def delete_task_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除任务。
+    根据id或code删除任务。
 
     :param task_id: 任务主键ID
     :param task_code: 任务业务标识
@@ -101,12 +101,12 @@ async def delete_task_info(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"按id或code删除任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除任务成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -116,7 +116,7 @@ async def update_task_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新任务。
+    根据id或code更新任务。
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
@@ -133,14 +133,14 @@ async def update_task_info(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"按id或code更新任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新任务成功, 结果明细: {data}")
         return SuccessResponse(data=data, message="更新成功", total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -151,7 +151,7 @@ async def get_task_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询任务。
+    根据id或code查询任务。
 
     :param task_id: 任务主键ID
     :param task_code: 任务业务标识
@@ -172,12 +172,12 @@ async def get_task_info(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"按id或code查询任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询任务成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -187,7 +187,7 @@ async def search_tasks_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询任务。
+    根据条件查询任务。
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
@@ -235,12 +235,12 @@ async def search_tasks_info(
                 replace_fields={"id": "task_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"按条件查询任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据条件查询任务成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=e.message)
     except Exception as e:
-        LOGGER.error(f"按条件查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -264,8 +264,8 @@ async def run_task_info(
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums import AutoTestReportType
         from backend.services.ctx import get_current_username
-        # __task_id 会随消息传到 Worker，task_prerun 从 request.properties 取出；
-        # 只有传了 __task_id，Worker 端 _create_task_record 才会查任务表并写入 record 的 task_id/task_name。
+        # __task_id会随消息传到Worker，task_prerun从request.properties取出；
+        # 只有传了__task_id，Worker端_create_task_record才会查任务表并写入record的task_id/task_name。
         # created_user 写入执行记录（Worker 无 HTTP 鉴权上下文）。
         run_autotest_task.apply_async(
             kwargs={
@@ -300,7 +300,7 @@ async def start_task_info(
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
-            return ParameterResponse(message="参数 task_id 不能为空")
+            return ParameterResponse(message="参数[task_id]不允许为空")
         instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=True)
         data = await instance.to_dict(
             exclude_fields={
@@ -312,7 +312,7 @@ async def start_task_info(
             replace_fields={"id": "task_id"},
         )
         LOGGER.info(f"已启动任务 task_id={task_id}")
-        return SuccessResponse(message="任务已启动，将按调度执行", data=data, total=1)
+        return SuccessResponse(message="任务已启动，将根据调度执行", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
@@ -335,7 +335,7 @@ async def stop_task_info(
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
-            return ParameterResponse(message="参数 task_id 不能为空")
+            return ParameterResponse(message="参数[task_id]不允许为空")
         instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=False)
         data = await instance.to_dict(
             exclude_fields={
@@ -347,7 +347,7 @@ async def stop_task_info(
             replace_fields={"id": "task_id"},
         )
         LOGGER.info(f"已停止任务 task_id={task_id}")
-        return SuccessResponse(message="任务已停止，将不再按调度执行", data=data, total=1)
+        return SuccessResponse(message="任务已停止，将不再根据调度执行", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
@@ -376,7 +376,7 @@ async def search_task_records(
             )
             for obj in instances
         ]
-        LOGGER.info(f"按条件查询任务执行记录成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询任务执行记录成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -392,7 +392,7 @@ async def download_task_record_attachment(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按执行记录 attachments 项下载文件。
+    根据执行记录 attachments 项下载文件。
 
     :param record_id: 执行记录主键
     :param key: 附件标识（信封 attachments[].key）

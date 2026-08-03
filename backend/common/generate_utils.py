@@ -224,7 +224,7 @@ class GenerateUtils:
         :param digit: 非必填项，是否包含数字，默认 False
         :param char: 非必填项，是否包含英文字母，默认 False
         :param chinese: 非必填项，是否包含中文汉字，默认 False
-        :return: 按规则拼接后的随机字符串；未指定类型时默认仅数字
+        :return: 根据规则拼接后的随机字符串；未指定类型时默认仅数字
         """
         try:
             length: int = int(length)

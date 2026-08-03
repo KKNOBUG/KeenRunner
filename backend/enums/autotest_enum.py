@@ -48,18 +48,18 @@ class AutoTestStepType(StringEnum):
 class AutoTestLoopMode(StringEnum):
     # 循环模式：次数循环(loop_mode + loop_maximums + loop_interval)
     COUNT = "次数循环"
-    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量固定 loop_index / loop_value)
+    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_value)
     LIST = "列表循环"
-    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量固定 loop_index / loop_key / loop_value)
+    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_key/loop_value)
     DICT = "字典循环"
     # 循环模式：条件循环(loop_mode + conditions + loop_interval + loop_timeout)
     CONDITION = "条件循环"
 
 
 class AutoTestLoopErrorStrategy(StringEnum):
-    CONTINUE = "继续下一次循环"
     BREAK = "中断循环"
     STOP = "停止整个用例执行"
+    CONTINUE = "继续下一次循环"
 
 
 class AutoTestAssertionOperation(StringEnum):
@@ -83,12 +83,12 @@ class AutoTestAssertionOperation(StringEnum):
 
 class AutoTestTaskType(StringEnum):
     """
-    任务业务类型：Task 定义分类、Beat 扫描过滤、执行记录分类均按此区分。
-    AUTOTEST_API 保留历史值 autotest_api，与存量任务行兼容。
+    任务业务类型：Task定义分类、Beat扫描过滤、执行记录分类均根据此区分。
+    AUTOTEST_API保留历史值autotest_api，与存量任务行兼容。
     """
     AUTOTEST_API = "autotest_api"  # 用例编排（任务列表定时/手动）
     CASE_STEP_EXEC = "用例执行"  # 单用例步骤树异步执行
-    EXPORT_CASE_DATA = "导出用例数据"  # 公共接口 HEAD/BODY 导出
+    EXPORT_CASE_DATA = "导出用例数据"  # 公共接口HEAD/BODY导出
     EXPORT_CASE_SCRIPT = "导出公共接口"  # 公共接口脚本模板导出
     SCHEDULE_SCAN = "调度扫描"  # Beat 扫描派发（通常不写 Record）
 

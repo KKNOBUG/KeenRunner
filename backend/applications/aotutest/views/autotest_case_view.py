@@ -99,7 +99,7 @@ async def delete_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除用例。
+    根据id或code删除用例。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -117,14 +117,14 @@ async def delete_case(
             },
             replace_fields={"id": "case_id"}
         )
-        LOGGER.info(f"按id或code删除用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除用例成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -134,7 +134,7 @@ async def update_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新除用例。
+    根据id或code更新除用例。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
@@ -151,14 +151,14 @@ async def update_case(
             },
             replace_fields={"id": "case_id"}
         )
-        LOGGER.info(f"按id或code更新除用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新除用例成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新除用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新除用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -169,7 +169,7 @@ async def get_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询用例。
+    根据id或code查询用例。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -214,12 +214,12 @@ async def get_case(
                 replace_fields={"id": "tag_id"}
             ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
         ] if tag_ids else []
-        LOGGER.info(f"按id或code查询用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询用例成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -229,7 +229,7 @@ async def search_cases(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询用例。
+    根据条件查询用例。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
@@ -264,7 +264,7 @@ async def search_cases(
             q &= Q(created_user__iexact=case_in.created_user)
         if case_in.updated_user:
             q &= Q(updated_user__iexact=case_in.updated_user)
-        # 创建时间范围：按 created_time 筛选，仅日期时补全为当天起止
+        # 创建时间范围：根据 created_time 筛选，仅日期时补全为当天起止
         if case_in.date_from:
             date_from = case_in.date_from.strip()
             if len(date_from) == 10:  # YYYY-MM-DD
@@ -285,10 +285,7 @@ async def search_cases(
         case_serializes: List[Dict[str, Any]] = []
         for instance in instances:
             serialize: Dict[str, Any] = await instance.to_dict(
-                exclude_fields={
-                    "state",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
+                exclude_fields={"state", "reserve_1", "reserve_2", "reserve_3"},
                 replace_fields={"id": "case_id"}
             )
             project_id: int = serialize.pop("case_project")
@@ -316,12 +313,12 @@ async def search_cases(
                 ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
             ] if tag_ids else []
             case_serializes.append(serialize)
-        LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -360,7 +357,7 @@ async def export_testcases_xlsx(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    同步导出公共接口用例的请求头与请求体为xlsx（数量不超过EXPORT_ASYNC_THRESHOLD）。
+    同步导出公共接口用例的请求头与请求体为xlsx, 数量不超过EXPORT_ASYNC_THRESHOLD。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -389,7 +386,7 @@ async def export_testcases_xlsx(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"导出测试用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"导出公共接口报文失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
@@ -399,12 +396,11 @@ async def export_testcases_async(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口用例（数量超过 EXPORT_ASYNC_THRESHOLD）：校验通过后下发 Celery 任务，
-    任务生成 xlsx 并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    异步导出公共接口用例, 数量超过 EXPORT_ASYNC_THRESHOLD：校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应（含celery_task_id）
+    :return: 统一HTTP响应
     """
     try:
         if not case_ids:
@@ -420,7 +416,7 @@ async def export_testcases_async(
             },
             expires=3600,
         )
-        LOGGER.info(f"异步导出测试用例任务已下发: celery_task_id={apply_async_result.task_id}, 数量={len(case_ids)}")
+        LOGGER.info(f"异步导出公共接口报文任务已下发: celery_task_id={apply_async_result.task_id}, 数量={len(case_ids)}")
         return SuccessResponse(
             message="导出任务已提交后台执行，请稍后在执行记录中查看结果",
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
@@ -439,8 +435,7 @@ async def export_case_scripts_xlsx(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    同步导出公共接口脚本（数量不超过 EXPORT_ASYNC_THRESHOLD）：复制模板副本写入数据行，
-    产出文件可直接用于「导入脚本」（更新或新增公共接口）。
+    同步导出公共接口脚本, 数量不超过EXPORT_ASYNC_THRESHOLD：复制模板副本写入数据行，产出文件可直接用于导入脚本, 更新或新增公共接口。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -479,12 +474,11 @@ async def export_case_scripts_async(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口脚本（数量超过 EXPORT_ASYNC_THRESHOLD）：校验通过后下发 Celery 任务，
-    任务生成 xlsx 并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    异步导出公共接口脚本, 数量超过EXPORT_ASYNC_THRESHOLD：校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表
     :param services: 
-    :return: 统一HTTP响应，含celery_task_id）
+    :return: 统一HTTP响应
     """
     try:
         if not case_ids:
@@ -519,10 +513,9 @@ async def import_case_scripts(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    导入公共接口脚本：解析模板文件逐行校验，按「所属应用+接口名称」匹配，存在更新、不存在新增；
-    用例类型固定公共接口、用例属性固定正用例；全部行校验通过才在单事务内落库。
+    导入公共接口脚本：解析模板文件逐行校验，根据所属应用+接口名称匹配，存在更新、不存在新增；用例类型固定公共接口、用例属性固定正用例；全部行校验通过才在单事务内落库。
 
-    :param file: 模板 xlsx 文件
+    :param file: 模板xlsx文件
     :param services: 
     :return: 统 HTTP响应（含新增/更新计数或不合规行明细）
     """

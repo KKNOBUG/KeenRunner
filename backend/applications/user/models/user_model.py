@@ -12,7 +12,7 @@ from backend.applications.base.services.scaffold import ScaffoldModel, Timestamp
 
 
 class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
-    """系统用户模型，对应表 krun_user。"""
+    """系统用户模型。"""
 
     username = fields.CharField(max_length=32, unique=True, description="用户账号")
     password = fields.CharField(max_length=255, description="用户密码")

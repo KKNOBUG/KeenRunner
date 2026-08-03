@@ -14,7 +14,7 @@ from backend.applications.base.services.router_crud import RouterCrud
 
 async def get_audit_crud() -> AuditCrud:
     """
-    获取审计 CRUD 服务实例（依赖注入）。
+    获取审计CRUD服务实例（依赖注入）。
 
     :return: AuditCrud 实例
     """
@@ -23,7 +23,7 @@ async def get_audit_crud() -> AuditCrud:
 
 async def get_menu_crud() -> MenuCrud:
     """
-    获取菜单 CRUD 服务实例（依赖注入）。
+    获取菜单CRUD服务实例（依赖注入）。
 
     :return: MenuCrud 实例
     """
@@ -32,7 +32,7 @@ async def get_menu_crud() -> MenuCrud:
 
 async def get_role_crud() -> RoleCrud:
     """
-    获取角色 CRUD 服务实例（依赖注入）。
+    获取角色CRUD服务实例（依赖注入）。
 
     :return: RoleCrud 实例
     """
@@ -41,7 +41,7 @@ async def get_role_crud() -> RoleCrud:
 
 async def get_router_crud() -> RouterCrud:
     """
-    获取路由 CRUD 服务实例（依赖注入）。
+    获取路由CRUD服务实例（依赖注入）。
 
     :return: RouterCrud 实例
     """

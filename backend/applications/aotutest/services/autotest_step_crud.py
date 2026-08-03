@@ -49,9 +49,8 @@ from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表「显式清空」，需回补以落库NULL
 # 注意：branch_items由更新路径单独处理（仅条件分支步骤），不在此集合内
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
-    "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file",
-    "request_body", "session_variables", "defined_variables", "extract_variables", "assert_validators",
-    "database_operates", "redis_operates", "conditions",
+    "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
+    "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates", "conditions",
 )
 
 
@@ -75,12 +74,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not step_id:
-            error_message: str = "查询步骤信息失败, 参数(step_id)不允许为空"
+            error_message: str = "查询步骤信息失败, 参数[step_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(id=step_id, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询步骤信息失败, 步骤(id={step_id})不存在"
+            error_message: str = f"查询步骤信息失败, 记录[id={step_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -97,13 +96,13 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not step_code:
-            error_message: str = "查询步骤信息失败, 参数(step_code)不允许为空"
+            error_message: str = "查询步骤信息失败, 参数[step_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(step_code=step_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询步骤信息失败, 步骤(code={step_code})不存在"
+            error_message: str = f"查询步骤信息失败, 记录[code={step_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -132,7 +131,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             state__not=1
         ).order_by("step_no").all()
         root_index = [step.step_no for step in root_steps]
-        LOGGER.info(f"获取用例(case_id={case_id})根步骤成功, 共计: {len(root_steps)}个, 根步骤序号: {root_index}")
+        LOGGER.info(f"获取用例[case_id={case_id}]根步骤成功, 共计: {len(root_steps)}个, 根步骤序号: {root_index}")
 
         # 步骤计数器：用于统计该用例拥有的步骤总数
         # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id 为 None）
@@ -625,7 +624,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         deleted_count: int = 0
         if exclude_step is None:
             exclude_step = set()
-        # 记录本次软删除的步骤，按用例归类，事务提交后同步清理其数据源
+        # 记录本次软删除的步骤，根据用例归类，事务提交后同步清理其数据源
         deleted_by_case: Dict[int, List[str]] = {}
 
         async def delete_step_and_children(step_instance: AutoTestApiStepInfo) -> int:
@@ -1148,7 +1147,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 # 递归处理子步骤（条件分支: 差量替换; 其他: 增量）
                 if step_data.step_type == AutoTestStepType.IF and step_data.branch_items:
                     # 收集本次提交仍存在的子步骤ID，仅软删除不再存在的旧子步骤，
-                    # 避免把待更新的子步骤先删除导致后续按 step_id 更新时查不到
+                    # 避免把待更新的子步骤先删除导致后续根据 step_id 更新时查不到
                     retained_child_ids: Set[int] = set()
                     for branch in step_data.branch_items:
                         for child in (branch.branch_children or []):

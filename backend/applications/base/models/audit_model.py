@@ -13,7 +13,7 @@ from backend.enums import HTTPMethod
 
 
 class Audit(ScaffoldModel, TimestampMixin):
-    """审计日志模型，对应表 krun_audit。"""
+    """审计日志模型。"""
 
     user_id = fields.BigIntField(index=True, description="用户ID")
     username = fields.CharField(max_length=32, index=True, description="用户名称")

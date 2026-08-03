@@ -80,6 +80,6 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
-    # 创建时间范围（按 created_time 筛选，格式 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss）
+    # 创建时间范围（根据 created_time 筛选，格式 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss）
     date_from: Optional[str] = Field(None, description="创建时间-起")
     date_to: Optional[str] = Field(None, description="创建时间-止")

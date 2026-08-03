@@ -24,7 +24,7 @@ class XPathUtils:
       如需精确指定请使用索引，如 ``.//item[1]``；
     - 未匹配到元素时，``update`` 不修改原数据并返回原字符串；``query`` 返回 ``None``；
       ``delete`` 不修改原数据并返回原字符串；``add`` 沿路径创建元素。
-    - 默认命名空间（xmlns=...）下，无前缀路径如 ``./Head/SvcCd`` 会自动按
+    - 默认命名空间（xmlns=...）下，无前缀路径如 ``./Head/SvcCd`` 会自动根据
       ``./{*}Head/{*}SvcCd`` 回退匹配；无命名空间的 XML 仍优先走原始路径。
     """
 
@@ -50,7 +50,7 @@ class XPathUtils:
 
     @staticmethod
     def _tag_in_parent_ns(parent: ElementTree.Element, local_name: str) -> str:
-        """按父节点命名空间生成子标签；父无命名空间则返回本地名。"""
+        """根据父节点命名空间生成子标签；父无命名空间则返回本地名。"""
         parent_tag = parent.tag or ""
         if "}" in parent_tag:
             ns = parent_tag.split("}", 1)[0][1:]
@@ -115,7 +115,7 @@ class XPathUtils:
         """
         命名空间兼容的 ``findall``。
 
-        先按原表达式匹配；无结果且表达式可改写时，再按 ``{*}`` 通配命名空间匹配。
+        先根据原表达式匹配；无结果且表达式可改写时，再根据 ``{*}`` 通配命名空间匹配。
         这样无 xmlns 的报文与带默认命名空间的报文都能用 ``./Head/SvcCd`` 这类路径。
         """
         if not xpath:
@@ -136,7 +136,7 @@ class XPathUtils:
 
     @classmethod
     def find_child(cls, parent: ElementTree.Element, name: str) -> Optional[ElementTree.Element]:
-        """在直接子节点中按本地名查找（兼容有/无命名空间）。"""
+        """在直接子节点中根据本地名查找（兼容有/无命名空间）。"""
         if not name:
             return None
         child = parent.find(name)
@@ -192,7 +192,7 @@ class XPathUtils:
         :param xml_data: 待新增的 XML 字符串或 ElementTree 元素。
         :param xpath: XPath 表达式，定位目标父元素或路径。
         :param value: 新数据；会被转换为字符串写入新元素 text。
-        :param tag: 新子元素标签名；不提供时按上述规则推导。
+        :param tag: 新子元素标签名；不提供时根据上述规则推导。
         :return: 新增后的 XML 字符串。
         :raises ValueError: 输入为无效 XML 格式时抛出。
         """

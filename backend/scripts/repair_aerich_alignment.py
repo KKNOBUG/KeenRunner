@@ -41,7 +41,7 @@ FAKE_APPLY_MAX_NUM: int = 39
 
 
 def list_migration_files() -> list[tuple[int, str]]:
-    """列出磁盘迁移文件，按版本号升序。"""
+    """列出磁盘迁移文件，根据版本号升序。"""
     out: list[tuple[int, str]] = []
     for file in MIGRATION_DIR.glob("*.py"):
         num_str: str = file.name.split("_")[0]

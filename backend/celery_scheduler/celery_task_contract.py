@@ -36,7 +36,7 @@ CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
 
 def resolve_task_meta(celery_task_name: Optional[str]) -> Dict[str, Any]:
     """
-    按Celery任务名解析task_type与默认task_name。
+    根据Celery任务名解析task_type与默认task_name。
     """
     if not celery_task_name:
         return {}

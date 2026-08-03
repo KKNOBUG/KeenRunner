@@ -76,7 +76,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             record_in = data
             raw = data.model_dump(exclude_unset=True)
         update_dict = record_in.update_dict()
-        # task_summary / task_error / batch_code 允许显式置空
+        # task_summary/task_error/batch_code允许显式置空
         allow_none_keys = ("task_summary", "task_error", "batch_code")
         update_dict = {
             k: v for k, v in update_dict.items()

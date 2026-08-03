@@ -41,7 +41,7 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     pid = int(project_id)
     name = (env_name or "").strip()
     if not name:
-        raise ParameterException(message="执行环境名称(env_name)不允许为空")
+        raise ParameterException(message="执行环境名称[env_name]不允许为空")
 
     env_row = await AutoTestApiEnvEnumInfo.filter(env_name__iexact=name, state__not=1).first()
     if not env_row:
@@ -60,8 +60,8 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     if not cfg or not str(cfg.config_host or "").strip():
         raise NotFoundException(
             message=(
-                f"未找到可用的 API 环境配置(config_type={AutoTestConfigNodeType.API.value!r} 且 config_host 非空): "
-                f"project_id={pid}, env_id={env_row.id}"
+                f"未找到可用的API环境配置(config_type={AutoTestConfigNodeType.API.value!r} 且config_host非空): "
+                f"[project_id={pid}, env_id={env_row.id}]"
             )
         )
     host = str(cfg.config_host).strip().rstrip("/").rstrip(":")
@@ -88,13 +88,13 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not env_id:
-            error_message: str = "查询环境枚举信息失败, 参数(env_id)不允许为空"
+            error_message: str = "查询环境枚举信息失败, 参数[env_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.get_or_none(id=env_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询环境枚举信息失败, 环境(id={env_id})不存在"
+            error_message: str = f"查询环境枚举信息失败, 记录[id={env_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -111,13 +111,13 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not env_code:
-            error_message: str = "查询环境枚举信息失败, 参数(env_code)不允许为空"
+            error_message: str = "查询环境枚举信息失败, 参数[env_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(env_code=env_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询环境枚举信息失败, 环境(code={env_code})不存在"
+            error_message: str = f"查询环境枚举信息失败, 记录[code={env_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -134,13 +134,13 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not env_name:
-            error_message: str = "查询环境枚举信息失败, 参数(env_name)不允许为空"
+            error_message: str = "查询环境枚举信息失败, 参数[env_name]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(env_name=env_name, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询环境枚举信息失败, 环境(env_name={env_name})不存在"
+            error_message: str = f"查询环境枚举信息失败, 记录[env_name={env_name}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -204,7 +204,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             instance = await self.update(id=env_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新环境枚举信息失败, 环境(id={env_id}或code={env_code})不存在, 错误描述: {e}"
+            error_message: str = f"更新环境枚举信息失败, 记录[id={env_id}]或[code={env_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:

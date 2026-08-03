@@ -46,7 +46,7 @@ class DatasetLoader:
             executing_quote_case_id: Optional[int],
     ) -> Optional[Dict[str, Dict[str, Any]]]:
         """
-        按dataset_name与用例步骤标识加载数据源场景，引用公共脚本时不加载。
+        根据dataset_name与用例步骤标识加载数据源场景，引用公共脚本时不加载。
 
         :param case_id: 用例ID
         :param step_code: 步骤标识

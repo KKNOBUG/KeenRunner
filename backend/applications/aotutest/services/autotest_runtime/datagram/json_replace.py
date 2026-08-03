@@ -16,18 +16,18 @@ from backend.common import JSONPathUtils
 
 
 class JsonDatagram:
-    """按JSONPath映射原地（或解析后）更新JSON请求报文。"""
+    """根据JSONPath映射原地（或解析后）更新JSON请求报文。"""
 
     @staticmethod
     def _by_jsonpath_modify_inner_content(datagram: Dict[str, Any], json_path: str, json_value: Any, split_symbol: str = "@JSON@") -> None:
         """
-        按两段内嵌JSONPath定位并更新字段值，无@JSON@分隔符时退化为普通单段JSONPath更新。
+        根据两段内嵌JSONPath定位并更新字段值，无@JSON@分隔符时退化为普通单段JSONPath更新。
 
         约定第一段JSONPath定位到一个字符串JSON或dict字段，第二段JSONPath在该字段值所代表的JSON内部继续定位并更新，
         最后把更新结果回写到第一段JSONPath对应的字段，形如'$.escape_field@JSON@$.name'。
 
         :param datagram: 待更新的JSON报文字典
-        :param json_path: 形如'outer@JSON@inner'的两段JSONPath，无分隔符时按单段处理
+        :param json_path: 形如'outer@JSON@inner'的两段JSONPath，无分隔符时根据单段处理
         :param json_value: 要写入的目标值
         :param split_symbol: 两段路径的分隔符，默认'@JSON@'
         """
@@ -39,7 +39,7 @@ class JsonDatagram:
 
         json_parts: List[str] = json_path.split(split_symbol)
         if len(json_parts) != 2:
-            # 兜底：无法识别链路，按原逻辑尝试普通更新
+            # 兜底：无法识别链路，根据原逻辑尝试普通更新
             JSONPathUtils.update(datagram, json_path, json_value)
             return
 
@@ -52,7 +52,7 @@ class JsonDatagram:
         if outer_value == [] or outer_value is None:
             return
 
-        # JSONPath 可能返回多个命中；这里按“单命中”处理（符合你描述的两段链路）
+        # JSONPath 可能返回多个命中；这里根据“单命中”处理（符合你描述的两段链路）
         if isinstance(outer_value, list):
             if len(outer_value) != 1:
                 return
@@ -157,8 +157,8 @@ class JsonDatagram:
             urlencoded: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        数据驱动报文替换：先按head_map更新请求头键值，再依次将head_map、body_map
-        按JSONPath应用到request_body/form_data/urlencoded。
+        数据驱动报文替换：先根据head_map更新请求头键值，再依次将head_map、body_map
+        根据JSONPath应用到request_body/form_data/urlencoded。
 
         规则说明：head_map中路径会先解析为请求头字段名，仅当该键已存在于request_headers时覆盖；
         head_map与body_map均会写入body/form/urlencoded（request_body中也可能出现head侧路径）；

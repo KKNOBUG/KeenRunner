@@ -36,12 +36,12 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :raises NotFoundException: on_error为True且部门不存在
         """
         if not department_id:
-            error_message: str = "查询部门信息失败, 参数(department_id)不允许为空"
+            error_message: str = "查询部门信息失败, 参数[department_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=department_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询部门信息失败, 部门(id={department_id})不存在"
+            error_message: str = f"查询部门信息失败, 记录[id={department_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -58,19 +58,19 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :raises NotFoundException: on_error为True且部门不存在
         """
         if not code:
-            error_message: str = "查询部门信息失败, 参数(code)不允许为空"
+            error_message: str = "查询部门信息失败, 参数[code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(code=code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询部门信息失败, 部门(code={code})不存在"
+            error_message: str = f"查询部门信息失败, 记录[code={code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
 
     async def get_by_name(self, name: str) -> List[Department]:
         """
-        按部门名称精确查询，可能返回多条。
+        根据部门名称精确查询，可能返回多条。
 
         :param name: 部门名称
         :return: 匹配的部门列表(无匹配时为空列表)
@@ -88,9 +88,9 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise ParameterException(message="父级部门不能为自身")
         parent = await self.get_by_id(parent_id, on_error=True)
         if parent.is_deleted:
-            raise ParameterException(message=f"父级部门(id={parent_id})不存在或已删除")
+            raise ParameterException(message=f"父级部门[id={parent_id}]不存在或已删除")
         if parent.parent_id != 0:
-            raise ParameterException(message="子部门不允许再添加子部门，父级只能选择顶级部门")
+            raise ParameterException(message="子部门不允许再添加子部门, 父级只能选择顶级部门")
 
     async def create_department(self, department_in: DepartmentCreate, created_user: Optional[str] = None) -> Department:
         """
@@ -107,7 +107,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         name = department_in.name
         instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
         if instances:
-            raise DataAlreadyExistsException(message=f"部门(code={code},name={name})信息已存在")
+            raise DataAlreadyExistsException(message=f"创建部门信息失败, 记录[code={code},name={name}]信息已存在")
 
         instance = await self.create(department_in)
         if created_user is not None:
@@ -168,13 +168,13 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             await instance.save()
             return instance
         except DoesNotExist as e:
-            raise NotFoundException(message=f"部门(id={department_id})信息不存在")
+            raise NotFoundException(message=f"更新部门信息失败, 记录[id={department_id}]信息不存在")
 
     async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:
         """
         构建未删除部门的树形结构(从parent_id=0 递归)。
 
-        :param name: 可选，按名称模糊过滤后再建树
+        :param name: 可选，根据名称模糊过滤后再建树
         :return: 顶级部门节点列表，每节点含children
         """
         q = Q()

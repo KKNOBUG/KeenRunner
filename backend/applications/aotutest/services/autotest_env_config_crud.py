@@ -50,12 +50,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_id:
-            error_message: str = "查询配置信息失败, 参数(config_id)不允许为空"
+            error_message: str = "查询配置信息失败, 参数[config_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(id=config_id, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询配置信息失败, 用例(id={config_id})不存在"
+            error_message: str = f"查询配置信息失败, 记录[id={config_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -72,13 +72,13 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_code:
-            error_message: str = "查询配置信息失败, 参数(config_code)不允许为空"
+            error_message: str = "查询配置信息失败, 参数[config_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(config_code=config_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询配置信息失败, 步骤(code={config_code})不存在"
+            error_message: str = f"查询配置信息失败, 记录[code={config_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -190,8 +190,8 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             ).exclude(id=config_id).first()
             if existing_config:
                 LOGGER.error(
-                    f"同[应用&环境]下配置名称不允许重复: "
-                    f"根据(env_id={env_id}, project_id={project_id}, config_name={config_name})条件检查配置信息已存在"
+                    f"同[应用&环境]下配置名称不允许重复, "
+                    f"查询条件: [env_id={env_id}, project_id={project_id}, config_name={config_name}]"
                 )
                 raise DataAlreadyExistsException(message="同[应用&环境]下配置名称不允许重复")
 
@@ -218,7 +218,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             instance = await self.update(id=config_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新配置信息失败, 用例(id={config_id}或code={config_code})不存在, 错误描述: {e}"
+            error_message: str = f"更新配置信息失败, 用例[id={config_id}或code={config_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
@@ -281,14 +281,14 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
-        按应用ID列表查询环境配置并按类型嵌套归类。
+        根据应用ID列表查询环境配置并根据类型嵌套归类。
 
         :param project_ids: 应用主键ID列表
         :return: 嵌套归类结果；请求中的应用ID均出现在第一层
         :raises ParameterException: project_ids为空
         """
         if not project_ids:
-            error_message: str = "根据应用列表查询环境配置失败, 参数(project_ids)不允许为空"
+            error_message: str = "根据应用列表查询环境配置失败, 参数[project_ids]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -315,7 +315,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             config_type_raw: AutoTestConfigNodeType = cfg_instance.config_type
             config_type_act = config_type_raw.value if hasattr(config_type_raw, "value") else str(config_type_raw)
             if config_type_act not in classified_config_type:
-                LOGGER.warning(f"跳过未知配置类型: project_id={project_id}, env_id={env_id}, config_type={config_type_act}")
+                LOGGER.warning(f"跳过未知配置类型: [project_id={project_id}, env_id={env_id}, config_type={config_type_act}]")
                 continue
             if env_id not in classified_config_result[project_id]:
                 classified_config_result[project_id][env_id] = {t: {} for t in classified_config_type}

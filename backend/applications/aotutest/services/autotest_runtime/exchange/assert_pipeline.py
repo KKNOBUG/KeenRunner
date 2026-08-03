@@ -38,7 +38,7 @@ class AssertPipeline:
             is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        按StepAssertValidatorItem列表取实际值并与期望值比较。
+        根据StepAssertValidatorItem列表取实际值并与期望值比较。
 
         不完整规则（缺name/expr/operation/source）会跳过该项；取实际值失败或比较
         异常时记入该项结果且success=False，不中断其余项。
@@ -56,7 +56,7 @@ class AssertPipeline:
         :param log_callback: 可选日志回调(str) -> None；占位符解析时亦作logger
         :param finished_variables: 非空时对except_value先做占位符解析
         :param is_core_engine: True时finished_variables需提供get_variable；
-            False时按变量列表解析
+            False时根据变量列表解析
         :return: 每项断言结果dict列表（含name/source/expr/operation/except_value/
             actual_value/success/error）
         :raises TypeError: 列表或子项类型非法时
@@ -200,7 +200,7 @@ class AssertPipeline:
         将数据驱动场景的assert_head/assert_body追加到validator_results（原地修改）。
 
         assert_head的source固定为response headers，当response_headers is None时跳过
-        全部head断言（TCP无响应头场景）；assert_body的source按表达式前缀自动判定
+        全部head断言（TCP无响应头场景）；assert_body的source根据表达式前缀自动判定
         （$.走JSONPath、./或//走XPath、其余走Text）；提供finished_variables
         时，预期值先经resolve_placeholders再比较。
 
@@ -215,7 +215,7 @@ class AssertPipeline:
         :param finished_variables: 期望值占位符解析上下文；None则不解析
         :param is_core_engine: 占位符解析模式（见PlaceholderResolver）
         :param log_callback: 可选日志回调；同时作为占位符解析logger
-        :param body_source: 保留参数，当前未生效；assert_body的source按表达式前缀自动判定
+        :param body_source: 保留参数，当前未生效；assert_body的source根据表达式前缀自动判定
         :return: None
         """
         if not isinstance(step_struct, dict):

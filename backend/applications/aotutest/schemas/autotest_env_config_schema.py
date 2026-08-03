@@ -76,7 +76,7 @@ class AutoTestApiConfigSelect(AutoTestApiConfigBase):
 
 
 class AutoTestEnvConfigQueryByProjectsIn(BaseModel):
-    """按应用ID列表查询环境配置并分类的请求体。"""
+    """根据应用ID列表查询环境配置并分类的请求体。"""
 
     project_ids: List[int] = Field(..., min_length=1, description="应用(project)ID 列表")
 

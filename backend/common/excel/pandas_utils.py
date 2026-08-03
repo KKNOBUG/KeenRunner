@@ -20,7 +20,7 @@ class PandasUtils(object):
     :func create_excel:  如果目标文件路径上的excel文件不存在，则在该路径上创建excel实体文件
     :func create_sheet:  在文件中尝试创建一个新的sheet页数据
     :func read_sheet_data:  获取指定sheet页的数据视图
-    :func acquire_sheet_data:  获取指定sheet页的数据视图，并按照指定的表头，压缩成列表嵌套字典，列表中每一个子元素代表一行数据
+    :func acquire_sheet_data:  获取指定sheet页的数据视图，并根据照指定的表头，压缩成列表嵌套字典，列表中每一个子元素代表一行数据
     :func acquire_cell_value:  获取指定sheet页的数据视图中的指定行列坐标的数据
     :func acquire_sheet_series:  获取指定sheet页数据视图中的一列或一行数据
     :func acquire_sheet_names:  获取excel文件中所有的sheet页名称
@@ -97,7 +97,7 @@ class PandasUtils(object):
 
     def acquire_sheet_data(self, sheet_name: str, header_row_index: int = 0) -> List[dict]:
         """
-        获取指定sheet页的数据视图，并按照指定的表头，压缩成列表嵌套字典，列表中每一个子元素代表一行数据
+        获取指定sheet页的数据视图，并根据照指定的表头，压缩成列表嵌套字典，列表中每一个子元素代表一行数据
         :param sheet_name: excel文件中的sheet名称
         :param header_row_index: 表头行号
         :return:

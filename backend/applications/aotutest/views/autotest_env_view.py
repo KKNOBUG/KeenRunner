@@ -77,7 +77,7 @@ async def delete_env_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除环境。
+    根据id或code删除环境。
 
     :param env_id: 环境主键ID
     :param env_code: 环境业务标识
@@ -95,12 +95,12 @@ async def delete_env_info(
             },
             replace_fields={"id": "env_id"}
         )
-        LOGGER.info(f"按id或code删除环境成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除环境成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -110,7 +110,7 @@ async def delete_env_batch(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code列表删除环境。
+    根据id或code列表删除环境。
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
@@ -118,10 +118,10 @@ async def delete_env_batch(
     """
     try:
         count = await services.env_enum_curd.delete_envs(env_in=env_in)
-        LOGGER.info(f"按id或code列表删除环境成功, 数量: {count}")
+        LOGGER.info(f"根据id或code列表删除环境成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
-        LOGGER.error(f"按id或code列表删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code列表删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败, 异常描述: {e}")
 
 
@@ -131,7 +131,7 @@ async def update_env_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新环境。
+    根据id或code更新环境。
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
@@ -148,14 +148,14 @@ async def update_env_info(
             },
             replace_fields={"id": "env_id"}
         )
-        LOGGER.info(f"按id或code更新环境成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新环境成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败, 异常描述: {e}")
 
 
@@ -166,7 +166,7 @@ async def get_env_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询环境。
+    根据id或code查询环境。
 
     :param env_id: 环境主键ID
     :param env_code: 环境业务标识
@@ -187,12 +187,12 @@ async def get_env_info(
             },
             replace_fields={"id": "env_id"}
         )
-        LOGGER.info(f"按id或code查询环境成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询环境成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
@@ -223,7 +223,7 @@ async def search_env_info(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询环境。
+    根据条件查询环境。
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
@@ -258,10 +258,10 @@ async def search_env_info(
                 replace_fields={"id": "env_id"}
             )
             env_serializes.append(serialize)
-        LOGGER.info(f"按条件查询环境成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询环境成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=env_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")

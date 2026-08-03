@@ -110,7 +110,7 @@ async def delete_step(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code删除步骤。
+    根据id或code删除步骤。
 
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
@@ -128,14 +128,14 @@ async def delete_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"按id或code删除步骤成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除步骤成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code删除步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -145,7 +145,7 @@ async def update_step(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code更新步骤。
+    根据id或code更新步骤。
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
@@ -162,14 +162,14 @@ async def update_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"按id或code更新步骤成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新步骤成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code更新步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"修改失败，异常描述: {e}")
 
 
@@ -180,7 +180,7 @@ async def get_step(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询步骤。
+    根据id或code查询步骤。
 
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
@@ -201,12 +201,12 @@ async def get_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"按id或code查询步骤成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询步骤成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -216,7 +216,7 @@ async def search_steps(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件查询步骤。
+    根据条件查询步骤。
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
@@ -259,12 +259,12 @@ async def search_steps(
                 replace_fields={"id": "step_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"按条件查询步骤成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件查询步骤成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -275,7 +275,7 @@ async def get_step_tree(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按id或code查询步骤树。
+    根据id或code查询步骤树。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -284,7 +284,7 @@ async def get_step_tree(
     """
     try:
         load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
-        LOGGER.info(f"按id或code查询步骤树成功, 结果明细: {load.step_counter.model_dump()}")
+        LOGGER.info(f"根据id或code查询步骤树成功, 结果明细: {load.step_counter.model_dump()}")
         if load.root_steps:
             data = [s.model_dump(mode="json") for s in load.root_steps]
         elif load.case_only_when_no_steps is not None:
@@ -296,7 +296,7 @@ async def get_step_tree(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按id或code查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -316,7 +316,7 @@ async def copy_step_tree(
     """
     try:
         if not case_id and not case_code:
-            return BadReqResponse(message="必须提供 case_id 或 case_code 参数")
+            return BadReqResponse(message="参数[case_id, case_code]不允许为空")
         copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code)
         LOGGER.info("复制用例步骤树成功")
         return SuccessResponse(message="复制成功", data=copy_data)
@@ -384,8 +384,8 @@ async def batch_update_steps_tree(
                     baseline_step_label = step_label
                 elif current_names != baseline_names:
                     error_detail = (
-                        f"步骤「{step_label}」的数据源场景列名与步骤「{baseline_step_label}」不一致："
-                        f"前者为{current_names}，后者为{baseline_names}"
+                        f"步骤[{step_label}]的数据源场景列名与步骤[{baseline_step_label}]不一致: "
+                        f"前者: {current_names}, 后者: {baseline_names}"
                     )
                     LOGGER.error(error_detail)
                     return BadReqResponse(message="数据源场景列名不一致，请先统一各步骤数据源的场景列", data=error_detail)
@@ -1027,7 +1027,7 @@ async def debug_tcp_request(
                 )
         append_debugging_log(message="【参数替换】结束")
 
-        # 按 env_id + 应用 + 配置名解析 host/port（与 HTTP 调试一致，不使用 request_url/request_port）
+        # 根据env_id + 应用 + 配置名解析host/port（与 HTTP 调试一致，不使用 request_url/request_port）
         host: str = ""
         port: Optional[str] = None
         try:
@@ -1116,7 +1116,7 @@ async def debug_tcp_request(
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message="TCP请求调试异常", data=error_message)
 
-        # 解析响应：与 TcpStepExecutor 一致，按 response_type 本地解析
+        # 解析响应：与 TcpStepExecutor 一致，根据 response_type 本地解析
         duration = int((time.time() - start_time) * 1000)
         append_debugging_log(message=f"TCP请求调试完成: 耗时: {duration}ms")
         try:
@@ -1809,7 +1809,7 @@ async def execute_step_tree(
         # ========== ASYNC_EXEC：运行模式（同步执行已保存步骤树）==========
         if execute_type == AutoTestReportType.ASYNC_EXEC:
             try:
-                # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
+                # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内根据 case_id/step_no/step_code/dataset_name 查表获取
                 if not selected_dataset_names:
                     # 普通单次执行（无选中数据集）
                     batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
@@ -1907,7 +1907,7 @@ async def execute_step_tree(
 
             def merged_variables(*variables: List[StepVariablesBase]) -> List[StepVariablesBase]:
                 """
-                按 key 合并多组变量，后者覆盖前者。
+                根据 key 合并多组变量，后者覆盖前者。
 
                 :param variables: 多组 StepVariablesBase 列表
                 :return: 去重合并后的变量列表
@@ -1926,14 +1926,14 @@ async def execute_step_tree(
             if not all_root_steps:
                 return BadReqResponse(message="没有可执行的根步骤")
 
-            # 6. 调试模式执行：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内按 case_id/step_no/step_code/dataset_name 查表获取
+            # 6. 调试模式执行：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内根据 case_id/step_no/step_code/dataset_name 查表获取
             if selected_dataset_names:
                 if len(selected_dataset_names) != 1:
                     return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
                 debug_dataset_name: str = selected_dataset_names[0]
             else:
                 debug_dataset_name: Optional[str] = None
-            # 与 ASYNC_EXEC / SCHEDULE_EXEC 一致：调试落库报告写入 batch_code，供历史记录按批次聚合
+            # 与 ASYNC_EXEC / SCHEDULE_EXEC 一致：调试落库报告写入 batch_code，供历史记录根据批次聚合
             batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
             engine = AutoTestStepExecutionEngine(save_report=True, batch_code=batch_code)
             results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
@@ -1955,7 +1955,7 @@ async def execute_step_tree(
                     case_state=case_state,
                     case_last_time=case_last_time,
                 ))
-            # 7. 获取最终会话变量：merged_variables 与引擎返回的 session_variables（均为模型列表）按 key 合并
+            # 7. 获取最终会话变量：merged_variables 与引擎返回的 session_variables（均为模型列表）根据 key 合并
             final_m: Dict[str, StepVariablesBase] = {}
             for it in merged_variables:
                 if it.key:

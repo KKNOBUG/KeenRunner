@@ -15,11 +15,11 @@ from backend.applications.aotutest.schemas.autotest_step_schema import StepVaria
 
 
 class VariableResolver(Protocol):
-    """变量解析协议：按名称返回已定义变量的值。"""
+    """变量解析协议：根据名称返回已定义变量的值。"""
 
     def get_variable(self, name: str) -> Any:
         """
-        按变量名取值。
+        根据变量名取值。
 
         :param name: 变量名（占位符${name}中的name）
         :return: 变量值
@@ -44,7 +44,7 @@ class ExchangeContext:
 
 
 class ListVariableResolver:
-    """调试视图等场景：从StepVariablesBase列表按key取值。"""
+    """调试视图等场景：从StepVariablesBase列表根据key取值。"""
 
     def __init__(self, variables: Optional[Sequence[StepVariablesBase]]) -> None:
         """
@@ -56,7 +56,7 @@ class ListVariableResolver:
 
     def get_variable(self, name: str) -> Any:
         """
-        从列表中按key取值。
+        从列表中根据key取值。
 
         :param name: 变量名
         :return: 对应value

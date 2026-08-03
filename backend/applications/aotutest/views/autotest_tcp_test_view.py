@@ -281,7 +281,7 @@ class _TcpTestServer:
         purpose = self._xml_text(loan_elem, "Purpose", "房屋装修")
         repayment_method = self._xml_text(loan_elem, "RepaymentMethod", "等额本息")
 
-        # 风控决策：按年收入和申请金额计算批准额度
+        # 风控决策：根据年收入和申请金额计算批准额度
         income_ratio = min(float(annual_income) / max(applied_amount, 1), 3.0)
         approved_ratio = 0.8 + 0.1 * min(income_ratio, 1.0)
         approved_amount = int(applied_amount * min(approved_ratio, 0.95))
@@ -352,7 +352,7 @@ class _TcpTestServer:
         # 贷款条款（数组）
         terms_elem = etree.SubElement(resp_body, "Terms")
         terms_data = [
-            "按月等额本息还款",
+            "根据月等额本息还款",
             "提前还款需支付剩余本金2%违约金",
             "逾期罚息为日利率0.05%",
             "贷款发放后30天内不可提前还款",

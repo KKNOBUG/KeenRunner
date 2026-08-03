@@ -179,7 +179,7 @@ def random_enum_invalid(enum_str: str, length: int) -> str:
 
 def generate_length_invalid(field: Field, rule: str) -> Tuple[Optional[str], Optional[int]]:
     """
-    按长度规则生成超长非法值。
+    根据长度规则生成超长非法值。
 
     :param field: 字段定义
     :param rule: ``length_int`` 或 ``length_float``
@@ -215,7 +215,7 @@ def generate_length_invalid(field: Field, rule: str) -> Tuple[Optional[str], Opt
 
 def generate_decimal_invalid(field: Field, decimal_flag: str) -> Optional[str]:
     """
-    按边界规则生成小数非法/边界值。
+    根据边界规则生成小数非法/边界值。
 
     :param field: 字段定义（需含 length 如 ``总长,小数位``）
     :param decimal_flag: 边界规则标识（decimal_nine / decimal_zero 等）
@@ -387,7 +387,7 @@ def export_excel(cases: List[Dict[str, Any]], fields: List[Field], output_file: 
 async def generate_test_data(input_excel: str, output_excel: str, rules: List[str], json_message: Union[str, Dict[str, Any]],
                              create_id: int) -> None:
     """
-    异步生成测试数据：读模板、按规则造数、导出 Excel，并回写生成状态。
+    异步生成测试数据：读模板、根据规则造数、导出 Excel，并回写生成状态。
 
     :param input_excel: 字段模板路径
     :param output_excel: 输出 Excel 路径

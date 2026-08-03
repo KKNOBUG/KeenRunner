@@ -49,7 +49,7 @@ async def create_dept(
 
     :param department_in: 部门入参
     :param current_user: 当前登录用户
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -76,7 +76,7 @@ async def delete_dept_one(
     删除部门信息。
 
     :param department_id: 部门 ID
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -98,7 +98,7 @@ async def delete_depts_batch(
     批量删除部门。
 
     :param body_in: 批量删除入参
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -121,7 +121,7 @@ async def update_dept(
 
     :param department_in: 部门入参
     :param current_user: 当前登录用户
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -148,12 +148,12 @@ async def get_dept(
     查询部门信息。
 
     :param department_id: 部门 ID
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     instance = await dept_crud.get_or_none(id=department_id)
     if not instance:
-        return NotFoundResponse(message=f"部门(id={department_id})信息不存在")
+        return NotFoundResponse(message=f"记录[id={department_id}]不存在")
 
     data: dict = await instance.to_dict()
     return SuccessResponse(data=data)
@@ -168,7 +168,7 @@ async def list_dept(
     查询部门列表。
 
     :param name: 部门名称（模糊）
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     dept_tree = await dept_crud.get_dept_tree(name)
@@ -184,7 +184,7 @@ async def search_dept(
     查询部门列表。
 
     :param department_in: 部门入参
-    :param dept_crud: 部门 CRUD 服务
+    :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     page = department_in.page

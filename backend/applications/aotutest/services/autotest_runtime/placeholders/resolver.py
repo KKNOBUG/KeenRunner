@@ -29,7 +29,7 @@ class PlaceholderResolver:
     @classmethod
     def _resolve_placeholder_inner(cls, inner: str, is_core_engine: bool, finished_variables: Optional[Any]) -> Any:
         """
-        解析单个${...}花括号内的文本：含括号视为GenerateUtils函数, 否则按变量名解析。
+        解析单个${...}花括号内的文本：含括号视为GenerateUtils函数, 否则根据变量名解析。
 
         :param inner: 占位符花括号内文本(如\"a\"或\"generate_uuid()\")会进行strip
         :param is_core_engine: True时finished_variables需提供get_variable(name)
@@ -126,7 +126,7 @@ class PlaceholderResolver:
                 logger_object(f"【变量运算】算式求值成功\n\t: {content} >>>>> {merged} >>>>> {formatted_result}")
                 return formatted_result
             except Exception as e:
-                logger_object(f"【变量运算】算式求值失败\n\t: {content} >>>>> {merged} >>>>> {e}, 改为按字符串拼接")
+                logger_object(f"【变量运算】算式求值失败\n\t: {content} >>>>> {merged} >>>>> {e}, 改为根据字符串拼接")
 
         return PlaceholderArithmetic._split_placeholders(
             content=content,
@@ -216,7 +216,7 @@ class PlaceholderResolver:
         """
         解析XML报文中各文本节点与属性内的${...}占位符（含算术表达式）。
 
-        按元素text/tail/attrib粒度调用_resolve_string_placeholders，与JSON字段级行为对齐。
+        根据元素text/tail/attrib粒度调用_resolve_string_placeholders，与JSON字段级行为对齐。
         无效XML时回退为整串_resolve_string_placeholders。
 
         :param xml_text: XML报文字符串
@@ -263,7 +263,7 @@ class PlaceholderResolver:
         """
         递归解析str/dict/list中的${...}占位符。
 
-        【字符串】单/多占位符解析变量或GenerateUtils函数（花括号内同时含括号时按函数处理）。全部占位符解析成功且值均可视为数字、模板骨架为算术字符时，对合并表达式安全求值（如(${a}+10)*${b}/${c}）；否则按字符串拼接。若整串以{/[开头且可JSON反序列化，则对内部str节点递归替换后再dumps。
+        【字符串】单/多占位符解析变量或GenerateUtils函数（花括号内同时含括号时根据函数处理）。全部占位符解析成功且值均可视为数字、模板骨架为算术字符时，对合并表达式安全求值（如(${a}+10)*${b}/${c}）；否则根据字符串拼接。若整串以{/[开头且可JSON反序列化，则对内部str节点递归替换后再dumps。
 
         【字典】递归每个value（key不替换，与历史行为一致）
 

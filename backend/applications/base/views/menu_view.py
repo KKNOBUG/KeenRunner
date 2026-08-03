@@ -34,7 +34,7 @@ def _norm_menu_type(v) -> str:
 
 def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     """
-    按名称子串、类型筛选菜单树：节点自身命中或子树有命中则保留。
+    根据名称子串、类型筛选菜单树：节点自身命中或子树有命中则保留。
 
     :param nodes: 菜单树节点列表
     :param name_kw: 菜单名称关键字
@@ -72,7 +72,7 @@ async def list_menu(
 
     :param name: 菜单名称（子串匹配）
     :param menu_type: 菜单类型
-    :param menu_crud: 菜单 CRUD 服务
+    :param menu_crud: 菜单CRUD服务
     :return: 统一HTTP响应
     """
 
@@ -85,7 +85,7 @@ async def list_menu(
         """
         menu = await menu_crud.get_by_id(menu_id=menu_id, on_error=False)
         if not menu:
-            return NotFoundResponse(message=f"菜单(id={menu_id})信息不存在")
+            return NotFoundResponse(message=f"记录[id={menu_id}]信息不存在")
 
         menu_dict = await menu.to_dict()
         child_menus = await menu_crud.model.filter(parent_id=menu_id).order_by("order")
@@ -111,7 +111,7 @@ async def get_menu(
     查看菜单。
 
     :param menu_id: 菜单ID
-    :param menu_crud: 菜单 CRUD 服务
+    :param menu_crud: 菜单CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -134,7 +134,7 @@ async def create_menu(
     创建菜单。
 
     :param menu_in: 菜单入参
-    :param menu_crud: 菜单 CRUD 服务
+    :param menu_crud: 菜单CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -158,7 +158,7 @@ async def update_menu(
     更新菜单。
 
     :param menu_in: 菜单入参
-    :param menu_crud: 菜单 CRUD 服务
+    :param menu_crud: 菜单CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -180,7 +180,7 @@ async def delete_menu(
     删除菜单。
 
     :param id: 菜单ID
-    :param menu_crud: 菜单 CRUD 服务
+    :param menu_crud: 菜单CRUD服务
     :return: 统一HTTP响应
     """
     child_menu_count = await menu_crud.model.filter(parent_id=id).count()

@@ -63,7 +63,7 @@ class AutoTestApiRecordCreate(AutoTestApiRecordBase):
 
 
 class AutoTestApiRecordUpdate(AutoTestApiRecordBase):
-    """更新任务执行观测记录入参（按celery_id部分更新）。"""
+    """更新任务执行观测记录入参（根据celery_id部分更新）。"""
 
     celery_id: Optional[str] = Field(None, max_length=255, description="Celery 调度ID")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")

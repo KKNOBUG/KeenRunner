@@ -37,7 +37,7 @@ async def get_login_access_token(
     验证用户密码和状态并生成令牌。
 
     :param credentials: 登录凭证入参
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     try:
@@ -118,14 +118,12 @@ async def get_userinfo(
     """
     查看当前用户信息。
 
-    :param user_crud: 用户 CRUD 服务
+    :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
     user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
     data = await user_obj.to_dict(exclude_fields=["password"])
-    # 头像地址
-    # data["avatar"] = f'http://172.20.10.2:8518/static/avatar/admin/20250220204648.png'
     return SuccessResponse(data=data)
 
 

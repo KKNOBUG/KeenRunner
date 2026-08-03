@@ -143,12 +143,12 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not task_id:
-            error_message: str = "查询任务信息失败, 参数(task_id)不允许为空"
+            error_message: str = "查询任务信息失败, 参数[task_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.get_or_none(id=task_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询任务信息失败, 任务(id={task_id})不存在"
+            error_message: str = f"查询任务信息失败, 记录[id={task_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -165,12 +165,12 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not task_code:
-            error_message: str = "查询任务信息失败, 参数(task_code)不允许为空"
+            error_message: str = "查询任务信息失败, 参数[task_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance = await self.model.filter(task_code=task_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询任务信息失败, 任务(code={task_code})不存在"
+            error_message: str = f"查询任务信息失败, 记录[code={task_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -194,7 +194,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         # 业务层验证：检查 (task_name, task_project) 唯一
         existing_task = await self.model.filter(task_name=task_name, task_project=task_project, state__not=1).first()
         if existing_task:
-            error_message: str = f"任务(task_name={task_name}, task_project={task_project})已存在"
+            error_message: str = f"任务[task_name={task_name}, task_project={task_project}]已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
@@ -264,7 +264,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             instance = await self.update(id=task_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新任务信息失败, 任务(id={task_id}或code={task_code})不存在, 错误描述: {e}"
+            error_message: str = f"更新任务信息失败, 任务[id={task_id}]或[code={task_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:

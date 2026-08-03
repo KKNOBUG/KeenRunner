@@ -57,13 +57,13 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises NotFoundException: on_error为True且记录不存在
         """
         if not data_source_id:
-            error_message: str = "查询数据源失败, 参数(data_source_id)不允许为空"
+            error_message: str = "查询数据源失败, 参数[data_source_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.get_or_none(id=data_source_id, **kwargs)
         if not instance and on_error:
-            error_message: str = f"查询数据源失败, 数据源(id={data_source_id})不存在"
+            error_message: str = f"查询数据源失败, 记录[id={data_source_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -80,13 +80,13 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises NotFoundException: 当on_error为True且记录不存在时
         """
         if not (data_source_code or "").strip():
-            error_message: str = "查询数据源失败, 参数(data_source_code)不允许为空"
+            error_message: str = "查询数据源失败, 参数[data_source_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(data_source_code=data_source_code.strip(), **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询数据源失败, 数据源(data_source_code={data_source_code})不存在"
+            error_message: str = f"查询数据源失败, 记录[data_source_code={data_source_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -103,13 +103,13 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises NotFoundException: on_error为True且记录不存在时
         """
         if not file_hash:
-            error_message: str = "查询数据源信息失败, 参数(file_hash)不允许为空"
+            error_message: str = "查询数据源信息失败, 参数[file_hash]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(file_hash=file_hash, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询数据源信息失败, 数据源(file_hash={file_hash})不存在"
+            error_message: str = f"查询数据源信息失败, 记录[file_hash={file_hash}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -137,7 +137,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises NotFoundException: 当on_error为True且无匹配记录时
         """
         if not case_id and not (case_code or "").strip():
-            error_message: str = "查询数据源失败, 参数(case_id或case_code)必须二选一传递"
+            error_message: str = "参数[case_id, case_code)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -182,13 +182,13 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises NotFoundException: on_error为True且记录不存在时
         """
         if not case_id:
-            error_message: str = "查询数据源失败, 参数(case_id)不允许为空"
+            error_message: str = "查询数据源失败, 参数[case_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(case_id=case_id, **kwargs).order_by("-id").first()
         if not instance and on_error:
-            error_message: str = f"查询数据源失败, 数据源(case_id={case_id})不存在"
+            error_message: str = f"查询数据源失败, 记录[case_id={case_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -217,7 +217,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
     async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestApiDataSourceInfo:
         """
-        创建数据源，按用例与步骤定位，已删除则恢复，已启用则拒绝。
+        创建数据源，根据用例与步骤定位，已删除则恢复，已启用则拒绝。
 
         :param data_source_in: 创建schema(data_source_code由模型默认值生成，无需传入)
         :return: 新建或恢复后的数据源实例
@@ -248,7 +248,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             try:
                 return await self.update(id=existing.id, obj_in=update_dict)
             except DoesNotExist as e:
-                error_message: str = f"恢复数据源失败, 数据源(id={existing.id})不存在, 错误描述: {e}"
+                error_message: str = f"恢复数据源失败, 记录[id={existing.id}]不存在, 错误描述: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise NotFoundException(message=error_message) from e
             except IntegrityError as e:
@@ -257,15 +257,15 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 raise DataBaseStorageException(message=error_message) from e
 
         error_message: str = (
-            f"新增数据源失败, 数据源(case_id={case_id}, case_code={case_code}, "
-            f"step_id={step_id}, step_code={step_code})已存在且为启用状态"
+            f"新增数据源失败, 已存在启用状态记录, "
+            f"查询条件: [(case_id={case_id}, case_code={case_code}, step_id={step_id}, step_code={step_code}]"
         )
         LOGGER.error(error_message)
         raise DataAlreadyExistsException(message=error_message)
 
     async def update_data_source(self, data_source_in: AutoTestDataSourceUpdate) -> AutoTestApiDataSourceInfo:
         """
-        更新数据源，按id/code或用例步骤组合定位。
+        更新数据源，根据id/code或用例步骤组合定位。
 
         :param data_source_in: 更新schema
         :return: 更新后的数据源实例
@@ -302,7 +302,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 state__not=1
             )
         else:
-            error_message: str = "更新数据源失败, 定位参数不足(需在 schema 中提供 data_source_id / data_source_code / case+step)"
+            error_message: str = "更新数据源失败, 定位参数不足"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -317,7 +317,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         try:
             return await self.update(id=instance.id, obj_in=update_dict)
         except DoesNotExist as e:
-            error_message: str = f"更新数据源失败, 数据源(id={instance.id})不存在, 错误描述: {e}"
+            error_message: str = f"更新数据源失败, 记录[id={instance.id}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
@@ -335,7 +335,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             step_code: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
-        软删除数据源，按id/code或用例步骤组合定位。
+        软删除数据源，根据id/code或用例步骤组合定位。
 
         :param data_source_id: 主键ID
         :param data_source_code: 数据驱动标识代码
@@ -369,7 +369,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
                 state__not=1
             )
         else:
-            error_message: str = "删除数据源失败, 定位参数不足(需 id/data_source_code/(case+step))"
+            error_message: str = "删除数据源失败, 定位参数不足"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -386,7 +386,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises ParameterException: case_id为空时
         """
         if not case_id:
-            error_message: str = "解绑用例数据源失败, 参数(case_id)不允许为空"
+            error_message: str = "解绑用例数据源失败, 参数[case_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -429,7 +429,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises NotFoundException: 无匹配记录或指定场景不存在时
         """
         if not case_id or not step_code:
-            error_message: str = "查询数据源信息失败, 参数(case_id、step_code)不允许为空"
+            error_message: str = "查询数据源信息失败, 参数[case_id、step_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -438,7 +438,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         LOGGER.info(f"查询数据源信息条件(此时不判断dataset_name是否存在于dataset中)：{condition}")
         source_instance: AutoTestApiDataSourceInfo = await self.model.filter(**condition, **kwargs).first()
         if not source_instance:
-            error_message: str = f"查询数据源信息失败, 暂无满足({condition})查询条件的记录"
+            error_message: str = f"查询数据源信息失败, 暂无满足[{condition}]查询条件的记录"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
 
@@ -450,7 +450,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         if dataset:
             single_dataset = dataset.get(dataset_name)
             if not single_dataset:
-                error_message: str = f"查询数据源信息失败, 指定场景名称({dataset_name})下数据为空"
+                error_message: str = f"查询数据源信息失败, 指定场景名称[{dataset_name}]下数据为空"
                 raise NotFoundException(message=error_message)
             source_dict["dataset"] = single_dataset
 
@@ -473,7 +473,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             created_user: Optional[str] = None,
     ) -> AutoTestApiDataSourceInfo:
         """
-        上传解析场景：根据case_id + step_id + step_code若已存在则更新，否则创建。
+        上传解析场景：根据case_id+step_id+step_code若已存在则更新，否则创建。
 
         :param case_id: 用例主键
         :param case_code: 用例标识代码
@@ -492,7 +492,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises ParameterException: parsed_data为空时
         """
         if not parsed_data:
-            raise ParameterException(message="参数 parsed_data 不能为空")
+            raise ParameterException(message="参数[parsed_data]不允许为空")
 
         from backend.applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
 
@@ -560,7 +560,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises ParameterException: case_id为空时
         """
         if not case_id:
-            raise ParameterException(message="参数(case_id)不允许为空")
+            raise ParameterException(message="参数[case_id]不允许为空")
         return await self.model.filter(case_id=case_id, state=state).order_by("-updated_time", "step_id", "step_code").all()
 
     async def copy_data_source_for_step(
@@ -583,7 +583,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :raises ParameterException: case_id或step_code为空时
         """
         if not case_id or not (step_code or "").strip():
-            raise ParameterException(message="复制数据源失败, 参数(case_id, step_code)不允许为空")
+            raise ParameterException(message="复制数据源失败, 参数[case_id, step_code]不允许为空")
         source = await self.get_by_id(data_source_id=source_data_source_id, on_error=False, state__not=1)
         if not source:
             return None
@@ -624,13 +624,13 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :raises NotFoundException: on_error为True且记录不存在时
         """
         if not create_code:
-            error_message: str = "查询数据源生成信息失败, 参数(create_code)不允许为空"
+            error_message: str = "查询数据源生成信息失败, 参数[create_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(create_code=create_code, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询数据源生成信息失败, 数据源(create_code={create_code})不存在"
+            error_message: str = f"查询数据源生成信息失败, 记录[create_code={create_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -648,13 +648,13 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :raises NotFoundException: on_error为True且无记录时
         """
         if not step_code:
-            error_message: str = "查询数据源生成信息失败, 参数(step_code)不允许为空"
+            error_message: str = "查询数据源生成信息失败, 参数[step_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(step_code=step_code, **kwargs).order_by("-id").limit(limit_num)
         if not instance and on_error:
-            error_message: str = f"查询数据源生成信息失败, 数据源(step_code={step_code})不存在"
+            error_message: str = f"查询数据源生成信息失败, 记录[step_code={step_code}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -671,13 +671,13 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :raises NotFoundException: on_error为True且记录不存在时
         """
         if not file_hash:
-            error_message: str = "查询数据源生成信息失败, 参数(file_hash)不允许为空"
+            error_message: str = "查询数据源生成信息失败, 参数[file_hash]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         instance = await self.model.filter(file_hash=file_hash, **kwargs).first()
         if not instance and on_error:
-            error_message: str = f"查询数据源生成信息失败, 数据源(file_hash={file_hash})不存在"
+            error_message: str = f"查询数据源生成信息失败, 记录[file_hash={file_hash}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -737,7 +737,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :raises NotFoundException: 记录不存在时
         """
         if not create_code:
-            error_message: str = f"参数缺失, 删除数据源生成信息时必须传递create_code"
+            error_message: str = f"参数[create_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -745,10 +745,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         instance = await self.get_by_code(create_code=create_code, on_error=False, state__not=1)
 
         if not instance:
-            error_message: str = (
-                f"根据(create_code={create_code})条件检查失败, "
-                f"数据源信息不存在"
-            )
+            error_message: str = f"数据源信息不存在, 查询条件: [create_code={create_code}]"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
 
@@ -792,7 +789,7 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
         if instance.file_hash and not instance.file_hash.endswith("X"):
             if await aos.path.exists(instance.file_hash):
                 await aos.remove(instance.file_hash)
-    LOGGER.warning(f"删除更新后多余步骤: (case_id={case_id}, step_code__in={list(step_code_list)})已被清理")
+    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]已被清理")
     steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
     for step_info in steps_info:
         if step_info and step_info.file_name:
@@ -801,4 +798,4 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
                 await aos.remove(file_path)
         if step_info and step_info.file_path and await aos.path.exists(step_info.file_path):
             await aos.remove(step_info.file_path)
-    LOGGER.warning(f"删除更新后多余步骤: (case_id={case_id}, step_code__in={list(step_code_list)})已被清理")
+    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]已被清理")
