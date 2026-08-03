@@ -126,7 +126,7 @@ async def delete_tag_batch(
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_tag.post("/update", summary="更新标签", description="根据id或code更新标签信息")
@@ -252,10 +252,10 @@ async def search_tags_info(
                 replace_fields={"id": "tag_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件查询标签成功, 结果明细: {data}")
+        LOGGER.info(f"根据条件查询标签成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

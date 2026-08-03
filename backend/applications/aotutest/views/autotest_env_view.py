@@ -67,7 +67,7 @@ async def create_env_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败, 异常描述: {e}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
 @autotest_env.delete("/delete", summary="删除环境", description="根据id或code删除环境信息")
@@ -101,7 +101,7 @@ async def delete_env_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_env.post("/delete", summary="批量删除环境", description="根据id或code列表删除环境信息")
@@ -122,7 +122,7 @@ async def delete_env_batch(
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_env.post("/update", summary="更新环境", description="根据id或code更新环境信息")
@@ -156,7 +156,7 @@ async def update_env_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败, 异常描述: {e}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @autotest_env.get("/get", summary="查询环境", description="根据id或code查询环境信息")
@@ -193,7 +193,7 @@ async def get_env_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_env.get("/get_names", summary="查询环境名称", description="查询去重后的环境名称列表")
@@ -214,7 +214,7 @@ async def get_env_name_list(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询环境名称(去重)环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_env.post("/search", summary="查询环境列表", description="根据条件分页查询环境列表信息(Body)")
@@ -264,4 +264,4 @@ async def search_env_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")

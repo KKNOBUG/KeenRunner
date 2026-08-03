@@ -270,4 +270,4 @@ async def search_reports(
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

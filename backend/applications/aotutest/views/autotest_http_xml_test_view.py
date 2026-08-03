@@ -7,6 +7,7 @@
 @DateTime: 2026/7/23 10:00:00
 """
 import datetime
+import traceback
 from typing import Optional
 
 from fastapi import APIRouter, Request
@@ -220,8 +221,8 @@ async def http_xml_test_endpoint(request: Request):
         body_bytes = await request.body()
         text = body_bytes.decode("utf-8", errors="ignore").strip()
     except Exception as e:
-        LOGGER.error(f"HTTP XML测试接口读取请求体异常: {e}")
-        return FailureResponse(message=f"读取请求体失败: {e}")
+        LOGGER.error(f"HTTP XML测试接口读取请求体失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"读取请求体失败，异常描述: {e}")
 
     response_xml = _build_claim_response(text)
     LOGGER.info(f"HTTP XML测试接口处理完成, 请求长度: {len(text)}")
@@ -240,10 +241,10 @@ async def get_http_xml_sample_request():
     将此XML报文作为HTTP请求步骤的请求体（选择xml类型），
     发送到 POST/xml 接口，服务器将返回XML格式的理赔审批结果。
     """
-    return SuccessResponse(data=_SAMPLE_REQUEST_XML)
+    return SuccessResponse(message="查询成功", data=_SAMPLE_REQUEST_XML)
 
 
 @autotest_http_xml_test.get("/sample/response", summary="预览XML响应报文")
 async def get_http_xml_sample_response():
     """预览 HTTP XML 测试接口对示例请求返回的 XML 响应。"""
-    return SuccessResponse(data=_build_claim_response(_SAMPLE_REQUEST_XML))
+    return SuccessResponse(message="查询成功", data=_build_claim_response(_SAMPLE_REQUEST_XML))

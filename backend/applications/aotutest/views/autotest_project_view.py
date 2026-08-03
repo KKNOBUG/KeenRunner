@@ -67,7 +67,7 @@ async def create_project_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增应用失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败, 异常描述: {e}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
 @autotest_project.delete("/delete", summary="删除应用", description="根据id或code删除应用信息")
@@ -103,7 +103,7 @@ async def delete_project_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除应用失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_project.post("/delete", summary="批量删除应用", description="根据id或code列表删除应用信息")
@@ -124,7 +124,7 @@ async def delete_projects_batch(
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除项目失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_project.post("/update", summary="更新应用", description="根据id或code更新应用信息")
@@ -158,7 +158,7 @@ async def update_project_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新应用失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败, 异常描述: {e}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @autotest_project.get("/get", summary="查询应用", description="根据id或code查询应用信息")
@@ -195,7 +195,7 @@ async def get_project_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询应用失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_project.get("/get_names", summary="查询应用名称", description="查询去重后的应用名称列表")
@@ -216,7 +216,7 @@ async def get_env_name_list(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询应用名称(去重)失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_project.post("/search", summary="查询应用列表", description="根据条件分页查询应用列表信息(Body)")
@@ -270,10 +270,10 @@ async def search_project_info(
             )
             for obj in instances
         ]
-        LOGGER.info(f"根据条件查询应用成功, 结果明细: {total}")
+        LOGGER.info(f"根据条件查询应用成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询应用失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")

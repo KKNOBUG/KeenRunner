@@ -8,6 +8,7 @@
 """
 import asyncio
 import datetime
+import traceback
 from typing import Any, Dict, Optional
 
 import orjson
@@ -464,14 +465,18 @@ async def start_tcp_test_server(
     """
     try:
         await _tcp_test_server.start(host=host, json_port=json_port, xml_port=xml_port)
+        status = _tcp_test_server.status()
+        LOGGER.info(f"启动TCP测试服务器成功, host: {host}, json_port: {json_port}, xml_port: {xml_port}")
         return SuccessResponse(
-            message="TCP测试服务器启动成功",
-            data=_tcp_test_server.status(),
+            message="启动成功",
+            data=status,
         )
     except OSError as e:
-        return FailureResponse(message=f"启动失败: {e}")
+        LOGGER.error(f"启动TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"启动失败，异常描述: {e}")
     except Exception as e:
-        return FailureResponse(message=f"启动异常: {e}")
+        LOGGER.error(f"启动TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
 @autotest_tcp_test.post("/stop", summary="停止TCP测试服务器")
@@ -479,15 +484,20 @@ async def stop_tcp_test_server():
     """停止 TCP 测试服务器的两个端口。"""
     try:
         await _tcp_test_server.stop()
-        return SuccessResponse(message="TCP测试服务器已停止", data=_tcp_test_server.status())
+        status = _tcp_test_server.status()
+        LOGGER.info("停止TCP测试服务器成功")
+        return SuccessResponse(message="停止成功", data=status)
     except Exception as e:
-        return FailureResponse(message=f"停止异常: {e}")
+        LOGGER.error(f"停止TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
 @autotest_tcp_test.get("/status", summary="查询TCP测试服务器状态")
 async def get_tcp_test_server_status():
     """查询两个 TCP 端口的运行状态和连接计数。"""
-    return SuccessResponse(data=_tcp_test_server.status())
+    status = _tcp_test_server.status()
+    LOGGER.info(f"查询TCP测试服务器状态成功, is_running: {status.get('is_running')}")
+    return SuccessResponse(message="查询成功", data=status)
 
 
 @autotest_tcp_test.get("/sample/json", summary="获取JSON请求示例报文")
@@ -522,7 +532,7 @@ async def get_json_sample():
             "page_size": 5,
         },
     }
-    return SuccessResponse(data=sample)
+    return SuccessResponse(message="查询成功", data=sample)
 
 
 @autotest_tcp_test.get("/sample/xml", summary="获取XML请求示例报文")
@@ -569,7 +579,7 @@ async def get_xml_sample():
     </GuarantorInfo>
   </Body>
 </Request>"""
-    return SuccessResponse(data=sample)
+    return SuccessResponse(message="查询成功", data=sample)
 
 
 @autotest_tcp_test.get("/sample/response/json", summary="预览JSON端口的XML响应")
@@ -580,7 +590,7 @@ async def get_json_response_preview():
         "account_info": {"account_no": "6228480012345678", "currency": "CNY", "customer_id": "CUST00001"},
         "query_condition": {"page_no": 1, "page_size": 5},
     }).decode("utf-8")
-    return SuccessResponse(data=_tcp_test_server._build_json_response(sample))
+    return SuccessResponse(message="查询成功", data=_tcp_test_server._build_json_response(sample))
 
 
 @autotest_tcp_test.get("/sample/response/xml", summary="预览XML端口的XML响应")
@@ -594,4 +604,4 @@ async def get_xml_response_preview():
     <LoanInfo><LoanType>个人消费贷款</LoanType><Amount>200000</Amount><Term>36</Term><Purpose>房屋装修</Purpose><RepaymentMethod>等额本息</RepaymentMethod></LoanInfo>
   </Body>
 </Request>"""
-    return SuccessResponse(data=_tcp_test_server._build_xml_response(sample))
+    return SuccessResponse(message="查询成功", data=_tcp_test_server._build_xml_response(sample))

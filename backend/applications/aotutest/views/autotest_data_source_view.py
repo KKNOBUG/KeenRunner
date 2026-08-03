@@ -133,7 +133,7 @@ async def create_data_source_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败, 异常描述: {e}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
 @autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源信息")
@@ -174,7 +174,7 @@ async def delete_data_source_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"删除数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {e}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_data_source.post("/unbind_case", summary="解绑用例数据源", description="解绑用例下全部数据源")
@@ -197,7 +197,7 @@ async def unbind_case_data_source(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"解绑用例数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"解绑失败, 异常描述: {e}")
+        return FailureResponse(message=f"解绑失败，异常描述: {e}")
 
 
 @autotest_data_source.post("/update", summary="更新数据源")
@@ -239,7 +239,7 @@ async def update_data_source_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败, 异常描述: {e}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @autotest_data_source.post("/save_or_update", summary="保存数据源", description="保存或更新数据源信息")
@@ -283,7 +283,9 @@ async def save_or_update_data_source_info(
                 state__not=1
             )
         else:
-            return ParameterResponse(message=f"更新失败, 传递参数无法确认数据源处理逻辑")
+            return ParameterResponse(
+                message="请提供参数[data_source_id, data_source_code]或[case_id, case_code, step_id, step_code]进行保存或更新"
+            )
 
         if data_in.dataframe is not None:
             try:
@@ -324,7 +326,7 @@ async def save_or_update_data_source_info(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"保存或更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"保存失败, 异常描述: {e}")
+        return FailureResponse(message=f"保存失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/get", summary="查询数据源", description="根据条件查询单条数据源信息")
@@ -367,7 +369,7 @@ async def get_data_source_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询案例数据场景名称")
@@ -401,7 +403,8 @@ async def query_case_name(
                     seen.add(name_str)
                     merged_names.append(name_str)
 
-    return SuccessResponse(message="查询数据源成功", data=merged_names)
+    LOGGER.info(f"查询案例数据场景成功, case_id={case_id}, 结果数量: {len(merged_names)}")
+    return SuccessResponse(message="查询成功", data=merged_names)
 
 
 @autotest_data_source.post("/search", summary="查询数据源列表", description="根据条件分页查询数据源列表信息(Body)")
@@ -451,7 +454,7 @@ async def search_data_source_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/get_by_case_step", summary="查询步骤数据源", description="根据用例与步骤查询数据源(单条或列表)")
@@ -475,14 +478,16 @@ async def get_data_source_by_case_step(
         )
         if isinstance(result, list):
             serializes = [await _serialize_data_source(x) for x in result]
+            LOGGER.info(f"根据case_step查询数据源成功, 结果数量: {len(serializes)}")
             return SuccessResponse(message="查询成功", data=serializes, total=len(serializes))
         data = await _serialize_data_source(result)
+        LOGGER.info(f"根据case_step查询数据源成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据case_step查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/scene_names_by_case", summary="查询数据源场景列名", description="根据用例查询已落库数据源场景列名")
@@ -501,7 +506,7 @@ async def get_scene_names_by_case(
     """
     try:
         if not case_id and not (case_code or "").strip():
-            return ParameterResponse(message="参数[case_id, case_code)不允许为空")
+            return ParameterResponse(message="参数[case_id, case_code]不允许为空")
 
         # 定位用例，优先使用 case_id
         effective_case_id: Optional[int] = case_id
@@ -580,7 +585,7 @@ async def get_scene_names_by_case(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据用例查询数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/dataset_scenario", summary="查询数据集场景", description="查询某步骤下单个数据集场景")
@@ -611,7 +616,7 @@ async def get_dataset_scenario_info(
         return SuccessResponse(message="查询成功", data=scenario, total=1)
     except Exception as e:
         LOGGER.error(f"查询数据集场景失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据集导入模板xlsx")
@@ -667,8 +672,8 @@ async def single_step_dataset_upload(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询步骤失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=str(e))
+        LOGGER.error(f"查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询步骤失败，异常描述: {e}")
 
     if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤上传数据驱动文件")
@@ -678,8 +683,8 @@ async def single_step_dataset_upload(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=str(e))
+        LOGGER.error(f"查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询用例失败，异常描述: {e}")
     if case_instance.case_type in PUBLIC_CASE_TYPES:
         return BadReqResponse(message="公共脚本/公共接口不允许使用数据源")
 
@@ -710,7 +715,7 @@ async def single_step_dataset_upload(
     try:
         step_data, dataset_names, dataframe, axis = await parse_xlsx_first_sheet_async(file_path)
     except FileNotFoundError as e:
-        return FailureResponse(message=str(e))
+        return FailureResponse(message=f"解析文件失败，异常描述: {e}")
     except ValueError as e:
         return BadReqResponse(message=f"解析失败: {str(e)}")
     if not step_data:
@@ -737,8 +742,8 @@ async def single_step_dataset_upload(
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"数据源保存失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=str(e))
+        LOGGER.error(f"数据源保存失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"数据源保存失败，异常描述: {e}")
 
     await _sync_step_data_source_meta(
         case_id=case_id,
@@ -748,6 +753,7 @@ async def single_step_dataset_upload(
         file_desc=file_desc,
     )
     data = await _serialize_data_source(instance)
+    LOGGER.info(f"单步骤数据集上传成功, 结果明细: {data}")
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
@@ -786,7 +792,7 @@ async def single_step_dataset_download(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败, 异常描述: {e}")
+        return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
 @autotest_data_source.post("/batch_step_dataset_upload", summary="批量上传步骤数据源")
@@ -812,7 +818,7 @@ async def batch_step_dataset_upload(
     :return: 统一HTTP响应
     """
     if not case_id:
-        return ParameterResponse(message="case_id 不能为空")
+        return ParameterResponse(message="参数[case_id]不允许为空")
     if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
 
@@ -820,8 +826,8 @@ async def batch_step_dataset_upload(
     try:
         all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
     except Exception as e:
-        LOGGER.error(f"查询步骤树失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=str(e))
+        LOGGER.error(f"查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询步骤树失败，异常描述: {e}")
 
     step_map: Dict[str, Dict[str, Any]] = {}
     for step in all_steps:
@@ -839,8 +845,8 @@ async def batch_step_dataset_upload(
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询用例失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=str(e))
+        LOGGER.error(f"查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询用例失败，异常描述: {e}")
     if case_instance.case_type in PUBLIC_CASE_TYPES:
         return BadReqResponse(message="公共脚本/公共接口不允许使用数据源，无法批量上传数据源")
 
@@ -870,7 +876,7 @@ async def batch_step_dataset_upload(
     try:
         full_parsed, _, sheet_axes, sheet_dataframes = await parse_xlsx_to_parsed_data_async(file_path)
     except FileNotFoundError as e:
-        return FailureResponse(message=str(e))
+        return FailureResponse(message=f"解析文件失败，异常描述: {e}")
     except ValueError as e:
         return BadReqResponse(message=f"解析失败: {str(e)}")
     if not full_parsed:
@@ -928,6 +934,7 @@ async def batch_step_dataset_upload(
         LOGGER.error(f"批量上传数据源失败, 已全部回滚: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"批量上传数据源失败，已全部回滚: {e}")
 
+    LOGGER.info(f"多步骤数据集批量上传成功, case_id={case_id}, 数量: {len(created)}")
     return SuccessResponse(
         message=f"多步骤数据集批量上传成功，共{len(created)}条数据源",
         data=created,
@@ -988,4 +995,4 @@ async def batch_step_dataset_download(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"汇总导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败, 异常描述: {e}")
+        return FailureResponse(message=f"导出失败，异常描述: {e}")

@@ -235,10 +235,10 @@ async def search_tasks_info(
                 replace_fields={"id": "task_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件查询任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据条件查询任务成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
-        return ParameterResponse(message=e.message)
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
@@ -259,7 +259,7 @@ async def run_task_info(
     try:
         task_id = task_in.get("task_id")
         if task_id is None:
-            return ParameterResponse(message="参数 task_id 不能为空")
+            return ParameterResponse(message="参数[task_id]不允许为空")
         await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums import AutoTestReportType
@@ -282,7 +282,7 @@ async def run_task_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"执行任务失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"执行失败, 异常描述: {e}")
+        return FailureResponse(message=f"执行失败，异常描述: {e}")
 
 
 @autotest_task.post("/start", summary="启动任务", description="启用任务调度")
@@ -317,7 +317,7 @@ async def start_task_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"启动任务失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"启动失败, 异常描述: {e}")
+        return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
 @autotest_task.post("/stop", summary="停止任务", description="关闭任务调度")
@@ -352,7 +352,7 @@ async def stop_task_info(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"停止任务失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"停止失败, 异常描述: {e}")
+        return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
 @autotest_task.post("/record/search", summary="查询执行记录", description="根据条件分页查询任务执行记录(Body)")
@@ -382,7 +382,7 @@ async def search_task_records(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询任务执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
 @autotest_task.get("/record/{record_id}/attachments/{key}/download", summary="下载执行记录附件", description="根据记录id与附件key下载附件")
@@ -428,4 +428,4 @@ async def download_task_record_attachment(
         return ParameterResponse(message=str(e))
     except Exception as e:
         LOGGER.error(f"下载执行记录附件失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"下载失败, 异常描述: {str(e)}")
+        return FailureResponse(message=f"下载失败，异常描述: {str(e)}")
