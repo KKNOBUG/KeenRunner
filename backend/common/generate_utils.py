@@ -33,8 +33,8 @@ class GenerateUtils:
         使用单例模式，在整个应用程序的生命周期内仅创建一个 GenerateUtils 实例
         在多线程环境下，通过 threading.Lock 确保线程安全
 
-        :param args: 非必填项，位置参数(未使用)
-        :param kwargs: 非必填项，关键字参数(未使用)
+        :param args: 非必填项，位置参数
+        :param kwargs: 非必填项，关键字参数
         :return: GenerateUtils 类的唯一实例
         """
         if not cls.__private_instance and not cls.__private_initialized:
@@ -49,8 +49,8 @@ class GenerateUtils:
         """
         初始化 Faker(中英文)、Pinyin 实例及日期时间格式映射表
 
-        :param args: 非必填项，位置参数(未使用)
-        :param kwargs: 非必填项，关键字参数(未使用)
+        :param args: 非必填项，位置参数
+        :param kwargs: 非必填项，关键字参数
         :return: 无返回值
         """
         super().__init__(*args, **kwargs)
