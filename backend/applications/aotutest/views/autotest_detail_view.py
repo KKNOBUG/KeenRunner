@@ -44,8 +44,8 @@ async def create_step_detail(
     新增明细。
 
     :param detail_in: 明细入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.detail_curd.create_detail(detail_in)
@@ -82,8 +82,8 @@ async def delete_report(
     :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.detail_curd.delete_detail(
@@ -118,8 +118,8 @@ async def update_report(
     按id或code更新明细。
 
     :param detail_in: 明细入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.detail_curd.update_detail(detail_in)
@@ -156,8 +156,8 @@ async def get_step_detail(
     :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if detail_id:
@@ -195,8 +195,8 @@ async def search_step_details(
     按条件查询明细。
 
     :param detail_in: 明细入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()

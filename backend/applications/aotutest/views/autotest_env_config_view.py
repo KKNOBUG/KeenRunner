@@ -48,8 +48,8 @@ async def create_env_config(
     新增环境配置。
 
     :param config_in: 环境配置入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.env_config_curd.create_config(config_in=config_in)
@@ -82,10 +82,10 @@ async def delete_env_config(
     """
     按id或code删除环境配置。
 
-    :param config_id: 环境配置主键 ID
+    :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.env_config_curd.delete_config(config_id=config_id, config_code=config_code)
@@ -116,8 +116,8 @@ async def delete_env_config_batch(
     按id或code列表删除环境。
 
     :param config_in: 环境配置入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         count = await services.env_config_curd.delete_configs(config_in=config_in)
@@ -137,8 +137,8 @@ async def update_env_config(
     按id或code更新环境配置。
 
     :param config_in: 环境配置入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.env_config_curd.update_config(config_in=config_in)
@@ -171,10 +171,10 @@ async def get_env_info(
     """
     按id或code查询环境配置。
 
-    :param config_id: 环境配置主键 ID
+    :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if config_id:
@@ -208,8 +208,8 @@ async def search_env_info(
     按条件查询环境配置。
 
     :param config_in: 环境配置入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()
@@ -324,11 +324,11 @@ async def get_unique_env_config_name_list(
     """
     获取去重后的配置名称列表。
 
-    :param project_id: 应用主键 ID
-    :param env_id: 环境主键 ID
+    :param project_id: 应用主键ID
+    :param env_id: 环境主键ID
     :param config_type: 配置类型
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         config_type_val = config_type.value if config_type is not None else None

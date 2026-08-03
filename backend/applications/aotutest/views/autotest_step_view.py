@@ -78,8 +78,8 @@ async def create_step(
     新增步骤。
 
     :param step_in: 步骤入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.step_curd.create_step(step_in)
@@ -112,10 +112,10 @@ async def delete_step(
     """
     按id或code删除步骤。
 
-    :param step_id: 步骤主键 ID
+    :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.step_curd.delete_step(step_id=step_id, step_code=step_code)
@@ -148,8 +148,8 @@ async def update_step(
     按id或code更新步骤。
 
     :param step_in: 步骤入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.step_curd.update_step(step_in)
@@ -182,10 +182,10 @@ async def get_step(
     """
     按id或code查询步骤。
 
-    :param step_id: 步骤主键 ID
+    :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if step_id:
@@ -219,8 +219,8 @@ async def search_steps(
     按条件查询步骤。
 
     :param step_in: 步骤入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()
@@ -277,10 +277,10 @@ async def get_step_tree(
     """
     按id或code查询步骤树。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param case_code: 用例业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
@@ -309,10 +309,10 @@ async def copy_step_tree(
     """
     复制用例步骤树（返回未保存的副本）。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param case_code: 用例业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if not case_id and not case_code:
@@ -336,8 +336,8 @@ async def batch_update_steps_tree(
     更新用例级步骤树。
 
     :param data: 步骤树入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         # 获取用例信息和步骤数据
@@ -353,7 +353,7 @@ async def batch_update_steps_tree(
 
         # 1.5 校验HTTP/TCP步骤的数据源场景列名一致性
         def _collect_http_tcp_with_ds(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """递归收集步骤树中拥有 data_source_id 的 HTTP/TCP 步骤。"""
+            """递归收集步骤树中拥有data_source_id的HTTP/TCP步骤。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
             for s in steps:
                 if s.step_type and str(s.step_type) in (str(AutoTestStepType.HTTP), str(AutoTestStepType.TCP)):
@@ -417,10 +417,10 @@ async def batch_update_steps_tree(
                                     steps: List[AutoTestStepTreeUpdateItem], relevant_case_id: int
                             ) -> None:
                                 """
-                                递归将步骤树中各节点的 case_id 更新为目标用例 ID。
+                                递归将步骤树中各节点的case_id更新为目标用例ID。
 
                                 :param steps: 步骤列表
-                                :param relevant_case_id: 目标用例 ID
+                                :param relevant_case_id: 目标用例ID
                                 """
                                 for step in steps:
                                     step.case_id = relevant_case_id
@@ -507,7 +507,7 @@ async def validate_step_tree(
 
     :param steps: 步骤树入参
     :param deep_validate: 是否深度校验
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         # 第2层：树结构校验
@@ -526,7 +526,7 @@ async def validate_step_tree(
         # 摘要
         def _count_steps(items: List[AutoTestStepTreeUpdateItem]) -> int:
             """
-            递归统计步骤树节点总数（含 children / quote_steps）。
+            递归统计步骤树节点总数（含children/quote_steps）。
 
             :param items: 步骤列表
             :return: 节点总数
@@ -542,7 +542,7 @@ async def validate_step_tree(
 
         def _collect_types(items: List[AutoTestStepTreeUpdateItem]) -> None:
             """
-            递归收集步骤树中各节点的 step_type 到外层 step_types。
+            递归收集步骤树中各节点的step_type到外层step_types。
 
             :param items: 步骤列表
             """
@@ -584,8 +584,8 @@ async def debug_http_request(
     HTTP请求调试。
 
     :param step_data: 步骤调试入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
@@ -610,7 +610,7 @@ async def debug_http_request(
         extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
         assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
 
-        # 将 defined / session 变量合并为查找 dict（提取/断言用）及 StepVariablesBase 列表（占位符解析用）
+        # 将defined/session变量合并为查找dict（提取/断言用）及StepVariablesBase列表（占位符解析用）
         merged_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
             if isinstance(item, StepVariablesBase) and item.key:
@@ -654,7 +654,7 @@ async def debug_http_request(
         # 日志辅助函数：添加时间戳和步骤名称
         def append_debugging_log(message: str) -> None:
             """
-            将带时间戳与步骤名的调试日志追加到 debugging_logs。
+            将带时间戳与步骤名的调试日志追加到debugging_logs。
 
             :param message: 日志内容
             """
@@ -669,7 +669,7 @@ async def debug_http_request(
                     f"请求方法: {request_method}\n\t"
                     f"请求地址: {request_url}"
         )
-        # 解析请求参数（列表格式）及 request_body、request_text 中的占位符
+        # 解析请求参数（列表格式）及request_body、request_text中的占位符
         finished_variables: List[StepVariablesBase] = AutoTestToolService.resolve_placeholders(
             value=initial_var_models,
             logger_object=append_debugging_log,
@@ -949,8 +949,8 @@ async def debug_tcp_request(
     TCP请求调试。
 
     :param step_data: 步骤调试入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         env_id: int = step_data.env_id
@@ -984,7 +984,7 @@ async def debug_tcp_request(
         # 日志辅助函数：添加时间戳和步骤名称
         def append_debugging_log(message: str) -> None:
             """
-            将带时间戳与步骤名的调试日志追加到 debugging_logs。
+            将带时间戳与步骤名的调试日志追加到debugging_logs。
 
             :param message: 日志内容
             """
@@ -1235,8 +1235,8 @@ async def debug_python_code(
     Python代码调试。
 
     :param step_data: 步骤调试入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         # 提取请求参数
@@ -1360,8 +1360,8 @@ async def debug_redis_request(
     Redis请求调试。
 
     :param step_data: 步骤调试入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         env_id: int = step_data.env_id
@@ -1388,7 +1388,7 @@ async def debug_redis_request(
 
         def append_debugging_log(message: str) -> None:
             """
-            将带时间戳与步骤名的调试日志追加到 debugging_logs。
+            将带时间戳与步骤名的调试日志追加到debugging_logs。
 
             :param message: 日志内容
             """
@@ -1681,9 +1681,9 @@ def _serialize_for_celery_initial_variables(
         items: Optional[List[StepVariablesBase]],
 ) -> List[Dict[str, Any]]:
     """
-    将初始变量列表序列化为 Celery 可传递的纯 dict 列表。
+    将初始变量列表序列化为Celery可传递的纯dict列表。
 
-    :param items: StepVariablesBase 或 dict 列表
+    :param items: StepVariablesBase或dict列表
     :return: 序列化后的变量列表
     """
     if not items:
@@ -1703,10 +1703,10 @@ def _serialize_for_celery_steps_execute_config(
         cfg: Optional[Dict[str, StepsExecuteConfigBase]],
 ) -> Optional[Dict[str, Any]]:
     """
-    将步骤执行配置序列化为 Celery 可传递的纯 dict。
+    将步骤执行配置序列化为Celery可传递的纯dict。
 
     :param cfg: 步骤执行配置映射
-    :return: 序列化后的配置，空则返回 None
+    :return: 序列化后的配置，空则返回None
     """
     if not cfg:
         return None
@@ -1730,8 +1730,8 @@ async def execute_step_tree(
     执行或调试步骤树。
 
     :param request: 业务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         case_id: int = request.case_id
@@ -2009,8 +2009,8 @@ async def batch_execute_cases_endpoint(
     批量执行用例。
 
     :param request: 业务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         case_ids = request.case_ids
@@ -2020,22 +2020,6 @@ async def batch_execute_cases_endpoint(
             initial_variables = []
         if not case_ids or len(case_ids) == 0:
             return BadReqResponse(message="case_ids列表不能为空")
-
-        # 后台执行
-        # from celery_scheduler.tasks.task_exec_case import task_batch_execute_cases
-        # apply_async_resound: AsyncResult = task_batch_execute_cases.apply_async(
-        #     kwargs={
-        #         "case_ids": case_ids,
-        #         "initial_variables": initial_variables,
-        #         "env_name": env_name,
-        #         "report_type": AutoTestApiReportType.ASYNC_EXEC
-        #     },
-        #     expires=3600,
-        # )
-        # exec_result = {
-        #     "task_id": apply_async_resound.task_id,
-        #     "task_state": apply_async_resound.state
-        # }
 
         # 异步执行
         exec_result = await services.step_curd.batch_execute_cases(

@@ -45,8 +45,8 @@ async def create_report(
     新增报告。
 
     :param report_in: 报告入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.report_curd.create_report(report_in)
@@ -79,10 +79,10 @@ async def delete_report(
     """
     按id或code删除报告。
 
-    :param report_id: 报告主键 ID
+    :param report_id: 报告主键ID
     :param report_code: 报告业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.report_curd.delete_report(report_id=report_id, report_code=report_code)
@@ -113,8 +113,8 @@ async def update_report(
     按id或code更新报告。
 
     :param report_in: 报告入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.report_curd.update_report(report_in)
@@ -147,10 +147,10 @@ async def get_report(
     """
     按id或code查询报告。
 
-    :param report_id: 报告主键 ID
+    :param report_id: 报告主键ID
     :param report_code: 报告业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if report_id:
@@ -184,8 +184,8 @@ async def search_reports(
     按条件查询报告。
 
     :param report_in: 报告入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()
@@ -261,7 +261,7 @@ async def search_reports(
             )
             for obj in instances
         ])
-        # 用列表推导式填充 case_name 并生成最终数据
+        # 用列表推导式填充case_name并生成最终数据
         data = [
             {**item, "case_name": case_name_map.get(item["case_id"], "")}
             for item in report_instances

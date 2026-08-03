@@ -54,7 +54,7 @@ from backend.services import get_current_username
 
 autotest_case = APIRouter()
 
-# 导出数量阈值：超过该值走异步 Celery 导出
+# 导出数量阈值：超过该值走异步Celery导出
 EXPORT_ASYNC_THRESHOLD = 10
 
 
@@ -67,8 +67,8 @@ async def create_case(
     新增用例。
 
     :param case_in: 用例入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.case_curd.create_case(case_in)
@@ -101,10 +101,10 @@ async def delete_case(
     """
     按id或code删除用例。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param case_code: 用例业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.case_curd.delete_case(case_id=case_id, case_code=case_code)
@@ -137,8 +137,8 @@ async def update_case(
     按id或code更新除用例。
 
     :param case_in: 用例入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.case_curd.update_case(case_in)
@@ -171,10 +171,10 @@ async def get_case(
     """
     按id或code查询用例。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param case_code: 用例业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if case_id:
@@ -232,8 +232,8 @@ async def search_cases(
     按条件查询用例。
 
     :param case_in: 用例入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()
@@ -337,7 +337,7 @@ async def get_request_step_project_ids(
     - TCP请求：step.request_project_id
     - 数据库请求：step.database_operates[*].project_id（可能多个）
 
-    同时递归遍历 children 与 quote_steps（引用公共脚本展开后的步骤）。
+    同时递归遍历children与quote_steps（引用公共脚本展开后的步骤）。
     """
     try:
         project_ids: List[int] = await services.step_curd.get_request_step_project_ids(
@@ -360,22 +360,22 @@ async def export_testcases_xlsx(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    同步导出公共接口用例的请求头与请求体为 xlsx（数量不超过 EXPORT_ASYNC_THRESHOLD）。
+    同步导出公共接口用例的请求头与请求体为xlsx（数量不超过EXPORT_ASYNC_THRESHOLD）。
 
     :param case_ids: 用例主键列表
-    :param services: 自动化测试 CRUD 依赖聚合
+    :param services: 自动化测试CRUD依赖聚合
     :return: xlsx 文件流
     """
     try:
         if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例")
+            return ParameterResponse(message="请至少选择一个用例(公共接口)")
         if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
-            return ParameterResponse(message=f"导出数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
+            return ParameterResponse(message=f"选择的用例(公共接口)数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
         cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
         if invalid:
-            return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
+            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
         workbook = build_export_workbook(cases_data=cases_data)
-        # 先落临时文件再以 FileResponse 分块流式返回，避免整文件驻留内存OOM；发送后自动清理
+        # 先落临时文件再以FileResponse分块流式返回，避免整文件驻留内存OOM；发送后自动清理
         temp = tempfile.NamedTemporaryFile(prefix="krun_export_", suffix=".xlsx", delete=False)
         temp_path = temp.name
         temp.close()
@@ -403,15 +403,15 @@ async def export_testcases_async(
     任务生成 xlsx 并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应（含 celery_task_id）
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应（含celery_task_id）
     """
     try:
         if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例")
+            return ParameterResponse(message="请至少选择一个用例(公共接口)")
         _, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
         if invalid:
-            return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
+            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
         apply_async_result = export_testcases_task.apply_async(
             kwargs={
                 "case_ids": case_ids,
@@ -443,17 +443,17 @@ async def export_case_scripts_xlsx(
     产出文件可直接用于「导入脚本」（更新或新增公共接口）。
 
     :param case_ids: 用例主键列表
-    :param services: 自动化测试 CRUD 依赖聚合
+    :param services: 自动化测试CRUD依赖聚合
     :return: xlsx 文件流
     """
     try:
         if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例")
+            return ParameterResponse(message="请至少选择一个用例(公共接口)")
         if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
-            return ParameterResponse(message=f"导出数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
+            return ParameterResponse(message=f"选择的用例(公共接口)数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
         rows, invalid = await prepare_script_export_rows(case_ids=case_ids, services=services)
         if invalid:
-            return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
+            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
         workbook = build_script_workbook(rows)
         # 先落临时文件再以 FileResponse 分块流式返回，避免整文件驻留内存OOM；发送后自动清理
         temp = tempfile.NamedTemporaryFile(prefix="krun_export_", suffix=".xlsx", delete=False)
@@ -483,15 +483,15 @@ async def export_case_scripts_async(
     任务生成 xlsx 并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应（含 celery_task_id）
+    :param services: 
+    :return: 统一HTTP响应，含celery_task_id）
     """
     try:
         if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例")
+            return ParameterResponse(message="请至少选择一个用例(公共接口)")
         _, invalid = await prepare_script_export_rows(case_ids=case_ids, services=services)
         if invalid:
-            return ParameterResponse(message="存在不合规用例，已取消导出", data={"invalid": invalid})
+            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
         apply_async_result = export_case_scripts_task.apply_async(
             kwargs={
                 "case_ids": case_ids,
@@ -523,8 +523,8 @@ async def import_case_scripts(
     用例类型固定公共接口、用例属性固定正用例；全部行校验通过才在单事务内落库。
 
     :param file: 模板 xlsx 文件
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应（含新增/更新计数或不合规行明细）
+    :param services: 
+    :return: 统 HTTP响应（含新增/更新计数或不合规行明细）
     """
     if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的模板文件")

@@ -45,8 +45,8 @@ async def create_project_info(
     新增应用。
 
     :param project_in: 应用入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.project_curd.create_project(project_in=project_in)
@@ -79,10 +79,10 @@ async def delete_project_info(
     """
     按id或code删除应用。
 
-    :param project_id: 应用主键 ID
+    :param project_id: 应用主键ID
     :param project_code: 应用业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.project_curd.delete_project(project_id=project_id, project_code=project_code)
@@ -115,8 +115,8 @@ async def delete_projects_batch(
     按id或code列表删除项目。
 
     :param project_in: 应用入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         count = await services.project_curd.delete_projects(project_in=project_in)
@@ -136,8 +136,8 @@ async def update_project_info(
     按id或code更新应用。
 
     :param project_in: 应用入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.project_curd.update_project(project_in=project_in)
@@ -170,10 +170,10 @@ async def get_project_info(
     """
     按id或code查询应用。
 
-    :param project_id: 应用主键 ID
+    :param project_id: 应用主键ID
     :param project_code: 应用业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if project_id:
@@ -205,8 +205,8 @@ async def get_env_name_list(
     """
     查询应用名称(去重)。
 
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         names: List[str] = await services.project_curd.model.filter(state__not=1).distinct().values_list("project_name", flat=True)
@@ -228,8 +228,8 @@ async def search_project_info(
     按条件查询应用。
 
     :param project_in: 应用入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()

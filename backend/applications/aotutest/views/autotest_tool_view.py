@@ -23,11 +23,11 @@ autotest_tool = APIRouter()
 
 
 def _get_func_desc(attr_name: str) -> str:
-    """从 GenerateUtils 获取属性/方法的 doc 作为简短说明，无则返回空字符串。"""
+    """从 GenerateUtils 获取属性/方法的doc作为简短说明，无则返回空字符串。"""
     if not hasattr(GenerateUtils, attr_name):
         return ""
     attr = getattr(GenerateUtils, attr_name)
-    # 可能是 property，取 fget 的 doc
+    # 可能是property，取fget的doc
     if isinstance(attr, property) and attr.fget is not None:
         doc = inspect.getdoc(attr.fget)
     else:
@@ -83,11 +83,11 @@ def _build_func_list_with_desc1() -> List[Dict[str, Any]]:
 def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
     """
     获取类下所有公共方法信息
-    支持：实例方法 / @classmethod / @staticmethod
+    支持：实例方法/@classmethod/@staticmethod
     返回结构：[{"name": "函数名(干净无类型参数)", "desc": "函数首行文档注释"}]
     规则：
     1. 仅收集非下划线开头公共方法
-    2. 剔除 self / cls
+    2. 剔除 self/cls
     3. 剔除所有类型注解、返回值注解
     4. 保留参数默认值
     5. desc 取函数首行文档注释，无注释则为空
@@ -111,7 +111,7 @@ def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
             sig = inspect.signature(member)
             params = list(sig.parameters.values())
 
-            # 剔除 self / cls
+            # 剔除 self/cls
             if params:
                 first_p = params[0]
                 if first_p.name in ("self", "cls"):
@@ -148,7 +148,7 @@ async def get_func_info():
     """
     辅助函数查询。
 
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         func_list = _build_func_list_with_desc2(GenerateUtils)

@@ -41,7 +41,7 @@ async def create_role(
     :param role_in: 角色入参
     :param current_user: 当前登录用户
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await role_crud.create_role(role_in=role_in, created_user=current_user.username)
@@ -61,7 +61,7 @@ async def delete_role_one(
 
     :param role_id: 角色 ID
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await role_crud.delete_role(role_id=role_id)
@@ -85,7 +85,7 @@ async def delete_roles_batch(
 
     :param body_in: 角色批量删除入参
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         count = await role_crud.delete_roles(
@@ -111,7 +111,7 @@ async def update_role(
     :param role_in: 角色入参
     :param current_user: 当前登录用户
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     update_dict = role_in.model_dump(exclude_unset=True, exclude={"id"})
     update_dict["updated_user"] = current_user.username
@@ -132,7 +132,7 @@ async def get_role_by(
     :param code: 角色代码
     :param name: 角色名称
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     where: dict = {}
     if code:
@@ -160,7 +160,7 @@ async def list_role(
     :param order: 排序字段
     :param name: 角色名称
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     q = Q()
     if name:
@@ -182,7 +182,7 @@ async def get_role_authorized(
 
     :param id: 角色 ID
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     role_obj = await role_crud.get_or_error(id=id)
     data = await role_obj.to_dict(m2m=True)
@@ -199,7 +199,7 @@ async def update_role_authorized(
 
     :param role_in: 角色菜单与路由权限入参
     :param role_crud: 角色 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     role_obj = await role_crud.get_or_none(id=role_in.id)
     await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)

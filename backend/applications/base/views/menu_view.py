@@ -73,7 +73,7 @@ async def list_menu(
     :param name: 菜单名称（子串匹配）
     :param menu_type: 菜单类型
     :param menu_crud: 菜单 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
 
     async def get_menu_with_children(menu_id: int):
@@ -112,7 +112,7 @@ async def get_menu(
 
     :param menu_id: 菜单ID
     :param menu_crud: 菜单 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)
@@ -135,7 +135,7 @@ async def create_menu(
 
     :param menu_in: 菜单入参
     :param menu_crud: 菜单 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await menu_crud.create_menu(menu_in=menu_in)
@@ -159,7 +159,7 @@ async def update_menu(
 
     :param menu_in: 菜单入参
     :param menu_crud: 菜单 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await menu_crud.update_menu(menu_in=menu_in)
@@ -181,7 +181,7 @@ async def delete_menu(
 
     :param id: 菜单ID
     :param menu_crud: 菜单 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     child_menu_count = await menu_crud.model.filter(parent_id=id).count()
     if child_menu_count > 0:

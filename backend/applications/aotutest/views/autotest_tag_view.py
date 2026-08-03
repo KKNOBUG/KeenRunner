@@ -47,8 +47,8 @@ async def create_tag_info(
     新增标签。
 
     :param tag_in: 标签入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.tag_curd.create_tag(tag_in=tag_in)
@@ -81,10 +81,10 @@ async def delete_tag_info(
     """
     按id或code删除标签。
 
-    :param tag_id: 标签主键 ID
+    :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.tag_curd.delete_tag(tag_id=tag_id, tag_code=tag_code)
@@ -117,8 +117,8 @@ async def delete_tag_batch(
     按id或code列表删除标签。
 
     :param tag_in: 标签入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         count = await services.tag_curd.delete_tags(tag_in=tag_in)
@@ -138,8 +138,8 @@ async def update_tag_info(
     按id或code更新标签。
 
     :param tag_in: 标签入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.tag_curd.update_tag(tag_in=tag_in)
@@ -176,10 +176,10 @@ async def get_tag_info(
     """
     按id或code查询标签。
 
-    :param tag_id: 标签主键 ID
+    :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if tag_id:
@@ -215,8 +215,8 @@ async def search_tags_info(
     按条件查询标签。
 
     :param tag_in: 标签入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()

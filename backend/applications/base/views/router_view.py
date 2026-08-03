@@ -34,7 +34,7 @@ async def create_router(
 
     :param router_in: 路由入参
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await router_crud.create_router(router_in=router_in)
@@ -56,7 +56,7 @@ async def delete_router(
 
     :param router_id: 路由ID
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await router_crud.delete_router(router_id)
@@ -78,7 +78,7 @@ async def update_user(
 
     :param router_in: 路由入参
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await router_crud.update_router(router_in)
@@ -100,7 +100,7 @@ async def get_user(
 
     :param router_id: 路由ID
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     instance = await router_crud.get_or_none(id=router_id)
     if not instance:
@@ -120,7 +120,7 @@ async def get_routers(
 
     :param router_in: 路由查询入参
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     page = router_in.page
     page_size = router_in.page_size
@@ -168,7 +168,7 @@ async def list_router(
     :param summary: 路由作用简介
     :param tags: 路由所属标签
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     q = Q()
     if path:
@@ -194,7 +194,7 @@ async def refresh_router(
 
     :param request: HTTP 请求对象
     :param router_crud: 路由 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     app = request.app
     data = await router_crud.refresh_router(app=app)

@@ -51,8 +51,8 @@ async def create_task_info(
     新增任务。
 
     :param task_in: 任务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.task_curd.create_task(task_in=task_in)
@@ -85,10 +85,10 @@ async def delete_task_info(
     """
     按id或code删除任务。
 
-    :param task_id: 任务主键 ID
+    :param task_id: 任务主键ID
     :param task_code: 任务业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.task_curd.delete_task(task_id=task_id, task_code=task_code)
@@ -119,8 +119,8 @@ async def update_task_info(
     按id或code更新任务。
 
     :param task_in: 任务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.task_curd.update_task(task_in=task_in)
@@ -153,10 +153,10 @@ async def get_task_info(
     """
     按id或code查询任务。
 
-    :param task_id: 任务主键 ID
+    :param task_id: 任务主键ID
     :param task_code: 任务业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if task_id:
@@ -190,8 +190,8 @@ async def search_tasks_info(
     按条件查询任务。
 
     :param task_in: 任务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()
@@ -253,8 +253,8 @@ async def run_task_info(
     立即执行任务。
 
     :param task_in: 任务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         task_id = task_in.get("task_id")
@@ -294,8 +294,8 @@ async def start_task_info(
     启动任务（启用调度）。
 
     :param task_in: 任务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         task_id = task_in.get("task_id")
@@ -329,8 +329,8 @@ async def stop_task_info(
     停止任务（关闭调度）。
 
     :param task_in: 任务入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         task_id = task_in.get("task_id")
@@ -364,8 +364,8 @@ async def search_task_records(
     任务执行记录查询。
 
     :param record_in: 任务执行记录查询入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         total, instances = await services.record_curd.select_records(record_in=record_in)
@@ -392,11 +392,11 @@ async def download_task_record_attachment(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按执行记录 attachments 项下载文件（兼容旧 task_summary 仅含 file_path）。
+    按执行记录 attachments 项下载文件。
 
     :param record_id: 执行记录主键
     :param key: 附件标识（信封 attachments[].key）
-    :param services: 自动化测试 CRUD 依赖聚合
+    :param services: 自动化测试CRUD依赖聚合
     :return: 文件流或统一错误响应
     """
     try:

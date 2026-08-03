@@ -60,7 +60,7 @@ autotest_data_source = APIRouter()
 
 
 async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[str, Any]:
-    """序列化单条数据源(与 env 视图 replace id 为业务主键字段风格一致）。"""
+    """序列化单条数据源。"""
     data = await instance.to_dict(
         exclude_fields={
             "state",
@@ -74,7 +74,7 @@ async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[st
         },
         replace_fields={"id": "data_source_id"},
     )
-    # Excel/pandas 可能留下 NaN，标准 JSON 无法序列化
+    # Excel/pandas可能留下NaN，标准JSON无法序列化
     return json_safe_value(data)
 
 
@@ -124,8 +124,8 @@ async def create_data_source_info(
     新增数据源。
 
     :param data_in: 数据源入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.data_source_curd.create_data_source(data_source_in=data_in)
@@ -154,14 +154,14 @@ async def delete_data_source_info(
     """
     删除数据源(软删)。
 
-    :param data_source_id: 数据源主键 ID
+    :param data_source_id: 数据源主键ID
     :param data_source_code: 数据源业务标识
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param case_code: 用例业务标识
-    :param step_id: 步骤主键 ID
+    :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         instance = await services.data_source_curd.delete_data_source(
@@ -190,9 +190,9 @@ async def unbind_case_data_source(
     """
     解绑用例下全部数据源：软删除该用例所有数据源记录，并清空步骤上的数据源指针。
 
-    :param case_id: 用例主键 ID
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param case_id: 用例主键ID
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         result = await services.data_source_curd.unbind_case_data_sources(case_id=case_id)
@@ -214,8 +214,8 @@ async def update_data_source_info(
     更新数据源。
 
     :param data_in: 数据源入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         effective = data_in
@@ -259,8 +259,8 @@ async def save_or_update_data_source_info(
     case_code 缺失时自动查询用例表补齐。
 
     :param data_in: 数据源入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         case_id: int = data_in.case_id
@@ -388,9 +388,9 @@ async def query_case_name(
 
     合并当前用例下所有数据源的 dataset_names，去重并保持出现顺序。
 
-    :param case_id: 用例主键 ID
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param case_id: 用例主键ID
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     if not case_id:
         return ParameterResponse(message="查询失败, 参数(case_id)不允许为空")
@@ -419,8 +419,8 @@ async def search_data_source_info(
     按条件分页查询数据源。
 
     :param sel_in: 数据源查询入参
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         q = Q()
@@ -469,7 +469,7 @@ async def get_data_source_by_case_step(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 
 ):
-    """未传 step 条件时返回该用例下数据源列表；传入 step 条件时返回单条。"""
+    """未传step条件时返回该用例下数据源列表；传入step条件时返回单条。"""
     try:
         result = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
@@ -500,10 +500,10 @@ async def get_scene_names_by_case(
     """
     返回当前用例下所有已落库数据源的场景列名信息，用于无数据源绑定步骤生成空白模板。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param case_code: 用例标识代码
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         if not case_id and not (case_code or "").strip():
@@ -599,11 +599,11 @@ async def get_dataset_scenario_info(
     """
     查询某步骤下单个数据集场景。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param step_code: 步骤业务标识
     :param dataset_name: 数据集场景名称
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         scenario = await services.data_source_curd.get_dataset_scenario(
@@ -622,7 +622,7 @@ async def get_dataset_scenario_info(
 
 @autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据集导入模板xlsx")
 async def import_template_download():
-    """分发仓库内置于 output/template 的 xlsx（HTTP/TCP 请求步骤共用）；流式读取，不加 UTF-8 BOM，避免损坏二进制格式。"""
+    """分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。"""
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
         return NotFoundResponse(message="导入模板文件不存在，请确认已部署 output/template 下模板文件")
@@ -650,13 +650,13 @@ async def single_step_dataset_upload(
     """
     参数化驱动-单步骤数据集上传。
 
-    :param case_id: 用例主键 ID
-    :param step_id: 步骤主键 ID
+    :param case_id: 用例主键ID
+    :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param file_desc: 文件描述
     :param file: 上传文件
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的数据驱动文件")
@@ -764,7 +764,7 @@ async def single_step_dataset_download(
         step_code: str = Query(..., description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """从数据库 dataframe 字段导出 xlsx（不依赖前端当前表格状态）。"""
+    """从数据库dataframe字段导出xlsx（不依赖前端当前表格状态）。"""
     try:
         instance = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
@@ -805,17 +805,17 @@ async def batch_step_dataset_upload(
     """
     参数化驱动-多步骤数据集批量上传。
 
-    按 sheet 名匹配步骤树中的 HTTP/TCP 请求步骤（步骤名唯一），校验通过后逐步骤创建数据源。
+    按 sheet 名匹配步骤树中的HTTP/TCP请求步骤（步骤名唯一），校验通过后逐步骤创建数据源。
     校验规则（任一不满足即整体拒绝，不落库）：
-    - 每个 sheet 名均能匹配到步骤树中的 HTTP/TCP 请求步骤；
-    - 各 sheet 的场景数量一致；
-    - 各 sheet 的场景名称及顺序一致。
+    - 每个sheet名均能匹配到步骤树中的HTTP/TCP请求步骤；
+    - 各sheet的场景数量一致；
+    - 各sheet的场景名称及顺序一致。
 
-    :param case_id: 用例主键 ID
+    :param case_id: 用例主键ID
     :param file_desc: 文件描述
     :param file: 上传文件
-    :param services: 自动化测试 CRUD 依赖聚合
-    :return: 统一 HTTP 响应
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     if not case_id:
         return ParameterResponse(message="case_id 不能为空")
@@ -947,11 +947,11 @@ async def batch_step_dataset_download(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    汇总导出用例下所有 HTTP/TCP 请求步骤绑定的数据源为单个 xlsx：
-    每个步骤一个 sheet（sheet 名=步骤名，数据=该步骤数据源的 dataframe）。
+    汇总导出用例下所有HTTP/TCP请求步骤绑定的数据源为单个xlsx：
+    每个步骤一个sheet（sheet 名=步骤名，数据=该步骤数据源的dataframe）。
 
-    :param case_id: 用例主键 ID
-    :param services: 自动化测试 CRUD 依赖聚合
+    :param case_id: 用例主键ID
+    :param services: 自动化测试CRUD依赖聚合
     :return: xlsx 文件流
     """
     try:

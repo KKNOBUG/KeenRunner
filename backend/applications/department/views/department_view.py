@@ -50,7 +50,7 @@ async def create_dept(
     :param department_in: 部门入参
     :param current_user: 当前登录用户
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await dept_crud.create_department(
@@ -77,7 +77,7 @@ async def delete_dept_one(
 
     :param department_id: 部门 ID
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await dept_crud.delete_department(department_id)
@@ -99,7 +99,7 @@ async def delete_depts_batch(
 
     :param body_in: 批量删除入参
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         count = await dept_crud.delete_departments(body_in.department_ids)
@@ -122,7 +122,7 @@ async def update_dept(
     :param department_in: 部门入参
     :param current_user: 当前登录用户
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await dept_crud.update_department(
@@ -149,7 +149,7 @@ async def get_dept(
 
     :param department_id: 部门 ID
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     instance = await dept_crud.get_or_none(id=department_id)
     if not instance:
@@ -169,7 +169,7 @@ async def list_dept(
 
     :param name: 部门名称（模糊）
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     dept_tree = await dept_crud.get_dept_tree(name)
     return SuccessResponse(data=dept_tree)
@@ -185,7 +185,7 @@ async def search_dept(
 
     :param department_in: 部门入参
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     page = department_in.page
     page_size = department_in.page_size

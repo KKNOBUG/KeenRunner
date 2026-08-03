@@ -126,7 +126,7 @@ def _build_claim_response(text: str) -> str:
     etree.SubElement(approval, "Hospital").text = hospital
     etree.SubElement(approval, "ApprovalDate").text = datetime.datetime.now().strftime("%Y-%m-%d")
     etree.SubElement(approval, "PaymentDate").text = (
-        datetime.datetime.now() + datetime.timedelta(days=5)
+            datetime.datetime.now() + datetime.timedelta(days=5)
     ).strftime("%Y-%m-%d")
 
     documents = etree.SubElement(resp_body, "RequiredDocuments")
@@ -209,10 +209,10 @@ _SAMPLE_REQUEST_XML = """<?xml version="1.0" encoding="UTF-8"?>
 @autotest_http_xml_test.post(path="/xml", summary="HTTP XML测试接口", description="保险理赔申请")
 async def http_xml_test_endpoint(request: Request):
     """
-    接收 XML 格式请求报文（保险理赔申请），返回 XML 格式响应。
+    接收XML格式请求报文（保险理赔申请），返回XML格式响应。
 
-    请求体为 XML 格式，包含 Head（请求头）和 Body（保单信息 + 报案人信息 + 理赔信息），
-    响应为 XML 格式，包含保单信息、报案人信息、审批结果、所需材料清单、处理时间线、联系方式等 40+ 字段。
+    请求体为XML格式，包含Head（请求头）和Body（保单信息 + 报案人信息 + 理赔信息），
+    响应为XML格式，包含保单信息、报案人信息、审批结果、所需材料清单、处理时间线、联系方式等40+字段。
 
     用于测试 HTTP 请求步骤中 XML 报文类型的发送与响应解析。
     """
@@ -235,10 +235,10 @@ async def http_xml_test_endpoint(request: Request):
 @autotest_http_xml_test.get("/sample/request", summary="获取XML请求示例报文")
 async def get_http_xml_sample_request():
     """
-    获取 HTTP XML 测试接口的请求报文示例（保险理赔申请）。
+    获取HTTP、XML测试接口的请求报文示例（保险理赔申请）。
 
-    将此 XML 报文作为 HTTP 请求步骤的请求体（选择 xml 类型），
-    发送到 POST /xml 接口，服务器将返回 XML 格式的理赔审批结果。
+    将此XML报文作为HTTP请求步骤的请求体（选择xml类型），
+    发送到 POST/xml 接口，服务器将返回XML格式的理赔审批结果。
     """
     return SuccessResponse(data=_SAMPLE_REQUEST_XML)
 

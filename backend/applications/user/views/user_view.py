@@ -51,7 +51,7 @@ async def create_user(
 
     :param user_in: 用户入参
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await user_crud.create_user(user_in=user_in)
@@ -73,7 +73,7 @@ async def delete_user(
 
     :param user_id: 用户 ID
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await user_crud.delete_user(user_id)
@@ -97,7 +97,7 @@ async def delete_users(
 
     :param user_in: 用户入参
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         deleted_ids = await user_crud.delete_users(user_in=user_in)
@@ -119,7 +119,7 @@ async def update_user(
 
     :param user_in: 用户入参
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     user_id: int = user_in.user_id
     try:
@@ -145,7 +145,7 @@ async def get_user(
     :param user_id: 用户 ID
     :param user_crud: 用户 CRUD 服务
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
     if not instance:
@@ -166,7 +166,7 @@ async def get_user_by_username(
 
     :param username: 用户账号
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     instance = await user_crud.get_by_username(username=username)
     if not instance:
@@ -209,7 +209,7 @@ async def list_user(
     :param dept_id: 主键 ID
     :param user_crud: 用户 CRUD 服务
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     q = Q()
     if username:
@@ -259,7 +259,7 @@ async def get_users(
     :param user_in: 用户入参
     :param user_crud: 用户 CRUD 服务
     :param dept_crud: 部门 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     q = Q()
     if user_in.username:
@@ -318,7 +318,7 @@ async def update_user_password(
 
     :param req_in: 修改密码入参
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
     instance = await user_crud.get_or_error(user_id)
@@ -341,7 +341,7 @@ async def reset_password(
 
     :param user_id: 用户 ID
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     data = await user_crud.reset_password(user_id)
     return SuccessResponse(message="重置密码", data=data, total=1)
@@ -355,7 +355,7 @@ async def logout(
     用户登出。
 
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
     try:

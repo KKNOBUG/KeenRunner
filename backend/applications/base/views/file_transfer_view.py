@@ -47,7 +47,7 @@ async def upload_file(
     :param check_filetype: 是否检查文件后缀是否符合规范
     :param check_filesize: 是否检查文件体积是否符合规范
     :param upload_file_size: 文件的体积限制
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     state, detail = await FileTransfer.save_upload_file_chunks(
         upload_file=file,
@@ -70,7 +70,7 @@ async def download_file(path: Union[str, Path] = Form(..., description="文件�
     下载文件。
 
     :param path: 文件下载路径
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
     filename: str = quote(os.path.basename(path).encode("utf-8"))
@@ -90,7 +90,7 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
     读取文件。
 
     :param path: 文件读取路径
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
     try:
@@ -113,7 +113,7 @@ async def move_file(
 
     :param src_path: 文件原始路径
     :param dst_path: 文件目标路径
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     src_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, src_path)
     dst_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, dst_path)

@@ -38,7 +38,7 @@ async def get_login_access_token(
 
     :param credentials: 登录凭证入参
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         user: User = await user_crud.authenticate(credentials)
@@ -83,7 +83,7 @@ async def get_user_menu():
     """
     查看当前用户菜单。
 
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()
@@ -119,7 +119,7 @@ async def get_userinfo(
     查看当前用户信息。
 
     :param user_crud: 用户 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
     user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
@@ -134,7 +134,7 @@ async def get_user_router():
     """
     查看当前用户路由。
 
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     user_id = CTX_USER_ID.get()
     user_obj = await User.filter(id=user_id).first()

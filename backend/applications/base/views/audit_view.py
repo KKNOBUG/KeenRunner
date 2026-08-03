@@ -49,7 +49,7 @@ async def list_audit(
     :param start_time: 开始时间
     :param end_time: 结束时间
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     q = Q()
     if username:
@@ -86,7 +86,7 @@ async def search_audit(
 
     :param audit_in: 审计日志查询入参
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     q = Q()
     if audit_in.username:
@@ -125,7 +125,7 @@ async def get_audit(
 
     :param audit_id: 审计日志 ID
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await audit_crud.get_by_id(audit_id=audit_id)
@@ -152,7 +152,7 @@ async def get_audit_by_user(
     :param page: 页码
     :param page_size: 每页条数
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         q = Q(user_id=user_id)
@@ -176,7 +176,7 @@ async def get_recent_audits(
     :param limit: 返回数量
     :param user_id: 用户 ID
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         audit_logs = await audit_crud.get_recent_audits(limit=limit, user_id=user_id)
@@ -197,7 +197,7 @@ async def get_audit_statistics(
 
     :param user_id: 用户 ID
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         data = await audit_crud.get_statistics_by_user(user_id=user_id)
@@ -217,7 +217,7 @@ async def delete_audit(
 
     :param audit_id: 审计日志 ID
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         instance = await audit_crud.delete_by_id(audit_id=audit_id)
@@ -241,7 +241,7 @@ async def delete_audits_batch(
 
     :param body_in: 审计日志批量删除入参
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         count = await audit_crud.delete_by_ids(body_in.audit_ids)
@@ -262,7 +262,7 @@ async def delete_audits_by_user(
 
     :param user_id: 用户 ID
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         count = await audit_crud.delete_by_user_id(user_id=user_id)
@@ -285,7 +285,7 @@ async def delete_audits_by_time(
     :param start_time: 开始时间
     :param end_time: 结束时间
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         count = await audit_crud.delete_by_time_range(start_time=start_time, end_time=end_time)
@@ -304,7 +304,7 @@ async def clear_all_audits(
     清空所有审计日志（危险操作）。
 
     :param audit_crud: 审计日志 CRUD 服务
-    :return: 统一 HTTP 响应
+    :return: 统一HTTP响应
     """
     try:
         count = await audit_crud.clear_all()
