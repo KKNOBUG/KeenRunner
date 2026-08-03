@@ -21,13 +21,36 @@ from backend.applications.aotutest.schemas.autotest_record_schema import (
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
-from backend.core.exceptions import ParameterException
+from backend.core.exceptions import ParameterException, NotFoundException
 
 
 class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestApiRecordInfo)
+
+    async def get_by_id(self, record_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiRecordInfo]:
+        """
+        根据主键ID查询应用。
+
+        :param record_id: 执行记录主键ID
+        :param on_error: 未找到时是否抛出NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 应用实例或None
+        :raises ParameterException: record_id为空
+        :raises NotFoundException: on_error为True且记录不存在
+        """
+        if not record_id:
+            error_message: str = "查询执行记录信息失败, 参数[record_id]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        instance = await self.model.filter(id=record_id, **kwargs).first()
+        if not instance and on_error:
+            error_message: str = f"查询执行记录信息失败, 记录[id={record_id}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        return instance
 
     async def get_by_celery_id(self, celery_id: str, **kwargs) -> Optional[AutoTestApiRecordInfo]:
         """
