@@ -41,11 +41,11 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     pid = int(project_id)
     name = (env_name or "").strip()
     if not name:
-        raise ParameterException(message="执行环境名称[env_name]不允许为空")
+        raise ParameterException(message="参数[env_name]不允许为空")
 
     env_row = await AutoTestApiEnvEnumInfo.filter(env_name__iexact=name, state__not=1).first()
     if not env_row:
-        raise NotFoundException(message=f"环境枚举不存在: env_name={name!r}")
+        raise NotFoundException(message=f"查询环境枚举失败, 记录[env_name={name}]不存在")
 
     cfg = (
         await AutoTestApiEnvConfigInfo.filter(
@@ -60,7 +60,7 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     if not cfg or not str(cfg.config_host or "").strip():
         raise NotFoundException(
             message=(
-                f"未找到可用的API环境配置(config_type={AutoTestConfigNodeType.API.value!r} 且config_host非空): "
+                f"未找到可用的API环境配置config_type={AutoTestConfigNodeType.API.value!r} 且config_host非空): "
                 f"[project_id={pid}, env_id={env_row.id}]"
             )
         )
