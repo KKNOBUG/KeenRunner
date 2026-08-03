@@ -50,7 +50,7 @@ class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
 
 
 class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
-    """保存或更新数据源入参（合并 create/update 为单一入口）。"""
+    """保存或更新数据源入参"""
 
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据源标识代码")
@@ -80,7 +80,7 @@ class AutoTestDataSourceSelect(BaseModel):
 
 
 class AutoTestDataSourceConditionQuery(BaseModel):
-    """按任意模型字段条件查询（内部附加 state__not=1）。"""
+    """按任意模型字段条件查询"""
 
     conditions: Dict[str, Any] = Field(..., description="与模型字段一致的等值条件")
     only_one: bool = Field(default=True, description="为 True 返回单条，否则返回列表")

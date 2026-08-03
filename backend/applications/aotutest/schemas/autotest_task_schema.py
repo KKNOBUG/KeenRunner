@@ -24,19 +24,10 @@ class AutoTestApiTaskCreate(BaseModel):
         description="任务业务类型",
     )
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
-    task_kwargs: Optional[Dict[str, Any]] = Field(
-        None,
-        description="轻量扩展参数：case_ids、initial_variables 等（不含 cases_execute_config）",
-    )
-    cases_execute_config: Optional[Dict[str, Any]] = Field(
-        None,
-        description="按用例ID的执行配置（权威字段）",
-    )
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
+    cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="按用例ID的执行配置")
     task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="Cron 触发表达式")
-    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(
-        AutoTestTaskPeriodicSwitch.INFINITY,
-        description="周期表达式(执行1次/执行N次)",
-    )
+    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(AutoTestTaskPeriodicSwitch.INFINITY, description="周期表达式(执行1次/执行N次)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(False, description="是否启动调度(True/False)")
@@ -52,21 +43,12 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[AutoTestTaskType] = Field(None, description="任务业务类型")
     task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
-    task_kwargs: Optional[Dict[str, Any]] = Field(
-        None,
-        description="轻量扩展参数：case_ids、initial_variables 等",
-    )
-    cases_execute_config: Optional[Dict[str, Any]] = Field(
-        None,
-        description="按用例ID的执行配置（权威字段）",
-    )
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
+    cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="按用例ID的执行配置")
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
     task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="Cron 触发表达式")
-    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(
-        None,
-        description="周期表达式(执行1次/执行N次)",
-    )
+    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(None, description="周期表达式(执行1次/执行N次)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")

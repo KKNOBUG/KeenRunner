@@ -48,7 +48,7 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
     report_code: Optional[str] = Field(
         None,
         max_length=64,
-        description="报告标识代码；执行引擎落库时传入与明细一致的预生成 code，未传时由 ORM 默认生成",
+        description="报告标识代码；执行引擎落库时传入与明细一致的预生成code，未传时由ORM默认生成",
     )
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
@@ -76,7 +76,7 @@ class AutoTestApiReportSelect(BaseModel):
     report_type: Optional[AutoTestReportType] = Field(None, description="报告类型")
     task_code: Optional[str] = Field(None, description="任务标识代码")
     batch_code: Optional[str] = Field(None, description="批次标识代码")
-    # True：仅用例页执行/调试产生的报告（无 task_code），排除任务调度
+    # True：仅用例页执行/调试产生的报告（task_code），排除任务调度
     exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")
 
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
@@ -85,6 +85,6 @@ class AutoTestApiReportSelect(BaseModel):
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
-    # 执行时间范围（按用例执行开始时间 case_st_time 筛选，格式 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss）
+    # 执行时间范围（按用例执行开始时间case_st_time筛选，格式YYYY-MM-DD或YYYY-MM-DD HH:mm:ss）
     date_from: Optional[str] = Field(None, description="执行开始时间-起")
     date_to: Optional[str] = Field(None, description="执行开始时间-止")

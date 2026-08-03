@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiProjectBase(BaseModel):
-    """应用（项目）公共字段（创建/更新/查询共用）。"""
+    """应用公共字段（创建/更新/查询共用）。"""
 
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
     project_desc: Optional[str] = Field(None, max_length=2048, description="应用描述")
@@ -28,7 +28,7 @@ class AutoTestApiProjectBase(BaseModel):
 
 
 class AutoTestApiProjectCreate(AutoTestApiProjectBase):
-    """创建应用（项目）入参。"""
+    """创建应用入参。"""
 
     project_name: str = Field(..., max_length=255, description="应用名称")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
@@ -39,7 +39,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
         """
         将开发负责人字段规范为列表（逗号分隔字符串拆分）。
 
-        :param v: 原始值（null / str / list）
+        :param v: 原始值（null/str/list）
         :return: 人员列表或原值
         """
         if v is None:
@@ -56,7 +56,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
         """
         将开发人员字段规范为列表（逗号分隔字符串拆分）。
 
-        :param v: 原始值（null / str / list）
+        :param v: 原始值（null/str/list）
         :return: 人员列表或原值
         """
         if v is None:
@@ -73,7 +73,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
         """
         将测试负责人字段规范为列表（逗号分隔字符串拆分）。
 
-        :param v: 原始值（null / str / list）
+        :param v: 原始值（null/str/list）
         :return: 人员列表或原值
         """
         if v is None:
@@ -90,7 +90,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
         """
         将测试人员字段规范为列表（逗号分隔字符串拆分）。
 
-        :param v: 原始值（null / str / list）
+        :param v: 原始值（null/str/list）
         :return: 人员列表或原值
         """
         if v is None:
@@ -103,7 +103,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
 
 
 class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
-    """更新应用（项目）入参。"""
+    """更新应用入参。"""
 
     project_id: Optional[int] = Field(None, description="应用ID")
     project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
@@ -111,14 +111,14 @@ class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
 
 
 class AutoTestApiProjectDelete(BaseModel):
-    """删除应用（项目）入参。"""
+    """删除应用入参。"""
 
     project_ids: Optional[List[int]] = Field(None, description="应用ID列表")
     project_codes: Optional[List[str]] = Field(None, description="应用标识代码列表")
 
 
 class AutoTestApiProjectSelect(AutoTestApiProjectBase):
-    """分页查询应用（项目）入参。"""
+    """分页查询应用入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")

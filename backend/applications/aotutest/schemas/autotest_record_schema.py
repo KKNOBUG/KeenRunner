@@ -34,10 +34,7 @@ class AutoTestApiRecordBase(BaseModel):
     report_type: Optional[AutoTestReportType] = Field(None, description="报告类型(异步执行/定时执行等)")
     batch_code: Optional[str] = Field(None, max_length=64, description="批次码(关联脚本报告)")
     case_ids: Optional[List[int]] = Field(None, description="本次执行的用例ID列表")
-    exec_snapshot: Optional[Dict[str, Any]] = Field(
-        None,
-        description="执行入参与调度快照：task_kwargs、cases_execute_config、crontab/periodic 等",
-    )
+    exec_snapshot: Optional[Dict[str, Any]] = Field(None, description="执行入参与调度快照")
     task_summary: Optional[Any] = Field(None, description="任务执行完整响应(对象)")
     task_error: Optional[str] = Field(None, description="错误信息")
     celery_node: Optional[str] = Field(None, max_length=512, description="Celery 任务节点名")
@@ -52,10 +49,7 @@ class AutoTestApiRecordCreate(AutoTestApiRecordBase):
     """创建任务执行观测记录入参。"""
 
     celery_id: str = Field(..., max_length=255, description="Celery 调度ID")
-    celery_status: AutoTestTaskStatus = Field(
-        default=AutoTestTaskStatus.RUNNING,
-        description="执行状态",
-    )
+    celery_status: AutoTestTaskStatus = Field(default=AutoTestTaskStatus.RUNNING, description="执行状态")
     case_ids: Optional[List[int]] = Field(default_factory=list, description="本次执行的用例ID列表")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
@@ -63,13 +57,13 @@ class AutoTestApiRecordCreate(AutoTestApiRecordBase):
         """
         转为落库字典，仅包含已设置字段。
 
-        :return: 可直接传入 CRUD.create 的字段字典
+        :return: 可直接传入CRUD.create的字段字典
         """
         return self.model_dump(exclude_unset=True, exclude_none=False)
 
 
 class AutoTestApiRecordUpdate(AutoTestApiRecordBase):
-    """更新任务执行观测记录入参（按 celery_id 部分更新）。"""
+    """更新任务执行观测记录入参（按celery_id部分更新）。"""
 
     celery_id: Optional[str] = Field(None, max_length=255, description="Celery 调度ID")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")

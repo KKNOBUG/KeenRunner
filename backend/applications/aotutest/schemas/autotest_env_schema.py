@@ -22,7 +22,7 @@ class AutoTestApiEnvCreate(BaseModel):
 
 
 class AutoTestApiEnvBase(BaseModel):
-    """环境枚举公共字段（更新/查询共用）。"""
+    """环境枚举公共字段。"""
 
     env_id: Optional[int] = Field(None, description="环境ID")
     env_code: Optional[str] = Field(None, max_length=64, description="环境标识代码")

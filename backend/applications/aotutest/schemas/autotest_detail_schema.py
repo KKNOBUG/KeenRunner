@@ -35,7 +35,7 @@ class DataBaseOperates(BaseModel):
 
 
 class RedisOperates(BaseModel):
-    """步骤执行明细中的单条 Redis 操作字段模型。"""
+    """步骤执行明细中的单条Redis操作字段模型。"""
 
     index: int = Field(..., ge=0, description="Redis操作序号")
     name: str = Field(..., max_length=128, description="Redis操作名称")
@@ -60,7 +60,7 @@ class ConditionsBase(BaseModel):
     @classmethod
     def validate_condition_compare(cls, v: Any) -> str:
         """
-        校验并规范化条件比较符为 AutoTestAssertionOperation 枚举值。
+        校验并规范化条件比较符为AutoTestAssertionOperation枚举值。
 
         :param v: 原始比较符
         :return: 规范化后的比较符字符串
@@ -129,7 +129,7 @@ class AutoTestApiDetailVarBase(BaseModel):
     @classmethod
     def normalize_step_exec_logger(cls, v: Any) -> Optional[List[str]]:
         """
-        将 step_exec_logger 规范为 list[str] 或 null，过滤空项。
+        将step_exec_logger规范为List[str]或null，过滤空项。
 
         :param v: 原始日志字段
         :return: 规范化后的日志列表，全空则返回 None
@@ -137,7 +137,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         if v is None:
             return None
         if not isinstance(v, list):
-            raise ValueError("step_exec_logger 须为 list[str] 或 null")
+            raise ValueError("参数[step_exec_logger]必须为List[str]或null值")
         out = [str(x) for x in v if x is not None and str(x) != ""]
         return out or None
 
@@ -147,7 +147,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         """
         将单条 database_operates 对象包装为列表。
 
-        :param v: 原始值（null / dict / list）
+        :param v: 原始值（null/dict/list）
         :return: 列表形式或原值
         """
         if v is None:
@@ -162,9 +162,9 @@ class AutoTestApiDetailVarBase(BaseModel):
     @classmethod
     def normalize_redis_operates(cls, v):
         """
-        将单条 redis_operates 对象包装为列表。
+        将单条redis_operates对象包装为列表。
 
-        :param v: 原始值（null / dict / list）
+        :param v: 原始值（null/dict/list）
         :return: 列表形式或原值
         """
         if v is None:
@@ -179,7 +179,7 @@ class AutoTestApiDetailVarBase(BaseModel):
     @classmethod
     def normalize_json_fields(cls, v):
         """
-        将嵌套模型/复杂字段转为可 JSON 序列化结构；失败时置空并写入 step_exec_logger。
+        将嵌套模型/复杂字段转为可JSON序列化结构；失败时置空并写入step_exec_logger。
 
         :param v: 原始入参字典或其它类型
         :return: 规范化后的入参
@@ -193,7 +193,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["conditions"] = conditions_value.model_dump()
             except Exception as e:
                 v["conditions"] = None
-                executive_logger.append(f"字段[conditions]标准化失败, 已置空, 错误描述: {e}")
+                executive_logger.append(f"字段[conditions]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         session_variables_value: Optional[List[StepVariablesBase]] = v.get("session_variables")
         if session_variables_value:
@@ -204,7 +204,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 ]
             except Exception as e:
                 v["session_variables"] = None
-                executive_logger.append(f"字段[session_variables]标准化失败, 已置空, 错误描述: {e}")
+                executive_logger.append(f"字段[session_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         defined_variables_value: Optional[List[StepVariablesBase]] = v.get("defined_variables")
         if defined_variables_value:
@@ -215,7 +215,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 ]
             except Exception as e:
                 v["defined_variables"] = None
-                executive_logger.append(f"字段[defined_variables]标准化失败, 已置空, 错误描述: {e}")
+                executive_logger.append(f"字段[defined_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         extract_variables_value: Optional[List[Dict[str, Any]]] = v.get("extract_variables")
         if extract_variables_value:
@@ -223,7 +223,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["extract_variables"] = orjson.loads(orjson.dumps(extract_variables_value))
             except Exception as e:
                 v["extract_variables"] = None
-                executive_logger.append(f"字段[extract_variables]标准化失败, 已置空, 错误描述: {e}")
+                executive_logger.append(f"字段[extract_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         assert_validators_value: Optional[List[Dict[str, Any]]] = v.get("assert_validators")
         if assert_validators_value:
@@ -231,7 +231,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["assert_validators"] = orjson.loads(orjson.dumps(assert_validators_value))
             except Exception as e:
                 v["assert_validators"] = None
-                executive_logger.append(f"字段[assert_validators]标准化失败, 已置空, 错误描述: {e}")
+                executive_logger.append(f"字段[assert_validators]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         database_operates_value: Optional[List[Dict[str, Any]]] = v.get("database_operates")
         if database_operates_value:
@@ -239,7 +239,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["database_operates"] = orjson.loads(orjson.dumps(database_operates_value))
             except Exception as e:
                 v["database_operates"] = None
-                executive_logger.append(f"字段[database_operates]标准化失败, 已置空, 错误描述: {e}")
+                executive_logger.append(f"字段[database_operates]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         if executive_logger:
             base = v.get("step_exec_logger")
@@ -248,14 +248,14 @@ class AutoTestApiDetailVarBase(BaseModel):
             elif isinstance(base, list):
                 base_list = [str(x) for x in base if x is not None and str(x) != ""]
             else:
-                raise ValueError("step_exec_logger 须为 list[str] 或 null")
+                raise ValueError("参数[step_exec_logger]必须为List[str]或null值")
             v["step_exec_logger"] = base_list + [str(x) for x in executive_logger]
 
         return v
 
 
 class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, AutoTestApiDetailResBase):
-    """步骤执行明细公共字段（创建/更新共用）。"""
+    """步骤执行明细公共字段。"""
 
     quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本ID")
     step_st_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行开始时间")
