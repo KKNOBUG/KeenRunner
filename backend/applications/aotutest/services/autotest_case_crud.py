@@ -38,10 +38,14 @@ def _normalize_case_tags(
     """用户脚本：允许打标签，公共脚本/公共接口: 禁止打标签。"""
     if case_type in PUBLIC_CASE_TYPES:
         if case_tags:
-            raise ParameterException(message=f"{context}, [公共脚本/公共接口]不支持打标签")
+            error_message: str = f"{context}, 用例类型为[公共脚本/公共接口]时不支持打标签"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         return None
     if not case_tags:
-        raise ParameterException(message=f"{context}参数[case_tags]不允许为空")
+        error_message: str = f"{context}, 参数[case_tags]不允许为空"
+        LOGGER.error(error_message)
+        raise ParameterException(message=error_message)
     return case_tags
 
 
@@ -211,7 +215,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         if effective_type in PUBLIC_CASE_TYPES:
             # 公共脚本/公共接口：无论是否传 case_tags，一律清空
             if update_dict.get("case_tags"):
-                error_message = "更新用例信息失败, 公共脚本/公共接口不支持打标签"
+                error_message = "更新用例信息失败, 用例类型为[公共脚本/公共接口]时不支持打标签"
                 LOGGER.error(error_message)
                 raise ParameterException(message=error_message)
             update_dict["case_tags"] = None
@@ -257,7 +261,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 await self._cascade_public_api_step_project(instance)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新用例信息失败, 用例[id={case_id}]或[code={case_code}]不存在, 错误描述: {e}"
+            error_message: str = f"更新用例信息失败, 记录[id={case_id}]或[code={case_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
@@ -287,9 +291,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             # 业务层验证：公共用例(脚本/接口)删除前检查是否被引用
             quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
             if quote_steps_count > 0:
-                error_message: str = (
-                    f"用例[id={case_id}]存在{quote_steps_count}个引用, 无法直接删除, 查询条件: [quote_case_id={case_id}]"
-                )
+                error_message: str = f"删除用例信息失败, 记录[id={case_id}]存在{quote_steps_count}个引用, 无法直接删除"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
@@ -391,11 +393,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 if case_tags:
                     await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
                 if not case_name:
-                    error_message: str = f"第{cid}条用例新增失败, 用例名称[case_name]字段不允许为空"
+                    error_message: str = f"第{cid}条用例新增失败, 参数[case_name]不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
                 if not case_project:
-                    error_message: str = f"第{cid}条用例新增失败, 用例所属项目[case_project]字段不允许为空"
+                    error_message: str = f"第{cid}条用例新增失败, 参数[case_project]不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 

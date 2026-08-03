@@ -100,7 +100,7 @@ async def create_step(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增步骤失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败, 异常描述: {e}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
 @autotest_step.delete("/delete", summary="删除步骤", description="根据id或code删除步骤信息")
@@ -170,7 +170,7 @@ async def update_step(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新步骤失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"修改失败，异常描述: {e}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @autotest_step.get("/get", summary="查询步骤", description="根据id或code查询步骤信息")
@@ -474,13 +474,13 @@ async def batch_update_steps_tree(
                 # 6. 构建返回结果
                 return SuccessResponse(message="更新用例及步骤树成功", data={"cases": case_result, "steps": step_result})
         except (TypeRejectException, NotFoundException, ParameterException, DataBaseStorageException, DataAlreadyExistsException) as e:
-            return FailureResponse(message=e.message)
+            return FailureResponse(message=str(e.message))
         except Exception as e:
             # 事务会自动回滚
             LOGGER.error(
                 f"发生未知错误，事务已回滚, "
                 f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}, \n"
+                f"异常描述: {e}, \n"
                 f"错误回溯: {traceback.format_exc()}"
             )
             raise
@@ -572,7 +572,7 @@ async def validate_step_tree(
         return SuccessResponse(message=message, data=result_data)
     except Exception as e:
         LOGGER.error(f"校验步骤树异常，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"校验步骤树异常, 异常描述: {e}")
+        return FailureResponse(message=f"校验步骤树异常，异常描述: {e}")
 
 
 @autotest_step.post("/http_debugging", summary="调试HTTP请求")
@@ -645,8 +645,8 @@ async def debug_http_request(
                 else:
                     request_url = f"{execute_env_host}:{execute_env_port}/{request_url}"
             except Exception as e:
-                LOGGER.error(f"HTTP请求调试异常, 错误描述: {e}\n{traceback.format_exc()}")
-                return FailureResponse(f"HTTP请求调试异常, 错误描述: {e}")
+                LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
+                return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
 
         # 记录执行日志，用于前端反馈
         debugging_logs: List[str] = []
@@ -1055,7 +1055,7 @@ async def debug_tcp_request(
 
         if not host or not port:
             return FailureResponse(
-                message="TCP请求调试失败, 目标服务器地址或端口未配置(请检查该环境下的 API 环境配置中的 config_host/config_port)"
+                message="TCP请求调试失败, 目标服务器地址或端口未配置(请检查该环境下的API环境配置中的config_host/config_port)"
             )
 
         # 发送TCP请求：json 发 request_body，xml/raw 发 request_text
@@ -1111,7 +1111,7 @@ async def debug_tcp_request(
                 error_message: str = (
                     f"【TCP请求调试】请求目标服务器发生未知错误,"
                     f"错误类型: {type(e).__name__},"
-                    f"错误描述: {e}"
+                    f"异常描述: {e}"
                 )
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message="TCP请求调试异常", data=error_message)
@@ -1220,7 +1220,7 @@ async def debug_tcp_request(
             }
         }
         LOGGER.info(f"TCP请求调试完成: 耗时: {duration}ms")
-        return SuccessResponse(message="TCP调试请求成功", data=result_data)
+        return SuccessResponse(message="TCP请求调试完成", data=result_data)
     except Exception as e:
         LOGGER.error(f"TCP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
@@ -1281,7 +1281,7 @@ async def debug_python_code(
                     for vc in assert_validators:
                         source: str = (vc.source or "").strip().lower()
                         if source and source not in ("session_variables", "变量池"):
-                            raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被允许")
+                            raise StepExecutionError(f"【代码请求(Python)】数据源类型 {source} 不被允许")
 
                     session_lookup_map: Dict[str, Any] = {}
                     session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))
@@ -1308,7 +1308,7 @@ async def debug_python_code(
                             "error": f"【断言验证】- 共计: {assert_failed_number}个断言验证未通过, 详情见报告明细",
                         }
                         LOGGER.info(f"Python代码调试失败(断言未通过): {step_name}")
-                        return SuccessResponse(message="Python代码调试失败", data=debugging_result, total=1)
+                        return FailureResponse(message="Python代码调试失败", data=debugging_result)
 
                 debugging_return["result"] = executive_result
                 debugging_return["assert_validators"] = validator_result
@@ -1318,11 +1318,11 @@ async def debug_python_code(
                 # 构建失败响应
                 debugging_return["error"] = str(e)
                 LOGGER.error(f"【Python代码调试】失败, 错误回溯: {traceback.format_exc()}")
-                return SuccessResponse(message="Python代码调试失败", data=debugging_return, total=1)
+                return FailureResponse(message="Python代码调试失败", data=debugging_return)
 
     except Exception as e:
         response_data = {
-            "错误描述": f"【Python代码调试】异常, {e}",
+            "异常描述": f"【Python代码调试】异常, {e}",
             "错误类型": f"{type(e).__name__}",
             "错误时间": f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "错误回溯": f"{traceback.format_exc()}",
@@ -1402,7 +1402,7 @@ async def debug_redis_request(
             return NotFoundResponse(message=msg)
         env_name: str = str(env_instance.env_name or "").strip()
         if not env_name:
-            return FailureResponse(message="Redis请求调试失败, 环境名称为空")
+            return FailureResponse(message="参数[env_name]不允许为空")
 
         append_debugging_log(
             message=f"Redis请求调试开始: \n\t"
@@ -1477,15 +1477,15 @@ async def debug_redis_request(
                         return NotFoundResponse(message=msg)
                     operate_project_id = project_instance.id
                 if not operate_project_id:
-                    return FailureResponse(message=f"{operate_no}：参数[project_id]不能为空")
+                    return FailureResponse(message=f"{operate_no}：参数[project_id]不允许为空")
                 if not operate_config_name:
-                    return FailureResponse(message=f"{operate_no}：参数[config_name]不能为空")
+                    return FailureResponse(message=f"{operate_no}：参数[config_name]不允许为空")
                 if not operate_database_name:
-                    return FailureResponse(message=f"{operate_no}：参数[database_name]不能为空")
+                    return FailureResponse(message=f"{operate_no}：参数[database_name]不允许为空")
                 if not operate_expr:
-                    return FailureResponse(message=f"{operate_no}：参数[expr]不能为空")
+                    return FailureResponse(message=f"{operate_no}：参数[expr]不允许为空")
                 if not operate_variable_name:
-                    return FailureResponse(message=f"{operate_no}：参数[variable_name]不能为空")
+                    return FailureResponse(message=f"{operate_no}：参数[variable_name]不允许为空")
 
                 env_config_instance = await services.env_config_curd.get_by_conditions(
                     only_one=True,
@@ -1671,7 +1671,7 @@ async def debug_redis_request(
             }
         }
         LOGGER.info(f"Redis请求调试完成: 耗时: {duration}ms")
-        return SuccessResponse(message="Redis调试请求成功", data=result_data)
+        return SuccessResponse(message="Redis请求调试完成", data=result_data)
     except Exception as e:
         LOGGER.error(f"Redis请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"Redis请求调试失败，异常描述: {e}")
@@ -1804,7 +1804,7 @@ async def execute_step_tree(
                 )
             except Exception as e:
                 LOGGER.error(f"提交定时执行任务失败, case_id={case_id}, err={e}\n{traceback.format_exc()}")
-                return FailureResponse(message=f"提交后台执行失败, 异常描述: {e}")
+                return FailureResponse(message=f"提交后台执行失败，异常描述: {e}")
 
         # ========== ASYNC_EXEC：运行模式（同步执行已保存步骤树）==========
         if execute_type == AutoTestReportType.ASYNC_EXEC:
@@ -1878,7 +1878,7 @@ async def execute_step_tree(
                     f"执行步骤过程中发生异常，事务已回滚: "
                     f"用例ID: {case_id}, "
                     f"错误类型: {type(e).__name__}, "
-                    f"错误详情: {e}"
+                    f"异常描述: {e}"
                 )
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message=f"执行步骤过程中发生异常，事务已回滚: {str(e)}")
@@ -1997,7 +1997,7 @@ async def execute_step_tree(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"执行或调试步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"执行或调试步骤树失败, 异常描述: {e}")
+        return FailureResponse(message=f"执行或调试步骤树失败，异常描述: {e}")
 
 
 @autotest_step.post("/batch_execute", summary="批量执行用例")
@@ -2019,7 +2019,7 @@ async def batch_execute_cases_endpoint(
         if not isinstance(initial_variables, list):
             initial_variables = []
         if not case_ids or len(case_ids) == 0:
-            return BadReqResponse(message="case_ids列表不能为空")
+            return BadReqResponse(message="参数[case_ids]不允许为空")
 
         # 异步执行
         exec_result = await services.step_curd.batch_execute_cases(
@@ -2027,6 +2027,8 @@ async def batch_execute_cases_endpoint(
             initial_variables=initial_variables,
             report_type=AutoTestReportType.ASYNC_EXEC,
         )
+        LOGGER.info(f"批量执行用例任务挂载成功, case_ids={case_ids}")
         return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)
     except Exception as e:
-        return FailureResponse(message=f"批量执行失败，异常描述: {str(e)}")
+        LOGGER.error(f"批量执行用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"批量执行失败，异常描述: {e}")

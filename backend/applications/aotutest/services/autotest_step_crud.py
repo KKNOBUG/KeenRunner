@@ -507,7 +507,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 if not parent_step:
                     error_message: str = (
                         f"根据(id={parent_step_id}, step_type__in=[条件分支, 循环结构])条件检查父级步骤信息失败, "
-                        f"父级步骤(id={parent_step_id})不存在"
+                        f"记录[id={parent_step_id}]不存在"
                     )
                     LOGGER.error(error_message)
                     raise NotFoundException(message=error_message)
@@ -560,7 +560,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             instance = await self.update(id=step_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新步骤信息失败, 步骤(id={step_id}或code={step_code})不存在, 错误描述: {e}"
+            error_message: str = f"更新步骤信息失败, 记录[id={step_id}]或[code={step_code}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
@@ -590,7 +590,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         if children_count > 0:
             error_message: str = (
                 f"根据(parent_step_id={step_id})条件检查步骤信息失败, "
-                f"步骤(id={step_id})存在{children_count}个子级步骤, 无法直接删除"
+                f"记录[id={step_id}]存在{children_count}个子级步骤, 无法直接删除"
             )
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
@@ -839,15 +839,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             # 步骤不存在，执行新增，及验证必填字段
             if not step_instance:
                 if not case_id:
-                    error_message: str = f"第{sid}条步骤新增失败, 步骤所属用例(case_id)字段不允许为空"
+                    error_message: str = f"第{sid}条步骤新增失败, 参数[case_id]不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
                 if not step_no:
-                    error_message: str = f"第{sid}条步骤新增失败, 步骤序号(step_no)字段不允许为空"
+                    error_message: str = f"第{sid}条步骤新增失败, 参数[step_no]不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
                 if not step_data.step_type:
-                    error_message: str = f"第{sid}条步骤新增失败, 步骤类型(step_type)字段不允许为空"
+                    error_message: str = f"第{sid}条步骤新增失败, 参数[step_type]不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 
@@ -865,7 +865,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     error_message: str = (
                         f"第{sid}步骤新增失败, "
                         f"根据(case_id={case_id}, step_no={step_no})条件查询步骤信息失败, "
-                        f"用一用例下步骤序号不允许重复"
+                        f"同一用例下步骤序号不允许重复"
                     )
                     LOGGER.error(error_message)
                     raise DataAlreadyExistsException(message=error_message)

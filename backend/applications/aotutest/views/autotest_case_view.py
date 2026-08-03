@@ -134,7 +134,7 @@ async def update_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code更新除用例。
+    根据id或code更新用例。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
@@ -151,14 +151,14 @@ async def update_case(
             },
             replace_fields={"id": "case_id"}
         )
-        LOGGER.info(f"根据id或code更新除用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新用例成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except (NotFoundException, ParameterException) as e:
         return ParameterResponse(message=str(e.message))
     except (DataAlreadyExistsException, DataBaseStorageException) as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新除用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
