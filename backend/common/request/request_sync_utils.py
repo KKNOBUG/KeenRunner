@@ -94,13 +94,13 @@ class RequestSyncUtils:
                 "response_object": response,    # `requests` 的响应对象
                 "response_json": Any            # 解析后的 JSON 数据，如果解析失败则为错误信息字符串
             }
-        :raises ValueError: 如果请求方式不被支持或请求过程中出现错误
+        :raises ValueError: 如果请求方式不被允许或请求过程中出现错误
         :raises requests.exceptions.HTTPError: 如果服务器返回的HTTP状态码不是200
         """
 
         # 1.检查请求方式是否被允许
         if method not in HTTPMethod.get_members():
-            raise ValueError(f"请求方式[{method.value}]不被支持")
+            raise ValueError(f"请求方式[{method.value}]不被允许")
 
         # 2.检查是否指定请求头信息
         headers = self.headers_convert(headers=headers, params=params, data=data, json=json)

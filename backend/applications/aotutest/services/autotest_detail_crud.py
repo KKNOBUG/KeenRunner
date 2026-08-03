@@ -88,7 +88,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param skip_report_check: 为True时不校验报告是否存在
         :return: 创建后的明细实例
         :raises NotFoundException: 用例或报告不存在
-        :raises DataBaseStorageException: 违反唯一约束
+        :raises DataBaseStorageException: 违反约束规则
         :raises DataAlreadyExistsException: 其他写入冲突
         """
         case_id: int = detail_in.case_id
@@ -119,7 +119,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增明细信息失败, 违反联合唯一约束规则[report_code, case_code, step_code, num_cycles]"
+            error_message: str = f"新增明细信息失败, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
@@ -164,7 +164,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         detail_id: Optional[int] = detail_in.detail_id
         step_code: Optional[str] = detail_in.step_code
         if not detail_id and (not report_code or not step_code):
-            error_message: str = f"参数缺失, 更新明细信息时必须传递[detail_id]或[report_code, step_code]参数"
+            error_message: str = f"参数[detail_id]或[report_code, step_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if detail_id:
@@ -208,7 +208,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :raises NotFoundException: 明细不存在
         """
         if not detail_id and (not report_code or not step_code):
-            error_message: str = f"参数缺失, 删除明细信息时必须传递[detail_id]或[report_code, step_code]参数"
+            error_message: str = f"参数[detail_id]或[report_code, step_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -241,6 +241,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询明细信息异常, 错误描述: {e}"
+            error_message: str = f"查询明细信息异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e

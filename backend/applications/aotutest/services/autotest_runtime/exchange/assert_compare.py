@@ -149,7 +149,7 @@ class AssertionCompare:
         try:
             op = AutoTestAssertionOperation(operation)
         except ValueError as exc:
-            raise ValueError(f"操作符[{operation!r}]不被支持") from exc
+            raise ValueError(f"操作符[{operation!r}]不被允许") from exc
 
         handlers: Dict[AutoTestAssertionOperation, Callable[[Any, Any], bool]] = {
             AutoTestAssertionOperation.EQUAL: cls._type_aware_equals,

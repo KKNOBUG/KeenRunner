@@ -298,7 +298,7 @@ class AioTcpClient:
             return prefix + body
         if frame_mode == TcpFrameMode.RAW:
             return body
-        raise ReqInvalidException(message=f"不被支持的 TcpFrameMode 枚举: {frame_mode}")
+        raise ReqInvalidException(message=f"不被允许的TcpFrameMode枚举: {frame_mode}")
 
     async def _read_until_eof(self, reader: asyncio.StreamReader, read_timeout: float, max_bytes: int) -> bytes:
         total = 0
@@ -369,7 +369,7 @@ class AioTcpClient:
                 if frame_mode == TcpFrameMode.RAW:
                     return await self._read_until_eof(reader, read_to, self.max_response_bytes)
 
-                raise ReqInvalidException(message=f"不被支持的 TcpFrameMode 枚举: {frame_mode}")
+                raise ReqInvalidException(message=f"不被允许的TcpFrameMode枚举: {frame_mode}")
             except asyncio.TimeoutError as e:
                 raise ReqInvalidException(message=f"TCP服务读写超时({host}:{port}, 超时={conn_timeout}s): {e}")
             except asyncio.IncompleteReadError as e:

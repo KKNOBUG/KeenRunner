@@ -357,7 +357,7 @@ class Extractors:
                     f"请与「{step_label}」中的 variable_name 一致"
                 )
 
-        raise ValueError(f"【{operation_type}】数据源源类型 {source} 不被支持")
+        raise ValueError(f"【{operation_type}】数据源源类型 {source} 不被允许")
 
 
 def _register_extractors() -> Dict[str, Callable[..., Any]]:
@@ -440,7 +440,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
             raise ValueError(f"【{operation_type}】变量池未提供")
         if not isinstance(ctx.session_lookup, dict):
             raise ValueError(
-                f"【{operation_type}】变量池类型不被支持: {type(ctx.session_lookup)}; "
+                f"【{operation_type}】变量池类型不被允许: {type(ctx.session_lookup)}; "
                 f"仅支持 Dict[str, Any] 并使用 JSONPath 取值"
             )
         try:

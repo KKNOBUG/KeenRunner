@@ -59,10 +59,7 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     )
     if not cfg or not str(cfg.config_host or "").strip():
         raise NotFoundException(
-            message=(
-                f"未找到可用的API环境配置config_type={AutoTestConfigNodeType.API.value!r} 且config_host非空): "
-                f"[project_id={pid}, env_id={env_row.id}]"
-            )
+            message=f"未找到可用的API环境配置, 查询条件: [project_id={pid}, env_id={env_row.id}, config_type={AutoTestConfigNodeType.API.value}]"
         )
     host = str(cfg.config_host).strip().rstrip("/").rstrip(":")
     port_raw = getattr(cfg, "config_port", None)

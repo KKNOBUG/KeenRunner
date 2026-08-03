@@ -203,7 +203,7 @@ class PlaceholderArithmetic:
                     return -eval_node(node.operand)
                 if isinstance(node.op, ast.UAdd):
                     return +eval_node(node.operand)
-                raise ValueError("计算内容中包含不被支持的一元运算符, 仅支持: + -")
+                raise ValueError("计算内容中包含不被允许的一元运算符, 仅支持: + -")
             if isinstance(node, ast.BinOp):
                 left = eval_node(node.left)
                 right = eval_node(node.right)
@@ -217,8 +217,8 @@ class PlaceholderArithmetic:
                     if right == 0:
                         raise ZeroDivisionError("计算内容错误, 除数不能为0")
                     return left / right
-                raise ValueError("计算内容中包含不被支持的二元运算符, 仅支持: + - * /")
-            raise ValueError("计算内容中包含不被支持的算术结构, 仅支持数字与四则运算")
+                raise ValueError("计算内容中包含不被允许的二元运算符, 仅支持: + - * /")
+            raise ValueError("计算内容中包含不被允许的算术结构, 仅支持数字与四则运算")
 
         tree = ast.parse(expr, mode="eval")
         if not isinstance(tree, ast.Expression):

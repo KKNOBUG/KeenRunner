@@ -1281,7 +1281,7 @@ async def debug_python_code(
                     for vc in assert_validators:
                         source: str = (vc.source or "").strip().lower()
                         if source and source not in ("session_variables", "变量池"):
-                            raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
+                            raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被允许")
 
                     session_lookup_map: Dict[str, Any] = {}
                     session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))

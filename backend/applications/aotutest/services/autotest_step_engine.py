@@ -2126,7 +2126,7 @@ class PythonStepExecutor(BaseStepExecutor):
                         continue
                     source: str = str(valid.source).strip().lower()
                     if source not in {"session_variables", "变量池"}:
-                        raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被支持")
+                        raise StepExecutionError(f"【代码请求(Python)】数据源源类型 {source} 不被允许")
 
                 # 变量池快照：defined -> session -> 本步执行结果（后者优先级最高）
                 self.apply_extract_and_assert(
