@@ -12,8 +12,10 @@ import io
 import json
 import os
 import re
+from collections import Counter
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from xml.etree import ElementTree
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, PatternFill
@@ -25,7 +27,6 @@ from backend.applications.aotutest.models.autotest_model import (
     AutoTestApiProjectInfo,
     AutoTestApiStepInfo,
 )
-from backend.common.convert_utils import Convert
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.enums import (
     AutoTestAssertionOperation,
@@ -231,6 +232,56 @@ def _flatten_jsonpath(data: Any, prefix: str = "$") -> List[Tuple[str, Any]]:
     return pairs
 
 
+def _xml_local_name(tag: str) -> str:
+    """去掉 Clark 命名空间，仅保留本地标签名。"""
+    if tag and "}" in tag:
+        return tag.rsplit("}", 1)[-1]
+    return tag or ""
+
+
+def _flatten_xml_to_jsonpath_pairs(xml_text: str) -> List[Tuple[str, Any]]:
+    """
+    按 XML 文档序将叶子字段展平为 JSONPath 列（不经 xmltodict，保留空标签与声明序）。
+
+    路径约定与 JSON 展平对齐：``$.Root.Child``；同名兄弟仅在重复时加 0-based 下标；
+    属性为 ``$.Path.@attr``。非法 XML 回退 ``$.raw``。
+    """
+    text = str(xml_text or "").strip()
+    if not text:
+        return []
+    try:
+        root = ElementTree.fromstring(text)
+    except ElementTree.ParseError:
+        return [("$.raw", xml_text)]
+
+    pairs: List[Tuple[str, Any]] = []
+
+    def walk(elem: ElementTree.Element, path: str) -> None:
+        for attr_name, attr_value in elem.attrib.items():
+            local_attr = _xml_local_name(attr_name)
+            pairs.append((f"{path}.@{local_attr}", "" if attr_value is None else attr_value))
+
+        children = list(elem)
+        if not children:
+            pairs.append((path, "" if elem.text is None else elem.text))
+            return
+
+        name_total = Counter(_xml_local_name(child.tag) for child in children)
+        name_seen: Counter = Counter()
+        for child in children:
+            local = _xml_local_name(child.tag)
+            name_seen[local] += 1
+            if name_total[local] > 1:
+                child_path = f"{path}.{local}[{name_seen[local] - 1}]"
+            else:
+                child_path = f"{path}.{local}"
+            walk(child, child_path)
+
+    root_name = _xml_local_name(root.tag) or "root"
+    walk(root, f"$.{root_name}")
+    return pairs
+
+
 def _body_to_pairs(step: Any) -> List[Tuple[str, Any]]:
     args = getattr(step, "request_args_type", None)
     if args == AutoTestReqArgsType.JSON:
@@ -238,10 +289,7 @@ def _body_to_pairs(step: Any) -> List[Tuple[str, Any]]:
         return _flatten_jsonpath(body) if isinstance(body, dict) else []
     if args == AutoTestReqArgsType.XML:
         text = getattr(step, "request_text", None) or ""
-        converted = Convert.xml_to_json(text) if text else ""
-        if isinstance(converted, dict):
-            return _flatten_jsonpath(converted)
-        return [("$.raw", text)] if text else []
+        return _flatten_xml_to_jsonpath_pairs(text) if text else []
     if args == AutoTestReqArgsType.RAW:
         text = getattr(step, "request_text", None) or ""
         return [("$.raw", text)] if text else []
