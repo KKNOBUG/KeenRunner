@@ -6,12 +6,12 @@
 @Module  : autest_report_schema
 @DateTime: 2025/11/26 16:43
 """
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Any, Dict
 
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestReportType
+from backend.enums import AutoTestReportType, AutoTestTaskStatus
 
 
 class AutoTestApiReportBase(BaseModel):
@@ -88,3 +88,27 @@ class AutoTestApiReportSelect(BaseModel):
     # 执行时间范围（根据用例执行开始时间case_st_time筛选，格式YYYY-MM-DD或YYYY-MM-DD HH:mm:ss）
     date_from: Optional[str] = Field(None, description="执行开始时间-起")
     date_to: Optional[str] = Field(None, description="执行开始时间-止")
+
+
+class AutoTestApiReportBatchSelect(BaseModel):
+    """按批次聚合查询任务执行历史入参（分页粒度=批次）。"""
+
+    page: int = Field(default=1, ge=1, description="页码（按批次）")
+    page_size: int = Field(default=10, ge=1, le=200, description="每页批次数")
+    task_code: str = Field(..., min_length=1, max_length=64, description="任务标识代码（必填）")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    include_reports: bool = Field(default=True, description="是否在批次行中附带报告明细列表")
+
+
+class AutoTestApiReportBatchItem(BaseModel):
+    """单次任务执行（一个 batch_code）的汇总行。"""
+
+    batch_code: Optional[str] = Field(None, description="批次标识；空表示无 batch_code 的单报孤立行")
+    execute_result: AutoTestTaskStatus = Field(..., description="批次执行结果(成功/失败/部分成功)")
+    pass_rate: Optional[float] = Field(None, description="通过率(0-100)，成功报告数/总报告数")
+    pass_count: int = Field(default=0, description="成功报告数")
+    report_count: int = Field(default=0, description="本批次报告总数")
+    created_user: Optional[str] = Field(None, description="执行人员（取首个非空）")
+    execute_time: Optional[str] = Field(None, description="执行时间（本批次最早 case_st_time）")
+    elapsed_seconds: float = Field(default=0.0, description="本批次耗时合计（秒）")
+    reports: List[Dict[str, Any]] = Field(default_factory=list, description="本批次报告明细（含 case_name）")

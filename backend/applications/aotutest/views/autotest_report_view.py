@@ -17,7 +17,8 @@ from backend.applications.aotutest.dependencies import AutoTestApiServices, get_
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
     AutoTestApiReportSelect,
-    AutoTestApiReportUpdate
+    AutoTestApiReportUpdate,
+    AutoTestApiReportBatchSelect,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -282,4 +283,33 @@ async def search_reports(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_report.post("/search_batches", summary="按批次查询任务执行历史", description="按task_code聚合batch_code，计算成功/部分成功/失败状态")
+async def search_report_batches(
+        batch_in: AutoTestApiReportBatchSelect = Body(..., description="批次查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    任务执行历史专用：按批次聚合报告并返回执行结果。
+
+    :param batch_in: 含必填task_code；page/page_size针对批次数
+    :param services: 自动化测试CRUD依赖聚合
+    :return: data 为批次汇总列表，total为批次总数
+    """
+    try:
+        total, batches = await services.report_curd.search_batches(batch_in)
+        data = [item.model_dump(mode="json") for item in batches]
+        LOGGER.info(
+            f"按批次查询任务执行历史成功, task_code={batch_in.task_code}, "
+            f"批次总数={total}, 本页={len(data)}"
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按批次查询任务执行历史失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

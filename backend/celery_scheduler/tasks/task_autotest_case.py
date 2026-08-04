@@ -103,13 +103,14 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
             task_code=task_code,
         )
         elapsed = (datetime.now() - started).total_seconds()
-        case_all_ok = (
-            int(result.get("total_cases") or 0) > 0
-            and int(result.get("failed_cases") or 0) == 0
-        )
-        task.last_execute_state = (
-            AutoTestTaskStatus.SUCCESS if case_all_ok else AutoTestTaskStatus.FAILURE
-        )
+        total_cases = int(result.get("total_cases") or 0)
+        success_cases = int(result.get("success_cases") or 0)
+        if 0 < total_cases == success_cases:
+            task.last_execute_state = AutoTestTaskStatus.SUCCESS
+        elif success_cases >= 1:
+            task.last_execute_state = AutoTestTaskStatus.PARTIAL_SUCCESS
+        else:
+            task.last_execute_state = AutoTestTaskStatus.FAILURE
         await task.save(update_fields=["last_execute_state"])
         if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _is_only_once(task):
             task.task_enabled = False

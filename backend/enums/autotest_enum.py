@@ -110,6 +110,7 @@ class AutoTestTaskStatus(StringEnum):
     RUNNING = "正在执行"
     SUCCESS = "成功"
     FAILURE = "失败"
+    PARTIAL_SUCCESS = "部分成功"
 
 
 class AutoTestReqArgsType(StringEnum):

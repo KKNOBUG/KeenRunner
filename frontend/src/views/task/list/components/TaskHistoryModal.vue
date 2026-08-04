@@ -1,8 +1,8 @@
 <script setup>
 /**
  * 任务执行历史：
- * 1) 弹窗：按 task_code 查报告，再按 batch_code 分组 → 每次任务执行一条
- * 2) 左侧抽屉：按脚本分组展示本批次多次执行（轮次 × 数据源）
+ * 1) 弹窗：POST /report/search_batches 按批次分页，后端给出执行状态
+ * 2) 左侧抽屉：本批次按脚本分组（轮次 × 数据源）
  * 3) 右侧抽屉：ReportDetailDrawer 步骤执行明细
  */
 import { computed, h, reactive, ref, watch } from 'vue'
@@ -52,29 +52,33 @@ const pagination = reactive({
   },
 })
 
-const pagedBatchRows = computed(() => {
-  const start = (pagination.page - 1) * pagination.pageSize
-  return batchRows.value.slice(start, start + pagination.pageSize)
-})
-
 const scriptDrawerVisible = ref(false)
-const scriptDrawerTitle = ref('脚本执行信息')
-/** 按脚本分组后的结构 */
 const scriptGroups = ref([])
 const expandedScriptNames = ref([])
 
 const detailDrawerVisible = ref(false)
 const detailReportRow = ref(null)
 
+const BATCH_RESULT_TAG_TYPE = {
+  成功: 'success',
+  部分成功: 'warning',
+  失败: 'error',
+}
+
 function isCaseSuccess(state) {
   return state === true || state === 'true'
 }
 
-function parseElapsedSeconds(val) {
-  if (val == null || val === '') return 0
-  const s = String(val).trim().replace(/s$/i, '')
-  const n = parseFloat(s)
-  return Number.isFinite(n) ? n : 0
+function renderBatchResultTag(row) {
+  return h(
+    NTag,
+    {
+      type: BATCH_RESULT_TAG_TYPE[row.execute_result] || 'error',
+      size: 'small',
+      round: true,
+    },
+    { default: () => row.execute_result || '失败' },
+  )
 }
 
 function formatElapsed(seconds) {
@@ -102,28 +106,66 @@ function getCaseCfg(caseId) {
   return caseCfg && typeof caseCfg === 'object' ? caseCfg : {}
 }
 
-function resolveEnvNamesForCases(caseIds) {
+function resolveEnvDisplay(caseId) {
+  const caseCfg = getCaseCfg(caseId)
   const names = new Set()
-  for (const id of caseIds) {
-    const caseCfg = getCaseCfg(id)
-    if (caseCfg.env_name) names.add(String(caseCfg.env_name).trim())
-    const steps = caseCfg.steps_execute_config
-    if (steps && typeof steps === 'object') {
-      for (const stepCfg of Object.values(steps)) {
-        if (stepCfg && typeof stepCfg === 'object' && stepCfg.env_name) {
-          names.add(String(stepCfg.env_name).trim())
-        }
+  if (caseCfg.env_name) names.add(String(caseCfg.env_name).trim())
+  const steps = caseCfg.steps_execute_config
+  if (steps && typeof steps === 'object') {
+    for (const stepCfg of Object.values(steps)) {
+      if (stepCfg && typeof stepCfg === 'object' && stepCfg.env_name) {
+        names.add(String(stepCfg.env_name).trim())
       }
     }
   }
-  return [...names].filter(Boolean)
+  const list = [...names].filter(Boolean)
+  return list.length ? list.join('、') : '-'
 }
 
 function enrichReportRow(report) {
-  const envNames = resolveEnvNamesForCases(report?.case_id != null ? [report.case_id] : [])
   return {
     ...report,
-    env_display: envNames.length ? envNames.join('、') : '-',
+    env_display: resolveEnvDisplay(report?.case_id),
+  }
+}
+
+async function loadHistory() {
+  const code = historyTaskCode.value
+  if (!code) {
+    batchRows.value = []
+    pagination.itemCount = 0
+    return
+  }
+  loading.value = true
+  try {
+    const res = await api.getApiReportBatches({
+      task_code: code,
+      page: pagination.page,
+      page_size: pagination.pageSize,
+      include_reports: true,
+    })
+    const list = Array.isArray(res?.data) ? res.data : []
+    batchRows.value = list.map((b, idx) => {
+      const reports = (b.reports || []).map(enrichReportRow)
+      const first = reports[0]
+      return {
+        _key: b.batch_code || `single:${first?.report_code || first?.report_id || idx}`,
+        task_name: historyTaskName.value || '-',
+        execute_result: b.execute_result,
+        pass_rate: b.pass_rate,
+        created_user: b.created_user || '-',
+        execute_time: b.execute_time || '-',
+        elapsed_display: formatElapsed(Number(b.elapsed_seconds) || 0),
+        reports,
+      }
+    })
+    pagination.itemCount = Number(res?.total) || 0
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '加载执行历史失败')
+    batchRows.value = []
+    pagination.itemCount = 0
+  } finally {
+    loading.value = false
   }
 }
 
@@ -139,30 +181,21 @@ function annotateRunsForCase(reports, caseId) {
   const cfgDatasets = Array.isArray(caseCfg.selected_dataset_names)
     ? caseCfg.selected_dataset_names.map((x) => String(x).trim()).filter(Boolean)
     : []
-  const cfgExecCount = Math.max(1, Number(caseCfg.execute_count) || 1)
 
   return sorted.map((r, index) => {
     let datasetName = r.dataset_name != null && String(r.dataset_name).trim()
       ? String(r.dataset_name).trim()
       : null
-    // 历史报告无 dataset_name 时，按配置顺序推断（与执行循环一致）
     if (!datasetName && cfgDatasets.length) {
       datasetName = cfgDatasets[index % cfgDatasets.length] || null
     }
     const dsCount = cfgDatasets.length || (datasetName ? 1 : 0)
-    let roundNo = index + 1
-    if (dsCount > 0) {
-      roundNo = Math.floor(index / dsCount) + 1
-    }
+    const roundNo = dsCount > 0 ? Math.floor(index / dsCount) + 1 : index + 1
     return {
-      ...enrichReportRow(r),
+      ...r,
       run_index: index + 1,
-      round_no: roundNo,
       round_label: `第 ${roundNo} 次`,
       dataset_name: datasetName || null,
-      dataset_display: datasetName || '未使用数据源',
-      _cfg_execute_count: cfgExecCount,
-      _cfg_dataset_count: cfgDatasets.length,
     }
   })
 }
@@ -182,129 +215,37 @@ function buildScriptGroups(reports) {
     const caseId = list[0]?.case_id
     const runs = annotateRunsForCase(list, caseId)
     const passCount = runs.filter((r) => isCaseSuccess(r.case_state)).length
-    const failCount = runs.length - passCount
     const caseCfg = getCaseCfg(caseId)
     const cfgDatasets = Array.isArray(caseCfg.selected_dataset_names)
       ? caseCfg.selected_dataset_names.map((x) => String(x).trim()).filter(Boolean)
       : []
     const cfgExecCount = Math.max(1, Number(caseCfg.execute_count) || 1)
-    const envNames = resolveEnvNamesForCases(caseId != null ? [caseId] : [])
-    const usedDatasets = [...new Set(runs.map((r) => r.dataset_name).filter(Boolean))]
+    const planLabel = cfgDatasets.length
+      ? `配置 ${cfgExecCount} 次 × ${cfgDatasets.length} 个数据源`
+      : `配置执行 ${cfgExecCount} 次`
 
-    let planLabel = `配置执行 ${cfgExecCount} 次`
-    if (cfgDatasets.length) {
-      planLabel = `配置 ${cfgExecCount} 次 × ${cfgDatasets.length} 个数据源`
-    }
-
+    const allOk = passCount === runs.length && runs.length > 0
+    const allFail = passCount === 0 && runs.length > 0
     groups.push({
       _key: key,
       case_id: caseId,
       case_name: list[0]?.case_name || `用例${caseId ?? '-'}`,
-      env_display: envNames.length ? envNames.join('、') : '-',
+      env_display: resolveEnvDisplay(caseId),
       plan_label: planLabel,
-      cfg_execute_count: cfgExecCount,
-      cfg_dataset_names: cfgDatasets,
-      used_datasets: usedDatasets,
       run_count: runs.length,
       pass_count: passCount,
-      fail_count: failCount,
-      all_ok: failCount === 0 && runs.length > 0,
-      pass_rate: runs.length ? (passCount / runs.length) * 100 : null,
+      all_ok: allOk,
+      result_label: allOk ? '全部成功' : allFail ? '全部失败' : '存在失败',
       runs,
     })
   }
 
-  // 按首次执行时间排序，贴近任务内脚本顺序
   groups.sort((a, b) => {
     const ta = a.runs[0]?.case_st_time || ''
     const tb = b.runs[0]?.case_st_time || ''
     return String(ta).localeCompare(String(tb))
   })
   return groups
-}
-
-function buildBatchRows(reports) {
-  const map = new Map()
-  for (const r of reports || []) {
-    const bc = r.batch_code != null ? String(r.batch_code).trim() : ''
-    const key = bc || `single:${r.report_code || r.report_id || r.id}`
-    if (!map.has(key)) map.set(key, [])
-    map.get(key).push(r)
-  }
-
-  const rows = []
-  for (const [key, list] of map) {
-    const enriched = list.map(enrichReportRow)
-    const passCount = enriched.filter((r) => isCaseSuccess(r.case_state)).length
-    const total = enriched.length
-    const allOk = total > 0 && passCount === total
-    const passRate = total > 0 ? (passCount / total) * 100 : null
-    const elapsedSum = enriched.reduce((acc, r) => acc + parseElapsedSeconds(r.case_elapsed), 0)
-    const times = enriched.map((r) => r.case_st_time).filter(Boolean).sort()
-    const users = [...new Set(enriched.map((r) => r.created_user).filter(Boolean))]
-    const batchCode = key.startsWith('single:') ? null : key
-
-    rows.push({
-      _key: key,
-      batch_code: batchCode,
-      task_name: historyTaskName.value || '-',
-      execute_result: allOk,
-      pass_rate: passRate,
-      created_user: users[0] || '-',
-      execute_time: times.length ? times[0] : '-',
-      elapsed_display: formatElapsed(elapsedSum),
-      report_count: total,
-      reports: enriched,
-    })
-  }
-
-  rows.sort((a, b) => String(b.execute_time || '').localeCompare(String(a.execute_time || '')))
-  return rows
-}
-
-async function fetchAllReportsByTaskCode(taskCode) {
-  if (!taskCode) return []
-  const pageSize = 200
-  let page = 1
-  let total = Infinity
-  const collected = []
-  while (collected.length < total) {
-    const res = await api.getApiReportList({
-      task_code: taskCode,
-      page,
-      page_size: pageSize,
-      order: ['-case_st_time'],
-    })
-    const chunk = Array.isArray(res?.data) ? res.data : []
-    total = Number(res?.total) || chunk.length
-    collected.push(...chunk)
-    if (!chunk.length || chunk.length < pageSize) break
-    page += 1
-    if (page > 50) break
-  }
-  return collected.filter((r) => String(r.task_code || '').trim() === String(taskCode).trim())
-}
-
-async function loadHistory() {
-  const code = historyTaskCode.value
-  if (!code) {
-    batchRows.value = []
-    pagination.itemCount = 0
-    return
-  }
-  loading.value = true
-  try {
-    const reports = await fetchAllReportsByTaskCode(code)
-    batchRows.value = buildBatchRows(reports)
-    pagination.itemCount = batchRows.value.length
-    pagination.page = 1
-  } catch (e) {
-    window.$message?.error?.(e?.message || e?.data?.message || '加载执行历史失败')
-    batchRows.value = []
-    pagination.itemCount = 0
-  } finally {
-    loading.value = false
-  }
 }
 
 watch(
@@ -314,6 +255,7 @@ watch(
       scriptDrawerVisible.value = false
       detailDrawerVisible.value = false
       detailReportRow.value = null
+      pagination.page = 1
       loadHistory()
     } else {
       scriptDrawerVisible.value = false
@@ -325,19 +267,19 @@ watch(
 
 function onPageChange(page) {
   pagination.page = page
+  loadHistory()
 }
 
 function onPageSizeChange(pageSize) {
   pagination.pageSize = pageSize
   pagination.page = 1
+  loadHistory()
 }
 
 function openScriptDrawer(batchRow) {
   const groups = buildScriptGroups(batchRow?.reports || [])
   scriptGroups.value = groups
-  // 默认全部展开，便于一眼看清
   expandedScriptNames.value = groups.map((g) => g._key)
-  scriptDrawerTitle.value = '脚本执行信息'
   scriptDrawerVisible.value = true
   detailDrawerVisible.value = false
   detailReportRow.value = null
@@ -422,7 +364,7 @@ function makeRunColumns() {
     },
     {
       title: '数据源',
-      key: 'dataset_display',
+      key: 'dataset_name',
       width: 140,
       align: 'center',
       ellipsis: { tooltip: true },
@@ -527,14 +469,10 @@ const batchColumns = computed(() => [
   {
     title: '执行结果',
     key: 'execute_result',
-    width: 100,
+    width: 110,
     align: 'center',
     render(row) {
-      return h(
-        NTag,
-        { type: row.execute_result ? 'success' : 'error', size: 'small', round: true },
-        { default: () => (row.execute_result ? '成功' : '失败') },
-      )
+      return renderBatchResultTag(row)
     },
   },
   {
@@ -611,10 +549,10 @@ const modalStyle = {
     @close="modalVisible = false"
   >
     <NSpin :show="loading">
-      <div v-if="pagedBatchRows.length" class="history-table-wrap">
+      <div v-if="batchRows.length" class="history-table-wrap">
         <NDataTable
           :columns="batchColumns"
-          :data="pagedBatchRows"
+          :data="batchRows"
           :row-key="(row) => row._key"
           :scroll-x="1000"
           :single-line="true"
@@ -638,7 +576,7 @@ const modalStyle = {
   </NModal>
 
   <NDrawer v-model:show="scriptDrawerVisible" placement="left" width="60%" :trap-focus="false">
-    <NDrawerContent :title="scriptDrawerTitle" closable :native-scrollbar="false">
+    <NDrawerContent title="脚本执行信息" closable :native-scrollbar="false">
       <div v-if="scriptGroups.length" class="script-drawer-body">
         <NCollapse v-model:expanded-names="expandedScriptNames" display-directive="show">
           <NCollapseItem
@@ -659,7 +597,7 @@ const modalStyle = {
                     round
                     :type="group.all_ok ? 'success' : 'error'"
                   >
-                    {{ group.all_ok ? '全部成功' : '存在失败' }}
+                    {{ group.result_label }}
                   </NTag>
                   <span class="meta-text">{{ group.pass_count }}/{{ group.run_count }} 通过</span>
                   <span class="meta-text">{{ group.plan_label }}</span>

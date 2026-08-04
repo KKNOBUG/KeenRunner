@@ -7,7 +7,8 @@
 @DateTime: 2025/11/27 09:34
 """
 import traceback
-from typing import Optional, List, Tuple
+from collections import defaultdict
+from typing import Optional, List, Tuple, Dict, Any
 
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -16,7 +17,9 @@ from tortoise.transactions import in_transaction
 from backend.applications.aotutest.models.autotest_model import AutoTestApiReportInfo
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
-    AutoTestApiReportUpdate
+    AutoTestApiReportUpdate,
+    AutoTestApiReportBatchSelect,
+    AutoTestApiReportBatchItem,
 )
 from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -26,6 +29,7 @@ from backend.core.exceptions import (
     NotFoundException,
     DataBaseStorageException,
 )
+from backend.enums import AutoTestTaskStatus
 
 
 class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
@@ -184,3 +188,118 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             error_message: str = f"查询报告信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+
+    @staticmethod
+    def _parse_elapsed_seconds(val: Any) -> float:
+        if val is None or val == "":
+            return 0.0
+        text = str(val).strip().rstrip("sS")
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _is_case_success(case_state: Any) -> bool:
+        return case_state is True or case_state == "true"
+
+    @classmethod
+    def _resolve_batch_execute_result(cls, reports: List[Dict[str, Any]]) -> AutoTestTaskStatus:
+        """
+        按脚本维度汇总批次结果。
+
+        - 成功：每个脚本的全部运行（含数据驱动）均成功
+        - 部分成功：至少一个脚本的全部运行均成功，但并非全部脚本都如此
+        - 失败：没有任何一个脚本达到「其全部运行均成功」
+        """
+        by_case: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for row in reports:
+            case_id = row.get("case_id")
+            key = (
+                str(case_id)
+                if case_id is not None
+                else f"unknown:{row.get('report_code') or row.get('report_id')}"
+            )
+            by_case[key].append(row)
+
+        fully_ok = 0
+        for rows in by_case.values():
+            if rows and all(cls._is_case_success(r.get("case_state")) for r in rows):
+                fully_ok += 1
+
+        script_count = len(by_case)
+        if 0 < script_count == fully_ok:
+            return AutoTestTaskStatus.SUCCESS
+        if fully_ok >= 1:
+            return AutoTestTaskStatus.PARTIAL_SUCCESS
+        return AutoTestTaskStatus.FAILURE
+
+    async def search_batches(self, batch_in: AutoTestApiReportBatchSelect) -> Tuple[int, List[AutoTestApiReportBatchItem]]:
+        """
+        按task_code拉取报告，按batch_code聚合并计算执行结果，再按批次分页。
+
+        :param batch_in: 批次查询入参
+        :return: (批次总数, 当前页批次列表)
+        """
+        task_code = (batch_in.task_code or "").strip()
+        if not task_code:
+            raise ParameterException(message="参数[task_code]不允许为空")
+
+        state = 0 if batch_in.state is None else batch_in.state
+        instances: List[AutoTestApiReportInfo] = await self.model.filter(
+            task_code=task_code,
+            state=state,
+        ).order_by("case_st_time").all()
+
+        if not instances:
+            return 0, []
+
+        case_ids = list({obj.case_id for obj in instances if obj.case_id is not None})
+        case_name_map: Dict[int, str] = {}
+        if case_ids:
+            case_name_map = dict(
+                await AutoTestApiCaseCrud().model.filter(
+                    id__in=case_ids,
+                    state__not=1
+                ).values_list("id", "case_name")
+            )
+
+        exclude_fields = {"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"}
+        report_dicts: List[Dict[str, Any]] = []
+        for obj in instances:
+            item = await obj.to_dict(exclude_fields=exclude_fields, replace_fields={"id": "report_id"})
+            item["case_name"] = case_name_map.get(item.get("case_id"), "")
+            report_dicts.append(item)
+
+        grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for row in report_dicts:
+            bc = row.get("batch_code")
+            bc_text = str(bc).strip() if bc is not None else ""
+            key = bc_text if bc_text else f"single:{row.get('report_code') or row.get('report_id')}"
+            grouped[key].append(row)
+
+        batches: List[AutoTestApiReportBatchItem] = []
+        for key, rows in grouped.items():
+            pass_count = sum(1 for r in rows if self._is_case_success(r.get("case_state")))
+            total = len(rows)
+            times = sorted(t for t in (r.get("case_st_time") for r in rows) if t)
+            users = [u for u in (r.get("created_user") for r in rows) if u]
+            result = self._resolve_batch_execute_result(rows)
+            batches.append(
+                AutoTestApiReportBatchItem(
+                    batch_code=None if key.startswith("single:") else key,
+                    execute_result=result,
+                    pass_rate=round(pass_count / total * 100.0, 2) if total else None,
+                    pass_count=pass_count,
+                    report_count=total,
+                    created_user=str(users[0]) if users else None,
+                    execute_time=times[0] if times else None,
+                    elapsed_seconds=round(sum(self._parse_elapsed_seconds(r.get("case_elapsed")) for r in rows), 3),
+                    reports=rows if batch_in.include_reports else [],
+                )
+            )
+
+        batches.sort(key=lambda b: b.execute_time or "", reverse=True)
+        start = (batch_in.page - 1) * batch_in.page_size
+        end = start + batch_in.page_size
+        return len(batches), batches[start:end]

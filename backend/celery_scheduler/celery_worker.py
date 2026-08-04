@@ -310,7 +310,18 @@ async def _update_task_record_on_end(
     await init_tortoise_orm()
 
     now = datetime.now()
-    status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE
+    # 有批次脚本汇总时按成功/部分成功/失败落库；否则回退 pipeline 成败二态
+    if isinstance(task_summary, dict) and ("total_cases" in task_summary or "success_cases" in task_summary):
+        total_cases = int(task_summary.get("total_cases") or 0)
+        success_cases = int(task_summary.get("success_cases") or 0)
+        if 0 < total_cases == success_cases:
+            status_enum = AutoTestTaskStatus.SUCCESS
+        elif success_cases >= 1:
+            status_enum = AutoTestTaskStatus.PARTIAL_SUCCESS
+        else:
+            status_enum = AutoTestTaskStatus.FAILURE
+    else:
+        status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE
     summary_obj = normalize_task_summary(task_summary, pipeline_ok=success)
     error_text = None
     if not success:

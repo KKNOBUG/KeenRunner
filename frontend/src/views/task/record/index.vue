@@ -136,6 +136,7 @@ const celeryStatusOptions = [
   { label: '正在执行', value: '正在执行' },
   { label: '成功', value: '成功' },
   { label: '失败', value: '失败' },
+  { label: '部分成功', value: '部分成功' },
 ]
 
 const triggerTypeOptions = [
@@ -347,7 +348,7 @@ const columns = [
     width: 100,
     align: 'center',
     render(row) {
-      const typeMap = { 等待执行: 'default', 正在执行: 'warning', 成功: 'success', 失败: 'error' }
+      const typeMap = { 等待执行: 'default', 正在执行: 'warning', 成功: 'success', 失败: 'error', 部分成功: 'warning' }
       return h(
         NTag,
         { type: typeMap[row.celery_status] || 'default', size: 'small', round: true },

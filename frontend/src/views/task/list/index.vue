@@ -27,10 +27,11 @@ import api from '@/api'
 defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
 
 const TASK_STATUS_MAP = {
-  '等待执行': '等待执行',
-  '正在执行': '正在执行',
-  '成功': '成功',
-  '失败': '失败',
+  等待执行: '等待执行',
+  正在执行: '正在执行',
+  成功: '成功',
+  失败: '失败',
+  部分成功: '部分成功',
 }
 
 const $table = ref(null)
@@ -171,7 +172,7 @@ const logRecordColumns = [
     width: 100,
     align: 'center',
     render: (row) => {
-      const typeMap = { 等待执行: 'default', 正在执行: 'warning', 成功: 'success', 失败: 'error' }
+      const typeMap = { 等待执行: 'default', 正在执行: 'warning', 成功: 'success', 失败: 'error', 部分成功: 'warning' }
       return h(NTag, { type: typeMap[row.celery_status] || 'default', size: 'small', round: true }, () => row.celery_status || '-')
     },
   },
@@ -462,6 +463,7 @@ const columns = computed(() => {
         正在执行: 'warning',
         成功: 'success',
         失败: 'error',
+        部分成功: 'warning',
       }
       return h(
         NTag,

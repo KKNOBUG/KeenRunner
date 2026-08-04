@@ -174,6 +174,8 @@ export default {
   executeStepTree: (data = {}) => request.post('/autotest/step/execute_or_debugging', data),
   // 报告相关
   getApiReportList: (data = {}) => request.post('/autotest/report/search', data),
+  /** 任务执行历史：按 batch_code 聚合，含 execute_result */
+  getApiReportBatches: (data = {}) => request.post('/autotest/report/search_batches', data),
   deleteApiReport: (params = {}) => {
     const queryParams = []
     if (params.report_id) queryParams.push(`report_id=${params.report_id}`)
