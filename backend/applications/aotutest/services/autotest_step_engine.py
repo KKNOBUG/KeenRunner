@@ -2689,12 +2689,12 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         app_id=str(operate_project_id),
                         env=str(env_name).strip(),
                         config_name=operate_config_name,
-                        db_name=operate_database_name
+                        database_name=operate_database_name,
                     )
                     expr_executive_result: Dict[str, Any] = await pool_manager.execute_sql(
                         pool=database_pool,
                         sql=operate_sql_expr,
-                        is_dict=True
+                        result_as_dict=True,
                     )
                     sql_count: Optional[int] = None
                     sql_data: Optional[List[Dict[str, Any]]] = None
