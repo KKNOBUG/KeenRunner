@@ -111,7 +111,7 @@ export function getAssertPlaceholder(object, assertMode) {
   if (assertMode === ASSERT_MODE_DATABASE) return DB_JSONPATH_PLACEHOLDER
   if (assertMode === ASSERT_MODE_REDIS) return REDIS_JSONPATH_PLACEHOLDER
   if (object === '变量池' || assertMode === ASSERT_MODE_PYTHON) {
-    return '请输入变量池中的变量名，如：token'
+    return 'JSONPath，如：$.token 或 $.list[0].name'
   }
   return getExtractPlaceholder(object)
 }

@@ -78,7 +78,7 @@
                       v-model:value="item.object"
                       :options="PYTHON_ASSERT_OBJECT_OPTIONS"
                       placeholder="变量池"
-                      :disabled="readonly"
+                      :disabled="readonly || lockObject"
                   />
                 </n-form-item>
               </div>
@@ -156,6 +156,8 @@ const props = defineProps({
   sourceOptions: { type: Array, default: () => [] },
   /** response 模式下新建断言的默认断言对象（如独立断言步骤默认「变量池」） */
   defaultObject: { type: String, default: null },
+  /** 锁定断言对象不可切换（独立断言步骤固定「变量池」并置灰） */
+  lockObject: { type: Boolean, default: false },
 })
 
 const model = defineModel({ type: Object, default: () => ({}) })
