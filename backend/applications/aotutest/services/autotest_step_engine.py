@@ -2686,8 +2686,8 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         raise StepExecutionError(f"【数据库请求】{operate_no}：参数[variable_name]不能为空")
 
                     database_pool: Pool = await pool_manager.get_or_create_pool(
-                        app_id=str(operate_project_id),
-                        env=str(env_name).strip(),
+                        project_id=str(operate_project_id),
+                        env_name=str(env_name).strip(),
                         config_name=operate_config_name,
                         database_name=operate_database_name,
                     )
