@@ -28,7 +28,7 @@ router = APIRouter()
 
 @router.post("/create", summary="新增路由信息")
 async def create_router(
-        router_in: RouterCreate = Body(),
+        router_in: RouterCreate = Body(..., description="路由信息"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
@@ -120,8 +120,8 @@ async def get_router(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @router.post("/search", summary="查询路由列表", description="根据条件分页查询路由列表信息(Body)")
-async def get_routers(
-        router_in: RouterSelect = Body(),
+async def search_routers(
+        router_in: RouterSelect = Body(..., description="查询条件"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
@@ -162,7 +162,7 @@ async def get_routers(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @router.get("/list", summary="查询路由列表", description="根据条件分页查询路由列表信息(Query)")
-async def list_router(
+async def list_routers(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),

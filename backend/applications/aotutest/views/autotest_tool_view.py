@@ -76,7 +76,7 @@ def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
 
 
 @autotest_tool.get("/get", summary="查询辅助函数")
-async def get_func_info():
+async def get_funcs():
     """
     辅助函数查询。
 

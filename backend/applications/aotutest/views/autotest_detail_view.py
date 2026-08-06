@@ -36,7 +36,7 @@ autotest_detail = APIRouter()
 
 
 @autotest_detail.post("/create", summary="新增明细")
-async def create_step_detail(
+async def create_detail(
         detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -150,7 +150,7 @@ async def update_detail(
 
 
 @autotest_detail.get("/get", summary="查询明细", description="根据id或code查询明细信息")
-async def get_step_detail(
+async def get_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
@@ -199,7 +199,7 @@ async def get_step_detail(
 
 
 @autotest_detail.post("/search", summary="查询明细列表", description="根据条件分页查询明细列表信息(Body)")
-async def search_step_details(
+async def search_details(
         detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

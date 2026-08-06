@@ -39,7 +39,7 @@ autotest_project = APIRouter()
 
 
 @autotest_project.post("/create", summary="新增应用")
-async def create_project_info(
+async def create_project(
         project_in: AutoTestApiProjectCreate = Body(..., description="应用信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -71,7 +71,7 @@ async def create_project_info(
 
 
 @autotest_project.delete("/delete", summary="删除应用", description="根据id或code删除应用信息")
-async def delete_project_info(
+async def delete_project(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -109,7 +109,7 @@ async def delete_project_info(
 
 
 @autotest_project.post("/delete", summary="批量删除应用", description="根据id或code列表删除应用信息")
-async def delete_projects_batch(
+async def delete_projects(
         project_in: AutoTestApiProjectDelete = Body(..., description="项目信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -136,7 +136,7 @@ async def delete_projects_batch(
 
 
 @autotest_project.post("/update", summary="更新应用", description="根据id或code更新应用信息")
-async def update_project_info(
+async def update_project(
         project_in: AutoTestApiProjectUpdate = Body(..., description="应用信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -174,7 +174,7 @@ async def update_project_info(
 
 
 @autotest_project.get("/get", summary="查询应用", description="根据id或code查询应用信息")
-async def get_project_info(
+async def get_project(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -213,7 +213,7 @@ async def get_project_info(
 
 
 @autotest_project.get("/get_names", summary="查询应用名称", description="查询去重后的应用名称列表")
-async def get_project_name_list(
+async def get_project_names(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -232,7 +232,7 @@ async def get_project_name_list(
 
 
 @autotest_project.post("/search", summary="查询应用列表", description="根据条件分页查询应用列表信息(Body)")
-async def search_project_info(
+async def search_projects(
         project_in: AutoTestApiProjectSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

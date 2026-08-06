@@ -45,7 +45,7 @@ autotest_task = APIRouter()
 
 
 @autotest_task.post("/create", summary="新增任务")
-async def create_task_info(
+async def create_task(
         task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -83,7 +83,7 @@ async def create_task_info(
 
 
 @autotest_task.delete("/delete", summary="删除任务", description="根据id或code删除任务信息")
-async def delete_task_info(
+async def delete_task(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -119,7 +119,7 @@ async def delete_task_info(
 
 
 @autotest_task.post("/update", summary="更新任务", description="根据id或code更新任务信息")
-async def update_task_info(
+async def update_task(
         task_in: AutoTestApiTaskUpdate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -157,7 +157,7 @@ async def update_task_info(
 
 
 @autotest_task.get("/get", summary="查询任务", description="根据id或code查询任务信息")
-async def get_task_info(
+async def get_task(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -196,7 +196,7 @@ async def get_task_info(
 
 
 @autotest_task.post("/search", summary="查询任务列表", description="根据条件分页查询任务列表信息(Body)")
-async def search_tasks_info(
+async def search_tasks(
         task_in: AutoTestApiTaskSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -259,7 +259,7 @@ async def search_tasks_info(
 
 
 @autotest_task.post("/run", summary="立即执行任务")
-async def run_task_info(
+async def run_task(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -302,7 +302,7 @@ async def run_task_info(
 
 
 @autotest_task.post("/start", summary="启动任务", description="启用任务调度")
-async def start_task_info(
+async def start_task(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -339,7 +339,7 @@ async def start_task_info(
 
 
 @autotest_task.post("/stop", summary="停止任务", description="关闭任务调度")
-async def stop_task_info(
+async def stop_task(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

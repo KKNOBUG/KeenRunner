@@ -114,7 +114,7 @@ async def delete_env_config(
 
 
 @autotest_env_config.post("/delete", summary="批量删除环境配置", description="根据id或code列表删除环境配置信息")
-async def delete_env_config_batch(
+async def delete_env_configs(
         config_in: AutoTestApiConfigDelete = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -216,7 +216,7 @@ async def get_env_config(
 
 
 @autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
-async def search_env_config(
+async def search_env_configs(
         config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -301,8 +301,8 @@ async def search_env_config(
 
 
 @autotest_env_config.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
-async def query_classify_env_config(
-        body: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+async def query_env_configs_classified(
+        config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -311,7 +311,7 @@ async def query_classify_env_config(
     """
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
-            project_ids=body.project_ids,
+            project_ids=config_in.project_ids,
         )
         total_configs: int = sum(
             len(names)
@@ -320,7 +320,7 @@ async def query_classify_env_config(
             for names in buckets.values()
         )
         LOGGER.info(
-            f"根据应用列表查询环境配置并分类成功, project_ids={body.project_ids}, 配置条数: {total_configs}"
+            f"根据应用列表查询环境配置并分类成功, project_ids={config_in.project_ids}, 配置条数: {total_configs}"
         )
         return SuccessResponse(message="查询成功", data=data, total=total_configs)
     except ParameterException as e:
@@ -331,7 +331,7 @@ async def query_classify_env_config(
 
 
 @autotest_env_config.get("/config_names", summary="查询配置名称", description="获取去重后的配置名称列表")
-async def get_unique_env_config_name_list(
+async def get_env_config_names(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
         config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型，可选"),

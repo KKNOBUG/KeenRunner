@@ -8,7 +8,7 @@
 """
 import traceback
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Body, Query, Depends
 
 from backend.applications.base.dependencies import get_menu_crud
 from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
@@ -71,7 +71,7 @@ def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     return out
 
 @menu.post("/list", summary="查看菜单列表", description="根据name或type查询菜单信息")
-async def list_menu(
+async def list_menus(
         name: str = Query(default="", description="菜单名称(子串匹配)"),
         menu_type: str = Query(default="", description="菜单类型：catalog/menu"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
@@ -142,7 +142,7 @@ async def get_menu(
 
 @menu.post("/create", summary="创建菜单")
 async def create_menu(
-        menu_in: MenuCreate,
+        menu_in: MenuCreate = Body(..., description="菜单信息"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
@@ -165,7 +165,7 @@ async def create_menu(
 
 @menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
 async def update_menu(
-        menu_in: MenuUpdate,
+        menu_in: MenuUpdate = Body(..., description="菜单信息"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """

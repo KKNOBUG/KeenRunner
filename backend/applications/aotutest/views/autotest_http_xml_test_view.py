@@ -208,7 +208,7 @@ _SAMPLE_REQUEST_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 @autotest_http_xml_test.post(path="/xml", summary="HTTP XML测试接口", description="保险理赔申请")
-async def http_xml_test_endpoint(request: Request):
+async def http_xml_test(request: Request):
     """
     接收XML格式请求报文（保险理赔申请），返回XML格式响应。
 

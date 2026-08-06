@@ -114,7 +114,7 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
 
 
 @autotest_data_source.post("/create", summary="新增数据源")
-async def create_data_source_info(
+async def create_data_source(
         data_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -142,7 +142,7 @@ async def create_data_source_info(
 
 
 @autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源信息")
-async def delete_data_source_info(
+async def delete_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
         case_id: Optional[int] = Query(None, description="用例ID"),
@@ -208,7 +208,7 @@ async def unbind_case_data_source(
 
 
 @autotest_data_source.post("/update", summary="更新数据源")
-async def update_data_source_info(
+async def update_data_source(
         data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -252,7 +252,7 @@ async def update_data_source_info(
 
 
 @autotest_data_source.post("/save_or_update", summary="保存数据源", description="保存或更新数据源信息")
-async def save_or_update_data_source_info(
+async def save_or_update_data_source(
         data_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -341,7 +341,7 @@ async def save_or_update_data_source_info(
 
 
 @autotest_data_source.get("/get", summary="查询数据源", description="根据条件查询单条数据源信息")
-async def get_data_source_info(
+async def get_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
         case_id: Optional[int] = Query(None, description="用例ID"),
@@ -384,7 +384,7 @@ async def get_data_source_info(
 
 
 @autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询案例数据场景名称")
-async def query_case_name(
+async def query_dataset_names(
         case_id: int = Form(..., title="案例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -419,7 +419,7 @@ async def query_case_name(
 
 
 @autotest_data_source.post("/search", summary="查询数据源列表", description="根据条件分页查询数据源列表信息(Body)")
-async def search_data_source_info(
+async def search_data_sources(
         sel_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -604,7 +604,7 @@ async def get_scene_names_by_case(
 
 
 @autotest_data_source.get("/dataset_scenario", summary="查询数据集场景", description="查询某步骤下单个数据集场景")
-async def get_dataset_scenario_info(
+async def get_dataset_scenario(
         case_id: int = Query(..., description="用例ID"),
         step_code: str = Query(..., description="步骤标识代码"),
         dataset_name: str = Query(..., description="数据集/场景名称"),

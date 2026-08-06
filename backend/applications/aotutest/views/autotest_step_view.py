@@ -347,20 +347,20 @@ async def copy_step_tree(
 
 @autotest_step.post("/update_or_create_tree", summary="更新步骤树", description="更新或创建用例级步骤树")
 async def batch_update_steps_tree(
-        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
+        tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     更新用例级步骤树。
 
-    :param data: 步骤树入参
+    :param tree_in: 步骤树入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         # 获取用例信息和步骤数据
-        case_data: AutoTestApiCaseUpdate = data.case
-        steps_data: List[AutoTestStepTreeUpdateItem] = data.steps
+        case_data: AutoTestApiCaseUpdate = tree_in.case
+        steps_data: List[AutoTestStepTreeUpdateItem] = tree_in.steps
 
         # 1. 校验步骤树结构合法性
         is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(steps_data)
@@ -1744,23 +1744,23 @@ def _serialize_for_celery_steps_execute_config(
 
 @autotest_step.post("/execute_or_debugging", summary="执行步骤树", description="执行或调试步骤树")
 async def execute_step_tree(
-        request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
+        execute_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     执行或调试步骤树。
 
-    :param request: 业务入参
+    :param execute_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        case_id: int = request.case_id
-        execute_type: AutoTestReportType = request.execute_type
-        steps: Optional[List[AutoTestStepTreeUpdateItem]] = request.steps
-        initial_variables: Optional[List[StepVariablesBase]] = request.initial_variables
-        steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = request.steps_execute_config
-        selected_dataset_names: Optional[List[str]] = request.selected_dataset_names
+        case_id: int = execute_in.case_id
+        execute_type: AutoTestReportType = execute_in.execute_type
+        steps: Optional[List[AutoTestStepTreeUpdateItem]] = execute_in.steps
+        initial_variables: Optional[List[StepVariablesBase]] = execute_in.initial_variables
+        steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = execute_in.steps_execute_config
+        selected_dataset_names: Optional[List[str]] = execute_in.selected_dataset_names
 
         if execute_type == AutoTestReportType.SYNC_EXEC:
             return SuccessResponse(message="同步执行暂未开放", data=None, total=0)
@@ -2024,21 +2024,21 @@ async def execute_step_tree(
 
 
 @autotest_step.post("/batch_execute", summary="批量执行用例")
-async def batch_execute_cases_endpoint(
-        request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
+async def batch_execute_cases(
+        batch_in: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     批量执行用例。
 
-    :param request: 业务入参
+    :param batch_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        case_ids = request.case_ids
-        env_name = request.env_name
-        initial_variables = request.initial_variables if request.initial_variables is not None else []
+        case_ids = batch_in.case_ids
+        env_name = batch_in.env_name
+        initial_variables = batch_in.initial_variables if batch_in.initial_variables is not None else []
         if not isinstance(initial_variables, list):
             initial_variables = []
         if not case_ids or len(case_ids) == 0:

@@ -39,7 +39,7 @@ autotest_tag = APIRouter()
 
 
 @autotest_tag.post("/create", summary="新增标签")
-async def create_tag_info(
+async def create_tag(
         tag_in: AutoTestApiTagCreate = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -75,7 +75,7 @@ async def create_tag_info(
 
 
 @autotest_tag.delete("/delete", summary="删除标签", description="根据id或code删除标签信息")
-async def delete_tag_info(
+async def delete_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -111,7 +111,7 @@ async def delete_tag_info(
 
 
 @autotest_tag.post("/delete", summary="批量删除标签", description="根据id或code列表删除标签信息")
-async def delete_tag_batch(
+async def delete_tags(
         tag_in: AutoTestApiTagDelete = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -134,7 +134,7 @@ async def delete_tag_batch(
 
 
 @autotest_tag.post("/update", summary="更新标签", description="根据id或code更新标签信息")
-async def update_tag_info(
+async def update_tag(
         tag_in: AutoTestApiTagUpdate = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -172,7 +172,7 @@ async def update_tag_info(
 
 
 @autotest_tag.get("/get", summary="查询标签", description="根据id或code查询标签信息")
-async def get_tag_info(
+async def get_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -211,7 +211,7 @@ async def get_tag_info(
 
 
 @autotest_tag.post("/search", summary="查询标签列表", description="根据条件分页查询标签列表信息(Body)")
-async def search_tags_info(
+async def search_tags(
         tag_in: AutoTestApiTagSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

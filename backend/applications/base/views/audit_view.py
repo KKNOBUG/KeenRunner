@@ -21,7 +21,7 @@ from backend.core.responses import FailureResponse, NotFoundResponse, SuccessRes
 audit = APIRouter()
 
 @audit.get("/list", summary="查询日志列表", description="根据条件分页查询日志信息(Query)")
-async def list_audit(
+async def list_audits(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         username: str = Query(default=None, description="用户名称"),
@@ -80,7 +80,7 @@ async def list_audit(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @audit.post("/search", summary="查询日志列表", description="根据条件分页查询日志信息(Body)")
-async def search_audit(
+async def search_audits(
         audit_in: AuditSelect = Body(..., description="查询条件"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
@@ -238,19 +238,19 @@ async def delete_audit(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 @audit.post("/delete", summary="批量删除日志", description="根据id列表批量删除日志信息")
-async def delete_audits_batch(
-        body_in: AuditBatchDelete = Body(..., description="审计日志ID列表"),
+async def delete_audits(
+        audit_in: AuditBatchDelete = Body(..., description="审计日志批量删除入参"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
     根据 id 列表删除审计日志。
 
-    :param body_in: 审计日志批量删除入参
+    :param audit_in: 审计日志批量删除入参
     :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
-        count = await audit_crud.delete_by_ids(body_in.audit_ids)
+        count = await audit_crud.delete_by_ids(audit_in.audit_ids)
         LOGGER.info(f"批量删除审计日志成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:

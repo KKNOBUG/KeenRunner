@@ -37,7 +37,7 @@ autotest_env = APIRouter()
 
 
 @autotest_env.post("/create", summary="新增环境")
-async def create_env_info(
+async def create_env(
         env_in: AutoTestApiEnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -69,7 +69,7 @@ async def create_env_info(
 
 
 @autotest_env.delete("/delete", summary="删除环境", description="根据id或code删除环境信息")
-async def delete_env_info(
+async def delete_env(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -105,7 +105,7 @@ async def delete_env_info(
 
 
 @autotest_env.post("/delete", summary="批量删除环境", description="根据id或code列表删除环境信息")
-async def delete_env_batch(
+async def delete_envs(
         env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -128,7 +128,7 @@ async def delete_env_batch(
 
 
 @autotest_env.post("/update", summary="更新环境", description="根据id或code更新环境信息")
-async def update_env_info(
+async def update_env(
         env_in: AutoTestApiEnvUpdate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -164,7 +164,7 @@ async def update_env_info(
 
 
 @autotest_env.get("/get", summary="查询环境", description="根据id或code查询环境信息")
-async def get_env_info(
+async def get_env(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -203,7 +203,7 @@ async def get_env_info(
 
 
 @autotest_env.get("/get_names", summary="查询环境名称", description="查询去重后的环境名称列表")
-async def get_env_name_list(
+async def get_env_names(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -222,7 +222,7 @@ async def get_env_name_list(
 
 
 @autotest_env.post("/search", summary="查询环境列表", description="根据条件分页查询环境列表信息(Body)")
-async def search_env_info(
+async def search_envs(
         env_in: AutoTestApiEnvSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

@@ -42,7 +42,7 @@ user_secure = APIRouter()
 
 @user_public.post("/create", summary="新增用户")
 async def create_user(
-        user_in: UserCreate = Body(),
+        user_in: UserCreate = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
@@ -185,7 +185,7 @@ async def get_user_by_username(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @user_secure.get("/list", summary="查询用户列表", description="根据条件分页查询用户列表信息(Query)")
-async def list_user(
+async def list_users(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
@@ -261,8 +261,8 @@ async def list_user(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @user_secure.post("/search", summary="查询用户列表", description="根据条件分页查询用户列表信息(Body)")
-async def get_users(
-        user_in: UserSelect = Body(),
+async def search_users(
+        user_in: UserSelect = Body(..., description="查询条件"),
         user_crud: UserCrud = Depends(get_user_crud),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -327,23 +327,23 @@ async def get_users(
 
 @user_secure.post("/update_password", summary="修改密码", description="根据当前登录用户ID修改密码")
 async def update_user_password(
-        req_in: UpdatePassword,
+        password_in: UpdatePassword = Body(..., description="修改密码入参"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
     修改密码。
 
-    :param req_in: 修改密码入参
+    :param password_in: 修改密码入参
     :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
     try:
         user_id = CTX_USER_ID.get()
         instance = await user_crud.get_or_error(user_id)
-        verified = verify_password(req_in.old_password, instance.password)
+        verified = verify_password(password_in.old_password, instance.password)
         if not verified:
             return FailureResponse(message="旧密码验证错误")
-        instance.password = get_password_hash(req_in.new_password)
+        instance.password = get_password_hash(password_in.new_password)
         await instance.save()
         data = await instance.to_dict(exclude_fields=["password"])
         LOGGER.info(f"修改密码成功, user_id: {user_id}")

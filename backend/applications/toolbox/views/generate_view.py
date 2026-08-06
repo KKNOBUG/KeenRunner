@@ -18,20 +18,22 @@ from backend.core.responses import SuccessResponse
 generate = APIRouter()
 
 @generate.post("/info", summary="随机生成虚拟信息")
-async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
+async def generate_info(
+        generate_in: GenerateVirtualInfo = Body(..., description="虚拟信息生成入参"),
+):
     """
     随机生成虚拟信息。
 
-    :param rq_in: 虚拟信息生成入参
+    :param generate_in: 虚拟信息生成入参
     :return: 统一HTTP响应
     """
     data: Dict[str, Any] = {}
-    number: int = rq_in.number
-    minAge: int = rq_in.minAge
-    maxAge: int = rq_in.maxAge
-    personOption: List[str] = rq_in.personOption
-    datetimeOption: List[str] = rq_in.datetimeOption
-    randomOption: List[str] = rq_in.randomOption
+    number: int = generate_in.number
+    minAge: int = generate_in.minAge
+    maxAge: int = generate_in.maxAge
+    personOption: List[str] = generate_in.personOption
+    datetimeOption: List[str] = generate_in.datetimeOption
+    randomOption: List[str] = generate_in.randomOption
 
     for x in range(number):
         info = GENERATE.generate_information(minAge=minAge, maxAge=maxAge, convert="capitalize")

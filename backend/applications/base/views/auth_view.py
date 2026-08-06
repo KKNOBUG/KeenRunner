@@ -35,7 +35,7 @@ auth_public = APIRouter()
 auth_secure = APIRouter()
 
 @auth_public.post("/access_token", summary="生成访问令牌", description="验证用户密码和状态并生成令牌")
-async def get_login_access_token(
+async def login(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -131,7 +131,7 @@ async def get_user_menu():
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @auth_secure.post("/userinfo", summary="查看当前用户信息")
-async def get_userinfo(
+async def get_user_info(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
@@ -151,7 +151,7 @@ async def get_userinfo(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @auth_secure.post("/getUserRouters", summary="查看当前用户路由")
-async def get_user_router():
+async def get_user_routers():
     """
     查看当前用户路由。
 

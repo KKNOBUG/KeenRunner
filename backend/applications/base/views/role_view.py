@@ -30,7 +30,7 @@ role = APIRouter()
 
 @role.post("/create", summary="创建角色")
 async def create_role(
-        role_in: RoleCreate,
+        role_in: RoleCreate = Body(..., description="角色信息"),
         current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
@@ -54,7 +54,7 @@ async def create_role(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
-async def delete_role_one(
+async def delete_role(
         role_id: int = Query(..., description="角色id"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
@@ -79,21 +79,21 @@ async def delete_role_one(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 @role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
-async def delete_roles_batch(
-        body_in: RoleBatchDelete = Body(..., description="id或code列表"),
+async def delete_roles(
+        role_in: RoleBatchDelete = Body(..., description="角色批量删除入参"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     批量删除角色。
 
-    :param body_in: 角色批量删除入参
+    :param role_in: 角色批量删除入参
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
         count = await role_crud.delete_roles(
-            role_ids=body_in.role_ids,
-            role_codes=body_in.role_codes,
+            role_ids=role_in.role_ids,
+            role_codes=role_in.role_codes,
         )
         LOGGER.info(f"批量删除角色成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
@@ -103,7 +103,7 @@ async def delete_roles_batch(
 
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(
-        role_in: RoleUpdate,
+        role_in: RoleUpdate = Body(..., description="角色信息"),
         current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
@@ -127,7 +127,7 @@ async def update_role(
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 @role.get("/get", summary="查看角色", description="根据角色code或name查看角色信息")
-async def get_role_by(
+async def get_role(
         code: str = Query(default=None, description="角色代码"),
         name: str = Query(default=None, description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
@@ -157,7 +157,7 @@ async def get_role_by(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 @role.get("/list", summary="查看角色列表", description="根据角色id或code查看角色信息")
-async def list_role(
+async def list_roles(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
@@ -211,7 +211,7 @@ async def get_role_authorized(
 
 @role.post("/authorized", summary="更新角色权限", description="根据角色id修改角色权限")
 async def update_role_authorized(
-        role_in: RoleUpdateMenusRouters,
+        role_in: RoleUpdateMenusRouters = Body(..., description="角色权限入参"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
