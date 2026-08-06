@@ -14,6 +14,7 @@ const stepDefinitions = {
   database: { allowChildren: false },
   redis: { allowChildren: false },
   quote: { allowChildren: false },
+  assert: { allowChildren: false },
 }
 
 let seed = 1000
@@ -43,6 +44,8 @@ const backendTypeToLocal = (step_type) => {
       return 'database'
     case 'Redis请求':
       return 'redis'
+    case '断言':
+      return 'assert'
     default:
       return 'code'
   }
@@ -245,6 +248,11 @@ export function mapBackendStep(step) {
       redis_searched: !!step.redis_searched,
       redis_operates: ops.length ? ops : [],
       extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
+      assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
+    }
+  } else if (localType === 'assert') {
+    base.config = {
+      step_name: step.step_name || '',
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
     }
   }

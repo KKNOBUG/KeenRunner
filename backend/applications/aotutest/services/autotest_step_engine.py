@@ -2145,6 +2145,58 @@ class PythonStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
+class AssertStepExecutor(BaseStepExecutor):
+    """
+    断言步骤执行器：按 assert_validators 执行断言，规则/比较符/管线与 HTTP 步骤断言对齐。
+
+    独立断言步骤无请求/响应报文时，数据源通常为变量池（session_variables/变量池）；
+    比较符复用 AutoTestAssertionOperation，经 StepAssertValidatorItem.operation 校验。
+    """
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        """
+        执行步骤上的断言规则，失败项通过apply_extract_and_assert转为StepExecutionError。
+
+        :param result: 本步执行结果
+        :return: None
+        :raises StepExecutionError: 缺少断言配置、规则类型非法或断言失败时抛出
+        """
+        try:
+            assert_validators = self.step.assert_validators
+            if not assert_validators:
+                raise StepExecutionError("【断言】缺少必要配置: assert_validators")
+            for valid in assert_validators:
+                if not isinstance(valid, StepAssertValidatorItem):
+                    raise StepExecutionError(
+                        f"【断言】子项参数异常: \n\t"
+                        f"预期类型: StepAssertValidatorItem\n\t"
+                        f"实际类型: {type(valid).__name__}"
+                    )
+
+            executive_st_time: datetime = datetime.now()
+            # 与 HTTP 共用提取/断言管线；
+            self.apply_extract_and_assert(
+                result,
+                step_label="断言",
+                extract_variables=[],
+                assert_validators=assert_validators,
+            )
+            executive_ed_time: datetime = datetime.now()
+            result.response = {
+                "assert_count": len(assert_validators),
+                "assert_passed": sum(1 for item in result.assert_validators if item.get("success")),
+                "assert_failed": sum(1 for item in result.assert_validators if not item.get("success")),
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+            }
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
+
+
 class WaitStepExecutor(BaseStepExecutor):
     """
     等待步骤执行器：根据step.wait秒数调用context.sleep。
@@ -3413,6 +3465,7 @@ class StepExecutorFactory:
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
+        AutoTestStepType.ASSERT: AssertStepExecutor,
     }
 
     @classmethod

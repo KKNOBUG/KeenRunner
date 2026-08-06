@@ -265,7 +265,11 @@ const validateExtractAssertInSteps = (stepList) => {
         if (!extractResult.valid) {
             return { valid: false, message: `步骤：${stepName}，${extractResult.message}` }
         }
-        const assertResult = validateAssertList(resolveStepListField(config, original, 'assert_validators'))
+        const assertList = resolveStepListField(config, original, 'assert_validators')
+        if (step.type === 'assert' && (!Array.isArray(assertList) || assertList.length === 0)) {
+            return { valid: false, message: `步骤：${stepName}，断言步骤至少需要配置一条断言规则` }
+        }
+        const assertResult = validateAssertList(assertList)
         if (!assertResult.valid) {
             return { valid: false, message: `步骤：${stepName}，${assertResult.message}` }
         }

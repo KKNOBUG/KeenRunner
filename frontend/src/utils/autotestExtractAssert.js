@@ -137,7 +137,7 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
   }
 }
 
-export function createEmptyAssertItem(assertMode, defaultSource = null) {
+export function createEmptyAssertItem(assertMode, defaultSource = null, defaultObject = null) {
   if (isVariableNameAssertMode(assertMode)) {
     return {
       name: '',
@@ -158,7 +158,7 @@ export function createEmptyAssertItem(assertMode, defaultSource = null) {
   }
   return {
     name: '',
-    object: 'Response Json',
+    object: defaultObject || 'Response Json',
     jsonpath: '',
     assertion: '等于',
     value: '',

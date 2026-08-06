@@ -16,6 +16,7 @@ const LOCAL_TYPE_TO_BACKEND = {
     quote: '引用公共脚本',
     database: '数据库请求',
     redis: 'Redis请求',
+    assert: '断言',
 }
 
 export const localTypeToBackend = (localType) => LOCAL_TYPE_TO_BACKEND[localType] || '代码请求(Python)'
@@ -223,6 +224,9 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
         } else if (step.type === 'code') {
             backendStep.code = config.code !== undefined ? config.code : (original.code || '')
+            backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+        } else if (step.type === 'assert') {
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '断言')
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
         } else if (step.type === 'loop') {
             backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'

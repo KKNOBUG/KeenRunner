@@ -17,6 +17,7 @@ export const VALID_STEP_TYPES = new Set([
   '数据库请求',
   'Redis请求',
   '引用公共脚本',
+  '断言',
 ])
 
 /** 新建/无步骤时编辑器初始模板（对齐 update_or_create_tree 新建入参） */

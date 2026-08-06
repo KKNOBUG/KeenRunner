@@ -169,6 +169,21 @@ class ExecutorFieldsValidation:
                 if not step.session_variables:
                     missing.append("session_variables")
 
+            elif step_type == AutoTestStepType.ASSERT:
+                if not step.assert_validators:
+                    missing.append("assert_validators")
+                else:
+                    for idx, item in enumerate(step.assert_validators):
+                        op_label = f"assert_validators[{idx}]"
+                        if not getattr(item, "name", None):
+                            missing.append(f"{op_label}.name")
+                        if not getattr(item, "source", None):
+                            missing.append(f"{op_label}.source")
+                        if not getattr(item, "expr", None):
+                            missing.append(f"{op_label}.expr")
+                        if not getattr(item, "operation", None):
+                            missing.append(f"{op_label}.operation")
+
             if missing:
                 errors.append({
                     "step_code": step_code,

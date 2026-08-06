@@ -298,6 +298,7 @@ import ApiIfEditor from "@/views/autotest/condition_controller/index.vue";
 import ApiWaitEditor from "@/views/autotest/wait_controller/index.vue";
 import ApiUserVariablesEditor from "@/views/autotest/user_variables_controller/index.vue";
 import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
+import ApiAssertEditor from "@/views/autotest/assert_controller/index.vue";
 import api from "@/api";
 import { mapBackendStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
@@ -330,6 +331,7 @@ const stepDefinitions = {
   database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
   redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:file-rs'},
   quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
+  assert: {label: '断言', allowChildren: false, icon: 'material-symbols:rule'},
 }
 
 const {
@@ -354,6 +356,7 @@ const editorMap = {
   wait: ApiWaitEditor,
   user_variables: ApiUserVariablesEditor,
   quote: ApiQuoteEditor,
+  assert: ApiAssertEditor,
 }
 
 let seed = 1000
@@ -1719,7 +1722,12 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
                             extract_variables: [],
                             assert_validators: []
                           }
-                          : {}
+                          : type === 'assert'
+                              ? {
+                                step_name: '断言',
+                                assert_validators: []
+                              }
+                              : {}
   const defaultName = type === 'loop'
       ? '循环结构(次数循环)'
       : type === 'if'
@@ -1732,9 +1740,11 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
                       ? '数据库请求'
                       : type === 'redis'
                           ? 'Redis请求'
-                          : type === 'quote' && extraConfig?.step_name
-                              ? extraConfig.step_name
-                              : `${def.label}`
+                          : type === 'assert'
+                              ? '断言'
+                              : type === 'quote' && extraConfig?.step_name
+                                  ? extraConfig.step_name
+                                  : `${def.label}`
   const config = extraConfig ? {...defaultConfig, ...extraConfig} : defaultConfig
   const newStep = {
     id: genId(),
@@ -2038,6 +2048,10 @@ const updateStepConfig = (id, config) => {
       if (config.step_name !== undefined) {
         step.name = String(config.step_name).trim() || '代码请求(Python)'
       }
+    } else if (step.type === 'assert') {
+      if (config.step_name !== undefined && config.step_name !== null) {
+        step.name = String(config.step_name).trim() || '断言'
+      }
     } else if (step.type === 'database') {
       if (config.step_name !== undefined && String(config.step_name).trim()) {
         step.name = String(config.step_name).trim()
@@ -2078,6 +2092,7 @@ const getStepIconClass = (type) => {
     wait: 'icon-wait',
     database: 'icon-database',
     redis: 'icon-redis',
+    assert: 'icon-assert',
     user_variables: 'icon-user_variables',
     quote: 'icon-quote',
     quote_public_script: 'icon-quote',
@@ -2686,6 +2701,10 @@ provide('stepTreeContext', {
 }
 
 :deep(.step-icon.icon-redis) {
+  color: #BA55D3;
+}
+
+:deep(.step-icon.icon-assert) {
   color: #BA55D3;
 }
 

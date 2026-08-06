@@ -54,7 +54,7 @@ class ProjectConfig(BaseSettings):
     SERVER_APP: str = "backend_main:app"
     SERVER_HOST: str = ShellUtils.acquire_localhost()
     SERVER_SYSTEM: str = platform.system()
-    SERVER_PORT: int = 8518
+    SERVER_PORT: int = 8519
     SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
     SERVER_DELAY: int = 5
 

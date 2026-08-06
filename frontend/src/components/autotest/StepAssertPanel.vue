@@ -154,6 +154,8 @@ const props = defineProps({
   },
   readonly: { type: Boolean, default: false },
   sourceOptions: { type: Array, default: () => [] },
+  /** response 模式下新建断言的默认断言对象（如独立断言步骤默认「变量池」） */
+  defaultObject: { type: String, default: null },
 })
 
 const model = defineModel({ type: Object, default: () => ({}) })
@@ -188,7 +190,7 @@ function exprPlaceholder(item) {
 
 function addItem() {
   const key = getNextDictKey(model.value)
-  model.value[key] = createEmptyAssertItem(props.mode, defaultSource())
+  model.value[key] = createEmptyAssertItem(props.mode, defaultSource(), props.defaultObject)
   collapseState[key] = false
 }
 
