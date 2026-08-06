@@ -135,15 +135,12 @@ async def search_routers(
         page = router_in.page
         page_size = router_in.page_size
         order = router_in.order
-        id = router_in.id
         path = router_in.path
         method = router_in.method
         summary = router_in.summary
         tags = router_in.tags
 
         q = Q()
-        if id:
-            q &= Q(id__contains=id)
         if path:
             q &= Q(path__contains=path)
         if method:
