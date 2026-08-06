@@ -8,8 +8,9 @@
 """
 from __future__ import annotations
 
+import json
 import operator
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List
 
 from backend.enums.autotest_enum import AutoTestAssertionOperation
 
@@ -104,6 +105,27 @@ class AssertionCompare:
         return actual_len == int(nb)
 
     @classmethod
+    def _assertion_array_length_equal(cls, actual: Any, expected: Any) -> bool:
+        """
+        比较容器（数组/对象）元素个数是否等于期望长度；与「长度等于」区分，后者偏字符串长度。
+
+        仅支持 list/tuple/set/frozenset/dict；字符串、标量、None 返回 False。
+
+        :param actual: 实际值（数组或对象）
+        :param expected: 期望长度（数字字符串会经_normalize_value转换）
+        :return: 容器长度是否相等
+        """
+        nb = cls._normalize_value(expected)
+        if nb is None or actual is None:
+            return False
+        if not isinstance(actual, (list, tuple, set, frozenset, dict)):
+            return False
+        try:
+            return len(actual) == int(nb)
+        except (TypeError, ValueError):
+            return False
+
+    @classmethod
     def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
         """
         判断实际值是否为空。
@@ -136,6 +158,80 @@ class AssertionCompare:
         return not cls._assertion_is_empty(actual, None)
 
     @classmethod
+    def _parse_set_literal(cls, text: str) -> List[Any]:
+        """
+        解析集合字面量内部文本：统一全角/半角逗号后分割，去掉可选首尾引号，再经_normalize_value转类型。
+
+        :param text: 去掉外层[]或{}后的内容
+        :return: 元素列表
+        """
+        elements: List[Any] = []
+        for part in text.replace("，", ",").split(","):
+            token = part.strip()
+            if not token:
+                continue
+            if len(token) >= 2 and token[0] == token[-1] and token[0] in "\"'":
+                token = token[1:-1]
+            elements.append(cls._normalize_value(token))
+        return elements
+
+    @classmethod
+    def _coerce_to_collection(cls, expected: Any) -> List[Any]:
+        """
+        将期望值规范为成员判断用的列表。
+
+        支持list/tuple/set/frozenset、JSON数组字符串、{张三, 李四, 10086}字面量；
+        其余标量视为单元素集合；dict与JSON对象拒绝。
+
+        :param expected: 用户给定的集合或可解析为集合的值
+        :return: 元素列表
+        :raises ValueError: 期望值非法时
+        """
+        if expected is None:
+            raise ValueError("集合期望值不允许为[None | Null]")
+        if isinstance(expected, (list, tuple, set, frozenset)):
+            return list(expected)
+        if isinstance(expected, dict):
+            raise ValueError("集合期望值不支持Dict，请使用List/Set或集合字面量")
+        if not isinstance(expected, str):
+            return [expected]
+
+        text = expected.strip()
+        if not text:
+            raise ValueError("集合期望值不允许为空字符串")
+
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                parsed = None
+            if isinstance(parsed, list):
+                return parsed
+            return cls._parse_set_literal(text[1:-1])
+
+        if text.startswith("{") and text.endswith("}"):
+            try:
+                parsed = json.loads(text)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                parsed = None
+            if isinstance(parsed, dict):
+                raise ValueError("集合期望值不支持JSON对象，请使用[元素1, 元素2]或{元素1, 元素2}写法")
+            return cls._parse_set_literal(text[1:-1])
+
+        return [cls._normalize_value(text)]
+
+    @classmethod
+    def _assertion_in_set(cls, actual: Any, expected: Any) -> bool:
+        """
+        判断实际值是否属于期望集合（类型感知相等）。
+
+        :param actual: 实际值
+        :param expected: 集合（list/set/JSON数组/{张三, 李四, 10086}）
+        :return: 是否属于集合
+        """
+        return any(cls._type_aware_equals(actual, item) for item in cls._coerce_to_collection(expected))
+
+    @classmethod
     def compare_assertion(cls, actual: Any, operation: str, expected: Any) -> bool:
         """
         根据操作符对实际值与期望值做断言比较；operation须为AutoTestAssertionOperation枚举值。
@@ -159,8 +255,11 @@ class AssertionCompare:
             AutoTestAssertionOperation.LESS_THAN: lambda a, e: cls._type_aware_compare(a, e, operator.lt),
             AutoTestAssertionOperation.LESS_OR_EQUAL: lambda a, e: cls._type_aware_compare(a, e, operator.le),
             AutoTestAssertionOperation.LENGTH_EQUAL: cls._assertion_length_equal,
+            AutoTestAssertionOperation.ARRAY_LENGTH_EQUAL: cls._assertion_array_length_equal,
             AutoTestAssertionOperation.CONTAINS: lambda a, e: str(e) in str(a),
             AutoTestAssertionOperation.NOT_CONTAINS: lambda a, e: str(e) not in str(a),
+            AutoTestAssertionOperation.IN_SET: cls._assertion_in_set,
+            AutoTestAssertionOperation.NOT_IN_SET: lambda a, e: not cls._assertion_in_set(a, e),
             AutoTestAssertionOperation.STARTS_WITH: lambda a, e: str(a).startswith(str(e)),
             AutoTestAssertionOperation.ENDS_WITH: lambda a, e: str(a).endswith(str(e)),
             AutoTestAssertionOperation.NOT_EMPTY: cls._assertion_not_empty,
