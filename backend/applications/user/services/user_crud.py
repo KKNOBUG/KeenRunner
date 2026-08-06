@@ -28,7 +28,6 @@ from backend.core.exceptions import (
 from backend.core.responses import ForbiddenResponse
 from backend.services import verify_password, get_password_hash
 
-
 class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     def __init__(self):

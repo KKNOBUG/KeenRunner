@@ -37,7 +37,6 @@ from backend.services import DependAuth
 
 dept = APIRouter()
 
-
 @dept.post("/create", summary="新增部门信息")
 async def create_dept(
         department_in: DepartmentCreate = Body(),
@@ -68,7 +67,6 @@ async def create_dept(
         LOGGER.error(f"新增部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
-
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
 async def delete_dept_one(
         department_id: int = Query(..., description="部门ID"),
@@ -92,7 +90,6 @@ async def delete_dept_one(
         LOGGER.error(f"删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
-
 @dept.post("/delete", summary="批量删除部门", description="根据id列表批量删除部门信息")
 async def delete_depts_batch(
         body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
@@ -112,7 +109,6 @@ async def delete_depts_batch(
     except Exception as e:
         LOGGER.error(f"批量删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
-
 
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
 async def update_dept(
@@ -144,7 +140,6 @@ async def update_dept(
         LOGGER.error(f"更新部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
-
 @dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
 async def get_dept(
         department_id: int = Query(..., description="部门ID"),
@@ -169,7 +164,6 @@ async def get_dept(
         LOGGER.error(f"查询部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
 async def list_dept(
         name: str = Query(default=None, description="部门名称"),
@@ -189,7 +183,6 @@ async def list_dept(
     except Exception as e:
         LOGGER.error(f"查询部门列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
 
 @dept.post("/search", summary="查询部门列表", description="根据条件分页查询部门列表信息(Body)")
 async def search_dept(

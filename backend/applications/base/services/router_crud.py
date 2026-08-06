@@ -18,7 +18,6 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
-
 class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
     def __init__(self):

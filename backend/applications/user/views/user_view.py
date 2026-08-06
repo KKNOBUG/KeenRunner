@@ -40,7 +40,6 @@ from backend.services import CTX_USER_ID, verify_password, get_password_hash
 user_public = APIRouter()
 user_secure = APIRouter()
 
-
 @user_public.post("/create", summary="新增用户")
 async def create_user(
         user_in: UserCreate = Body(),
@@ -63,7 +62,6 @@ async def create_user(
     except Exception as e:
         LOGGER.error(f"新增用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
-
 
 @user_secure.delete("/delete", summary="删除用户", description="根据id删除用户信息")
 async def delete_user(
@@ -90,7 +88,6 @@ async def delete_user(
         LOGGER.error(f"删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
-
 @user_secure.post("/deletes", summary="批量删除用户", description="根据id列表批量删除用户信息")
 async def delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
@@ -111,7 +108,6 @@ async def delete_users(
     except Exception as e:
         LOGGER.error(f"根据id列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
-
 
 @user_secure.post("/update", summary="更新用户", description="根据id更新用户信息")
 async def update_user(
@@ -137,7 +133,6 @@ async def update_user(
     except Exception as e:
         LOGGER.error(f"更新用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
-
 
 @user_secure.get("/get", summary="查询用户信息", description="根据id查询用户信息")
 async def get_user(
@@ -166,7 +161,6 @@ async def get_user(
         LOGGER.error(f"查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @user_secure.get("/byUsername", summary="查询用户信息", description="根据用户名查询用户信息")
 async def get_user_by_username(
         username: str = Query(..., description="用户名称"),
@@ -189,7 +183,6 @@ async def get_user_by_username(
     except Exception as e:
         LOGGER.error(f"根据用户名查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
 
 @user_secure.get("/list", summary="查询用户列表", description="根据条件分页查询用户列表信息(Query)")
 async def list_user(
@@ -267,7 +260,6 @@ async def list_user(
         LOGGER.error(f"查询用户列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @user_secure.post("/search", summary="查询用户列表", description="根据条件分页查询用户列表信息(Body)")
 async def get_users(
         user_in: UserSelect = Body(),
@@ -333,7 +325,6 @@ async def get_users(
         LOGGER.error(f"查询用户列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @user_secure.post("/update_password", summary="修改密码", description="根据当前登录用户ID修改密码")
 async def update_user_password(
         req_in: UpdatePassword,
@@ -361,7 +352,6 @@ async def update_user_password(
         LOGGER.error(f"修改密码失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"修改失败，异常描述: {e}")
 
-
 @user_secure.post("/reset_password", summary="重置密码")
 async def reset_password(
         user_id: int = Body(..., description="用户ID", embed=True),
@@ -381,7 +371,6 @@ async def reset_password(
     except Exception as e:
         LOGGER.error(f"重置密码失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"重置失败，异常描述: {e}")
-
 
 @user_secure.post("/logout", summary="用户登出", description="退出当前登录用户")
 async def logout(

@@ -72,7 +72,7 @@ async def create_step_detail(
 
 
 @autotest_detail.delete("/delete", summary="删除明细", description="根据id或code删除明细信息")
-async def delete_report(
+async def delete_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
@@ -114,7 +114,7 @@ async def delete_report(
 
 
 @autotest_detail.post("/update", summary="更新明细", description="根据id或code更新明细信息")
-async def update_report(
+async def update_detail(
         detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -168,12 +168,16 @@ async def get_step_detail(
     try:
         if detail_id:
             instance = await services.detail_curd.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
-        else:
+        elif step_code and report_code:
             instance = await services.detail_curd.get_by_conditions(
                 only_one=True,
                 on_error=True,
-                conditions={"step_code": step_code, "report_code": report_code}
+                step_code=step_code,
+                report_code=report_code,
+                state__not=1,
             )
+        else:
+            return ParameterResponse(message="查询明细失败, 请传detail_id或(step_code与report_code)")
         data = await instance.to_dict(
             exclude_fields={
                 "state",

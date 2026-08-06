@@ -213,7 +213,7 @@ async def get_project_info(
 
 
 @autotest_project.get("/get_names", summary="查询应用名称", description="查询去重后的应用名称列表")
-async def get_env_name_list(
+async def get_project_name_list(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -254,11 +254,15 @@ async def search_project_info(
         if project_in.project_phase:
             q &= Q(project_phase__contains=project_in.project_phase)
         if project_in.project_dev_owners:
+            owner_q = Q()
             for dev_owner in project_in.project_dev_owners:
-                q |= Q(project_dev_owners__contains=[dev_owner])
+                owner_q |= Q(project_dev_owners__contains=[dev_owner])
+            q &= owner_q
         if project_in.project_test_owners:
+            owner_q = Q()
             for test_owner in project_in.project_test_owners:
-                q |= Q(project_test_owners__contains=[test_owner])
+                owner_q |= Q(project_test_owners__contains=[test_owner])
+            q &= owner_q
         if project_in.created_user:
             q &= Q(created_user__contains=project_in.created_user)
         if project_in.updated_user:

@@ -27,7 +27,6 @@ from backend.services.file_transfer import FileTransfer
 
 file_transfer = APIRouter()
 
-
 @file_transfer.post("/upload", summary="上传文件")
 async def upload_file(
         file: UploadFile = File(..., description="文件对象"),
@@ -70,7 +69,6 @@ async def upload_file(
         LOGGER.error(f"上传文件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"上传失败，异常描述: {e}")
 
-
 @file_transfer.post("/download", summary="下载文件")
 async def download_file(path: Union[str, Path] = Form(..., description="文件下载路径")):
     """
@@ -89,7 +87,6 @@ async def download_file(path: Union[str, Path] = Form(..., description="文件�
             "Content-Disposition": f"attachment; filename*=utf-8''{filename}"
         }
     )
-
 
 @file_transfer.post("/read", summary="读取文件")
 async def read_file(path: Union[str, Path] = Form(..., description="文件读取路径")):
@@ -110,7 +107,6 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
     except Exception as e:
         LOGGER.error(f"读取文件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"读取失败，异常描述: {e}", data={"error": str(e)})
-
 
 @file_transfer.post("/move", summary="移动文件")
 async def move_file(

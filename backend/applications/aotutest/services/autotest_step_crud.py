@@ -57,9 +57,6 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
 class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
 
     def __init__(self):
-        """
-        初始化CRUD，绑定模型AutoTestApiStepInfo。
-        """
         super().__init__(model=AutoTestApiStepInfo)
 
     async def get_by_id(self, step_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
@@ -310,24 +307,24 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 if request_project_id:
                     try:
                         project_ids.add(int(request_project_id))
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError):
+                        LOGGER.warning(f"忽略非法参数[request_project_id]: {request_project_id}")
             elif st_e == AutoTestStepType.DATABASE:
                 for db_operate in step.database_operates or []:
                     project_id = db_operate.project_id
                     if project_id:
                         try:
                             project_ids.add(int(project_id))
-                        except Exception:
-                            pass
+                        except (TypeError, ValueError):
+                            LOGGER.warning(f"忽略非法参数[database.project_id]: {project_id}")
             elif st_e == AutoTestStepType.REDIS:
                 for redis_operate in step.redis_operates or []:
                     project_id = redis_operate.project_id
                     if project_id:
                         try:
                             project_ids.add(int(project_id))
-                        except Exception:
-                            pass
+                        except (TypeError, ValueError):
+                            LOGGER.warning(f"忽略非法[redis.project_id]: {project_id}")
             for child in step.children or []:
                 recursive_require_project_ids(child)
             for quote_step in step.quote_steps or []:
@@ -854,13 +851,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 # 业务层验证: 检查用例是否存在
                 case_instance = await case_crud.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
 
-                # 业务层验证: 检查同一用例下步骤序号是否已存在
-                existing_step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_conditions(
-                    only_one=True,
-                    on_error=False,
+                existing_step_instance: Optional[AutoTestApiStepInfo] = await self.model.filter(
+                    case_id=case_id,
+                    step_no=step_no,
+                    step_code=step_code,
                     state__not=1,
-                    conditions={"case_id": case_id, "step_no": step_no, "step_code": step_code},
-                )
+                ).first()
                 if existing_step_instance:
                     error_message: str = (
                         f"第{sid}步骤新增失败, "
@@ -1412,7 +1408,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                             )
                             case_results.append(one)
                             LOGGER.info(
-                                f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                                f"用例[id={case_id}]第[{run_idx}/{total_runs}]次执行完成: "
                                 f"[dataset={ds_name}, success={one.get('success', False)}]"
                             )
                     empty_error = "未执行任何数据集"

@@ -18,7 +18,6 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
 
-
 class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
     def __init__(self):
@@ -135,12 +134,14 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         await role.menus.clear()
         for menu_id in menu_ids:
             menu_obj = await Menu.filter(id=menu_id).first()
-            await role.menus.add(menu_obj)
+            if menu_obj:
+                await role.menus.add(menu_obj)
 
         await role.routers.clear()
         for item in router_infos:
             router_obj = await Router.filter(path=item.get("path"), method=item.get("method")).first()
-            await role.routers.add(router_obj)
+            if router_obj:
+                await role.routers.add(router_obj)
 
     async def delete_role(self, role_id: int, **kwargs) -> Role:
         """
@@ -169,7 +170,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
                 try:
                     await self.remove_or_error(id=int(rid))
                     n += 1
-                except (DoesNotExist, Exception):
+                except DoesNotExist:
                     continue
         elif role_codes:
             for code in role_codes:
@@ -178,6 +179,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
                     try:
                         await self.remove_or_error(id=obj.id)
                         n += 1
-                    except Exception:
+                    except DoesNotExist:
                         continue
         return n

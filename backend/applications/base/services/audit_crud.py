@@ -16,7 +16,6 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException, NotFoundException
 
-
 class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
     def __init__(self):

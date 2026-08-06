@@ -157,7 +157,7 @@ async def update_env_config(
                 "created_time", "updated_time",
                 "reserve_1", "reserve_2", "reserve_3"
             },
-            replace_fields={"id": "env_id"}
+            replace_fields={"id": "config_id"}
         )
         LOGGER.info(f"根据id或code更新环境配置成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
@@ -175,7 +175,7 @@ async def update_env_config(
 
 
 @autotest_env_config.get("/get", summary="查询环境配置", description="根据id或code查询环境配置信息")
-async def get_env_info(
+async def get_env_config(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -189,6 +189,8 @@ async def get_env_info(
     :return: 统一HTTP响应
     """
     try:
+        if not config_id and not config_code:
+            return ParameterResponse(message="查询环境配置失败, 参数[config_id]或[config_code]至少传一个")
         if config_id:
             instance = await services.env_config_curd.get_by_id(config_id=config_id, on_error=True, state__not=1)
         else:
@@ -200,7 +202,7 @@ async def get_env_info(
                 "created_time", "updated_time",
                 "reserve_1", "reserve_2", "reserve_3"
             },
-            replace_fields={"id": "env_id"}
+            replace_fields={"id": "config_id"}
         )
         LOGGER.info(f"根据id或code查询环境配置成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
@@ -214,7 +216,7 @@ async def get_env_info(
 
 
 @autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
-async def search_env_info(
+async def search_env_config(
         config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

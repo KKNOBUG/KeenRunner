@@ -20,7 +20,6 @@ from backend.core.responses import FailureResponse, NotFoundResponse, SuccessRes
 
 audit = APIRouter()
 
-
 @audit.get("/list", summary="查询日志列表", description="根据条件分页查询日志信息(Query)")
 async def list_audit(
         page: int = Query(default=1, ge=1, description="页码"),
@@ -80,7 +79,6 @@ async def list_audit(
         LOGGER.error(f"查询审计日志列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @audit.post("/search", summary="查询日志列表", description="根据条件分页查询日志信息(Body)")
 async def search_audit(
         audit_in: AuditSelect = Body(..., description="查询条件"),
@@ -124,7 +122,6 @@ async def search_audit(
         LOGGER.error(f"查询审计日志列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @audit.get("/get", summary="查询日志", description="根据id查询日志信息")
 async def get_audit(
         audit_id: int = Query(..., description="日志ID"),
@@ -147,7 +144,6 @@ async def get_audit(
     except Exception as e:
         LOGGER.error(f"查询审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
 
 @audit.get("/byUser", summary="查询用户日志", description="根据用户id分页查询日志信息")
 async def get_audit_by_user(
@@ -175,7 +171,6 @@ async def get_audit_by_user(
         LOGGER.error(f"查询用户审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @audit.get("/recent", summary="查询最近日志", description="根据条件获取最近日志信息")
 async def get_recent_audits(
         limit: int = Query(default=10, ge=1, le=100, description="返回数量"),
@@ -199,7 +194,6 @@ async def get_recent_audits(
         LOGGER.error(f"查询最近审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @audit.get("/statistics", summary="查询日志统计", description="根据用户id查询日志统计信息")
 async def get_audit_statistics(
         user_id: int = Query(..., description="用户ID"),
@@ -219,7 +213,6 @@ async def get_audit_statistics(
     except Exception as e:
         LOGGER.error(f"统计审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"统计失败，异常描述: {e}")
-
 
 @audit.delete("/delete", summary="删除日志", description="根据id删除日志信息")
 async def delete_audit(
@@ -244,7 +237,6 @@ async def delete_audit(
         LOGGER.error(f"删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
-
 @audit.post("/delete", summary="批量删除日志", description="根据id列表批量删除日志信息")
 async def delete_audits_batch(
         body_in: AuditBatchDelete = Body(..., description="审计日志ID列表"),
@@ -265,7 +257,6 @@ async def delete_audits_batch(
         LOGGER.error(f"批量删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
-
 @audit.delete("/delete_by_user", summary="删除用户日志", description="根据用户id删除全部日志信息")
 async def delete_audits_by_user(
         user_id: int = Query(..., description="用户ID"),
@@ -285,7 +276,6 @@ async def delete_audits_by_user(
     except Exception as e:
         LOGGER.error(f"根据用户删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
-
 
 @audit.delete("/delete_by_time", summary="删除时间范围日志", description="根据时间范围删除日志信息")
 async def delete_audits_by_time(
@@ -308,7 +298,6 @@ async def delete_audits_by_time(
     except Exception as e:
         LOGGER.error(f"根据时间删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
-
 
 @audit.delete("/clear_all", summary="清空审计日志", description="清空所有审计日志(危险操作)")
 async def clear_all_audits(

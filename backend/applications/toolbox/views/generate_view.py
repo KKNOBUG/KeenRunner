@@ -17,7 +17,6 @@ from backend.core.responses import SuccessResponse
 
 generate = APIRouter()
 
-
 @generate.post("/info", summary="随机生成虚拟信息")
 async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
     """
@@ -34,12 +33,10 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
     datetimeOption: List[str] = rq_in.datetimeOption
     randomOption: List[str] = rq_in.randomOption
 
-    # 随机人员
     for x in range(number):
         info = GENERATE.generate_information(minAge=minAge, maxAge=maxAge, convert="capitalize")
         data.setdefault("person", []).append({k: v for k, v in info.items() if k in personOption})
 
-    # 随机时间
     formats: Dict[int, str] = {
         11: "Y",
         12: "M",
@@ -96,7 +93,6 @@ async def generate_info(rq_in: GenerateVirtualInfo = Body(...)):
                     fmt=key, isMicrosecond=key > 50)
                 data.setdefault(y, {}).setdefault(value, item)
 
-    # 随机数字
     for z in randomOption:
         if z == "uuid":
             data[z] = [GENERATE.generate_uuid() for _ in range(number)]

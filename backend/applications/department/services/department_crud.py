@@ -18,7 +18,6 @@ from backend.applications.department.schemas.department_schema import Department
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
-
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
 
     def __init__(self):

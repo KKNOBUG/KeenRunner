@@ -16,7 +16,6 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
-
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     def __init__(self):

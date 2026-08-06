@@ -94,7 +94,9 @@ async def _sync_step_data_source_meta(
             data_source_desc=(file_desc or "")[:2048] or None,
         )
     except Exception as e:
-        LOGGER.warning(f"同步步骤数据源元信息失败[case_id={case_id}, step_code={step_code}]: {e}")
+        error_message = f"同步步骤数据源元信息失败[case_id={case_id}, step_code={step_code}]: {e}"
+        LOGGER.error(error_message)
+        raise DataBaseStorageException(message=error_message) from e
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:

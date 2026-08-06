@@ -166,9 +166,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
             count = await AutoTestApiDetailCrud().model.filter(report_code=report_code, state__not=1).update(state=1)
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
-
-        instance.state = 1
-        await instance.save()
+            instance.state = 1
+            await instance.save()
         return instance
 
     async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiReportInfo]]:

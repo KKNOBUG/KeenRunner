@@ -695,12 +695,13 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 创建入参
         :return: 创建或更新后的生成记录
-        :raises DataAlreadyExistsException: 持久化异常时
+        :raises DataBaseStorageException: 违反约束时
+        :raises NotFoundException: 记录不存在时
         """
         try:
             instance = await self.get_by_hash(file_hash=data_in.file_hash, state__not=1)
             if instance:
-                instance = await self.update_data_create(
+                return await self.update_data_create(
                     data_in=AutoTestApiDataCreateUpdate(
                         id=instance.id,
                         create_status="0",
@@ -708,14 +709,12 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
                         file_desc=data_in.file_desc
                     )
                 )
-                return instance
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
-            instance = await self.create(data_dict)
-            return instance
-        except Exception as e:
-            error_message: str = f"新增数据源生成信息异常, 错误描述: {e}"
+            return await self.create(data_dict)
+        except IntegrityError as e:
+            error_message: str = f"新增数据源生成信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataAlreadyExistsException(message=error_message) from e
+            raise DataBaseStorageException(message=error_message) from e
 
     async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestApiDataCreateInfo:
         """
@@ -723,16 +722,21 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 更新入参
         :return: 更新后的生成记录
-        :raises DataAlreadyExistsException: 更新异常时
+        :raises DataBaseStorageException: 违反约束时
+        :raises NotFoundException: 记录不存在时
         """
         try:
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.update(id=data_in.id, obj_in=data_dict)
             return instance
-        except Exception as e:
-            error_message: str = f"更新数据源生成信息异常, 错误描述: {e}"
+        except DoesNotExist as e:
+            error_message: str = f"更新数据源生成信息失败, 记录[id={data_in.id}]不存在"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataAlreadyExistsException(message=error_message) from e
+            raise NotFoundException(message=error_message) from e
+        except IntegrityError as e:
+            error_message: str = f"更新数据源生成信息异常, 违反约束规则: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataBaseStorageException(message=error_message) from e
 
     async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestApiDataCreateInfo:
         """
@@ -793,10 +797,9 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     await data_create_crud.model.filter(step_code__in=step_code_list, state__not=1).update(state=1)
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
     for instance in instance_list:
-        if instance.file_hash and not instance.file_hash.endswith("X"):
-            if await aos.path.exists(instance.file_hash):
-                await aos.remove(instance.file_hash)
-    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]已被清理")
+        if instance.file_path and not str(instance.file_path).endswith("X"):
+            if await aos.path.exists(instance.file_path):
+                await aos.remove(instance.file_path)
     steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
     for step_info in steps_info:
         if step_info and step_info.file_name:

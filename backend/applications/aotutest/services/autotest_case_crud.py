@@ -128,11 +128,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
         case_type: Optional[AutoTestCaseType] = case_in.case_type
-        try:
-            case_tags = _normalize_case_tags(case_type, case_in.case_tags, context="新增用例信息失败")
-        except ParameterException as e:
-            LOGGER.error(str(e.message))
-            raise
+        case_tags = _normalize_case_tags(case_type, case_in.case_tags, context="新增用例信息失败")
 
         # 业务层验证: 检查标签是否全部存在(get_by_ids不接受空列表, 无标签时跳过)
         if case_tags:
@@ -222,11 +218,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         elif "case_tags" in update_dict or ("case_type" in update_dict and original_case_type in PUBLIC_CASE_TYPES):
             # 用户脚本：显式改标签，或从公共类型切过来时必须具备标签
             raw_tags = update_dict.get("case_tags", instance.case_tags)
-            try:
-                normalized_tags = _normalize_case_tags(effective_type, raw_tags, context="更新用例信息失败")
-            except ParameterException as e:
-                LOGGER.error(str(e.message))
-                raise
+            normalized_tags = _normalize_case_tags(effective_type, raw_tags, context="更新用例信息失败")
             update_dict["case_tags"] = normalized_tags
             await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
@@ -385,11 +377,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
             # 用例不存在，执行新增，及验证必填字段(仅用户脚本要求标签)
             if not case_instance:
-                try:
-                    case_tags = _normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
-                except ParameterException as e:
-                    LOGGER.error(str(e.message))
-                    raise
+                case_tags = _normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
                 if case_tags:
                     await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
                 if not case_name:
@@ -474,23 +462,21 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                         "case_type" in update_case_dict and case_instance.case_type in PUBLIC_CASE_TYPES
                 ):
                     raw_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    try:
-                        normalized_tags = _normalize_case_tags(effective_type, raw_tags, context=f"第{cid}条用例更新失败")
-                    except ParameterException as e:
-                        LOGGER.error(str(e.message))
-                        raise
+                    normalized_tags = _normalize_case_tags(effective_type, raw_tags, context=f"第{cid}条用例更新失败")
                     update_case_dict["case_tags"] = normalized_tags
                     await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
                 # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
+                    check_name = update_case_dict.get("case_name", case_instance.case_name)
+                    check_project = update_case_dict.get("case_project", case_instance.case_project)
                     existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.model.filter(
-                        case_project=case_project, case_name=case_name, state__not=1
+                        case_project=check_project, case_name=check_name, state__not=1
                     ).exclude(id=case_id).first()
                     if existing_case_instance:
                         error_message: str = (
-                            f"第{cid}条用例新增失败, 相同应用下用例名称不允许重复, "
-                            f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}]"
+                            f"第{cid}条用例更新失败, 相同应用下用例名称不允许重复, "
+                            f"查询条件: [case_project={check_project}, case_name={check_name}, case_type={case_type}]"
                         )
                         LOGGER.error(error_message)
                         raise DataAlreadyExistsException(message=error_message)

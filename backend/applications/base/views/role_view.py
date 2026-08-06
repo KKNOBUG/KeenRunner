@@ -9,7 +9,7 @@
 import traceback
 
 from fastapi import APIRouter, Body, Depends
-from fastapi.params import Query, Form
+from fastapi.params import Query
 from tortoise.expressions import Q
 
 from backend.applications.base.dependencies import get_role_crud
@@ -27,7 +27,6 @@ from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, F
 from backend.services import DependAuth
 
 role = APIRouter()
-
 
 @role.post("/create", summary="创建角色")
 async def create_role(
@@ -54,7 +53,6 @@ async def create_role(
         LOGGER.error(f"创建角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
-
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
 async def delete_role_one(
         role_id: int = Query(..., description="角色id"),
@@ -80,7 +78,6 @@ async def delete_role_one(
         LOGGER.error(f"删除角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
-
 @role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
 async def delete_roles_batch(
         body_in: RoleBatchDelete = Body(..., description="id或code列表"),
@@ -103,7 +100,6 @@ async def delete_roles_batch(
     except Exception as e:
         LOGGER.error(f"批量删除角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
-
 
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(
@@ -130,11 +126,10 @@ async def update_role(
         LOGGER.error(f"更新角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
-
-@role.get("/get", summary="查看角色", description="根据角色id或code查看角色信息")
+@role.get("/get", summary="查看角色", description="根据角色code或name查看角色信息")
 async def get_role_by(
-        code: str = Form(default=None, description="角色名称"),
-        name: str = Form(default=None, description="角色代码"),
+        code: str = Query(default=None, description="角色代码"),
+        name: str = Query(default=None, description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
@@ -148,9 +143,11 @@ async def get_role_by(
     try:
         where: dict = {}
         if code:
-            where[code] = code
+            where["code"] = code
         if name:
-            where[name] = name
+            where["name"] = name
+        if not where:
+            return ParameterResponse(message="查询角色失败, 参数[code]或[name]至少传一个")
         instances = await role_crud.get_by_conditions(only_one=True, **where)
         data = [await obj.to_dict() for obj in instances]
         LOGGER.info(f"查看角色成功, 结果数量: {len(data)}")
@@ -158,7 +155,6 @@ async def get_role_by(
     except Exception as e:
         LOGGER.error(f"查看角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
 
 @role.get("/list", summary="查看角色列表", description="根据角色id或code查看角色信息")
 async def list_role(
@@ -192,7 +188,6 @@ async def list_role(
         LOGGER.error(f"查看角色列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @role.get("/authorized", summary="查看角色权限", description="根据角色id查看角色权限")
 async def get_role_authorized(
         id: int = Query(..., description="角色id"),
@@ -214,7 +209,6 @@ async def get_role_authorized(
         LOGGER.error(f"查看角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @role.post("/authorized", summary="更新角色权限", description="根据角色id修改角色权限")
 async def update_role_authorized(
         role_in: RoleUpdateMenusRouters,
@@ -229,9 +223,13 @@ async def update_role_authorized(
     """
     try:
         role_obj = await role_crud.get_or_none(id=role_in.id)
+        if not role_obj:
+            return NotFoundResponse(message=f"更新角色权限失败, 记录[id={role_in.id}]不存在")
         await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
         LOGGER.info(f"更新角色权限成功, role_id={role_in.id}")
         return SuccessResponse(message="更新成功")
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")

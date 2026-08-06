@@ -26,7 +26,6 @@ from backend.core.responses import (
 
 router = APIRouter()
 
-
 @router.post("/create", summary="新增路由信息")
 async def create_router(
         router_in: RouterCreate = Body(),
@@ -49,7 +48,6 @@ async def create_router(
     except Exception as e:
         LOGGER.error(f"新增路由失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
-
 
 @router.delete("/delete", summary="删除路由信息", description="根据id删除路由信息")
 async def delete_router(
@@ -74,9 +72,8 @@ async def delete_router(
         LOGGER.error(f"删除路由失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
-
 @router.post("/update", summary="更新路由信息", description="根据id更新路由信息")
-async def update_user(
+async def update_router(
         router_in: RouterUpdate = Body(..., description="接口信息"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
@@ -98,10 +95,9 @@ async def update_user(
         LOGGER.error(f"更新路由失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
-
 @router.get("/get", summary="查询路由信息", description="根据id查询路由信息")
-async def get_user(
-        router_id: int = Query(None, description="接口ID"),
+async def get_router(
+        router_id: int = Query(..., description="接口ID"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
@@ -122,7 +118,6 @@ async def get_user(
     except Exception as e:
         LOGGER.error(f"查询路由失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
 
 @router.post("/search", summary="查询路由列表", description="根据条件分页查询路由列表信息(Body)")
 async def get_routers(
@@ -166,7 +161,6 @@ async def get_routers(
         LOGGER.error(f"查询路由列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-
 @router.get("/list", summary="查询路由列表", description="根据条件分页查询路由列表信息(Query)")
 async def list_router(
         page: int = Query(default=1, ge=1, description="页码"),
@@ -206,7 +200,6 @@ async def list_router(
     except Exception as e:
         LOGGER.error(f"查询路由列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
 
 @router.post("/refresh", summary="刷新路由列表", description="重新获取项目中所有的APIRouter信息进行数据库更新")
 async def refresh_router(

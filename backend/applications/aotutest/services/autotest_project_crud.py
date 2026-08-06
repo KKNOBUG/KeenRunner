@@ -116,7 +116,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         # 业务层验证：检查应用名称是否存在
         existing_project: Optional[AutoTestApiProjectInfo] = await self.model.filter(project_name=project_name).first()
-        project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
         if project_in.project_dev_owners is not None:
             project_in.project_dev_owners = sorted(project_in.project_dev_owners, key=str.lower)
         if project_in.project_developers is not None:
@@ -125,6 +124,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             project_in.project_test_owners = sorted(project_in.project_test_owners, key=str.lower)
         if project_in.project_testers is not None:
             project_in.project_testers = sorted(project_in.project_testers, key=str.lower)
+        project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
         if not existing_project:
             try:
                 instance: AutoTestApiProjectInfo = await self.create(obj_in=project_dict)
@@ -167,6 +167,9 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             exclude_unset=True,
             exclude={"project_id", "project_code"}
         )
+        for owner_key in ("project_dev_owners", "project_developers", "project_test_owners", "project_testers"):
+            if owner_key in update_dict and update_dict[owner_key] is not None:
+                update_dict[owner_key] = sorted(update_dict[owner_key], key=str.lower)
 
         # 业务层验证：检查应用名称是否重复
         if "project_name" in update_dict:
@@ -185,11 +188,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_project(
-            self,
-            project_id: Optional[int] = None,
-            project_code: Optional[str] = None
-    ) -> AutoTestApiProjectInfo:
+    async def delete_project(self, project_id: Optional[int] = None, project_code: Optional[str] = None) -> AutoTestApiProjectInfo:
         """
         软删除应用；需无关联用例、环境配置明细、标签。
 
@@ -217,12 +216,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
+
         # 业务层验证：检查是否存在关联环境配置明细（应用+环境枚举下的配置）
         config_count = await AutoTestApiEnvConfigInfo.filter(project_id=pid, state__not=1).count()
         if config_count > 0:
             msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
+
         # 业务层验证：检查是否存在关联标签
         tag_count = await AutoTestApiTagCrud().model.filter(tag_project=pid, state__not=1).count()
         if tag_count > 0:
