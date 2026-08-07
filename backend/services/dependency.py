@@ -39,10 +39,12 @@ class AuthControl:
             CTX_USER_ID.set(int(user_id))
             CTX_USERNAME.set((user.username or "").strip())
             return user
-        except jwt.DecodeError:
-            raise HTTPException(status_code=401, detail="请求服务鉴权失败, 请携带有效 Token 进行访问")
+        except HTTPException:
+            raise
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="请求服务鉴权已过期, 请重新登录获取有效 Token 后进行访问")
+        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=401, detail="请求服务鉴权失败, 请携带有效 Token 进行访问")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"{repr(e)}")
 
