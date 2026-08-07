@@ -424,9 +424,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if item is None:
                 continue
             if not isinstance(item, str):
-                raise ParameterException(
-                    message=f"排序字段必须为字符串, 收到: {type(item).__name__}"
-                )
+                raise ParameterException(message=f"排序字段必须为字符串, 收到: {type(item).__name__}")
             field = item.strip()
             if not field or field in ("-", "+"):
                 continue
