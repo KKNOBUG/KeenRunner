@@ -37,8 +37,9 @@ from backend.services import DependAuth
 
 dept = APIRouter()
 
+
 @dept.post("/create", summary="新增部门信息")
-async def create_dept(
+async def create_department(
         department_in: DepartmentCreate = Body(..., description="部门信息"),
         current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
@@ -67,8 +68,9 @@ async def create_dept(
         LOGGER.error(f"新增部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
+
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
-async def delete_dept(
+async def delete_department(
         department_id: int = Query(..., description="部门ID"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -90,8 +92,9 @@ async def delete_dept(
         LOGGER.error(f"删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
+
 @dept.post("/delete", summary="批量删除部门", description="根据id列表批量删除部门信息")
-async def delete_depts(
+async def batch_delete_departments(
         department_in: DepartmentBatchDelete = Body(..., description="部门批量删除入参"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -110,8 +113,9 @@ async def delete_depts(
         LOGGER.error(f"批量删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
+
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
-async def update_dept(
+async def update_department(
         department_in: DepartmentUpdate = Body(..., description="部门信息"),
         current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
@@ -140,8 +144,9 @@ async def update_dept(
         LOGGER.error(f"更新部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
+
 @dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
-async def get_dept(
+async def get_department(
         department_id: int = Query(..., description="部门ID"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -164,15 +169,16 @@ async def get_dept(
         LOGGER.error(f"查询部门失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
+
 @dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
-async def list_depts(
+async def list_departments(
         name: str = Query(default=None, description="部门名称"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
     查询部门列表。
 
-    :param name: 部门名称（模糊）
+    :param name: 部门名称
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
@@ -184,8 +190,9 @@ async def list_depts(
         LOGGER.error(f"查询部门列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
+
 @dept.post("/search", summary="查询部门列表", description="根据条件分页查询部门列表信息(Body)")
-async def search_depts(
+async def search_departments(
         department_in: DepartmentSelect = Body(..., description="查询条件"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
