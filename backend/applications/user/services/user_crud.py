@@ -28,6 +28,7 @@ from backend.core.exceptions import (
 from backend.core.responses import ForbiddenResponse
 from backend.services import verify_password, get_password_hash
 
+
 class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     def __init__(self):
@@ -152,9 +153,11 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        user_in.password = get_password_hash(password=user_in.password)
-        instance = await self.create(user_in)
-        await self.update_roles(instance, user_in.role_ids)
+        # 使用 create_dict 排除 role_ids，并显式写入哈希后的密码，避免明文落库
+        user_data = user_in.create_dict()
+        user_data["password"] = get_password_hash(password=user_in.password)
+        instance = await self.create(user_data)
+        await self.update_roles(instance, user_in.role_ids or [])
         return instance
 
     async def delete_user(self, user_id: int, **kwargs) -> User:
