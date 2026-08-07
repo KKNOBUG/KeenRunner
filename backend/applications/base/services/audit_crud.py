@@ -9,12 +9,14 @@
 import asyncio
 from typing import List, Optional, Any, Tuple, Dict
 
+from tortoise.expressions import Q
+from tortoise.functions import Count
+
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.base.schemas.audit_schema import AuditCreate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException, NotFoundException
-from tortoise.expressions import Q
 
 # 列表/最近日志查询不拉取大字段，完整报文仍由GET返回
 AUDIT_LIST_ONLY_FIELDS: Tuple[str, ...] = (
