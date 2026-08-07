@@ -7,6 +7,7 @@
 @DateTime: 2025/2/19 23:11
 """
 import traceback
+from typing import Optional
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.params import Query
@@ -27,6 +28,7 @@ from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, F
 from backend.services import DependAuth
 
 role = APIRouter()
+
 
 @role.post("/create", summary="创建角色")
 async def create_role(
@@ -53,6 +55,7 @@ async def create_role(
         LOGGER.error(f"创建角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
+
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
 async def delete_role(
         role_id: int = Query(..., description="角色id"),
@@ -78,6 +81,7 @@ async def delete_role(
         LOGGER.error(f"删除角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
+
 @role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
 async def delete_roles(
         role_in: RoleBatchDelete = Body(..., description="角色批量删除入参"),
@@ -100,6 +104,7 @@ async def delete_roles(
     except Exception as e:
         LOGGER.error(f"批量删除角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
+
 
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(
@@ -126,35 +131,43 @@ async def update_role(
         LOGGER.error(f"更新角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
-@role.get("/get", summary="查看角色", description="根据角色code或name查看角色信息")
+
+@role.get("/get", summary="查看角色", description="根据角色id或code查看角色信息")
 async def get_role(
-        code: str = Query(default=None, description="角色代码"),
-        name: str = Query(default=None, description="角色名称"),
+        role_id: Optional[int] = Query(default=None, ge=1, description="角色ID"),
+        code: Optional[str] = Query(default=None, description="角色代码"),
+        name: Optional[str] = Query(default=None, description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     查看角色。
 
+    :param role_id: 角色主键ID，与code/name三选一
     :param code: 角色代码
     :param name: 角色名称
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
-        where: dict = {}
-        if code:
-            where["code"] = code
-        if name:
-            where["name"] = name
-        if not where:
-            return ParameterResponse(message="查询角色失败, 参数[code]或[name]至少传一个")
-        instances = await role_crud.get_by_conditions(only_one=True, **where)
-        data = [await obj.to_dict() for obj in instances]
-        LOGGER.info(f"查看角色成功, 结果数量: {len(data)}")
-        return SuccessResponse(message="查询成功", data=data, total=len(data))
+        if not role_id and not code and not name:
+            return ParameterResponse(message="查询角色信息失败, 参数[role_id]或[code]或[name]不允许为空")
+        if role_id:
+            instance = await role_crud.get_by_id(role_id=role_id, on_error=True)
+        elif code:
+            instance = await role_crud.get_by_code(role_code=code, on_error=True)
+        else:
+            instance = await role_crud.get_by_name(role_name=name, on_error=True)
+        data = await instance.to_dict()
+        LOGGER.info(f"查看角色成功, 结果明细: {data}")
+        return SuccessResponse(message="查询成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查看角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
+
 
 @role.get("/list", summary="查看角色列表", description="根据角色id或code查看角色信息")
 async def list_roles(
@@ -188,6 +201,7 @@ async def list_roles(
         LOGGER.error(f"查看角色列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
+
 @role.get("/authorized", summary="查看角色权限", description="根据角色id查看角色权限")
 async def get_role_authorized(
         id: int = Query(..., description="角色id"),
@@ -208,6 +222,7 @@ async def get_role_authorized(
     except Exception as e:
         LOGGER.error(f"查看角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
+
 
 @role.post("/authorized", summary="更新角色权限", description="根据角色id修改角色权限")
 async def update_role_authorized(
