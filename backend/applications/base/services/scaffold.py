@@ -408,6 +408,31 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             raise NotFoundException(message=error_message)
         return instances
 
+    @staticmethod
+    def _normalize_order(order: Optional[list]) -> list:
+        """
+        规范化排序字段列表：过滤None/空串，拒绝非字符串元素。
+
+        :param order: 原始排序字段列表
+        :return: 可用于 order_by 的字段列表
+        :raises ParameterException: 存在非字符串排序项时
+        """
+        if not order:
+            return []
+        cleaned: list = []
+        for item in order:
+            if item is None:
+                continue
+            if not isinstance(item, str):
+                raise ParameterException(
+                    message=f"排序字段必须为字符串, 收到: {type(item).__name__}"
+                )
+            field = item.strip()
+            if not field or field in ("-", "+"):
+                continue
+            cleaned.append(field)
+        return cleaned
+
     async def list(
             self,
             page: int,
@@ -426,7 +451,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param related: 预加载的关联字段列表
         :return: (总记录数, 当前页记录列表)
         """
-        order: list = order or []
+        order: list = self._normalize_order(order)
         related: list = related or []
         query = self.model.filter(search)
         return (
