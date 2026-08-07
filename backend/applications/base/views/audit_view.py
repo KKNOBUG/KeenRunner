@@ -10,15 +10,15 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Optional
 
-from applications.base.dependencies import get_audit_crud
-from applications.base.schemas.audit_schema import AuditBatchDelete, AuditSelect
-from applications.base.services.audit_crud import (
+from backend.applications.base.dependencies import get_audit_crud
+from backend.applications.base.schemas.audit_schema import AuditBatchDelete, AuditSelect
+from backend.applications.base.services.audit_crud import (
     AUDIT_LIST_EXCLUDE_FIELDS,
     AuditCrud,
 )
-from configure import GLOBAL_CONFIG, LOGGER
-from core.exceptions import NotFoundException
-from core.responses import FailureResponse, NotFoundResponse, SuccessResponse
+from backend.configure import GLOBAL_CONFIG, LOGGER
+from backend.core.exceptions import NotFoundException
+from backend.core.responses import FailureResponse, NotFoundResponse, SuccessResponse
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
