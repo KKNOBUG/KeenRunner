@@ -10,17 +10,15 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Optional
 
+from fastapi import APIRouter, Body, Query, Depends
+from tortoise.expressions import Q
+
 from backend.applications.base.dependencies import get_audit_crud
 from backend.applications.base.schemas.audit_schema import AuditBatchDelete, AuditSelect
-from backend.applications.base.services.audit_crud import (
-    AUDIT_LIST_EXCLUDE_FIELDS,
-    AuditCrud,
-)
+from backend.applications.base.services.audit_crud import AuditCrud
 from backend.configure import GLOBAL_CONFIG, LOGGER
 from backend.core.exceptions import NotFoundException
 from backend.core.responses import FailureResponse, NotFoundResponse, SuccessResponse
-from fastapi import APIRouter, Body, Query, Depends
-from tortoise.expressions import Q
 
 audit = APIRouter()
 
@@ -91,7 +89,14 @@ def _build_audit_search_q(
 async def _serialize_audit_list(audit_log_objs) -> list:
     """列表序列化：显式排除大字段，避免 only() 后触发惰性补查。"""
     return [
-        await audit_log.to_dict(exclude_fields=AUDIT_LIST_EXCLUDE_FIELDS)
+        await audit_log.to_dict(
+            exclude_fields={
+                "request_header",
+                "request_params",
+                "response_header",
+                "response_params",
+            }
+        )
         for audit_log in audit_log_objs
     ]
 

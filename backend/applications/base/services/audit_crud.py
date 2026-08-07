@@ -37,13 +37,6 @@ AUDIT_LIST_ONLY_FIELDS: Tuple[str, ...] = (
     "updated_time",
 )
 
-AUDIT_LIST_EXCLUDE_FIELDS = {
-    "request_header",
-    "request_params",
-    "response_header",
-    "response_params",
-}
-
 
 class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 

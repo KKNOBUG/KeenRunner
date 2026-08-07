@@ -34,7 +34,6 @@ class Audit(ScaffoldModel, TimestampMixin):
 
     class Meta:
         table = "krun_audit"
-        # 列表默认按 created_time 倒序；byUser为user_id + 时间；method/code精确过滤时常与时间联用
         indexes = (
             ("created_time",),
             ("user_id", "created_time"),
