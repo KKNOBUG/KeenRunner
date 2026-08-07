@@ -17,7 +17,7 @@ from typing import Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, S
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import core_schema
 from tortoise import fields, models
-from tortoise.exceptions import FieldError
+from tortoise.exceptions import FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.fields import JSONField
 from tortoise.models import Model
@@ -366,7 +366,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :return: 数据库模型实例
         :raises DoesNotExist: 对象不存在时抛出
         """
-        return await self.model.get(id=id, **kwargs)
+        try:
+            return await self.model.get(id=id, **kwargs)
+        except DoesNotExist as e:
+            error_message: str = f"查询{self.model.__name__}失败, 记录[id={id}]不存在"
+            raise NotFoundException(message=error_message) from e
 
     async def get_or_none(self, id: int, **kwargs) -> Optional[ModelType]:
         """
