@@ -313,7 +313,7 @@ class AutoTestApiDetailSelect(BaseModel):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: List[str] = Field(default=["step_st_time"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["step_st_time"], description="排序字段")
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")

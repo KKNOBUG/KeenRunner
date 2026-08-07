@@ -317,7 +317,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :raises ParameterException: 查询字段非法
         """
         try:
-            order = order or ["-last_execute_time"]
             # 根据执行时间排序时：有执行记录优先（NULL 置后），再根据时间倒序
             if order == ["-last_execute_time"] or (
                     len(order) == 1 and order[0] == "-last_execute_time"

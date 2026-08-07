@@ -390,7 +390,7 @@ class AutoTestApiStepSelect(BaseModel):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: List[str] = Field(default=["case_id", "step_no"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["case_id", "step_no"], description="排序字段")
 
     step_id: Optional[int] = Field(None, description="步骤ID")
     step_no: Optional[int] = Field(None, description="步骤序号")

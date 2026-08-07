@@ -54,7 +54,7 @@ class RoleSelect(RoleBase):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: Optional[list] = Field(default=[], examples=["id"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
 
 
 class RoleUpdateMenusRouters(BaseModel):

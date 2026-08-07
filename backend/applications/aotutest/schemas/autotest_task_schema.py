@@ -60,7 +60,7 @@ class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: List[str] = Field(default=["-last_execute_time"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["-last_execute_time"], description="排序字段")
 
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")

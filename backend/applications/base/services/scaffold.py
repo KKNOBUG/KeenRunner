@@ -889,7 +889,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         # 强制添加 state=1 条件
         q = Q(state=1) & search
-        return await self.list(page=page, page_size=page_size, search=q, order=order or ["-updated_time"])
+        return await self.list(page=page, page_size=page_size, search=q, order=order)
 
     async def soft_delete_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
         """

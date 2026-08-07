@@ -88,7 +88,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param order: 排序字段列表；为空时使用 ["-created_time"]
         :return: (总记录数, 当前页审计日志列表)
         """
-        return await self.list(page=page, page_size=page_size, search=search, order=order or ["-created_time"])
+        return await self.list(page=page, page_size=page_size, search=search, order=order)
 
     async def delete_by_id(self, audit_id: int) -> Audit:
         """

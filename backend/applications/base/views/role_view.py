@@ -173,7 +173,7 @@ async def get_role(
 async def list_roles(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
-        order: list = Query(default=["id"], description="排序字段"),
+        order: list = Query(default_factory=lambda: ["id"], description="排序字段"),
         name: str = Query(default="", description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):

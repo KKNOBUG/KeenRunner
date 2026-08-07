@@ -73,7 +73,7 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: List[str] = Field(default=["-created_time"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
 
     exclude_case_id: Optional[int] = Field(None, description="排除的用例ID（复制时排除自己）")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")

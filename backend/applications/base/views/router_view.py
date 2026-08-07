@@ -162,7 +162,7 @@ async def search_routers(
 async def list_routers(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
-        order: list = Query(default=["id"], description="排序字段"),
+        order: list = Query(default_factory=lambda: ["id"], description="排序字段"),
         path: str = Query(None, description="路由请求路径"),
         summary: str = Query(None, description="路由作用简介"),
         tags: str = Query(None, description="路由所属标签"),

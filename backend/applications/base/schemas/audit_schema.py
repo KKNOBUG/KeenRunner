@@ -60,7 +60,7 @@ class AuditSelect(AuditBase):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: Optional[list] = Field(default=[], examples=["-created_time"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
     start_time: Optional[str] = Field(default=None, description="开始时间")
     end_time: Optional[str] = Field(default=None, description="结束时间")
 

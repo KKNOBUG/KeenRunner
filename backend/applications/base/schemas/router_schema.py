@@ -6,7 +6,7 @@
 @Module  : router_schema.py
 @DateTime: 2025/1/31 17:36
 """
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -60,4 +60,4 @@ class RouterSelect(RouterBase):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: Optional[list] = Field(default=[], examples=["id"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")

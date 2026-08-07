@@ -49,7 +49,7 @@ class AutoTestApiEnvSelect(AutoTestApiEnvBase):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
-    order: List[str] = Field(default=["-created_time"], description="排序字段")
+    order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
 
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

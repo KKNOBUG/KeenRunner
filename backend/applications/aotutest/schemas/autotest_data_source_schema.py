@@ -64,7 +64,9 @@ class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
 
 class AutoTestDataSourceSelect(BaseModel):
     """分页查询数据驱动文件入参。"""
-
+    page: int = Field(default=1, ge=1, description="页码")
+    page_size: int = Field(default=10, ge=1, le=100, description="每页数量")
+    order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
     data_source_id: Optional[int] = Field(None, ge=1, description="主键过滤")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动标识过滤")
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
@@ -73,9 +75,6 @@ class AutoTestDataSourceSelect(BaseModel):
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     file_name: Optional[str] = Field(None, max_length=255, description="数据驱动文件存储名称")
     file_path: Optional[str] = Field(None, max_length=1024, description="数据驱动文件存储路径")
-    page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=1, le=100, description="每页数量")
-    order: List[str] = Field(default=["-updated_time"], description="排序字段")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)，默认仅查启用")
 
 
