@@ -6,15 +6,42 @@
 @Module  : audit_crud
 @DateTime: 2026/4/20 16:53
 """
+import asyncio
 from typing import List, Optional, Any, Tuple, Dict
 
+from applications.base.models.audit_model import Audit
+from applications.base.schemas.audit_schema import AuditCreate
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import ParameterException, NotFoundException
 from tortoise.expressions import Q
 
-from backend.applications.base.models.audit_model import Audit
-from backend.applications.base.schemas.audit_schema import AuditCreate
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import ParameterException, NotFoundException
+# 列表/最近日志查询不拉取大字段，完整报文仍由GET返回（写入侧不截断）
+AUDIT_LIST_ONLY_FIELDS: Tuple[str, ...] = (
+    "id",
+    "user_id",
+    "username",
+    "request_time",
+    "request_tags",
+    "request_summary",
+    "request_method",
+    "request_router",
+    "request_client",
+    "response_time",
+    "response_code",
+    "response_message",
+    "response_elapsed",
+    "created_time",
+    "updated_time",
+)
+
+AUDIT_LIST_EXCLUDE_FIELDS = {
+    "request_header",
+    "request_params",
+    "response_header",
+    "response_params",
+}
+
 
 class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
@@ -80,15 +107,33 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             order: Optional[list] = None
     ) -> Tuple[int, List[Audit]]:
         """
-        根据条件分页查询审计日志列表，默认根据创建时间倒序。
+        根据条件分页查询审计日志列表。
+
+        查询方式优化：
+        - 默认/空排序回落到 -created_time，便于命中 (created_time) / (user_id, created_time) 索引
+        - 仅 SELECT 列表字段，避免拉取 request/response 大字段
+        - count 与分页查询并行执行
 
         :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 搜索条件(Q对象)
-        :param order: 排序字段列表；为空时使用 ["-created_time"]
+        :param order: 排序字段列表；由调用方提供，空则 ["-created_time"]
         :return: (总记录数, 当前页审计日志列表)
         """
-        return await self.list(page=page, page_size=page_size, search=search, order=order)
+        order_fields: list = self._normalize_order(order) or ["-created_time"]
+        base_query = self.model.filter(search)
+        page_query = (
+            base_query
+            .only(*AUDIT_LIST_ONLY_FIELDS)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .order_by(*order_fields)
+        )
+        total, rows = await asyncio.gather(
+            base_query.count(),
+            page_query,
+        )
+        return int(total), list(rows)
 
     async def delete_by_id(self, audit_id: int) -> Audit:
         """
@@ -147,6 +192,8 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         """
         统计指定用户的审计日志：总量、根据请求方式、根据响应代码分布。
 
+        使用 group_by + Count，避免把明细列全部加载到内存。
+
         :param user_id: 用户ID
         :return: 含user_id、total_count、method_statistics、code_statistics的字典
         :raises ParameterException: user_id为空
@@ -156,37 +203,40 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        total_count = await self.model.filter(user_id=user_id).count()
+        base = self.model.filter(user_id=user_id)
+        total_count, method_rows, code_rows = await asyncio.gather(
+            base.count(),
+            base.annotate(cnt=Count("id")).group_by("request_method").values("request_method", "cnt"),
+            base.annotate(cnt=Count("id")).group_by("response_code").values("response_code", "cnt"),
+        )
 
-        # 根据请求方式统计
-        method_stats = {}
-        methods = await self.model.filter(user_id=user_id).values_list("request_method", flat=True)
-        for method in methods:
-            method_stats[method] = method_stats.get(method, 0) + 1
-
-        # 根据响应代码统计
-        code_stats = {}
-        codes = await self.model.filter(user_id=user_id).values_list("response_code", flat=True)
-        for code in codes:
-            if code:
-                code_stats[code] = code_stats.get(code, 0) + 1
+        method_stats = {
+            str(row["request_method"]): int(row["cnt"])
+            for row in method_rows
+            if row.get("request_method") is not None
+        }
+        code_stats = {
+            str(row["response_code"]): int(row["cnt"])
+            for row in code_rows
+            if row.get("response_code")
+        }
 
         return {
             "user_id": user_id,
-            "total_count": total_count,
+            "total_count": int(total_count),
             "method_statistics": method_stats,
             "code_statistics": code_stats,
         }
 
     async def get_recent_audits(self, limit: int = 10, user_id: Optional[int] = None) -> List[Audit]:
         """
-        根据创建时间倒序获取最近的审计日志。
+        根据创建时间倒序获取最近的审计日志（仅列表字段）。
 
         :param limit: 返回条数上限，默认10
         :param user_id: 可选，仅查询该用户的日志
         :return: 审计日志列表
         """
-        query = self.model.all()
+        query = self.model.all().only(*AUDIT_LIST_ONLY_FIELDS)
         if user_id:
             query = query.filter(user_id=user_id)
         return await query.order_by("-created_time").limit(limit)
