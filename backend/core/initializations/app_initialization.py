@@ -36,6 +36,29 @@ from backend.core.middlewares.request_context_middleware import request_context_
 from backend.services import DependPermission, DependOptionalAuth
 
 
+def _migration_app_dir() -> str:
+    return os.path.join(PROJECT_CONFIG.MIGRATION_DIR, "models")
+
+
+def _has_migration_files() -> bool:
+    app_dir = _migration_app_dir()
+    if not os.path.isdir(app_dir):
+        return False
+    return any(
+        name.endswith(".py") and name != "__init__.py"
+        for name in os.listdir(app_dir)
+    )
+
+
+def _clean_empty_migration_app_dir() -> None:
+    """清理无迁移文件的models目录。"""
+    app_dir = _migration_app_dir()
+    if not os.path.isdir(app_dir) or _has_migration_files():
+        return
+    LOGGER.warning(f"检测到空的迁移目录(无 .py 迁移文件), 清理后重新 init-db: {app_dir}")
+    shutil.rmtree(app_dir)
+
+
 async def register_database(app: FastAPI) -> None:
     config: Dict[str, Any] = {
         "connections": PROJECT_CONFIG.DATABASE_CONNECTIONS,
@@ -66,16 +89,17 @@ async def register_database(app: FastAPI) -> None:
         location=PROJECT_CONFIG.MIGRATION_DIR,
     )
 
-    # 初始化数据库和迁移
+    # 初始化数据库和迁移，当safe=True时，若aerich/业务表已存在则跳过建表；safe=False可能重建表导致丢数据。
+    _clean_empty_migration_app_dir()
     try:
-        # 当 safe 设置为 True 时，如果数据库中已经存在 Aerich 所需的迁移表（通常是 aerich 表），init_db 方法不会尝试去重新创建这些表，避免因为表已存在而抛出错误。
-        # 当 safe 设置为 False 时，如果数据库中已经存在 Aerich 所需的迁移表，init_db 方法会尝试重新创建这些表，这可能会导致现有表被删除并重新创建，从而丢失表中的数据。
         await command.init_db(safe=True)
     except FileExistsError:
-        pass
+        # 已有迁移文件时属正常情况；若仍无迁移文件，说明目录被非预期内容占用
+        if not _has_migration_files():
+            LOGGER.error(f"Aerich init_db 命令执行失败: 迁移目录非空且无迁移文件: {_migration_app_dir()}")
+            raise
 
     await command.init()
-
     if not PROJECT_CONFIG.aerich_should_run_on_startup:
         LOGGER.warning(
             "跳过 Aerich 数据迁移指令: \n"
@@ -98,6 +122,18 @@ async def register_database(app: FastAPI) -> None:
         else:
             raise RuntimeError("数据库迁移元数据与本地[migration]不一致, 无法进行迁移, 请手工修复或从备份恢复后再启动应用") from e
     except Exception as e:
+        err_msg = str(e)
+        # 空库/未执行init-db命令：应真正初始化建表，不能fake upgrade迁移
+        if "init-db" in err_msg or "init_db" in err_msg:
+            LOGGER.warning(f"迁移元数据缺失, 执行 init-db 初始化: {e}")
+            _clean_empty_migration_app_dir()
+            try:
+                await command.init_db(safe=True)
+            except FileExistsError:
+                if not _has_migration_files():
+                    raise
+            await command.upgrade(run_in_transaction=True)
+            return
         LOGGER.warning(f"数据库迁移警告, 数据库已有本次迁移字段: {e}")
         await command.upgrade(run_in_transaction=True, fake=True)
         return

@@ -108,7 +108,7 @@ async def init_database_dept():
 
     dept_data: List[DepartmentCreate] = [
         DepartmentCreate(
-            code="DEFAULT_SYSTEM_DEPARTMENT",
+            code="SYSTEM_DEPT",
             name="系统默认部门",
             description="系统默认配置，无具体业务归属，仅作初始部门使用",
             order=0,
@@ -116,7 +116,7 @@ async def init_database_dept():
             created_user=INIT_CREATED_USER,
         ),
         DepartmentCreate(
-            code="DEFAULT_AUTOTEST_DEPARTMENT",
+            code="AUTOTEST_DEPT",
             name="技术测试团队",
             description="技术测试与冒烟验证相关人员所属部门",
             order=1,
@@ -139,8 +139,8 @@ async def init_database_user():
         LOGGER.info("[用户]已有数据，跳过初始化")
         return
 
-    default_dept = await Department.get_or_none(code="DEFAULT_SYSTEM_DEPARTMENT")
-    test_dept = await Department.get_or_none(code="DEFAULT_AUTOTEST_DEPARTMENT")
+    default_dept = await Department.get_or_none(code="SYSTEM_DEPT")
+    test_dept = await Department.get_or_none(code="AUTOTEST_DEPT")
     admin_role = await Role.get_or_none(code=ROLE_CODE_ADMIN)
     user_role = await Role.get_or_none(code=ROLE_CODE_USER)
     guest_role = await Role.get_or_none(code=ROLE_CODE_GUEST)
