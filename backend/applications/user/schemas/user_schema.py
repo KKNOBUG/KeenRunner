@@ -10,9 +10,11 @@ from typing import Optional, List
 
 from pydantic import BaseModel, EmailStr, Field
 
+from backend.applications.base.services.scaffold import UpperStr
+
 
 class UserBase(BaseModel):
-    """用户公共字段（创建/更新/查询共用）。"""
+    """用户公共字段。"""
 
     username: Optional[str] = Field(default=None, max_length=32, description="用户账号")
     alias: Optional[str] = Field(default=None, max_length=32, description="用户姓名")
@@ -23,7 +25,6 @@ class UserBase(BaseModel):
     address: Optional[str] = Field(default=None, max_length=255, description="用户住址")
     gender: Optional[int] = Field(default=None, le=2, description="用户性别: 0未知 1男 2女")
     user_type: Optional[int] = Field(default=None, le=9, description="用户类型：0xx 1xx 2xx")
-    is_active: Optional[bool] = Field(default=None, description="是否激活")
     is_superuser: Optional[bool] = Field(default=None, description="是否为超级管理员")
     emergency_name: Optional[str] = Field(default=None, max_length=32, description="紧急联系人")
     emergency_phone: Optional[str] = Field(default=None, max_length=20, description="紧急联系电话")
@@ -38,12 +39,12 @@ class UserCreate(UserBase):
     password: str = Field(..., max_length=255, description="用户密码")
     alias: str = Field(..., max_length=32, description="用户姓名")
     email: EmailStr = Field(..., max_length=64, description="用户邮箱")
-    gender: int = Field(default=0, le=2, description="用户性别: 0未知 1男 2女")
+    gender: int = Field(default=0, ge=0, le=2, description="用户性别: 0未知 1男 2女")
     avatar: str = Field(default="/static/avatar/default/20250101010101.png", max_length=255, description="用户头像")
-    user_type: int = Field(default=0, le=9, description="用户类型：0xx 1xx 2xx")
-    is_active: bool = Field(default=True, description="是否激活")
+    user_type: int = Field(default=0, ge=0, le=9, description="用户类型：0xx 1xx 2xx")
     is_superuser: bool = Field(default=False, description="是否为超级管理员")
-    role_ids: Optional[List[int]] = Field(default=[], description="角色ID列表")
+    role_ids: Optional[List[int]] = Field(default_factory=list, description="角色ID列表")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):
         """
@@ -60,7 +61,8 @@ class UserUpdate(UserBase):
     """更新用户入参。"""
 
     user_id: int = Field(..., ge=1, description="用户ID")
-    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    state: Optional[int] = Field(default=None, description="状态(0:启用, 1:禁用)")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class UserBatchDelete(BaseModel):
@@ -75,7 +77,7 @@ class UserSelect(UserBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
-    state: Optional[int] = Field(default=None, description="状态(0:启用, 1:禁用)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
 class UpdatePassword(BaseModel):

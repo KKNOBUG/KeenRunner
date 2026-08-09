@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import Optional, Union, List
 
 from tortoise.exceptions import DoesNotExist
-from tortoise.expressions import F
 
 from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.base.services.role_crud import RoleCrud
@@ -42,8 +41,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
-        :raises ParameterException: user_id为空
-        :raises NotFoundException: on_error为True且用户不存在
         """
         if not user_id:
             error_message: str = "查询用户信息失败, 参数[user_id]不允许为空"
@@ -64,8 +61,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
-        :raises ParameterException: username为空
-        :raises NotFoundException: on_error为True且用户不存在
         """
         if not username:
             error_message: str = "查询用户信息失败, 参数[username]不允许为空"
@@ -86,8 +81,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
-        :raises ParameterException: alias为空
-        :raises NotFoundException: on_error为True且用户不存在
         """
         if not alias:
             error_message: str = "查询用户信息失败, 参数[alias]不允许为空"
@@ -106,8 +99,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param credentials: 登录凭证(username、password)
         :return: 用户实例
-        :raises NotFoundException: 用户不存在或密码错误
-        :raises NoPermissionException: 用户已禁用
         """
         user = await self.model.filter(username=credentials.username).first()
         if not user:
@@ -131,7 +122,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: None
-        :raises NotFoundException: 用户不存在
         """
         user = await self.get_by_id(user_id=user_id, on_error=True)
         user.last_login = datetime.now()
@@ -143,7 +133,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_in: 新增用户入参
         :return: 新建的用户实例
-        :raises DataAlreadyExistsException: 邮箱或账号已存在
         """
         email = user_in.email
         username = user_in.username
@@ -153,7 +142,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        # 使用 create_dict 排除 role_ids，并显式写入哈希后的密码，避免明文落库
+        # 使用create_dict排除role_ids，并显式写入哈希后的密码，避免明文落库
         user_data = user_in.create_dict()
         user_data["password"] = get_password_hash(password=user_in.password)
         instance = await self.create(user_data)
@@ -167,13 +156,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user_id: 用户ID
         :param kwargs: 额外查询条件
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
-        instance.state = 1
-        instance.is_active = 0
-        instance.token_version += 1  # 吊销用户所有Token
-        await instance.save()
+        instance = await self.soft_delete(id=instance.id)
+        # 吊销用户所有Token
+        instance.token_version += 1
+        await instance.save(update_fields=["token_version"])
         return instance
 
     async def delete_users(self, user_in: UserBatchDelete) -> List[int]:
@@ -184,27 +172,30 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :return: 实际删除的用户ID列表
         """
         user_ids: Optional[List[int]] = user_in.user_ids
-        if user_ids:
-            deleted_ids = await self.model.filter(id__in=user_ids).exclude(state=1).values_list("id", flat=True)
-            if deleted_ids:
-                await self.model.filter(id__in=deleted_ids).update(state=1, token_version=F('token_version') + 1)
-        else:
-            deleted_ids = []
+        if not user_ids:
+            return []
+
+        deleted_ids: List[int] = []
+        for uid in user_ids:
+            try:
+                await self.delete_user(int(uid))
+                deleted_ids.append(int(uid))
+            except NotFoundException:
+                continue
         return deleted_ids
 
     async def update_user(self, user_in: UserUpdate) -> User:
         """
-        根据user_id更新用户基础字段(不含角色，角色由update_roles单独处理)。
+        根据user_id更新用户信息。
 
         :param user_in: 更新入参
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         user_id: int = user_in.user_id
         user_if: dict = user_in.model_dump(exclude_none=True)
         try:
             instance = await self.update(id=user_id, obj_in=user_if)
-        except DoesNotExist as e:
+        except DoesNotExist:
             error_message: str = f"更新用户信息失败, 记录[id={user_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
@@ -219,7 +210,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user: 用户实例
         :param role_ids: 角色ID列表；空列表表示清空
         :return: None
-        :raises DoesNotExist: 角色不存在
         """
         await user.roles.clear()
         for role_id in role_ids or []:
@@ -232,13 +222,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: 不含密码的用户字典，或ForbiddenResponse
-        :raises DoesNotExist: 用户不存在
         """
         instance = await self.get_or_error(id=user_id)
         if instance.is_superuser:
             return ForbiddenResponse(message="不允许重置超级用户密码")
 
-        instance.password = get_password_hash(password="123456")
+        instance.password = get_password_hash(password="KFuser01@!")
         instance.token_version += 1  # 吊销用户所有Token
         await instance.save()
         data = await instance.to_dict(exclude_fields=["id", "password"])
@@ -251,7 +240,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user_id: 用户ID
         :param new_password: 新密码(明文)
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         instance.password = get_password_hash(password=new_password)
@@ -265,9 +253,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
-        instance.token_version += 1  # 吊销用户所有Token
+        # 吊销用户所有Token
+        instance.token_version += 1
         await instance.save()
         return instance

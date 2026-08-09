@@ -21,7 +21,6 @@ class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
     phone = fields.CharField(max_length=20, null=True, description="用户电话")
     motto = fields.CharField(max_length=255, null=True, description="用户签名")
     avatar = fields.CharField(max_length=255, null=True, description="用户头像")
-    is_active = fields.BooleanField(default=True, index=True, description="是否激活")
     is_superuser = fields.BooleanField(default=False, index=True, description="是否为超级管理员")
     last_login = fields.DatetimeField(null=True, index=True, description="最后一次登陆时间")
     token_version = fields.IntField(default=0, description="Token版本号，用于吊销用户所有Token")

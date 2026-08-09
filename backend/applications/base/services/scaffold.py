@@ -17,7 +17,7 @@ from typing import Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, S
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import core_schema
 from tortoise import fields, models
-from tortoise.exceptions import FieldError, DoesNotExist
+from tortoise.exceptions import DoesNotExist, FieldError
 from tortoise.expressions import Q
 from tortoise.fields import JSONField
 from tortoise.models import Model
@@ -35,6 +35,107 @@ def unique_identify() -> str:
     timestamp: int = int(datetime.now().timestamp())
     uuid4_str: str = uuid.uuid4().hex.upper()
     return f"{timestamp}-{uuid4_str}"
+
+
+class UpperStr(str):
+    """
+    大写字符串类型，用于Pydantic模型验证。
+    """
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            cls._validate,
+            handler(str),
+            serialization=core_schema.to_string_ser_schema(),
+        )
+
+    @classmethod
+    def _validate(cls, v: Optional[str], info: Any) -> 'UpperStr':
+        """
+        验证并转换为大写字符串。
+        """
+        if not isinstance(v, str):
+            raise ValueError("必须是字符串类型")
+        return cls(v.upper())
+
+
+class LowerStr(str):
+    """
+    小写字符串类型，用于Pydantic模型验证。
+    """
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            cls._validate,
+            handler(str),
+            serialization=core_schema.to_string_ser_schema(),
+        )
+
+    @classmethod
+    def _validate(cls, v: Optional[str], info: Any) -> 'LowerStr':
+        """
+        验证并转换为小写字符串。
+        """
+        if not isinstance(v, str):
+            raise ValueError("必须是字符串类型")
+        return cls(v.lower())
+
+
+class UpperCharField(fields.CharField):
+    """
+    大写字符串字段，写入/读出时自动转大写。
+    """
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.upper()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.upper()
+        return value
+
+
+class LowerCharField(fields.CharField):
+    """
+    小写字符串字段，写入/读出时自动转小写。
+    """
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.lower()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
+
+class JSONTextField(JSONField):
+    """
+    以TEXT类型存储JSON格式的数据字段，避免MySQL的JSON列在落库时会对对象键做归一化（根据键长度、字节值排序），导致字段顺序丢失；。
+    """
+
+    SQL_TYPE = "LONGTEXT"
+
+    def to_python_value(self, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return super().to_python_value(value)
 
 
 class ScaffoldModel(models.Model):
@@ -94,7 +195,7 @@ class ScaffoldModel(models.Model):
         fk_exclude_fields = fk_exclude_fields or []
 
         d = {}
-        # 获取本表字段并根据 include_fields 参数确定要处理的字段列表
+        # 获取本表字段并根据include_fields参数确定要处理的字段列表
         db_fields_process = self._meta.db_fields
         if include_fields:
             db_fields_process = include_fields
@@ -108,7 +209,7 @@ class ScaffoldModel(models.Model):
                 field = replace_fields.get(field, field)
             d[field] = await self.__format_value(value)
 
-        # 如果 fk 为 True，异步获取外键字段关联的数据
+        # 如果fk为True，异步获取外键字段关联的数据
         if fk:
             tasks = [
                 self.__fetch_fk_field(field, fk_include_fields, fk_exclude_fields, cache)
@@ -119,7 +220,7 @@ class ScaffoldModel(models.Model):
             for field, values in results:
                 d[field] = values
 
-        # 如果 m2m 为 True，异步获取多对多关系字段的数据
+        # 如果m2m为True，异步获取多对多关系字段的数据
         if m2m:
             tasks = [
                 self.__fetch_m2m_field(field, m2m_include_fields, m2m_exclude_fields, cache)
@@ -140,10 +241,12 @@ class ScaffoldModel(models.Model):
         格式化字段值为可序列化的类型。
 
         支持的类型转换：
-        - Decimal -> str(避免JSON序列化错误)
-        - datetime/date/time -> str(根据全局配置格式化)
-        - bytes -> str(UTF-8 解码)
-        - timedelta -> str
+        - Decimal: str
+        - datetime: str
+        - date: str
+        - time: str
+        - bytes: str
+        - timedelta: str
         """
         if isinstance(value, Decimal):
             return str(value)
@@ -264,11 +367,11 @@ class MaintainMixin:
     """
     维护信息Mixin，记录数据的创建人和最后更新人。
 
-    - created_user: 记录数据的创建者
-    - updated_user: 记录数据的修改者
+    - created_user: 记录数据的创建者（自动转大写）
+    - updated_user: 记录数据的修改者（自动转大写）
     """
-    created_user = fields.CharField(max_length=16, default=None, null=True, description="创建人员")
-    updated_user = fields.CharField(max_length=16, default=None, null=True, description="更新人员")
+    created_user = UpperCharField(max_length=16, default=None, null=True, description="创建人员")
+    updated_user = UpperCharField(max_length=16, default=None, null=True, description="更新人员")
 
 
 class ReserveFields:
@@ -278,26 +381,6 @@ class ReserveFields:
     reserve_1 = fields.CharField(max_length=64, default=None, null=True, description="备用字段1")
     reserve_2 = fields.CharField(max_length=128, default=None, null=True, description="备用字段2")
     reserve_3 = fields.CharField(max_length=255, default=None, null=True, description="备用字段3")
-
-
-class JSONTextField(JSONField):
-    """
-    以TEXT类型存储JSON格式的数据字段。
-
-    与JSONField的唯一区别在于SQL_TYPE：使用LONGTEXT而非MySQL的JSON列。
-    MySQL的JSON列在落库时会对对象键做归一化(根据键长度、字节值排序)，导致字段顺序丢失；
-    改用TEXT列原样存储JSON文本即可保留插入顺序。
-    Python侧依旧表现为dict/list：继承JSONField的dict ↔ str透明转换
-    (安装了orjson时默认使用orjson，序列化/反序列化均保持顺序)，
-    空值约定：None → 落库NULL；空dict {} → 落库 "{}"。
-    """
-
-    SQL_TYPE = "LONGTEXT"
-
-    def to_python_value(self, value: Any) -> Any:
-        if isinstance(value, str) and not value.strip():
-            return None
-        return super().to_python_value(value)
 
 
 # 类型变量定义，用于泛型约束
@@ -330,32 +413,74 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
-    def _fill_created_user(self, obj_dict: Dict[str, Any]) -> None:
+    def _fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
-        创建时自动写入created_user(已有值则不覆盖)。
+        创建时自动写入created_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
+
+        :param obj_dict: 待写入字段字典
+        :param model: 目标模型；默认self.model
         """
-        if not hasattr(self.model, "created_user"):
-            return
-        if obj_dict.get("created_user"):
+        target = model or self.model
+        if not hasattr(target, "created_user"):
             return
         # 惰性导入，避免 scaffold ↔ services.dependency 循环依赖
         from backend.services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["created_user"] = username
-
-    def _fill_updated_user(self, obj_dict: Dict[str, Any]) -> None:
-        """
-        更新时自动写入updated_user(已有值则不覆盖)。
-        """
-        if not hasattr(self.model, "updated_user"):
             return
-        if obj_dict.get("updated_user"):
+        existing = obj_dict.get("created_user")
+        if isinstance(existing, str) and existing.strip():
+            obj_dict["created_user"] = existing.strip().upper()[:16]
+
+    def _fill_updated_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
+        """
+        更新时自动写入updated_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
+
+        :param obj_dict: 待写入字段字典
+        :param model: 目标模型；默认 self.model
+        """
+        target = model or self.model
+        if not hasattr(target, "updated_user"):
             return
         from backend.services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["updated_user"] = username
+            return
+        existing = obj_dict.get("updated_user")
+        if isinstance(existing, str) and existing.strip():
+            obj_dict["updated_user"] = existing.strip().upper()[:16]
+
+    def soft_delete_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
+        """
+        构造软删除更新字典: state=1 + 按统一规则填充updated_user字段。
+
+        :param updated_user: 无登录上下文时的回落更新人员字段
+        :return: 可直接用于filter().update(**values)的字段字典
+        """
+        values: Dict[str, Any] = {"state": 1}
+        if updated_user is not None and str(updated_user).strip():
+            values["updated_user"] = updated_user
+        self._fill_updated_user(values)
+        if not hasattr(self.model, "updated_user"):
+            values.pop("updated_user", None)
+        return values
+
+    def soft_restore_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
+        """
+        构造软删除恢复更新字典: state=0 + 按统一规则填充updated_user字段。
+
+        :param updated_user: 无登录上下文时的回落更新人员字段
+        :return: 可直接用于filter().update(**values)的字段字典
+        """
+        values: Dict[str, Any] = {"state": 0}
+        if updated_user is not None and str(updated_user).strip():
+            values["updated_user"] = updated_user
+        self._fill_updated_user(values)
+        if not hasattr(self.model, "updated_user"):
+            values.pop("updated_user", None)
+        return values
 
     async def get_or_error(self, id: int, **kwargs) -> ModelType:
         """
@@ -364,7 +489,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 对象唯一标识符
         :param kwargs: 额外的过滤条件
         :return: 数据库模型实例
-        :raises DoesNotExist: 对象不存在时抛出
         """
         try:
             return await self.model.get(id=id, **kwargs)
@@ -395,8 +519,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param on_error: True时未找到则抛出NotFoundException
         :param kwargs: 查询条件字段
         :return: 单条记录、记录列表或None
-        :raises ParameterException: 查询条件字段错误时抛出
-        :raises NotFoundException: 未找到记录且on_error=True时抛出
         """
         try:
             stmt: QuerySet = self.model.filter(**kwargs)
@@ -418,8 +540,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         规范化排序字段列表：过滤None/空串，拒绝非字符串元素。
 
         :param order: 原始排序字段列表
-        :return: 可用于 order_by 的字段列表
-        :raises ParameterException: 存在非字符串排序项时
+        :return: 可用于order_by的字段列表
         """
         if not order:
             return []
@@ -508,7 +629,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要更新的记录ID
         :param obj_in: 更新数据，可以是Pydantic Schema实例或字典
         :return: 更新后的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
         """
         obj = await self.get_or_error(id=id)
         if isinstance(obj_in, Dict):
@@ -542,8 +662,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         # 获取模型有效字段列表
         valid_fields = set(self.model._meta.db_fields)
         valid_fields.update(self.model._meta.fk_fields)
-        from backend.services.ctx import get_current_username
-        current_username = get_current_username()
 
         total_updated = 0
         for update_data in updates:
@@ -569,8 +687,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if not update_dict:
                 continue
 
-            if current_username and hasattr(self.model, "updated_user") and not update_dict.get("updated_user"):
-                update_dict["updated_user"] = current_username
+            self._fill_updated_user(update_dict)
 
             # 执行更新
             count = await self.model.filter(**{key_field: key_value}).update(**update_dict)
@@ -586,7 +703,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要删除的记录ID
         :param kwargs: 额外的过滤条件
         :return: 被删除的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
         """
         obj = await self.get_or_error(id=id, **kwargs)
         await obj.delete()
@@ -598,7 +714,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         :param id: 要硬删除的记录ID
         :return: 被删除的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
         """
         obj = await self.get_or_error(id=id)
         await obj.delete()
@@ -628,7 +743,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             results = await crud.query().filter(age__gte=18).exclude(state=1).order_by("-created_time").limit(10).all()
 
             # 分页查询
-            total, items = await crud.query().filter(is_active=True).paginate(page=1, page_size=20)
+            total, items = await crud.query().filter(state=0).paginate(page=1, page_size=20)
 
             # 条件组合
             results = await crud.query().filter(
@@ -755,14 +870,14 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param obj_in: 主记录创建数据
         :param related_data: 关联数据字典，格式为{"field_name": [obj1, obj2, ...]}
         :return: 创建成功的主记录对象
-        :raises Exception: 创建失败时回滚事务
         """
         async with in_transaction() as connection:
             # 创建主记录
             if isinstance(obj_in, Dict):
-                obj_dict = obj_in
+                obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(warnings=False)
+            self._fill_created_user(obj_dict)
             obj = self.model(**obj_dict)
             await obj.save(using_db=connection)
 
@@ -770,11 +885,19 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if related_data:
                 for field_name, items in related_data.items():
                     related_manager = getattr(obj, field_name)
+                    related_model = (
+                            getattr(related_manager, "remote_model", None)
+                            or getattr(related_manager, "model", None)
+                    )
                     for item in items:
                         if isinstance(item, Dict):
-                            await related_manager.create(**item, using_db=connection)
+                            item_dict = dict(item)
                         else:
-                            await related_manager.create(**item.model_dump(warnings=False), using_db=connection)
+                            item_dict = item.model_dump(warnings=False)
+                        # 关联模型若含维护字段，同样按当前用户规则补齐（CTX 优先覆盖）
+                        if related_model is None or hasattr(related_model, "created_user"):
+                            self._fill_created_user(item_dict, model=related_model)
+                        await related_manager.create(**item_dict, using_db=connection)
 
             LOGGER.info(f"事务创建成功: {self.model.__name__}(id={obj.id})")
             return obj
@@ -792,15 +915,15 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param obj_in: 主记录更新数据
         :param related_updates: 关联数据更新字典，格式为{"field_name": [{"id": 1, "data": {...}}, ...]}
         :return: 更新后的主记录对象
-        :raises Exception: 更新失败时回滚事务
         """
         async with in_transaction() as connection:
             # 更新主记录
             obj = await self.get_or_error(id=id)
             if isinstance(obj_in, Dict):
-                obj_dict = obj_in
+                obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(exclude_unset=True, exclude={"id"})
+            self._fill_updated_user(obj_dict)
             obj = obj.update_from_dict(obj_dict)
             await obj.save(using_db=connection)
 
@@ -808,10 +931,16 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if related_updates:
                 for field_name, items in related_updates.items():
                     related_manager = getattr(obj, field_name)
+                    related_model = (
+                            getattr(related_manager, "remote_model", None)
+                            or getattr(related_manager, "model", None)
+                    )
                     for item in items:
                         item_id = item.get("id")
-                        item_data = item.get("data", {})
+                        item_data = dict(item.get("data", {}) or {})
                         if item_id:
+                            if related_model is None or hasattr(related_model, "updated_user"):
+                                self._fill_updated_user(item_data, model=related_model)
                             await related_manager.filter(id=item_id).update(**item_data, using_db=connection)
 
             LOGGER.info(f"事务更新成功: {self.model.__name__}(id={id})")
@@ -822,10 +951,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         软删除：将记录标记为已删除。
 
         :param id: 要软删除的记录ID
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 更新后的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         obj = await self.get_or_error(id=id)
         if not hasattr(obj, 'state'):
@@ -833,13 +960,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 如果模型有 updated_user 字段，记录删除人
-        if updated_user is not None and hasattr(obj, 'updated_user'):
-            obj.updated_user = updated_user
-
-        # 保存更新
-        obj.state = 1
-        await obj.save(update_fields=["state", "updated_user"] if hasattr(obj, 'updated_user') else ["state"])
+        values = self.soft_delete_values(updated_user=updated_user)
+        for key, value in values.items():
+            setattr(obj, key, value)
+        await obj.save(update_fields=list(values.keys()))
         LOGGER.info(f"软删除成功: {self.model.__name__}(id={id})")
         return obj
 
@@ -848,10 +972,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         恢复软删除的记录。
 
         :param id: 要恢复的记录ID
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 恢复后的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         obj = await self.get_or_error(id=id)
 
@@ -860,12 +982,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 如果模型有 updated_user 字段，记录更新人
-        if updated_user is not None and hasattr(obj, 'updated_user'):
-            obj.updated_user = updated_user
-
-        obj.state = 0
-        await obj.save(update_fields=["state", "updated_user"] if hasattr(obj, 'updated_user') else ["state"])
+        values = self.soft_restore_values(updated_user=updated_user)
+        for key, value in values.items():
+            setattr(obj, key, value)
+        await obj.save(update_fields=list(values.keys()))
         LOGGER.info(f"恢复软删除成功: {self.model.__name__}(id={id})")
         return obj
 
@@ -884,7 +1004,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param search: 额外的搜索条件
         :param order: 排序字段列表，默认根据updated_time倒序
         :return: (总记录数, 已删除记录列表)
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法查询已删除记录"
@@ -900,9 +1019,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         批量软删除。
 
         :param ids: 要软删除的记录ID列表
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 实际更新的记录数
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量软删除"
@@ -912,10 +1030,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if not ids:
             return 0
 
-        update_fields: Dict[str, Any] = {"state": 1}
-        if hasattr(self.model, 'updated_user') and updated_user is not None:
-            update_fields["updated_user"] = updated_user
-
+        update_fields = self.soft_delete_values(updated_user=updated_user)
         count = await self.model.filter(id__in=ids, state__not=1).update(**update_fields)
         LOGGER.info(f"批量软删除成功: {self.model.__name__}, 数量={count}, ids={ids}")
         return count
@@ -925,9 +1040,8 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         批量恢复软删除的记录。
 
         :param ids: 要恢复的记录ID列表
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 实际恢复的记录数
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量恢复"
@@ -937,10 +1051,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if not ids:
             return 0
 
-        update_fields: Dict[str, Any] = {"state": 0}
-        if hasattr(self.model, 'updated_user') and updated_user is not None:
-            update_fields["updated_user"] = updated_user
-
+        update_fields = self.soft_restore_values(updated_user=updated_user)
         count = await self.model.filter(id__in=ids, state=1).update(**update_fields)
         LOGGER.info(f"批量恢复成功: {self.model.__name__}, 数量={count}, ids={ids}")
         return count
@@ -955,18 +1066,18 @@ class QueryBuilder(Generic[ModelType]):
         results = await crud.query().filter(age__gte=18).all()
 
         # 链式条件
-        results = await crud.query().filter(state=0).exclude(is_deleted=True).order_by("-created_time").limit(10).all()
+        results = await crud.query().filter(state=0).exclude(state=1).order_by("-created_time").limit(10).all()
 
         # 分页
-        total, items = await crud.query().filter(is_active=True).paginate(page=1, page_size=20)
+        total, items = await crud.query().filter(state=0).paginate(page=1, page_size=20)
 
         # 预加载关联
         results = await crud.query().prefetch("roles", "permissions").all()
 
         # 安全复用(使用clone)
         base = crud.query().filter(state=0)
-        active_users = await base.clone().filter(is_active=True).all()
-        inactive_users = await base.clone().filter(is_active=False).all()
+        active_users = await base.clone().filter(state=0).all()
+        inactive_users = await base.clone().filter(state=1).all()
     """
 
     def __init__(self, model: Type[ModelType]):
@@ -1108,57 +1219,3 @@ class QueryBuilder(Generic[ModelType]):
         检查是否存在。
         """
         return await self._build_query().exists()
-
-
-class UpperStr(str):
-    """
-    大写字符串类型，用于Pydantic模型验证。
-    """
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-            cls,
-            source_type: Any,
-            handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
-        return core_schema.with_info_after_validator_function(
-            cls._validate,
-            handler(str),
-            serialization=core_schema.to_string_ser_schema(),
-        )
-
-    @classmethod
-    def _validate(cls, v: Optional[str], info: Any) -> 'UpperStr':
-        """
-        验证并转换为大写字符串。
-        """
-        if not isinstance(v, str):
-            raise ValueError("必须是字符串类型")
-        return cls(v.upper())
-
-
-class LowerStr(str):
-    """
-    小写字符串类型，用于Pydantic模型验证。
-    """
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-            cls,
-            source_type: Any,
-            handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
-        return core_schema.with_info_after_validator_function(
-            cls._validate,
-            handler(str),
-            serialization=core_schema.to_string_ser_schema(),
-        )
-
-    @classmethod
-    def _validate(cls, v: Optional[str], info: Any) -> 'LowerStr':
-        """
-        验证并转换为小写字符串。
-        """
-        if not isinstance(v, str):
-            raise ValueError("必须是字符串类型")
-        return cls(v.lower())

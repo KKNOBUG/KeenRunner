@@ -62,6 +62,7 @@ class ProjectConfig(BaseSettings):
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥，建议: openssl rand -hex 32")
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
+    AUTH_JWT_TEMPORARY_TOKEN: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicGFzc3dvcmQiOm51bGwsImFsaWFzIjpudWxsLCJlbWFpbCI6bnVsbCwicGhvbmUiOm51bGwsImF2YXRhciI6bnVsbCwic3RhdGUiOjAsImlzX2FjdGl2ZSI6bnVsbCwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJsYXN0X2xvZ2luIjpudWxsLCJhY2Nlc3NfdG9rZW4iOm51bGwsImV4cCI6MTgxNzQzMzM5NCwidG9rZW5fdmVyc2lvbiI6MH0.k6ue_ZpEvsaDx9LrBHjDTaSpzS0dfGPsZif3r4ArK2Y"
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
