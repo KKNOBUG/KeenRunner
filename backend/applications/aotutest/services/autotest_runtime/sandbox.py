@@ -54,7 +54,6 @@ def _safe_user_code_import(
     :param fromlist: from ... import的子模块列表
     :param level: 相对导入层级，非0则拒绝
     :return: 导入的模块对象
-    :raises ImportError: 相对导入或不在白名单时
     """
     if level != 0:
         raise ImportError("代码请求(Python)步骤中不允许使用相对路径导入模块")

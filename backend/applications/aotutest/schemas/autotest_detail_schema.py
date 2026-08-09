@@ -109,7 +109,7 @@ class AutoTestApiDetailVarBase(BaseModel):
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="数据库请求操作列表")
     redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="Redis请求操作列表")
-    step_exec_logger: Optional[List[str]] = Field(default=None, description="步骤执行日志(字符串列表)")
+    step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
     @field_validator("session_variables", "defined_variables", "extract_variables", "assert_validators", mode="before")
@@ -127,19 +127,21 @@ class AutoTestApiDetailVarBase(BaseModel):
 
     @field_validator("step_exec_logger", mode="before")
     @classmethod
-    def normalize_step_exec_logger(cls, v: Any) -> Optional[List[str]]:
+    def normalize_step_exec_logger(cls, v: Any) -> Optional[str]:
         """
-        将step_exec_logger规范为List[str]或null，过滤空项。
+        将step_exec_logger规范为多行文本或null。
+        兼容引擎传入的 List[str]：过滤空项后以换行拼接。
 
-        :param v: 原始日志字段
-        :return: 规范化后的日志列表，全空则返回 None
+        :param v: 原始日志字段（str / List[str] / null）
+        :return: 规范化后的日志文本，全空则返回 None
         """
         if v is None:
             return None
-        if not isinstance(v, list):
-            raise ValueError("参数[step_exec_logger]必须为List[str]或null值")
-        out = [str(x) for x in v if x is not None and str(x) != ""]
-        return out or None
+        if isinstance(v, list):
+            out = [str(x) for x in v if x is not None and str(x) != ""]
+            return "\n".join(out) if out else None
+        text = str(v).strip()
+        return text or None
 
     @field_validator('database_operates', mode='before')
     @classmethod
@@ -243,13 +245,15 @@ class AutoTestApiDetailVarBase(BaseModel):
 
         if executive_logger:
             base = v.get("step_exec_logger")
-            if base is None:
-                base_list: List[str] = []
-            elif isinstance(base, list):
-                base_list = [str(x) for x in base if x is not None and str(x) != ""]
-            else:
-                raise ValueError("参数[step_exec_logger]必须为List[str]或null值")
-            v["step_exec_logger"] = base_list + [str(x) for x in executive_logger]
+            extra = "\n".join(str(x) for x in executive_logger if x is not None and str(x) != "")
+            if extra:
+                if base is None or base == "":
+                    v["step_exec_logger"] = extra
+                elif isinstance(base, list):
+                    base_list = [str(x) for x in base if x is not None and str(x) != ""]
+                    v["step_exec_logger"] = "\n".join(base_list + [str(x) for x in executive_logger])
+                else:
+                    v["step_exec_logger"] = f"{base}\n{extra}"
 
         return v
 
@@ -273,7 +277,7 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
     database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
     redis_searched: Optional[bool] = Field(default=None, description="本次执行是否启用Redis查到即止")
-    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
     dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称")
@@ -292,7 +296,7 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
     step_type: AutoTestStepType = Field(..., description="步骤类型")
     step_state: bool = Field(..., description="步骤执行状态")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
@@ -305,7 +309,7 @@ class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiDetailSelect(BaseModel):
@@ -327,6 +331,6 @@ class AutoTestApiDetailSelect(BaseModel):
     step_state: Optional[bool] = Field(None, description="步骤执行状态(True:成功, False:失败)")
 
     detail_id: Optional[int] = Field(None, description="明细ID")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

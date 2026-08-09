@@ -44,7 +44,7 @@ from backend.core.responses import (
 autotest_task = APIRouter()
 
 
-@autotest_task.post("/create", summary="新增任务")
+@autotest_task.post("/create", summary="新增任务", description="新增任务信息")
 async def create_task(
         task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -107,14 +107,14 @@ async def delete_task(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"根据id或code删除任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除任务信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除任务信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -141,7 +141,7 @@ async def update_task(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"根据id或code更新任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新任务信息成功, 结果明细: {data}")
         return SuccessResponse(data=data, message="更新成功", total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -152,7 +152,7 @@ async def update_task(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新任务信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -184,14 +184,14 @@ async def get_task(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"根据id或code查询任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询任务信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询任务信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -218,9 +218,9 @@ async def search_tasks(
         if task_in.task_project:
             q &= Q(task_project=task_in.task_project)
         if task_in.created_user:
-            q &= Q(created_user__iexact=task_in.created_user)
+            q &= Q(created_user=task_in.created_user)
         if task_in.updated_user:
-            q &= Q(updated_user__iexact=task_in.updated_user)
+            q &= Q(updated_user=task_in.updated_user)
         if task_in.env_id:
             q &= Q(related_cases_env_id__contains=[task_in.env_id])
         if task_in.date_from:
@@ -249,16 +249,16 @@ async def search_tasks(
                 replace_fields={"id": "task_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件查询任务成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询任务列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询任务列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_task.post("/run", summary="立即执行任务")
+@autotest_task.post("/run", summary="执行任务", description="立即执行任务")
 async def run_task(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -275,9 +275,9 @@ async def run_task(
         if task_id is None:
             return ParameterResponse(message="参数[task_id]不允许为空")
         await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
-        from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
-        from backend.enums import AutoTestReportType
-        from backend.services.ctx import get_current_username
+        from celery_scheduler.tasks.task_autotest_case import run_autotest_task
+        from enums import AutoTestReportType
+        from services.ctx import get_current_username
         # __task_id会随消息传到Worker，task_prerun从request.properties取出；
         # 只有传了__task_id，Worker端_create_task_record才会查任务表并写入record的task_id/task_name。
         # created_user 写入执行记录（Worker 无 HTTP 鉴权上下文）。
@@ -290,7 +290,7 @@ async def run_task(
             queue="autotest_queue",
             __task_id=task_id
         )
-        LOGGER.info(f"已下发执行任务 task_id={task_id}")
+        LOGGER.info(f"下发执行任务成功，task_id={task_id}")
         return SuccessResponse(message="已下发执行，请稍后在报告中查看结果", data={"task_id": task_id}, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -327,14 +327,14 @@ async def start_task(
             },
             replace_fields={"id": "task_id"},
         )
-        LOGGER.info(f"已启动任务 task_id={task_id}")
+        LOGGER.info(f"启用任务调度成功，task_id={task_id}")
         return SuccessResponse(message="任务已启动，将根据调度执行", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"启动任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"启用任务调度失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
@@ -364,14 +364,14 @@ async def stop_task(
             },
             replace_fields={"id": "task_id"},
         )
-        LOGGER.info(f"已停止任务 task_id={task_id}")
+        LOGGER.info(f"关闭任务调度成功，task_id={task_id}")
         return SuccessResponse(message="任务已停止，将不再根据调度执行", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"停止任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"关闭任务调度失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
@@ -396,28 +396,28 @@ async def search_task_records(
             )
             for obj in instances
         ]
-        LOGGER.info(f"根据条件查询任务执行记录成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询任务执行记录成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询任务执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询任务执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
 @autotest_task.get("/record/{record_id}/attachments/{key}/download", summary="下载执行记录附件", description="根据记录id与附件key下载附件")
 async def download_task_record_attachment(
         record_id: int = Path(..., description="执行记录主键"),
-        key: str = Path(..., description="附件 key，默认 main"),
+        key: str = Path(..., description="附件key，默认main"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据执行记录 attachments 项下载文件。
+    根据执行记录attachments项下载文件。
 
     :param record_id: 执行记录主键
-    :param key: 附件标识（信封 attachments[].key）
+    :param key: 附件标识（信封attachments[].key）
     :param services: 自动化测试CRUD依赖聚合
-    :return: 文件流或统一错误响应
+    :return: 文件流响应
     """
     try:
         record = await services.record_curd.get_or_none(id=record_id, state__not=1)
@@ -435,10 +435,6 @@ async def download_task_record_attachment(
         if not os.path.isfile(file_path):
             return ParameterResponse(message="附件文件不存在或已过期清理")
         file_name = str(item.get("name") or os.path.basename(file_path))
-        LOGGER.info(
-            f"下载执行记录附件: record_id={record_id}, key={want}, "
-            f"storage_key={item['storage_key']}, file_name={file_name}"
-        )
         return FileResponse(
             path=file_path,
             media_type=str(item.get("content_type") or "application/octet-stream"),
@@ -447,5 +443,5 @@ async def download_task_record_attachment(
     except ValueError as e:
         return ParameterResponse(message=str(e))
     except Exception as e:
-        LOGGER.error(f"下载执行记录附件失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据记录id与附件key下载附件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下载失败，异常描述: {str(e)}")

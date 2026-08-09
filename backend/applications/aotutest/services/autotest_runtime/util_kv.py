@@ -31,7 +31,6 @@ class KvUtils:
         :param items: 变量项序列
         :param skip_if_no_value: 为True时跳过value为None的项
         :return: key -> value字典
-        :raises TypeError: 变量项不是StepVariablesBase时
         """
         if not items:
             return {}

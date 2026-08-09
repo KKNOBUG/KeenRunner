@@ -45,8 +45,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 报告实例或None
-        :raises ParameterException: report_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not report_id:
             error_message: str = "查询报告信息失败, 参数[report_id]不允许为空"
@@ -68,8 +66,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 报告实例或None
-        :raises ParameterException: report_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not report_code:
             error_message: str = "查询报告信息失败, 参数[report_code]不允许为空"
@@ -89,13 +85,10 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         :param report_in: 报告创建schema
         :return: 创建后的报告实例
-        :raises NotFoundException: 用例不存在
-        :raises DataBaseStorageException: 违反数据库约束
         """
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
 
-        # 业务层验证：检查用例是否存在
         await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
@@ -119,13 +112,10 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         :param report_in: 报告更新schema
         :return: 更新后的报告实例
-        :raises NotFoundException: 报告不存在
-        :raises DataBaseStorageException: 违反约束
         """
         report_id: Optional[int] = report_in.report_id
         report_code: Optional[str] = report_in.report_code
 
-        # 业务层验证：检查用例是否存在
         if report_id:
             await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
@@ -152,23 +142,23 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
         :return: 软删除后的报告实例
-        :raises NotFoundException: 报告不存在
         """
-        # 业务层验证：检查用例是否存在
         if report_id:
             instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
 
-        # 业务层验证：检查报告是否存在明细信息, 如果存在则删除
         async with in_transaction():
             report_code = instance.report_code
-            from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-            count = await AutoTestApiDetailCrud().model.filter(report_code=report_code, state__not=1).update(state=1)
+            from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
+            detail_crud = AutoTestApiDetailCrud()
+            detail_ids = await detail_crud.model.filter(
+                report_code=report_code, state__not=1
+            ).values_list("id", flat=True)
+            count = await detail_crud.soft_delete_batch(ids=list(detail_ids))
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
-            instance.state = 1
-            await instance.save()
-        return instance
+
+        return await self.soft_delete(id=instance.id)
 
     async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiReportInfo]]:
         """
@@ -179,7 +169,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -190,6 +179,12 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     @staticmethod
     def _parse_elapsed_seconds(val: Any) -> float:
+        """
+        将耗时字段解析为秒数浮点值。
+
+        :param val: 耗时原始值
+        :return: 秒数；无法解析时返回0.0
+        """
         if val is None or val == "":
             return 0.0
         text = str(val).strip().rstrip("sS")
@@ -200,6 +195,12 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     @staticmethod
     def _is_case_success(case_state: Any) -> bool:
+        """
+        判断用例执行状态是否表示成功。
+
+        :param case_state: 用例执行状态
+        :return: 是否成功
+        """
         return case_state is True or case_state == "true"
 
     @classmethod
@@ -207,9 +208,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """
         按脚本维度汇总批次结果。
 
-        - 成功：每个脚本的全部运行（含数据驱动）均成功
-        - 部分成功：至少一个脚本的全部运行均成功，但并非全部脚本都如此
-        - 失败：没有任何一个脚本达到「其全部运行均成功」
+        :param reports: 报告字典列表
+        :return: 成功(各脚本全部运行均成功)、部分成功(至少一个脚本全部运行成功)或失败
         """
         by_case: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for row in reports:

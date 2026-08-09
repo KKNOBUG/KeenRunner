@@ -37,8 +37,6 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 执行记录实例或None
-        :raises ParameterException: record_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not record_id:
             error_message: str = "查询执行记录信息失败, 参数[record_id]不允许为空"
@@ -77,6 +75,57 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             record_in = data
         return await self.create(record_in.create_dict())
 
+    async def update_record(
+            self,
+            data: Union[AutoTestApiRecordUpdate, Dict[str, Any]],
+            *,
+            record_id: Optional[int] = None,
+            celery_id: Optional[str] = None,
+    ) -> AutoTestApiRecordInfo:
+        """
+        更新一条任务执行记录（按主键或celery_id定位）。
+
+        :param data: 更新入参Schema或字段字典
+        :param record_id: 执行记录主键
+        :param celery_id: Celery任务ID；与 record_id 二选一
+        :return: 更新后的记录实例
+        """
+        if not record_id and not celery_id:
+            error_message: str = "更新执行记录失败, 参数[record_id]或[celery_id]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        if record_id:
+            record = await self.get_by_id(record_id=record_id, on_error=True, state__not=1)
+        else:
+            record = await self.get_by_celery_id(celery_id=celery_id, state__not=1)
+            if not record:
+                error_message: str = f"更新执行记录失败, 记录[celery_id={celery_id}]不存在"
+                LOGGER.error(error_message)
+                raise NotFoundException(message=error_message)
+
+        if isinstance(data, dict):
+            record_in = AutoTestApiRecordUpdate.model_validate(data)
+            raw = data
+        else:
+            record_in = data
+            raw = data.model_dump(exclude_unset=True)
+        update_dict = record_in.update_dict()
+        # task_summary/task_error/batch_code允许显式置空
+        allow_none_keys = ("task_summary", "task_error", "batch_code")
+        update_dict = {
+            k: v for k, v in update_dict.items()
+            if hasattr(record, k) and (v is not None or (k in allow_none_keys and k in raw))
+        }
+        # 有CTX时以登录用户为准；Celery等无上下文时保留入参，再回落到创建人员
+        self._fill_updated_user(update_dict)
+        if not update_dict.get("updated_user"):
+            username = str(record.created_user).strip() if record.created_user else None
+            if username:
+                update_dict["updated_user"] = username.upper()[:16]
+
+        return await self.update(id=record.id, obj_in=update_dict)
+
     async def update_record_by_celery_id(
             self,
             celery_id: str,
@@ -92,31 +141,10 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         record = await self.get_by_celery_id(celery_id=celery_id, state__not=1)
         if not record:
             return None
-        if isinstance(data, dict):
-            record_in = AutoTestApiRecordUpdate.model_validate(data)
-            raw = data
-        else:
-            record_in = data
-            raw = data.model_dump(exclude_unset=True)
-        update_dict = record_in.update_dict()
-        # task_summary/task_error/batch_code允许显式置空
-        allow_none_keys = ("task_summary", "task_error", "batch_code")
-        update_dict = {
-            k: v for k, v in update_dict.items()
-            if hasattr(record, k) and (v is not None or (k in allow_none_keys and k in raw))
-        }
-        # Worker 更新终态时无 HTTP 用户上下文：优先入参，其次沿用创建人
-        if not update_dict.get("updated_user"):
-            from backend.services.ctx import get_current_username
-            username = get_current_username() or (
-                str(record.created_user).strip() if record.created_user else None
-            )
-            if username:
-                update_dict["updated_user"] = username.upper()[:16]
-        for key, value in update_dict.items():
-            setattr(record, key, value)
-        await record.save(update_fields=list(update_dict.keys()))
-        return record
+        try:
+            return await self.update_record(data, celery_id=celery_id)
+        except NotFoundException:
+            return None
 
     async def select_records(self, record_in: AutoTestApiRecordSelect) -> Tuple[int, List[AutoTestApiRecordInfo]]:
         """
@@ -124,7 +152,6 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
 
         :param record_in: 查询条件(含分页、排序与时间区间)
         :return: (总数, 记录列表)
-        :raises ParameterException: 查询字段非法时
         """
         try:
             q = Q()

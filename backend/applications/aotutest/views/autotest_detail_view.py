@@ -35,8 +35,8 @@ from backend.core.responses import (
 autotest_detail = APIRouter()
 
 
-@autotest_detail.post("/create", summary="新增明细")
-async def create_detail(
+@autotest_detail.post("/create", summary="新增明细", description="新增明细信息")
+async def create_step_detail(
         detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -58,7 +58,6 @@ async def create_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"新增明细成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -72,14 +71,14 @@ async def create_detail(
 
 
 @autotest_detail.delete("/delete", summary="删除明细", description="根据id或code删除明细信息")
-async def delete_detail(
+async def delete_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code删除明细。
+    根据id或code删除明细信息。
 
     :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
@@ -102,24 +101,23 @@ async def delete_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"根据id或code删除明细成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除明细信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
 @autotest_detail.post("/update", summary="更新明细", description="根据id或code更新明细信息")
-async def update_detail(
+async def update_step_detail(
         detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code更新明细。
+    根据id或code更新明细信息。
 
     :param detail_in: 明细入参
     :param services: 自动化测试CRUD依赖聚合
@@ -136,7 +134,6 @@ async def update_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"根据id或code更新明细成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -145,19 +142,19 @@ async def update_detail(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新明细信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @autotest_detail.get("/get", summary="查询明细", description="根据id或code查询明细信息")
-async def get_detail(
+async def get_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code查询明细。
+    根据id或code查询明细信息。
 
     :param detail_id: 明细主键ID
     :param step_code: 步骤业务标识
@@ -168,16 +165,12 @@ async def get_detail(
     try:
         if detail_id:
             instance = await services.detail_curd.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
-        elif step_code and report_code:
+        else:
             instance = await services.detail_curd.get_by_conditions(
                 only_one=True,
                 on_error=True,
-                step_code=step_code,
-                report_code=report_code,
-                state__not=1,
+                conditions={"step_code": step_code, "report_code": report_code}
             )
-        else:
-            return ParameterResponse(message="查询明细失败, 请传detail_id或(step_code与report_code)")
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -187,24 +180,23 @@ async def get_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"根据id或code查询明细成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询明细信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_detail.post("/search", summary="查询明细列表", description="根据条件分页查询明细列表信息(Body)")
-async def search_details(
+async def search_step_details(
         detail_in: AutoTestApiDetailSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据条件查询明细。
+    根据条件分页查询明细列表信息。
 
     :param detail_in: 明细入参
     :param services: 自动化测试CRUD依赖聚合
@@ -231,9 +223,9 @@ async def search_details(
         if detail_in.detail_id:
             q &= Q(id=detail_in.detail_id)
         if detail_in.created_user:
-            q &= Q(created_user__iexact=detail_in.created_user)
+            q &= Q(created_user=detail_in.created_user)
         if detail_in.updated_user:
-            q &= Q(updated_user__iexact=detail_in.updated_user)
+            q &= Q(updated_user=detail_in.updated_user)
         q &= Q(state=detail_in.state)
         total, instances = await services.detail_curd.select_details(
             search=q,
@@ -253,10 +245,9 @@ async def search_details(
                 replace_fields={"id": "detail_id"}
             )
             detail_serializes.append(serialize)
-        LOGGER.info(f"根据条件查询明细成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=detail_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询明细列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

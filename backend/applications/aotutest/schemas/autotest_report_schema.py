@@ -6,7 +6,7 @@
 @Module  : autest_report_schema
 @DateTime: 2025/11/26 16:43
 """
-from typing import Optional, List, Union, Any, Dict
+from typing import Optional, List, Any, Dict
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +15,7 @@ from backend.enums import AutoTestReportType, AutoTestTaskStatus
 
 
 class AutoTestApiReportBase(BaseModel):
-    """测试报告公共字段（创建/更新共用）。"""
+    """测试报告公共字段。"""
 
     case_st_time: Optional[str] = Field(None, max_length=32, description="用例执行开始时间")
     case_ed_time: Optional[str] = Field(None, max_length=32, description="用例执行结束时间")
@@ -50,7 +50,7 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
         max_length=64,
         description="报告标识代码；执行引擎落库时传入与明细一致的预生成code，未传时由ORM默认生成",
     )
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiReportUpdate(AutoTestApiReportBase):
@@ -58,14 +58,14 @@ class AutoTestApiReportUpdate(AutoTestApiReportBase):
 
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, max_length=64, description="报告标识代码")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiReportSelect(BaseModel):
     """分页查询测试报告入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=5, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
 
     case_id: Optional[int] = Field(None, description="用例ID")
@@ -73,21 +73,22 @@ class AutoTestApiReportSelect(BaseModel):
     case_name: Optional[str] = Field(None, description="用例名称（模糊匹配）")
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
-    report_type: Optional[AutoTestReportType] = Field(None, description="报告类型")
-    task_code: Optional[str] = Field(None, description="任务标识代码")
+    report_type: Optional[AutoTestReportType] = Field(
+        default=AutoTestReportType.ASYNC_EXEC,
+        description="报告类型（默认异步执行）",
+    )
+    task_code: Optional[str] = Field(None, description="任务标识代码（未传则仅查 task_code 为空的报告）")
     batch_code: Optional[str] = Field(None, description="批次标识代码")
-    # True：仅用例页执行/调试产生的报告（task_code），排除任务调度
     exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")
 
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
-    # 执行时间范围（根据用例执行开始时间case_st_time筛选，格式YYYY-MM-DD或YYYY-MM-DD HH:mm:ss）
-    date_from: Optional[str] = Field(None, description="执行开始时间-起")
-    date_to: Optional[str] = Field(None, description="执行开始时间-止")
+    date_from: Optional[str] = Field(None, description="执行开始时间-起(YYYY-MM-DD或带时分秒)")
+    date_to: Optional[str] = Field(None, description="执行开始时间-止(YYYY-MM-DD或带时分秒)")
 
 
 class AutoTestApiReportBatchSelect(BaseModel):
@@ -108,7 +109,7 @@ class AutoTestApiReportBatchItem(BaseModel):
     pass_rate: Optional[float] = Field(None, description="通过率(0-100)，成功报告数/总报告数")
     pass_count: int = Field(default=0, description="成功报告数")
     report_count: int = Field(default=0, description="本批次报告总数")
-    created_user: Optional[str] = Field(None, description="执行人员（取首个非空）")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="执行人员")
     execute_time: Optional[str] = Field(None, description="执行时间（本批次最早 case_st_time）")
     elapsed_seconds: float = Field(default=0.0, description="本批次耗时合计（秒）")
     reports: List[Dict[str, Any]] = Field(default_factory=list, description="本批次报告明细（含 case_name）")

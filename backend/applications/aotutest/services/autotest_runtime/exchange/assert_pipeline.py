@@ -59,7 +59,6 @@ class AssertPipeline:
             False时根据变量列表解析
         :return: 每项断言结果dict列表（含name/source/expr/operation/except_value/
             actual_value/success/error）
-        :raises TypeError: 列表或子项类型非法时
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:

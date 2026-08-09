@@ -7,7 +7,7 @@
 @DateTime: 2026/1/16 16:47
 """
 
-from typing import Optional, List, Union
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,7 @@ class AutoTestApiTagCreate(BaseModel):
     tag_mode: str = Field(..., max_length=64, description="标签大类")
     tag_name: str = Field(..., max_length=64, description="标签名称")
     tag_desc: Optional[str] = Field(None, max_length=2048, description="标签描述")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiTagUpdate(BaseModel):
@@ -32,6 +33,7 @@ class AutoTestApiTagUpdate(BaseModel):
     tag_mode: Optional[str] = Field(None, max_length=64, description="标签大类")
     tag_name: Optional[str] = Field(None, max_length=64, description="标签名称")
     tag_desc: Optional[str] = Field(None, max_length=2048, description="标签描述")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiTagDelete(BaseModel):
@@ -48,6 +50,6 @@ class AutoTestApiTagSelect(AutoTestApiTagUpdate):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
 
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

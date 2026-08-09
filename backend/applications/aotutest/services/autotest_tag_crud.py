@@ -41,8 +41,6 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 标签实例或None
-        :raises ParameterException: tag_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not tag_id:
             error_message: str = "查询标签信息失败, 参数[tag_id]不允许为空"
@@ -64,8 +62,6 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :param on_error: 有缺失时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 全部存在时返回标签列表；有缺失且on_error为False时返回False
-        :raises ParameterException: tag_ids为空或非列表
-        :raises NotFoundException: 存在缺失ID且on_error为True
         """
         if not tag_ids:
             error_message: str = "查询标签信息失败, 参数[tag_ids]不允许为空"
@@ -94,8 +90,6 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 标签实例或None
-        :raises ParameterException: tag_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not tag_code:
             error_message: str = "查询标签信息失败, 参数[tag_code]不允许为空"
@@ -115,20 +109,21 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
         :param tag_in: 标签创建schema
         :return: 创建或恢复后的标签实例
-        :raises NotFoundException: 应用不存在
-        :raises DataBaseStorageException: 违反数据库约束
         """
         tag_mode: str = tag_in.tag_mode
         tag_name: str = tag_in.tag_name
         tag_project: int = tag_in.tag_project
 
         # 业务层验证：检查应用是否存在
-        from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+        from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
         await AutoTestApiProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
-
         # 业务层验证：同应用下相同大类及名称仅允许一条记录（含已禁用，命中则恢复启用）
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
-        existing_tag = await self.model.filter(tag_project=tag_project, tag_mode=tag_mode, tag_name=tag_name).first()
+        existing_tag = await self.model.filter(
+            tag_project=tag_project,
+            tag_mode=tag_mode,
+            tag_name=tag_name,
+        ).first()
         if not existing_tag:
             try:
                 instance: AutoTestApiTagInfo = await self.create(obj_in=tag_dict)
@@ -149,13 +144,10 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestApiTagInfo:
         """
-        更新标签，根据tag_id或tag_code定位并校验 (tag_project, tag_mode, tag_name) 唯一。
+        更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
 
         :param tag_in: 标签更新schema
         :return: 更新后的标签实例
-        :raises NotFoundException: 标签不存在
-        :raises DataAlreadyExistsException: 同应用同大类同名标签已存在
-        :raises DataBaseStorageException: 违反约束
         """
         tag_id: Optional[int] = tag_in.tag_id
         tag_code: Optional[str] = tag_in.tag_code
@@ -206,24 +198,24 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :param tag_id: 标签主键ID，与tag_code二选一
         :param tag_code: 标签标识代码，与tag_id二选一
         :return: 软删除后的标签实例
-        :raises NotFoundException: 标签不存在
-        :raises DataAlreadyExistsException: 有用例关联该标签
         """
+        if not tag_id and not tag_code:
+            error_message: str = "删除标签信息失败, 参数[tag_id]或[tag_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if tag_id:
             instance = await self.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
 
-        from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+        from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
         cases_count = await AutoTestApiCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def delete_tags(self, tag_in: AutoTestApiTagDelete) -> int:
         """
@@ -231,9 +223,6 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
         :param tag_in: 标签删除schema
         :return: 更新条数
-        :raises ParameterException: tag_ids与tag_codes均未传
-        :raises NotFoundException: 标签不存在
-        :raises DataAlreadyExistsException: 有用例关联该标签
         """
         tag_ids: Optional[List[int]] = tag_in.tag_ids
         tag_codes: Optional[List[str]] = tag_in.tag_codes
@@ -264,7 +253,6 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

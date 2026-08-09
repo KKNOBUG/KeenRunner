@@ -51,7 +51,6 @@ class ExtractPipeline:
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调(str) -> None
         :return: (name->value字典, 逐项结果列表)；成功项才写入字典
-        :raises TypeError: 列表或子项类型非法时
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []

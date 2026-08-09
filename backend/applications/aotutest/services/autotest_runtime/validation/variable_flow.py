@@ -18,8 +18,6 @@ from backend.applications.aotutest.services.autotest_runtime.sandbox import RE_P
 
 
 class VariableFlowValidation:
-    """保存前第四层：占位符引用与变量产出匹配；并提供session变量收集。"""
-
     @classmethod
     def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
@@ -86,7 +84,8 @@ class VariableFlowValidation:
                 _collect_produced(child)
             if step.branch_items:
                 for branch in step.branch_items:
-                    branch_children = branch.branch_children if hasattr(branch, "branch_children") else (branch.get("branch_children") if isinstance(branch, dict) else None)
+                    branch_children = branch.branch_children if hasattr(branch, "branch_children") else (
+                        branch.get("branch_children") if isinstance(branch, dict) else None)
                     for child in (branch_children or []):
                         _collect_produced(child)
             for quote_step in (step.quote_steps or []):
@@ -126,7 +125,8 @@ class VariableFlowValidation:
                 fields["conditions"] = step.conditions
             if step.branch_items:
                 for bi, branch in enumerate(step.branch_items):
-                    cond = branch.branch_conditions if hasattr(branch, "branch_conditions") else (branch.get("branch_conditions") if isinstance(branch, dict) else None)
+                    cond = branch.branch_conditions if hasattr(branch, "branch_conditions") else (
+                        branch.get("branch_conditions") if isinstance(branch, dict) else None)
                     if cond is not None:
                         fields[f"branch_items[{bi}].branch_conditions"] = cond
             if step.session_variables:
@@ -168,7 +168,8 @@ class VariableFlowValidation:
                 _check_refs(child)
             if step.branch_items:
                 for branch in step.branch_items:
-                    branch_children = branch.branch_children if hasattr(branch, "branch_children") else (branch.get("branch_children") if isinstance(branch, dict) else None)
+                    branch_children = branch.branch_children if hasattr(branch, "branch_children") else (
+                        branch.get("branch_children") if isinstance(branch, dict) else None)
                     for child in (branch_children or []):
                         _check_refs(child)
             for quote_step in (step.quote_steps or []):

@@ -207,15 +207,20 @@ _SAMPLE_REQUEST_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </Request>"""
 
 
-@autotest_http_xml_test.post(path="/xml", summary="HTTP XML测试接口", description="保险理赔申请")
-async def http_xml_test(request: Request):
+@autotest_http_xml_test.post(path="/xml", summary="执行HTTP/XML测试", description="保险理赔申请")
+async def http_xml_test(
+        request: Request,
+):
     """
     接收XML格式请求报文（保险理赔申请），返回XML格式响应。
 
-    请求体为XML格式，包含Head（请求头）和Body（保单信息 + 报案人信息 + 理赔信息），
+    请求体为XML格式，包含Head（请求头）和Body（保单信息+报案人信息+理赔信息），
     响应为XML格式，包含保单信息、报案人信息、审批结果、所需材料清单、处理时间线、联系方式等40+字段。
 
-    用于测试 HTTP 请求步骤中 XML 报文类型的发送与响应解析。
+    用于测试HTTP请求步骤中XML报文类型的发送与响应解析。
+
+    :param request: HTTP请求对象
+    :return: XML格式响应
     """
     try:
         body_bytes = await request.body()
@@ -225,26 +230,27 @@ async def http_xml_test(request: Request):
         return FailureResponse(message=f"读取请求体失败，异常描述: {e}")
 
     response_xml = _build_claim_response(text)
-    LOGGER.info(f"HTTP XML测试接口处理完成, 请求长度: {len(text)}")
-
-    return FastAPIResponse(
-        content=response_xml,
-        media_type="application/xml; charset=utf-8",
-    )
+    return FastAPIResponse(content=response_xml, media_type="application/xml; charset=utf-8")
 
 
-@autotest_http_xml_test.get("/sample/request", summary="获取XML请求示例报文")
+@autotest_http_xml_test.get("/sample/request", summary="查询XML请求示例报文", description="获取HTTP/XML测试接口的理赔申请请求示例")
 async def get_http_xml_sample_request():
     """
-    获取HTTP、XML测试接口的请求报文示例（保险理赔申请）。
+    获取HTTP/XML测试接口的请求报文示例（保险理赔申请）。
 
     将此XML报文作为HTTP请求步骤的请求体（选择xml类型），
-    发送到 POST/xml 接口，服务器将返回XML格式的理赔审批结果。
+    发送到POST/xml接口，服务器将返回XML格式的理赔审批结果。
+
+    :return: 统一HTTP响应
     """
     return SuccessResponse(message="查询成功", data=_SAMPLE_REQUEST_XML)
 
 
-@autotest_http_xml_test.get("/sample/response", summary="预览XML响应报文")
+@autotest_http_xml_test.get("/sample/response", summary="查询XML响应报文", description="预览HTTP/XML测试接口对示例请求返回的XML响应")
 async def get_http_xml_sample_response():
-    """预览 HTTP XML 测试接口对示例请求返回的 XML 响应。"""
+    """
+    预览HTTP/XML测试接口对示例请求返回的XML响应。
+
+    :return: 统一HTTP响应
+    """
     return SuccessResponse(message="查询成功", data=_build_claim_response(_SAMPLE_REQUEST_XML))

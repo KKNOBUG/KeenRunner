@@ -6,16 +6,16 @@
 @Module  : autotest_case_schema.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestCaseType, AutoTestCaseAttr
+from backend.enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType
 
 
 class AutoTestApiCaseMeta(BaseModel):
-    """用例公共字段（更新/查询共用）。"""
+    """用例公共字段。"""
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
@@ -27,7 +27,7 @@ class AutoTestApiCaseMeta(BaseModel):
 
 
 class AutoTestApiCaseBase(BaseModel):
-    """用例公共字段（更新/查询共用）。"""
+    """用例公共字段。"""
 
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
     case_tags: Optional[List[int]] = Field(None, description="用例所属标签")
@@ -58,14 +58,14 @@ class AutoTestApiCaseCreate(AutoTestApiCaseBase):
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiCaseUpdate(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     """更新用例入参。"""
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
@@ -75,11 +75,8 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
 
-    exclude_case_id: Optional[int] = Field(None, description="排除的用例ID（复制时排除自己）")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
+    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
-
-    # 创建时间范围（根据 created_time 筛选，格式 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss）
-    date_from: Optional[str] = Field(None, description="创建时间-起")
-    date_to: Optional[str] = Field(None, description="创建时间-止")

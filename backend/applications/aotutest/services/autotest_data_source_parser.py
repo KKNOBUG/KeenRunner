@@ -108,7 +108,6 @@ def detect_matrix_axis(values: Any) -> int:
 
     :param values: 二维矩阵(DataFrame.values)
     :return: 方向，水平模式(第0行含分区标记)返回AXIS_HORIZONTAL，垂直模式(第0列含分区标记)返回AXIS_VERTICAL
-    :raises ValueError: 矩阵为空，或第0行与第0列均不含分区标记(非合法数据源矩阵)
     """
     if values.size == 0:
         raise ValueError("数据矩阵为空，无法识别方向")
@@ -355,7 +354,6 @@ async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[st
 
     :param matrix: 二维列表(与单步骤xlsx首sheet、header=None结构一致)
     :return: (step_data, dataset_names, norm_matrix, axis)
-    :raises ValueError: matrix非二维列表，或矩阵方向无法识别
     """
     if not isinstance(matrix, list):
         raise ValueError("dataframe 须为二维列表")
@@ -377,8 +375,6 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
 
     :param file_path: xlsx文件路径
     :return: (step_data, dataset_names, dataframe, axis)，dataframe为原始二维矩阵，axis为矩阵方向
-    :raises FileNotFoundError: 文件不存在
-    :raises ValueError: 解析失败或矩阵方向无法识别
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -400,8 +396,6 @@ async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any
 
     :param file_path: xlsx文件路径
     :return: (parsed_data, dataset_names, sheet_axes, sheet_matrices)，dataset_names为去重排序后的场景名列表
-    :raises FileNotFoundError: 文件不存在
-    :raises ValueError: 解析失败或某sheet矩阵方向无法识别
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")

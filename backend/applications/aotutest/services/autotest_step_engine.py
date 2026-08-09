@@ -18,11 +18,15 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 import httpx
 import orjson
 from aiomysql import Pool
+
+from backend.applications.aotutest.services.autotest_runtime.protocol_http import build_httpx_request_kwargs, assemble_http_body_payloads
+from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import select_tcp_payload, parse_tcp_response, parse_tcp_timeouts, \
+    resolve_tcp_request_extract_sources, tcp_body_source_for_assert
 
 if TYPE_CHECKING:
     from backend.applications.aotutest.dependencies import AutoTestApiServices
@@ -199,7 +203,6 @@ class StepExecutionContext:
 
         若未指定外部HTTP客户端, 将创建一个默认的httpx.AsyncClient实例，并通过AsyncExitStack管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
         :return: 上下文管理器实例本身, 用于异步with语句
-        :raises StepExecutionError: 创建 HTTP 客户端失败时抛出
         """
         try:
             if self._http_client is None:
@@ -271,7 +274,6 @@ class StepExecutionContext:
         获取当前HTTP客户端，必须在async with上下文中使用。
 
         :return: 当前注入或创建的HTTP客户端
-        :raises RuntimeError: HTTP客户端未创建时抛出
         """
         if self._http_client is None:
             raise RuntimeError("异步上下文管理器: HTTP客户端未创建, 请在异步上下文中使用")
@@ -321,7 +323,6 @@ class StepExecutionContext:
         :param variables: 待更新的变量列表
         :param scope: 目标作用域（defined_variables 或 session_variables）
         :return: None
-        :raises ValueError: 作用域非法、入参非列表或元素非法时抛出
         """
         if scope not in ("defined_variables", "session_variables"):
             raise ValueError(
@@ -364,8 +365,6 @@ class StepExecutionContext:
         session_variables 为持续累积已执行的步骤产生的变量（所有步骤共享）。
         :param name: 变量名，非空字符串
         :return: 变量值
-        :raises StepExecutionError: 变量名不是非空字符串时抛出
-        :raises KeyError: 变量未定义时抛出
         """
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: \n\t变量名必须是非空字符串, 当前值: {name}")
@@ -386,7 +385,6 @@ class StepExecutionContext:
 
         :param seconds: 等待秒数；None不等待，小于0或大于300抛出异常
         :return: None
-        :raises StepExecutionError: seconds非法或等待异常时抛出
         """
         if seconds is None:
             return
@@ -430,32 +428,20 @@ class StepExecutionContext:
         :param files: 上传文件
         :param timeout: 超时秒数，None使用上下文默认
         :return: 响应对象
-        :raises StepExecutionError: 请求失败、超时、URL非法或连接异常时抛出
         """
         try:
             client = self.http_client
-            kwargs: Dict[str, Any] = {
-                "headers": headers,
-                "params": params,
-                "data": data,
-                "json": json_data,
-                "content": content,
-                "files": files,
-            }
-            if timeout is not None:
-                kwargs["timeout"] = timeout
-            kwargs: Dict[str, Any] = {key: value for key, value in kwargs.items() if value}
-            raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
+            kwargs = build_httpx_request_kwargs(
+                headers=headers,
+                params=params,
+                data=data,
+                json_data=json_data,
+                content=content,
+                files=files,
+                timeout=timeout,
+                encode_headers=True,
+            )
             try:
-                if raw_headers:
-                    # 对请求头中的中文进行UTF-8百分号编码
-                    encoded_headers: Dict[str, Any] = {
-                        key: quote(value, encoding="utf-8", safe=':/?#[]@!$&\'()*+,;=-._~%')
-                        if isinstance(value, str) else value for key, value in raw_headers.items()
-                    }
-                    if encoded_headers:
-                        # 把编码后的headers放回kwargs
-                        kwargs["headers"] = encoded_headers
                 response = await client.request(method, url, **kwargs)
                 self.log(
                     f"【HTTP请求】请求成功: \n\t"
@@ -695,7 +681,6 @@ class StepExecutionContext:
 
         :param source: 待校验的Python源代码字符串
         :return: None
-        :raises StepExecutionError: 导入非白名单模块或使用相对导入时抛出
         """
         allowed_cn = "、".join(sorted(USER_CODE_ALLOWED_IMPORT_ROOTS))
         try:
@@ -1068,7 +1053,6 @@ class BaseStepExecutor:
         :param session_lookup_extra: 额外并入变量池查找表的会话变量
         :param body_source: 提取断言所用的响应体来源标识
         :return: None
-        :raises StepExecutionError: 提取/断言存在失败项或处理异常时抛出
         """
         session_lookup = AutoTestToolService.build_session_lookup(
             self.context.defined_variables,
@@ -1245,7 +1229,7 @@ class BaseStepExecutor:
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
         step_logs: List[str] = self.context.logs.get(self.step_code, [])
-        step_exec_logger: Optional[List[str]] = list(step_logs) if step_logs else None
+        step_exec_logger: Optional[str] = "\n".join(step_logs) if step_logs else None
         response_body = None
         response_text = None
         response_header = None
@@ -1393,7 +1377,6 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param result: 用于挂载子步骤结果与成败状态的执行结果对象
         :return: None
-        :raises StepExecutionError: 循环模式/错误策略缺失或非法，或子步骤根据策略停止时抛出
         """
         try:
             loop_mode_str = self.step.loop_mode
@@ -1451,7 +1434,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_maximums为空、子步骤根据停止策略失败或循环次数超限时抛出
         """
         loop_maximums = self.step.loop_maximums
         if not loop_maximums:
@@ -1533,7 +1515,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_iterable为空、数据源非可迭代对象、子步骤根据停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1644,7 +1625,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_iterable为空、数据源非字典、子步骤根据停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1764,7 +1744,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: conditions为空、子步骤根据停止策略失败或循环轮数超限时抛出
         """
         condition = self.step.conditions
         if not condition:
@@ -1894,7 +1873,6 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param condition: 待评估的条件模型
         :return: 条件成立返回 True，否则False
-        :raises StepExecutionError: 条件缺少必要字段、变量未定义、占位符解析异常或条件执行异常时抛出
         """
         condition_expr = condition.condition_expr
         condition_compare = condition.condition_compare
@@ -1930,7 +1908,6 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param source: 数据源，可为${var}、JSON字符串或已解析对象
         :return: 可迭代对象（如 list、dict）
-        :raises StepExecutionError: 解析失败时
         """
         try:
             # 占位符解析后再解析${var} 或JSON字面量
@@ -2076,7 +2053,6 @@ class PythonStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 代码执行失败、断言失败或结果提取失败时抛出
         """
         try:
             code = self.step.code
@@ -2145,6 +2121,33 @@ class PythonStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
+class WaitStepExecutor(BaseStepExecutor):
+    """
+    等待步骤执行器：根据step.wait秒数调用context.sleep。
+    """
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        """
+        根据 step.wait 指定的秒数挂起当前步骤。
+
+        :param result: 本步执行结果（等待步骤通常不写入额外字段）
+        :return: None
+        """
+        try:
+            wait_seconds = self.step.wait
+            if wait_seconds is None:
+                raise StepExecutionError("【等待控制】缺少必要配置: wait")
+
+            await self.context.sleep(wait_seconds)
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
+
+
 class AssertStepExecutor(BaseStepExecutor):
     """
     断言步骤执行器：按 assert_validators 执行断言，规则/比较符/管线与 HTTP 步骤断言对齐。
@@ -2159,7 +2162,6 @@ class AssertStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 缺少断言配置、规则类型非法或断言失败时抛出
         """
         try:
             assert_validators = self.step.assert_validators
@@ -2197,34 +2199,6 @@ class AssertStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
-class WaitStepExecutor(BaseStepExecutor):
-    """
-    等待步骤执行器：根据step.wait秒数调用context.sleep。
-    """
-
-    async def _execute(self, result: StepExecutionResult) -> None:
-        """
-        根据 step.wait 指定的秒数挂起当前步骤。
-
-        :param result: 本步执行结果（等待步骤通常不写入额外字段）
-        :return: None
-        :raises StepExecutionError: 等待异常时抛出
-        """
-        try:
-            wait_seconds = self.step.wait
-            if wait_seconds is None:
-                raise StepExecutionError("【等待控制】缺少必要配置: wait")
-
-            await self.context.sleep(wait_seconds)
-        except StepExecutionError:
-            raise
-        except Exception as e:
-            result.success = False
-            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
-            self.context.log(result.error, step_code=self.step_code)
-            raise StepExecutionError(result.error) from e
-
-
 class UserVariablesStepExecutor(BaseStepExecutor):
     """
     用户变量步骤执行器：解析step.session_variables后合并到session_variables。
@@ -2236,7 +2210,6 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 变量解析或合并异常时抛出
         """
         try:
             session_variables_raw: List[StepVariablesBase] = self.step.session_variables
@@ -2265,7 +2238,6 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果，子步骤结果写入children
         :return: None
-        :raises StepExecutionError: 子用例执行异常时抛出
         """
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         try:
@@ -2391,7 +2363,6 @@ class TcpStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 环境/报文解析或请求异常时抛出
         """
         try:
             env_name: Optional[str] = None
@@ -2495,16 +2466,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 )
 
             request_args_type_raw = self.step.request_args_type
-            if request_args_type_raw is None:
-                payload = request_text if request_text not in (None, "") else request_body
-            elif request_args_type_raw == AutoTestReqArgsType.RAW:
-                payload = request_text
-            elif request_args_type_raw == AutoTestReqArgsType.JSON:
-                payload = request_body
-            elif request_args_type_raw == AutoTestReqArgsType.XML:
-                payload = request_text
-            else:
-                payload = request_text if request_text not in (None, "") else request_body
+            payload = select_tcp_payload(
+                request_args_type_raw, request_text=request_text, request_body=request_body
+            )
 
             # 写入result.request，便于落库与排障
             result.request = {
@@ -2528,22 +2492,11 @@ class TcpStepExecutor(BaseStepExecutor):
 
             length_field_size = self.step.tcp_length_field_size or 8
             encoding = self.step.tcp_encoding or "utf-8"
-            connect_timeout = self.step.tcp_connect_timeout
-            read_timeout = self.step.tcp_read_timeout
             max_response_bytes = self.step.tcp_max_response_bytes or (10 * 1024 * 1024)
             response_type = (self.step.tcp_response_type or "text").strip().lower()
-
-            def _to_timedelta(v: Any) -> Optional["timedelta"]:
-                """将秒数字符串/数值转为timedelta；空或非法返回None。"""
-                if v is None or v == "":
-                    return None
-                try:
-                    return timedelta(seconds=float(v))
-                except Exception:
-                    return None
-
-            connect_td = _to_timedelta(connect_timeout)
-            read_td = _to_timedelta(read_timeout)
+            connect_td, read_td = parse_tcp_timeouts(
+                self.step.tcp_connect_timeout, self.step.tcp_read_timeout
+            )
 
             start = time.perf_counter()
             async with AioTcpClient(
@@ -2563,38 +2516,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 )
                 # 只请求一次：获取原始字节后本地解析，避免解析失败时重发TCP请求
                 resp_bytes = await utils.bytes_resp()
-                try:
-                    resp_text = resp_bytes.decode(encoding, errors="ignore")
-                except Exception:
-                    resp_text = ""
-                response_json: Optional[Any] = None
-
-                if response_type == "json":
-                    try:
-                        body_any = orjson.loads(resp_bytes) if resp_bytes else None
-                        response_json = body_any if isinstance(body_any, (dict, list)) else None
-                        if body_any is not None:
-                            resp_text = orjson.dumps(body_any).decode("UTF-8")
-                    except Exception:
-                        response_json = None
-                elif response_type == "xml":
-                    # 与xml_resp行为一致：lxml格式化
-                    try:
-                        if resp_bytes and resp_bytes.strip():
-                            from lxml import etree
-                            parser = etree.XMLParser(recover=False, remove_blank_text=True, encoding=encoding)
-                            root = etree.fromstring(resp_bytes, parser=parser)
-                            resp_text = etree.tostring(root, encoding=str, pretty_print=True, xml_declaration=False).strip()
-                    except Exception:
-                        pass  # 格式化失败，保留decode后的文本
-                    response_json = None
-                elif response_type == "bytes":
-                    response_json = None
-                else:  # text
-                    try:
-                        response_json = orjson.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
-                    except Exception:
-                        response_json = None
+                parsed = parse_tcp_response(resp_bytes, encoding=encoding, response_type=response_type)
+                resp_text = parsed.response_text
+                response_json = parsed.response_json
 
             elapsed = round(time.perf_counter() - start, 6)
             result.response = {
@@ -2603,26 +2527,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 "response_bytes": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
             }
 
-            request_json_for_extract = request_body if isinstance(request_body, (dict, list)) else None
-            if request_json_for_extract is None and isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
-                try:
-                    parsed_request = orjson.loads(request_text)
-                    if isinstance(parsed_request, (dict, list)):
-                        request_json_for_extract = parsed_request
-                except Exception:
-                    request_json_for_extract = None
-            request_text_for_extract = request_text if request_text not in (None, "") else (
-                payload if isinstance(payload, str) else None
+            request_json_for_extract, request_text_for_extract = resolve_tcp_request_extract_sources(
+                request_body=request_body, request_text=request_text, payload=payload
             )
-            # 根据响应类型选择数据驱动assert_body的提取来源
-            if response_type == "json":
-                tcp_body_source = "response json"
-            elif response_type == "xml":
-                tcp_body_source = "response xml"
-            elif response_type == "text":
-                tcp_body_source = "response text"
-            else:
-                tcp_body_source = "response json"
             self.apply_extract_and_assert(
                 result,
                 step_label="TCP请求",
@@ -2631,7 +2538,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_text=request_text_for_extract,
                 request_json=request_json_for_extract,
                 step_struct=step_struct,
-                body_source=tcp_body_source,
+                body_source=tcp_body_source_for_assert(response_type),
             )
         except StepExecutionError:
             raise
@@ -2653,7 +2560,6 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: SQL执行或结果处理异常时抛出
         """
         try:
             merge_operates_env_name: Optional[str] = None
@@ -2894,7 +2800,7 @@ class RedisStepExecutor(BaseStepExecutor):
     """
 
     @staticmethod
-    def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
+    def has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
         """
         判断Redis命令结果列表是否含有效数据（非空/非空白）。
 
@@ -2919,7 +2825,6 @@ class RedisStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: Redis命令执行或结果处理异常时抛出
         """
         try:
             merge_operates_env_name: Optional[str] = None
@@ -3089,7 +2994,7 @@ class RedisStepExecutor(BaseStepExecutor):
                         "redis_data": redis_data,
                         "redis_count": redis_count,
                     })
-                    if redis_searched and self._has_effective_redis_result(redis_data):
+                    if redis_searched and self.has_effective_redis_result(redis_data):
                         self.context.log(
                             f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令",
                             step_code=self.step_code,
@@ -3188,22 +3093,26 @@ class HttpStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: URL/环境非法、请求配置或数据源处理异常、响应解析失败时抛出
         """
         try:
-            # 获取当前步骤的执行配置并处理请求URL
             request_url: str = (self.step.request_url or "").strip().lstrip("/")
             request_method: HTTPMethod = self.step.request_method
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
             env_name: Optional[str] = None
             if current_step_config:
                 if current_step_config.config_type == AutoTestConfigNodeType.API:
-                    env_name: str = current_step_config.env_name
+                    env_name = current_step_config.env_name
                     config_name: str = current_step_config.config_name
-                    config_host: str = current_step_config.config_host
-                    config_port: str = current_step_config.config_port
+                    config_host: str = (current_step_config.config_host or "").strip().rstrip("/").rstrip(":")
+                    config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
                     self.step.request_config_name = config_name
-                    request_url = f"{config_host}:{config_port}/{request_url}"
+                    if config_host and not config_host.lower().startswith(("http://", "https://")):
+                        config_host = f"http://{config_host}"
+                    request_url = (
+                        f"{config_host}/{request_url}"
+                        if not config_port
+                        else f"{config_host}:{config_port}/{request_url}"
+                    )
 
             if not request_url or not request_url.lower().startswith("http") or not env_name:
                 raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")
@@ -3315,36 +3224,20 @@ class HttpStepExecutor(BaseStepExecutor):
             content_payload: Optional[Any] = None
             # 根据request_args_type选取请求体类型，仅使用一种方式，避免冲突
             request_args_type: Optional[AutoTestReqArgsType] = self.step.request_args_type
-            if request_args_type is None:
-                # 未配置时保持兼容：优先raw -> form-data -> urlencoded作为data，若存在request_body且未产生data载荷，则作为json
-                if request_text:
-                    data_payload = request_text
-                elif request_form_data or request_form_file:
-                    data_payload = request_form_data
-                    file_payload = request_form_file if request_form_file else None
-                elif request_form_urlencoded:
-                    data_payload = request_form_urlencoded
-                if request_body and not data_payload:
-                    json_payload = request_body
-            elif request_args_type in (AutoTestReqArgsType.NONE, AutoTestReqArgsType.PARAMS):
-                # 无请求体或仅查询参数
-                pass
-            elif request_args_type == AutoTestReqArgsType.RAW:
-                data_payload = request_text
-            elif request_args_type == AutoTestReqArgsType.JSON:
-                json_payload = request_body
-            elif request_args_type == AutoTestReqArgsType.XML:
-                content_payload = request_text
-                if request_header is None:
-                    request_header = {}
-                has_content_type = any(k.lower() == "content-type" for k in request_header)
-                if not has_content_type:
-                    request_header["Content-Type"] = "application/xml; charset=utf-8"
-            elif request_args_type == AutoTestReqArgsType.FORM_DATA:
-                data_payload = request_form_data
-                file_payload = request_form_file if request_form_file else None
-            elif request_args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
-                data_payload = request_form_urlencoded
+            payloads = assemble_http_body_payloads(
+                request_args_type,
+                request_text=request_text,
+                request_body=request_body,
+                form_data=request_form_data,
+                form_files=request_form_file,
+                urlencoded=request_form_urlencoded,
+                headers=request_header,
+            )
+            json_payload = payloads.json_payload
+            data_payload = payloads.data_payload
+            content_payload = payloads.content_payload
+            file_payload = payloads.file_payload
+            request_header = payloads.headers
             # 先写入实际发往目标服务器的数据，避免后续处理response异常时落库拿不到request
             result.request = {
                 "request_url": request_url,
@@ -3434,7 +3327,6 @@ class DefaultStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果，子步骤写入children
         :return: None
-        :raises StepExecutionError: 子步骤执行异常时抛出
         """
         try:
             child_results = await self._execute_children()
@@ -3463,9 +3355,9 @@ class StepExecutorFactory:
         AutoTestStepType.LOOP: LoopStepExecutor,
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,
+        AutoTestStepType.ASSERT: AssertStepExecutor,
         AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
-        AutoTestStepType.ASSERT: AssertStepExecutor,
     }
 
     @classmethod
@@ -3476,7 +3368,6 @@ class StepExecutorFactory:
         :param step: 步骤树节点
         :param context: 执行上下文
         :return: 步骤执行器实例
-        :raises StepExecutionError: 步骤类型未定义、无法转换或执行器实例化失败时抛出
         """
         try:
             raw_type = step.step_type

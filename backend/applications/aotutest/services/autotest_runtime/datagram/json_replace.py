@@ -24,7 +24,7 @@ class JsonDatagram:
         根据两段内嵌JSONPath定位并更新字段值，无@JSON@分隔符时退化为普通单段JSONPath更新。
 
         约定第一段JSONPath定位到一个字符串JSON或dict字段，第二段JSONPath在该字段值所代表的JSON内部继续定位并更新，
-        最后把更新结果回写到第一段JSONPath对应的字段，形如'$.escape_field@JSON@$.name'。
+        最后把更新结果回写到第一段JSONPath对应的字段，形如：$.escape_field@JSON@$.name。
 
         :param datagram: 待更新的JSON报文字典
         :param json_path: 形如'outer@JSON@inner'的两段JSONPath，无分隔符时根据单段处理

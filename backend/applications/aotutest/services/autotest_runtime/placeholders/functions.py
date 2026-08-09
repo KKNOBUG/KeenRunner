@@ -25,7 +25,6 @@ class PlaceholderFunctions:
         注意：当前仅支持关键字参数[如: key=value), 并使用ast.literal_eval进行字面量解析, 不包含=的内容会被忽略(即位置参数不会被解析和记录)
         :param func_string: 函数调用形式的字符串
         :return: 二元组(函数名, 参数字典), 无法解析时返回(None, None)
-        :raises ValueError: 参数值不是合法字面量或解析失败时
         """
         if not isinstance(func_string, str):
             return None, None
@@ -56,7 +55,6 @@ class PlaceholderFunctions:
 
         :param content: 如"generate_uuid()"、"generate_string(length=2)"
         :return: 函数返回值
-        :raises AttributeError: 非函数形式或函数不存在/执行失败
         """
         try:
             func_name, func_args = cls._parse_funcname_funcargs(content)

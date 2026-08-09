@@ -136,7 +136,7 @@ class _TcpTestServer:
 
     async def _read_and_detect(self, reader: asyncio.StreamReader, build_response: Any) -> tuple:
         """
-        读取请求数据，自动检测帧协议，调用 build_response 构造响应。
+        读取请求数据，自动检测帧协议，调用build_response构造响应。
 
         :return: (response_xml_str, is_length_prefixed)
         """
@@ -453,24 +453,25 @@ async def start_tcp_test_server(
         xml_port: int = Body(9998, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
 ):
     """
-    启动 TCP 测试服务器，同时监听两个端口：
+    启动TCP测试服务器，同时监听两个端口。
 
-    - **JSON 端口**（默认 9999）：接收 JSON 格式请求报文（银行账户交易查询），
-      返回 XML 格式响应（含 AccountInfo + TransactionList 数组 + Summary，共 30+ 字段）
+    - **JSON端口**（默认9999）：接收JSON格式请求报文（银行账户交易查询），
+      返回XML格式响应（含AccountInfo + TransactionList数组 + Summary，共30+字段）
 
-    - **XML 端口**（默认 9998）：接收 XML 格式请求报文（贷款申请），
-      返回 XML 格式响应（含 ApprovalInfo + RepaymentPlan 数组 + Terms 数组 + ContactInfo，共 40+ 字段）
+    - **XML端口**（默认9998）：接收XML格式请求报文（贷款申请），
+      返回XML格式响应（含ApprovalInfo + RepaymentPlan数组 + Terms数组 + ContactInfo，共40+字段）
 
-    帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或 RAW（无前缀）。
+    帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或RAW（无前缀）。
+
+    :param host: 监听地址
+    :param json_port: JSON请求端口
+    :param xml_port: XML请求端口
+    :return: 统一HTTP响应
     """
     try:
         await _tcp_test_server.start(host=host, json_port=json_port, xml_port=xml_port)
         status = _tcp_test_server.status()
-        LOGGER.info(f"启动TCP测试服务器成功, host: {host}, json_port: {json_port}, xml_port: {xml_port}")
-        return SuccessResponse(
-            message="启动成功",
-            data=status,
-        )
+        return SuccessResponse(message="启动成功", data=status)
     except OSError as e:
         LOGGER.error(f"启动TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"启动失败，异常描述: {e}")
@@ -479,34 +480,42 @@ async def start_tcp_test_server(
         return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
-@autotest_tcp_test.post("/stop", summary="停止TCP测试服务器")
+@autotest_tcp_test.post("/stop", summary="停止TCP测试服务器", description="停止双端口TCP测试服务器")
 async def stop_tcp_test_server():
-    """停止 TCP 测试服务器的两个端口。"""
+    """
+    停止TCP测试服务器的两个端口。
+
+    :return: 统一HTTP响应
+    """
     try:
         await _tcp_test_server.stop()
         status = _tcp_test_server.status()
-        LOGGER.info("停止TCP测试服务器成功")
         return SuccessResponse(message="停止成功", data=status)
     except Exception as e:
         LOGGER.error(f"停止TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
-@autotest_tcp_test.get("/status", summary="查询TCP测试服务器状态")
+@autotest_tcp_test.get("/status", summary="查询TCP测试服务器状态", description="查询双端口运行状态与连接计数")
 async def get_tcp_test_server_status():
-    """查询两个 TCP 端口的运行状态和连接计数。"""
+    """
+    查询两个TCP端口的运行状态和连接计数。
+
+    :return: 统一HTTP响应
+    """
     status = _tcp_test_server.status()
-    LOGGER.info(f"查询TCP测试服务器状态成功, is_running: {status.get('is_running')}")
     return SuccessResponse(message="查询成功", data=status)
 
 
-@autotest_tcp_test.get("/sample/json", summary="获取JSON请求示例报文")
+@autotest_tcp_test.get("/sample/json", summary="查询JSON请求示例报文", description="获取JSON端口银行账户交易查询请求示例")
 async def get_json_sample():
     """
-    获取 JSON 端口的请求报文示例（银行账户交易查询）。
+    获取JSON端口的请求报文示例（银行账户交易查询）。
 
-    将此报文通过 TCP 连接发送到 JSON 端口（默认 9999），
-    服务器将返回 XML 格式的交易明细响应。
+    将此报文通过TCP连接发送到JSON端口（默认9999），
+    服务器将返回XML格式的交易明细响应。
+
+    :return: 统一HTTP响应
     """
     sample = {
         "request_header": {
@@ -535,13 +544,15 @@ async def get_json_sample():
     return SuccessResponse(message="查询成功", data=sample)
 
 
-@autotest_tcp_test.get("/sample/xml", summary="获取XML请求示例报文")
+@autotest_tcp_test.get("/sample/xml", summary="查询XML请求示例报文", description="获取XML端口贷款申请请求示例")
 async def get_xml_sample():
     """
-    获取 XML 端口的请求报文示例（贷款申请）。
+    获取XML端口的请求报文示例（贷款申请）。
 
-    将此报文通过 TCP 连接发送到 XML 端口（默认 9998），
-    服务器将返回 XML 格式的贷款审批结果。
+    将此报文通过TCP连接发送到XML端口（默认9998），
+    服务器将返回XML格式的贷款审批结果。
+
+    :return: 统一HTTP响应
     """
     sample = """<?xml version="1.0" encoding="UTF-8"?>
 <Request>
@@ -582,9 +593,13 @@ async def get_xml_sample():
     return SuccessResponse(message="查询成功", data=sample)
 
 
-@autotest_tcp_test.get("/sample/response/json", summary="预览JSON端口的XML响应")
+@autotest_tcp_test.get("/sample/response/json", summary="查询JSON端口的XML响应", description="预览JSON端口对示例请求返回的XML响应")
 async def get_json_response_preview():
-    """预览 JSON 端口对示例请求返回的 XML 响应。"""
+    """
+    预览JSON端口对示例请求返回的XML响应。
+
+    :return: 统一HTTP响应
+    """
     sample = orjson.dumps({
         "request_header": {"request_id": "PREVIEW", "channel": "mobile", "institution": "KRUN_TEST_BANK"},
         "account_info": {"account_no": "6228480012345678", "currency": "CNY", "customer_id": "CUST00001"},
@@ -593,9 +608,13 @@ async def get_json_response_preview():
     return SuccessResponse(message="查询成功", data=_tcp_test_server._build_json_response(sample))
 
 
-@autotest_tcp_test.get("/sample/response/xml", summary="预览XML端口的XML响应")
+@autotest_tcp_test.get("/sample/response/xml", summary="查询XML端口的XML响应", description="预览XML端口对示例请求返回的XML响应")
 async def get_xml_response_preview():
-    """预览 XML 端口对示例请求返回的 XML 响应。"""
+    """
+    预览XML端口对示例请求返回的XML响应。
+
+    :return: 统一HTTP响应
+    """
     sample = """<?xml version="1.0" encoding="UTF-8"?>
 <Request>
   <Head><Channel>web</Channel><RequestID>PREVIEW</RequestID><Institution>KRUN_TEST_BANK</Institution></Head>

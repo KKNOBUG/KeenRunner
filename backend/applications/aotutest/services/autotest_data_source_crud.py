@@ -53,8 +53,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: data_source_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not data_source_id:
             error_message: str = "查询数据源失败, 参数[data_source_id]不允许为空"
@@ -76,8 +74,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时若未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: 当data_source_code为空时
-        :raises NotFoundException: 当on_error为True且记录不存在时
         """
         if not (data_source_code or "").strip():
             error_message: str = "查询数据源失败, 参数[data_source_code]不允许为空"
@@ -99,8 +95,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: file_hash为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not file_hash:
             error_message: str = "查询数据源信息失败, 参数[file_hash]不允许为空"
@@ -133,8 +127,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时若未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 单条实例、列表或None
-        :raises ParameterException: 未传case_id且case_code为空时
-        :raises NotFoundException: 当on_error为True且无匹配记录时
         """
         if not case_id and not (case_code or "").strip():
             error_message: str = "查询数据源失败, 参数[case_id]或[case_code]不允许为空"
@@ -178,8 +170,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: case_id为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not case_id:
             error_message: str = "查询数据源失败, 参数[case_id]不允许为空"
@@ -221,15 +211,21 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param data_source_in: 创建schema(data_source_code由模型默认值生成，无需传入)
         :return: 新建或恢复后的数据源实例
-        :raises DataAlreadyExistsException: 同键已存在且为启用状态时
-        :raises DataBaseStorageException: 违反数据库约束时
-        :raises NotFoundException: 恢复路径上记录异常丢失时
         """
         data_dict: Dict[str, Any] = data_source_in.model_dump(exclude_none=True, exclude_unset=True)
         case_id = data_dict.get("case_id")
         case_code = data_dict.get("case_code")
         step_id = data_dict.get("step_id")
         step_code = data_dict.get("step_code")
+
+        # 模型非空字段兜底：cache_key/dataset/dataset_names
+        if not str(data_dict.get("cache_key") or "").strip():
+            data_dict["cache_key"] = make_cache_key(int(case_id), str(step_code or "").strip())
+        if data_dict.get("dataset") is None:
+            data_dict["dataset"] = {}
+        if data_dict.get("dataset_names") is None:
+            data_dict["dataset_names"] = []
+
         existing = await self.model.filter(case_id=case_id, case_code=case_code, step_id=step_id, step_code=step_code).first()
 
         if not existing:
@@ -269,9 +265,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param data_source_in: 更新schema
         :return: 更新后的数据源实例
-        :raises ParameterException: 定位参数[data_source_id]或[data_source_code]或[case_id, case_code, step_id, step_code]不允许为空时
-        :raises NotFoundException: 记录不存在时
-        :raises DataBaseStorageException: 违反约束时
         """
         case_id: Optional[int] = data_source_in.case_id
         step_id: Optional[int] = data_source_in.step_id
@@ -344,8 +337,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_id: 步骤主键
         :param step_code: 步骤标识代码
         :return: 软删除后的实例
-        :raises ParameterException: 定位参数[data_source_id]或[data_source_code]或[case_id, case_code, step_id, step_code]不允许为空时
-        :raises NotFoundException: 记录不存在时
         """
         if data_source_id:
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
@@ -373,9 +364,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def unbind_case_data_sources(self, case_id: int) -> Dict[str, int]:
         """
@@ -383,19 +372,23 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param case_id: 用例主键
         :return: {"data_source": 软删记录数, "step": 清空指针的步骤数}
-        :raises ParameterException: case_id为空时
         """
         if not case_id:
             error_message: str = "解绑用例数据源失败, 参数[case_id]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        deleted_count: int = await self.model.filter(case_id=case_id, state=0).update(state=1)
-        cleared_count: int = await AutoTestApiStepInfo.filter(case_id=case_id, state=0).update(
-            data_source_id=None,
-            data_source_name=None,
-            data_source_desc=None,
-        )
+        source_ids = await self.model.filter(case_id=case_id, state=0).values_list("id", flat=True)
+        deleted_count: int = await self.soft_delete_batch(ids=list(source_ids))
+        from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+        step_crud = AutoTestApiStepCrud()
+        step_vals: Dict[str, Any] = {
+            "data_source_id": None,
+            "data_source_name": None,
+            "data_source_desc": None,
+        }
+        step_crud._fill_updated_user(step_vals)
+        cleared_count: int = await AutoTestApiStepInfo.filter(case_id=case_id, state=0).update(**step_vals)
         return {"data_source": deleted_count, "step": cleared_count}
 
     async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataSourceInfo]]:
@@ -407,7 +400,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)元组
-        :raises ParameterException: 查询条件非法导致FieldError时
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -425,8 +417,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param dataset_name: 场景名；为空则返回完整dataset
         :param kwargs: 额外过滤条件
         :return: 含dataset字段的字典
-        :raises ParameterException: case_id或step_code为空时
-        :raises NotFoundException: 无匹配记录或指定场景不存在时
         """
         if not case_id or not step_code:
             error_message: str = "查询数据源信息失败, 参数[case_id, step_code]不允许为空"
@@ -490,7 +480,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param axis: 数据矩阵方向(0:水平模式, 1:垂直模式)
         :param created_user: 创建人(更新路径会映射为updated_user)
         :return: 数据源实例
-        :raises ParameterException: parsed_data为空时
         """
         if not parsed_data:
             error_message: str = "参数[parsed_data]不允许为空"
@@ -560,7 +549,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_id: 用例主键
         :param state: 状态过滤，默认0(启用)
         :return: 根据updated_time倒序及步骤字段排序的列表
-        :raises ParameterException: case_id为空时
         """
         if not case_id:
             error_message: str = "参数[case_id]不允许为空"
@@ -585,7 +573,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_code: 新步骤标识代码
         :param source_data_source_id: 源数据源主键ID
         :return: 新数据源主键ID；源数据源不存在时返回None
-        :raises ParameterException: case_id或step_code为空时
         """
         if not case_id or not (step_code or "").strip():
             error_message: str = "复制数据源失败, 参数[case_id, step_code]不允许为空"
@@ -627,8 +614,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 生成记录或None
-        :raises ParameterException: create_code为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not create_code:
             error_message: str = "查询数据源生成信息失败, 参数[create_code]不允许为空"
@@ -651,8 +636,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param on_error: 为True时无记录则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 生成记录列表
-        :raises ParameterException: step_code为空时
-        :raises NotFoundException: on_error为True且无记录时
         """
         if not step_code:
             error_message: str = "查询数据源生成信息失败, 参数[step_code]不允许为空"
@@ -674,8 +657,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 生成记录或None
-        :raises ParameterException: file_hash为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not file_hash:
             error_message: str = "查询数据源生成信息失败, 参数[file_hash]不允许为空"
@@ -695,13 +676,11 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 创建入参
         :return: 创建或更新后的生成记录
-        :raises DataBaseStorageException: 违反约束时
-        :raises NotFoundException: 记录不存在时
         """
         try:
             instance = await self.get_by_hash(file_hash=data_in.file_hash, state__not=1)
             if instance:
-                return await self.update_data_create(
+                instance = await self.update_data_create(
                     data_in=AutoTestApiDataCreateUpdate(
                         id=instance.id,
                         create_status="0",
@@ -709,10 +688,12 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
                         file_desc=data_in.file_desc
                     )
                 )
+                return instance
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
-            return await self.create(data_dict)
-        except IntegrityError as e:
-            error_message: str = f"新增数据源生成信息异常, 违反约束规则: {e}"
+            instance = await self.create(data_dict)
+            return instance
+        except Exception as e:
+            error_message: str = f"新增数据源生成信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -722,19 +703,13 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 更新入参
         :return: 更新后的生成记录
-        :raises DataBaseStorageException: 违反约束时
-        :raises NotFoundException: 记录不存在时
         """
         try:
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.update(id=data_in.id, obj_in=data_dict)
             return instance
-        except DoesNotExist as e:
-            error_message: str = f"更新数据源生成信息失败, 记录[id={data_in.id}]不存在"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise NotFoundException(message=error_message) from e
-        except IntegrityError as e:
-            error_message: str = f"更新数据源生成信息异常, 违反约束规则: {e}"
+        except Exception as e:
+            error_message: str = f"更新数据源生成信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -744,25 +719,14 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param create_code: 生成任务标识
         :return: 软删除后的记录
-        :raises ParameterException: 参数校验失败时
-        :raises NotFoundException: 记录不存在时
         """
         if not create_code:
             error_message: str = "删除数据源生成信息失败, 参数[create_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 业务层验证：检查明细信息是否存在
-        instance = await self.get_by_code(create_code=create_code, on_error=False, state__not=1)
-
-        if not instance:
-            error_message: str = f"删除数据源生成信息失败, 记录[create_code={create_code}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-
-        instance.state = 1
-        await instance.save()
-        return instance
+        instance = await self.get_by_code(create_code=create_code, on_error=True, state__not=1)
+        return await self.soft_delete(id=instance.id)
 
     async def select_data_source(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataCreateInfo]]:
         """
@@ -773,7 +737,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总数, 实例列表)
-        :raises ParameterException: 查询字段非法时
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -785,7 +748,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
 async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
-    软删除指定步骤的数据源与生成记录，并清理关联本地文件。
+    硬删除指定步骤的数据源与生成记录，并清理关联本地文件。
 
     :param case_id: 用例主键(用于定位上传目录)
     :param step_code_list: 待清理的步骤标识列表
@@ -793,14 +756,15 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     data_source_crud = AutoTestDataSourceCrud()
     data_create_crud = AutoTestApiDataCreateCrud()
-    await data_source_crud.model.filter(step_code__in=step_code_list).update(state=1)
-    await data_create_crud.model.filter(step_code__in=step_code_list, state__not=1).update(state=1)
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
-    for instance in instance_list:
-        if instance.file_path and not str(instance.file_path).endswith("X"):
-            if await aos.path.exists(instance.file_path):
-                await aos.remove(instance.file_path)
     steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
+    await data_source_crud.model.filter(step_code__in=step_code_list).delete()
+    await data_create_crud.model.filter(step_code__in=step_code_list).delete()
+    for instance in instance_list:
+        if instance.file_hash and not instance.file_hash.endswith("X"):
+            if await aos.path.exists(instance.file_hash):
+                await aos.remove(instance.file_hash)
+    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]关联数据已被清理")
     for step_info in steps_info:
         if step_info and step_info.file_name:
             file_path = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id), step_info.file_name)
@@ -808,4 +772,3 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
                 await aos.remove(file_path)
         if step_info and step_info.file_path and await aos.path.exists(step_info.file_path):
             await aos.remove(step_info.file_path)
-    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]已被清理")

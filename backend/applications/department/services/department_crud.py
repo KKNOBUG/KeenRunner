@@ -13,7 +13,7 @@ from tortoise.expressions import Q
 
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.department.models.dept_model import Department, DeptStruct
-from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
+from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate, DepartmentBatchDelete
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 

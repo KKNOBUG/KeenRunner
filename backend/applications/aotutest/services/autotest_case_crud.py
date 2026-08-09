@@ -23,18 +23,13 @@ from backend.core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES
+from backend.enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES, AutoTestReqArgsType
 
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL
 CASE_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = ("case_tags", "session_variables")
 
 
-def _normalize_case_tags(
-        case_type: Optional[AutoTestCaseType],
-        case_tags: Optional[List[int]],
-        *,
-        context: str = "用例",
-) -> Optional[List[int]]:
+def _normalize_case_tags(case_type: Optional[AutoTestCaseType], case_tags: Optional[List[int]], *, context: str = "用例") -> Optional[List[int]]:
     """用户脚本：允许打标签，公共脚本/公共接口: 禁止打标签。"""
     if case_type in PUBLIC_CASE_TYPES:
         if case_tags:
@@ -76,8 +71,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
-        :raises ParameterException: case_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not case_id:
             error_message: str = "查询用例信息失败, 参数[case_id]不允许为空"
@@ -99,8 +92,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
-        :raises ParameterException: case_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not case_code:
             error_message: str = "查询用例信息失败, 参数[case_code]不允许为空"
@@ -114,27 +105,48 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise NotFoundException(message=error_message)
         return instance
 
+    @staticmethod
+    async def get_case_ids_by_request_step(
+            step_type: Optional[AutoTestStepType] = None,
+            request_args_type: Optional[AutoTestReqArgsType] = None,
+    ) -> Optional[List[int]]:
+        """
+        根据请求步骤类型与参数类型查询关联用例ID列表。
+
+        :param step_type: 请求步骤类型；可选
+        :param request_args_type: 请求参数类型；可选
+        :return: 关联用例ID列表；两者皆空时返回None
+        """
+        if step_type is None and request_args_type is None:
+            return None
+
+        step_q = Q(
+            state__not=1,
+            step_type__in=[AutoTestStepType.TCP.value, AutoTestStepType.HTTP.value],
+        ) & ~Q(case_id__isnull=True)
+        if step_type is not None:
+            step_q &= Q(step_type=step_type.value)
+        if request_args_type is not None:
+            step_q &= Q(request_args_type=request_args_type.value)
+
+        case_ids: List[int] = await AutoTestApiStepInfo.filter(step_q).distinct().values_list("case_id", flat=True)
+        return case_ids
+
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
         """
         创建用例，校验标签存在及同项目下用例名唯一。
 
         :param case_in: 用例创建schema
         :return: 创建后的用例实例
-        :raises ParameterException: 用户脚本未填标签，或公共脚本/公共接口误填标签，或标签格式非法
-        :raises NotFoundException: 标签不存在
-        :raises DataAlreadyExistsException: 同项目下用例名重复
-        :raises DataBaseStorageException: 违反数据库约束
         """
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
         case_type: Optional[AutoTestCaseType] = case_in.case_type
         case_tags = _normalize_case_tags(case_type, case_in.case_tags, context="新增用例信息失败")
 
-        # 业务层验证: 检查标签是否全部存在(get_by_ids不接受空列表, 无标签时跳过)
         if case_tags:
             await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
-        # 业务层验证: 检查用例信息是否已经存在
         existing_case = await self.get_by_conditions(
             only_one=True,
             on_error=False,
@@ -185,20 +197,20 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param case_in: 用例更新schema，需含case_id或case_code
         :return: 更新后的用例实例
-        :raises NotFoundException: 用例或关联标签不存在
-        :raises DataAlreadyExistsException: 同项目下用例名重复
-        :raises DataBaseStorageException: 违反数据库约束
         """
         case_id: Optional[int] = case_in.case_id
         case_code: Optional[str] = case_in.case_code
         case_type: Optional[AutoTestCaseType] = case_in.case_type
 
-        # 业务层验证：检查用例信息是否存在
+        if not case_id and not case_code:
+            error_message: str = "更新用例信息失败, 参数[case_id]或[case_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if case_id:
             instance = await self.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
-            case_id: int = instance.id
+            case_id = instance.id
         original_case_type: Optional[AutoTestCaseType] = instance.case_type
         update_dict = case_in.model_dump(
             exclude_none=True,
@@ -209,20 +221,17 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         effective_type = update_dict.get("case_type", instance.case_type)
         if effective_type in PUBLIC_CASE_TYPES:
-            # 公共脚本/公共接口：无论是否传 case_tags，一律清空
             if update_dict.get("case_tags"):
                 error_message = "更新用例信息失败, 用例类型为[公共脚本/公共接口]时不支持打标签"
                 LOGGER.error(error_message)
                 raise ParameterException(message=error_message)
             update_dict["case_tags"] = None
         elif "case_tags" in update_dict or ("case_type" in update_dict and original_case_type in PUBLIC_CASE_TYPES):
-            # 用户脚本：显式改标签，或从公共类型切过来时必须具备标签
             raw_tags = update_dict.get("case_tags", instance.case_tags)
             normalized_tags = _normalize_case_tags(effective_type, raw_tags, context="更新用例信息失败")
             update_dict["case_tags"] = normalized_tags
             await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
-        # 业务层验证：检查应用ID和用例名称是否唯一
         if "case_name" in update_dict or "case_project" in update_dict:
             case_name = update_dict.get("case_name", instance.case_name)
             case_project = update_dict.get("case_project", instance.case_project)
@@ -239,14 +248,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        # 业务层验证：切换为公共接口时，存量步骤树形态必须合规（与批量路径一致的阻断策略）
         if case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API:
             await self._validate_switch_to_public_api(instance)
 
         try:
             update_dict["case_version"] = instance.case_version + 1
             instance = await self.update(id=case_id, obj_in=update_dict)
-            # 公共接口所属应用一致性：切换类型或修改所属应用后，级联对齐其唯一请求步骤
             if "case_project" in update_dict or (
                     case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API
             ):
@@ -263,34 +270,35 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestApiCaseInfo:
         """
-        删除用例，先硬删关联步骤，再删除用例；公共脚本需无引用。
+        软删除用例，并软删除该用例下所有步骤；公共脚本需无引用。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
-        :return: 删除后的用例实例
-        :raises NotFoundException: 用例不存在
-        :raises DataAlreadyExistsException: 公共脚本仍被引用
+        :return: 软删除后的用例实例
         """
-        # 业务层验证: 检查用例是否存在
+        if not case_id and not case_code:
+            error_message: str = "删除用例信息失败, 参数[case_id]或[case_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if case_id:
             instance = await self.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
-            case_id: int = instance.id
+            case_id = instance.id
 
         case_type: AutoTestCaseType = instance.case_type
         if case_type in PUBLIC_CASE_TYPES:
-            # 业务层验证：公共用例(脚本/接口)删除前检查是否被引用
             quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
             if quote_steps_count > 0:
                 error_message: str = f"删除用例信息失败, 记录[id={case_id}]存在{quote_steps_count}个引用, 无法直接删除"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        # 业务层验证：检查用例是否拥有步骤
-        await AutoTestApiStepInfo.filter(case_id=case_id, state__not=1).delete()
-        await instance.delete()
-        return instance
+        from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+        step_crud = AutoTestApiStepCrud()
+        step_ids = await step_crud.model.filter(case_id=case_id, state__not=1).values_list("id", flat=True)
+        await step_crud.soft_delete_batch(ids=list(step_ids))
+        return await self.soft_delete(id=instance.id)
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiCaseInfo]]:
         """
@@ -301,7 +309,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -316,7 +323,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         校验切换为公共接口前存量步骤树形态是否合规。
 
         :param case_instance: 待切换的用例实例
-        :raises ParameterException: 存量步骤树形态不满足公共接口约束时
         """
         root_steps: List[AutoTestApiStepInfo] = await AutoTestApiStepInfo.filter(
             case_id=case_instance.id, parent_step_id=None, state__not=1
@@ -343,10 +349,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param cases_data: 用例更新schema列表
         :return: 含created_count、updated_count、success_detail的字典
-        :raises NotFoundException: 关联标签不存在
-        :raises ParameterException: 必填字段缺失
-        :raises DataAlreadyExistsException: 同项目下用例名重复
-        :raises DataBaseStorageException: 数据库写入异常
         """
         created_count: int = 0
         updated_count: int = 0
@@ -363,7 +365,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             if case_id and case_code and (case_id, case_code) in processed_case:
                 continue
 
-            # 业务层验证：检查用例是否存在
             if not case_id and not case_code:
                 case_instance = None
             else:
@@ -375,7 +376,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     state__not=1
                 )
 
-            # 用例不存在，执行新增，及验证必填字段(仅用户脚本要求标签)
             if not case_instance:
                 case_tags = _normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
                 if case_tags:
@@ -389,7 +389,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 
-                # 业务层验证：检查应用ID和用例名称是否唯一
                 existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
                     only_one=True,
                     on_error=False,
@@ -428,13 +427,10 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 case_dict["case_id"] = new_case_instance.id
                 success_detail.append(case_dict)
 
-            # 用例存在，执行更新
             else:
-                # 业务层验证：切换为公共接口时，存量步骤树必须合规（仅1步、HTTP/TCP、无数据源），否则阻断切换
                 if case_type == AutoTestCaseType.PUBLIC_API and case_instance.case_type != AutoTestCaseType.PUBLIC_API:
                     await self._validate_switch_to_public_api(case_instance)
 
-                # 如果没有任何可更新的字段，跳过
                 update_case_dict: Dict[str, Any] = case_data.model_dump(
                     exclude_none=True,
                     exclude_unset=True,
@@ -462,21 +458,22 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                         "case_type" in update_case_dict and case_instance.case_type in PUBLIC_CASE_TYPES
                 ):
                     raw_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    normalized_tags = _normalize_case_tags(effective_type, raw_tags, context=f"第{cid}条用例更新失败")
+                    normalized_tags = _normalize_case_tags(
+                        effective_type, raw_tags, context=f"第{cid}条用例更新失败"
+                    )
                     update_case_dict["case_tags"] = normalized_tags
                     await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
-                # 业务层验证：检查应用ID和用例名称的唯一性（排除当前记录）
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
-                    check_name = update_case_dict.get("case_name", case_instance.case_name)
-                    check_project = update_case_dict.get("case_project", case_instance.case_project)
+                    unique_name = update_case_dict.get("case_name", case_instance.case_name)
+                    unique_project = update_case_dict.get("case_project", case_instance.case_project)
                     existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.model.filter(
-                        case_project=check_project, case_name=check_name, state__not=1
+                        case_project=unique_project, case_name=unique_name, state__not=1
                     ).exclude(id=case_id).first()
                     if existing_case_instance:
                         error_message: str = (
                             f"第{cid}条用例更新失败, 相同应用下用例名称不允许重复, "
-                            f"查询条件: [case_project={check_project}, case_name={check_name}, case_type={case_type}]"
+                            f"查询条件: [case_project={unique_project}, case_name={unique_name}, case_type={case_type}]"
                         )
                         LOGGER.error(error_message)
                         raise DataAlreadyExistsException(message=error_message)
@@ -489,7 +486,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 
-                # 公共接口所属应用一致性：切换类型或修改所属应用后，级联对齐其唯一请求步骤
                 if "case_project" in update_case_dict or (
                         case_type == AutoTestCaseType.PUBLIC_API
                         and case_instance.case_type != AutoTestCaseType.PUBLIC_API

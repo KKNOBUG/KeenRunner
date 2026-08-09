@@ -78,8 +78,6 @@ class ExtractAssertPipeline:
             （$. → response json，./或// → response xml，其他 → response text）
         :return: (extract_results_list, assert_results_list)，元素为结果dict
             （含name/source/expr/success/error等字段）
-        :raises ValueError: raise_on_failure=True且存在失败的提取或断言时
-        :raises TypeError: 提取/断言规则列表或子项类型非法时（由下游管线抛出）
         """
         _, extract_results_list = ExtractPipeline.run_extract_variables(
             extract_variables=extract_variables or [],

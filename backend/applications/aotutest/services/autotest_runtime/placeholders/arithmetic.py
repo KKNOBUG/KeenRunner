@@ -174,8 +174,6 @@ class PlaceholderArithmetic:
         不使用Python内置eval/exec函数计算, 完全基于AST语法树白名单校验实现安全计算, 允许数值常量、一元正负号、加减乘除、括号(括号自动体现为AST结构), 禁止变量、属性、函数调用、下标、幂运算、字符串等所有非算术语法。整数结果返回int类型, 小数结果返回float类型
         :param expr: 算术表达式字符串(如: "1 + 2*(3-4)")
         :return: 计算结果
-        :raises ValueError: 表达式为空、超出最大长度限制或包含非白名单语法时抛出
-        :raises ZeroDivisionError: 除数为0时抛出
         """
         expr = expr.strip()
         if not expr:
@@ -189,8 +187,6 @@ class PlaceholderArithmetic:
 
             :param node: AST表达式节点
             :return: 子表达式计算值（float）
-            :raises ValueError: 存在非白名单语法/运算符时抛出
-            :raises ZeroDivisionError: 除法分母为0时抛出
             """
             if isinstance(node, ast.Constant):
                 if isinstance(node.value, (int, float)):

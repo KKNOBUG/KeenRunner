@@ -35,8 +35,6 @@ class PlaceholderResolver:
         :param is_core_engine: True时finished_variables需提供get_variable(name)
         :param finished_variables: 核心引擎上下文或变量列表(List[Dict], 每项含key/value)
         :return: 解析到的变量值或函数执行结果
-        :raises KeyError: 变量未定义(非核心引擎列表路径)
-        :raises AttributeError: 函数不存在或执行失败
         """
         inner = inner.strip()
         if "(" in inner and ")" in inner:

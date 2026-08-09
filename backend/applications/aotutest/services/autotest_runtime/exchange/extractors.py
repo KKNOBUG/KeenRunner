@@ -55,7 +55,6 @@ class Extractors:
         :param operation_type: 错误信息前缀（变量提取/断言验证）
         :param empty_message: data为空时的错误文案
         :return: 提取值
-        :raises ValueError: 数据为空、表达式非法、越界或路径无匹配
         """
         if data is None:
             raise ValueError(empty_message)
@@ -103,7 +102,6 @@ class Extractors:
         :param empty_message: 正文为空时的错误文案
         :param invalid_xml_message: 解析失败时的错误文案前缀
         :return: 元素text或tostring结果；ALL时返回原文
-        :raises ValueError: 空正文、非法XML、无匹配、越界等
         """
         if not text:
             raise ValueError(empty_message)
@@ -160,7 +158,6 @@ class Extractors:
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
         :return: 匹配到的分组值；ALL时返回原文
-        :raises ValueError: 空正文、正则非法、未匹配、分组索引越界
         """
         if not text:
             raise ValueError(empty_message)
@@ -213,7 +210,6 @@ class Extractors:
         :param empty_message: 映射为空时的错误文案
         :param miss_message: 提取异常消息为空时的兜底文案
         :return: 提取值；ALL时返回整个映射
-        :raises ValueError: 空映射、表达式非法或路径无匹配
         """
         if not data:
             raise ValueError(empty_message)
@@ -234,7 +230,6 @@ class Extractors:
         :param data: 待取值的对象(dict/list或嵌套结构)
         :param expr: 非空字符串，合法JSONPath表达式(如$.a.b、$.data[0].id、$.items[*].id)
         :return: 单匹配时返回该值，多匹配时返回值的列表
-        :raises ValueError: 表达式非法、路径无匹配或解析异常时
         """
         expr = str(expr).strip()
         if not expr:
@@ -298,7 +293,6 @@ class Extractors:
         :param session_variables_lookup: 变量池Dict[str, Any]，根据JSONPath取值
         :param operation_type: 错误信息前缀，如变量提取、断言验证
         :return: 提取得到的值
-        :raises ValueError: 来源不支持、数据为空、表达式非法、路径无匹配或数组越界等
         """
         range_type_n: str = (range_type or "SOME").strip().lower()
         source_key: str = cls._normalize_extract_source(source)

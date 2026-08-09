@@ -6,7 +6,7 @@
 @Module  : autotest_step_schema.py
 @DateTime: 2025/4/28
 """
-from typing import Optional, List, Dict, Any, Type, Union
+from typing import Optional, List, Dict, Any, Type
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -19,7 +19,6 @@ from backend.enums import (
     AutoTestLoopErrorStrategy,
     AutoTestAssertionOperation,
     AutoTestConfigNodeType,
-    AutoTestReportType,
 )
 from backend.enums import HTTPMethod
 
@@ -41,7 +40,7 @@ class DataBaseOperates(BaseModel):
 
 
 class RedisOperates(BaseModel):
-    """步骤定义中的单条 Redis 操作字段模型。"""
+    """步骤定义中的单条Redis操作字段模型。"""
 
     name: str = Field(..., max_length=128, description="Redis操作名称")
     expr: str = Field(..., max_length=4096, description="Redis命令(支持多行)")
@@ -107,15 +106,36 @@ class StepVariablesBase(BaseModel):
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
 
 
+# 前端固定传 APP/FILE/DB；归一为本项目枚举 api/file/database。REDIS 为本项目扩展。
+_STEPS_EXECUTE_CONFIG_TYPE_ALIASES: Dict[str, str] = {
+    "APP": AutoTestConfigNodeType.API.value,
+    "FILE": AutoTestConfigNodeType.FILE.value,
+    "DB": AutoTestConfigNodeType.DB.value,
+    "REDIS": AutoTestConfigNodeType.REDIS.value,
+}
+
+
 class StepsExecuteConfigBase(BaseModel):
     """步骤执行时环境配置覆盖基础字段模型。"""
 
     env_name: str = Field(..., max_length=128, description="环境名称")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
+    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(yangkai: APP/FILE/DB；扩展: REDIS)")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="配置主机")
     config_port: str = Field(..., max_length=8, description="配置端口")
     database_name: Optional[str] = Field(None, max_length=128, description="数据库名称")
+
+    @field_validator("config_type", mode="before")
+    @classmethod
+    def normalize_config_type(cls, v: Any) -> Any:
+        """仅接受 APP/FILE/DB（及扩展 REDIS），映射为本项目枚举值。"""
+        if v is None or isinstance(v, AutoTestConfigNodeType):
+            return v
+        raw = v.value if hasattr(v, "value") else str(v).strip()
+        mapped = _STEPS_EXECUTE_CONFIG_TYPE_ALIASES.get(raw)
+        if mapped is None:
+            raise ValueError(f"config_type仅支持APP/FILE/DB/REDIS，当前值: {raw}")
+        return mapped
 
 
 class StepExtractVariableItem(BaseModel):
@@ -135,6 +155,19 @@ class StepAssertValidatorItem(BaseModel):
     expr: str = Field(..., max_length=4096, description="表达式")
     operation: str = Field(..., max_length=128, description="比较符")
     except_value: Any = Field(default=None, description="期待值")
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def validate_operation(cls, v: Any) -> str:
+        """
+        校验并规范化比较符为AutoTestAssertionOperation枚举值（与HTTP步骤断言一致）。
+
+        :param v: 原始比较符
+        :return: 规范化后的比较符字符串
+        """
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            raise ValueError("参数[operation]不允许为空")
+        return AutoTestAssertionOperation(str(v).strip()).value
 
 
 class AutoTestApiStepReqBase(BaseModel):
@@ -328,7 +361,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
-    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     @field_validator("conditions", mode="before")
     @classmethod
@@ -376,13 +409,13 @@ class AutoTestApiStepCreate(AutoTestApiStepBase):
     step_no: int = Field(..., ge=1, description="步骤序号")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     step_type: AutoTestStepType = Field(..., description="步骤所属类型")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiStepUpdate(AutoTestApiStepBase):
     """更新步骤入参。"""
 
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiStepSelect(BaseModel):
@@ -400,9 +433,9 @@ class AutoTestApiStepSelect(BaseModel):
     case_id: Optional[int] = Field(None, description="用例ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
     quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, description="更新人员")
-    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
 class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
@@ -440,7 +473,7 @@ class AutoTestStepTreeUpdateList(BaseModel):
 class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     """HTTP 步骤调试入参。"""
 
-    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
@@ -451,7 +484,7 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     """TCP 步骤调试入参。"""
 
-    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_text: Optional[str] = Field(None, description="请求体数据(Text格式)")
     request_project_id: int = Field(..., ge=1, description="请求应用ID")
@@ -468,7 +501,7 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase):
     """Redis 步骤调试入参。"""
 
-    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
 
     @model_validator(mode="after")
@@ -491,36 +524,25 @@ class AutoTestCaseRunInfo(BaseModel):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    """步骤树执行/调试入参。"""
+    """步骤树执行/调试入参。无由视图根据是否携带 steps 判定运行/调试模式。"""
 
-    case_id: int = Field(..., description="用例ID")
-    execute_type: AutoTestReportType = Field(..., description="执行类型(复用AutoTestReportType枚举)")
-    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(DEBUG_EXEC必填；ASYNC_EXEC/SCHEDULE_EXEC不填)")
-    initial_variables: Optional[List[StepVariablesBase]] = Field(default_factory=list, description="初始变量池(列表项为key/value/desc)")
-    # 脚本执行配置：key=步骤ID(step_id) 或 @@{step_name}（当步骤未落库时），value=配置明细；空 dict 表示该步骤无配置覆盖
-    # { step_id 或 @@step_name: {env_name, config_type(api|database|file), config_name, config_host, config_port, database_name} }
-    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default_factory=dict, description="脚本执行配置作用环境")
-    # 参数化驱动：ASYNC_EXEC/SCHEDULE_EXEC可传多条；DEBUG_EXEC仅可选一条
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称(列表运行/定时模式可选多条；调试模式仅可选一条)")
-
-    @model_validator(mode='after')
-    def validate_execute_request(self):
-        """
-        根据execute_type校验steps是否必填或禁止传递。
-
-        :return: 当前模型实例
-        """
-        if self.case_id is None:
-            raise ValueError("参数[case_id]不允许为空")
-        has_steps = bool(self.steps)
-        et = self.execute_type
-        if et == AutoTestReportType.DEBUG_EXEC:
-            if not has_steps:
-                raise ValueError("参数[execute_type]为DEBUG_EXEC时必须传递[steps]")
-        elif et in (AutoTestReportType.ASYNC_EXEC, AutoTestReportType.SCHEDULE_EXEC):
-            if has_steps:
-                raise ValueError("参数[execute_type]非DEBUG_EXEC时无须传递[steps]")
-        return self
+    case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
+        None,
+        description="步骤树数据(调试模式必填, 运行模式不填)",
+    )
+    initial_variables: Optional[List[StepVariablesBase]] = Field(
+        None,
+        description="会话变量(初始变量池), 列表项含key、value、desc字段",
+    )
+    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(
+        default=None,
+        description="脚本执行配置作用环境",
+    )
+    selected_dataset_names: Optional[List[str]] = Field(
+        None,
+        description="选中的数据集名称列表，运行模式可选多条，调试模式仅可选1条",
+    )
 
 
 class AutoTestBatchExecuteCases(BaseModel):

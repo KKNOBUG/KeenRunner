@@ -7,7 +7,7 @@
 @DateTime: 2026/2/1 12:13
 """
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -21,7 +21,7 @@ from backend.enums import (
 
 
 class AutoTestApiRecordBase(BaseModel):
-    """任务执行观测记录公共字段（创建/更新共用）。"""
+    """任务执行观测记录公共字段。"""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -51,7 +51,7 @@ class AutoTestApiRecordCreate(AutoTestApiRecordBase):
     celery_id: str = Field(..., max_length=255, description="Celery 调度ID")
     celery_status: AutoTestTaskStatus = Field(default=AutoTestTaskStatus.RUNNING, description="执行状态")
     case_ids: Optional[List[int]] = Field(default_factory=list, description="本次执行的用例ID列表")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
     def create_dict(self) -> Dict[str, Any]:
         """
@@ -66,7 +66,7 @@ class AutoTestApiRecordUpdate(AutoTestApiRecordBase):
     """更新任务执行观测记录入参（根据celery_id部分更新）。"""
 
     celery_id: Optional[str] = Field(None, max_length=255, description="Celery 调度ID")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
     def update_dict(self) -> Dict[str, Any]:
         """

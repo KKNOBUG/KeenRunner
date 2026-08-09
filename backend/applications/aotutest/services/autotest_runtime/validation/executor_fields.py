@@ -14,7 +14,6 @@ from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestS
 
 
 class ExecutorFieldsValidation:
-    """保存前第三层：HTTP/TCP/DB/Redis/Python等执行器字段完整性。"""
 
     @classmethod
     def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:

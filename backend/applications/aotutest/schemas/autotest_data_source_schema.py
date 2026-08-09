@@ -6,7 +6,7 @@
 @Module  : autotest_data_source_schema.py
 @DateTime: 2026/3/6
 """
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import UpperStr
 
 
 class AutoTestDataSourceBase(BaseModel):
-    """数据驱动文件公共字段（创建/更新共用）。"""
+    """数据驱动文件公共字段。"""
 
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
@@ -38,7 +38,7 @@ class AutoTestDataSourceCreate(AutoTestDataSourceBase):
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     step_id: int = Field(..., ge=1, description="步骤ID")
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
@@ -46,7 +46,7 @@ class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
 
     data_source_id: Optional[int] = Field(None, ge=1, description="主键ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动文件标识代码")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
@@ -58,8 +58,8 @@ class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     step_id: int = Field(..., ge=1, description="步骤ID")
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="操作人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="操作人员")
 
 
 class AutoTestDataSourceSelect(BaseModel):
@@ -67,6 +67,7 @@ class AutoTestDataSourceSelect(BaseModel):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=100, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
+
     data_source_id: Optional[int] = Field(None, ge=1, description="主键过滤")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动标识过滤")
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
@@ -75,7 +76,7 @@ class AutoTestDataSourceSelect(BaseModel):
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     file_name: Optional[str] = Field(None, max_length=255, description="数据驱动文件存储名称")
     file_path: Optional[str] = Field(None, max_length=1024, description="数据驱动文件存储路径")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)，默认仅查启用")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
 class AutoTestDataSourceConditionQuery(BaseModel):

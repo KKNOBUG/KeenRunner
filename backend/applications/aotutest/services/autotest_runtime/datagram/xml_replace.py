@@ -26,13 +26,9 @@ class XmlDatagram:
         """
         数据驱动报文替换（XML）：根据XPath将body_map写入请求XML。
 
-        通过'XPathUtils.update'逐项替换；匹配规则与提取侧XPath语义对齐。
-        空路径跳过；匹配不到时由XPathUtils决定（通常忽略），非法XML/执行失败抛ValueError。
-
         :param body_map: XPath->值的映射
         :param request_text: XML报文字符串；空值原样返回
         :return: 替换后的XML字符串
-        :raises ValueError: 报文不是有效XML，或XPath执行失败时
         """
         if not request_text:
             return request_text

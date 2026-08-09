@@ -105,27 +105,6 @@ class AssertionCompare:
         return actual_len == int(nb)
 
     @classmethod
-    def _assertion_array_length_equal(cls, actual: Any, expected: Any) -> bool:
-        """
-        比较容器（数组/对象）元素个数是否等于期望长度；与「长度等于」区分，后者偏字符串长度。
-
-        仅支持 list/tuple/set/frozenset/dict；字符串、标量、None 返回 False。
-
-        :param actual: 实际值（数组或对象）
-        :param expected: 期望长度（数字字符串会经_normalize_value转换）
-        :return: 容器长度是否相等
-        """
-        nb = cls._normalize_value(expected)
-        if nb is None or actual is None:
-            return False
-        if not isinstance(actual, (list, tuple, set, frozenset, dict)):
-            return False
-        try:
-            return len(actual) == int(nb)
-        except (TypeError, ValueError):
-            return False
-
-    @classmethod
     def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
         """
         判断实际值是否为空。
@@ -185,7 +164,6 @@ class AssertionCompare:
 
         :param expected: 用户给定的集合或可解析为集合的值
         :return: 元素列表
-        :raises ValueError: 期望值非法时
         """
         if expected is None:
             raise ValueError("集合期望值不允许为[None | Null]")
@@ -240,7 +218,6 @@ class AssertionCompare:
         :param operation: 操作符(与AutoTestAssertionOperation一致)
         :param expected: 期望值(部分操作符可忽略)
         :return: 断言是否通过
-        :raises ValueError: 不支持的操作符或比较过程异常
         """
         try:
             op = AutoTestAssertionOperation(operation)
@@ -255,7 +232,6 @@ class AssertionCompare:
             AutoTestAssertionOperation.LESS_THAN: lambda a, e: cls._type_aware_compare(a, e, operator.lt),
             AutoTestAssertionOperation.LESS_OR_EQUAL: lambda a, e: cls._type_aware_compare(a, e, operator.le),
             AutoTestAssertionOperation.LENGTH_EQUAL: cls._assertion_length_equal,
-            AutoTestAssertionOperation.ARRAY_LENGTH_EQUAL: cls._assertion_array_length_equal,
             AutoTestAssertionOperation.CONTAINS: lambda a, e: str(e) in str(a),
             AutoTestAssertionOperation.NOT_CONTAINS: lambda a, e: str(e) not in str(a),
             AutoTestAssertionOperation.IN_SET: cls._assertion_in_set,

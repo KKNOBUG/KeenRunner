@@ -37,7 +37,7 @@ from backend.core.responses import (
 autotest_report = APIRouter()
 
 
-@autotest_report.post("/create", summary="新增报告")
+@autotest_report.post("/create", summary="新增报告", description="新增报告信息")
 async def create_report(
         report_in: AutoTestApiReportCreate = Body(..., description="报告信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -60,7 +60,6 @@ async def create_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"新增报告成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -98,14 +97,13 @@ async def delete_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"根据id或code删除报告成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除报告信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -132,7 +130,6 @@ async def update_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"根据id或code更新报告成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -141,7 +138,7 @@ async def update_report(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新报告信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -173,14 +170,13 @@ async def get_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"根据id或code查询报告成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询报告信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -190,9 +186,9 @@ async def search_reports(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据条件查询报告。
+    按条件分页查询报告列表。
 
-    :param report_in: 报告入参
+    :param report_in: 报告查询入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
@@ -217,19 +213,19 @@ async def search_reports(
             q &= Q(report_code__contains=report_in.report_code)
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
-        if report_in.task_code:
-            q &= Q(task_code__contains=report_in.task_code)
+        # 与 zzt 一致：始终按 task_code 精确匹配；未传时等价于 IS NULL
         if report_in.exclude_task_code:
-            # 用例执行历史：排除任务调度产生的报告（task_code 为空或未设置）
             q &= Q(task_code__isnull=True) | Q(task_code="")
+        else:
+            q &= Q(task_code=report_in.task_code)
         if report_in.batch_code:
             q &= Q(batch_code__contains=report_in.batch_code)
         if report_in.case_state is not None:
             q &= Q(case_state=report_in.case_state)
         if report_in.created_user:
-            q &= Q(created_user__iexact=report_in.created_user)
+            q &= Q(created_user=report_in.created_user)
         if report_in.updated_user:
-            q &= Q(updated_user__iexact=report_in.updated_user)
+            q &= Q(updated_user=report_in.updated_user)
         if report_in.step_pass_ratio:
             q &= Q(step_pass_ratio__gte=report_in.step_pass_ratio)
         # 执行时间范围：根据case_st_time筛选，仅日期时补全为当天起止
@@ -250,8 +246,6 @@ async def search_reports(
             page_size=report_in.page_size,
             order=report_in.order
         )
-        # 批量获取case_id并查询case_name
-        data = []
         case_ids = [obj.case_id for obj in instances]
         unique_case_ids = list(set(case_ids))
         case_name_map = {}
@@ -262,31 +256,40 @@ async def search_reports(
                     state__not=1
                 ).values_list("id", "case_name")
             )
-        # 并发执行所有to_dict操作（核心：用gather批量处理异步任务）
         report_instances = await asyncio.gather(*[
             obj.to_dict(
-                exclude_fields={"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"},
-                replace_fields={"id": "report_id"}
+                exclude_fields={
+                    "state",
+                    "created_user",
+                    "created_time",
+                    "reserve_1",
+                    "reserve_2",
+                    "reserve_3",
+                },
+                replace_fields={"id": "report_id"},
             )
             for obj in instances
         ])
-        # 用列表推导式填充case_name并生成最终数据
-        data = [
-            {**item, "case_name": case_name_map.get(item["case_id"], "")}
-            for item in report_instances
-        ]
-        LOGGER.info(f"根据条件查询报告成功, 结果数量: {total}")
-        return SuccessResponse(message="查询成功", data=data, total=total)
+        data = []
+        for item in report_instances:
+            ratio = item.get("step_pass_ratio", 0) or 0
+            try:
+                item["step_pass_ratio"] = f"{round(float(ratio), 2)}%"
+            except (TypeError, ValueError):
+                item["step_pass_ratio"] = "0.0%"
+            item["case_name"] = case_name_map.get(item["case_id"], "")
+            data.append(item)
+        return SuccessResponse(message="报告列表查询成功", data=data, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询报告列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_batches", summary="按批次查询任务执行历史", description="按task_code聚合batch_code，计算成功/部分成功/失败状态")
+@autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算成功/部分成功/失败状态")
 async def search_report_batches(
         batch_in: AutoTestApiReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -296,20 +299,16 @@ async def search_report_batches(
 
     :param batch_in: 含必填task_code；page/page_size针对批次数
     :param services: 自动化测试CRUD依赖聚合
-    :return: data 为批次汇总列表，total为批次总数
+    :return: 统一HTTP响应
     """
     try:
         total, batches = await services.report_curd.search_batches(batch_in)
         data = [item.model_dump(mode="json") for item in batches]
-        LOGGER.info(
-            f"按批次查询任务执行历史成功, task_code={batch_in.task_code}, "
-            f"批次总数={total}, 本页={len(data)}"
-        )
         return SuccessResponse(message="查询成功", data=data, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按批次查询任务执行历史失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"按task_code聚合batch_code计算成功/部分成功/失败状态失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

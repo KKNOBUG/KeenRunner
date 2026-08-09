@@ -14,7 +14,6 @@ from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestS
 
 
 class StepTreeValidation:
-    """保存前第一步：步骤树拓扑与嵌套合法性校验。"""
 
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> Tuple[bool, Optional[str]]:
@@ -77,7 +76,8 @@ class StepTreeValidation:
                         f"step_type={step.step_type})不允许配置 branch_items, 仅'条件分支'类型允许"
                     )
                 for branch in step.branch_items:
-                    branch_children = branch.branch_children if hasattr(branch, "branch_children") else (branch.get("branch_children") if isinstance(branch, dict) else None)
+                    branch_children = branch.branch_children if hasattr(branch, "branch_children") else (
+                        branch.get("branch_children") if isinstance(branch, dict) else None)
                     for child in (branch_children or []):
                         child_is_valid, child_error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())
                         if not child_is_valid:

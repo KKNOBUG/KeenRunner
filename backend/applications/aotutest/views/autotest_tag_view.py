@@ -38,7 +38,7 @@ from backend.core.responses import (
 autotest_tag = APIRouter()
 
 
-@autotest_tag.post("/create", summary="新增标签")
+@autotest_tag.post("/create", summary="新增标签", description="新增标签信息")
 async def create_tag(
         tag_in: AutoTestApiTagCreate = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -61,7 +61,6 @@ async def create_tag(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"新增标签成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -99,19 +98,18 @@ async def delete_tag(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"根据id或code删除标签成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除标签信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_tag.post("/delete", summary="批量删除标签", description="根据id或code列表删除标签信息")
-async def delete_tags(
+@autotest_tag.post("/delete", summary="删除标签(批量)", description="根据id或code列表删除标签信息")
+async def batch_delete_tags(
         tag_in: AutoTestApiTagDelete = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -124,12 +122,15 @@ async def delete_tags(
     """
     try:
         count = await services.tag_curd.delete_tags(tag_in=tag_in)
-        LOGGER.info(f"根据id或code列表删除标签成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code列表删除标签信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -156,7 +157,6 @@ async def update_tag(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"根据id或code更新标签成功, 结果明细: {data}")
         return SuccessResponse(data=data, message="更新成功", total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -167,7 +167,7 @@ async def update_tag(
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新标签信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -199,14 +199,13 @@ async def get_tag(
             },
             replace_fields={"id": "tag_id"}
         )
-        LOGGER.info(f"根据id或code查询标签成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询标签信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -235,9 +234,9 @@ async def search_tags(
         if tag_in.tag_name:
             q &= Q(tag_name__contains=tag_in.tag_name)
         if tag_in.created_user:
-            q &= Q(created_user__iexact=tag_in.created_user)
+            q &= Q(created_user=tag_in.created_user)
         if tag_in.updated_user:
-            q &= Q(updated_user__iexact=tag_in.updated_user)
+            q &= Q(updated_user=tag_in.updated_user)
         q &= Q(state=tag_in.state)
         total, instances = await services.tag_curd.select_tags(
             search=q,
@@ -256,10 +255,9 @@ async def search_tags(
                 replace_fields={"id": "tag_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件查询标签成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询标签失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询标签列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

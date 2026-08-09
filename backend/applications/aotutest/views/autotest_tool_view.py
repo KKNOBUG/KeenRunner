@@ -21,18 +21,10 @@ autotest_tool = APIRouter()
 
 def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
     """
-    获取类下所有公共方法信息
-    支持：实例方法、@classmethod、@staticmethod
-    返回结构：[{"name": "函数名(干净无类型参数)", "desc": "函数首行文档注释"}]
-    规则：
-        1. 仅收集非下划线开头公共方法
-        2. 剔除 self/cls
-        3. 剔除所有类型注解、返回值注解
-        4. 保留参数默认值
-        5. desc 取函数首行文档注释，无注释则为空
+    获取类下所有公共方法信息。
 
-    :param cls: 目标类，通常为 GenerateUtils
-    :return: [{"name": "func(a=1)", "desc": "..."}, ...]
+    :param cls: 目标类，通常为GenerateUtils
+    :return: 方法列表，项为name与desc字典
     """
     result: List[Dict[str, Any]] = []
 
@@ -65,9 +57,17 @@ def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
                 else:
                     param_parts.append(f"{p.name}={p.default!r}")
 
+            param_str = ", ".join(param_parts)
+            func_full_name = f"{name}({param_str})"
+
+            # 提取首行注释
+            doc = inspect.getdoc(member) or ""
+            # 仅收录简要说明，不包含参数说明
+            # desc = doc.splitlines()[0].strip() if doc else ""
+
             result.append({
-                "name": f"{name}({', '.join(param_parts)})",
-                "desc": inspect.getdoc(member) or "",
+                "value": func_full_name,
+                "key": doc
             })
         except (ValueError, TypeError):
             continue
@@ -75,8 +75,8 @@ def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
     return result
 
 
-@autotest_tool.get("/get", summary="查询辅助函数")
-async def get_funcs():
+@autotest_tool.get("/get", summary="查询辅助函数", description="查询辅助函数列表")
+async def list_funcs():
     """
     辅助函数查询。
 
@@ -84,7 +84,6 @@ async def get_funcs():
     """
     try:
         func_list = _build_func_list_with_desc(GenerateUtils)
-        LOGGER.info("辅助函数查询成功")
         return SuccessResponse(message="查询成功", data=func_list, total=len(func_list))
     except Exception as e:
         LOGGER.error(f"辅助函数查询失败，异常描述: {e}\n{traceback.format_exc()}")

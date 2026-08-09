@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiProjectBase(BaseModel):
-    """应用公共字段（创建/更新/查询共用）。"""
+    """应用公共字段。"""
 
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
     project_desc: Optional[str] = Field(None, max_length=2048, description="应用描述")
@@ -31,7 +31,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     """创建应用入参。"""
 
     project_name: str = Field(..., max_length=255, description="应用名称")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
     @field_validator('project_dev_owners', mode='before')
     @classmethod
@@ -107,7 +107,7 @@ class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
 
     project_id: Optional[int] = Field(None, description="应用ID")
     project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiProjectDelete(BaseModel):
@@ -125,6 +125,6 @@ class AutoTestApiProjectSelect(AutoTestApiProjectBase):
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
 
     project_id: Optional[int] = Field(None, description="应用ID")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
