@@ -12,7 +12,7 @@ from backend.applications.base.services.scaffold import ScaffoldModel, Timestamp
 
 
 class Department(ScaffoldModel, TimestampMixin, MaintainMixin):
-    """部门信息模型（最多两级树）。"""
+    """部门信息模型，最多两级树。"""
 
     code = fields.CharField(max_length=16, unique=True, description="部门代码")
     name = fields.CharField(max_length=64, unique=True, description="部门名称")
@@ -26,7 +26,7 @@ class Department(ScaffoldModel, TimestampMixin, MaintainMixin):
 
 
 class DeptStruct(ScaffoldModel, TimestampMixin):
-    """部门闭包表模型（ancestor/descendant 关系）。"""
+    """部门闭包表模型，ancestor/descendant关系。"""
 
     ancestor = fields.IntField(index=True, description="父部门")
     descendant = fields.IntField(index=True, description="子部门")

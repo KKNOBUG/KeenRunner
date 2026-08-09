@@ -62,7 +62,6 @@ class GenerateVirtualInfo(BaseModel):
 
         :param personOption: 中文选项列表
         :return: 映射后的字段键列表
-        :raises ValueError: 含未预定义选项
         """
         _option_key: set = set(PERSON_OPTION_MAP.keys())
         if not set(personOption).issubset(_option_key):
@@ -78,7 +77,6 @@ class GenerateVirtualInfo(BaseModel):
 
         :param datetimeOption: 中文选项列表
         :return: 映射后的时间类型键列表
-        :raises ValueError: 含未预定义选项
         """
         _option_key: set = set(DATETIME_OPTION_MAP.keys())
         if not set(datetimeOption).issubset(_option_key):
@@ -94,7 +92,6 @@ class GenerateVirtualInfo(BaseModel):
 
         :param randomOption: 中文选项列表
         :return: 映射后的随机类型键列表
-        :raises ValueError: 含未预定义选项
         """
         _option_key: set = set(RANDOM_OPTION_MAP.keys())
         if not set(randomOption).issubset(_option_key):
@@ -108,7 +105,6 @@ class GenerateVirtualInfo(BaseModel):
         校验年龄区间：maxAge 不得小于 minAge。
 
         :return: 校验通过的模型实例
-        :raises ValueError: maxAge < minAge
         """
         min_age = self.minAge
         max_age = self.maxAge

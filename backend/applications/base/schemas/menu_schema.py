@@ -10,11 +10,12 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import MenuType
 
 
 class BaseMenu(BaseModel):
-    """菜单树节点出参（含 children）。"""
+    """菜单树节点出参，含children。"""
 
     id: int = Field(..., description="菜单ID")
     name: str = Field(..., max_length=32, description="菜单名称")
@@ -44,6 +45,7 @@ class MenuCreate(BaseModel):
     component: str = Field(default="Layout", max_length=128, description="组件")
     keepalive: Optional[bool] = Field(default=True, description="存活")
     redirect: Optional[str] = Field(default=None, max_length=128, description="重定向")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
 
 class MenuUpdate(BaseModel):
@@ -60,3 +62,4 @@ class MenuUpdate(BaseModel):
     component: Optional[str] = Field(default=None, max_length=128, description="组件")
     keepalive: Optional[bool] = Field(default=None, description="存活")
     redirect: Optional[str] = Field(default=None, max_length=128, description="重定向")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")

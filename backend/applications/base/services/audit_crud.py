@@ -50,8 +50,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param audit_id: 审计日志ID
         :param on_error: 未找到时是否抛出NotFoundException
         :return: 审计日志实例或None
-        :raises ParameterException: audit_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not audit_id:
             error_message: str = "查询审计日志失败, 参数[audit_id]不允许为空"
@@ -71,8 +69,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param user_id: 用户ID
         :param on_error: 无记录时是否抛出NotFoundException
         :return: 审计日志列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: user_id空
-        :raises NotFoundException: on_error为True且该用户无审计日志
         """
         if not user_id:
             error_message: str = "查询审计日志失败, 参数[user_id]不允许为空"
@@ -104,15 +100,10 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         """
         根据条件分页查询审计日志列表。
 
-        查询方式优化：
-        - 默认/空排序回落到 -created_time，便于命中 (created_time) / (user_id, created_time) 索引
-        - 仅 SELECT 列表字段，避免拉取 request/response 大字段
-        - count 与分页查询并行执行
-
         :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 搜索条件(Q对象)
-        :param order: 排序字段列表；由调用方提供，空则 ["-created_time"]
+        :param order: 排序字段列表；由调用方提供，空则["-created_time"]
         :return: (总记录数, 当前页审计日志列表)
         """
         order_fields: list = self._normalize_order(order) or ["-created_time"]
@@ -136,7 +127,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
         :param audit_id: 审计日志ID
         :return: 被删除的审计日志实例
-        :raises NotFoundException: 记录不存在
         """
         instance = await self.get_by_id(audit_id=audit_id, on_error=True)
         await instance.delete()
@@ -160,7 +150,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
         :param user_id: 用户ID
         :return: 实际删除的记录数
-        :raises ParameterException: user_id为空
         """
         if not user_id:
             error_message: str = "删除审计日志失败, 参数[user_id]不允许为空"
@@ -175,7 +164,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param start_time: 起始时间
         :param end_time: 结束时间
         :return: 实际删除的记录数
-        :raises ParameterException: start_time或end_time为空
         """
         if not start_time or not end_time:
             error_message: str = "删除审计日志失败, 参数[start_time, end_time]不允许为空"
@@ -187,11 +175,8 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         """
         统计指定用户的审计日志：总量、根据请求方式、根据响应代码分布。
 
-        使用 group_by + Count，避免把明细列全部加载到内存。
-
         :param user_id: 用户ID
         :return: 含user_id、total_count、method_statistics、code_statistics的字典
-        :raises ParameterException: user_id为空
         """
         if not user_id:
             error_message: str = "统计审计日志失败, 参数[user_id]不允许为空"

@@ -29,6 +29,7 @@ from backend.core.responses import (
 
 menu = APIRouter()
 
+
 def _norm_menu_type(v) -> str:
     """
     规范化菜单类型值。
@@ -41,6 +42,7 @@ def _norm_menu_type(v) -> str:
     if hasattr(v, "value"):
         return str(v.value)
     return str(v)
+
 
 def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     """
@@ -70,8 +72,83 @@ def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
             out.append({**node, "children": children})
     return out
 
-@menu.post("/list", summary="查看菜单列表", description="根据name或type查询菜单信息")
-async def list_menus(
+
+@menu.post("/create", summary="新增菜单", description="新增菜单信息")
+async def create_menu(
+        menu_in: MenuCreate = Body(..., description="菜单信息"),
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
+    """
+    新增菜单。
+
+    :param menu_in: 菜单入参
+    :param menu_crud: 菜单CRUD服务
+    :return: 统一HTTP响应
+    """
+    try:
+        instance = await menu_crud.create_menu(menu_in=menu_in)
+        data = await instance.to_dict()
+        return SuccessResponse(message="新增成功", data=data, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"新增菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增失败，异常描述: {e}")
+
+
+@menu.delete("/delete", summary="删除菜单", description="根据id删除菜单信息")
+async def delete_menu(
+        id: int = Query(..., description="菜单id"),
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
+    """
+    删除菜单。
+
+    :param id: 菜单ID
+    :param menu_crud: 菜单CRUD服务
+    :return: 统一HTTP响应
+    """
+    child_menu_count = await menu_crud.model.filter(parent_id=id).count()
+    if child_menu_count > 0:
+        return FailureResponse(message="不能删除带有子菜单的菜单")
+    try:
+        instance = await menu_crud.delete_menu(menu_id=id)
+        data = await instance.to_dict()
+        return SuccessResponse(message="删除成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"根据id删除菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
+
+
+@menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
+async def update_menu(
+        menu_in: MenuUpdate = Body(..., description="菜单信息"),
+        menu_crud: MenuCrud = Depends(get_menu_crud),
+):
+    """
+    更新菜单。
+
+    :param menu_in: 菜单入参
+    :param menu_crud: 菜单CRUD服务
+    :return: 统一HTTP响应
+    """
+    try:
+        instance = await menu_crud.update_menu(menu_in=menu_in)
+        data = await instance.to_dict()
+        return SuccessResponse(message="更新成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"根据id更新菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
+
+
+@menu.post("/list", summary="查询菜单列表", description="根据name或type查询菜单信息")
+async def list_menu(
         name: str = Query(default="", description="菜单名称(子串匹配)"),
         menu_type: str = Query(default="", description="菜单类型：catalog/menu"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
@@ -109,13 +186,13 @@ async def list_menus(
         tk = menu_type.strip() if menu_type else ""
         if nk or tk:
             res_menu = _filter_menu_tree(res_menu, name_kw=nk, type_kw=tk)
-        LOGGER.info(f"查询菜单列表成功, 数量: {len(res_menu)}")
         return SuccessResponse(message="查询成功", data=res_menu, total=len(res_menu))
     except Exception as e:
-        LOGGER.error(f"查询菜单列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据name或type查询菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-@menu.get("/get", summary="查看菜单", description="根据id查询菜单信息")
+
+@menu.get("/get", summary="查询菜单", description="根据id查询菜单信息")
 async def get_menu(
         menu_id: int = Query(..., description="菜单id"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
@@ -129,87 +206,11 @@ async def get_menu(
     """
     try:
         result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)
-        data = await result.to_dict()
-        LOGGER.info(f"查询菜单成功, 结果明细: {data}")
-        return SuccessResponse(message="查询成功", data=data, total=1)
+        return SuccessResponse(message="查询成功", data=result, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id查询菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
-@menu.post("/create", summary="创建菜单")
-async def create_menu(
-        menu_in: MenuCreate = Body(..., description="菜单信息"),
-        menu_crud: MenuCrud = Depends(get_menu_crud),
-):
-    """
-    创建菜单。
-
-    :param menu_in: 菜单入参
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
-    """
-    try:
-        instance = await menu_crud.create_menu(menu_in=menu_in)
-        data = await instance.to_dict()
-        LOGGER.info(f"创建菜单成功, 结果明细: {data}")
-        return SuccessResponse(message="新增成功", data=data, total=1)
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"创建菜单失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {e}")
-
-@menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
-async def update_menu(
-        menu_in: MenuUpdate = Body(..., description="菜单信息"),
-        menu_crud: MenuCrud = Depends(get_menu_crud),
-):
-    """
-    更新菜单。
-
-    :param menu_in: 菜单入参
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
-    """
-    try:
-        instance = await menu_crud.update_menu(menu_in=menu_in)
-        data = await instance.to_dict()
-        LOGGER.info(f"更新菜单成功, 结果明细: {data}")
-        return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"更新菜单失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
-
-@menu.delete("/delete", summary="删除菜单", description="根据id删除菜单信息")
-async def delete_menu(
-        id: int = Query(..., description="菜单id"),
-        menu_crud: MenuCrud = Depends(get_menu_crud),
-):
-    """
-    删除菜单。
-
-    :param id: 菜单ID
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
-    """
-    child_menu_count = await menu_crud.model.filter(parent_id=id).count()
-    if child_menu_count > 0:
-        return FailureResponse(message="不能删除带有子菜单的菜单")
-    try:
-        instance = await menu_crud.delete_menu(menu_id=id)
-        data = await instance.to_dict()
-        LOGGER.info(f"删除菜单成功, 结果明细: {data}")
-        return SuccessResponse(message="删除成功", data=data, total=1)
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除菜单失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")

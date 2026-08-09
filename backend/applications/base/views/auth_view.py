@@ -34,8 +34,9 @@ from backend.services import create_access_token
 auth_public = APIRouter()
 auth_secure = APIRouter()
 
+
 @auth_public.post("/access_token", summary="生成访问令牌", description="验证用户密码和状态并生成令牌")
-async def login(
+async def get_login_access_token(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -81,17 +82,16 @@ async def login(
             phone=user.phone,
             avatar=user.avatar,
             state=user.state,
-            is_active=user.is_active,
             is_superuser=user.is_superuser,
             last_login=user.last_login
         )
-        LOGGER.info(f"用户登录成功, username: {user.username}")
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception as e:
-        LOGGER.error(f"用户登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"验证用户密码和状态并生成令牌失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"登录失败，异常描述: {e}")
 
-@auth_secure.post("/usermenu", summary="查看当前用户菜单")
+
+@auth_secure.post("/usermenu", summary="查询当前用户菜单", description="查询当前登录用户的菜单信息")
 async def get_user_menu():
     """
     查看当前用户菜单。
@@ -101,8 +101,6 @@ async def get_user_menu():
     try:
         user_id = CTX_USER_ID.get()
         user_obj = await User.filter(id=user_id).first()
-        if not user_obj:
-            return NotFoundResponse(message=f"查询用户菜单失败, 记录[id={user_id}]不存在")
         menus: List[Menu] = []
         if user_obj.is_superuser:
             menus = await Menu.all()
@@ -130,7 +128,8 @@ async def get_user_menu():
         LOGGER.error(f"查询当前用户菜单失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-@auth_secure.post("/userinfo", summary="查看当前用户信息")
+
+@auth_secure.post("/userinfo", summary="查询当前用户信息", description="查询当前登录用户的基本信息")
 async def get_user_info(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -144,14 +143,14 @@ async def get_user_info(
         user_id = CTX_USER_ID.get()
         user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
         data = await user_obj.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"查询当前用户信息成功, user_id: {user_id}")
         return SuccessResponse(message="查询成功", data=data)
     except Exception as e:
         LOGGER.error(f"查询当前用户信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
-@auth_secure.post("/getUserRouters", summary="查看当前用户路由")
-async def get_user_routers():
+
+@auth_secure.post("/get_user_routers", summary="查询当前用户路由", description="查询当前登录用户的路由权限")
+async def get_user_router():
     """
     查看当前用户路由。
 
@@ -160,12 +159,9 @@ async def get_user_routers():
     try:
         user_id = CTX_USER_ID.get()
         user_obj = await User.filter(id=user_id).first()
-        if not user_obj:
-            return NotFoundResponse(message=f"查询用户路由失败, 记录[id={user_id}]不存在")
         if user_obj.is_superuser:
             router_objs: List[Router] = await Router.all()
             routers = [router.method.lower() + router.path for router in router_objs]
-            LOGGER.info(f"查询当前用户路由成功, user_id: {user_id}, 数量: {len(routers)}")
             return SuccessResponse(message="查询成功", data=routers)
         role_objs: List[Role] = await user_obj.roles
         routers = []
@@ -173,7 +169,6 @@ async def get_user_routers():
             router_objs: List[Router] = await role_obj.routers
             routers.extend([router.method.lower() + router.path for router in router_objs])
         routers = list(set(routers))
-        LOGGER.info(f"查询当前用户路由成功, user_id: {user_id}, 数量: {len(routers)}")
         return SuccessResponse(message="查询成功", data=routers)
     except Exception as e:
         LOGGER.error(f"查询当前用户路由失败，异常描述: {e}\n{traceback.format_exc()}")

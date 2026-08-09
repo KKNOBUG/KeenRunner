@@ -6,205 +6,199 @@
 @Module  : data_initialization.py
 @DateTime: 2025/2/19 22:12
 """
-
 from typing import List
 
 from fastapi import FastAPI
-from tortoise.expressions import Q
 
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate
+from backend.applications.aotutest.models.autotest_model import AutoTestApiTagInfo
 from backend.applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate
 from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
 from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
 from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
 from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.models.router_model import Router
+from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.menu_schema import MenuCreate
 from backend.applications.base.schemas.role_schema import RoleCreate
 from backend.applications.base.services.menu_crud import MenuCrud
+from backend.applications.base.services.permission_rule import (
+    ROLE_CODE_USER,
+    ROLE_CODE_GUEST,
+    ROLE_CODE_ADMIN,
+    warn_unclassified_routers,
+    filter_routers_for_role
+)
 from backend.applications.base.services.role_crud import RoleCrud
 from backend.applications.base.services.router_crud import RouterCrud
+from backend.applications.department.models.dept_model import Department
 from backend.applications.department.schemas.department_schema import DepartmentCreate
 from backend.applications.department.services.department_crud import DepartmentCrud
 from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import UserCrud
 from backend.configure import LOGGER
-from backend.enums import AutoTestStepType
 from backend.enums import MenuType
+
+# 初始化种子数据的创建人（管理员账号，大写）
+INIT_CREATED_USER = "ADMIN"
 
 
 async def init_database_role():
     role_crud = RoleCrud()
-    role_table = await role_crud.model.exists()
-    if role_table:
-        LOGGER.info("[角色]数据表已存在，跳过初始化")
+    if await role_crud.model.exists():
+        LOGGER.info("[角色]已有数据，跳过初始化")
         return
+
+    from backend.applications.base.models.router_model import Router
 
     admin_role = await role_crud.create_role(
         RoleCreate(
-            code="ROLE-9999",
-            name="超级用户",
-            description="超级用户角色"
-        )
+            code=ROLE_CODE_ADMIN,
+            name="管理员",
+            description="平台超管，拥有全部菜单与接口权限",
+            created_user=INIT_CREATED_USER,
+        ),
     )
-    normal_role = await role_crud.create_role(
+    user_role = await role_crud.create_role(
         RoleCreate(
-            code="ROLE-1001",
-            name="普通用户",
-            description="普通用户角色"
-        )
+            code=ROLE_CODE_USER,
+            name="标准用户",
+            description="系统域只读，业务域增删改查全开；不可操作系统写操作与角色权限变更",
+            created_user=INIT_CREATED_USER,
+        ),
     )
-    LOGGER.info(f"创建[超级用户]角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
-    LOGGER.info(f"创建[普通用户]角色成功: {normal_role.name} (id: {normal_role.id}, code: {normal_role.code})")
+    guest_role = await role_crud.create_role(
+        RoleCreate(
+            code=ROLE_CODE_GUEST,
+            name="宾客用户",
+            description="系统域只读，业务域仅查询与新增；禁止一切修改与删除",
+            created_user=INIT_CREATED_USER,
+        ),
+    )
+    LOGGER.info(f"创建角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
+    LOGGER.info(f"创建角色成功: {user_role.name} (id: {user_role.id}, code: {user_role.code})")
+    LOGGER.info(f"创建角色成功: {guest_role.name} (id: {guest_role.id}, code: {guest_role.code})")
 
-    # 为超级用户角色分配所有的路由
-    all_routers = await Router.all()
-    await admin_role.routers.add(*all_routers)
-    LOGGER.info(f"角色[超级用户]绑定路由成功, 共计{len(all_routers)}个")
-
-    # 为普通用户分配基本路由
-    # Router.tags 来自 FastAPI include_router 的 tags（如“基础服务”“用户服务”），
-    # 因此这里使用模糊匹配“基础”，避免精确字符串不一致导致普通用户无法访问。
-    basic_routers = await Router.filter(Q(method__in=["GET"]) | Q(tags__icontains="基础"))
-    await normal_role.routers.add(*basic_routers)
-    LOGGER.info(f"角色[超级用户]绑定路由成功, 共计{len(basic_routers)}个")
-
-    # 为超级用户角色和普通用户角色分配所有的菜单
     all_menus = await Menu.all()
-    await admin_role.menus.add(*all_menus)
-    await normal_role.menus.add(*all_menus)
-    LOGGER.info(f"角色[超级用户]绑定菜单成功, 共计{len(all_menus)}个")
-    LOGGER.info(f"角色[普通用户]绑定菜单成功, 共计{len(all_menus)}个")
+    if all_menus:
+        await admin_role.menus.add(*all_menus)
+        await user_role.menus.add(*all_menus)
+        await guest_role.menus.add(*all_menus)
+        LOGGER.info(f"三角色绑定菜单成功, 共计{len(all_menus)}个")
+
+    all_routers = await Router.all()
+    warn_unclassified_routers(all_routers)
+    admin_routers = filter_routers_for_role(ROLE_CODE_ADMIN, all_routers)
+    user_routers = filter_routers_for_role(ROLE_CODE_USER, all_routers)
+    guest_routers = filter_routers_for_role(ROLE_CODE_GUEST, all_routers)
+    if admin_routers:
+        await admin_role.routers.add(*admin_routers)
+    if user_routers:
+        await user_role.routers.add(*user_routers)
+    if guest_routers:
+        await guest_role.routers.add(*guest_routers)
+    LOGGER.info(f"角色[{admin_role.name}]绑定路由成功, 共计{len(admin_routers)}个")
+    LOGGER.info(f"角色[{user_role.name}]绑定路由成功, 共计{len(user_routers)}个")
+    LOGGER.info(f"角色[{guest_role.name}]绑定路由成功, 共计{len(guest_routers)}个")
 
 
 async def init_database_dept():
     dept_crud = DepartmentCrud()
-    dept_table = await dept_crud.model.exists()
-    if dept_table:
-        LOGGER.info("[部门]数据表已存在，跳过初始化")
+    if await dept_crud.model.exists():
+        LOGGER.info("[部门]已有数据，跳过初始化")
         return
 
     dept_data: List[DepartmentCreate] = [
         DepartmentCreate(
-            code="DEPT-9999",
-            name="默认部门",
-            description="系统默认配置，无具体部门，仅作初始部门使用",
+            code="DEFAULT_SYSTEM_DEPARTMENT",
+            name="系统默认部门",
+            description="系统默认配置，无具体业务归属，仅作初始部门使用",
             order=0,
-            parent_id=0
+            parent_id=0,
+            created_user=INIT_CREATED_USER,
         ),
         DepartmentCreate(
-            code="DEPT-KF",
-            name="研发部(技术中心)",
-            description="软件开发部门，包含前端开发、后端开发、功能测试、自动化测试等",
-            order=0,
-            parent_id=0
-        ),
-        DepartmentCreate(
-            code="DEPT-KF01",
-            name="开发一部",
-            description="软件开发部门，开发一部",
+            code="DEFAULT_AUTOTEST_DEPARTMENT",
+            name="技术测试团队",
+            description="技术测试与冒烟验证相关人员所属部门",
             order=1,
-            parent_id=2
+            parent_id=0,
+            created_user=INIT_CREATED_USER,
         ),
-        DepartmentCreate(
-            code="DEPT-KF02",
-            name="开发二部",
-            description="软件开发部门，开发二部",
-            order=1,
-            parent_id=2
-        ),
-        DepartmentCreate(
-            code="DEPT-CS",
-            name="测试部门",
-            description="软件测试部门",
-            order=0,
-            parent_id=0
-        ),
-        DepartmentCreate(
-            code="DEPT-CS01",
-            name="测试一部",
-            description="软件测试部门，测试一部",
-            order=1,
-            parent_id=5
-        ),
-        DepartmentCreate(
-            code="DEPT-CS02",
-            name="测试二部",
-            description="软件测试部门，测试二部",
-            order=1,
-            parent_id=5
-        )
     ]
 
     for dept_in in dept_data:
         try:
             dept = await dept_crud.create_department(department_in=dept_in)
-            LOGGER.info(f"创建部门成功: {dept.name} (id: {dept.id}, username: {dept.code})")
+            LOGGER.info(f"创建部门成功: {dept.name} (id: {dept.id}, code: {dept.code})")
         except Exception as e:
-            LOGGER.error(f"创建部门失败: {dept_in['alias']}, username: {dept_in['username']}: {e}")
+            LOGGER.error(f"创建部门失败: {dept_in.name}, code: {dept_in.code}: {e}")
 
 
 async def init_database_user():
     user_crud = UserCrud()
-    user_table = await user_crud.model.exists()
-    if user_table:
-        LOGGER.info("[用户]数据表已存在，跳过初始化")
+    if await user_crud.model.exists():
+        LOGGER.info("[用户]已有数据，跳过初始化")
+        return
+
+    default_dept = await Department.get_or_none(code="DEFAULT_SYSTEM_DEPARTMENT")
+    test_dept = await Department.get_or_none(code="DEFAULT_AUTOTEST_DEPARTMENT")
+    admin_role = await Role.get_or_none(code=ROLE_CODE_ADMIN)
+    user_role = await Role.get_or_none(code=ROLE_CODE_USER)
+    guest_role = await Role.get_or_none(code=ROLE_CODE_GUEST)
+
+    if not all([default_dept, test_dept, admin_role, user_role, guest_role]):
+        LOGGER.error("[用户]初始化失败: 部门或角色尚未就绪，请检查初始化顺序")
         return
 
     user_data: List[UserCreate] = [
         UserCreate(
             username="admin",
-            password="123456",
+            password="KFuser01@!",
             alias="系统管理员",
             email="admin@test.com",
             phone="18888888888",
             avatar="/static/avatar/default/20250101010101.png",
-            dept_id=1,
-            is_active=True,
+            dept_id=default_dept.id,
             is_superuser=True,
-            role_ids=[1],
-        ),
-        UserCreate(
-            username="guest",
-            password="123456",
-            alias="访客用户",
-            email="guest@test.com",
-            phone="18888888888",
-            avatar="/static/avatar/default/20250101010101.png",
-            dept_id=6,
-            is_active=True,
-            is_superuser=False,
-            role_ids=[2],
+            role_ids=[admin_role.id],
+            created_user=INIT_CREATED_USER,
         ),
         UserCreate(
             username="tester",
-            password="123456",
-            alias="测试用户",
+            password="KFuser01@!",
+            alias="标准用户",
             email="tester@test.com",
             phone="18888888888",
             avatar="/static/avatar/default/20250101010101.png",
-            dept_id=7,
-            is_active=True,
+            dept_id=test_dept.id,
             is_superuser=False,
-            role_ids=[2],
-        )
+            role_ids=[user_role.id],
+            created_user=INIT_CREATED_USER,
+        ),
+        UserCreate(
+            username="guest",
+            password="KFuser01@!",
+            alias="宾客用户",
+            email="guest@test.com",
+            phone="18888888888",
+            avatar="/static/avatar/default/20250101010101.png",
+            dept_id=test_dept.id,
+            is_superuser=False,
+            role_ids=[guest_role.id],
+            created_user=INIT_CREATED_USER,
+        ),
     ]
     for user_in in user_data:
         try:
             user = await user_crud.create_user(user_in=user_in)
             LOGGER.info(f"创建用户成功: {user.alias} (id: {user.id}, username: {user.username})")
         except Exception as e:
-            LOGGER.error(f"创建用户失败: {user_in['alias']}, username: {user_in['username']}: {e}")
+            LOGGER.error(f"创建用户失败: {user_in.alias}, username: {user_in.username}: {e}")
 
 
 async def init_database_menu():
     menu_crud = MenuCrud()
-    menu_table = await menu_crud.model.exists()
-    if menu_table:
-        LOGGER.info("[菜单]数据表已存在，跳过初始化")
+    if await menu_crud.model.exists():
+        LOGGER.info("[菜单]已有数据，跳过初始化")
         return
     # 系统设置菜单配置
     system_parent_menu = await menu_crud.create_menu(
@@ -218,8 +212,9 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/system/user"
-        )
+            redirect="/system/user",
+            created_user=INIT_CREATED_USER,
+        ),
     )
     system_children_menu = [
         Menu(
@@ -231,7 +226,8 @@ async def init_database_menu():
             icon="tdesign:user-setting",
             is_hidden=False,
             component="/system/user",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -242,7 +238,8 @@ async def init_database_menu():
             icon="tdesign:user-transmit",
             is_hidden=False,
             component="/system/role",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -253,7 +250,8 @@ async def init_database_menu():
             icon="fluent:text-grammar-settings-24-filled",
             is_hidden=False,
             component="/system/menu",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -264,7 +262,8 @@ async def init_database_menu():
             icon="carbon:data-vis-1",
             is_hidden=False,
             component="/system/router",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -275,7 +274,8 @@ async def init_database_menu():
             icon="mingcute:department-line",
             is_hidden=False,
             component="/system/dept",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -286,7 +286,8 @@ async def init_database_menu():
             icon="devicon:redis-wordmark",
             is_hidden=False,
             component="/system/redis",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -297,7 +298,8 @@ async def init_database_menu():
             icon="streamline:database-setting",
             is_hidden=False,
             component="/system/database",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -308,7 +310,8 @@ async def init_database_menu():
             icon="carbon:flow-logs-vpc",
             is_hidden=False,
             component="/system/auditlog",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
     ]
     await Menu.bulk_create(system_children_menu)
@@ -326,8 +329,9 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/program/project"
-        )
+            redirect="/program/project",
+            created_user=INIT_CREATED_USER,
+        ),
     )
     program_children_menu = [
         Menu(
@@ -339,7 +343,8 @@ async def init_database_menu():
             icon="fluent:apps-28-filled",
             is_hidden=False,
             component="/program/project",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -347,11 +352,11 @@ async def init_database_menu():
             path="environment",
             order=2,
             parent_id=program_parent_menu.id,
-            # icon="fluent:apps-add-in-28-regular",
             icon="eos-icons:env",
             is_hidden=False,
             component="/program/environment",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -362,7 +367,8 @@ async def init_database_menu():
             icon="tabler:tags",
             is_hidden=False,
             component="/program/tags",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
     ]
     await Menu.bulk_create(program_children_menu)
@@ -380,8 +386,9 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/interface/swagger"
-        )
+            redirect="/interface/swagger",
+            created_user=INIT_CREATED_USER,
+        ),
     )
     interface_children_menu = [
         Menu(
@@ -393,7 +400,8 @@ async def init_database_menu():
             icon="devicon:swagger",
             is_hidden=False,
             component="/interface/swagger",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -404,7 +412,8 @@ async def init_database_menu():
             icon="mdi:file-document-outline",
             is_hidden=False,
             component="/interface/redoc",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
     ]
     await Menu.bulk_create(interface_children_menu)
@@ -422,8 +431,9 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/autotest/testcase"
-        )
+            redirect="/autotest/testcase",
+            created_user=INIT_CREATED_USER,
+        ),
     )
     autotest_children_menu = [
         Menu(
@@ -436,6 +446,8 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/ui",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -447,6 +459,8 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/ui",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -458,6 +472,8 @@ async def init_database_menu():
             is_hidden=True,
             component="/autotest/steps",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -469,6 +485,8 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/testcase",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -480,6 +498,8 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/report",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
     ]
     await Menu.bulk_create(autotest_children_menu)
@@ -497,8 +517,9 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/task/record"
-        )
+            redirect="/task/record",
+            created_user=INIT_CREATED_USER,
+        ),
     )
     task_children_menu = [
         Menu(
@@ -511,6 +532,8 @@ async def init_database_menu():
             is_hidden=False,
             component="/task/list",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -522,6 +545,8 @@ async def init_database_menu():
             is_hidden=False,
             component="/task/record",
             keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
         ),
     ]
     await Menu.bulk_create(task_children_menu)
@@ -539,8 +564,9 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/toolbox/pythonHelpDoc"
-        )
+            redirect="/toolbox/pythonHelpDoc",
+            created_user=INIT_CREATED_USER,
+        ),
     )
     toolbox_children_menu = [
         Menu(
@@ -552,7 +578,8 @@ async def init_database_menu():
             icon="vscode-icons:file-type-python",
             is_hidden=False,
             component="/toolbox/pythonHelpDoc",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -563,7 +590,8 @@ async def init_database_menu():
             icon="carbon:data-volume",
             is_hidden=False,
             component="/toolbox/generate",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -574,7 +602,8 @@ async def init_database_menu():
             icon="fluent:text-underline-double-24-filled",
             is_hidden=False,
             component="/toolbox/textAnalysis",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -585,7 +614,8 @@ async def init_database_menu():
             icon="material-symbols:database-search",
             is_hidden=False,
             component="/toolbox/databaseSearch",
-            keepalive=False
+            keepalive=False,
+            created_user=INIT_CREATED_USER
         ),
     ]
     await Menu.bulk_create(toolbox_children_menu)
@@ -603,252 +633,91 @@ async def init_database_menu():
             is_hidden=False,
             component="/top-menu",
             keepalive=False,
-            redirect=""
-        )
+            redirect="",
+            created_user=INIT_CREATED_USER,
+        ),
     )
 
 
 async def init_database_router(app: FastAPI):
     router_crud = RouterCrud()
-    router_table = await router_crud.model.exists()
-    if router_table:
-        LOGGER.info("[路由]数据表已存在，跳过初始化")
+    if await router_crud.model.exists():
+        LOGGER.info("[路由]已有数据，跳过初始化")
         return
 
-    await router_crud.refresh_router(app)
+    # 初始化无 HTTP 登录上下文：临时写入 CTX，供 refresh_router 取当前用户
+    from backend.services.ctx import CTX_USERNAME
+    CTX_USERNAME.set(INIT_CREATED_USER)
+    # 首次灌路由时角色可能尚未创建，关闭自动补绑；角色初始化阶段再完整绑定
+    await router_crud.refresh_router(app, sync_role_bindings=False)
 
 
 async def init_database_project():
     project_crud = AutoTestApiProjectCrud()
-    project_table = await project_crud.model.exists()
-    if project_table:
-        LOGGER.info("[应用]数据表已存在，跳过初始化")
+    if await project_crud.model.exists():
+        LOGGER.info("[应用]已有数据，跳过初始化")
         return
 
     await project_crud.create_project(
         AutoTestApiProjectCreate(
-            project_name="KRUN",
-            project_desc="KRUN测管平台",
+            project_name="ToolBox工具箱",
+            project_desc="平台默认应用：ToolBox工具箱",
             project_state="开发中",
-            project_dev_owners=["张三丰", "秦始皇"],
-            project_developers=["张余", "苏钰", "赵思明", "叶无云", "沈牧云"],
-            project_test_owners=["黄思妙", "吴婕妤"],
-            project_testers=["谢霆锋", "赵思明", "杨浩亮"],
-            created_user="admin",
+            project_dev_owners=["admin"],
+            project_developers=["admin"],
+            project_test_owners=["tester"],
+            project_testers=["tester", "guest"],
+            created_user=INIT_CREATED_USER,
             project_phase=None,
             project_current_month_env=None,
         )
     )
-    LOGGER.info(f"创建[应用]成功")
+    LOGGER.info("创建[应用]成功: ToolBox工具箱")
 
 
 async def init_database_tag():
     tag_crud = AutoTestApiTagCrud()
-    tag_table = await tag_crud.model.exists()
-    if tag_table:
-        LOGGER.info("[标签]数据表已存在，跳过初始化")
+    if await tag_crud.model.exists():
+        LOGGER.info("[标签]已有数据，跳过初始化")
+        return
+
+    project_crud = AutoTestApiProjectCrud()
+    project = await project_crud.model.filter(project_name="ToolBox工具箱").first()
+    if not project:
+        LOGGER.error("[标签]初始化失败: 未找到应用 ToolBox工具箱")
         return
 
     tag_data: List[AutoTestApiTagCreate] = [
         AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="后端开发工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="前端开发工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
+            tag_project=project.id,
+            tag_mode="技术测试团队",
             tag_name="测试工程师",
             tag_desc=None,
+            created_user=INIT_CREATED_USER,
         ),
         AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="运维工程师",
+            tag_project=project.id,
+            tag_mode="技术测试团队",
+            tag_name="开发工程师",
             tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="运维工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="市场营销部",
-            tag_name="新媒体运营",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="市场营销部",
-            tag_name="短视频运营",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="市场营销部",
-            tag_name="活动策划",
-            tag_desc=None,
+            created_user=INIT_CREATED_USER,
         ),
     ]
-    await tag_crud.model.bulk_create(*tag_data)
-    LOGGER.info(f"创建[标签]成功")
-
-
-async def init_database_case():
-    case_crud = AutoTestApiCaseCrud()
-    case_table = await case_crud.model.exists()
-    if case_table:
-        LOGGER.info("[用例]数据表已存在，跳过初始化")
-        return
-
-    cases: List[AutoTestApiCaseCreate] = [
-
-    ]
-    await case_crud.model.bulk_create(*cases)
-    LOGGER.info(f"创建[用例]成功")
-
-
-async def init_database_step():
-    step_crud = AutoTestApiStepCrud()
-    step_table = await step_crud.model.exists()
-    if step_table:
-        LOGGER.info("[步骤]数据表已存在，跳过初始化")
-        return
-
-    steps: List[AutoTestApiStepCreate] = [
-        AutoTestApiStepCreate(
-            case_id=1,
-            step_no=1,
-            step_name="用户自定义变量池",
-            step_type=AutoTestStepType.USER_VARIABLES,
-            step_desc="用户自定义的变量, 提供后续步骤使用",
-            created_user="admin",
-            session_variables=[
-                {
-                    "key": "name",
-                    "desc": "姓名",
-                    "value": "${generate_name()}"
-                },
-                {
-                    "key": "ident",
-                    "desc": "年龄",
-                    "value": "${generate_ident_card_number_condition(min_age=18, max_age=18)}"
-                },
-                {
-                    "key": "city",
-                    "desc": "城市",
-                    "value": "${generate_city()}"
-                },
-                {
-                    "key": "country",
-                    "desc": "国家",
-                    "value": "${generate_country()}"
-                },
-                {
-                    "key": "province",
-                    "desc": "省份",
-                    "value": "${generate_province()}"
-                },
-                {
-                    "key": "address",
-                    "desc": "地址",
-                    "value": "${generate_address()}"
-                },
-                {
-                    "key": "age_phone",
-                    "desc": "",
-                    "value": "18_${generate_phone()}"
-                },
-                {
-                    "key": "randomNum",
-                    "desc": "",
-                    "value": "${generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)}"
-                }
-            ]
-        ),
-        AutoTestApiStepCreate(
-            case_id=1,
-            step_no=2,
-            step_name="登录KRUN测管平台",
-            step_type=AutoTestStepType.HTTP,
-            step_desc="输入正确的账号和密码完成登录",
-            created_user="admin",
-            request_url="http://172.20.10.2:8518/base/auth/access_token",
-            request_method="POST",
-            request_args_type="json",
-            request_header=[
-                {
-                    "key": "X-name",
-                    "desc": "自定义请求头参数姓名",
-                    "value": "张三"
-                },
-                {
-                    "key": "X-random",
-                    "desc": "自定义请求头参数随机数",
-                    "value": "${generate_random_int(min_=1, max_=10)}"
-                }
-            ],
-            request_body={
-                "password": "${password}",
-                "username": "${username}"
-            },
-            defined_variables=[
-                {
-                    "key": "username",
-                    "desc": "",
-                    "value": "admin"
-                },
-                {
-                    "key": "password",
-                    "desc": "",
-                    "value": "123456"
-                }
-            ],
-            extract_variables=[
-                {
-                    "expr": "$.data.access_token",
-                    "name": "access_token",
-                    "index": 0,
-                    "range": "SOME",
-                    "source": "Response Json"
-                }
-            ],
-            assert_validators=[
-                {
-                    "expr": "$.code",
-                    "name": "code",
-                    "source": "Response Json",
-                    "operation": "等于",
-                    "except_value": "000000"
-                },
-                {
-                    "expr": "$.message",
-                    "name": "message",
-                    "source": "Response Json",
-                    "operation": "等于",
-                    "except_value": "请求成功"
-                }
-            ],
-        ),
-    ]
-    await step_crud.model.bulk_create(*steps)
+    await tag_crud.model.bulk_create(
+        [
+            AutoTestApiTagInfo(**tag.model_dump())
+            for tag in tag_data
+        ]
+    )
+    LOGGER.info("创建[标签]成功")
 
 
 async def init_database_table(app: FastAPI):
+    # 菜单/路由须先于角色，角色/部门须先于用户
+    await init_database_menu()
+    await init_database_router(app)
     await init_database_role()
     await init_database_dept()
     await init_database_user()
-    await init_database_menu()
-    await init_database_router(app)
     await init_database_project()
     await init_database_tag()
-    await init_database_case()

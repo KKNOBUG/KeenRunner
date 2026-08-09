@@ -10,9 +10,11 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
+
 
 class RoleBase(BaseModel):
-    """角色公共字段（创建/更新/查询共用）。"""
+    """角色公共字段。"""
 
     code: Optional[str] = Field(default=None, max_length=16, description="角色代码")
     name: Optional[str] = Field(default=None, max_length=64, description="角色名称")
@@ -25,6 +27,7 @@ class RoleCreate(RoleBase):
     code: str = Field(..., max_length=16, description="角色代码")
     name: str = Field(..., max_length=64, description="角色名称")
     description: Optional[str] = Field(default="", description="角色描述")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):
         """
@@ -39,12 +42,13 @@ class RoleUpdate(RoleBase):
     """更新角色入参。"""
 
     id: int = Field(..., description="角色ID")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
     def update_dict(self):
         """
-        转为更新字典，排除 id 与未设置字段。
+        转为更新字典，排除id与未设置字段。
 
-        :return: 可直接用于 update_from_dict 的字段字典
+        :return: 可直接用于update_from_dict的字段字典
         """
         return self.model_dump(exclude_unset=True, exclude={"id"})
 
@@ -55,6 +59,8 @@ class RoleSelect(RoleBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
 
 class RoleUpdateMenusRouters(BaseModel):

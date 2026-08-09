@@ -10,11 +10,12 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import HTTPMethod
 
 
 class RouterBase(BaseModel):
-    """路由公共字段（创建/更新/查询共用）。"""
+    """路由公共字段。"""
 
     path: Optional[str] = Field(default=None, max_length=255, description="路由请求路径")
     method: Optional[HTTPMethod] = Field(default=None, description="路由请求方式")
@@ -31,6 +32,7 @@ class RouterCreate(RouterBase):
     summary: str = Field(..., max_length=255, description="路由作用简介")
     tags: str = Field(..., max_length=255, description="路由所属标签")
     description: Optional[str] = Field(default=None, description="路由功能描述")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):
         """
@@ -45,12 +47,13 @@ class RouterUpdate(RouterBase):
     """更新路由入参。"""
 
     id: int = Field(..., description="路由ID")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
     def update_dict(self):
         """
-        转为更新字典，排除 id 与未设置字段。
+        转为更新字典，排除id与未设置字段。
 
-        :return: 可直接用于 update_from_dict 的字段字典
+        :return: 可直接用于update_from_dict的字段字典
         """
         return self.model_dump(exclude_unset=True, exclude={"id"})
 
@@ -61,3 +64,5 @@ class RouterSelect(RouterBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")

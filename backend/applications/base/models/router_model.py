@@ -8,8 +8,8 @@
 """
 from tortoise import fields
 
-from backend.enums import HTTPMethod
 from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from backend.enums import HTTPMethod
 
 
 class Router(ScaffoldModel, MaintainMixin, TimestampMixin):

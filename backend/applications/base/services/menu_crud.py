@@ -16,6 +16,7 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
+
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
     def __init__(self):
@@ -29,8 +30,6 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 菜单实例或None
-        :raises ParameterException: menu_id为空
-        :raises NotFoundException: on_error为True且菜单不存在
         """
         if not menu_id:
             error_message: str = "查询菜单信息失败, 参数[menu_id]不允许为空"
@@ -51,8 +50,6 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 菜单实例或None
-        :raises ParameterException: path为空
-        :raises NotFoundException: on_error为True且菜单不存在
         """
         if not path:
             error_message: str = "查询菜单信息失败, 参数[path]不允许为空"
@@ -71,7 +68,6 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
         :param menu_in: 新增菜单入参
         :return: 新建的菜单实例
-        :raises DataAlreadyExistsException: name或path已存在
         """
         name = menu_in.name
         path = menu_in.path
@@ -91,7 +87,6 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         :param menu_id: 菜单ID
         :param kwargs: 额外查询条件
         :return: 被删除的菜单实例
-        :raises NotFoundException: 菜单不存在
         """
         instance = await self.get_by_id(menu_id=menu_id, on_error=True, **kwargs)
         await instance.delete()
@@ -103,7 +98,6 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
 
         :param menu_in: 更新入参
         :return: 更新后的菜单实例
-        :raises NotFoundException: 菜单不存在
         """
         menu_id: int = menu_in.id
         menu_if: dict = menu_in.model_dump(exclude_none=True)

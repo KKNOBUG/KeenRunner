@@ -27,7 +27,8 @@ from backend.services.file_transfer import FileTransfer
 
 file_transfer = APIRouter()
 
-@file_transfer.post("/upload", summary="上传文件")
+
+@file_transfer.post("/upload", summary="上传文件", description="上传文件到指定目的地")
 async def upload_file(
         file: UploadFile = File(..., description="文件对象"),
         path: Union[str, Path] = Form(..., description="文件上传目的地"),
@@ -63,19 +64,19 @@ async def upload_file(
         if not state:
             LOGGER.error(f"上传文件失败，异常描述: {detail}")
             return FailureResponse(message=f"上传失败，异常描述: {detail}")
-        LOGGER.info(f"上传文件成功, path: {path}")
         return SuccessResponse(message="上传成功", data=detail)
     except Exception as e:
         LOGGER.error(f"上传文件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"上传失败，异常描述: {e}")
 
-@file_transfer.post("/download", summary="下载文件")
+
+@file_transfer.post("/download", summary="下载文件", description="根据路径下载文件")
 async def download_file(path: Union[str, Path] = Form(..., description="文件下载路径")):
     """
     下载文件。
 
     :param path: 文件下载路径
-    :return: 统一HTTP响应
+    :return: 文件流响应
     """
     filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
     filename: str = quote(os.path.basename(path).encode("utf-8"))
@@ -88,7 +89,8 @@ async def download_file(path: Union[str, Path] = Form(..., description="文件�
         }
     )
 
-@file_transfer.post("/read", summary="读取文件")
+
+@file_transfer.post("/read", summary="查询文件内容", description="根据路径读取文件内容")
 async def read_file(path: Union[str, Path] = Form(..., description="文件读取路径")):
     """
     读取文件。
@@ -100,7 +102,6 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
     try:
         with open(file=filepath, mode="r", encoding="utf-8") as fp:
             content: str = fp.read()
-        LOGGER.info(f"读取文件成功, path: {path}")
         return SuccessResponse(data=content, message="文件读取成功")
     except FileNotFoundError:
         return NotFoundResponse(message=f"文件:{filepath}未找到")
@@ -108,7 +109,8 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
         LOGGER.error(f"读取文件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"读取失败，异常描述: {e}", data={"error": str(e)})
 
-@file_transfer.post("/move", summary="移动文件")
+
+@file_transfer.post("/move", summary="更新文件位置", description="根据路径移动文件位置")
 async def move_file(
         src_path: Union[str, Path] = Form(..., description="文件原始路径"),
         dst_path: Union[str, Path] = Form(..., description="文件目标路径"),
@@ -124,7 +126,6 @@ async def move_file(
     dst_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, dst_path)
     try:
         state: bool = FileUtils.move_directory(src_file_path, dst_file_path)
-        LOGGER.info(f"移动文件成功, src_path: {src_path}, dst_path: {dst_path}")
         return SuccessResponse(message="文件移动成功", data={"src_path": src_file_path, "dst_path": dst_file_path, "state": state})
     except Exception as e:
         LOGGER.error(f"移动文件失败，异常描述: {e}\n{traceback.format_exc()}")

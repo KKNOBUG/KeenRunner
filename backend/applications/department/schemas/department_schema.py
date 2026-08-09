@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.applications.base.services.scaffold import UpperStr
+
 
 class DepartmentCreate(BaseModel):
     """新增部门入参。"""
@@ -20,6 +22,7 @@ class DepartmentCreate(BaseModel):
     description: Optional[str] = Field(default=None, description="部门描述")
     order: int = Field(default=0, description="排序")
     parent_id: int = Field(default=0, description="父部门ID")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):
         """
@@ -39,11 +42,11 @@ class DepartmentUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=255, description="部门描述")
     order: Optional[int] = Field(default=None, ge=0, description="排序")
     parent_id: Optional[int] = Field(default=None, ge=0, description="父部门ID")
-    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
     def update_dict(self):
         """
-        转为更新字典，排除 id 与未设置字段。
+        转为更新字典，排除id与未设置字段。
 
         :return: 可直接用于update_from_dict的字段字典
         """
@@ -58,9 +61,9 @@ class DepartmentSelect(BaseModel):
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     code: Optional[str] = Field(default=None, description="部门代码")
     name: Optional[str] = Field(default=None, description="部门名称")
-    is_deleted: Optional[bool] = Field(default=None, description="是否已删除；不传则仅查未删除")
-    created_user: Optional[str] = Field(default=None, max_length=16, description="创建人员")
-    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
     created_time: Optional[datetime] = Field(default=None, description="创建时间")
     updated_time: Optional[datetime] = Field(default=None, description="更新时间")
 
