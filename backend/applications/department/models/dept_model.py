@@ -8,10 +8,10 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin, MaintainMixin
+from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
 
 
-class Department(ScaffoldModel, TimestampMixin, MaintainMixin):
+class Department(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
     """部门信息模型，最多两级树。"""
 
     code = fields.CharField(max_length=16, unique=True, description="部门代码")

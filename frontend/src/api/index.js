@@ -12,7 +12,7 @@ export default {
   login: (data) => request.post('/base/auth/access_token', data, { noNeedToken: true }),
   getUserInfo: () => request.post('/base/auth/userinfo'),
   getUserMenu: () => request.post('/base/auth/usermenu'),
-  getUserRouters: () => request.post('/base/auth/getUserRouters'),
+  getUserRouters: () => request.post('/base/auth/get_user_routers'),
   // 用户相关
   getUserList: (params = {}) => request.get('/user/list', { params }),
   getUserById: (params = {}) => request.get('/user/get', { params }),
@@ -55,11 +55,11 @@ export default {
   updateDept: (data = {}) => request.post('/dept/update', data),
   deleteDept: (params = {}) => request.delete('/dept/delete', { params }),
   /** 批量删除：Body { department_ids?: number[] } */
-  deleteDeptBatch: (data = {}) => request.post('/dept/delete', data),
+  deleteDeptBatch: (data = {}) => request.post('/dept/deletes', data),
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
   /** 批量删除：Body { audit_ids?: number[] } */
-  deleteAuditLogBatch: (data = {}) => request.post('/base/audit/delete', data),
+  deleteAuditLogBatch: (data = {}) => request.post('/base/audit/deletes', data),
 
   // ---------- autotest：应用 / 环境 / 标签（元数据）----------
   getProject: (params = {}) => request.get('/autotest/project/get', { params }),
@@ -72,29 +72,51 @@ export default {
   /** 应用分页搜索（默认大页全量；传入 data 可覆盖 page/page_size/state） */
   getProjectList: (data = {}) => request.post('/autotest/project/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
+  // 环境（主表）
   getEnv: (params = {}) => request.get('/autotest/env/get', { params }),
   createEnv: (data = {}) => request.post('/autotest/env/create', data),
   /** 单笔删除：Query env_id 或 env_code */
   deleteEnv: (params = {}) => request.delete('/autotest/env/delete', { params }),
   /** 批量删除：Body { env_ids?: number[] } 或 { env_codes?: string[] } */
-  deleteEnvBatch: (data = {}) => request.post('/autotest/env/delete', data),
+  deleteEnvBatch: (data = {}) => request.post('/autotest/env/deletes', data),
   updateEnv: (data = {}) => request.post('/autotest/env/update', data),
+  /** 环境分页搜索（默认大页全量；传入 data 可覆盖 page/page_size/state） */
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
+  /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
+  listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
+  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type/ip/page/page_size */
+  getEnvPage: (params = {}) => request.get('/autotest/env/page', { params }),
+  /** 全部启用应用（环境侧）。Query: page/page_size */
+  getAllApps: (params = {}) => request.get('/autotest/env/get_all_app', { params }),
 
-  // 环境配置（HTTP/通用/数据库 等）
+  // 环境配置（子表，按节点类型拆分）
   getEnvConfig: (params = {}) => request.get('/autotest/config/get', { params }),
-  createEnvConfig: (data = {}) => request.post('/autotest/config/create', data),
-  updateEnvConfig: (data = {}) => request.post('/autotest/config/update', data),
-  /** 单笔删除：Query config_id 或 config_code */
-  deleteEnvConfig: (params = {}) => request.delete('/autotest/config/delete', { params }),
-  /** 批量删除：Body { config_ids?: number[] } 或 { config_codes?: string[] } */
-  deleteEnvConfigBatch: (data = {}) => request.post('/autotest/config/delete', data),
+  /** 新增 APP 配置。Body: APPEnvConfigCreate */
+  createAppEnvConfig: (data = {}) => request.post('/autotest/config/app/create', data),
+  /** 新增 FILE 配置。Body: FILEEnvConfigCreate */
+  createFileEnvConfig: (data = {}) => request.post('/autotest/config/file/create', data),
+  /** 新增 DB 配置。Body: DBEnvConfigCreate */
+  createDbEnvConfig: (data = {}) => request.post('/autotest/config/database/create', data),
+  /** 新增 Redis 配置。Body: RedisEnvConfigCreate */
+  createRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/create', data),
+  /** 更新 APP 配置。Body: APPEnvConfigUpdate */
+  updateAppEnvConfig: (data = {}) => request.post('/autotest/config/app/update', data),
+  /** 更新 FILE 配置。Body: FILEEnvConfigUpdate */
+  updateFileEnvConfig: (data = {}) => request.post('/autotest/config/file/update', data),
+  /** 更新 DB 配置。Body: DBEnvConfigUpdate */
+  updateDbEnvConfig: (data = {}) => request.post('/autotest/config/database/update', data),
+  /** 删除子表配置（单条）。Body: { id, env_type, updated_user? } */
+  deleteEnvConfig: (data = {}) => request.post('/autotest/config/delete', data),
+  /** 子表配置分页搜索（含 project_name/env_name）。Body: AutoTestApiConfigSelect */
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
-  /** Query: project_id、env_id、config_type(api|database|file) 可选 */
+  /** 子表配置分页列表（ip/port+类型扩展字段）。Query: env_info_id/env_name/env_type/page/page_size */
+  getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
+  /** Query: project_id、env_id、config_type(api|database|redis|file) 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
-  /** Body: { project_ids: number[] } -> project_id -> env_id -> type -> config_name -> {host,port,...} */
+  /** Body: { project_ids: number[] } -> project_id -> env_name -> APP|FILE|DB -> config_name -> {config_host,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/config/query', data),
-
+  /** 数据库连通性测试。Body: { id, project_id, env_name, config_name, db_name } */
+  testDbConnection: (data = {}) => request.post('/autotest/config/database/test_connection', data),
 
   getTag: (params = {}) => request.get('/autotest/tag/get', { params }),
   createTag: (data = {}) => request.post('/autotest/tag/create', data),
@@ -120,7 +142,7 @@ export default {
   },
   /** Body：{ case_ids } —— 同步导出公共接口用例请求头与请求体为 xlsx（≤10），返回 blob；校验失败时返回 JSON */
   exportTestcasesXlsx: (data = {}) => axios.post(
-      `${import.meta.env.VITE_BASE_API}/autotest/case/export_datagram_sync`,
+      `${import.meta.env.VITE_BASE_API}/autotest/case/export_case_datagram_sync`,
       data,
       {
         responseType: 'blob',
@@ -128,10 +150,10 @@ export default {
       },
   ),
   /** Body：{ case_ids } —— 异步导出公共接口用例（>10），返回 { celery_task_id } */
-  exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_datagram_async', data),
+  exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_case_datagram_async', data),
   /** Body：{ case_ids } —— 同步导出公共接口脚本为模板xlsx（≤10），返回 blob；校验失败时返回 JSON */
   exportCaseScriptsXlsx: (data = {}) => axios.post(
-      `${import.meta.env.VITE_BASE_API}/autotest/case/export_script_sync`,
+      `${import.meta.env.VITE_BASE_API}/autotest/case/export_case_scripts_sync`,
       data,
       {
         responseType: 'blob',
@@ -139,9 +161,9 @@ export default {
       },
   ),
   /** Body：{ case_ids } —— 异步导出公共接口脚本（>10），返回 { celery_task_id } */
-  exportCaseScriptsAsync: (data = {}) => request.post('/autotest/case/export_script_async', data),
+  exportCaseScriptsAsync: (data = {}) => request.post('/autotest/case/export_case_scripts_async', data),
   /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增） */
-  importCaseScript: (formData) => request.post('/autotest/case/import_script', formData),
+  importCaseScript: (formData) => request.post('/autotest/case/import_case_scripts', formData),
   getAutoTestStepTree: (data = {}) => {
     const params = []
     if (data.case_id) params.push(`case_id=${data.case_id}`)
