@@ -567,7 +567,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         instance = await self.soft_delete(id=instance.id)
         # 同步硬删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
-        from applications.aotutest.services.autotest_data_source_crud import delete_step_create
+        from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
         await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
 
@@ -653,7 +653,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源与数据生成记录
         if deleted_by_case:
-            from applications.aotutest.services.autotest_data_source_crud import delete_step_create
+            from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
             for ds_case_id, step_codes in deleted_by_case.items():
                 await delete_step_create(case_id=ds_case_id, step_code_list=step_codes)
 
@@ -888,7 +888,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 # 复制来的步骤携带数据源时，同步复制为新步骤的独立数据源（仅复制解析数据，文件字段置空）
                 source_data_source_id = getattr(step_data, "data_source_id", None)
                 if source_data_source_id:
-                    from applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+                    from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
                     new_data_source_id: Optional[int] = None
                     try:
                         new_data_source_id = await AutoTestDataSourceCrud().copy_data_source_for_step(

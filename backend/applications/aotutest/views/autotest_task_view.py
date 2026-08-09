@@ -275,9 +275,9 @@ async def run_task(
         if task_id is None:
             return ParameterResponse(message="参数[task_id]不允许为空")
         await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
-        from celery_scheduler.tasks.task_autotest_case import run_autotest_task
-        from enums import AutoTestReportType
-        from services.ctx import get_current_username
+        from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
+        from backend.enums import AutoTestReportType
+        from backend.services.ctx import get_current_username
         # __task_id会随消息传到Worker，task_prerun从request.properties取出；
         # 只有传了__task_id，Worker端_create_task_record才会查任务表并写入record的task_id/task_name。
         # created_user 写入执行记录（Worker 无 HTTP 鉴权上下文）。

@@ -17,7 +17,7 @@ from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvSelect,
-    AutoTestApiEnvDelete
+    AutoTestApiEnvDelete, AutoTestApiEnvListQuery, AutoTestApiEnvConfigQueryByProjectsIn
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -269,3 +269,117 @@ async def search_environments(
     except Exception as e:
         LOGGER.error(f"根据条件查询环境失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@autotest_env.post("/query", summary="查询环境配置并分类", description="按id列表查询环境配置并分类返回")
+async def classify_environment_configs(
+        env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按应用ID列表查询环境配置并分类返回。
+
+    :param env_config_in: 含project_ids的查询入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        data = await services.env_config_curd.query_classified_by_project_ids(
+            project_ids=env_config_in.project_ids,
+        )
+        total_configs: int = sum(
+            len(names)
+            for envs in data.values()
+            for buckets in envs.values()
+            for names in buckets.values()
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total_configs)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_env.post("/list", summary="查询环境列表", description="按节点类型/应用聚合环境名称")
+async def list_environments(
+        env_in: AutoTestApiEnvListQuery = Body(..., description="查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按节点类型/应用聚合环境名称。
+
+    :param env_in: 可选应用ID列表
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        result_data = await services.env_enum_curd.get_envs(env_in.project_id)
+        return SuccessResponse(message="查询成功", data=result_data)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询环境列表失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败: {e}")
+
+
+@autotest_env.get("/page", summary="查询环境分页列表", description="按应用/环境/节点类型聚合后分页查询")
+async def search_environments(
+        project_id: Optional[int] = Query(None, description="应用ID", ge=1),
+        env_name: Optional[str] = Query(None, description="环境名称"),
+        env_type: Optional[int] = Query(None, description="节点类型"),
+        ip: Optional[str] = Query(None, description="IP地址"),
+        page: int = Query(1, description="页码", ge=1),
+        page_size: int = Query(10, description="每页条数", ge=1, le=100),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按应用/环境/节点类型聚合后分页查询。
+
+    :param project_id: 应用主键ID
+    :param env_name: 环境名称
+    :param env_type: 节点类型
+    :param ip: IP地址
+    :param page: 页码
+    :param page_size: 每页条数
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        total, data = await services.env_enum_curd.get_env_search_list(
+            project_id=project_id,
+            env_name=env_name,
+            env_type=env_type,
+            ip=ip,
+            page=page,
+            page_size=page_size,
+        )
+        return SuccessResponse(data=data, total=total, message="查询成功")
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询环境分页列表失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 错误描述: {e}")
+
+
+@autotest_env.get("/get_all_app", summary="查询全部应用", description="获取全部启用应用列表")
+async def get_all_apps(
+        page: int = Query(1, ge=1, description="页码"),
+        page_size: int = Query(10000, ge=1, description="每页条数"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    获取全部启用应用列表。
+
+    :param page: 页码
+    :param page_size: 每页条数
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        data, total = await services.project_curd.get_all_project(page, page_size)
+        LOGGER.info(f"获取所有应用成功, 结果明细: {total}")
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except Exception as e:
+        LOGGER.error(f"获取所有应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")

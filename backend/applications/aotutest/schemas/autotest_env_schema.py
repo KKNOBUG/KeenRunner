@@ -59,7 +59,7 @@ class AutoTestApiEnvSelect(AutoTestApiEnvBase):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
-class EnvListQuery(BaseModel):
+class AutoTestApiEnvListQuery(BaseModel):
     """按应用聚合查询环境名称列表入参。"""
 
     project_id: Optional[List[int]] = Field(None, description="应用ID列表，如 [999,998,997]")

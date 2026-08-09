@@ -150,7 +150,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         async with in_transaction():
             report_code = instance.report_code
-            from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
+            from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
             detail_crud = AutoTestApiDetailCrud()
             detail_ids = await detail_crud.model.filter(
                 report_code=report_code, state__not=1

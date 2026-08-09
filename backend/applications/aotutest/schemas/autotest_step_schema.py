@@ -330,7 +330,7 @@ class AutoTestApiStepVarBase(BaseModel):
 
 
 class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepRedisBase, AutoTestApiStepVarBase):
-    """步骤公共字段（创建/更新/树节点共用）。"""
+    """步骤公共字段。"""
 
     model_config = ConfigDict(extra="ignore")
 

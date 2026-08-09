@@ -14,20 +14,6 @@ from typing import Optional, Dict, Any, List, Tuple, Union
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo, AutoTestApiEnvConfigInfo
-from backend.applications.aotutest.schemas.autotest_env_schema import (
-    AutoTestApiEnvCreate,
-    AutoTestApiEnvUpdate,
-    AutoTestApiEnvDelete
-)
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
-    NotFoundException,
-    ParameterException,
-    DataBaseStorageException,
-)
-
 from backend.applications.aotutest.models.autotest_model import (
     AutoTestApiEnvEnumInfo,
     AutoTestApiEnvConfigInfo,
@@ -502,7 +488,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         """
         try:
             resolve_config_type(data.env_type)
-            from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+            from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
             await AutoTestApiProjectCrud().get_by_id(project_id=data.project_id, on_error=True, state__not=1)
 
             env_name = data.env_name.upper()
@@ -555,7 +541,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         """
         try:
             config_type = resolve_config_type(data.env_type)
-            from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+            from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
             await AutoTestApiProjectCrud().get_by_id(project_id=data.project_id, on_error=True, state__not=1)
 
             existing = await self.get_by_id(env_id=data.id, on_error=True, state__not=1)
@@ -590,7 +576,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
                 state=0,
             )
             if old_project_id != data.project_id or old_env_name != new_env_name or old_env_type != data.env_type:
-                from applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
+                from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
                 config_crud = AutoTestApiEnvConfigCrud()
                 config_update: Dict[str, Any] = {
                     "project_id": data.project_id,
@@ -632,7 +618,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
                     message=f"环境ID:{env_id}的节点类型为{existing.env_type}，与请求类型{env_type}不一致"
                 )
 
-            from applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
+            from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
             config_crud = AutoTestApiEnvConfigCrud()
             config_ids = await AutoTestApiEnvConfigInfo.filter(
                 env_id=env_id,
