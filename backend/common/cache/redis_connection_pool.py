@@ -8,26 +8,39 @@
 """
 import asyncio
 import shlex
-import traceback
 from typing import Any, Dict, List, Optional, Set, Type
 
-import orjson
 import redis.asyncio as aioredis
 from loguru import logger
 
 
 class RedisConnPoolFromConfig:
-    """基于自动化环境配置表的 Redis 连接管理器（单例）。"""
+    """
+    基于自动化环境配置表的Redis连接管理器（单例）。
+
+    连接与错误按四层键缓存：app_id -> env -> config_name -> db_name。
+    """
 
     __private_instance = None
     __private_initialized = False
 
     def __new__(cls, *args, **kwargs) -> object:
+        """
+        创建或返回单例实例。
+
+        :return: RedisConnPoolFromConfig单例
+        """
         if cls.__private_instance is None and cls.__private_initialized is False:
             cls.__private_instance = super().__new__(cls)
         return cls.__private_instance
 
     def __init__(self, config_model: Optional[Type], logger=logger):
+        """
+        初始化单例；重复构造时直接跳过。
+
+        :param config_model: Tortoise环境配置模型类
+        :param logger: 日志记录器，默认loguru.logger
+        """
         if self.__private_initialized:
             return
         super().__init__()
@@ -38,6 +51,11 @@ class RedisConnPoolFromConfig:
         self.errors: Dict[str, Dict[str, Dict[str, Dict[str, str]]]] = {}
 
     def _config_model_field_names(self) -> Set[str]:
+        """
+        读取config_model的Tortoise字段名集合。
+
+        :return: 字段名集合；模型无效时为空集合
+        """
         meta = getattr(self.config_model, "_meta", None)
         if not meta or not getattr(meta, "fields_map", None):
             return set()
@@ -50,6 +68,16 @@ class RedisConnPoolFromConfig:
             config_name: str,
             db_name: str,
     ) -> Optional[Dict[str, Any]]:
+        """
+        从环境配置表读取Redis连接参数。
+
+        :param app_id: 应用主键ID，对应project_id
+        :param env: 环境名称，忽略大小写匹配
+        :param config_name: 配置名称，忽略大小写匹配
+        :param db_name: Redis库序号或database_name
+        :return: 含host/port/username/password/db_index的字典；未找到时为None
+        :raises ValueError: 未提供config_model或模型字段无法识别
+        """
         if not self.config_model:
             raise ValueError("未提供ORM模型，请通过config_model参数传入")
 
@@ -67,17 +95,20 @@ class RedisConnPoolFromConfig:
             )
 
         try:
-            from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
-            from backend.enums import AutoTestConfigNodeType
+            from applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
+            from enums import AutoTestConfigNodeType
         except ImportError as e:
             self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
             return None
 
         env_row = await AutoTestApiEnvEnumInfo.filter(
+            project_id=app_id_int,
             env_name__iexact=env,
         ).filter(state__not=1).first()
         if not env_row:
-            self.logger.warning(f"未找到环境枚举 env_name(忽略大小写)={env!r}")
+            self.logger.warning(
+                f"未找到环境 project_id={app_id_int}, env_name(忽略大小写)={env!r}"
+            )
             return None
 
         qs = self.config_model.filter(
@@ -116,6 +147,15 @@ class RedisConnPoolFromConfig:
         }
 
     def _set_client(self, app_id: str, env: str, config_name: str, db_name: str, client: Any):
+        """
+        缓存已建立的Redis客户端。
+
+        :param app_id: 应用ID缓存键
+        :param env: 环境名称缓存键
+        :param config_name: 配置名称缓存键
+        :param db_name: 库序号缓存键
+        :param client: redis.asyncio客户端实例
+        """
         if app_id not in self.clients:
             self.clients[app_id] = {}
         if env not in self.clients[app_id]:
@@ -125,6 +165,15 @@ class RedisConnPoolFromConfig:
         self.clients[app_id][env][config_name][db_name] = client
 
     def _set_error(self, app_id: str, env: str, config_name: str, db_name: str, error_msg: str):
+        """
+        记录指定四层键下的连接错误信息。
+
+        :param app_id: 应用ID缓存键
+        :param env: 环境名称缓存键
+        :param config_name: 配置名称缓存键
+        :param db_name: 库序号缓存键
+        :param error_msg: 错误描述
+        """
         if app_id not in self.errors:
             self.errors[app_id] = {}
         if env not in self.errors[app_id]:
@@ -134,18 +183,48 @@ class RedisConnPoolFromConfig:
         self.errors[app_id][env][config_name][db_name] = error_msg
 
     def _clear_error(self, app_id: str, env: str, config_name: str, db_name: str):
+        """
+        清除指定四层键下的连接错误信息。
+
+        :param app_id: 应用ID缓存键
+        :param env: 环境名称缓存键
+        :param config_name: 配置名称缓存键
+        :param db_name: 库序号缓存键
+        """
         try:
             del self.errors[app_id][env][config_name][db_name]
         except KeyError:
             pass
 
     def _get_client(self, app_id: str, env: str, config_name: str, db_name: str) -> Optional[Any]:
+        """
+        按四层键获取已缓存的Redis客户端。
+
+        :param app_id: 应用ID缓存键
+        :param env: 环境名称缓存键
+        :param config_name: 配置名称缓存键
+        :param db_name: 库序号缓存键
+        :return: 客户端实例；未缓存时为None
+        """
         try:
             return self.clients[app_id][env][config_name][db_name]
         except KeyError:
             return None
 
     async def connection(self, app_id: str, env: str, config_name: str, db_name: str, max_retries: int = 3) -> bool:
+        """
+        创建并缓存Redis连接；已存在同键连接时直接返回False。
+
+        :param app_id: 应用主键ID
+        :param env: 环境名称
+        :param config_name: 配置名称
+        :param db_name: Redis库序号，缺省按0处理
+        :param max_retries: 建连失败时的最大重试次数
+        :return: 新创建连接为True；连接已存在为False
+        :raises ValueError: app_id/env/config_name为空
+        :raises Exception: 配置缺失或字段不完整
+        :raises ConnectionError: 重试耗尽后仍无法连接
+        """
         if not all([app_id, env, config_name]):
             err_msg = "应用ID、环境、配置名称均不能为空"
             self.logger.error(err_msg)
@@ -204,6 +283,16 @@ class RedisConnPoolFromConfig:
         return False
 
     async def get_or_create_client(self, app_id: str, env: str, config_name: str, db_name: str) -> Any:
+        """
+        获取已缓存客户端；不存在时先建连再返回。
+
+        :param app_id: 应用主键ID
+        :param env: 环境名称
+        :param config_name: 配置名称
+        :param db_name: Redis库序号，缺省按0处理
+        :return: redis.asyncio客户端实例
+        :raises ConnectionError: 建连失败或缓存中仍无客户端
+        """
         app_id_key = app_id.strip()
         env_clean = env.lower().strip()
         config_clean = config_name.lower().strip()
@@ -223,6 +312,12 @@ class RedisConnPoolFromConfig:
 
     @staticmethod
     def parse_redis_commands(expr: str) -> List[List[str]]:
+        """
+        将多行Redis命令文本解析为参数列表。
+
+        :param expr: 命令文本，支持#注释行与shlex分词
+        :return: 每条命令的参数列表，如[["GET", "key"]]
+        """
         commands: List[List[str]] = []
         for raw_line in (expr or "").splitlines():
             line = raw_line.strip()
@@ -238,6 +333,12 @@ class RedisConnPoolFromConfig:
 
     @staticmethod
     def _normalize_result(value: Any) -> Any:
+        """
+        将Redis返回值规范化为可JSON序列化结构。
+
+        :param value: 原始返回值
+        :return: 规范化后的标量、列表或字典
+        """
         if value is None or isinstance(value, (bool, int, float, str)):
             return value
         if isinstance(value, bytes):
@@ -249,6 +350,14 @@ class RedisConnPoolFromConfig:
         return str(value)
 
     async def execute_commands(self, client: Any, expr: str) -> Dict[str, Any]:
+        """
+        在指定客户端上顺序执行多条Redis命令。
+
+        :param client: redis.asyncio客户端实例
+        :param expr: 多行命令文本
+        :return: 含redis_data与redis_count的结果字典
+        :raises ValueError: 客户端为空或命令文本为空
+        """
         if not client:
             raise ValueError("缺少Redis连接对象，请检查")
         commands = self.parse_redis_commands(expr)
@@ -272,6 +381,11 @@ class RedisConnPoolFromConfig:
 
 
 def get_app_redis_pool() -> "RedisConnPoolFromConfig":
+    """
+    获取绑定AutoTestApiEnvConfigInfo的Redis连接管理单例。
+
+    :return: RedisConnPoolFromConfig实例
+    """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
 
     return RedisConnPoolFromConfig(config_model=AutoTestApiEnvConfigInfo)

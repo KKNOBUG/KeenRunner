@@ -94,8 +94,6 @@ class RequestSyncUtils:
                 "response_object": response,    # `requests` 的响应对象
                 "response_json": Any            # 解析后的 JSON 数据，如果解析失败则为错误信息字符串
             }
-        :raises ValueError: 如果请求方式不被允许或请求过程中出现错误
-        :raises requests.exceptions.HTTPError: 如果服务器返回的HTTP状态码不是200
         """
 
         # 1.检查请求方式是否被允许
@@ -145,8 +143,6 @@ class RequestSyncUtils:
         :param json: 发送到服务器的JSON数据，用于判断请求数据类型
         :param headers: 请求头信息，可以是字典或JSON字符串
         :return: 处理后的请求头字典
-        :raises TypeError: 如果headers参数类型不正确
-        :raises ValueError: 如果headers字符串无法转换为字典
         """
         # 1.检查headers类型是否符合预定义类型
         if not isinstance(headers, (type(None), dict, str)):

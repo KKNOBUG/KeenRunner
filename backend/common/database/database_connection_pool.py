@@ -212,7 +212,6 @@ class DBConnPoolFromConfig:
         :param config_name: 配置名称
         :param database_name: 数据库名
         :return: 含 host/port/username/password/database_name/db_type 的字典；未找到为None
-        :raises ValueError: 未注入模型，或字段形态无法识别
         """
         if not self.config_model:
             raise ValueError("未提供ORM模型，请通过config_model参数传入")
@@ -348,8 +347,6 @@ class DBConnPoolFromConfig:
         :param database_name: 数据库名
         :param max_retries: 建池失败重试次数
         :return: 新建成功为True；池已存在为False
-        :raises ValueError: 参数为空、配置缺失或不支持的数据库类型
-        :raises ConnectionError: 重试耗尽仍无法建池
         """
         if not all([project_id, env_name, config_name, database_name]):
             error_message: str = "应用ID、环境、配置名称、数据库名称均不能为空"
@@ -466,9 +463,6 @@ class DBConnPoolFromConfig:
         :param sql: SQL 语句
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": 查询行或影响统计, "sql_count": 影响/返回行数}
-        :raises ValueError: 连接池或SQL为空
-        :raises TypeError: 不支持的连接池类型
-        :raises RuntimeError: SQL 执行失败
         """
         if not pool:
             raise ValueError("缺少数据库池连接对象，请检查")
@@ -495,7 +489,6 @@ class DBConnPoolFromConfig:
         :param sql: SQL 语句
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": ..., "sql_count": int}
-        :raises RuntimeError: 执行失败
         """
         async with pool.acquire() as connection:
             try:
@@ -539,7 +532,6 @@ class DBConnPoolFromConfig:
         :param sql: SQL 语句
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": ..., "sql_count": int}
-        :raises RuntimeError: 执行失败
         """
 
         def _run_oracle_sql():
@@ -592,11 +584,10 @@ class DBConnPoolFromConfig:
     @staticmethod
     def serialize_db_value(obj: Any) -> Any:
         """
-        orjson default 回调：序列化 Decimal/日期时间/bytes 等数据库字段。
+        orjson default回调：序列化Decimal/日期时间/bytes等数据库字段。
 
         :param obj: 待序列化对象
-        :return: 可被 orjson 处理的基础类型
-        :raises TypeError: 无法序列化的类型
+        :return: 可被orjson处理的基础类型
         """
         if isinstance(obj, Decimal):
             return str(obj)
@@ -673,7 +664,6 @@ class DBConnPoolFromConfig:
         :param config_name: 配置名称
         :param database_name: 数据库名
         :return: 连接池对象
-        :raises ConnectionError: 创建失败
         """
         project_id_key, env_key, config_key, db_key = self._normalize_pool_keys(
             project_id, env_name, config_name, database_name

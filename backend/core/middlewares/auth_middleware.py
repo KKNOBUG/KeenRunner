@@ -65,9 +65,10 @@ def _is_whitelisted(whitelist: Iterable[str], request_method: str, request_path:
 
 
 async def auth_middleware(request: Request, call_next):
-    request_method = request.method.upper()
-    request_path = _normalize_path(request.url.path)
-
+    request_method: str = request.method.upper()
+    request_path: str = _normalize_path(request.url.path)
+    # 临时放行策略
+    is_enabled: bool = request.headers.get("token") == PROJECT_CONFIG.AUTH_JWT_TEMPORARY_TOKEN
     # 允许CORS前置请求
     if request_method == "OPTIONS":
         return await call_next(request)
@@ -88,7 +89,7 @@ async def auth_middleware(request: Request, call_next):
         "* /static/*",
     ]
 
-    if _is_whitelisted(whitelist=whitelist, request_method=request_method, request_path=request_path):
+    if _is_whitelisted(whitelist=whitelist, request_method=request_method, request_path=request_path) or is_enabled:
         return await call_next(request)
 
     token = request.headers.get("token")

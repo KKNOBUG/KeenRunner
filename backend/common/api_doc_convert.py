@@ -6,20 +6,33 @@
 @Module  : api_doc_convert.py
 @DateTime: 2025/4/7 15:44
 """
-from typing import List
+from typing import List, Optional, Any, Dict, Union
 from xml.etree import ElementTree as ET
 
 
 class APIDocConvert:
+    """
+    将Excel风格的接口字段表转换为树结构，并生成JSON或XML报文骨架。
+
+    STRUCT/ARRAY同名二次出现视为闭合标记；ARRAY下叶子字段挂到隐式STRUCT子节点。
+    """
+
     def __init__(self, *args, **kwargs):
+        """
+        初始化转换器。
+
+        :param args: 保留位置参数
+        :param kwargs: 保留关键字参数
+        """
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def parse_excel_data(cls, excel_rows: List[tuple]):
+    def parse_excel_data(cls, excel_rows: List[tuple]) -> dict:
         """
-        解析excel数据，识别Struct/Array的开始和结束标记，返回结构化数据
-        :param excel_rows:
-        :return:
+        将Excel行列表解析为嵌套字段树。
+
+        :param excel_rows: 行元组列表，项为(en_name, zh_name, field_type, length)
+        :return: 根节点字典，含type/name/children等键
         """
         root: dict = {}
         stack: list = []
@@ -71,12 +84,13 @@ class APIDocConvert:
                     })
         return root
 
-    def build_json(self, node, is_root=True):
+    def build_json(self, node: dict, is_root: bool = True) -> Union[Dict[str, Any], List[Any], str]:
         """
-        递归构建json
-        :param node:
-        :param is_root:
-        :return:
+        根据字段树生成JSON报文骨架，叶子值使用length字段。
+
+        :param node: 字段树节点
+        :param is_root: 是否为根节点，根节点外层包裹节点名
+        :return: 字典、列表或空字符串
         """
         if node["type"] == "STRUCT":
             result = {}
@@ -93,12 +107,13 @@ class APIDocConvert:
         else:
             return ""
 
-    def build_xml(self, node, parent=None):
+    def build_xml(self, node: dict, parent: Optional[ET.Element] = None) -> Optional[ET.Element]:
         """
-        递归构建xml
-        :param node:
-        :param parent:
-        :return:
+        根据字段树生成XML报文骨架，叶子文本使用length字段。
+
+        :param node: 字段树节点
+        :param parent: 父Element；为None时创建根节点并返回
+        :return: 根Element；挂到parent时返回None
         """
         if parent is None:
             root = ET.Element(node["name"])
@@ -116,6 +131,7 @@ class APIDocConvert:
                     ET.SubElement(array_elem, child["name"]).text = child["length"]
         else:
             ET.SubElement(parent, node["name"]).text = node["length"]
+
 
 if __name__ == '__main__':
     excel_data = [
@@ -164,11 +180,23 @@ if __name__ == '__main__':
 
 
     def generate_random_string(length):
+        """
+        生成指定长度的随机字母数字串。
+
+        :param length: 字符串长度
+        :return: 随机字符串
+        """
         characters = string.ascii_letters + string.digits
         return ''.join(random.choice(characters) for i in range(length))
 
 
     def generate_message(data_structure):
+        """
+        按JSON骨架中的length生成随机报文样例。
+
+        :param data_structure: build_json产出的嵌套字典
+        :return: 填充随机值后的报文字典
+        """
         message = {}
         for key, value in data_structure.items():
             if isinstance(value, dict):

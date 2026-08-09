@@ -11,31 +11,19 @@ from xml.etree import ElementTree
 
 class XPathUtils:
     """
-    利用 XPath 对 XML 数据进行增删改查工具类。
+    利用XPath对XML数据进行增删改查的工具类。
 
-    1. 执行 XPath 新增并返回结果；
-    2. 执行 XPath 删除并返回结果；
-    3. 执行 XPath 更新并返回结果；
-    4. 执行 XPath 查询并返回结果。
-
-    约定：
-    - XPath 表达式遵循 ElementTree 支持的有限 XPath 语法；
-    - 多匹配时默认操作最后一个匹配元素，与提取侧 "response xml" 分支保持一致；
-      如需精确指定请使用索引，如 ``.//item[1]``；
-    - 未匹配到元素时，``update`` 不修改原数据并返回原字符串；``query`` 返回 ``None``；
-      ``delete`` 不修改原数据并返回原字符串；``add`` 沿路径创建元素。
-    - 默认命名空间（xmlns=...）下，无前缀路径如 ``./Head/SvcCd`` 会自动根据
-      ``./{*}Head/{*}SvcCd`` 回退匹配；无命名空间的 XML 仍优先走原始路径。
+    表达式遵循ElementTree有限XPath语法；多匹配时默认操作最后一个元素；
+    默认命名空间下无前缀路径会自动按{*}回退匹配。
     """
 
     @staticmethod
     def _parse(xml_data: Union[str, ElementTree.Element]) -> ElementTree.Element:
         """
-        将 XML 字符串或元素解析为 ElementTree 元素。
+        将XML字符串或元素解析为ElementTree元素。
 
-        :param xml_data: XML 字符串或 ElementTree 元素。
-        :return: ElementTree 元素。
-        :raises ValueError: 输入为无效 XML 字符串时抛出。
+        :param xml_data: XML字符串或ElementTree元素
+        :return: ElementTree元素
         """
         if isinstance(xml_data, str):
             return ElementTree.fromstring(xml_data.encode("utf-8"))
@@ -43,14 +31,25 @@ class XPathUtils:
 
     @staticmethod
     def _local_name(tag: str) -> str:
-        """取元素标签本地名（去掉 Clark 命名空间）。"""
+        """
+        取元素标签本地名，去掉Clark命名空间前缀。
+
+        :param tag: 元素标签
+        :return: 本地标签名
+        """
         if tag and "}" in tag:
             return tag.rsplit("}", 1)[-1]
         return tag or ""
 
     @staticmethod
     def _tag_in_parent_ns(parent: ElementTree.Element, local_name: str) -> str:
-        """根据父节点命名空间生成子标签；父无命名空间则返回本地名。"""
+        """
+        根据父节点命名空间生成子标签；父无命名空间则返回本地名。
+
+        :param parent: 父元素
+        :param local_name: 子元素本地名
+        :return: 带或不带命名空间的标签名
+        """
         parent_tag = parent.tag or ""
         if "}" in parent_tag:
             ns = parent_tag.split("}", 1)[0][1:]
@@ -60,10 +59,10 @@ class XPathUtils:
     @classmethod
     def _rewrite_segment_ns_agnostic(cls, segment: str) -> str:
         """
-        将单个路径段中的无前缀元素名改写为 ``{*}Name``。
+        将单个路径段中的无前缀元素名改写为{*}Name形式。
 
-        保留 ``.`` / ``..`` / ``*`` / 属性 ``@...`` / 已含 ``{...}`` 的 Clark 名；
-        ``prefix:local`` 仅保留 local 再加 ``{*}``。
+        :param segment: XPath路径段
+        :return: 改写后的路径段
         """
         if not segment or segment in (".", "..", "*"):
             return segment
@@ -85,9 +84,10 @@ class XPathUtils:
     @classmethod
     def namespace_agnostic_xpath(cls, xpath: str) -> str:
         """
-        将无命名空间前缀的 XPath 改写为 ElementTree 可匹配任意命名空间的形式。
+        将无命名空间前缀的XPath改写为可匹配任意命名空间的形式。
 
-        例：``./Head/SvcCd`` → ``./{*}Head/{*}SvcCd``；已含 ``{`` 的表达式原样返回。
+        :param xpath: 原始XPath表达式，如./Head/SvcCd
+        :return: 改写后表达式，如./{*}Head/{*}SvcCd；已含Clark名时原样返回
         """
         if not xpath or "{" in xpath:
             return xpath
@@ -113,10 +113,11 @@ class XPathUtils:
     @classmethod
     def findall(cls, root: ElementTree.Element, xpath: str) -> List[ElementTree.Element]:
         """
-        命名空间兼容的 ``findall``。
+        命名空间兼容的findall，先原路径再{*}回退匹配。
 
-        先根据原表达式匹配；无结果且表达式可改写时，再根据 ``{*}`` 通配命名空间匹配。
-        这样无 xmlns 的报文与带默认命名空间的报文都能用 ``./Head/SvcCd`` 这类路径。
+        :param root: 搜索根元素
+        :param xpath: XPath表达式
+        :return: 匹配到的元素列表
         """
         if not xpath:
             return []
@@ -136,7 +137,13 @@ class XPathUtils:
 
     @classmethod
     def find_child(cls, parent: ElementTree.Element, name: str) -> Optional[ElementTree.Element]:
-        """在直接子节点中根据本地名查找（兼容有/无命名空间）。"""
+        """
+        在直接子节点中根据本地名查找，兼容有无命名空间。
+
+        :param parent: 父元素
+        :param name: 子元素名或本地名
+        :return: 匹配子元素；未找到时为None
+        """
         if not name:
             return None
         child = parent.find(name)
@@ -160,11 +167,11 @@ class XPathUtils:
             target: ElementTree.Element,
     ) -> Optional[ElementTree.Element]:
         """
-        在 root 子树中查找 target 的直接父元素。
+        在root子树中查找target的直接父元素。
 
-        :param root: 搜索起点元素。
-        :param target: 目标子元素。
-        :return: 目标元素的父元素；根节点本身或未找到时返回 None。
+        :param root: 搜索起点元素
+        :param target: 目标子元素
+        :return: 父元素；根节点本身或未找到时为None
         """
         for elem in root.iter():
             for child in elem:
@@ -181,20 +188,15 @@ class XPathUtils:
             tag: Optional[str] = None,
     ) -> str:
         """
-        执行 XPath 新增并返回 XML 字符串。
+        按XPath新增节点并返回XML字符串。
 
-        行为（与 ``JSONPathUtils.add`` 对齐）：
-        1. XPath 存在且定位元素有同名子元素列表 → 末尾追加同名子元素（对应 JSON list.append）；
-        2. XPath 存在且定位元素为父容器（有不同名子元素）→ 创建 ``<tag>value</tag>`` 子元素（对应 dict[key]=value）；
-        3. XPath 存在且定位元素为叶子（仅 text）→ 追加同名兄弟元素（对应 str -> [str, value]）；
-        4. XPath 不存在 → 沿路径逐级创建元素，末级写入 value（对应 JSON 创建路径）。
+        路径存在时按末匹配元素追加子节点或同名兄弟；路径不存在时沿路径逐级创建。
 
-        :param xml_data: 待新增的 XML 字符串或 ElementTree 元素。
-        :param xpath: XPath 表达式，定位目标父元素或路径。
-        :param value: 新数据；会被转换为字符串写入新元素 text。
-        :param tag: 新子元素标签名；不提供时根据上述规则推导。
-        :return: 新增后的 XML 字符串。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
+        :param xml_data: 待修改的XML字符串或ElementTree元素
+        :param xpath: XPath表达式，定位目标父元素或路径
+        :param value: 新数据，写入新元素text
+        :param tag: 新子元素标签名；不提供时按规则推导
+        :return: 新增后的XML字符串
         """
         if not xpath:
             if isinstance(xml_data, str):
@@ -245,15 +247,14 @@ class XPathUtils:
             tag: Optional[str] = None,
     ) -> None:
         """
-        沿 xpath 逐级创建元素，末级写入 value。
+        沿xpath逐级创建元素，末级写入value。
 
-        仅支持以 ``/`` 分隔的简单路径（如 ``./a/b/c`` 或 ``a/b/c``）；
-        含 ``//``、谓词等复杂语法的路径不创建，直接忽略。
+        仅支持以/分隔的简单路径；含//或谓词的复杂路径不创建。
 
-        :param root: 根元素，原地修改。
-        :param xpath: XPath 表达式。
-        :param value: 末级写入值。
-        :param tag: 末级新增子元素标签名；不提供时设置末级元素 text。
+        :param root: 根元素，原地修改
+        :param xpath: XPath表达式
+        :param value: 末级写入值
+        :param tag: 末级新增子元素标签名；不提供时设置末级元素text
         """
         path = xpath.strip()
         if path.startswith("./"):
@@ -294,14 +295,11 @@ class XPathUtils:
             xpath: str,
     ) -> str:
         """
-        执行 XPath 删除并返回 XML 字符串。
+        按XPath删除匹配节点并返回XML字符串。
 
-        删除所有匹配元素（从其父元素中移除）；未匹配到时返回原字符串。
-
-        :param xml_data: 待删除的 XML 字符串或 ElementTree 元素。
-        :param xpath: XPath 表达式。
-        :return: 删除后的 XML 字符串。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
+        :param xml_data: 待修改的XML字符串或ElementTree元素
+        :param xpath: XPath表达式
+        :return: 删除后的XML字符串；未匹配时返回原内容
         """
         if not xpath:
             if isinstance(xml_data, str):
@@ -330,15 +328,12 @@ class XPathUtils:
             value: Any,
     ) -> str:
         """
-        执行 XPath 更新并返回 XML 字符串。
+        按XPath更新匹配节点文本并返回XML字符串。
 
-        匹配到多个元素时，仅更新最后一个；未匹配到时返回原字符串。
-
-        :param xml_data: 待更新的 XML 字符串或 ElementTree 元素。
-        :param xpath: XPath 表达式。
-        :param value: 新值；会被转换为字符串写入匹配元素的 text。
-        :return: 更新后的 XML 字符串。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
+        :param xml_data: 待修改的XML字符串或ElementTree元素
+        :param xpath: XPath表达式；多匹配时仅更新最后一个
+        :param value: 新值，写入匹配元素的text
+        :return: 更新后的XML字符串；未匹配时返回原内容
         """
         if not xpath:
             if isinstance(xml_data, str):
@@ -363,15 +358,11 @@ class XPathUtils:
             xpath: str,
     ) -> Optional[Any]:
         """
-        执行 XPath 查询并返回结果。
+        按XPath查询并返回匹配结果。
 
-        匹配到多个元素时，仅返回最后一个元素的 text；若该元素无 text 则返回该元素的
-        XML 字符串。未匹配到时返回 ``None``。
-
-        :param xml_data: 待查询的 XML 字符串或 ElementTree 元素。
-        :param xpath: XPath 表达式。
-        :return: 最后一个匹配元素的 text 或 XML 字符串；未匹配到时返回 ``None``。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
+        :param xml_data: 待查询的XML字符串或ElementTree元素
+        :param xpath: XPath表达式；多匹配时仅取最后一个
+        :return: 匹配元素的text或XML字符串；未匹配时为None
         """
         if not xpath:
             return None
@@ -588,7 +579,6 @@ if __name__ == '__main__':
     # print("[37] 空XPath返回原数据: 空字符串")
     # print(XPathUtils.delete(mock_xml, ""))
     # print("-" * 100)
-
 
     mock_xml2 = """<BOSFXIII xmlns="http://www.bankofshanghai.com/BOSFX/2017/07">
     <Head>

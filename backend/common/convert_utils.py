@@ -26,7 +26,6 @@ class Convert:
         :param decimal_str: 十进制时间戳（微秒）。
         :param fmt: 格式化类型，默认为10。
         :return: 格式化后的日期时间字符串。
-        :raises TypeError: 如果输入参数类型不正确。
         """
         if not isinstance(decimal_str, int):
             try:
@@ -47,7 +46,6 @@ class Convert:
         :param datetime_str: 日期时间字符串。
         :param fmt: 格式化类型，默认为10。
         :return: 十进制时间戳（微秒）。
-        :raises ValueError: 如果输入的日期时间字符串格式不正确。
         """
         datetime_value = datetime.strptime(datetime_str, cls.FORMATTER[fmt])
         timestamp_microseconds = int((datetime_value - datetime(year=1970, month=1, day=1)).total_seconds() * 1_000_000)

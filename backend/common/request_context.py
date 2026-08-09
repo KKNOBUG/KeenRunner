@@ -5,10 +5,6 @@
 @Project : Krun
 @Module  : request_context.py
 @DateTime: 2026/5/29
-
-轻量分布式追踪：X-Trace-ID + X-Span-ID + X-Parent-Span-ID。
-- TraceID：仅来自请求头 X-Trace-ID，未传则由后端留空（日志为 -）
-- SpanID：每个入站 HTTP、Celery 任务由服务端分配，经 X-Span-ID 回传/下发
 """
 from __future__ import annotations
 
@@ -32,17 +28,29 @@ _PARENT_SPAN_ID: ContextVar[str] = ContextVar("parent_span_id", default="")
 
 @dataclass(frozen=True)
 class TraceSnapshot:
+    """当前请求的追踪快照。"""
+
     trace_id: str
     span_id: str
     parent_span_id: str = ""
 
 
 def new_span_id() -> str:
-    """生成 SpanID（16 位 hex，与 OpenTelemetry span_id 长度一致）。"""
+    """
+    生成SpanID，16位hex，与OpenTelemetry span_id长度一致。
+
+    :return: 16位十六进制字符串
+    """
     return uuid.uuid4().hex[:16]
 
 
 def _sync_celery_local(trace_id: str, span_id: str) -> None:
+    """
+    将trace_id与span_id同步到Celery线程本地上下文。
+
+    :param trace_id: 追踪ID
+    :param span_id: 当前SpanID
+    """
     try:
         from backend.celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
 
@@ -53,6 +61,11 @@ def _sync_celery_local(trace_id: str, span_id: str) -> None:
 
 
 def get_trace_id() -> str:
+    """
+    获取当前上下文的TraceID，缺失时回落Celery本地或占位符。
+
+    :return: TraceID字符串；无值时为-
+    """
     tid = _TRACE_ID.get()
     if tid:
         return tid
@@ -68,6 +81,11 @@ def get_trace_id() -> str:
 
 
 def get_span_id() -> str:
+    """
+    获取当前上下文的SpanID，缺失时回落Celery本地或占位符。
+
+    :return: SpanID字符串；无值时为-
+    """
     sid = _SPAN_ID.get()
     if sid:
         return sid
@@ -83,10 +101,20 @@ def get_span_id() -> str:
 
 
 def get_parent_span_id() -> str:
+    """
+    获取当前上下文的ParentSpanID。
+
+    :return: ParentSpanID；无值时为空字符串
+    """
     return _PARENT_SPAN_ID.get() or ""
 
 
 def get_trace_snapshot() -> TraceSnapshot:
+    """
+    组装当前追踪快照。
+
+    :return: TraceSnapshot实例
+    """
     return TraceSnapshot(
         trace_id=get_trace_id(),
         span_id=get_span_id(),
@@ -99,7 +127,14 @@ def bind_trace_context(
         span_id: str,
         parent_span_id: str = "",
 ) -> Tuple[Token, Token, Token]:
-    """绑定 Trace/Span 到当前上下文，返回用于 reset 的 token 元组。"""
+    """
+    绑定Trace与Span到当前上下文，并同步Celery本地变量。
+
+    :param trace_id: 追踪ID
+    :param span_id: 当前SpanID
+    :param parent_span_id: 父SpanID
+    :return: 用于reset的ContextVar token元组
+    """
     _sync_celery_local(trace_id, span_id)
     return (
         _TRACE_ID.set(trace_id or ""),
@@ -109,6 +144,11 @@ def bind_trace_context(
 
 
 def clear_trace_context(tokens: Tuple[Token, Token, Token]) -> None:
+    """
+    按token恢复绑定前的追踪上下文。
+
+    :param tokens: bind_trace_context返回的token元组
+    """
     trace_t, span_t, parent_t = tokens
     _TRACE_ID.reset(trace_t)
     _SPAN_ID.reset(span_t)
@@ -116,15 +156,33 @@ def clear_trace_context(tokens: Tuple[Token, Token, Token]) -> None:
 
 
 def _header_value(request: Request, name: str) -> str:
+    """
+    读取请求头并截断到128字符。
+
+    :param request: Starlette请求对象
+    :param name: 请求头名称
+    :return: 去空白后的头值；缺失时为空字符串
+    """
     return (request.headers.get(name) or "").strip()[:128]
 
 
 def _incoming_trace_id(request: Request) -> str:
-    """仅解析 X-Trace-ID，未传则返回空字符串。"""
+    """
+    解析入站X-Trace-ID；未传时返回空字符串。
+
+    :param request: Starlette请求对象
+    :return: TraceID或空字符串
+    """
     return _header_value(request, HEADER_TRACE_ID)
 
 
 def _incoming_parent_span_id(request: Request) -> str:
+    """
+    解析入站父Span，优先X-Parent-Span-ID，其次X-Span-ID。
+
+    :param request: Starlette请求对象
+    :return: ParentSpanID或空字符串
+    """
     parent = _header_value(request, HEADER_PARENT_SPAN_ID)
     if not parent:
         parent = _header_value(request, HEADER_SPAN_ID)
@@ -132,7 +190,12 @@ def _incoming_parent_span_id(request: Request) -> str:
 
 
 def enter_server_span(request: Request) -> Tuple[TraceSnapshot, Tuple[Token, Token, Token]]:
-    """为当前入站 HTTP 分配 SpanID；TraceID 仅使用客户端传入的 X-Trace-ID。"""
+    """
+    为入站HTTP分配SpanID，TraceID仅使用客户端传入的X-Trace-ID。
+
+    :param request: Starlette请求对象
+    :return: (TraceSnapshot, bind_trace_context的token元组)
+    """
     trace_id = _incoming_trace_id(request)
     parent_span_id = _incoming_parent_span_id(request)
     span_id = new_span_id()
@@ -146,9 +209,14 @@ def enter_celery_span(
         span_id: str = "",
 ) -> Tuple[TraceSnapshot, Tuple[Token, Token, Token]]:
     """
-    Celery Worker 绑定追踪上下文。
-    - 消息头含 span_id 时复用（HTTP 直连下发）
-    - 否则为本任务新建 SpanID
+    在Celery Worker中绑定追踪上下文。
+
+    消息头含span_id时复用；否则为本任务新建SpanID。
+
+    :param trace_id: 追踪ID
+    :param parent_span_id: 父SpanID
+    :param span_id: 可复用的SpanID；为空则新建
+    :return: (TraceSnapshot, bind_trace_context的token元组)
     """
     tid = (trace_id or "").strip()
     sid = (span_id or "").strip() or new_span_id()
@@ -158,6 +226,11 @@ def enter_celery_span(
 
 
 def _is_inside_celery_worker() -> bool:
+    """
+    判断当前是否处于Celery任务执行上下文。
+
+    :return: 在Worker任务内为True，否则为False
+    """
     try:
         from celery._state import get_current_task
 
@@ -168,9 +241,11 @@ def _is_inside_celery_worker() -> bool:
 
 def celery_dispatch_trace_headers() -> Dict[str, str]:
     """
-    下发 Celery 时写入消息头追踪字段。
-    - HTTP 上下文：透传 trace_id（若有）与当前 span_id（子任务复用同一 Span）
-    - Celery 内再下发：仅透传 trace_id 与 parent_span_id，子任务新建 Span
+    组装下发Celery消息头中的追踪字段。
+
+    HTTP上下文透传trace_id与当前span_id；Worker内再下发时透传trace_id与parent_span_id。
+
+    :return: 可写入Celery headers的字典
     """
     headers: Dict[str, str] = {}
     trace_id = get_trace_id()
@@ -187,6 +262,12 @@ def celery_dispatch_trace_headers() -> Dict[str, str]:
 
 
 def _extract_celery_trace_fields(request_dict: Mapping[str, Any]) -> Tuple[str, str, str]:
+    """
+    从Celery请求字典或其嵌套headers中提取追踪字段。
+
+    :param request_dict: Celery任务请求相关字典
+    :return: (trace_id, span_id, parent_span_id)
+    """
     trace_id = (request_dict.get("trace_id") or "").strip()
     span_id = (request_dict.get("span_id") or "").strip()
     parent_span_id = (request_dict.get("parent_span_id") or "").strip()
@@ -201,6 +282,12 @@ def _extract_celery_trace_fields(request_dict: Mapping[str, Any]) -> Tuple[str, 
 
 
 def apply_response_trace_headers(headers: MutableMapping[str, str], snapshot: TraceSnapshot) -> None:
+    """
+    将追踪快照写入HTTP响应头。
+
+    :param headers: 可变响应头映射
+    :param snapshot: 当前TraceSnapshot
+    """
     if snapshot.trace_id:
         headers[HEADER_TRACE_ID] = snapshot.trace_id
     if snapshot.span_id and snapshot.span_id != _MISSING:
@@ -213,7 +300,10 @@ def propagate_trace_headers(
         headers: Optional[Union[Mapping[str, Any], MutableMapping[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
-    出站 HTTP：有 TraceID 时透传 X-Trace-ID，当前 Span 作为 X-Parent-Span-ID。
+    为出站HTTP组装追踪头，透传X-Trace-ID并将当前Span写入X-Parent-Span-ID。
+
+    :param headers: 已有请求头；为空时从空字典开始
+    :return: 合并追踪字段后的请求头字典
     """
     out: Dict[str, Any] = dict(headers or {})
     trace_id = get_trace_id()
@@ -222,6 +312,7 @@ def propagate_trace_headers(
         return out
 
     def _has(name: str) -> bool:
+        """判断输出头中是否已存在同名键（忽略大小写）。"""
         lower = name.lower()
         return any(k.lower() == lower for k in out)
 

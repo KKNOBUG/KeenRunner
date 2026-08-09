@@ -22,18 +22,17 @@ from backend.core.exceptions import ReqInvalidException, ResInvalidException
 
 class TcpFrameMode(str, Enum):
     """
-    TCP 收发帧格式(短连接AioTcpClient.exchange/长连接AsyncTcpConnection, 均可能用到子集)。
+    TCP 收发帧格式；短连接与长连接均可使用（长连接默认 LENGTH_PREFIX_JSON）。
 
-    - LENGTH_PREFIX_JSON: 长度前缀 + 正文(正文通常为JSON或文本)
-    - RAW: 无长度前缀, 仅用于短连接 RAW 模式下的原始收发
-    LENGTH_PREFIX_JSON（默认）
-    发送：先写固定宽度的十进制长度字符串（例如 8 位："00000123"），再写正文（通常是JSON/文本的字节）
-    接收：先读同样宽度的长度字段，解析出整数N，再读恰好N字节作为正文
-    适用：需要“先知道后面有多少字节”的协议；也是长连接AsyncTcpConnection.send/receive默认采用的那套
-    RAW
-    发送：只发正文，不加长度前缀。
-    接收：从流里一直读到对端关闭连接（或读超时），拼成完整响应。
-    适用：对端协议是“发完数据就关连接”，或者响应长度无法从协议里预先得知、只能靠EOF结束；不适合“连接保持、连续多帧”的场景（因为读EOF会阻塞到对端关闭）。
+    LENGTH_PREFIX_JSON（默认）：
+        - 发送：先写固定宽度十进制长度字符串（如 8 位 ``00000123``），再写正文。
+        - 接收：先读同样宽度的长度字段解析出 N，再读恰好 N 字节正文。
+        - 适用：需预先知道正文长度的协议；支持连接保持下的连续多帧。
+
+    RAW：
+        - 发送：只发正文，不加长度前缀。
+        - 接收：读至对端关闭连接（或读超时），拼成完整响应。
+        - 适用：对端「发完即关」或只能靠 EOF 界定响应；不适合长连接连续多帧。
     """
 
     LENGTH_PREFIX_JSON = "length_prefix_json"
@@ -42,18 +41,18 @@ class TcpFrameMode(str, Enum):
 
 class AsyncTcpUtils:
     """
-    异步 TCP 请求统一调度工具类构造(短连接)。
+    异步 TCP 短连接统一调度工具；由 ``AioTcpClient.tcp`` 构造，支持链式取响应。
 
-    :param client: 请求客户端；必填选项；AioTcpClient 实例
-    :param host: 字符类型；必填选项；TCP 服务主机地址
-    :param port: 整数类型；必填选项；TCP 服务端口
-    :param data: 发送数据；非必填项；str/bytes/dict/None
-    :param frame_mode: 帧协议；非必填项；默认 LENGTH_PREFIX_JSON
-    :param length_field_size: 整数类型；非必填项；长度前缀宽度(位数), 默认使用 client.length_field_size
-    :param encoding: 字符类型；非必填项；文本编码(默认 utf-8)
-    :param connect_timeout: 时间类型；非必填项；连接超时, 默认使用 client.connect_timeout
-    :param read_timeout: 时间类型；非必填项；读写超时, 默认使用 client.default_timeout
-    :param kwargs: 其他关键字参数, 预留扩展
+    :param client: AioTcpClient 实例
+    :param host: TCP 服务主机地址
+    :param port: TCP 服务端口
+    :param data: 发送数据（str / bytes / dict / None）
+    :param frame_mode: 帧协议，默认 LENGTH_PREFIX_JSON
+    :param length_field_size: 长度前缀宽度（位数）；缺省取 client.length_field_size
+    :param encoding: 文本编码，默认 utf-8
+    :param connect_timeout: 连接超时；缺省取 client.connect_timeout
+    :param read_timeout: 读写超时；缺省取 client.default_timeout
+    :param kwargs: 预留扩展关键字参数
     """
 
     def __init__(
@@ -83,10 +82,10 @@ class AsyncTcpUtils:
 
     async def execute(self) -> bytes:
         """
-        TCP请求统一调度方法, 执行TCP收发并返回响应字节。
+        执行一次 TCP 收发，返回响应正文字节。
 
-        :return: 响应体字节(若协议包含长度前缀, 已在内部剥离)
-        :raises ReqInvalidException: 当连接、发送、接收或协议解析发生异常时抛出
+        :return: 响应体字节（若协议含长度前缀，已在内部剥离）
+        :raises ReqInvalidException: 连接、读写或底层发送失败
         """
         try:
             return await self.client.exchange(
@@ -107,11 +106,11 @@ class AsyncTcpUtils:
 
     async def json_resp(self) -> Any:
         """
-        获取响应的JSON数据。
+        收发并将响应解析为 JSON。
 
-        :return: 解析后的JSON对象；空响应返回None
-        :raises ReqInvalidException: 当TCP请求失败时抛出
-        :raises ResInvalidException: 当响应体不是合法JSON或解析失败时抛出
+        :return: 解析后的 JSON 对象；空响应返回 None
+        :raises ReqInvalidException: 请求侧失败
+        :raises ResInvalidException: 响应无法按 JSON 解析
         """
         try:
             raw = await self.execute()
@@ -127,11 +126,11 @@ class AsyncTcpUtils:
 
     async def text_resp(self) -> str:
         """
-        获取响应的文本数据。
+        收发并将响应按编码解码为文本。
 
         :return: 解码后的文本字符串
-        :raises ReqInvalidException: 当 TCP 请求失败时抛出
-        :raises ResInvalidException: 当解码失败或处理异常时抛出
+        :raises ReqInvalidException: 请求侧失败
+        :raises ResInvalidException: 解码失败
         """
         try:
             raw = await self.execute()
@@ -145,11 +144,11 @@ class AsyncTcpUtils:
 
     async def bytes_resp(self) -> bytes:
         """
-        获取响应的字节数据。
+        收发并返回原始响应字节。
 
         :return: 响应体字节
-        :raises ReqInvalidException: 当TCP请求失败时抛出
-        :raises ResInvalidException: 当处理异常时抛出
+        :raises ReqInvalidException: 请求侧失败
+        :raises ResInvalidException: 读取异常
         """
         try:
             return await self.execute()
@@ -160,11 +159,11 @@ class AsyncTcpUtils:
 
     async def xml_resp(self) -> Optional[str]:
         """
-        获取响应的XML文本, 并格式化后返回。
+        收发并将响应解析为格式化 XML 文本。
 
-        :return: 格式化后的 XML 字符串；空响应返回None
-        :raises ReqInvalidException: 当TCP请求失败时抛出
-        :raises ResInvalidException: 当响应体不是合法XML或解析失败时抛出
+        :return: pretty-print 后的 XML 字符串；空响应返回 None
+        :raises ReqInvalidException: 请求侧失败
+        :raises ResInvalidException: XML 语法或解析异常
         """
         try:
             raw = await self.execute()
@@ -194,7 +193,9 @@ class AsyncTcpUtils:
 
 class AioTcpClient:
     """
-    构造异步TCP客户端(联合AsyncTcpUtils的统一调度特性, 实现支持链式调用)。
+    异步 TCP 短连接客户端；与 AsyncTcpUtils 配合实现 ``tcp(...).json_resp()`` 链式调用。
+
+    每次 ``exchange`` / 链式调用均为独立建连、收发后关闭；多次交互请用 AsyncTcpConnection。
     """
 
     def __init__(
@@ -208,12 +209,12 @@ class AioTcpClient:
             **kwargs: Any,
     ):
         """
-        :param timeout: 时间类型；非必填项；默认读写超时时间
-        :param connect_timeout: 时间类型；非必填项；默认连接超时时间
-        :param length_field_size: 整数类型；非必填项；长度前缀宽度(位数), 默认8
-        :param concurrency_limit: 整数类型；非必填项；并发连接限制, 默认50
-        :param max_response_bytes: 整数类型；非必填项；最大响应体字节数限制, 默认 10MB
-        :param kwargs: 其他关键字参数, 预留扩展
+        :param timeout: 默认读写超时
+        :param connect_timeout: 默认连接超时；缺省与 timeout 相同
+        :param length_field_size: 长度前缀宽度（位数），默认 8
+        :param concurrency_limit: 并发连接上限，默认 50
+        :param max_response_bytes: 单次响应正文最大字节数，默认 10MB
+        :param kwargs: 预留扩展关键字参数
         """
         self.default_timeout = timeout
         self.connect_timeout = connect_timeout or timeout
@@ -224,14 +225,18 @@ class AioTcpClient:
         self.kwargs = kwargs
 
     async def __aenter__(self) -> "AioTcpClient":
+        """异步上下文进入，返回自身。"""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """异步上下文退出；短连接客户端无额外资源释放。"""
         return None
 
     async def close(self) -> None:
         """
-        关闭当前请求会话(TCP短连接模式下为保持与HTTP客户端一致的接口, 默认无操作)。
+        关闭会话接口（与 HTTP 客户端形态对齐）。
+
+        短连接模式下无持久会话，默认空操作。
         """
         return None
 
@@ -249,18 +254,18 @@ class AioTcpClient:
             **kwargs: Any,
     ) -> AsyncTcpUtils:
         """
-        发起TCP请求(返回AsyncTcpUtils实例, 用于链式调用获取响应)。
+        构造一次 TCP 请求调度对象，供链式调用取响应。
 
         :param host: 目标主机
         :param port: 目标端口
         :param data: 发送内容
-        :param frame_mode: 帧协议, 见TcpFrameMode
-        :param length_field_size: 长度前缀宽度(位数)
+        :param frame_mode: 帧协议，见 TcpFrameMode
+        :param length_field_size: 长度前缀宽度（位数）；缺省用客户端默认值
         :param encoding: 文本编码
         :param connect_timeout: 连接超时
         :param read_timeout: 读写超时
-        :param kwargs: 其他关键字参数
-        :return: AsyncTcpUtils实例
+        :param kwargs: 透传至 exchange 的预留参数
+        :return: AsyncTcpUtils 实例
         """
         return AsyncTcpUtils(
             self,
@@ -277,6 +282,13 @@ class AioTcpClient:
 
     @staticmethod
     def _encode_body(data: Union[str, bytes, dict, None], encoding: str) -> bytes:
+        """
+        将发送数据规范为字节正文。
+
+        :param data: 原始发送数据；None 视为空正文
+        :param encoding: 字符串编码
+        :return: 正文字节（dict 经 orjson 序列化）
+        """
         if data is None:
             return b""
         if isinstance(data, bytes):
@@ -292,6 +304,16 @@ class AioTcpClient:
             length_field_size: int,
             encoding: str,
     ) -> bytes:
+        """
+        按帧模式组装待发送报文。
+
+        :param data: 发送数据
+        :param frame_mode: 帧协议
+        :param length_field_size: 长度前缀宽度（位数）
+        :param encoding: 文本编码
+        :return: 完整待发送字节（含可选长度前缀）
+        :raises ReqInvalidException: 未知帧模式
+        """
         body = self._encode_body(data, encoding)
         if frame_mode == TcpFrameMode.LENGTH_PREFIX_JSON:
             prefix = str(len(body)).zfill(length_field_size).encode(encoding)
@@ -301,6 +323,15 @@ class AioTcpClient:
         raise ReqInvalidException(message=f"不被允许的TcpFrameMode枚举: {frame_mode}")
 
     async def _read_until_eof(self, reader: asyncio.StreamReader, read_timeout: float, max_bytes: int) -> bytes:
+        """
+        RAW 模式下读至对端关闭（EOF）或超时。
+
+        :param reader: 流读取器
+        :param read_timeout: 单次 read 超时秒数
+        :param max_bytes: 累计可读上限
+        :return: 拼接后的响应字节
+        :raises ReqInvalidException: 超出 max_bytes 或读超时等
+        """
         total = 0
         chunks: List[bytes] = []
         while True:
@@ -327,10 +358,19 @@ class AioTcpClient:
             **kwargs: Any,
     ) -> bytes:
         """
-        内部请求实现: 建立连接、发送数据、接收响应并返回(短连接)
+        短连接收发：建连、发送、按帧模式接收、关闭连接。
 
-        :return: 响应体字节。
-        :raises ReqInvalidException: 当连接/读写/协议解析异常时抛出
+        :param host: 目标主机
+        :param port: 目标端口
+        :param data: 发送数据
+        :param frame_mode: 帧协议
+        :param length_field_size: 长度前缀宽度（位数）
+        :param encoding: 文本编码
+        :param connect_timeout: 连接超时；缺省用客户端默认
+        :param read_timeout: 读写超时；缺省用客户端默认
+        :param kwargs: 预留扩展（当前忽略）
+        :return: 响应正文字节（不含长度前缀）
+        :raises ReqInvalidException: 连接失败、超时、长度非法、响应过大等
         """
         del kwargs  # 预留扩展(如local_addr/ssl等)
         conn_timeout = (connect_timeout or self.connect_timeout).total_seconds()
@@ -388,17 +428,17 @@ class AioTcpClient:
 
 class AsyncTcpConnection:
     """
-    长连接TCP封装: 在同一条TCP连接上多次发送/接收。
+    长连接 TCP 封装：同一条连接上多次发送/接收（发送与接收均按长度前缀帧）。
 
     :param host: TCP 服务主机地址
     :param port: TCP 服务端口
-    :param length_field_size: 长度前缀宽度(位数)
-    :param retries: 自动重连次数(auto_reconnect=True时生效)
-    :param buffer_size: 预留参数
-    :param auto_reconnect: 是否自动重连
-    :param timeout: 连接与读写的默认超时时间
+    :param length_field_size: 长度前缀宽度（位数）
+    :param retries: 自动重连剩余次数（auto_reconnect=True 时生效）
+    :param buffer_size: 预留缓冲区参数
+    :param auto_reconnect: 是否在断连或超时后自动重连
+    :param timeout: 连接与读写默认超时
     :param encoding: 文本编码
-    :param max_response_bytes: 最大响应体字节数限制
+    :param max_response_bytes: 单次响应正文最大字节数
     """
 
     def __init__(
@@ -428,16 +468,28 @@ class AsyncTcpConnection:
         self.connected: bool = False
 
     async def __aenter__(self) -> "AsyncTcpConnection":
+        """进入上下文时建立连接。"""
         await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """退出上下文时关闭连接。"""
         await self.close()
 
     async def connect(self) -> None:
+        """
+        建立到目标主机的 TCP 连接。
+
+        :raises ReqInvalidException: 连接失败或超时且无法重连
+        """
         await self._connection()
 
     async def _connection(self) -> None:
+        """
+        实际建连；超时且开启自动重连时转入 ``_reconnection``。
+
+        :raises ReqInvalidException: 连接失败或超时
+        """
         try:
             self.reader, self.writer = await asyncio.wait_for(
                 asyncio.open_connection(host=self.host, port=self.port),
@@ -453,6 +505,11 @@ class AsyncTcpConnection:
             raise ReqInvalidException(message=f"TCP服务连接失败({self.host}:{self.port}): {e}")
 
     async def _reconnection(self) -> None:
+        """
+        消耗一次重试额度后随机退避并重新建连。
+
+        :raises ReqInvalidException: 重试次数耗尽
+        """
         self.retries -= 1
         if self.retries < 0:
             raise ReqInvalidException(message=f"TCP服务自动重连次数已用尽({self.host}:{self.port})")
@@ -460,6 +517,12 @@ class AsyncTcpConnection:
         await self._connection()
 
     async def send(self, data: Union[str, bytes, dict]) -> None:
+        """
+        按长度前缀帧发送一帧数据。
+
+        :param data: 发送内容（str / bytes / dict）
+        :raises ReqInvalidException: 未连接且无法重连
+        """
         body = AioTcpClient._encode_body(data, self.encoding)
         length_str = str(len(body)).zfill(self.length_field_size)
         packet = length_str.encode(self.encoding) + body
@@ -476,6 +539,11 @@ class AsyncTcpConnection:
         raise ReqInvalidException(message="TCP服务暂未连接, 无法发送请求")
 
     async def receive_headers(self) -> Dict[str, str]:
+        """
+        按行读取类 HTTP 头直至空行（可选能力，非长度前缀协议必需）。
+
+        :return: 头字段字典；未连接且无法重连时返回空字典
+        """
         headers: Dict[str, str] = {}
         if not (self.reader and self.connected):
             if self.auto_reconnect:
@@ -495,6 +563,12 @@ class AsyncTcpConnection:
         return headers
 
     async def receive(self) -> Any:
+        """
+        按长度前缀帧读取一帧；优先尝试 JSON 解析，失败则返回文本。
+
+        :return: JSON 对象或文本字符串
+        :raises ReqInvalidException: 未连接、超时、长度非法或响应过大
+        """
         if not (self.reader and self.connected):
             if self.auto_reconnect:
                 await self._reconnection()
@@ -527,6 +601,7 @@ class AsyncTcpConnection:
             return text
 
     async def close(self) -> None:
+        """关闭写端并清理连接状态。"""
         try:
             if self.writer and self.connected:
                 self.writer.close()
@@ -546,9 +621,18 @@ async def tcp_json(
         **kwargs: Any,
 ) -> Any:
     """
-    【短连接】便捷函数: 等价于AioTcpClient().tcp(...).json_resp()。
+    短连接便捷函数：等价于 ``AioTcpClient().tcp(...).json_resp()``。
 
-    内部仍为一次建连、收发后关闭；若需多次交互请改用AsyncTcpConnection。
+    内部仍为一次建连、收发后关闭；多次交互请使用 AsyncTcpConnection。
+
+    :param host: 目标主机
+    :param port: 目标端口
+    :param data: JSON 请求体（dict）
+    :param client: 可选复用的 AioTcpClient；未传则临时创建并在 finally 中 close
+    :param kwargs: 透传至 ``tcp``（如 frame_mode / encoding / 超时等）
+    :return: 解析后的 JSON 响应
+    :raises ReqInvalidException: 请求侧失败
+    :raises ResInvalidException: 响应非合法 JSON
     """
     own = client is None
     cli = client or AioTcpClient()
