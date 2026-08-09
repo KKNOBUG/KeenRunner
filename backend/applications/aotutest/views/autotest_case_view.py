@@ -6,10 +6,11 @@
 @Module  : autotest_case_view.py
 @DateTime: 2025/4/28
 """
+import asyncio
 import os
 import tempfile
 import traceback
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set, Tuple
 
 from fastapi import APIRouter, Body, Query, Depends, UploadFile, File
 from starlette.background import BackgroundTask
@@ -50,7 +51,7 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse
 )
-from backend.enums import AutoTestReportType
+from backend.enums import AutoTestReportType, AutoTestStepType, AutoTestCaseType
 from backend.services import get_current_username
 
 autotest_case = APIRouter()

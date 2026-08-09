@@ -17,6 +17,15 @@ from backend.applications.aotutest.dependencies import AutoTestApiServices, get_
 from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigSelect,
     AutoTestEnvConfigQueryByProjectsIn,
+    APPEnvConfigCreate,
+    FILEEnvConfigCreate,
+    DBEnvConfigCreate,
+    RedisEnvConfigCreate,
+    APPEnvConfigUpdate,
+    FILEEnvConfigUpdate,
+    DBEnvConfigUpdate,
+    EnvConfigDelete,
+    TestDBConnectionRequest,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (

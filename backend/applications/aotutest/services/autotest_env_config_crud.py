@@ -7,30 +7,45 @@
 @DateTime: 2026/4/16 10:51
 """
 import traceback
-from types import SimpleNamespace
-from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime
+from typing import Optional, Dict, Any, List, Tuple, Union
 
-from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
+from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
+from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo, AutoTestApiEnvEnumInfo
 from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
-    AutoTestApiConfigDelete
+    AutoTestApiConfigDelete,
+    APPEnvConfigCreate,
+    FILEEnvConfigCreate,
+    DBEnvConfigCreate,
+    RedisEnvConfigCreate,
+    APPEnvConfigUpdate,
+    FILEEnvConfigUpdate,
+    DBEnvConfigUpdate,
+    EnvConfigDelete,
 )
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
+from backend.applications.aotutest.schemas.autotest_env_schema import AutoTestApiEnvCreate
+from backend.applications.aotutest.services.autotest_env_crud import (
+    AutoTestApiEnvEnumCrud,
+    CONFIG_TYPE_TO_ENV_TYPE,
+    enum_field_value,
+    format_datetime,
+    resolve_config_type,
+)
 from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.common.database.database_connection_pool import get_app_database_pool
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
-    DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestConfigNodeType
+from backend.enums import AutoTestConfigNodeType, AutoTestDataBaseType
 
 
 class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiConfigCreate, AutoTestApiConfigUpdate]):
@@ -534,7 +549,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param config_in: 入参对象
         :return: 大写用户名（最多16位）
         """
-        from services.ctx import get_current_username
+        from backend.services.ctx import get_current_username
         username = get_current_username()
         if username:
             return username
