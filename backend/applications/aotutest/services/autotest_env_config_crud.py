@@ -289,7 +289,7 @@ class AutoTestApiEnvConfigCrud(
         按应用ID列表查询未删除配置并分类。
 
         :param project_ids: 应用ID列表
-        :return: project_id -> env_name -> APP|FILE|DB|REDIS -> config_name -> 主机信息
+        :return: project_id -> env_name -> api|file|database|redis -> config_name -> 主机信息
         """
         if not project_ids:
             error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
@@ -301,14 +301,8 @@ class AutoTestApiEnvConfigCrud(
             project_id: {}
             for project_id in distinct_project_ids
         }
-        # 响应桶标签与get_envs约定一致（展示名APP/FILE/DB/REDIS，非协议值）
-        config_type_to_label = {
-            AutoTestConfigNodeType.API: "APP",
-            AutoTestConfigNodeType.FILE: "FILE",
-            AutoTestConfigNodeType.DB: "DB",
-            AutoTestConfigNodeType.REDIS: "REDIS",
-        }
-        empty_type_buckets: Dict[str, Dict[str, Any]] = {label: {} for label in config_type_to_label.values()}
+        allowed_types = set(AutoTestConfigNodeType.get_values())
+        empty_type_buckets = {t: {} for t in allowed_types}
 
         env_config_instances: List[AutoTestApiEnvConfigInfo] = await self.model.filter(
             project_id__in=distinct_project_ids,
@@ -332,19 +326,19 @@ class AutoTestApiEnvConfigCrud(
                 )
                 continue
 
-            type_label: Optional[str] = config_type_to_label.get(cfg_instance.config_type)
-            if not type_label:
+            config_type = str(cfg_instance.config_type)
+            if config_type not in allowed_types:
                 LOGGER.warning(
-                    f"跳过未知配置类型: project_id={project_id}, env={env_name}, config_type={cfg_instance.config_type}"
+                    f"跳过未知配置类型: project_id={project_id}, env={env_name}, config_type={config_type}"
                 )
                 continue
 
             if env_name not in classified_config_result[project_id]:
                 classified_config_result[project_id][env_name] = {
-                    label: {} for label in empty_type_buckets
+                    t: {} for t in empty_type_buckets
                 }
 
-            classified_config_result[project_id][env_name][type_label][cfg_instance.config_name] = {
+            classified_config_result[project_id][env_name][config_type][cfg_instance.config_name] = {
                 "config_host": cfg_instance.config_host,
                 "config_port": cfg_instance.config_port,
                 "database_name": cfg_instance.database_name,
@@ -551,17 +545,12 @@ class AutoTestApiEnvConfigCrud(
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名称
-        :return: {code, status, message, data}
+        :return: 连接成功时的摘要信息
         """
         try:
             project_id_int = int(str(project_id).strip())
-        except (TypeError, ValueError):
-            return {
-                "code": "999999",
-                "status": "failure",
-                "message": "配置表未找到对应记录，请检查",
-                "data": None,
-            }
+        except (TypeError, ValueError) as e:
+            raise ParameterException(message="应用ID不合法") from e
 
         env_row = await AutoTestApiEnvCrud().get_bind_by_env_name(
             project_id=project_id_int,
@@ -569,12 +558,7 @@ class AutoTestApiEnvConfigCrud(
             env_type=AutoTestConfigNodeType.DB,
         )
         if not env_row:
-            return {
-                "code": "999999",
-                "status": "failure",
-                "message": "配置表未找到对应记录，请检查",
-                "data": None,
-            }
+            raise NotFoundException(message="配置表未找到对应记录，请检查")
 
         config = await self.model.filter(
             id=config_id,
@@ -586,12 +570,7 @@ class AutoTestApiEnvConfigCrud(
             state=0,
         ).first()
         if not config:
-            return {
-                "code": "999999",
-                "status": "failure",
-                "message": "配置表未找到对应记录，请检查",
-                "data": None,
-            }
+            raise NotFoundException(message="配置表未找到对应记录，请检查")
 
         try:
             await get_app_database_pool().create_pool(
@@ -600,22 +579,14 @@ class AutoTestApiEnvConfigCrud(
                 config_name=config_name,
                 database_name=database_name,
             )
-            return {
-                "code": "000000",
-                "status": "success",
-                "message": "数据库连接成功",
-                "data": {
-                    "config_id": config_id,
-                    "database_type": config.database_type,
-                    "config_host": config.config_host,
-                    "config_port": config.config_port,
-                },
-            }
         except Exception as e:
-            LOGGER.error(f"创建连接池失败: {e}\n{traceback.format_exc()}")
-            return {
-                "code": "999999",
-                "status": "failure",
-                "message": f"创建连接池失败：{str(e)}",
-                "data": None,
-            }
+            error_message = f"创建连接池失败：{e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataBaseStorageException(message=error_message) from e
+
+        return {
+            "config_id": config_id,
+            "database_type": config.database_type,
+            "config_host": config.config_host,
+            "config_port": config.config_port,
+        }

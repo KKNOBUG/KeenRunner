@@ -534,18 +534,20 @@ async def test_db_connection(
     :return: 统一HTTP响应
     """
     try:
-        return await services.env_config_curd.test_db_connection(
+        data = await services.env_config_curd.test_db_connection(
             config_id=config_in.config_id,
             project_id=config_in.project_id,
             env_name=config_in.env_name,
             config_name=config_in.config_name,
             database_name=config_in.database_name,
         )
+        return SuccessResponse(message="数据库连接成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"测试数据库连接失败: {e}\n{traceback.format_exc()}")
-        return {
-            "code": "999999",
-            "status": "failure",
-            "message": f"测试数据库连接失败：{e}",
-            "data": None,
-        }
+        return FailureResponse(message=f"测试数据库连接失败：{e}")

@@ -450,15 +450,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         按节点类型聚合环境名称（读环境绑定表并联字典）。
 
         :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用
-        :return: {APP/FILE/DB/REDIS: [...]} 或 {project_id: {APP/FILE/DB/REDIS: [...]}}
+        :return: {api/file/database/redis: [...]} 或 {project_id: {api/file/database/redis: [...]}}
         """
         try:
-            config_type_to_label = {
-                AutoTestConfigNodeType.API: "APP",
-                AutoTestConfigNodeType.FILE: "FILE",
-                AutoTestConfigNodeType.DB: "DB",
-                AutoTestConfigNodeType.REDIS: "REDIS",
-            }
+            allowed_types = set(AutoTestConfigNodeType.get_values())
             base_qs = self.model.filter(state=0)
 
             if project_id is None:
@@ -466,10 +461,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 name_map = await self._get_dict_name_map({row["env_id"] for row in rows})
                 env_map: Dict[str, set] = defaultdict(set)
                 for row in rows:
-                    label = config_type_to_label.get(row["env_type"])
+                    env_type = row["env_type"]
                     name = name_map.get(row["env_id"])
-                    if label and name:
-                        env_map[label].add(name)
+                    if env_type in allowed_types and name:
+                        env_map[str(env_type)].add(name)
                 return {et: sorted(names) for et, names in env_map.items()}
 
             unique_pids: Optional[List[int]] = None
@@ -484,10 +479,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             name_map = await self._get_dict_name_map({row["env_id"] for row in rows})
             grouped: Dict[int, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
             for row in rows:
-                label = config_type_to_label.get(row["env_type"])
+                env_type = row["env_type"]
                 name = name_map.get(row["env_id"])
-                if label and name:
-                    grouped[row["project_id"]][label].add(name)
+                if env_type in allowed_types and name:
+                    grouped[row["project_id"]][str(env_type)].add(name)
 
             result: Dict[int, Dict[str, List[str]]] = {}
             target_pids = unique_pids if unique_pids is not None else sorted(grouped.keys())

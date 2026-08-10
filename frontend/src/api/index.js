@@ -97,21 +97,21 @@ export default {
 
   // 环境配置（子表，按节点类型拆分）
   getEnvConfig: (params = {}) => request.get('/autotest/config/get', { params }),
-  /** 新增 APP 配置。Body: APPEnvConfigCreate */
+  /** 新增 API 类型配置。Body: APPEnvConfigCreate */
   createAppEnvConfig: (data = {}) => request.post('/autotest/config/app/create', data),
-  /** 新增 FILE 配置。Body: FILEEnvConfigCreate */
+  /** 新增 FILE 类型配置。Body: FILEEnvConfigCreate */
   createFileEnvConfig: (data = {}) => request.post('/autotest/config/file/create', data),
-  /** 新增 DB 配置。Body: DBEnvConfigCreate */
+  /** 新增 DB 类型配置。Body: DBEnvConfigCreate */
   createDbEnvConfig: (data = {}) => request.post('/autotest/config/database/create', data),
-  /** 新增 Redis 配置。Body: RedisEnvConfigCreate */
+  /** 新增 Redis 类型配置。Body: RedisEnvConfigCreate */
   createRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/create', data),
-  /** 更新 APP 配置。Body: APPEnvConfigUpdate */
+  /** 更新 API 类型配置。Body: APPEnvConfigUpdate */
   updateAppEnvConfig: (data = {}) => request.post('/autotest/config/app/update', data),
-  /** 更新 FILE 配置。Body: FILEEnvConfigUpdate */
+  /** 更新 FILE 类型配置。Body: FILEEnvConfigUpdate */
   updateFileEnvConfig: (data = {}) => request.post('/autotest/config/file/update', data),
-  /** 更新 DB 配置。Body: DBEnvConfigUpdate */
+  /** 更新 DB 类型配置。Body: DBEnvConfigUpdate */
   updateDbEnvConfig: (data = {}) => request.post('/autotest/config/database/update', data),
-  /** 更新 Redis 配置。Body: RedisEnvConfigUpdate */
+  /** 更新 Redis 类型配置。Body: RedisEnvConfigUpdate */
   updateRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/update', data),
   /** 删除子表配置（单条）。Body: { config_id, config_type(api|file|database|redis), updated_user? } */
   deleteEnvConfig: (data = {}) => request.post('/autotest/config/delete', data),
@@ -121,7 +121,7 @@ export default {
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
   /** Query: project_id、env_id、config_type(api|database|redis|file) 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
-  /** Body: { project_ids: number[] } -> project_id -> env_name -> APP|FILE|DB|REDIS -> config_name -> {config_host,...} */
+  /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/config/query', data),
   /** 数据库连通性测试。Body: { config_id, project_id, env_name, config_name, database_name } */
   testDbConnection: (data = {}) => request.post('/autotest/config/database/test_connection', data),

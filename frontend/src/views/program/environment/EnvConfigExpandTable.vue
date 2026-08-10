@@ -106,13 +106,10 @@ async function testConfig(row) {
       config_name: row.config_name,
       database_name: row.database_name,
     })
-    if (res?.code === '000000' && res?.status === 'success') {
-      window.$message?.success?.(res?.message || '连接成功')
-    } else {
-      window.$message?.error?.(res?.message || '连接失败')
-    }
+    window.$message?.success?.(res?.message || '连接成功')
   } catch (e) {
-    window.$message?.error?.(`连接失败：${e?.message || e}`)
+    // 失败提示由请求拦截器统一处理；此处仅兜底无message场景
+    if (!e?.message) window.$message?.error?.('连接失败')
   }
 }
 

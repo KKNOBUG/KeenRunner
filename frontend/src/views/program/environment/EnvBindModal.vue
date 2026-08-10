@@ -29,7 +29,7 @@
             v-model:value="form.env_type"
             :options="ENV_TYPE_OPTIONS"
             :disabled="isEdit"
-            placeholder="APP / FILE / DB / REDIS"
+            placeholder="API / FILE / DB / REDIS"
         />
       </NFormItem>
       <NFormItem

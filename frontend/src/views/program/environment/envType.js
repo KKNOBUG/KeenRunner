@@ -1,6 +1,6 @@
 /**
  * 环境节点类型：与后端 AutoTestConfigNodeType 对齐。
- * UI 展示用 APP/FILE/DB/REDIS，协议值用 api/file/database/redis。
+ * 协议值：api/file/database/redis。
  */
 export const ENV_TYPE = {
   API: 'api',
@@ -10,14 +10,14 @@ export const ENV_TYPE = {
 }
 
 export const ENV_TYPE_OPTIONS = [
-  { label: 'APP', value: ENV_TYPE.API },
+  { label: 'API', value: ENV_TYPE.API },
   { label: 'FILE', value: ENV_TYPE.FILE },
   { label: 'DB', value: ENV_TYPE.DB },
   { label: 'REDIS', value: ENV_TYPE.REDIS },
 ]
 
 export const ENV_TYPE_LABEL = {
-  [ENV_TYPE.API]: 'APP',
+  [ENV_TYPE.API]: 'API',
   [ENV_TYPE.FILE]: 'FILE',
   [ENV_TYPE.DB]: 'DB',
   [ENV_TYPE.REDIS]: 'REDIS',
@@ -30,6 +30,7 @@ export const ENV_TYPE_TAG = {
   [ENV_TYPE.REDIS]: 'error',
 }
 
+/** 路由路径中的 app 段对应 API 类型配置，非枚举值 */
 export const CREATE_CONFIG_PERM = {
   [ENV_TYPE.API]: '/autotest/config/app/create',
   [ENV_TYPE.FILE]: '/autotest/config/file/create',
