@@ -21,10 +21,7 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiEnvConfigTypedDelete,
 )
 from backend.applications.aotutest.schemas.autotest_env_schema import AutoTestApiEnvCreate
-from backend.applications.aotutest.services.autotest_env_crud import (
-    AutoTestApiEnvCrud,
-    format_datetime,
-)
+from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvCrud
 from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.common.database.database_connection_pool import get_app_database_pool
@@ -38,9 +35,7 @@ from backend.core.exceptions import (
 from backend.enums import AutoTestConfigNodeType
 
 
-class AutoTestApiEnvConfigCrud(
-    ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiEnvConfigCreate, AutoTestApiEnvConfigUpdate]
-):
+class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiEnvConfigCreate, AutoTestApiEnvConfigUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestApiEnvConfigInfo)
@@ -370,7 +365,7 @@ class AutoTestApiEnvConfigCrud(
         return sorted(set(names))
 
     @staticmethod
-    def serialize_config(instance: AutoTestApiEnvConfigInfo, env_name: str = "") -> Dict[str, Any]:
+    async def serialize_config(instance: AutoTestApiEnvConfigInfo, env_name: str = "") -> Dict[str, Any]:
         """
         按表字段序列化配置，并附带env_name便于前端展示。
 
@@ -378,28 +373,12 @@ class AutoTestApiEnvConfigCrud(
         :param env_name: 环境名称
         :return: 与表字段对齐的响应字典
         """
-        return {
-            "config_id": instance.id,
-            "env_id": instance.env_id,
-            "project_id": instance.project_id,
-            "config_name": instance.config_name,
-            "config_desc": instance.config_desc,
-            "config_type": instance.config_type,
-            "config_code": instance.config_code,
-            "config_host": instance.config_host,
-            "config_port": instance.config_port,
-            "config_username": instance.config_username,
-            "config_password": instance.config_password,
-            "database_name": instance.database_name,
-            "database_type": instance.database_type,
-            "is_no_password": instance.is_no_password,
-            "env_name": env_name,
-            "state": instance.state,
-            "created_user": instance.created_user,
-            "updated_user": instance.updated_user,
-            "created_time": format_datetime(instance.created_time),
-            "updated_time": format_datetime(instance.updated_time),
-        }
+        data = await instance.to_dict(
+            exclude_fields={"reserve_1", "reserve_2", "reserve_3"},
+            replace_fields={"id": "config_id"},
+        )
+        data["env_name"] = env_name
+        return data
 
     async def _get_or_create_env_bind(
             self,
@@ -520,7 +499,10 @@ class AutoTestApiEnvConfigCrud(
             instances = await query.offset((page - 1) * page_size).limit(page_size).all()
             env_ids = list({obj.env_id for obj in instances})
             env_name_map = await AutoTestApiEnvCrud().get_env_name_map(env_ids)
-            result = [self.serialize_config(obj, env_name_map.get(obj.env_id, "")) for obj in instances]
+            result = [
+                await self.serialize_config(obj, env_name_map.get(obj.env_id, ""))
+                for obj in instances
+            ]
             return total, result
         except ParameterException:
             raise

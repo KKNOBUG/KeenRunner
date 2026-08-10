@@ -53,7 +53,7 @@ async def _serialize_config_response(services: AutoTestApiServices, instance, en
     if env_name is None:
         env_name_map = await services.env_curd.get_env_name_map([instance.env_id])
         env_name = env_name_map.get(instance.env_id, "")
-    return services.env_config_curd.serialize_config(instance, env_name)
+    return await services.env_config_curd.serialize_config(instance, env_name)
 
 
 @autotest_env_config.post("/app/create", summary="新增APP类型环境配置", description="新增APP类型环境配置信息")

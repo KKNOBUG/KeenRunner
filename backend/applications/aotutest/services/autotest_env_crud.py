@@ -27,23 +27,13 @@ from backend.applications.aotutest.schemas.autotest_env_schema import (
 )
 from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
+from backend.configure import GLOBAL_CONFIG, LOGGER
 from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
 )
 from backend.enums import AutoTestConfigNodeType
-
-
-def format_datetime(value: Any) -> Optional[str]:
-    """将时间格式化为YYYY-MM-DD HH:MM:SS；空值返回None。"""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d %H:%M:%S")
-    text = str(value).strip()
-    return text[:19] if text else None
 
 
 class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCreate, AutoTestApiEnvUpdate]):
@@ -396,7 +386,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         :return: 环境响应字典
         """
         dict_row = await AutoTestApiEnvInfo.filter(id=bind.env_id).first()
-        return self._assemble_env_dict(bind, dict_row, with_audit)
+        return await self._assemble_env_dict(bind, dict_row, with_audit)
 
     async def serialize_envs(self, binds: List[AutoTestApiEnvBindInfo], with_audit: bool = False) -> List[Dict[str, Any]]:
         """
@@ -409,10 +399,13 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         dict_ids = list({bind.env_id for bind in binds})
         dict_rows = await AutoTestApiEnvInfo.filter(id__in=dict_ids).all() if dict_ids else []
         dict_map = {row.id: row for row in dict_rows}
-        return [self._assemble_env_dict(bind, dict_map.get(bind.env_id), with_audit) for bind in binds]
+        return [
+            await self._assemble_env_dict(bind, dict_map.get(bind.env_id), with_audit)
+            for bind in binds
+        ]
 
     @staticmethod
-    def _assemble_env_dict(
+    async def _assemble_env_dict(
             bind: AutoTestApiEnvBindInfo,
             dict_row: Optional[AutoTestApiEnvInfo],
             with_audit: bool,
@@ -420,26 +413,22 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         """
         拼装环境响应字典。
 
+        响应中的env_id表示绑定主键，故排除表字段env_id(字典外键)后将id映射为env_id。
+
         :param bind: 环境绑定实例
         :param dict_row: 环境字典实例，缺失时名称与描述降级为空
         :param with_audit: 是否附带审计字段
         :return: 环境响应字典
         """
-        data: Dict[str, Any] = {"env_id": bind.id}
-        if with_audit:
-            data.update({
-                "created_user": bind.created_user,
-                "updated_user": bind.updated_user,
-                "created_time": format_datetime(bind.created_time),
-                "updated_time": format_datetime(bind.updated_time),
-            })
-        data.update({
-            "env_name": dict_row.env_name if dict_row else "",
-            "env_desc": dict_row.env_desc if dict_row else None,
-            "env_code": bind.env_code,
-            "project_id": bind.project_id,
-            "env_type": bind.env_type,
-        })
+        exclude_fields = {"state", "reserve_1", "reserve_2", "reserve_3", "env_id"}
+        if not with_audit:
+            exclude_fields.update({"created_user", "updated_user", "created_time", "updated_time"})
+        data = await bind.to_dict(
+            exclude_fields=exclude_fields,
+            replace_fields={"id": "env_id"},
+        )
+        data["env_name"] = dict_row.env_name if dict_row else ""
+        data["env_desc"] = dict_row.env_desc if dict_row else None
         return data
 
     async def get_envs(
@@ -573,13 +562,21 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             result: List[Dict[str, Any]] = []
             for item in page_rows:
                 item_env_type = item["env_type"]
+                created_time = item["created_time"]
+                updated_time = item["updated_time"]
                 result.append({
                     "id": str(item["id"]),
                     "project_id": str(item["project_id"]),
                     "env_name": dict_name_map.get(item["env_id"], ""),
                     "env_type": item_env_type,
-                    "created_time": format_datetime(item["created_time"]),
-                    "updated_time": format_datetime(item["updated_time"]),
+                    "created_time": (
+                        created_time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
+                        if isinstance(created_time, datetime) else created_time
+                    ),
+                    "updated_time": (
+                        updated_time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
+                        if isinstance(updated_time, datetime) else updated_time
+                    ),
                     "project_name": project_map.get(int(item["project_id"]), ""),
                     "is_delete": (item["id"], item["project_id"], item_env_type) not in sub_exists,
                 })
