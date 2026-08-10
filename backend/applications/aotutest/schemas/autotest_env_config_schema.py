@@ -229,7 +229,7 @@ class EnvConfigDelete(BaseModel):
     """按节点类型删除环境配置入参。"""
 
     id: int = Field(..., description="配置主键ID")
-    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB,4:REDIS", ge=1, le=4)
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 

@@ -90,7 +90,7 @@ export default {
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
   /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
-  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type/ip/page/page_size */
+  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type(api|file|database|redis)/ip/page/page_size */
   getEnvPage: (params = {}) => request.get('/autotest/env/page', { params }),
   /** 全部启用应用（环境侧）。Query: page/page_size */
   getAllApps: (params = {}) => request.get('/autotest/env/get_all_app', { params }),
@@ -113,11 +113,11 @@ export default {
   updateDbEnvConfig: (data = {}) => request.post('/autotest/config/database/update', data),
   /** 更新 Redis 配置。Body: RedisEnvConfigUpdate */
   updateRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/update', data),
-  /** 删除子表配置（单条）。Body: { id, env_type, updated_user? } */
+  /** 删除子表配置（单条）。Body: { id, env_type(api|file|database|redis), updated_user? } */
   deleteEnvConfig: (data = {}) => request.post('/autotest/config/delete', data),
   /** 子表配置分页搜索（含 project_name/env_name）。Body: AutoTestApiConfigSelect */
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
-  /** 子表配置分页列表（ip/port+类型扩展字段）。Query: env_info_id/env_name/env_type/page/page_size */
+  /** 子表配置分页列表（ip/port+类型扩展字段）。Query: env_info_id/env_name/env_type(api|file|database|redis)/page/page_size */
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
   /** Query: project_id、env_id、config_type(api|database|redis|file) 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),

@@ -11,6 +11,13 @@ import api from '@/api'
 import EnvBindModal from './EnvBindModal.vue'
 import EnvConfigModal from './EnvConfigModal.vue'
 import EnvConfigExpandTable from './EnvConfigExpandTable.vue'
+import {
+  CREATE_CONFIG_PERM,
+  ENV_TYPE,
+  ENV_TYPE_LABEL,
+  ENV_TYPE_OPTIONS,
+  ENV_TYPE_TAG,
+} from './envType'
 
 defineOptions({ name: '环境管理' })
 
@@ -37,27 +44,12 @@ const queryItems = ref({
 const projectOptions = ref([])
 const vPermission = resolveDirective('permission')
 
-const ENV_TYPE_OPTIONS = [
-  { label: 'APP', value: 1 },
-  { label: 'FILE', value: 2 },
-  { label: 'DB', value: 3 },
-  { label: 'REDIS', value: 4 },
-]
-const ENV_TYPE_TAG = { 1: 'success', 2: 'warning', 3: 'info', 4: 'error' }
-const ENV_TYPE_LABEL = { 1: 'APP', 2: 'FILE', 3: 'DB', 4: 'REDIS' }
-const CREATE_CONFIG_PERM = {
-  1: '/autotest/config/app/create',
-  2: '/autotest/config/file/create',
-  3: '/autotest/config/database/create',
-  4: '/autotest/config/redis/create',
-}
-
 const bindModalShow = ref(false)
 const editingEnvRow = ref(null)
 
 const configModalShow = ref(false)
 const configModalMode = ref('create')
-const configModalType = ref(1)
+const configModalType = ref(ENV_TYPE.API)
 const configEnvRow = ref(null)
 /** 递增后通知已展开的子表重新拉取配置，避免必须手动折叠再展开 */
 const expandRefreshKey = ref(0)
@@ -74,7 +66,7 @@ function openEditBind(row) {
 
 function openAddConfig(row) {
   configEnvRow.value = row
-  configModalType.value = Number(row.env_type) || 1
+  configModalType.value = row.env_type || ENV_TYPE.API
   configModalMode.value = 'create'
   configModalShow.value = true
 }
@@ -168,7 +160,7 @@ const columns = computed(() => {
       width: 110,
       align: 'center',
       render(row) {
-        const t = Number(row.env_type)
+        const t = row.env_type
         return h(NTag, { type: ENV_TYPE_TAG[t] || 'default', size: 'small' }, { default: () => ENV_TYPE_LABEL[t] || row.env_type })
       },
     },
@@ -211,7 +203,7 @@ const columns = computed(() => {
                     },
                     { icon: renderIcon('material-symbols:add', { size: 16 }) }
                 ),
-                [[vPermission, apiPermissionKey('post', CREATE_CONFIG_PERM[Number(row.env_type)] || CREATE_CONFIG_PERM[1])]]
+                [[vPermission, apiPermissionKey('post', CREATE_CONFIG_PERM[row.env_type] || CREATE_CONFIG_PERM[ENV_TYPE.API])]]
             ),
             withDirectives(
                 h(

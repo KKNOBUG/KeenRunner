@@ -29,6 +29,7 @@ import { apiPermissionKey, renderIcon } from '@/utils'
 import { useUserStore } from '@/store'
 import { buildConfigDisplayColumns } from './envConfigColumns'
 import EnvConfigModal from './EnvConfigModal.vue'
+import { CREATE_CONFIG_PERM, ENV_TYPE, UPDATE_CONFIG_PERM } from './envType'
 
 defineOptions({ name: '环境配置展开子表' })
 
@@ -41,20 +42,10 @@ const props = defineProps({
 
 const vPermission = resolveDirective('permission')
 const userStore = useUserStore()
-const envType = Number(props.envRow.env_type)
+const envType = props.envRow.env_type || ENV_TYPE.API
 
-const EDIT_PERM = {
-  1: '/autotest/config/app/update',
-  2: '/autotest/config/file/update',
-  3: '/autotest/config/database/update',
-  4: '/autotest/config/redis/update',
-}
-const CREATE_PERM = {
-  1: '/autotest/config/app/create',
-  2: '/autotest/config/file/create',
-  3: '/autotest/config/database/create',
-  4: '/autotest/config/redis/create',
-}
+const EDIT_PERM = UPDATE_CONFIG_PERM
+const CREATE_PERM = CREATE_CONFIG_PERM
 
 const rows = ref([])
 const loading = ref(false)
@@ -116,7 +107,7 @@ function buildActionColumn(type) {
     title: '操作',
     key: 'actions',
     align: 'center',
-    width: type === 3 ? 140 : 120,
+    width: type === ENV_TYPE.DB ? 140 : 120,
     fixed: 'right',
     render(row) {
       const btns = [
@@ -165,7 +156,7 @@ function buildActionColumn(type) {
             }
         ),
       ]
-      if (type === 3) {
+      if (type === ENV_TYPE.DB) {
         btns.push(
             h(
                 NButton,
@@ -197,7 +188,7 @@ async function loadTypeRows(type) {
   })
   const list = res?.data || []
   // Redis列表字段与展示列对齐（ip/port/remark/maintainer）
-  if (type === 4) {
+  if (type === ENV_TYPE.REDIS) {
     return list.map((r) => ({
       ...r,
       id: r.id ?? r.config_id,

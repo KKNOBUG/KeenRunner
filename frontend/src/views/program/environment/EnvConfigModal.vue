@@ -23,7 +23,7 @@
           <NInput v-model:value="form.env" maxlength="64" placeholder="如 SIT、UAT" :disabled="true"/>
         </NFormItem>
 
-        <template v-if="configType === 1">
+        <template v-if="configType === ENV_TYPE.API">
           <NFormItem
               label="IP地址"
               path="env_host"
@@ -40,7 +40,7 @@
           </NFormItem>
         </template>
 
-        <template v-else-if="configType === 2">
+        <template v-else-if="configType === ENV_TYPE.FILE">
           <NFormItem
               label="服务器IP"
               path="server_ip"
@@ -77,7 +77,7 @@
           </NFormItem>
         </template>
 
-        <template v-else-if="configType === 3">
+        <template v-else-if="configType === ENV_TYPE.DB">
           <NFormItem
               label="数据库类型"
               path="db_type"
@@ -122,7 +122,7 @@
           </NFormItem>
         </template>
 
-        <template v-else-if="configType === 4">
+        <template v-else-if="configType === ENV_TYPE.REDIS">
           <NFormItem
               label="Redis主机"
               path="redis_host"
@@ -162,7 +162,7 @@
     </NForm>
     <template #footer>
       <NSpace justify="end">
-        <NButton v-if="configType === 3 && mode === 'edit'" :loading="testing" @click="handleTestConnection">
+        <NButton v-if="configType === ENV_TYPE.DB && mode === 'edit'" :loading="testing" @click="handleTestConnection">
           测试连接
         </NButton>
         <NButton @click="emit('update:show', false)">取消</NButton>
@@ -177,6 +177,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
 import api from '@/api'
 import { useUserStore } from '@/store'
+import { ENV_TYPE, ENV_TYPE_LABEL } from './envType'
 
 defineOptions({ name: '环境配置弹窗' })
 
@@ -184,8 +185,8 @@ const props = defineProps({
   show: { type: Boolean, default: false },
   /** create | edit | copy */
   mode: { type: String, default: 'create' },
-  /** 1=APP 2=FILE 3=DB 4=REDIS */
-  configType: { type: Number, required: true },
+  /** api/file/database/redis */
+  configType: { type: String, required: true },
   /** 主表绑定行 */
   envRow: { type: Object, required: true },
   /** 编辑/复制时的配置行 */
@@ -193,7 +194,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:show', 'saved'])
 
-const TYPE_LABEL = { 1: 'APP', 2: 'FILE', 3: 'DB', 4: 'REDIS' }
+const TYPE_LABEL = ENV_TYPE_LABEL
 const DB_TYPE_OPTIONS = [
   { label: 'mysql', value: 'mysql' },
   { label: 'oracle', value: 'oracle' },
@@ -274,21 +275,21 @@ function fillFromRow(row, { asCopy = false } = {}) {
     id: asCopy ? undefined : row.id,
     config_name: asCopy ? `${row.config_name || ''}_copy` : (row.config_name || ''),
     env: props.envRow.env_name || '',
-    env_host: t === 1 ? row.ip || '' : '',
-    env_port: t === 1 ? row.port || '' : '',
-    server_ip: t === 2 ? row.ip || '' : '',
-    server_port: t === 2 ? row.port || '' : '',
+    env_host: t === ENV_TYPE.API ? row.ip || '' : '',
+    env_port: t === ENV_TYPE.API ? row.port || '' : '',
+    server_ip: t === ENV_TYPE.FILE ? row.ip || '' : '',
+    server_port: t === ENV_TYPE.FILE ? row.port || '' : '',
     server_account: row.server_account || '',
     server_password: row.server_password || '',
     is_no_password: row.is_no_password ?? 1,
     db_name: row.db_name || '',
-    db_host: t === 3 ? row.ip || '' : '',
-    db_port: t === 3 ? row.port || '' : '',
+    db_host: t === ENV_TYPE.DB ? row.ip || '' : '',
+    db_port: t === ENV_TYPE.DB ? row.port || '' : '',
     db_user: row.db_user || '',
     db_password: row.db_password || '',
     db_type: row.db_type || 'mysql',
-    redis_host: t === 4 ? row.ip || '' : '',
-    redis_port: t === 4 ? row.port || '' : '',
+    redis_host: t === ENV_TYPE.REDIS ? row.ip || '' : '',
+    redis_port: t === ENV_TYPE.REDIS ? row.port || '' : '',
     redis_db: row.redis_db ?? '0',
     redis_username: row.redis_username || '',
     redis_password: row.redis_password || '',
@@ -314,8 +315,8 @@ function buildPayload() {
     base.created_user = currentMaintainer()
   }
   const t = props.configType
-  if (t === 1) Object.assign(base, { env_host: form.env_host, env_port: form.env_port })
-  else if (t === 2) {
+  if (t === ENV_TYPE.API) Object.assign(base, { env_host: form.env_host, env_port: form.env_port })
+  else if (t === ENV_TYPE.FILE) {
     Object.assign(base, {
       server_ip: form.server_ip,
       server_port: form.server_port,
@@ -323,7 +324,7 @@ function buildPayload() {
       server_password: form.server_password,
       is_no_password: form.is_no_password,
     })
-  } else if (t === 3) {
+  } else if (t === ENV_TYPE.DB) {
     Object.assign(base, {
       db_name: form.db_name,
       db_host: form.db_host,
@@ -332,7 +333,7 @@ function buildPayload() {
       db_password: form.db_password,
       db_type: form.db_type,
     })
-  } else if (t === 4) {
+  } else if (t === ENV_TYPE.REDIS) {
     Object.assign(base, {
       redis_host: form.redis_host,
       redis_port: form.redis_port,
@@ -351,10 +352,10 @@ async function handleSave() {
     const payload = buildPayload()
     const t = props.configType
     const isEditMode = props.mode === 'edit'
-    if (t === 1) await (isEditMode ? api.updateAppEnvConfig(payload) : api.createAppEnvConfig(payload))
-    else if (t === 2) await (isEditMode ? api.updateFileEnvConfig(payload) : api.createFileEnvConfig(payload))
-    else if (t === 3) await (isEditMode ? api.updateDbEnvConfig(payload) : api.createDbEnvConfig(payload))
-    else if (t === 4) await (isEditMode ? api.updateRedisEnvConfig(payload) : api.createRedisEnvConfig(payload))
+    if (t === ENV_TYPE.API) await (isEditMode ? api.updateAppEnvConfig(payload) : api.createAppEnvConfig(payload))
+    else if (t === ENV_TYPE.FILE) await (isEditMode ? api.updateFileEnvConfig(payload) : api.createFileEnvConfig(payload))
+    else if (t === ENV_TYPE.DB) await (isEditMode ? api.updateDbEnvConfig(payload) : api.createDbEnvConfig(payload))
+    else if (t === ENV_TYPE.REDIS) await (isEditMode ? api.updateRedisEnvConfig(payload) : api.createRedisEnvConfig(payload))
     window.$message?.success?.('保存成功')
     emit('saved')
     emit('update:show', false)

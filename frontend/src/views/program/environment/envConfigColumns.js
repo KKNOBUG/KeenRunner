@@ -1,15 +1,17 @@
+import { ENV_TYPE } from './envType'
+
 /**
  * 环境配置子表展示列（按配置类型）。
  * 操作列由使用方追加。
  *
- * @param {number} type 配置类型：1=APP, 2=FILE, 3=DB, 4=REDIS
+ * @param {string} type 配置类型：api/file/database/redis
  * @returns {Array} Naive UI DataTable 列定义
  */
 export function buildConfigDisplayColumns(type) {
   const cols = [
     { title: '配置名称', key: 'config_name', align: 'center', ellipsis: { tooltip: true }, minWidth: 120 },
   ]
-  if (type === 3) {
+  if (type === ENV_TYPE.DB) {
     cols.push({ title: '数据库名称', key: 'db_name', align: 'center', ellipsis: { tooltip: true }, minWidth: 120 })
     cols.push({ title: '数据库类型', key: 'db_type', align: 'center', width: 100 })
   }

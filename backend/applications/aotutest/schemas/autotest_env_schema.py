@@ -11,6 +11,7 @@ from typing import Optional, List, Union
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
+from backend.enums import AutoTestConfigNodeType
 
 
 class AutoTestApiEnvCreate(BaseModel):
@@ -18,7 +19,7 @@ class AutoTestApiEnvCreate(BaseModel):
 
     env_name: UpperStr = Field(..., max_length=64, description="环境枚举名称")
     project_id: int = Field(..., description="应用ID", ge=1)
-    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB,4:REDIS", ge=1, le=4)
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
     env_desc: Optional[str] = Field(None, max_length=2048, description="环境枚举描述")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
@@ -30,7 +31,7 @@ class AutoTestApiEnvBase(BaseModel):
     env_code: Optional[str] = Field(None, max_length=64, description="环境标识代码")
     env_name: Optional[Union[UpperStr, str]] = Field(None, max_length=64, description="环境名称")
     project_id: Optional[int] = Field(None, description="应用ID", ge=1)
-    env_type: Optional[int] = Field(None, description="节点类型：1:APP,2:FILE,3:DB,4:REDIS", ge=1, le=4)
+    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(api/file/database/redis)")
     env_desc: Optional[str] = Field(None, max_length=2048, description="环境枚举描述")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 

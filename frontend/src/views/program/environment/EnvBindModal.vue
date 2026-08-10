@@ -23,7 +23,7 @@
       <NFormItem
           label="节点类型"
           path="env_type"
-          :rule="{ required: true, type: 'number', message: '请选择节点类型', trigger: ['change', 'blur'] }"
+          :rule="{ required: true, message: '请选择节点类型', trigger: ['change', 'blur'] }"
       >
         <NSelect
             v-model:value="form.env_type"
@@ -72,6 +72,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
 import api from '@/api'
 import { useUserStore } from '@/store'
+import { ENV_TYPE, ENV_TYPE_OPTIONS } from './envType'
 
 defineOptions({ name: '环境绑定弹窗' })
 
@@ -82,13 +83,6 @@ const props = defineProps({
   projectOptions: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:show', 'saved'])
-
-const ENV_TYPE_OPTIONS = [
-  { label: 'APP', value: 1 },
-  { label: 'FILE', value: 2 },
-  { label: 'DB', value: 3 },
-  { label: 'REDIS', value: 4 },
-]
 
 const userStore = useUserStore()
 const formRef = ref(null)
@@ -102,7 +96,7 @@ const projectSelectOptions = computed(() =>
 
 const form = reactive({
   project_id: undefined,
-  env_type: 1,
+  env_type: ENV_TYPE.API,
   env_name: null,
   env_desc: '',
 })
@@ -135,7 +129,7 @@ function ensureEnvNameOption(name) {
 
 async function loadEditDetail() {
   form.project_id = Number(props.envRow.project_id)
-  form.env_type = Number(props.envRow.env_type)
+  form.env_type = props.envRow.env_type || ENV_TYPE.API
   form.env_name = String(props.envRow.env_name || '').trim().toUpperCase() || null
   form.env_desc = ''
   ensureEnvNameOption(form.env_name)
@@ -161,7 +155,7 @@ async function handleSave() {
         env_id: Number(props.envRow.id),
         env_name: form.env_name,
         project_id: Number(form.project_id),
-        env_type: Number(form.env_type),
+        env_type: form.env_type,
         env_desc: form.env_desc || '',
         updated_user: userStore.username,
       })
@@ -192,7 +186,7 @@ watch(
         await loadEditDetail()
       } else {
         form.project_id = undefined
-        form.env_type = 1
+        form.env_type = ENV_TYPE.API
         form.env_name = null
         form.env_desc = ''
       }

@@ -111,10 +111,17 @@ class RedisConnPoolFromConfig:
         ).values_list("id", flat=True)
         env_row = None
         if dict_ids:
+            base_filter = {
+                "project_id": app_id_int,
+                "env_id__in": list(dict_ids),
+                "state__not": 1,
+            }
             env_row = await AutoTestApiEnvBindInfo.filter(
-                project_id=app_id_int,
-                env_id__in=list(dict_ids),
-            ).filter(state__not=1).first()
+                env_type=AutoTestConfigNodeType.REDIS.value,
+                **base_filter,
+            ).first()
+            if not env_row:
+                env_row = await AutoTestApiEnvBindInfo.filter(**base_filter).first()
         if not env_row:
             self.logger.warning(
                 f"未找到环境 project_id={app_id_int}, env_name(忽略大小写)={env!r}"

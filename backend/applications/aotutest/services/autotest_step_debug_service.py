@@ -156,7 +156,7 @@ class StepDebugService:
             empty_env_message: Optional[str] = None,
     ) -> EnvEndpoint:
         """
-        按应用+环境名+配置名+类型解析环境配置（优先env_type=1）。
+        按应用+环境名+配置名+类型解析环境配置（优先 env_type=api）。
 
         :param services: CRUD依赖聚合
         :param project_id: 应用ID
@@ -176,7 +176,7 @@ class StepDebugService:
         env_row = await services.env_curd.get_bind_by_env_name(
             project_id=project_id,
             env_name=env_name,
-            env_type=1,
+            env_type=AutoTestConfigNodeType.API,
         )
         if not env_row:
             tmpl = env_not_found_template or "{label}, 应用[{project_id}]下环境[{env_name}]不存在"
