@@ -515,7 +515,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
     async def test_db_connection(
             self,
             config_id: int,
-            project_id: Union[int, str],
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -530,13 +530,8 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param database_name: 数据库名称
         :return: 连接成功时的摘要信息
         """
-        try:
-            project_id_int = int(str(project_id).strip())
-        except (TypeError, ValueError) as e:
-            raise ParameterException(message="应用ID不合法") from e
-
         env_row = await AutoTestApiEnvCrud().get_bind_by_env_name(
-            project_id=project_id_int,
+            project_id=project_id,
             env_name=env_name,
             env_type=AutoTestConfigNodeType.DB,
         )
@@ -545,7 +540,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         config = await self.model.filter(
             id=config_id,
-            project_id=project_id_int,
+            project_id=project_id,
             env_id=env_row.id,
             config_name=config_name,
             database_name=database_name,
@@ -557,7 +552,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         try:
             await get_app_database_pool().create_pool(
-                project_id=str(project_id_int),
+                project_id=project_id,
                 env_name=env_name,
                 config_name=config_name,
                 database_name=database_name,
