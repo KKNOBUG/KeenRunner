@@ -502,7 +502,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         """
         以环境绑定表分页查询；可选按子配置IP过滤。
 
-        :return: (总条数, 当前页记录)；记录含 id/project_id/env_name/env_type/project_name/is_delete/时间字段
+        :return: (总条数, 当前页记录)；记录含env_id(绑定主键)/project_id/env_name/env_type/project_name/is_delete/时间字段
         """
         try:
             allowed_types = AutoTestConfigNodeType.get_values()
@@ -561,11 +561,12 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
 
             result: List[Dict[str, Any]] = []
             for item in page_rows:
+                bind_id = item["id"]
                 item_env_type = item["env_type"]
                 created_time = item["created_time"]
                 updated_time = item["updated_time"]
                 result.append({
-                    "id": str(item["id"]),
+                    "env_id": str(bind_id),
                     "project_id": str(item["project_id"]),
                     "env_name": dict_name_map.get(item["env_id"], ""),
                     "env_type": item_env_type,
@@ -578,7 +579,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                         if isinstance(updated_time, datetime) else updated_time
                     ),
                     "project_name": project_map.get(int(item["project_id"]), ""),
-                    "is_delete": (item["id"], item["project_id"], item_env_type) not in sub_exists,
+                    "is_delete": (bind_id, item["project_id"], item_env_type) not in sub_exists,
                 })
             return total, result
         except ParameterException:

@@ -466,7 +466,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param project_id: 应用ID
         :param env_name: 环境名称
-        :param config_type: 配置类型(api/file/database/redis)
+        :param config_type: 配置类型(api/file/database/redis)；过滤绑定时对应env_type，同属AutoTestConfigNodeType
         :param page: 页码
         :param page_size: 每页条数
         :return: (总条数, 当前页列表)
@@ -482,6 +482,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 dict_ids = await AutoTestApiEnvCrud().get_dict_ids_by_name(env_name, exact=True)
                 if not dict_ids:
                     return 0, []
+                # 配置.env_id存的是绑定主键；按字典名找到绑定后再用绑定id过滤配置
                 bind_filter = AutoTestApiEnvBindInfo.filter(
                     env_id__in=dict_ids,
                     state__not=1,
@@ -490,10 +491,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                     bind_filter = bind_filter.filter(project_id=project_id)
                 if config_type is not None:
                     bind_filter = bind_filter.filter(env_type=config_type)
-                matched_env_ids = await bind_filter.values_list("id", flat=True)
-                if not matched_env_ids:
+                matched_bind_ids = await bind_filter.values_list("id", flat=True)
+                if not matched_bind_ids:
                     return 0, []
-                query = query.filter(env_id__in=list(matched_env_ids))
+                query = query.filter(env_id__in=list(matched_bind_ids))
 
             total = await query.count()
             instances = await query.offset((page - 1) * page_size).limit(page_size).all()

@@ -78,7 +78,7 @@ async function onConfigSaved() {
 }
 
 async function handleDelete(row) {
-  await api.deleteEnv({ env_id: Number(row.id) })
+  await api.deleteEnv({ env_id: Number(row.env_id) })
   window.$message?.success?.('删除成功')
   $table.value?.handleSearch?.()
 }
@@ -129,7 +129,7 @@ const columns = computed(() => {
       width: 40,
       renderExpand: (row) =>
           h(EnvConfigExpandTable, {
-            key: String(row.id),
+            key: String(row.env_id),
             envRow: row,
             refreshKey,
           }),
@@ -272,7 +272,7 @@ const columns = computed(() => {
         :columns="columns"
         :get-data="fetchEnvPage"
         :single-line="true"
-        row-key="id"
+        row-key="env_id"
         @query-bar-create="openCreateBind"
         @pagination-meta="onListPaginationMeta"
     >

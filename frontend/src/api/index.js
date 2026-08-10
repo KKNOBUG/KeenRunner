@@ -90,7 +90,7 @@ export default {
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
   /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
-  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type(api|file|database|redis)/ip/page/page_size */
+  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type(api|file|database|redis)/ip/page/page_size；行主键字段为env_id(绑定主键) */
   getEnvPage: (params = {}) => request.get('/autotest/env/page', { params }),
   /** 全部启用应用（环境侧）。Query: page/page_size */
   getAllApps: (params = {}) => request.get('/autotest/env/get_all_app', { params }),

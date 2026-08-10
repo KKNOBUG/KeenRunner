@@ -89,7 +89,7 @@ const formRef = ref(null)
 const saving = ref(false)
 const envNameLoading = ref(false)
 const envNameOptions = ref([])
-const isEdit = computed(() => props.envRow?.id != null && props.envRow?.id !== '')
+const isEdit = computed(() => props.envRow?.env_id != null && props.envRow?.env_id !== '')
 const projectSelectOptions = computed(() =>
     (props.projectOptions || []).map((p) => ({ label: p.label, value: p.value }))
 )
@@ -134,7 +134,7 @@ async function loadEditDetail() {
   form.env_desc = ''
   ensureEnvNameOption(form.env_name)
   try {
-    const res = await api.getEnv({ env_id: Number(props.envRow.id) })
+    const res = await api.getEnv({ env_id: Number(props.envRow.env_id) })
     form.env_desc = res?.data?.env_desc || ''
   } catch (_) {
     /* 描述加载失败不影响弹窗 */
@@ -152,7 +152,7 @@ async function handleSave() {
     await formRef.value?.validate?.()
     if (isEdit.value) {
       await api.updateEnv({
-        env_id: Number(props.envRow.id),
+        env_id: Number(props.envRow.env_id),
         env_name: form.env_name,
         project_id: Number(form.project_id),
         env_type: form.env_type,
