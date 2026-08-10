@@ -733,85 +733,78 @@ async def init_database_env_config():
 
     config_crud = AutoTestApiEnvConfigCrud()
     env_name = "SIT1"
-    maintainer = INIT_CREATED_USER
     project_id = int(project.id)
 
     seed_configs = [
-        # 主表1：APP
+        # 主表1：APP(api)
         APPEnvConfigCreate(
-            env_info_id=project_id,
+            project_id=project_id,
             config_name="ToolBox工具箱后端1",
-            env=env_name,
-            env_host="172.20.10.2",
-            env_port="8519",
-            maintainer=maintainer,
-            remark="服务器1",
+            env_name=env_name,
+            config_host="172.20.10.2",
+            config_port="8519",
+            config_desc="服务器1",
             created_user=INIT_CREATED_USER,
         ),
         APPEnvConfigCreate(
-            env_info_id=project_id,
+            project_id=project_id,
             config_name="ToolBox工具箱后端2",
-            env=env_name,
-            env_host="192.168.1.3",
-            env_port="8519",
-            maintainer=maintainer,
-            remark="服务器2",
+            env_name=env_name,
+            config_host="192.168.1.3",
+            config_port="8519",
+            config_desc="服务器2",
             created_user=INIT_CREATED_USER,
         ),
-        # 主表2：DB
+        # 主表2：DB(database)
         DBEnvConfigCreate(
-            env_info_id=project_id,
+            project_id=project_id,
             config_name="ToolBox工具箱后端1",
-            env=env_name,
-            db_name="tbx_runner",
-            db_host="10.211.55.3",
-            db_port="3306",
-            db_user="root",
-            db_password="root",
-            db_type="mysql",
-            maintainer=maintainer,
-            remark="服务器1",
+            env_name=env_name,
+            config_host="10.211.55.3",
+            config_port="3306",
+            database_name="tbx_runner",
+            database_type="mysql",
+            config_username="root",
+            config_password="root",
+            config_desc="服务器1",
             created_user=INIT_CREATED_USER,
         ),
         DBEnvConfigCreate(
-            env_info_id=project_id,
+            project_id=project_id,
             config_name="ToolBox工具箱后端2",
-            env=env_name,
-            db_name="tbx_runner",
-            db_host="10.211.55.3",
-            db_port="3333",
-            db_user="root",
-            db_password="root",
-            db_type="mysql",
-            maintainer=maintainer,
-            remark="服务器2",
+            env_name=env_name,
+            config_host="10.211.55.3",
+            config_port="3333",
+            database_name="tbx_runner",
+            database_type="mysql",
+            config_username="root",
+            config_password="root",
+            config_desc="服务器2",
             created_user=INIT_CREATED_USER,
         ),
-        # 主表3：FILE（未提供账号密码，按免密初始化）
+        # 主表3：FILE
         FILEEnvConfigCreate(
-            env_info_id=project_id,
+            project_id=project_id,
             config_name="ToolBox工具箱后端1",
-            env=env_name,
-            server_ip="10.208.24.12",
-            server_port="8888",
-            server_account="root",
-            server_password="root",
-            is_no_password=0,
-            maintainer=maintainer,
-            remark="服务器1",
+            env_name=env_name,
+            config_host="10.208.24.12",
+            config_port="8888",
+            config_username="root",
+            config_password="root",
+            is_no_password=True,
+            config_desc="服务器1",
             created_user=INIT_CREATED_USER,
         ),
         FILEEnvConfigCreate(
-            env_info_id=project_id,
+            project_id=project_id,
             config_name="ToolBox工具箱后端2",
-            env=env_name,
-            server_ip="10.208.24.14",
-            server_port="8888",
-            server_account="root",
-            server_password="root",
-            is_no_password=0,
-            maintainer=maintainer,
-            remark="服务器2",
+            env_name=env_name,
+            config_host="10.208.24.14",
+            config_port="8888",
+            config_username="root",
+            config_password="root",
+            is_no_password=True,
+            config_desc="服务器2",
             created_user=INIT_CREATED_USER,
         ),
     ]
@@ -821,7 +814,7 @@ async def init_database_env_config():
             created = await config_crud.create_config(config_in)
             LOGGER.info(
                 f"创建[环境配置]成功: env={env_name}, type={type(config_in).__name__}, "
-                f"name={created.get('config_name')}, id={created.get('id')}"
+                f"name={created.config_name}, id={created.id}"
             )
         except Exception as e:
             LOGGER.error(

@@ -37,7 +37,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: true,
   addDelete: false,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 const menuTypeFilterOptions = [

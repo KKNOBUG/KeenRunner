@@ -16,6 +16,7 @@
       <n-space wrap align="center" :size="[35, 15]">
         <slot />
         <div v-if="hasAnyAction" flex items-center :class="actionMode === 'inline' ? 'gap-20' : ''">
+          <!-- 平铺：各操作独立按钮 -->
           <template v-if="actionMode === 'inline'">
             <n-button v-if="addReset" secondary type="primary" size="small" @click="emit('reset')">
               重置
@@ -30,6 +31,56 @@
               删除
             </n-button>
           </template>
+
+          <!-- 分裂按钮：左搜索 / 右更多；无搜索或无更多项时自动降级 -->
+          <template v-else-if="actionMode === 'split'">
+            <n-button-group v-if="addSearch && hasMoreMenuItems" size="small" class="query-bar-split">
+              <n-button secondary type="primary" class="query-bar-split__main" @click="emit('search')">
+                <span inline-flex items-center gap-4>
+                  <TheIcon icon="material-symbols:search" :size="16" />
+                  搜索
+                </span>
+              </n-button>
+              <n-dropdown trigger="click" :options="moreMenuOptions" @select="onDropdownSelect">
+                <n-button
+                    secondary
+                    type="primary"
+                    class="query-bar-split__caret"
+                    title="更多操作"
+                    aria-label="更多操作"
+                >
+                  <TheIcon icon="material-symbols:expand-more" :size="16" />
+                </n-button>
+              </n-dropdown>
+            </n-button-group>
+            <n-button
+                v-else-if="addSearch"
+                secondary
+                type="primary"
+                size="small"
+                @click="emit('search')"
+            >
+              <span inline-flex items-center gap-4>
+                <TheIcon icon="material-symbols:search" :size="16" />
+                搜索
+              </span>
+            </n-button>
+            <n-dropdown
+                v-else-if="hasMoreMenuItems"
+                trigger="click"
+                :options="moreMenuOptions"
+                @select="onDropdownSelect"
+            >
+              <n-button secondary type="primary" size="small" title="更多操作">
+                <span inline-flex items-center gap-6>
+                  <TheIcon icon="material-symbols:more-horiz" :size="16" />
+                  更多
+                </span>
+              </n-button>
+            </n-dropdown>
+          </template>
+
+          <!-- 兼容：全部收纳进下拉（含搜索） -->
           <n-dropdown
               v-else
               trigger="click"
@@ -44,7 +95,7 @@
             </n-button>
           </n-dropdown>
         </div>
-        <!-- 与「操作」同排：如路由页的「刷新API」 -->
+        <!-- 与操作区同排：如路由页的「刷新API」 -->
         <slot name="afterActions" />
       </n-space>
     </n-config-provider>
@@ -53,7 +104,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { NButton, NConfigProvider, NDropdown, NSpace } from 'naive-ui'
+import { NButton, NButtonGroup, NConfigProvider, NDropdown, NSpace } from 'naive-ui'
 import { renderIcon } from '@/utils'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
@@ -67,15 +118,18 @@ const props = defineProps({
   /** 显示「删除」 */
   addDelete: { type: Boolean, default: false },
   /**
-   * 操作区布局：inline 平铺；dropdown 合并为「更多」下拉
+   * 操作区布局：
+   * inline 平铺；
+   * split 左搜索+右更多（默认）；
+   * dropdown 全部收纳进下拉（含搜索）
    */
   actionMode: {
     type: String,
-    default: 'inline',
-    validator: (v) => ['inline', 'dropdown'].includes(v),
+    default: 'split',
+    validator: (v) => ['inline', 'split', 'dropdown'].includes(v),
   },
   /**
-   * dropdown 模式下追加的自定义项：[{ label, key, icon?, disabled? }]
+   * 追加的自定义项：[{ label, key, icon?, disabled? }]
    * 选中后通过 action 事件回传 key
    */
   extraActions: {
@@ -107,20 +161,14 @@ const hasAnyAction = computed(
       (Array.isArray(props.extraActions) && props.extraActions.length > 0)
 )
 
-const dropdownOptions = computed(() => {
+/** 除搜索外的菜单项（split 右侧下拉） */
+const moreMenuOptions = computed(() => {
   const opts = []
   if (props.addReset) {
     opts.push({
       label: '重置',
       key: 'reset',
       icon: renderIcon('material-symbols:restart-alt', { size: 16 }),
-    })
-  }
-  if (props.addSearch) {
-    opts.push({
-      label: '搜索',
-      key: 'search',
-      icon: renderIcon('material-symbols:search', { size: 16 }),
     })
   }
   if (props.addCreate) {
@@ -149,6 +197,21 @@ const dropdownOptions = computed(() => {
   return opts
 })
 
+const hasMoreMenuItems = computed(() => moreMenuOptions.value.length > 0)
+
+/** dropdown 模式：含搜索的全量菜单 */
+const dropdownOptions = computed(() => {
+  const opts = []
+  if (props.addSearch) {
+    opts.push({
+      label: '搜索',
+      key: 'search',
+      icon: renderIcon('material-symbols:search', { size: 16 }),
+    })
+  }
+  return [...opts, ...moreMenuOptions.value]
+})
+
 function onDropdownSelect(key) {
   if (key === 'reset') emit('reset')
   else if (key === 'search') emit('search')
@@ -157,3 +220,16 @@ function onDropdownSelect(key) {
   else emit('action', key)
 }
 </script>
+
+<style scoped>
+.query-bar-split :deep(.query-bar-split__main) {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.query-bar-split :deep(.query-bar-split__caret) {
+  padding-left: 6px;
+  padding-right: 6px;
+  min-width: 28px;
+}
+</style>

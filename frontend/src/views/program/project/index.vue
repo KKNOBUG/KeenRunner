@@ -169,13 +169,13 @@ function customHandleEdit(row) {
   })
 }
 
-/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「操作」） */
+/** QueryBar：左搜索+右更多（分裂按钮） */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
   addCreate: true,
   addDelete: true,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 async function handleBatchDelete() {

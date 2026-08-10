@@ -78,6 +78,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: false,
   addDelete: false,
+  actionMode: 'split',
 }
 
 function onListPaginationMeta(meta) {

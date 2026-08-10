@@ -85,7 +85,7 @@ const props = defineProps({
     type: Function,
     required: true,
   },
-  /** 透传给 QueryBar 的 props（如 addReset、addSearch、actionMode 等） */
+  /** 透传给 QueryBar 的 props（如 addReset、addSearch、actionMode=split 等） */
   queryBarProps: {
     type: Object,
     default: () => ({}),

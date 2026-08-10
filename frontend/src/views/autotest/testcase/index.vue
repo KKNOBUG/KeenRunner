@@ -63,8 +63,8 @@ const queryBarProps = computed(() => ({
   addSearch: true,
   addCreate: canCreateCase.value,
   addDelete: true,
-  actionMode: 'dropdown',
-  /** 仅测试用例：导出/导入收纳进「操作」下拉 */
+  actionMode: 'split',
+  /** 仅测试用例：导出/导入收纳进右侧更多菜单 */
   extraActions: [
     {
       label: '导出报文',

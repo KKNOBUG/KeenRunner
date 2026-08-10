@@ -44,7 +44,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: true,
   addDelete: true,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 async function handleBatchDelete() {

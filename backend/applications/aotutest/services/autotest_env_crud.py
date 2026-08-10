@@ -25,6 +25,7 @@ from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvUpdate,
     AutoTestApiEnvDelete,
 )
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -33,11 +34,6 @@ from backend.core.exceptions import (
     DataBaseStorageException,
 )
 from backend.enums import AutoTestConfigNodeType
-
-
-def enum_field_value(value: Any) -> str:
-    """兼容CharEnumField返回枚举实例或字符串。"""
-    return value.value if hasattr(value, "value") else str(value)
 
 
 def format_datetime(value: Any) -> Optional[str]:
@@ -131,7 +127,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             }
             if env_type is not None:
                 instance = await self.model.filter(
-                    env_type=enum_field_value(env_type), **base_filter
+                    env_type=env_type, **base_filter
                 ).first()
             if not instance:
                 instance = await self.model.filter(**base_filter).first()
@@ -234,7 +230,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         :param env_in: 环境创建schema（含 project_id / env_type）
         :return: 创建或恢复后的环境绑定实例
         """
-        config_type = enum_field_value(env_in.env_type)
+        await AutoTestApiProjectCrud().get_by_id(project_id=env_in.project_id, on_error=True, state__not=1)
         dict_row = await self._get_or_create_env_dict(
             env_name=env_in.env_name,
             env_desc=env_in.env_desc,
@@ -243,17 +239,17 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         existing_bind: Optional[AutoTestApiEnvBindInfo] = await self.model.filter(
             env_id=dict_row.id,
             project_id=env_in.project_id,
-            env_type=config_type,
+            env_type=env_in.env_type,
         ).first()
         if not existing_bind:
+            payload = env_in.model_dump(
+                exclude_none=True,
+                exclude_unset=True,
+                exclude={"env_name", "env_desc"},
+            )
+            payload["env_id"] = dict_row.id
             try:
-                instance: AutoTestApiEnvBindInfo = await self.create(obj_in={
-                    "env_id": dict_row.id,
-                    "project_id": env_in.project_id,
-                    "env_type": config_type,
-                    "created_user": env_in.created_user,
-                })
-                return instance
+                return await self.create(obj_in=payload)
             except IntegrityError as e:
                 error_message: str = f"新增环境绑定信息异常, 违反约束规则: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
@@ -263,8 +259,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             restore_dict: Dict[str, Any] = {"state": 0}
             if env_in.created_user:
                 restore_dict["updated_user"] = env_in.created_user
-            instance = await self.update(id=existing_bind.id, obj_in=restore_dict)
-            return instance
+            return await self.update(id=existing_bind.id, obj_in=restore_dict)
         except (DoesNotExist, IntegrityError) as e:
             error_message: str = f"新增(更新)环境绑定信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
@@ -298,8 +293,6 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         )
         new_env_name = update_dict.pop("env_name", None)
         env_desc = update_dict.pop("env_desc", None)
-        if "env_type" in update_dict:
-            update_dict["env_type"] = enum_field_value(update_dict["env_type"])
         if new_env_name:
             dict_row = await self._get_or_create_env_dict(
                 env_name=new_env_name,
@@ -396,22 +389,22 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
 
     async def serialize_env(self, bind: AutoTestApiEnvBindInfo, with_audit: bool = False) -> Dict[str, Any]:
         """
-        将环境绑定实例与字典信息拼装为历史接口响应结构。
+        将环境绑定实例与字典信息拼装为响应结构。
 
         :param bind: 环境绑定实例
         :param with_audit: 是否附带审计字段(创建/更新人员与时间)
-        :return: 与历史接口一致的环境响应字典
+        :return: 环境响应字典
         """
         dict_row = await AutoTestApiEnvInfo.filter(id=bind.env_id).first()
         return self._assemble_env_dict(bind, dict_row, with_audit)
 
     async def serialize_envs(self, binds: List[AutoTestApiEnvBindInfo], with_audit: bool = False) -> List[Dict[str, Any]]:
         """
-        批量拼装环境绑定列表的历史接口响应结构。
+        批量拼装环境绑定列表响应结构。
 
         :param binds: 环境绑定实例列表
         :param with_audit: 是否附带审计字段(创建/更新人员与时间)
-        :return: 与历史接口一致的环境响应字典列表
+        :return: 环境响应字典列表
         """
         dict_ids = list({bind.env_id for bind in binds})
         dict_rows = await AutoTestApiEnvInfo.filter(id__in=dict_ids).all() if dict_ids else []
@@ -425,7 +418,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             with_audit: bool,
     ) -> Dict[str, Any]:
         """
-        按历史接口字段顺序拼装环境响应字典。
+        拼装环境响应字典。
 
         :param bind: 环境绑定实例
         :param dict_row: 环境字典实例，缺失时名称与描述降级为空
@@ -445,7 +438,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             "env_desc": dict_row.env_desc if dict_row else None,
             "env_code": bind.env_code,
             "project_id": bind.project_id,
-            "env_type": enum_field_value(bind.env_type),
+            "env_type": bind.env_type,
         })
         return data
 
@@ -457,13 +450,14 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         按节点类型聚合环境名称（读环境绑定表并联字典）。
 
         :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用
-        :return: {APP/FILE/DB: [...]} 或 {project_id: {APP/FILE/DB: [...]}}
+        :return: {APP/FILE/DB/REDIS: [...]} 或 {project_id: {APP/FILE/DB/REDIS: [...]}}
         """
         try:
             config_type_to_label = {
-                AutoTestConfigNodeType.API.value: "APP",
-                AutoTestConfigNodeType.FILE.value: "FILE",
-                AutoTestConfigNodeType.DB.value: "DB",
+                AutoTestConfigNodeType.API: "APP",
+                AutoTestConfigNodeType.FILE: "FILE",
+                AutoTestConfigNodeType.DB: "DB",
+                AutoTestConfigNodeType.REDIS: "REDIS",
             }
             base_qs = self.model.filter(state=0)
 
@@ -472,7 +466,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 name_map = await self._get_dict_name_map({row["env_id"] for row in rows})
                 env_map: Dict[str, set] = defaultdict(set)
                 for row in rows:
-                    label = config_type_to_label.get(enum_field_value(row["env_type"]))
+                    label = config_type_to_label.get(row["env_type"])
                     name = name_map.get(row["env_id"])
                     if label and name:
                         env_map[label].add(name)
@@ -490,7 +484,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             name_map = await self._get_dict_name_map({row["env_id"] for row in rows})
             grouped: Dict[int, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
             for row in rows:
-                label = config_type_to_label.get(enum_field_value(row["env_type"]))
+                label = config_type_to_label.get(row["env_type"])
                 name = name_map.get(row["env_id"])
                 if label and name:
                     grouped[row["project_id"]][label].add(name)
@@ -527,7 +521,6 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         :return: (总条数, 当前页记录)；记录含 id/project_id/env_name/env_type/project_name/is_delete/时间字段
         """
         try:
-            node_type = enum_field_value(env_type) if env_type is not None else None
             allowed_types = AutoTestConfigNodeType.get_values()
             base_qs = self.model.filter(state=0)
 
@@ -549,8 +542,8 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 if not dict_ids:
                     return 0, []
                 base_qs = base_qs.filter(env_id__in=dict_ids)
-            if node_type is not None:
-                base_qs = base_qs.filter(env_type=node_type)
+            if env_type is not None:
+                base_qs = base_qs.filter(env_type=env_type)
 
             active_project_ids = await AutoTestApiProjectInfo.filter(state=0).values_list("id", flat=True)
             if active_project_ids:
@@ -580,12 +573,11 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                     config_type__in=allowed_types,
                 ).values("env_id", "project_id", "config_type")
                 for crow in config_rows:
-                    ctype = enum_field_value(crow["config_type"])
-                    sub_exists.add((crow["env_id"], crow["project_id"], ctype))
+                    sub_exists.add((crow["env_id"], crow["project_id"], crow["config_type"]))
 
             result: List[Dict[str, Any]] = []
             for item in page_rows:
-                item_env_type = enum_field_value(item["env_type"])
+                item_env_type = item["env_type"]
                 result.append({
                     "id": str(item["id"]),
                     "project_id": str(item["project_id"]),

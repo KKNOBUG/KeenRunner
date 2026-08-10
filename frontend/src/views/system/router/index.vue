@@ -43,7 +43,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: true,
   addDelete: true,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 async function handleBatchDelete() {
@@ -326,7 +326,7 @@ const columns = computed(() => {
           />
         </QueryBarItem>
       </template>
-      <!-- 与 QueryBar「操作」下拉同一行，紧跟其后 -->
+      <!-- 与 QueryBar操作区同一行，紧跟其后 -->
       <template #queryBarAfterActions>
         <NButton
             v-permission="'post/api/v1/router/refresh'"

@@ -41,7 +41,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: false,
   addDelete: false,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 const getTodayRange = () => {

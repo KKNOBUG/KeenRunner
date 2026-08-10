@@ -88,7 +88,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: true,
   addDelete: false,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 function buildSearchParams(overrides = {}) {
@@ -126,9 +126,13 @@ const columns = computed(() => {
   return [
     {
       type: 'expand',
-      fixed: 'left',
       width: 40,
-      renderExpand: (row) => h(EnvConfigExpandTable, { envRow: row, refreshKey }),
+      renderExpand: (row) =>
+          h(EnvConfigExpandTable, {
+            key: String(row.id),
+            envRow: row,
+            refreshKey,
+          }),
     },
     { type: 'selection', fixed: 'left', width: 48 },
     {

@@ -8,6 +8,7 @@
         size="small"
         :bordered="false"
         :single-line="true"
+        :row-key="(row) => row.config_id"
     />
 
     <EnvConfigModal
@@ -49,6 +50,8 @@ const CREATE_PERM = CREATE_CONFIG_PERM
 
 const rows = ref([])
 const loading = ref(false)
+/** 防止 Popconfirm / 展开区重复挂载导致同一次删除打两次接口 */
+const deletingIds = new Set()
 
 const modalShow = ref(false)
 const modalMode = ref('create')
@@ -74,23 +77,34 @@ function openCopy(type, row) {
 }
 
 async function deleteConfig(type, row) {
+  const configId = row?.config_id
+  if (configId == null || deletingIds.has(configId)) {
+    return false
+  }
+  deletingIds.add(configId)
   try {
-    await api.deleteEnvConfig({ id: row.id, env_type: type, updated_user: currentMaintainer() })
+    await api.deleteEnvConfig({
+      config_id: configId,
+      config_type: type,
+      updated_user: currentMaintainer(),
+    })
     window.$message?.success?.('删除成功')
-    await reload()
-  } catch (e) {
-    window.$message?.error?.(`删除失败：${e?.message || e}`)
+    rows.value = rows.value.filter((item) => item.config_id !== configId)
+  } catch (_) {
+    // 错误提示已由请求拦截器统一弹出
+  } finally {
+    deletingIds.delete(configId)
   }
 }
 
 async function testConfig(row) {
   try {
     const res = await api.testDbConnection({
-      id: row.id,
-      project_id: String(props.envRow.project_id),
+      config_id: row.config_id,
+      project_id: Number(props.envRow.project_id),
       env_name: props.envRow.env_name,
       config_name: row.config_name,
-      db_name: row.db_name,
+      database_name: row.database_name,
     })
     if (res?.code === '000000' && res?.status === 'success') {
       window.$message?.success?.(res?.message || '连接成功')
@@ -147,7 +161,13 @@ function buildActionColumn(type) {
                   withDirectives(
                       h(
                           NButton,
-                          { size: 'tiny', quaternary: true, type: 'error', title: '删除' },
+                          {
+                            size: 'tiny',
+                            quaternary: true,
+                            type: 'error',
+                            title: '删除',
+                            disabled: deletingIds.has(row.config_id),
+                          },
                           { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
                       ),
                       [[vPermission, apiPermissionKey('post', '/autotest/config/delete')]]
@@ -180,28 +200,13 @@ const columns = computed(() => [...buildConfigDisplayColumns(envType), buildActi
 
 async function loadTypeRows(type) {
   const res = await api.getEnvConfigList({
-    env_info_id: Number(props.envRow.project_id),
+    project_id: Number(props.envRow.project_id),
     env_name: props.envRow.env_name,
-    env_type: type,
+    config_type: type,
     page: 1,
     page_size: 50,
   })
-  const list = res?.data || []
-  // Redis列表字段与展示列对齐（ip/port/remark/maintainer）
-  if (type === ENV_TYPE.REDIS) {
-    return list.map((r) => ({
-      ...r,
-      id: r.id ?? r.config_id,
-      ip: r.ip ?? r.config_host,
-      port: r.port ?? r.config_port,
-      redis_db: r.redis_db ?? r.database_name ?? r.db_name,
-      redis_username: r.redis_username ?? r.config_username,
-      redis_password: r.redis_password ?? r.config_password,
-      remark: r.remark ?? r.config_desc,
-      maintainer: r.maintainer ?? r.updated_user,
-    }))
-  }
-  return list
+  return res?.data || []
 }
 
 async function reload() {

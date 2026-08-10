@@ -116,7 +116,7 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
     config_params = fields.JSONField(default=None, null=True, description="数据库/服务器参数")
     config_kwargs = fields.JSONField(default=None, null=True, description="通用环境变量配置")
     config_header = fields.JSONField(default=None, null=True, description="通用请求头配置")
-    is_authorization = fields.BooleanField(default=None, null=True, description="是否免密")
+    is_no_password = fields.BooleanField(default=None, null=True, description="是否免密")
 
     class Meta:
         table = "krun_autotest_env_config"

@@ -113,17 +113,17 @@ export default {
   updateDbEnvConfig: (data = {}) => request.post('/autotest/config/database/update', data),
   /** 更新 Redis 配置。Body: RedisEnvConfigUpdate */
   updateRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/update', data),
-  /** 删除子表配置（单条）。Body: { id, env_type(api|file|database|redis), updated_user? } */
+  /** 删除子表配置（单条）。Body: { config_id, config_type(api|file|database|redis), updated_user? } */
   deleteEnvConfig: (data = {}) => request.post('/autotest/config/delete', data),
-  /** 子表配置分页搜索（含 project_name/env_name）。Body: AutoTestApiConfigSelect */
+  /** 子表配置分页搜索（含 project_name/env_name）。Body: AutoTestApiEnvConfigSelect */
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
-  /** 子表配置分页列表（ip/port+类型扩展字段）。Query: env_info_id/env_name/env_type(api|file|database|redis)/page/page_size */
+  /** 子表配置分页列表。Query: project_id/env_name/config_type(api|file|database|redis)/page/page_size */
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
   /** Query: project_id、env_id、config_type(api|database|redis|file) 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
-  /** Body: { project_ids: number[] } -> project_id -> env_name -> APP|FILE|DB -> config_name -> {config_host,...} */
+  /** Body: { project_ids: number[] } -> project_id -> env_name -> APP|FILE|DB|REDIS -> config_name -> {config_host,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/config/query', data),
-  /** 数据库连通性测试。Body: { id, project_id, env_name, config_name, db_name } */
+  /** 数据库连通性测试。Body: { config_id, project_id, env_name, config_name, database_name } */
   testDbConnection: (data = {}) => request.post('/autotest/config/database/test_connection', data),
 
   getTag: (params = {}) => request.get('/autotest/tag/get', { params }),

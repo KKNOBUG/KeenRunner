@@ -43,13 +43,13 @@ const checkedRowKeys = ref([])
 const queryItems = ref({ username: '', alias: '', dept_id: null, role_id: null })
 const vPermission = resolveDirective('permission')
 
-/** QueryBar：操作合并为下拉 */
+/** QueryBar：左搜索+右更多（分裂按钮） */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
   addCreate: true,
   addDelete: true,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 async function handleBatchDelete() {

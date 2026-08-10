@@ -15,8 +15,8 @@ from tortoise.expressions import Q
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from backend.applications.aotutest.schemas.autotest_env_config_schema import (
-    AutoTestApiConfigSelect,
-    AutoTestEnvConfigQueryByProjectsIn,
+    AutoTestApiEnvConfigSelect,
+    AutoTestApiEnvConfigQueryByProjectsIn,
     APPEnvConfigCreate,
     FILEEnvConfigCreate,
     DBEnvConfigCreate,
@@ -25,7 +25,7 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     APPEnvConfigUpdate,
     FILEEnvConfigUpdate,
     DBEnvConfigUpdate,
-    EnvConfigDelete,
+    AutoTestApiEnvConfigTypedDelete,
     TestDBConnectionRequest,
 )
 from backend.configure import LOGGER
@@ -33,17 +33,27 @@ from backend.core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
+    DataBaseStorageException,
 )
 from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
     NotFoundResponse,
-    DataAlreadyExistsResponse
+    DataAlreadyExistsResponse,
+    DataBaseStorageResponse,
 )
 from backend.enums import AutoTestConfigNodeType
 
 autotest_env_config = APIRouter()
+
+
+async def _serialize_config_response(services: AutoTestApiServices, instance, env_name: Optional[str] = None):
+    """将配置ORM序列化为响应字典；未传 env_name 时按 env_id 解析。"""
+    if env_name is None:
+        env_name_map = await services.env_curd.get_env_name_map([instance.env_id])
+        env_name = env_name_map.get(instance.env_id, "")
+    return services.env_config_curd.serialize_config(instance, env_name)
 
 
 @autotest_env_config.post("/app/create", summary="新增APP类型环境配置", description="新增APP类型环境配置信息")
@@ -59,10 +69,13 @@ async def create_app_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.create_config(config_in)
-        return SuccessResponse(message="新增APP配置成功", data=result, total=1)
+        instance = await services.env_config_curd.create_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="新增APP配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -85,10 +98,13 @@ async def create_file_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.create_config(config_in)
-        return SuccessResponse(message="新增FILE配置成功", data=result, total=1)
+        instance = await services.env_config_curd.create_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="新增FILE配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -111,10 +127,13 @@ async def create_db_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.create_config(config_in)
-        return SuccessResponse(message="新增DB配置成功", data=result, total=1)
+        instance = await services.env_config_curd.create_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="新增DB配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -137,10 +156,13 @@ async def create_redis_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.create_redis_config(config_in)
-        return SuccessResponse(message="新增Redis配置成功", data=result, total=1)
+        instance = await services.env_config_curd.create_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="新增Redis配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -163,10 +185,13 @@ async def update_redis_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.update_redis_config(config_in)
-        return SuccessResponse(message="修改Redis配置成功", data=result, total=1)
+        instance = await services.env_config_curd.update_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="修改Redis配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -178,7 +203,7 @@ async def update_redis_config(
 
 @autotest_env_config.post("/delete", summary="删除子表环境配置", description="删除指定子表环境配置信息")
 async def delete_env_config(
-        config_in: EnvConfigDelete = Body(..., description="环境配置信息"),
+        config_in: AutoTestApiEnvConfigTypedDelete = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -189,8 +214,9 @@ async def delete_env_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.delete_config(config_in)
-        return SuccessResponse(message="删除配置成功", data=result, total=1)
+        instance = await services.env_config_curd.delete_config(config_in)
+        data = await _serialize_config_response(services, instance)
+        return SuccessResponse(message="删除配置成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -213,10 +239,13 @@ async def update_app_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.update_config(config_in)
-        return SuccessResponse(message="修改APP配置成功", data=result, total=1)
+        instance = await services.env_config_curd.update_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="修改APP配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -239,10 +268,13 @@ async def update_file_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.update_config(config_in)
-        return SuccessResponse(message="修改FILE配置成功", data=result, total=1)
+        instance = await services.env_config_curd.update_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="修改FILE配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -265,10 +297,13 @@ async def update_db_config(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_config_curd.update_config(config_in)
-        return SuccessResponse(message="修改DB配置成功", data=result, total=1)
+        instance = await services.env_config_curd.update_config(config_in)
+        data = await _serialize_config_response(services, instance, config_in.env_name)
+        return SuccessResponse(message="修改DB配置成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -304,7 +339,7 @@ async def get_env_config(
                 "created_time", "updated_time",
                 "reserve_1", "reserve_2", "reserve_3"
             },
-            replace_fields={"id": "env_id"}
+            replace_fields={"id": "config_id"}
         )
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
@@ -318,7 +353,7 @@ async def get_env_config(
 
 @autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
 async def search_env_configs(
-        config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
+        config_in: AutoTestApiEnvConfigSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -393,7 +428,7 @@ async def search_env_configs(
 
 @autotest_env_config.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
 async def classify_env_configs(
-        env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+        env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -452,9 +487,9 @@ async def get_env_config_names(
 
 @autotest_env_config.get("/list", summary="查询子表环境配置列表", description="按条件分页查询子表环境配置列表")
 async def list_env_configs(
-        env_info_id: Optional[int] = Query(None, description="应用ID"),
-        env_name: Optional[str] = Query(None, description="环境"),
-        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(api/file/database/redis)"),
+        project_id: Optional[int] = Query(None, description="应用ID"),
+        env_name: Optional[str] = Query(None, description="环境名称"),
+        config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型(api/file/database/redis)"),
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -462,9 +497,9 @@ async def list_env_configs(
     """
     按条件分页查询子表环境配置列表。
 
-    :param env_info_id: 应用主键ID
+    :param project_id: 应用主键ID
     :param env_name: 环境名称
-    :param env_type: 节点类型
+    :param config_type: 配置类型
     :param page: 页码
     :param page_size: 每页条数
     :param services: 自动化测试CRUD依赖聚合
@@ -472,9 +507,9 @@ async def list_env_configs(
     """
     try:
         total, data = await services.env_config_curd.get_config_list(
-            env_info_id=env_info_id,
+            project_id=project_id,
             env_name=env_name,
-            env_type=env_type,
+            config_type=config_type,
             page=page,
             page_size=page_size,
         )
@@ -500,11 +535,11 @@ async def test_db_connection(
     """
     try:
         return await services.env_config_curd.test_db_connection(
-            config_id=config_in.id,
+            config_id=config_in.config_id,
             project_id=config_in.project_id,
             env_name=config_in.env_name,
             config_name=config_in.config_name,
-            db_name=config_in.db_name,
+            database_name=config_in.database_name,
         )
     except Exception as e:
         LOGGER.error(f"测试数据库连接失败: {e}\n{traceback.format_exc()}")

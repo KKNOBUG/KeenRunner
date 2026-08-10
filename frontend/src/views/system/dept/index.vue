@@ -22,7 +22,7 @@ const queryBarProps = {
   addSearch: true,
   addCreate: true,
   addDelete: false,
-  actionMode: 'dropdown',
+  actionMode: 'split',
 }
 
 /** 部门树节点是否命中筛选（自身或任一子孙） */
