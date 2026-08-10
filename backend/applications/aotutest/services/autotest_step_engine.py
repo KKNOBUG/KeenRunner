@@ -984,7 +984,7 @@ class BaseStepExecutor:
     @classmethod
     async def get_services(cls) -> AutoTestApiServices:
         """获取自动化测试依赖注入的CRUD服务聚合。"""
-        from applications.aotutest.dependencies import get_autotest_api_services
+        from backend.applications.aotutest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
     def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:

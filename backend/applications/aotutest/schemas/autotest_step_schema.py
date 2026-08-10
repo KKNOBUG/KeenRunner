@@ -106,36 +106,15 @@ class StepVariablesBase(BaseModel):
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
 
 
-# 前端固定传 APP/FILE/DB；归一为本项目枚举 api/file/database。REDIS 为本项目扩展。
-_STEPS_EXECUTE_CONFIG_TYPE_ALIASES: Dict[str, str] = {
-    "APP": AutoTestConfigNodeType.API.value,
-    "FILE": AutoTestConfigNodeType.FILE.value,
-    "DB": AutoTestConfigNodeType.DB.value,
-    "REDIS": AutoTestConfigNodeType.REDIS.value,
-}
-
-
 class StepsExecuteConfigBase(BaseModel):
     """步骤执行时环境配置覆盖基础字段模型。"""
 
     env_name: str = Field(..., max_length=128, description="环境名称")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(yangkai: APP/FILE/DB；扩展: REDIS)")
+    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(api/file/database/redis)")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="配置主机")
     config_port: str = Field(..., max_length=8, description="配置端口")
     database_name: Optional[str] = Field(None, max_length=128, description="数据库名称")
-
-    @field_validator("config_type", mode="before")
-    @classmethod
-    def normalize_config_type(cls, v: Any) -> Any:
-        """仅接受 APP/FILE/DB（及扩展 REDIS），映射为本项目枚举值。"""
-        if v is None or isinstance(v, AutoTestConfigNodeType):
-            return v
-        raw = v.value if hasattr(v, "value") else str(v).strip()
-        mapped = _STEPS_EXECUTE_CONFIG_TYPE_ALIASES.get(raw)
-        if mapped is None:
-            raise ValueError(f"config_type仅支持APP/FILE/DB/REDIS，当前值: {raw}")
-        return mapped
 
 
 class StepExtractVariableItem(BaseModel):
