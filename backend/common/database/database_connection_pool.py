@@ -10,7 +10,7 @@ import asyncio
 import traceback
 from datetime import date, time, datetime, timedelta
 from decimal import Decimal
-from typing import Dict, Optional, Any, Type, Set, Tuple
+from typing import Dict, Optional, Any, Type, Tuple
 
 import aiomysql
 import oracledb
@@ -40,8 +40,8 @@ class DBConnPoolFromConfig:
         """
         初始化单例；重复构造时直接跳过。
 
-        :param config_model: Tortoise 环境配置模型类
-        :param logger: 日志记录器，默认 loguru.logger
+        :param config_model: Tortoise环境配置模型类
+        :param logger: 日志记录器，默认loguru.logger
         """
         if self.__private_initialized:
             return
@@ -60,9 +60,9 @@ class DBConnPoolFromConfig:
             database_name: str,
     ) -> Tuple[str, str, str, str]:
         """
-        规范化四层缓存键：project_id 去空白，其余转小写。
+        规范化四层缓存键：project_id去空白，其余转小写。
 
-        :param project_id: 应用主键ID（Autotest=project_id；Legacy=env_info_id）
+        :param project_id: 应用主键ID
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名
@@ -75,71 +75,35 @@ class DBConnPoolFromConfig:
             database_name.lower().strip(),
         )
 
-    def _config_model_field_names(self) -> Set[str]:
-        """
-        读取 config_model 的 Tortoise 字段名集合。
-
-        :return: 字段名集合；模型无效时为空集合
-        """
-        meta = getattr(self.config_model, "_meta", None)
-        if not meta or not getattr(meta, "fields_map", None):
-            return set()
-        return set(meta.fields_map.keys())
-
-    async def _load_legacy_db_config(
+    async def _get_db_config_from_orm(
             self,
-            project_id: int,
+            project_id: str,
             env_name: str,
             config_name: str,
             database_name: str,
     ) -> Optional[Dict[str, Any]]:
         """
-        从 Legacy 配置表加载连接参数（env_info_id / db_* 字段）。
+        从自动化环境配置表加载数据库连接参数。
 
-        :param project_id: 应用ID（对应 env_info_id）
+        解析路径：环境字典(env_name) -> 环境绑定(project_id+env_type=database) -> 配置行。
+
+        :param project_id: 应用ID字符串
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名
-        :return: 标准化连接字典或None
+        :return: 含host/port/username/password/database_name/db_type的字典；未找到为None
         """
-        config_obj = await self.config_model.filter(
-            env_info_id=project_id,
-            env_name=env_name,
-            config_name=config_name,
-            db_name=database_name,
-            state=0,
-        ).first()
-        if not config_obj:
-            return None
-        return {
-            "host": getattr(config_obj, "db_host", None),
-            "port": int(getattr(config_obj, "db_port", None) or 3306),
-            "username": getattr(config_obj, "db_user", None),
-            "password": getattr(config_obj, "db_password", None) or "",
-            "database_name": getattr(config_obj, "db_name", None),
-            "db_type": str(getattr(config_obj, "db_type", None) or "mysql").lower(),
-        }
+        if not self.config_model:
+            raise ValueError("未提供ORM模型，请通过config_model参数传入")
 
-    async def _load_autotest_db_config(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-            field_names: Set[str],
-    ) -> Optional[Dict[str, Any]]:
-        """
-        从自动化环境配置表加载连接参数（project_id + env_id + config_*）。
-
-        :param project_id: 应用ID（对应 project_id）
-        :param env_name: 环境名称（按 env_name 忽略大小写匹配）
-        :param config_name: 配置名称
-        :param database_name: 数据库名
-        :param field_names: 模型字段名集合
-        :return: 标准化连接字典或None
-        """
         try:
-            # 必须与 Tortoise 初始化时注册的模块路径一致，否则模型无 default_connection
+            project_id_int = int(str(project_id).strip())
+        except (TypeError, ValueError) as e:
+            self.logger.error(f"project_id无法解析为整数: {project_id!r}, {e}")
+            return None
+
+        try:
+            # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
             from backend.applications.aotutest.models.autotest_model import (
                 AutoTestApiEnvInfo,
                 AutoTestApiEnvBindInfo,
@@ -149,102 +113,57 @@ class DBConnPoolFromConfig:
             self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
             return None
 
-        # 必须带 project_id，避免多应用下同名环境串库
         dict_ids = await AutoTestApiEnvInfo.filter(
             env_name__iexact=env_name,
             state__not=1,
         ).values_list("id", flat=True)
-        env_instance = None
-        if dict_ids:
-            env_instance = await AutoTestApiEnvBindInfo.filter(
-                project_id=project_id,
-                env_id__in=list(dict_ids),
-                env_type=AutoTestConfigNodeType.DB.value,
-                state__not=1,
-            ).first()
-            if not env_instance:
-                env_instance = await AutoTestApiEnvBindInfo.filter(
-                    project_id=project_id,
-                    env_id__in=list(dict_ids),
-                    state__not=1,
-                ).first()
-        if not env_instance:
+        if not dict_ids:
+            self.logger.warning(f"未找到环境字典 env_name(忽略大小写)={env_name!r}")
+            return None
+
+        # 必须带project_id与env_type，避免多应用同名环境或跨节点类型串库
+        env_bind = await AutoTestApiEnvBindInfo.filter(
+            project_id=project_id_int,
+            env_id__in=list(dict_ids),
+            env_type=AutoTestConfigNodeType.DB,
+            state__not=1,
+        ).first()
+        if not env_bind:
             self.logger.warning(
-                f"未找到环境枚举 project_id={project_id}, env_name(忽略大小写)={env_name!r}"
+                f"未找到环境绑定 project_id={project_id_int}, "
+                f"env_name(忽略大小写)={env_name!r}, env_type={AutoTestConfigNodeType.DB.value}"
             )
             return None
 
-        config_query = self.config_model.filter(
-            project_id=project_id,
-            env_id=env_instance.id,
+        config_obj = await self.config_model.filter(
+            project_id=project_id_int,
+            env_id=env_bind.id,
+            env_type=AutoTestConfigNodeType.DB,
             state__not=1,
-        )
-        if "env_type" in field_names:
-            config_query = config_query.filter(env_type=AutoTestConfigNodeType.DB.value)
-        config_obj = await config_query.filter(
             config_name__iexact=config_name,
             database_name__iexact=database_name,
         ).first()
         if not config_obj:
             return None
 
-        raw_port = getattr(config_obj, "config_port", None) or "3306"
+        raw_port = config_obj.config_port or "3306"
         try:
             port = int(str(raw_port).strip())
         except (TypeError, ValueError):
             port = 3306
 
-        database_type = getattr(config_obj, "database_type", None)
+        database_type = config_obj.database_type
         if database_type is not None and hasattr(database_type, "value"):
             database_type = database_type.value
 
         return {
-            "host": getattr(config_obj, "config_host", None),
+            "host": config_obj.config_host,
             "port": port,
-            "username": getattr(config_obj, "config_username", None),
-            "password": getattr(config_obj, "config_password", None) or "",
-            "database_name": getattr(config_obj, "database_name", None),
+            "username": config_obj.config_username,
+            "password": config_obj.config_password or "",
+            "database_name": config_obj.database_name,
             "db_type": str(database_type or "mysql").lower(),
         }
-
-    async def _get_db_config_from_orm(
-            self,
-            project_id: str,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        根据 config_model 字段形态选择 Legacy/Autotest 查询连接配置。
-
-        :param project_id: 应用ID字符串
-        :param env_name: 环境名称
-        :param config_name: 配置名称
-        :param database_name: 数据库名
-        :return: 含 host/port/username/password/database_name/db_type 的字典；未找到为None
-        """
-        if not self.config_model:
-            raise ValueError("未提供ORM模型，请通过config_model参数传入")
-
-        try:
-            project_id_int = int(str(project_id).strip())
-        except (TypeError, ValueError) as e:
-            self.logger.error(f"project_id 无法解析为整数: {project_id!r}, {e}")
-            return None
-
-        field_names = self._config_model_field_names()
-        if "env_info_id" in field_names:
-            return await self._load_legacy_db_config(project_id_int, env_name, config_name, database_name)
-        if "project_id" in field_names and "env_id" in field_names:
-            return await self._load_autotest_db_config(
-                project_id_int, env_name, config_name, database_name, field_names
-            )
-
-        raise ValueError(
-            f"config_model={getattr(self.config_model, '__name__', self.config_model)} "
-            f"字段无法识别为 Legacy(env_info_id) 或 Autotest(project_id+env_id)，"
-            f"当前字段: {sorted(field_names)}"
-        )
 
     def _set_pool(
             self,
@@ -351,7 +270,7 @@ class DBConnPoolFromConfig:
         """
         按配置创建数据库连接池；已存在则不重复创建。
 
-        :param project_id: 应用ID（Autotest 为 project_id）
+        :param project_id: 应用主键ID
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名
