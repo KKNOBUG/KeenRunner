@@ -11,8 +11,15 @@ from typing import List
 from fastapi import FastAPI
 
 from backend.applications.aotutest.models.autotest_model import AutoTestApiTagInfo
+from backend.applications.aotutest.schemas.autotest_env_config_schema import (
+    APPEnvConfigCreate,
+    DBEnvConfigCreate,
+    FILEEnvConfigCreate,
+)
 from backend.applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
 from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
+from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
+from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvCrud
 from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
 from backend.applications.base.models.menu_model import Menu
@@ -712,8 +719,121 @@ async def init_database_tag():
     LOGGER.info("创建[标签]成功")
 
 
+async def init_database_env_config():
+    project_crud = AutoTestApiProjectCrud()
+    project = await project_crud.model.filter(project_name="ToolBox工具箱", state__not=1).first()
+    if not project:
+        LOGGER.error("[环境配置]初始化失败: 未找到应用 ToolBox工具箱")
+        return
+
+    env_crud = AutoTestApiEnvCrud()
+    if await env_crud.model.filter(project_id=project.id, state__not=1).exists():
+        LOGGER.info("[环境配置]已有数据，跳过初始化")
+        return
+
+    config_crud = AutoTestApiEnvConfigCrud()
+    env_name = "SIT1"
+    maintainer = INIT_CREATED_USER
+    project_id = int(project.id)
+
+    seed_configs = [
+        # 主表1：APP
+        APPEnvConfigCreate(
+            env_info_id=project_id,
+            config_name="ToolBox工具箱后端1",
+            env=env_name,
+            env_host="172.20.10.2",
+            env_port="8519",
+            maintainer=maintainer,
+            remark="服务器1",
+            created_user=INIT_CREATED_USER,
+        ),
+        APPEnvConfigCreate(
+            env_info_id=project_id,
+            config_name="ToolBox工具箱后端2",
+            env=env_name,
+            env_host="192.168.1.3",
+            env_port="8519",
+            maintainer=maintainer,
+            remark="服务器2",
+            created_user=INIT_CREATED_USER,
+        ),
+        # 主表2：DB
+        DBEnvConfigCreate(
+            env_info_id=project_id,
+            config_name="ToolBox工具箱后端1",
+            env=env_name,
+            db_name="tbx_runner",
+            db_host="10.211.55.3",
+            db_port="3306",
+            db_user="root",
+            db_password="root",
+            db_type="mysql",
+            maintainer=maintainer,
+            remark="服务器1",
+            created_user=INIT_CREATED_USER,
+        ),
+        DBEnvConfigCreate(
+            env_info_id=project_id,
+            config_name="ToolBox工具箱后端2",
+            env=env_name,
+            db_name="tbx_runner",
+            db_host="10.211.55.3",
+            db_port="3333",
+            db_user="root",
+            db_password="root",
+            db_type="mysql",
+            maintainer=maintainer,
+            remark="服务器2",
+            created_user=INIT_CREATED_USER,
+        ),
+        # 主表3：FILE（未提供账号密码，按免密初始化）
+        FILEEnvConfigCreate(
+            env_info_id=project_id,
+            config_name="ToolBox工具箱后端1",
+            env=env_name,
+            server_ip="10.208.24.12",
+            server_port="8888",
+            server_account="root",
+            server_password="root",
+            is_no_password=0,
+            maintainer=maintainer,
+            remark="服务器1",
+            created_user=INIT_CREATED_USER,
+        ),
+        FILEEnvConfigCreate(
+            env_info_id=project_id,
+            config_name="ToolBox工具箱后端2",
+            env=env_name,
+            server_ip="10.208.24.14",
+            server_port="8888",
+            server_account="root",
+            server_password="root",
+            is_no_password=0,
+            maintainer=maintainer,
+            remark="服务器2",
+            created_user=INIT_CREATED_USER,
+        ),
+    ]
+
+    for config_in in seed_configs:
+        try:
+            created = await config_crud.create_config(config_in)
+            LOGGER.info(
+                f"创建[环境配置]成功: env={env_name}, type={type(config_in).__name__}, "
+                f"name={created.get('config_name')}, id={created.get('id')}"
+            )
+        except Exception as e:
+            LOGGER.error(
+                f"创建[环境配置]失败: env={env_name}, type={type(config_in).__name__}, "
+                f"name={config_in.config_name}: {e}"
+            )
+
+    LOGGER.info("创建[环境配置]初始化完成: ToolBox工具箱 / SIT1 (APP/DB/FILE)")
+
+
 async def init_database_table(app: FastAPI):
-    # 菜单/路由须先于角色，角色/部门须先于用户
+    # 菜单/路由须先于角色，角色/部门须先于用户；应用须先于标签/环境配置
     await init_database_menu()
     await init_database_router(app)
     await init_database_role()
@@ -721,3 +841,4 @@ async def init_database_table(app: FastAPI):
     await init_database_user()
     await init_database_project()
     await init_database_tag()
+    await init_database_env_config()
