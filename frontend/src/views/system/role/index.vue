@@ -35,7 +35,7 @@ function onListPaginationMeta(meta) {
 }
 
 const checkedRowKeys = ref([])
-const queryItems = ref({ name: '' })
+const queryItems = ref({ code: '', name: '', description: '' })
 const vPermission = resolveDirective('permission')
 const ROLE_AUTHORIZED_PERM = apiPermissionKey('post', '/base/role/authorized')
 
@@ -344,7 +344,7 @@ async function updateRoleAuthorized() {
         :is-pagination="true"
         :remote="true"
         :columns="columns"
-        :get-data="api.getRoleList"
+        :get-data="api.searchRoleList"
         :single-line="true"
         :scroll-x="1320"
         row-key="id"
@@ -355,12 +355,30 @@ async function updateRoleAuthorized() {
 
       <!--  搜索  -->
       <template #queryBar>
+        <QueryBarItem label="角色代码：">
+          <NInput
+              v-model:value="queryItems.code"
+              clearable
+              type="text"
+              placeholder="请输入角色代码"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
         <QueryBarItem label="角色名称：">
           <NInput
               v-model:value="queryItems.name"
               clearable
               type="text"
               placeholder="请输入角色名称"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="角色描述：">
+          <NInput
+              v-model:value="queryItems.description"
+              clearable
+              type="text"
+              placeholder="请输入角色描述"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>

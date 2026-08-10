@@ -133,7 +133,11 @@ const pagination = reactive({
   onUpdatePageSize: (pageSize) => {
     pagination.pageSize = pageSize
     pagination.page = 1
-    handleQuery()
+    if (props.isPagination && props.remote) {
+      handleQuery()
+    } else if (props.isPagination) {
+      emit('paginationMeta', { page: 1, page_size: pageSize })
+    }
   },
 })
 
@@ -186,6 +190,8 @@ function onPageChange(currentPage) {
   pagination.page = currentPage
   if (props.remote) {
     handleQuery()
+  } else if (props.isPagination) {
+    emit('paginationMeta', { page: currentPage, page_size: pagination.pageSize })
   }
 }
 function onChecked(rowKeys) {
@@ -210,6 +216,7 @@ function onCheckedRowKeysUpdate(rowKeys) {
 
 defineExpose({
   handleSearch,
+  handleQuery,
   handleReset,
   tableData,
   pagination,

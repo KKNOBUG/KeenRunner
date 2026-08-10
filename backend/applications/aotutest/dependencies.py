@@ -12,7 +12,7 @@ from backend.applications.aotutest.services.autotest_case_crud import AutoTestAp
 from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
 from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
 from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
+from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvCrud
 from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
 from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
@@ -28,7 +28,7 @@ class AutoTestApiServices:
     data_source_curd: AutoTestDataSourceCrud
     detail_curd: AutoTestApiDetailCrud
     env_config_curd: AutoTestApiEnvConfigCrud
-    env_enum_curd: AutoTestApiEnvEnumCrud
+    env_curd: AutoTestApiEnvCrud
     project_curd: AutoTestApiProjectCrud
     record_curd: AutoTestApiTaskRecordCrud
     report_curd: AutoTestApiReportCrud
@@ -48,7 +48,7 @@ async def get_autotest_api_services() -> AutoTestApiServices:
         data_source_curd=AutoTestDataSourceCrud(),
         detail_curd=AutoTestApiDetailCrud(),
         env_config_curd=AutoTestApiEnvConfigCrud(),
-        env_enum_curd=AutoTestApiEnvEnumCrud(),
+        env_curd=AutoTestApiEnvCrud(),
         project_curd=AutoTestApiProjectCrud(),
         record_curd=AutoTestApiTaskRecordCrud(),
         report_curd=AutoTestApiReportCrud(),

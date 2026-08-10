@@ -18,7 +18,7 @@ class AutoTestApiEnvCreate(BaseModel):
 
     env_name: UpperStr = Field(..., max_length=64, description="环境枚举名称")
     project_id: int = Field(..., description="应用ID", ge=1)
-    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB", ge=1, le=3)
+    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB,4:REDIS", ge=1, le=4)
     env_desc: Optional[str] = Field(None, max_length=2048, description="环境枚举描述")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
@@ -30,7 +30,7 @@ class AutoTestApiEnvBase(BaseModel):
     env_code: Optional[str] = Field(None, max_length=64, description="环境标识代码")
     env_name: Optional[Union[UpperStr, str]] = Field(None, max_length=64, description="环境名称")
     project_id: Optional[int] = Field(None, description="应用ID", ge=1)
-    env_type: Optional[int] = Field(None, description="节点类型：1:APP,2:FILE,3:DB")
+    env_type: Optional[int] = Field(None, description="节点类型：1:APP,2:FILE,3:DB,4:REDIS", ge=1, le=4)
     env_desc: Optional[str] = Field(None, max_length=2048, description="环境枚举描述")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
@@ -63,32 +63,6 @@ class AutoTestApiEnvListQuery(BaseModel):
     """按应用聚合查询环境名称列表入参。"""
 
     project_id: Optional[List[int]] = Field(None, description="应用ID列表，如 [999,998,997]")
-
-
-class EnvCreate(BaseModel):
-    """新增环境（应用+名称+节点类型）入参。"""
-
-    project_id: int = Field(..., description="应用ID", ge=1)
-    env_name: str = Field(..., description="环境名称", max_length=64)
-    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
-
-
-class EnvEditRequest(BaseModel):
-    """编辑环境（应用+名称+节点类型）入参。"""
-
-    id: int = Field(..., description="环境枚举ID")
-    project_id: int = Field(..., description="应用ID")
-    env_name: str = Field(..., description="环境名称")
-    env_type: int = Field(..., description="节点类型")
-    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
-
-
-class EnvDeleteRequest(BaseModel):
-    """删除环境（按枚举ID+节点类型）入参。"""
-
-    id: int = Field(..., description="环境枚举ID")
-    env_type: int = Field(..., description="节点类型")
 
 
 class AutoTestApiEnvConfigQueryByProjectsIn(BaseModel):

@@ -14,7 +14,7 @@ import api from '@/api'
 defineOptions({ name: '部门管理' })
 
 const $table = ref(null)
-const queryItems = ref({ name: '' })
+const queryItems = ref({ code: '', name: '', description: '' })
 const vPermission = resolveDirective('permission')
 
 const queryBarProps = {
@@ -25,18 +25,43 @@ const queryBarProps = {
   actionMode: 'dropdown',
 }
 
-function fetchDeptList(params) {
-  const p = { ...params }
-  const nm = p.name != null ? String(p.name).trim() : ''
-  if (nm) p.name = nm
-  else delete p.name
-  return api.getDepts(p).then((res) => {
-    const list = res.data || []
-    return {
-      data: list,
-      total: res.total ?? (Array.isArray(list) ? list.length : 0),
-    }
-  })
+/** 部门树节点是否命中筛选（自身或任一子孙） */
+function deptNodeMatch(node, code, name, description) {
+  const selfHit =
+      (!code || String(node.code || '').includes(code)) &&
+      (!name || String(node.name || '').includes(name)) &&
+      (!description || String(node.description || '').includes(description))
+  const children = Array.isArray(node.children) ? node.children : []
+  const filteredChildren = children
+      .map((c) => filterDeptNode(c, code, name, description))
+      .filter(Boolean)
+  if (selfHit || filteredChildren.length) {
+    return { ...node, children: filteredChildren }
+  }
+  return null
+}
+
+function filterDeptNode(node, code, name, description) {
+  return deptNodeMatch(node, code, name, description)
+}
+
+/**
+ * 部门列表：树形接口全量拉取后按代码/名称/描述前端过滤，保留父子层级。
+ * /dept/search为平面分页，无法直接表达两级部门树，故查询仍走树接口。
+ */
+async function fetchDeptList(params = {}) {
+  const res = await api.getDepts()
+  const code = (params.code || '').trim()
+  const name = (params.name || '').trim()
+  const description = (params.description || '').trim()
+  let list = res.data || []
+  if (code || name || description) {
+    list = list.map((n) => filterDeptNode(n, code, name, description)).filter(Boolean)
+  }
+  return {
+    data: list,
+    total: res.total ?? (Array.isArray(list) ? list.length : 0),
+  }
 }
 
 const initForm = {
@@ -116,19 +141,12 @@ const columns = [
   {
     title: '部门代码',
     key: 'code',
-    width: 100,
+    width: 180,
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
       return h(NTag, { type: 'info' }, { default: () => row.code })
     },
-  },
-  {
-    title: '排序',
-    key: 'order',
-    width: 100,
-    ellipsis: { tooltip: true },
-    align: 'center'
   },
   {
     title: '部门名称',
@@ -255,7 +273,7 @@ const columns = [
         v-model:query-items="queryItems"
         :query-bar-props="queryBarProps"
         :is-pagination="true"
-        :remote="true"
+        :remote="false"
         :columns="columns"
         :get-data="fetchDeptList"
         :single-line="true"
@@ -264,11 +282,27 @@ const columns = [
         @query-bar-create="handleClickAdd"
     >
       <template #queryBar>
+        <QueryBarItem label="部门代码：">
+          <NInput
+              v-model:value="queryItems.code"
+              clearable
+              placeholder="请输入部门代码"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
         <QueryBarItem label="部门名称：">
           <NInput
               v-model:value="queryItems.name"
               clearable
               placeholder="请输入部门名称"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="部门描述：">
+          <NInput
+              v-model:value="queryItems.description"
+              clearable
+              placeholder="请输入部门描述"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>

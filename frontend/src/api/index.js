@@ -28,6 +28,8 @@ export default {
   updatePassword: (data = {}) => request.post('/user/update_password', data),
   // 角色相关
   getRoleList: (params = {}) => request.get('/base/role/list', { params }),
+  /** 角色分页搜索（支持code/name/description），Body 同后端 RoleSelect */
+  searchRoleList: (data = {}) => request.post('/base/role/search', data),
   createRole: (data = {}) => request.post('/base/role/create', data),
   updateRole: (data = {}) => request.post('/base/role/update', data),
   deleteRole: (params = {}) => request.delete('/base/role/delete', { params }),
@@ -43,6 +45,8 @@ export default {
   deleteMenu: (params = {}) => request.delete('/base/menu/delete', { params }),
   // 路由相关
   getRouters: (params = {}) => request.get('/base/router/list', { params }),
+  /** 路由分页搜索（支持method/tags/path/summary），Body 同后端 RouterSelect */
+  searchRouterList: (data = {}) => request.post('/base/router/search', data),
   createRouter: (data = {}) => request.post('/base/router/create', data),
   updateRouter: (data = {}) => request.post('/base/router/update', data),
   deleteRouter: (params = {}) => request.delete('/base/router/delete', { params }),
@@ -58,6 +62,8 @@ export default {
   deleteDeptBatch: (data = {}) => request.post('/dept/deletes', data),
   // 审计相关
   getAuditLogList: (params = {}) => request.get('/base/audit/list', { params }),
+  /** 单条审计日志详情（含请求/响应头体大字段）。Query: audit_id */
+  getAuditLog: (params = {}) => request.get('/base/audit/get', { params }),
   /** 批量删除：Body { audit_ids?: number[] } */
   deleteAuditLogBatch: (data = {}) => request.post('/base/audit/deletes', data),
 
@@ -105,6 +111,8 @@ export default {
   updateFileEnvConfig: (data = {}) => request.post('/autotest/config/file/update', data),
   /** 更新 DB 配置。Body: DBEnvConfigUpdate */
   updateDbEnvConfig: (data = {}) => request.post('/autotest/config/database/update', data),
+  /** 更新 Redis 配置。Body: RedisEnvConfigUpdate */
+  updateRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/update', data),
   /** 删除子表配置（单条）。Body: { id, env_type, updated_user? } */
   deleteEnvConfig: (data = {}) => request.post('/autotest/config/delete', data),
   /** 子表配置分页搜索（含 project_name/env_name）。Body: AutoTestApiConfigSelect */

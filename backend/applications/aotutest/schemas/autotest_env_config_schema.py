@@ -207,11 +207,29 @@ class DBEnvConfigUpdate(BaseModel):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
+class RedisEnvConfigUpdate(BaseModel):
+    """修改 REDIS 类型环境配置入参。"""
+
+    id: int = Field(..., description="配置ID")
+    project_id: str = Field(..., description="应用ID", max_length=64)
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    redis_host: str = Field(..., description="Redis主机", max_length=128)
+    redis_port: str = Field(..., description="Redis端口", max_length=8)
+    redis_db: str = Field(default="0", description="Redis库编号", max_length=128)
+    redis_username: Optional[str] = Field(default="", description="Redis用户名", max_length=128)
+    redis_password: Optional[str] = Field(default="", description="Redis密码", max_length=128)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(2, description="操作类型：2-修改")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+
+
 class EnvConfigDelete(BaseModel):
     """按节点类型删除环境配置入参。"""
 
     id: int = Field(..., description="配置主键ID")
-    env_type: int = Field(..., description="节点类型")
+    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB,4:REDIS", ge=1, le=4)
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 

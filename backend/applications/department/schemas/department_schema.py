@@ -61,6 +61,7 @@ class DepartmentSelect(BaseModel):
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     code: Optional[str] = Field(default=None, description="部门代码")
     name: Optional[str] = Field(default=None, description="部门名称")
+    description: Optional[str] = Field(default=None, description="部门描述")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")

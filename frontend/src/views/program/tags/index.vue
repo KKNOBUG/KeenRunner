@@ -15,7 +15,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { apiPermissionKey, formatDate, renderIcon } from '@/utils'
+import { apiPermissionKey, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
@@ -179,7 +179,6 @@ function onQueryProjectChange(projectId) {
     projectId,
     target: 'query',
   })
-  $table.value?.handleSearch?.()
 }
 
 function customHandleAdd() {
@@ -299,44 +298,6 @@ const columns = computed(() => {
       ellipsis: { tooltip: true }
     },
     {
-      title: '更新时间',
-      key: 'updated_time',
-      width: 180,
-      align: 'center',
-      render(row) {
-        return row.updated_time ? formatDate(row.updated_time, 'YYYY-MM-DD HH:mm:ss') : '-'
-      },
-    },
-    {
-      title: '更新人员',
-      key: 'updated_user',
-      width: 100,
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        return row.updated_user || '-'
-      },
-    },
-    {
-      title: '创建时间',
-      key: 'created_time',
-      width: 180,
-      align: 'center',
-      render(row) {
-        return row.created_time ? formatDate(row.created_time, 'YYYY-MM-DD HH:mm:ss') : '-'
-      },
-    },
-    {
-      title: '创建人员',
-      key: 'created_user',
-      width: 100,
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        return row.created_user || '-'
-      },
-    },
-    {
       title: '操作',
       key: 'actions',
       width: 80,
@@ -434,7 +395,6 @@ const columns = computed(() => {
               filterable
               placeholder="先选应用后可选"
               style="width: 140px"
-              @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="标签名称：">

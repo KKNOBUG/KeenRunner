@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.params import Query
+from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from backend.applications.base.dependencies import get_role_crud
@@ -19,11 +20,24 @@ from backend.applications.base.schemas.role_schema import (
     RoleUpdate,
     RoleUpdateMenusRouters,
     RoleBatchDelete,
+    RoleSelect,
 )
 from backend.applications.base.services.role_crud import RoleCrud
 from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
-from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse, ParameterResponse, NotFoundResponse
+from backend.core.exceptions import (
+    DataAlreadyExistsException,
+    ParameterException,
+    NotFoundException,
+    DataBaseStorageException
+)
+from backend.core.responses import (
+    SuccessResponse,
+    DataAlreadyExistsResponse,
+    FailureResponse,
+    ParameterResponse,
+    NotFoundResponse,
+    DataBaseStorageResponse
+)
 
 role = APIRouter()
 
@@ -196,6 +210,37 @@ async def search_roles(
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据角色name查询角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@role.post("/search", summary="查询角色列表", description="根据条件分页查询角色列表信息(Body)")
+async def search_roles_by_body(
+        role_in: RoleSelect = Body(..., description="查询条件"),
+        role_crud: RoleCrud = Depends(get_role_crud),
+):
+    """
+    查询角色列表。
+
+    :param role_in: 角色查询入参
+    :param role_crud: 角色CRUD服务
+    :return: 统一HTTP响应
+    """
+    try:
+        q = Q()
+        if role_in.code:
+            q &= Q(code__contains=role_in.code)
+        if role_in.name:
+            q &= Q(name__contains=role_in.name)
+        if role_in.description:
+            q &= Q(description__contains=role_in.description)
+
+        total, role_objs = await role_crud.list(
+            page=role_in.page, page_size=role_in.page_size, search=q, order=role_in.order
+        )
+        data = [await obj.to_dict() for obj in role_objs]
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except Exception as e:
+        LOGGER.error(f"根据条件分页查询角色列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 

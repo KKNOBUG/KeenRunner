@@ -49,16 +49,8 @@ async def create_environment(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_enum_curd.create_env(env_in=env_in)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "env_id"}
-        )
+        instance = await services.env_curd.create_env(env_in=env_in)
+        data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataBaseStorageException as e:
@@ -83,16 +75,8 @@ async def delete_environment(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_enum_curd.delete_env(env_id=env_id, env_code=env_code)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "env_id"}
-        )
+        instance = await services.env_curd.delete_env(env_id=env_id, env_code=env_code)
+        data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code删除环境成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
@@ -117,7 +101,7 @@ async def delete_environments(
     :return: 统一HTTP响应
     """
     try:
-        count = await services.env_enum_curd.delete_envs(env_in=env_in)
+        count = await services.env_curd.delete_envs(env_in=env_in)
         LOGGER.info(f"根据id或code列表删除环境成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except ParameterException as e:
@@ -140,16 +124,8 @@ async def update_environment(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_enum_curd.update_env(env_in=env_in)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "env_id"}
-        )
+        instance = await services.env_curd.update_env(env_in=env_in)
+        data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code更新环境成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
@@ -179,18 +155,10 @@ async def get_environment(
     """
     try:
         if env_id:
-            instance = await services.env_enum_curd.get_by_id(env_id=env_id, on_error=True, state__not=1)
+            instance = await services.env_curd.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
-            instance = await services.env_enum_curd.get_by_code(env_code=env_code, on_error=True, state__not=1)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "env_id"}
-        )
+            instance = await services.env_curd.get_by_code(env_code=env_code, on_error=True, state__not=1)
+        data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code查询环境成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
@@ -213,7 +181,7 @@ async def get_environment_names(
     :return: 统一HTTP响应
     """
     try:
-        names: List[str] = await services.env_enum_curd.model.filter(state__not=1).distinct().values_list("env_name", flat=True)
+        names: List[str] = await services.env_curd.list_env_names()
         LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except Exception as e:
@@ -240,28 +208,22 @@ async def search_environments(
         if env_in.env_code:
             q &= Q(env_code=env_in.env_code)
         if env_in.env_name:
-            q &= Q(env_name__contains=env_in.env_name)
+            dict_ids = await services.env_curd.get_dict_ids_by_name(env_in.env_name)
+            if not dict_ids:
+                return SuccessResponse(message="查询成功", data=[], total=0)
+            q &= Q(env_id__in=dict_ids)
         if env_in.created_user:
             q &= Q(created_user__iexact=env_in.created_user)
         if env_in.updated_user:
             q &= Q(updated_user__iexact=env_in.updated_user)
         q &= Q(state=env_in.state)
-        total, instances = await services.env_enum_curd.select_envs(
+        total, instances = await services.env_curd.select_envs(
             search=q,
             page=env_in.page,
             page_size=env_in.page_size,
             order=env_in.order
         )
-        env_serializes: List[Dict[str, Any]] = []
-        for instance in instances:
-            serialize: Dict[str, Any] = await instance.to_dict(
-                exclude_fields={
-                    "state",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
-                replace_fields={"id": "env_id"}
-            )
-            env_serializes.append(serialize)
+        env_serializes: List[Dict[str, Any]] = await services.env_curd.serialize_envs(instances, with_audit=True)
         LOGGER.info(f"根据条件查询环境成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=env_serializes, total=total)
     except ParameterException as e:
@@ -314,7 +276,7 @@ async def list_environments(
     :return: 统一HTTP响应
     """
     try:
-        result_data = await services.env_enum_curd.get_envs(env_in.project_id)
+        result_data = await services.env_curd.get_envs(env_in.project_id)
         return SuccessResponse(message="查询成功", data=result_data)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -346,7 +308,7 @@ async def search_environments(
     :return: 统一HTTP响应
     """
     try:
-        total, data = await services.env_enum_curd.get_env_search_list(
+        total, data = await services.env_curd.get_env_search_list(
             project_id=project_id,
             env_name=env_name,
             env_type=env_type,

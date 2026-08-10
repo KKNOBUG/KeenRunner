@@ -173,18 +173,11 @@ class StepDebugService:
         if not env_name:
             raise ParameterException(message=empty_env_message or f"{label}, 参数[env_name]不允许为空")
 
-        env_row = await services.env_enum_curd.model.filter(
+        env_row = await services.env_curd.get_bind_by_env_name(
             project_id=project_id,
-            env_name__iexact=env_name,
+            env_name=env_name,
             env_type=1,
-            state__not=1,
-        ).first()
-        if not env_row:
-            env_row = await services.env_enum_curd.model.filter(
-                project_id=project_id,
-                env_name__iexact=env_name,
-                state__not=1,
-            ).first()
+        )
         if not env_row:
             tmpl = env_not_found_template or "{label}, 应用[{project_id}]下环境[{env_name}]不存在"
             raise NotFoundException(

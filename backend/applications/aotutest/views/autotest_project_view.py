@@ -10,6 +10,7 @@ import traceback
 from typing import Optional, List
 
 from fastapi import APIRouter, Body, Query, Depends
+from tortoise import connections
 from tortoise.expressions import Q
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
@@ -36,6 +37,33 @@ from backend.core.responses import (
 )
 
 autotest_project = APIRouter()
+
+
+async def _fuzzy_json_list_ids(
+        *,
+        table: str,
+        field: str,
+        keywords: List[str],
+        state: int,
+) -> List[int]:
+    """
+    MySQL JSON列表字段模糊匹配：CAST为字符串后LIKE，命中列表内任一元素片段即返回id。
+
+    :param table: 表名
+    :param field: JSON列表字段名
+    :param keywords: 关键字列表（已去空白）
+    :param state: 状态过滤
+    :return: 命中的主键id列表；无有效关键字时返回空列表
+    """
+    cleaned = [str(k).strip() for k in (keywords or []) if k is not None and str(k).strip()]
+    if not cleaned:
+        return []
+    likes = " OR ".join([f"CAST(`{field}` AS CHAR) LIKE %s" for _ in cleaned])
+    params = [f"%{k}%" for k in cleaned]
+    sql = f"SELECT `id` FROM `{table}` WHERE ({likes}) AND `state`=%s"
+    conn = connections.get("default")
+    rows = await conn.execute_query_dict(sql, [*params, state])
+    return [int(r["id"]) for r in rows]
 
 
 @autotest_project.post("/create", summary="新增应用", description="新增应用信息")
@@ -247,12 +275,23 @@ async def search_projects(
             q &= Q(project_state__contains=project_in.project_state)
         if project_in.project_phase:
             q &= Q(project_phase__contains=project_in.project_phase)
+        # JSON列表负责人：任一元素模糊包含关键字即可；多关键字之间为OR，与其它条件AND
         if project_in.project_dev_owners:
-            for dev_owner in project_in.project_dev_owners:
-                q |= Q(project_dev_owners__contains=[dev_owner])
+            dev_ids = await _fuzzy_json_list_ids(
+                table="krun_autotest_project",
+                field="project_dev_owners",
+                keywords=project_in.project_dev_owners,
+                state=project_in.state,
+            )
+            q &= Q(id__in=dev_ids) if dev_ids else Q(id=-1)
         if project_in.project_test_owners:
-            for test_owner in project_in.project_test_owners:
-                q |= Q(project_test_owners__contains=[test_owner])
+            test_ids = await _fuzzy_json_list_ids(
+                table="krun_autotest_project",
+                field="project_test_owners",
+                keywords=project_in.project_test_owners,
+                state=project_in.state,
+            )
+            q &= Q(id__in=test_ids) if test_ids else Q(id=-1)
         if project_in.created_user:
             q &= Q(created_user=project_in.created_user)
         if project_in.updated_user:

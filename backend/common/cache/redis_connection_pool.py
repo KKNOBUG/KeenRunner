@@ -95,16 +95,26 @@ class RedisConnPoolFromConfig:
             )
 
         try:
-            from applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
-            from enums import AutoTestConfigNodeType
+            # 必须与 Tortoise 初始化时注册的模块路径一致，否则模型无 default_connection
+            from backend.applications.aotutest.models.autotest_model import (
+                AutoTestApiEnvInfo,
+                AutoTestApiEnvBindInfo,
+            )
+            from backend.enums import AutoTestConfigNodeType
         except ImportError as e:
             self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
             return None
 
-        env_row = await AutoTestApiEnvEnumInfo.filter(
-            project_id=app_id_int,
+        dict_ids = await AutoTestApiEnvInfo.filter(
             env_name__iexact=env,
-        ).filter(state__not=1).first()
+            state__not=1,
+        ).values_list("id", flat=True)
+        env_row = None
+        if dict_ids:
+            env_row = await AutoTestApiEnvBindInfo.filter(
+                project_id=app_id_int,
+                env_id__in=list(dict_ids),
+            ).filter(state__not=1).first()
         if not env_row:
             self.logger.warning(
                 f"未找到环境 project_id={app_id_int}, env_name(忽略大小写)={env!r}"

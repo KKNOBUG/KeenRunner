@@ -144,8 +144,10 @@ async def get_routers(
         q = Q()
         if path:
             q &= Q(path__contains=path)
+        # method为CharEnumField(HTTPMethod)，仅支持等值匹配，不支持contains
         if method:
-            q &= Q(method__contains=method)
+            method_value = method.value if hasattr(method, "value") else method
+            q &= Q(method=method_value)
         if summary:
             q &= Q(summary__contains=summary)
         if tags:

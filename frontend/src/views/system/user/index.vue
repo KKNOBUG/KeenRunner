@@ -11,6 +11,7 @@ import {
   NLayoutContent,
   NLayoutSider,
   NPopconfirm,
+  NSelect,
   NSpace,
   NSwitch,
   NTag,
@@ -23,7 +24,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {apiPermissionKey, formatDate, renderIcon} from '@/utils'
+import {apiPermissionKey, formatDateTime, renderIcon} from '@/utils'
 import {useCRUD} from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
@@ -39,7 +40,7 @@ function onListPaginationMeta(meta) {
 }
 
 const checkedRowKeys = ref([])
-const queryItems = ref({ username: '', alias: '', email: '' })
+const queryItems = ref({ username: '', alias: '', dept_id: null, role_id: null })
 const vPermission = resolveDirective('permission')
 
 /** QueryBar：操作合并为下拉 */
@@ -110,6 +111,31 @@ onMounted(() => {
   api.getDepts().then((res) => (deptOption.value = res.data))
 })
 
+/** 所属角色筛选下拉选项 */
+const roleSelectOptions = computed(() =>
+  (roleOption.value || []).map((r) => ({ label: r.name, value: r.id }))
+)
+
+/**
+ * 用户列表数据源：全量拉取后前端筛选分页。
+ * 后端/user/list不支持所属角色筛选，为保证筛选语义与分页正确性，统一在前端完成四个条件的过滤。
+ */
+async function fetchUsers(params = {}) {
+  const res = await api.getUserList({ page: 1, page_size: 9999, state: 0 })
+  let list = res?.data || []
+  const username = (params.username || '').trim()
+  const alias = (params.alias || '').trim()
+  if (username) list = list.filter((u) => (u.username || '').includes(username))
+  if (alias) list = list.filter((u) => (u.alias || '').includes(alias))
+  if (params.dept_id != null) {
+    list = list.filter((u) => Number(u.dept?.id) === Number(params.dept_id))
+  }
+  if (params.role_id != null) {
+    list = list.filter((u) => (u.roles || []).some((r) => Number(r.id) === Number(params.role_id)))
+  }
+  return { data: list, total: list.length }
+}
+
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
   const seqBase = (page - 1) * page_size
@@ -146,7 +172,7 @@ const columns = computed(() => {
       ellipsis: {tooltip: true},
     },
     {
-      title: '用户角色',
+      title: '所属角色',
       key: 'role',
       width: 100,
       align: 'center',
@@ -186,27 +212,10 @@ const columns = computed(() => {
       align: 'center',
       width: 100,
       render(row) {
-        return h(
-            NTag,
-            {type: 'info', style: {margin: '2px 3px'}},
-            {default: () => row.state})
-      },
-    },
-    {
-      title: '是否禁用',
-      key: 'is_active',
-      width: 100,
-      align: 'center',
-      render(row) {
-        return h(NSwitch, {
-          size: 'small',
-          rubberBand: false,
-          value: row.is_active,
-          loading: !!row.publishing,
-          checkedValue: false,
-          uncheckedValue: true,
-          onUpdateValue: () => handleUpdateDisable(row),
-        })
+        const state = Number(row.state)
+        const text = state === 0 ? '启用' : state === 1 ? '禁用' : '-'
+        const type = state === 0 ? 'success' : state === 1 ? 'error' : 'default'
+        return h(NTag, {type, size: 'small'}, {default: () => text})
       },
     },
     {
@@ -216,14 +225,7 @@ const columns = computed(() => {
       width: 200,
       ellipsis: {tooltip: true},
       render(row) {
-        return h(
-            NButton,
-            {size: 'small', type: 'text', ghost: true},
-            {
-              default: () => (row.last_login !== null ? formatDate(row.last_login) : null),
-              icon: renderIcon('mdi:update', {size: 16}),
-            }
-        )
+        return h('span', row.last_login ? formatDateTime(row.last_login) : '-')
       },
     },
     {
@@ -288,7 +290,7 @@ const columns = computed(() => {
                 onPositiveClick: async () => {
                   try {
                     await api.resetPassword({user_id: row.id});
-                    $message.success('密码已成功重置为123456');
+                    $message.success('重置密码成功');
                     await $table.value?.handleSearch();
                   } catch (error) {
                     $message.error('重置密码失败: ' + error.message);
@@ -314,7 +316,7 @@ const columns = computed(() => {
                         ),
                         [[vPermission, apiPermissionKey('post', '/user/reset_password')]]
                     ),
-                default: () => h('div', {}, '确定重置用户密码为123456吗?'),
+                default: () => h('div', {}, '确定重置用户密码吗?'),
               }
           ),
         ]
@@ -323,50 +325,20 @@ const columns = computed(() => {
   ]
 })
 
-// 修改用户禁用状态
-async function handleUpdateDisable(row) {
-  if (!row.id) return
-  const userStore = useUserStore()
-  if (userStore.userId === row.id) {
-    $message.error('当前登录用户不可禁用！')
-    return
-  }
-  row.publishing = true
-  row.is_active = row.is_active === false
-  row.publishing = false
-  const role_ids = []
-  row.roles.forEach((e) => {
-    role_ids.push(e.id)
-  })
-  row.role_ids = role_ids
-  row.dept_id = row.dept?.id
-  const { id, roles, dept, ...payload } = row
-  try {
-    await api.updateUser({ ...payload, user_id: id })
-    $message?.success(row.is_active ? '已取消禁用该用户' : '已禁用该用户')
-    $table.value?.handleSearch()
-  } catch (err) {
-    // 有异常恢复原来的状态
-    row.is_active = row.is_active === false
-  } finally {
-    row.publishing = false
-  }
-}
-
 let lastClickedNodeId = null
 
+// 部门树点击：写入筛选条件后走统一查询；再次点击同一节点取消筛选
 const nodeProps = ({option}) => {
   return {
     onClick() {
       if (lastClickedNodeId === option.id) {
-        $table.value?.handleSearch()
+        queryItems.value.dept_id = null
         lastClickedNodeId = null
       } else {
-        api.getUserList({dept_id: option.id}).then((res) => {
-          $table.value.tableData = res.data
-          lastClickedNodeId = option.id
-        })
+        queryItems.value.dept_id = option.id
+        lastClickedNodeId = option.id
       }
+      $table.value?.handleSearch()
     },
   }
 }
@@ -467,9 +439,9 @@ const validateAddUser = {
             v-model:checked-row-keys="checkedRowKeys"
             :query-bar-props="queryBarProps"
             :is-pagination="true"
-            :remote="true"
+            :remote="false"
             :columns="columns"
-            :get-data="api.getUserList"
+            :get-data="fetchUsers"
             :single-line="true"
             :scroll-x="1500"
             row-key="id"
@@ -498,13 +470,25 @@ const validateAddUser = {
                   @keypress.enter="$table?.handleSearch()"
               />
             </QueryBarItem>
-            <QueryBarItem label="电子邮箱：">
-              <NInput
-                  v-model:value="queryItems.email"
+            <QueryBarItem label="所属部门：">
+              <NTreeSelect
+                  v-model:value="queryItems.dept_id"
+                  style="width: 180px"
+                  :options="deptOption"
+                  key-field="id"
+                  label-field="name"
+                  placeholder="请选择部门"
                   clearable
-                  type="text"
-                  placeholder="请输入邮箱"
-                  @keypress.enter="$table?.handleSearch()"
+                  default-expand-all
+              />
+            </QueryBarItem>
+            <QueryBarItem label="所属角色：">
+              <NSelect
+                  v-model:value="queryItems.role_id"
+                  style="width: 180px"
+                  :options="roleSelectOptions"
+                  clearable
+                  placeholder="请选择所属角色"
               />
             </QueryBarItem>
           </template>
@@ -551,7 +535,7 @@ const validateAddUser = {
             <NFormItem label="手机号码" path="phone">
               <NInput v-model:value="modalForm.phone" clearable placeholder="请输入手机号码"/>
             </NFormItem>
-            <NFormItem label="用户角色" path="role_ids">
+            <NFormItem label="所属角色" path="role_ids">
               <NCheckboxGroup v-model:value="modalForm.role_ids">
                 <NSpace item-style="display: flex;">
                   <NCheckbox
@@ -568,13 +552,6 @@ const validateAddUser = {
                   size="small"
                   :checked-value="true"
                   :unchecked-value="false"/>
-            </NFormItem>
-            <NFormItem label="是否禁用" path="is_active">
-              <NSwitch
-                  v-model:value="modalForm.is_active"
-                  :checked-value="false"
-                  :unchecked-value="true"
-                  :default-value="true"/>
             </NFormItem>
             <NFormItem label="所属部门" path="dept_id">
               <NTreeSelect

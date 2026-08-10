@@ -10,6 +10,7 @@ import {
   NModal,
   NScrollbar,
   NSelect,
+  NSpin,
   NTabPane,
   NTabs,
   NTag,
@@ -179,16 +180,37 @@ function formatXml(xml) {
   return formatted.trim() || xml
 }
 
-/** 渲染对象为 JSON 字符串（如请求头） */
+/** 渲染对象为格式化 JSON 字符串（如请求头）；兼容后端JSONField反序列化为字符串的场景 */
 function formatObject(value) {
-  if (value == null) return ''
+  if (value == null || value === '') return ''
   if (typeof value === 'object') return JSON.stringify(value, null, 2)
-  return String(value)
+  const str = String(value).trim()
+  if (!str) return ''
+  if (str.startsWith('{') || str.startsWith('[')) {
+    try {
+      return JSON.stringify(JSON.parse(str), null, 2)
+    } catch {
+      return str
+    }
+  }
+  return str
 }
 
-function openDetail(row) {
+const detailLoading = ref(false)
+
+// 列表接口不返回请求/响应头体大字段，打开详情时按需拉取单条完整记录
+async function openDetail(row) {
   detailRow.value = row
   detailVisible.value = true
+  detailLoading.value = true
+  try {
+    const res = await api.getAuditLog({ audit_id: row.id })
+    if (res?.data) detailRow.value = res.data
+  } catch {
+    // 详情拉取失败时保留列表行数据展示
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 const columns = computed(() => {
@@ -204,13 +226,6 @@ const columns = computed(() => {
       render(_row, rowIndex) {
         return seqBase + rowIndex + 1
       },
-    },
-    {
-      title: '日志ID',
-      key: 'id',
-      width: 80,
-      align: 'center',
-      ellipsis: { tooltip: true },
     },
     {
       title: '用户名称',
@@ -395,6 +410,7 @@ const columns = computed(() => {
         :style="{ width: '80%' }"
     >
       <template v-if="detailRow">
+        <NSpin :show="detailLoading">
         <NTabs type="line" class="audit-detail-tabs">
           <NTabPane name="request" tab="请求信息">
             <div class="audit-detail-content">
@@ -405,7 +421,7 @@ const columns = computed(() => {
                 <NDescriptionsItem label="请求时间">{{ formatDateTime(detailRow.request_time) }}</NDescriptionsItem>
               </NDescriptions>
               <div class="audit-params-section">
-                <div>请求头部：</div>
+                <div>请求头：</div>
                 <NCard size="small" content-style="padding: 12px;">
                   <NScrollbar style="max-height: 300px;">
                     <textarea v-if="formatObject(detailRow.request_header)" class="audit-code" readonly rows="12" :value="formatObject(detailRow.request_header)" />
@@ -414,7 +430,7 @@ const columns = computed(() => {
                 </NCard>
               </div>
               <div class="audit-params-section">
-                <div>请求参数：</div>
+                <div>请求体：</div>
                 <NCard size="small" content-style="padding: 12px;">
                   <NScrollbar style="max-height: 300px;">
                     <textarea v-if="formatParams(detailRow.request_params) !== '-'" class="audit-code" readonly rows="12" :value="formatParams(detailRow.request_params)" />
@@ -433,7 +449,7 @@ const columns = computed(() => {
                 <NDescriptionsItem label="响应耗时">{{ detailRow.response_elapsed || '-' }}</NDescriptionsItem>
               </NDescriptions>
               <div class="audit-params-section">
-                <div>响应头部：</div>
+                <div>响应头：</div>
                 <NCard size="small" content-style="padding: 12px;">
                   <NScrollbar style="max-height: 300px;">
                     <textarea v-if="formatObject(detailRow.response_header)" class="audit-code" readonly rows="12" :value="formatObject(detailRow.response_header)" />
@@ -442,7 +458,7 @@ const columns = computed(() => {
                 </NCard>
               </div>
               <div class="audit-params-section">
-                <div>响应参数：</div>
+                <div>响应体：</div>
                 <NCard size="small" content-style="padding: 12px;">
                   <NScrollbar style="max-height: 300px;">
                     <textarea v-if="formatParams(detailRow.response_params) !== '-'" class="audit-code" readonly rows="12" :value="formatParams(detailRow.response_params)" />
@@ -453,6 +469,7 @@ const columns = computed(() => {
             </div>
           </NTabPane>
         </NTabs>
+        </NSpin>
       </template>
     </NModal>
   </CommonPage>

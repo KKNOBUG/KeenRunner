@@ -193,6 +193,7 @@ async def search_departments(
         order = department_in.order
         code = department_in.code
         name = department_in.name
+        description = department_in.description
         state = department_in.state
         created_user = department_in.created_user
         updated_user = department_in.updated_user
@@ -202,6 +203,8 @@ async def search_departments(
             q &= Q(code__contains=code)
         if name:
             q &= Q(name__contains=name)
+        if description:
+            q &= Q(description__contains=description)
         if created_user:
             q &= Q(created_user=created_user)
         if updated_user:

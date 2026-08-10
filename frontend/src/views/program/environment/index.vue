@@ -1,6 +1,6 @@
 <script setup>
 import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
-import { NButton, NInput, NPopconfirm, NSelect, NTag } from 'naive-ui'
+import { NButton, NInput, NPopconfirm, NSelect, NSpace, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -8,19 +8,20 @@ import CrudTable from '@/components/table/CrudTable.vue'
 
 import { apiPermissionKey, renderIcon } from '@/utils'
 import api from '@/api'
-import EnvironmentEditDrawer from './EnvironmentEditDrawer.vue'
+import EnvBindModal from './EnvBindModal.vue'
+import EnvConfigModal from './EnvConfigModal.vue'
+import EnvConfigExpandTable from './EnvConfigExpandTable.vue'
 
 defineOptions({ name: '环境管理' })
 
 /**
  * 环境管理（主子表）。
- * 主表：环境枚举（应用 + 环境名称 + 节点类型），来自 GET /autotest/env/page（含 project_name/is_delete）。
- * 子表：环境配置（APP/FILE/DB/Redis），在抽屉内按应用 + 环境名维护。
- * Redis 配置挂在同名 APP 环境枚举下。
+ * 主表：环境绑定（应用 + 环境名称 + 节点类型 APP/FILE/DB/REDIS）。
+ * 子表：展开后按节点类型展示对应配置。
+ * 新增/编辑主表与配置均使用独立弹窗。
  */
 
 const $table = ref(null)
-/** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
 const listPaginationMeta = ref({ page: 1, page_size: 10 })
 function onListPaginationMeta(meta) {
   listPaginationMeta.value = meta
@@ -40,21 +41,48 @@ const ENV_TYPE_OPTIONS = [
   { label: 'APP', value: 1 },
   { label: 'FILE', value: 2 },
   { label: 'DB', value: 3 },
+  { label: 'REDIS', value: 4 },
 ]
-const ENV_TYPE_TAG = { 1: 'success', 2: 'warning', 3: 'info' }
-const ENV_TYPE_LABEL = { 1: 'APP', 2: 'FILE', 3: 'DB' }
-
-const drawerShow = ref(false)
-const editingEnvRow = ref(null)
-
-function openCreate() {
-  editingEnvRow.value = null
-  drawerShow.value = true
+const ENV_TYPE_TAG = { 1: 'success', 2: 'warning', 3: 'info', 4: 'error' }
+const ENV_TYPE_LABEL = { 1: 'APP', 2: 'FILE', 3: 'DB', 4: 'REDIS' }
+const CREATE_CONFIG_PERM = {
+  1: '/autotest/config/app/create',
+  2: '/autotest/config/file/create',
+  3: '/autotest/config/database/create',
+  4: '/autotest/config/redis/create',
 }
 
-function openEdit(row) {
+const bindModalShow = ref(false)
+const editingEnvRow = ref(null)
+
+const configModalShow = ref(false)
+const configModalMode = ref('create')
+const configModalType = ref(1)
+const configEnvRow = ref(null)
+/** 递增后通知已展开的子表重新拉取配置，避免必须手动折叠再展开 */
+const expandRefreshKey = ref(0)
+
+function openCreateBind() {
+  editingEnvRow.value = null
+  bindModalShow.value = true
+}
+
+function openEditBind(row) {
   editingEnvRow.value = row || null
-  drawerShow.value = true
+  bindModalShow.value = true
+}
+
+function openAddConfig(row) {
+  configEnvRow.value = row
+  configModalType.value = Number(row.env_type) || 1
+  configModalMode.value = 'create'
+  configModalShow.value = true
+}
+
+async function onConfigSaved() {
+  expandRefreshKey.value += 1
+  // 同步刷新主表行状态（如 is_delete），不重置页码
+  await $table.value?.handleQuery?.()
 }
 
 async function handleDelete(row) {
@@ -63,7 +91,6 @@ async function handleDelete(row) {
   $table.value?.handleSearch?.()
 }
 
-/** QueryBar：与表格工具栏一致的查询区操作（下拉合并为「操作」） */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
@@ -103,7 +130,14 @@ onMounted(async () => {
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
   const seqBase = (page - 1) * page_size
+  const refreshKey = expandRefreshKey.value
   return [
+    {
+      type: 'expand',
+      fixed: 'left',
+      width: 40,
+      renderExpand: (row) => h(EnvConfigExpandTable, { envRow: row, refreshKey }),
+    },
     { type: 'selection', fixed: 'left', width: 48 },
     {
       title: '序号',
@@ -139,15 +173,6 @@ const columns = computed(() => {
       },
     },
     {
-      title: '更新时间',
-      key: 'updated_time',
-      width: 180,
-      align: 'center',
-      render(row) {
-        return row.updated_time || '-'
-      },
-    },
-    {
       title: '创建时间',
       key: 'created_time',
       width: 180,
@@ -157,62 +182,81 @@ const columns = computed(() => {
       },
     },
     {
+      title: '更新时间',
+      key: 'updated_time',
+      width: 180,
+      align: 'center',
+      render(row) {
+        return row.updated_time || '-'
+      },
+    },
+    {
       title: '操作',
       key: 'actions',
       width: 130,
       align: 'center',
       fixed: 'right',
       render(row) {
-        const btns = [
-          withDirectives(
-              h(
-                  NButton,
-                  {
-                    size: 'tiny',
-                    quaternary: true,
-                    type: 'info',
-                    onClick: () => openEdit(row),
-                  },
-                  {
-                    default: () => '配置明细',
-                    icon: renderIcon('material-symbols:edit-outline', { size: 16 }),
-                  }
-              ),
-              [[vPermission, apiPermissionKey('post', '/autotest/env/update')]]
-          ),
-        ]
-        if (row.is_delete) {
-          btns.push(
-              h(
-                  NPopconfirm,
-                  {
-                    onPositiveClick: () => handleDelete(row),
-                    onNegativeClick: () => {},
-                  },
-                  {
-                    trigger: () =>
-                        withDirectives(
-                            h(
-                                NButton,
-                                {
-                                  size: 'tiny',
-                                  quaternary: true,
-                                  type: 'error',
-                                },
-                                {
-                                  default: () => '删除',
-                                  icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                                }
-                            ),
-                            [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
-                        ),
-                    default: () =>
-                        h('div', {}, '该环境下已无子表配置，确定删除吗？'),
-                  }
-              )
-          )
-        }
-        return btns
+        return h(NSpace, { size: 2, justify: 'center' }, {
+          default: () => [
+            withDirectives(
+                h(
+                    NButton,
+                    {
+                      size: 'tiny',
+                      quaternary: true,
+                      type: 'primary',
+                      title: '添加配置',
+                      onClick: () => openAddConfig(row),
+                    },
+                    { icon: renderIcon('material-symbols:add', { size: 16 }) }
+                ),
+                [[vPermission, apiPermissionKey('post', CREATE_CONFIG_PERM[Number(row.env_type)] || CREATE_CONFIG_PERM[1])]]
+            ),
+            withDirectives(
+                h(
+                    NButton,
+                    {
+                      size: 'tiny',
+                      quaternary: true,
+                      type: 'info',
+                      title: '编辑',
+                      onClick: () => openEditBind(row),
+                    },
+                    { icon: renderIcon('material-symbols:edit-outline', { size: 16 }) }
+                ),
+                [[vPermission, apiPermissionKey('post', '/autotest/env/update')]]
+            ),
+            h(
+                NPopconfirm,
+                { onPositiveClick: () => handleDelete(row) },
+                {
+                  trigger: () =>
+                      withDirectives(
+                          h(
+                              NButton,
+                              {
+                                size: 'tiny',
+                                quaternary: true,
+                                type: 'error',
+                                title: '删除',
+                              },
+                              { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+                          ),
+                          [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
+                      ),
+                  default: () =>
+                      h(
+                          'div',
+                          {},
+                          row.is_delete
+                              ? '该环境下已无子表配置，确定删除吗？'
+                              : '确定删除该环境绑定吗？'
+                      ),
+                }
+            ),
+          ],
+        })
       },
     },
   ]
@@ -233,7 +277,7 @@ const columns = computed(() => {
         :get-data="fetchEnvPage"
         :single-line="true"
         row-key="id"
-        @query-bar-create="openCreate"
+        @query-bar-create="openCreateBind"
         @pagination-meta="onListPaginationMeta"
     >
       <template #queryBar>
@@ -245,7 +289,6 @@ const columns = computed(() => {
               filterable
               placeholder="应用名称"
               style="width: 180px"
-              @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="环境名称：">
@@ -264,7 +307,6 @@ const columns = computed(() => {
               clearable
               placeholder="节点类型"
               style="width: 130px"
-              @update:value="$table?.handleSearch()"
           />
         </QueryBarItem>
         <QueryBarItem label="IP地址：">
@@ -279,11 +321,20 @@ const columns = computed(() => {
       </template>
     </CrudTable>
 
-    <EnvironmentEditDrawer
-        v-model:show="drawerShow"
+    <EnvBindModal
+        v-model:show="bindModalShow"
         :env-row="editingEnvRow"
         :project-options="projectOptions"
         @saved="$table?.handleSearch()"
+    />
+
+    <EnvConfigModal
+        v-if="configEnvRow"
+        v-model:show="configModalShow"
+        :mode="configModalMode"
+        :config-type="configModalType"
+        :env-row="configEnvRow"
+        @saved="onConfigSaved"
     />
   </CommonPage>
 </template>

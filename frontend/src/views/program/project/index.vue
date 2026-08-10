@@ -17,7 +17,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { apiPermissionKey, formatDate, renderIcon } from '@/utils'
+import { apiPermissionKey, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
@@ -42,8 +42,9 @@ const vPermission = resolveDirective('permission')
 
 /** 常用状态预设 + 历史值聚合，减少自由文本分裂 */
 const STATE_PRESETS = ['规划中', '开发中', '测试中', '已上线', '维护中', '已下线']
+const PHASE_PRESETS = ['需求', '设计', '开发', '联调', '测试', '验收', '上线', '运维']
 const stateOptions = ref(STATE_PRESETS.map((v) => ({ label: v, value: v })))
-const phaseOptions = ref([])
+const phaseOptions = ref(PHASE_PRESETS.map((v) => ({ label: v, value: v })))
 const envOptions = ref([])
 
 const {
@@ -216,7 +217,7 @@ async function refreshMetaOptions() {
     const res = await api.getProjectList({ page: 1, page_size: 9999, state: 0 })
     const rows = res?.data || []
     const states = new Set(STATE_PRESETS)
-    const phases = new Set()
+    const phases = new Set(PHASE_PRESETS)
     for (const row of rows) {
       const st = String(row.project_state ?? '').trim()
       const ph = String(row.project_phase ?? '').trim()
@@ -356,44 +357,6 @@ const columns = computed(() => {
       width: 400,
       align: 'center',
       ellipsis: { tooltip: true }
-    },
-    {
-      title: '更新时间',
-      key: 'updated_time',
-      width: 180,
-      align: 'center',
-      render(row) {
-        return row.updated_time ? formatDate(row.updated_time, 'YYYY-MM-DD HH:mm:ss') : '-'
-      },
-    },
-    {
-      title: '更新人员',
-      key: 'updated_user',
-      width: 100,
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        return row.updated_user || '-'
-      },
-    },
-    {
-      title: '创建时间',
-      key: 'created_time',
-      width: 180,
-      align: 'center',
-      render(row) {
-        return row.created_time ? formatDate(row.created_time, 'YYYY-MM-DD HH:mm:ss') : '-'
-      },
-    },
-    {
-      title: '创建人员',
-      key: 'created_user',
-      width: 100,
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        return row.created_user || '-'
-      },
     },
     {
       title: '操作',

@@ -139,25 +139,35 @@ class DBConnPoolFromConfig:
         :return: 标准化连接字典或None
         """
         try:
-            from applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
-            from enums import AutoTestConfigNodeType
+            # 必须与 Tortoise 初始化时注册的模块路径一致，否则模型无 default_connection
+            from backend.applications.aotutest.models.autotest_model import (
+                AutoTestApiEnvInfo,
+                AutoTestApiEnvBindInfo,
+            )
+            from backend.enums import AutoTestConfigNodeType
         except ImportError as e:
             self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
             return None
 
         # 必须带 project_id，避免多应用下同名环境串库
-        env_instance = await AutoTestApiEnvEnumInfo.filter(
-            project_id=project_id,
+        dict_ids = await AutoTestApiEnvInfo.filter(
             env_name__iexact=env_name,
-            env_type=3,
             state__not=1,
-        ).first()
-        if not env_instance:
-            env_instance = await AutoTestApiEnvEnumInfo.filter(
+        ).values_list("id", flat=True)
+        env_instance = None
+        if dict_ids:
+            env_instance = await AutoTestApiEnvBindInfo.filter(
                 project_id=project_id,
-                env_name__iexact=env_name,
+                env_id__in=list(dict_ids),
+                env_type=AutoTestConfigNodeType.DB.value,
                 state__not=1,
             ).first()
+            if not env_instance:
+                env_instance = await AutoTestApiEnvBindInfo.filter(
+                    project_id=project_id,
+                    env_id__in=list(dict_ids),
+                    state__not=1,
+                ).first()
         if not env_instance:
             self.logger.warning(
                 f"未找到环境枚举 project_id={project_id}, env_name(忽略大小写)={env_name!r}"

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
-import {NButton, NForm, NFormItem, NInput, NPopconfirm, NTag} from 'naive-ui'
+import {NButton, NForm, NFormItem, NInput, NPopconfirm, NSelect, NTag} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -17,8 +17,17 @@ import api from '@/api'
 defineOptions({ name: '路由管理' })
 
 const $table = ref(null)
-const queryItems = ref({})
+const queryItems = ref({ method: null, tags: '', path: '', summary: '' })
 const vPermission = resolveDirective('permission')
+
+/** 路由方式筛选选项 */
+const methodOptions = [
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'DELETE', value: 'DELETE' },
+  { label: 'PATCH', value: 'PATCH' },
+]
 const ROUTER_REFRESH_PERM = apiPermissionKey('post', '/base/router/refresh')
 
 const checkedRowKeys = ref([])
@@ -40,13 +49,13 @@ const queryBarProps = {
 async function handleBatchDelete() {
   const ids = [...(checkedRowKeys.value || [])]
   if (!ids.length) {
-    $message.warning('请先勾选要删除的 API')
+    $message.warning('请先勾选要删除的路由')
     return
   }
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 条 API 吗？`,
+    content: `确定删除选中的 ${ids.length} 条路由吗？`,
     async confirm() {
       await Promise.all(ids.map((router_id) => api.deleteRouter({ router_id })))
       $message.success('删除成功')
@@ -67,7 +76,7 @@ const {
   handleDelete,
   handleAdd,
 } = useCRUD({
-  name: 'API',
+  name: '路由',
   initForm: {},
   doCreate: api.createRouter,
   doUpdate: api.updateRouter,
@@ -98,39 +107,39 @@ async function handleRefreshRouter() {
   })
 }
 
-const addAPIRules = {
+const addRouterRules = {
   path: [
     {
       required: true,
-      message: '请输入API路径',
+      message: '请输入路由路径',
       trigger: ['input', 'blur', 'change'],
     },
   ],
   method: [
     {
       required: true,
-      message: '请输入方式',
+      message: '请输入路由方式',
       trigger: ['input', 'blur', 'change'],
     },
   ],
   summary: [
     {
       required: true,
-      message: '请输入API简介',
+      message: '请输入路由摘要',
       trigger: ['input', 'blur', 'change'],
     },
   ],
   tags: [
     {
       required: true,
-      message: '请输入API标签',
+      message: '请输入路由标签',
       trigger: ['input', 'blur', 'change'],
     },
   ],
   description: [
     {
       required: false,
-      message: '请输入API描述',
+      message: '请输入路由描述',
       trigger: ['input', 'blur', 'change'],
     },
   ],
@@ -151,7 +160,7 @@ const columns = computed(() => {
       },
     },
     {
-      title: '路由所属模块',
+      title: '路由标签',
       key: 'tags',
       width: 'auto',
       align: 'center',
@@ -165,21 +174,14 @@ const columns = computed(() => {
       },
     },
     {
-      title: '路由作用简介',
+      title: '路由摘要',
       key: 'summary',
       width: 'auto',
       align: 'center',
       ellipsis: { tooltip: true },
     },
     {
-      title: '路由请求路径',
-      key: 'path',
-      width: 'auto',
-      align: 'center',
-      ellipsis: { tooltip: true },
-    },
-    {
-      title: '路由请求方式',
+      title: '路由方式',
       key: 'method',
       align: 'center',
       width: 'auto',
@@ -193,7 +195,14 @@ const columns = computed(() => {
       },
     },
     {
-      title: '路由功能描述',
+      title: '路由路径',
+      key: 'path',
+      width: 'auto',
+      align: 'center',
+      ellipsis: { tooltip: true },
+    },
+    {
+      title: '路由描述',
       key: 'description',
       width: 'auto',
       align: 'center',
@@ -249,7 +258,7 @@ const columns = computed(() => {
                         ),
                         [[vPermission, apiPermissionKey('delete', '/base/router/delete')]]
                     ),
-                default: () => h('div', {}, '确定删除该API吗?'),
+                default: () => h('div', {}, '确定删除该路由吗?'),
               }
           ),
         ]
@@ -261,7 +270,7 @@ const columns = computed(() => {
 
 <template>
   <!-- 业务页面 -->
-  <CommonPage show-footer title="API列表">
+  <CommonPage show-footer title="路由列表">
     <!-- 表格 -->
     <CrudTable
         ref="$table"
@@ -273,37 +282,46 @@ const columns = computed(() => {
         :single-line="true"
         :scroll-x="1620"
         :columns="columns"
-        :get-data="api.getRouters"
+        :get-data="api.searchRouterList"
         row-key="id"
         @query-bar-create="handleAdd"
         @query-bar-delete="handleBatchDelete"
         @pagination-meta="onListPaginationMeta"
     >
       <template #queryBar>
-        <QueryBarItem label="API简介：">
-          <NInput
-              v-model:value="queryItems.summary"
-              clearable
-              type="text"
-              placeholder="请输入API简介"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="API路径：">
-          <NInput
-              v-model:value="queryItems.path"
-              clearable
-              type="text"
-              placeholder="请输入API路径"
-              @keypress.enter="$table?.handleSearch()"
-          />
-        </QueryBarItem>
-        <QueryBarItem label="API标签：">
+        <QueryBarItem label="路由标签：">
           <NInput
               v-model:value="queryItems.tags"
               clearable
               type="text"
-              placeholder="请输入API标签"
+              placeholder="请输入路由标签"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="路由摘要：">
+          <NInput
+              v-model:value="queryItems.summary"
+              clearable
+              type="text"
+              placeholder="请输入路由摘要"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="路由方式：">
+          <NSelect
+              v-model:value="queryItems.method"
+              style="width: 160px"
+              :options="methodOptions"
+              clearable
+              placeholder="请选择路由方式"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="路由路径：">
+          <NInput
+              v-model:value="queryItems.path"
+              clearable
+              type="text"
+              placeholder="请输入路由路径"
               @keypress.enter="$table?.handleSearch()"
           />
         </QueryBarItem>
@@ -318,7 +336,7 @@ const columns = computed(() => {
             :loading="refreshRouterLoading"
             @click="handleRefreshRouter"
         >
-          <TheIcon icon="material-symbols:refresh" :size="16" class="mr-5" />刷新API
+          <TheIcon icon="material-symbols:refresh" :size="16" class="mr-5" />刷新路由
         </NButton>
       </template>
     </CrudTable>
@@ -335,21 +353,21 @@ const columns = computed(() => {
           label-align="left"
           :label-width="80"
           :model="modalForm"
-          :rules="addAPIRules">
-        <NFormItem label="API简介" path="summary">
-          <NInput v-model:value="modalForm.summary" clearable placeholder="请输入API简介" />
+          :rules="addRouterRules">
+        <NFormItem label="路由摘要" path="summary">
+          <NInput v-model:value="modalForm.summary" clearable placeholder="请输入路由摘要" />
         </NFormItem>
-        <NFormItem label="API路径" path="path">
-          <NInput v-model:value="modalForm.path" clearable placeholder="请输入API路径" />
+        <NFormItem label="路由路径" path="path">
+          <NInput v-model:value="modalForm.path" clearable placeholder="请输入路由路径" />
         </NFormItem>
-        <NFormItem label="API方式" path="method">
-          <NInput v-model:value="modalForm.method" clearable placeholder="请输入API请求方式" />
+        <NFormItem label="路由方式" path="method">
+          <NInput v-model:value="modalForm.method" clearable placeholder="请输入路由请求方式" />
         </NFormItem>
-        <NFormItem label="API标签" path="tags">
-          <NInput v-model:value="modalForm.tags" clearable placeholder="请输入API标签" />
+        <NFormItem label="路由标签" path="tags">
+          <NInput v-model:value="modalForm.tags" clearable placeholder="请输入路由标签" />
         </NFormItem>
-        <NFormItem label="API描述" path="description">
-          <NInput v-model:value="modalForm.description" clearable placeholder="请输入API描述" />
+        <NFormItem label="路由描述" path="description">
+          <NInput v-model:value="modalForm.description" clearable placeholder="请输入路由描述" />
         </NFormItem>
       </NForm>
     </CrudModal>

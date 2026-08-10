@@ -21,6 +21,7 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     FILEEnvConfigCreate,
     DBEnvConfigCreate,
     RedisEnvConfigCreate,
+    RedisEnvConfigUpdate,
     APPEnvConfigUpdate,
     FILEEnvConfigUpdate,
     DBEnvConfigUpdate,
@@ -147,6 +148,32 @@ async def create_redis_config(
     except Exception as e:
         LOGGER.error(f"新增Redis配置失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增Redis配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/redis/update", summary="更新REDIS类型环境配置", description="更新REDIS类型环境配置信息")
+async def update_redis_config(
+        config_in: RedisEnvConfigUpdate = Body(..., description="环境配置信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    更新REDIS类型环境配置信息。
+
+    :param config_in: Redis环境配置更新入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        result = await services.env_config_curd.update_redis_config(config_in)
+        return SuccessResponse(message="修改Redis配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"修改Redis配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"修改Redis配置失败, 错误描述: {e}")
 
 
 @autotest_env_config.post("/delete", summary="删除子表环境配置", description="删除指定子表环境配置信息")
@@ -340,14 +367,7 @@ async def search_env_configs(
             )
         env_ids = [obj.env_id for obj in instances]
         unique_env_ids = list(set(env_ids))
-        env_name_map = {}
-        if unique_env_ids:
-            env_name_map = dict(
-                await services.env_enum_curd.model.filter(
-                    id__in=unique_env_ids,
-                    state__not=1
-                ).values_list("id", "env_name")
-            )
+        env_name_map = await services.env_curd.get_env_name_map(unique_env_ids)
         report_instances = await asyncio.gather(*[
             obj.to_dict(
                 exclude_fields={"state", "reserve_1", "reserve_2", "reserve_3"},
