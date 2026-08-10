@@ -450,10 +450,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 name_map = await self._get_dict_name_map({row["env_id"] for row in rows})
                 env_map: Dict[str, set] = defaultdict(set)
                 for row in rows:
-                    env_type = row["env_type"]
+                    env_type = row["env_type"].value
                     name = name_map.get(row["env_id"])
                     if env_type in allowed_types and name:
-                        env_map[str(env_type)].add(name)
+                        env_map[env_type].add(name)
                 return {et: sorted(names) for et, names in env_map.items()}
 
             unique_pids: Optional[List[int]] = None
@@ -468,10 +468,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             name_map = await self._get_dict_name_map({row["env_id"] for row in rows})
             grouped: Dict[int, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
             for row in rows:
-                env_type = row["env_type"]
+                env_type = row["env_type"].value
                 name = name_map.get(row["env_id"])
                 if env_type in allowed_types and name:
-                    grouped[row["project_id"]][str(env_type)].add(name)
+                    grouped[row["project_id"]][env_type].add(name)
 
             result: Dict[int, Dict[str, List[str]]] = {}
             target_pids = unique_pids if unique_pids is not None else sorted(grouped.keys())
