@@ -851,7 +851,7 @@ const loadTcpConfigNames = async (projectId) => {
   }
   tcpConfigNameLoading.value = true
   try {
-    const res = await api.getEnvConfigNameList({ project_id: pid, config_type: 'api' })
+    const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'api' })
     const list = Array.isArray(res?.data) ? res.data : []
     tcpConfigNameOptions.value = list.map((name) => ({ label: name, value: name }))
   } catch (e) {

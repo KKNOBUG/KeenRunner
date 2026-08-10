@@ -512,7 +512,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 config_qs = AutoTestApiEnvConfigInfo.filter(
                     state=0,
                     config_host__contains=ip,
-                    config_type__in=allowed_types,
+                    env_type__in=allowed_types,
                 )
                 matched_env_ids = await config_qs.values_list("env_id", flat=True)
                 if not matched_env_ids:
@@ -554,10 +554,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 config_rows = await AutoTestApiEnvConfigInfo.filter(
                     env_id__in=check_ids,
                     state=0,
-                    config_type__in=allowed_types,
-                ).values("env_id", "project_id", "config_type")
+                    env_type__in=allowed_types,
+                ).values("env_id", "project_id", "env_type")
                 for crow in config_rows:
-                    sub_exists.add((crow["env_id"], crow["project_id"], crow["config_type"]))
+                    sub_exists.add((crow["env_id"], crow["project_id"], crow["env_type"]))
 
             result: List[Dict[str, Any]] = []
             for item in page_rows:

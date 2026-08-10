@@ -375,8 +375,8 @@ async def search_env_configs(
             q &= Q(project_id=config_in.project_id)
         if config_in.config_name:
             q &= Q(config_name__contains=config_in.config_name)
-        if config_in.config_type:
-            q &= Q(config_type=config_in.config_type.value)
+        if config_in.env_type:
+            q &= Q(env_type=config_in.env_type.value)
         if config_in.database_type:
             q &= Q(database_type=config_in.database_type.value)
         if config_in.created_user:
@@ -460,7 +460,7 @@ async def classify_env_configs(
 async def get_env_config_names(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
-        config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型，可选"),
+        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型，可选"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -468,16 +468,16 @@ async def get_env_config_names(
 
     :param project_id: 应用主键ID
     :param env_id: 环境主键ID
-    :param config_type: 配置类型
+    :param env_type: 配置类型
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        config_type_val = config_type.value if config_type is not None else None
+        env_type_val = env_type.value if env_type is not None else None
         data = await services.env_config_curd.list_distinct_config_names(
             project_id=project_id,
             env_id=env_id,
-            config_type=config_type_val,
+            env_type=env_type_val,
         )
         return SuccessResponse(message="查询成功", data=data, total=len(data))
     except Exception as e:
@@ -489,7 +489,7 @@ async def get_env_config_names(
 async def list_env_configs(
         project_id: Optional[int] = Query(None, description="应用ID"),
         env_name: Optional[str] = Query(None, description="环境名称"),
-        config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型(api/file/database/redis)"),
+        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(api/file/database/redis)"),
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -499,7 +499,7 @@ async def list_env_configs(
 
     :param project_id: 应用主键ID
     :param env_name: 环境名称
-    :param config_type: 配置类型
+    :param env_type: 配置类型
     :param page: 页码
     :param page_size: 每页条数
     :param services: 自动化测试CRUD依赖聚合
@@ -509,7 +509,7 @@ async def list_env_configs(
         total, data = await services.env_config_curd.get_config_list(
             project_id=project_id,
             env_name=env_name,
-            config_type=config_type,
+            env_type=env_type,
             page=page,
             page_size=page_size,
         )

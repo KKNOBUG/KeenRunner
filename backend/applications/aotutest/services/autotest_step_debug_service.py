@@ -156,13 +156,13 @@ class StepDebugService:
             empty_env_message: Optional[str] = None,
     ) -> EnvEndpoint:
         """
-        按应用+环境名+配置名+类型解析环境配置（优先 env_type=api）。
+        按应用+环境名+配置名+节点类型解析环境配置（绑定与配置的 env_type 对齐）。
 
         :param services: CRUD依赖聚合
         :param project_id: 应用ID
         :param env_name: 环境名称
         :param config_name: 配置名称
-        :param config_type: 配置节点类型
+        :param config_type: 节点类型(与绑定表 env_type / 配置表 env_type 一致)
         :param label: 错误信息前缀（如HTTP请求调试失败）
         :param env_not_found_template: 环境不存在文案模板，可用{label}/{project_id}/{env_name}
         :param config_not_found_template: 配置不存在文案模板，可用{label}/{config_name}
@@ -176,7 +176,7 @@ class StepDebugService:
         env_row = await services.env_curd.get_bind_by_env_name(
             project_id=project_id,
             env_name=env_name,
-            env_type=AutoTestConfigNodeType.API,
+            env_type=config_type,
         )
         if not env_row:
             tmpl = env_not_found_template or "{label}, 应用[{project_id}]下环境[{env_name}]不存在"
@@ -191,7 +191,7 @@ class StepDebugService:
             env_id=env_row.id,
             project_id=project_id,
             config_name=config_name,
-            config_type=config_type,
+            env_type=config_type,
         )
         if not env_config_instance:
             tmpl = config_not_found_template or "{label}, 目标环境下[{config_name}]配置不存在"

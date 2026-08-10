@@ -85,7 +85,7 @@ async function deleteConfig(type, row) {
   try {
     await api.deleteEnvConfig({
       config_id: configId,
-      config_type: type,
+      env_type: type,
       updated_user: currentMaintainer(),
     })
     window.$message?.success?.('删除成功')
@@ -199,7 +199,7 @@ async function loadTypeRows(type) {
   const res = await api.getEnvConfigList({
     project_id: Number(props.envRow.project_id),
     env_name: props.envRow.env_name,
-    config_type: type,
+    env_type: type,
     page: 1,
     page_size: 50,
   })

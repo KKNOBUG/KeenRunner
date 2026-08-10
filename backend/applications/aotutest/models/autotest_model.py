@@ -101,10 +101,10 @@ class AutoTestApiEnvBindInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
+    env_type = fields.CharEnumField(AutoTestConfigNodeType, description="节点类型")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
     config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
-    config_type = fields.CharEnumField(AutoTestConfigNodeType, description="配置类型")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
     config_host = fields.CharField(max_length=128, description="数据库/服务器主机地址")
     config_port = fields.CharField(max_length=8, null=True, description="数据库/服务器端口")

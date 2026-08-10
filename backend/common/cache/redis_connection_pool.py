@@ -132,8 +132,8 @@ class RedisConnPoolFromConfig:
             project_id=app_id_int,
             env_id=env_row.id,
         ).filter(state__not=1)
-        if "config_type" in field_names:
-            qs = qs.filter(config_type=AutoTestConfigNodeType.REDIS.value)
+        if "env_type" in field_names:
+            qs = qs.filter(env_type=AutoTestConfigNodeType.REDIS.value)
         config_obj = await qs.filter(
             config_name__iexact=config_name,
             database_name__iexact=db_name,

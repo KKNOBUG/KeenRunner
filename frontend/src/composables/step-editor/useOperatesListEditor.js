@@ -125,10 +125,10 @@ export function useOperatesListEditor({
         if (configCache[pid] && !force) return configCache[pid]
         try {
             const [resNames, res] = await Promise.all([
-                api.getEnvConfigNameList({ project_id: pid, config_type: configType }),
+                api.getEnvConfigNameList({ project_id: pid, env_type: configType }),
                 api.searchEnvConfig({
                     project_id: pid,
-                    config_type: configType,
+                    env_type: configType,
                     page: 1,
                     page_size: 500,
                     state: 0

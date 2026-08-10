@@ -36,7 +36,7 @@ class AutoTestApiEnvConfigBase(BaseModel):
     env_name: Optional[str] = Field(None, max_length=64, description="环境名称(用于解析env_id，不落库)")
     config_name: Optional[str] = Field(None, max_length=128, description="配置名称")
     config_desc: Optional[str] = Field(None, max_length=2048, description="配置描述")
-    config_type: Optional[AutoTestConfigNodeType] = Field(None, description="配置类型(api/file/database/redis)")
+    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(api/file/database/redis)")
     config_host: Optional[str] = Field(None, max_length=128, description="主机地址")
     config_port: Optional[str] = Field(None, max_length=8, description="端口")
     config_group: Optional[str] = Field(None, max_length=128, description="分组")
@@ -55,15 +55,15 @@ class AutoTestApiEnvConfigCreate(AutoTestApiEnvConfigBase):
 
     project_id: int = Field(..., ge=1, description="应用ID")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(api/file/database/redis)")
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="主机地址")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
     @model_validator(mode="after")
-    def _validate_by_config_type(self):
-        """按配置类型校验必填字段。"""
-        if self.config_type == AutoTestConfigNodeType.DB:
+    def _validate_by_env_type(self):
+        """按节点类型校验必填字段。"""
+        if self.env_type == AutoTestConfigNodeType.DB:
             _validate_db_required_fields(
                 database_name=self.database_name,
                 database_type=self.database_type,
@@ -81,11 +81,11 @@ class AutoTestApiEnvConfigUpdate(AutoTestApiEnvConfigBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
     @model_validator(mode="after")
-    def _validate_by_config_type(self):
-        """更新时若携带config_type=DB，则校验DB必填字段。"""
-        if self.config_type is None:
+    def _validate_by_env_type(self):
+        """更新时若携带env_type=DB，则校验DB必填字段。"""
+        if self.env_type is None:
             return self
-        if self.config_type == AutoTestConfigNodeType.DB:
+        if self.env_type == AutoTestConfigNodeType.DB:
             _validate_db_required_fields(
                 database_name=self.database_name,
                 database_type=self.database_type,
@@ -106,7 +106,7 @@ class AutoTestApiEnvConfigTypedDelete(BaseModel):
     """按节点类型删除单条环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(api/file/database/redis)")
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
@@ -143,19 +143,19 @@ class TestDBConnectionRequest(BaseModel):
 class APPEnvConfigCreate(AutoTestApiEnvConfigCreate):
     """新增APP(api)类型环境配置入参。"""
 
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="节点类型")
 
 
 class FILEEnvConfigCreate(AutoTestApiEnvConfigCreate):
     """新增FILE类型环境配置入参。"""
 
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.FILE, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.FILE, description="节点类型")
 
 
 class DBEnvConfigCreate(AutoTestApiEnvConfigCreate):
     """新增DB(database)类型环境配置入参。"""
 
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="节点类型")
     database_name: str = Field(..., max_length=128, description="数据库名称")
     database_type: AutoTestDataBaseType = Field(..., description="数据库类型")
     config_username: str = Field(..., max_length=128, description="数据库用户名")
@@ -165,7 +165,7 @@ class DBEnvConfigCreate(AutoTestApiEnvConfigCreate):
 class RedisEnvConfigCreate(AutoTestApiEnvConfigCreate):
     """新增REDIS类型环境配置入参。"""
 
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.REDIS, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.REDIS, description="节点类型")
     config_port: str = Field(..., max_length=8, description="Redis端口")
     database_name: Optional[str] = Field(None, max_length=128, description="Redis库编号")
     config_username: Optional[str] = Field(None, max_length=128, description="Redis用户名")
@@ -176,7 +176,7 @@ class APPEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     """修改APP(api)类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
     config_host: str = Field(..., max_length=128, description="主机地址")
@@ -187,7 +187,7 @@ class FILEEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     """修改FILE类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.FILE, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.FILE, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
     config_host: str = Field(..., max_length=128, description="主机地址")
@@ -198,7 +198,7 @@ class DBEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     """修改DB(database)类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
     config_host: str = Field(..., max_length=128, description="主机地址")
@@ -213,7 +213,7 @@ class RedisEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     """修改REDIS类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.REDIS, description="配置类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.REDIS, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
     config_host: str = Field(..., max_length=128, description="主机地址")

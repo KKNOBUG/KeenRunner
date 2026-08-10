@@ -179,8 +179,8 @@ class DBConnPoolFromConfig:
             env_id=env_instance.id,
             state__not=1,
         )
-        if "config_type" in field_names:
-            config_query = config_query.filter(config_type=AutoTestConfigNodeType.DB.value)
+        if "env_type" in field_names:
+            config_query = config_query.filter(env_type=AutoTestConfigNodeType.DB.value)
         config_obj = await config_query.filter(
             config_name__iexact=config_name,
             database_name__iexact=database_name,
