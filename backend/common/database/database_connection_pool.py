@@ -10,7 +10,7 @@ import asyncio
 import traceback
 from datetime import date, time, datetime, timedelta
 from decimal import Decimal
-from typing import Dict, Optional, Any, Type, Tuple
+from typing import Dict, Optional, Any, Type, Tuple, Union
 
 import aiomysql
 import oracledb
@@ -25,7 +25,7 @@ class DBConnPoolFromConfig:
     """
     基于环境配置表的数据库连接池管理器（单例）。
 
-    池与错误按四层键缓存：project_id -> env_name -> config_name -> database_name。
+    池与错误按四层坐标缓存：project_id -> env_name -> config_name -> database_name。
     """
 
     __private_instance = None
@@ -53,45 +53,37 @@ class DBConnPoolFromConfig:
         self.errors: Dict[int, Dict[str, Dict[str, Dict[str, str]]]] = {}
 
     @staticmethod
-    def _normalize_pool_keys(
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-    ) -> Tuple[int, str, str, str]:
+    def _normalize(project_id: int, env_name: str, config_name: str, database_name: str) -> Tuple[int, str, str, str]:
         """
-        规范化四层缓存键：project_id去空白，其余转小写。
+        规范化四层缓存坐标：应用ID转整数，名称类字段去空白并转小写。
 
         :param project_id: 应用主键ID
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名
         :return: (project_id, env_name, config_name, database_name)
+        :raises ValueError: 应用ID非法或任一必填项为空
         """
-        return (
-            project_id,
-            env_name.lower().strip(),
-            config_name.lower().strip(),
-            database_name.lower().strip(),
-        )
+        env_name = (env_name or "").strip().lower()
+        config_name = (config_name or "").strip().lower()
+        database_name = (database_name or "").strip().lower()
+        if not project_id or not env_name or not config_name or not database_name:
+            raise ValueError("应用ID、环境名称、配置名称、数据库名称均不能为空")
+        return project_id, env_name, config_name, database_name
 
-    async def _get_db_config_from_orm(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_db_config_from_orm(self, project_id: int, env_name: str, config_name: str, database_name: str) -> Optional[Dict[str, Any]]:
         """
         从自动化环境配置表加载数据库连接参数。
 
         解析路径：环境字典(env_name) -> 环境绑定(project_id+env_type=database) -> 配置行。
 
-        :param project_id: 应用ID字符串
+        :param project_id: 应用主键ID
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名
         :return: 含host/port/username/password/database_name/db_type的字典；未找到为None
+        :raises ValueError: 未提供config_model
+        :raises RuntimeError: 无法导入环境模型或枚举
         """
         if not self.config_model:
             raise ValueError("未提供ORM模型，请通过config_model参数传入")
@@ -104,21 +96,22 @@ class DBConnPoolFromConfig:
             )
             from backend.enums import AutoTestConfigNodeType
         except ImportError as e:
-            self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
-            return None
+            error_message = f"无法导入自动化测试环境模型或枚举: {e}"
+            self.logger.error(error_message)
+            raise RuntimeError(error_message) from e
 
-        dict_ids = await AutoTestApiEnvInfo.filter(
+        env_dict_ids = await AutoTestApiEnvInfo.filter(
             env_name__iexact=env_name,
             state__not=1,
         ).values_list("id", flat=True)
-        if not dict_ids:
+        if not env_dict_ids:
             self.logger.warning(f"未找到环境字典 env_name(忽略大小写)={env_name!r}")
             return None
 
         # 必须带project_id与env_type，避免多应用同名环境或跨节点类型串库
         env_bind = await AutoTestApiEnvBindInfo.filter(
             project_id=project_id,
-            env_id__in=list(dict_ids),
+            env_id__in=list(env_dict_ids),
             env_type=AutoTestConfigNodeType.DB,
             state__not=1,
         ).first()
@@ -140,9 +133,9 @@ class DBConnPoolFromConfig:
         if not config_obj:
             return None
 
-        raw_port = config_obj.config_port or "3306"
+        port_raw = config_obj.config_port or "3306"
         try:
-            port = int(str(raw_port).strip())
+            port = int(str(port_raw).strip())
         except (TypeError, ValueError):
             port = 3306
 
@@ -159,23 +152,15 @@ class DBConnPoolFromConfig:
             "db_type": str(database_type or "mysql").lower(),
         }
 
-    def _set_pool(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-            pool: Any,
-    ) -> None:
+    def _set_pool(self, project_id: int, env_name: str, config_name: str, database_name: str, pool: Any) -> None:
         """
         写入四层连接池缓存。
 
-        :param project_id: 应用ID键
-        :param env_name: 环境键
-        :param config_name: 配置名称键
-        :param database_name: 数据库名键
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: 数据库名
         :param pool: 连接池对象
-        :return: None
         """
         if project_id not in self.pools:
             self.pools[project_id] = {}
@@ -185,23 +170,15 @@ class DBConnPoolFromConfig:
             self.pools[project_id][env_name][config_name] = {}
         self.pools[project_id][env_name][config_name][database_name] = pool
 
-    def _set_error(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-            error_message: str,
-    ) -> None:
+    def _set_error(self, project_id: int, env_name: str, config_name: str, database_name: str, error_message: str) -> None:
         """
         写入四层建池错误缓存。
 
-        :param project_id: 应用ID键
-        :param env_name: 环境键
-        :param config_name: 配置名称键
-        :param database_name: 数据库名键
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: 数据库名
         :param error_message: 错误描述
-        :return: None
         """
         if project_id not in self.errors:
             self.errors[project_id] = {}
@@ -211,41 +188,28 @@ class DBConnPoolFromConfig:
             self.errors[project_id][env_name][config_name] = {}
         self.errors[project_id][env_name][config_name][database_name] = error_message
 
-    def _clear_error(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-    ) -> None:
+    def _clear_error(self, project_id: int, env_name: str, config_name: str, database_name: str) -> None:
         """
-        清除指定键的建池错误记录。
+        清除指定坐标的建池错误记录。
 
-        :param project_id: 应用ID键
-        :param env_name: 环境键
-        :param config_name: 配置名称键
-        :param database_name: 数据库名键
-        :return: None
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: 数据库名
         """
         try:
             del self.errors[project_id][env_name][config_name][database_name]
         except KeyError:
             pass
 
-    def _get_pool(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-    ) -> Optional[Any]:
+    def _get_pool(self, project_id: int, env_name: str, config_name: str, database_name: str) -> Optional[Any]:
         """
         读取已缓存的连接池。
 
-        :param project_id: 应用ID键
-        :param env_name: 环境键
-        :param config_name: 配置名称键
-        :param database_name: 数据库名键
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: 数据库名
         :return: 连接池对象或None
         """
         try:
@@ -253,14 +217,7 @@ class DBConnPoolFromConfig:
         except KeyError:
             return None
 
-    async def create_pool(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-            max_retries: int = 3,
-    ) -> bool:
+    async def create_pool(self, project_id: Union[int, str], env_name: str, config_name: str, database_name: str, max_retries: int = 3) -> bool:
         """
         按配置创建数据库连接池；已存在则不重复创建。
 
@@ -270,29 +227,27 @@ class DBConnPoolFromConfig:
         :param database_name: 数据库名
         :param max_retries: 建池失败重试次数
         :return: 新建成功为True；池已存在为False
+        :raises ValueError: 参数非法、配置缺失或不支持的数据库类型
+        :raises RuntimeError: 查询配置过程出现非预期错误
+        :raises ConnectionError: 建池连接失败且重试耗尽
         """
-        if not all([project_id, env_name, config_name, database_name]):
-            error_message: str = "应用ID、环境、配置名称、数据库名称均不能为空"
-            self.logger.error(error_message)
-            raise ValueError(error_message)
-
-        project_id_key, env_key, config_key, db_key = self._normalize_pool_keys(
+        project_id, env_name, config_name, database_name = self._normalize(
             project_id, env_name, config_name, database_name
         )
-        if self._get_pool(project_id_key, env_key, config_key, db_key):
+        if self._get_pool(project_id, env_name, config_name, database_name):
             return False
 
         try:
             db_config = await self._get_db_config_from_orm(
-                project_id_key, env_key, config_key, db_key
+                project_id, env_name, config_name, database_name
             )
             if not db_config:
                 error_message = (
-                    f"配置表未找到记录 [project_id={project_id!r}, env_name={env_key!r}, "
-                    f"config_name={config_key!r}, database_name={db_key!r}]"
+                    f"配置表未找到记录 [project_id={project_id}, env_name={env_name!r}, "
+                    f"config_name={config_name!r}, database_name={database_name!r}]"
                 )
                 self.logger.error(error_message)
-                self._set_error(project_id_key, env_key, config_key, db_key, error_message)
+                self._set_error(project_id, env_name, config_name, database_name, error_message)
                 raise ValueError(error_message)
 
             missing_fields = [
@@ -302,21 +257,21 @@ class DBConnPoolFromConfig:
             if missing_fields:
                 error_message = f"数据库配置缺少必填字段：{missing_fields}"
                 self.logger.error(error_message)
-                self._set_error(project_id_key, env_key, config_key, db_key, error_message)
+                self._set_error(project_id, env_name, config_name, database_name, error_message)
                 raise ValueError(error_message)
-        except ValueError:
+        except (ValueError, RuntimeError):
             raise
         except Exception as e:
             error_message = f"查询数据库配置失败：{e}"
             self.logger.error(f"{error_message}\n{traceback.format_exc()}")
-            self._set_error(project_id_key, env_key, config_key, db_key, error_message)
-            raise
+            self._set_error(project_id, env_name, config_name, database_name, error_message)
+            raise RuntimeError(error_message) from e
 
         db_type = str(db_config.get("db_type") or "mysql").lower()
         if db_type not in SUPPORTED_DB_TYPES:
             error_message = f"不支持的数据库类型: {db_type!r}"
             self.logger.error(error_message)
-            self._set_error(project_id_key, env_key, config_key, db_key, error_message)
+            self._set_error(project_id, env_name, config_name, database_name, error_message)
             raise ValueError(error_message)
 
         event_loop = asyncio.get_running_loop()
@@ -337,7 +292,7 @@ class DBConnPoolFromConfig:
                         autocommit=True,
                     )
                 else:
-                    # Oracle 使用同步连接池，SQL 在线程池中执行
+                    # Oracle使用同步连接池，SQL在线程池中执行
                     def _create_oracle_pool():
                         return oracledb.create_pool(
                             user=db_config["username"],
@@ -352,12 +307,12 @@ class DBConnPoolFromConfig:
 
                     pool = await event_loop.run_in_executor(None, _create_oracle_pool)
 
-                self._set_pool(project_id_key, env_key, config_key, db_key, pool)
-                self._clear_error(project_id_key, env_key, config_key, db_key)
+                self._set_pool(project_id, env_name, config_name, database_name, pool)
+                self._clear_error(project_id, env_name, config_name, database_name)
                 self.logger.info(
                     f"数据库连接池创建成功 "
-                    f"[project_id={project_id_key}, env_name={env_key}, config={config_key}, "
-                    f"db={db_key}, type={db_type}]"
+                    f"[project_id={project_id}, env_name={env_name}, config_name={config_name}, "
+                    f"database_name={database_name}, db_type={db_type}]"
                 )
                 return True
             except Exception as e:
@@ -367,28 +322,27 @@ class DBConnPoolFromConfig:
                     )
                     await asyncio.sleep(3)
                     continue
-                error_message = f"连接失败，错误信息：{e}"
+                error_message = f"数据库连接失败：{e}"
                 self.logger.error(error_message)
-                self._set_error(project_id_key, env_key, config_key, db_key, error_message)
+                self._set_error(project_id, env_name, config_name, database_name, error_message)
                 raise ConnectionError(error_message) from e
-        return False
+        # max_retries<=0时不会进入循环
+        raise ValueError(f"建池重试次数非法: max_retries={max_retries}")
 
-    async def execute_sql(
-            self,
-            pool: Any,
-            sql: str,
-            result_as_dict: bool = True,
-    ) -> Dict[str, Any]:
+    async def execute_sql(self, pool: Any, sql: str, result_as_dict: bool = True) -> Dict[str, Any]:
         """
-        在已有连接池上执行 SQL。
+        在已有连接池上执行SQL。
 
-        :param pool: aiomysql.Pool 或 oracledb.ConnectionPool
-        :param sql: SQL 语句
+        :param pool: aiomysql.Pool或oracledb.ConnectionPool
+        :param sql: SQL语句
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": 查询行或影响统计, "sql_count": 影响/返回行数}
+        :raises ValueError: pool或sql非法
+        :raises TypeError: 不支持的连接池类型
+        :raises RuntimeError: SQL执行失败
         """
         if not pool:
-            raise ValueError("缺少数据库池连接对象，请检查")
+            raise ValueError("缺少数据库连接池对象")
         if not sql or not str(sql).strip():
             raise ValueError("SQL语句不能为空")
 
@@ -399,17 +353,12 @@ class DBConnPoolFromConfig:
             return await self._execute_oracle_sql(pool, sql, result_as_dict)
         raise TypeError(f"不支持的连接池类型: {pool_type_name}")
 
-    async def _execute_mysql_sql(
-            self,
-            pool: Any,
-            sql: str,
-            result_as_dict: bool,
-    ) -> Dict[str, Any]:
+    async def _execute_mysql_sql(self, pool: Any, sql: str, result_as_dict: bool) -> Dict[str, Any]:
         """
-        使用 aiomysql 连接池执行 SQL。
+        使用aiomysql连接池执行SQL。
 
         :param pool: aiomysql.Pool
-        :param sql: SQL 语句
+        :param sql: SQL语句
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": ..., "sql_count": int}
         """
@@ -438,21 +387,16 @@ class DBConnPoolFromConfig:
                     return {"sql_data": sql_data, "sql_count": affected_rows}
             except Exception as e:
                 await connection.rollback()
-                error_message = f"SQL执行失败，{e}"
+                error_message = f"SQL执行失败：{e}"
                 self.logger.error(f"{error_message}\n{traceback.format_exc()}")
                 raise RuntimeError(error_message) from e
 
-    async def _execute_oracle_sql(
-            self,
-            pool: Any,
-            sql: str,
-            result_as_dict: bool,
-    ) -> Dict[str, Any]:
+    async def _execute_oracle_sql(self, pool: Any, sql: str, result_as_dict: bool) -> Dict[str, Any]:
         """
-        使用 oracledb 同步连接池在线程中执行 SQL。
+        使用oracledb同步连接池在线程中执行SQL。
 
         :param pool: oracledb.ConnectionPool
-        :param sql: SQL 语句
+        :param sql: SQL语句
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": ..., "sql_count": int}
         """
@@ -500,7 +444,7 @@ class DBConnPoolFromConfig:
             )
             return {"sql_data": sql_data, "sql_count": sql_count}
         except Exception as e:
-            error_message = f"执行sql失败，{e}"
+            error_message = f"SQL执行失败：{e}"
             self.logger.error(f"{error_message}\n{traceback.format_exc()}")
             raise RuntimeError(error_message) from e
 
@@ -511,6 +455,7 @@ class DBConnPoolFromConfig:
 
         :param obj: 待序列化对象
         :return: 可被orjson处理的基础类型
+        :raises TypeError: 无法序列化的类型
         """
         if isinstance(obj, Decimal):
             return str(obj)
@@ -528,10 +473,9 @@ class DBConnPoolFromConfig:
 
     async def _close_pool(self, pool: Any) -> None:
         """
-        关闭单个连接池（兼容 aiomysql 异步关闭与 Oracle 同步关闭）。
+        关闭单个连接池（aiomysql异步关闭；Oracle同步关闭）。
 
         :param pool: 连接池对象
-        :return: None
         """
         if hasattr(pool, "close") and hasattr(pool, "wait_closed"):
             pool.close()
@@ -539,46 +483,38 @@ class DBConnPoolFromConfig:
         elif hasattr(pool, "close"):
             await asyncio.get_running_loop().run_in_executor(None, pool.close)
 
-    async def close(self, project_id: Optional[str] = None) -> None:
+    async def close(self, project_id: Optional[Union[int, str]] = None) -> None:
         """
         关闭指定应用或全部连接池，并清理对应错误记录。
 
-        :param project_id: 应用ID；为空则关闭全部
-        :return: None
+        :param project_id: 应用主键ID；为空则关闭全部
         """
-        if project_id:
-            project_id_key = project_id.strip()
-            if project_id_key not in self.pools:
+        if project_id is not None:
+            try:
+                project_id = int(str(project_id).strip())
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"应用ID不合法: {project_id!r}") from e
+            if project_id not in self.pools:
                 return
-            for env_key in list(self.pools[project_id_key].keys()):
-                for config_key in list(self.pools[project_id_key][env_key].keys()):
-                    for db_key, pool in list(self.pools[project_id_key][env_key][config_key].items()):
+            for env_name in list(self.pools[project_id].keys()):
+                for config_name in list(self.pools[project_id][env_name].keys()):
+                    for database_name, pool in list(self.pools[project_id][env_name][config_name].items()):
                         await self._close_pool(pool)
-                        self.logger.info(
-                            f"连接池已关闭 [{project_id_key}/{env_key}/{config_key}/{db_key}]"
-                        )
-            del self.pools[project_id_key]
-            self.errors.pop(project_id_key, None)
+                        self.logger.info(f"连接池已关闭: [project_id={project_id}/{env_name}/{config_name}/{database_name}]")
+            del self.pools[project_id]
+            self.errors.pop(project_id, None)
             return
 
-        for project_id_key in list(self.pools.keys()):
-            for env_key in list(self.pools[project_id_key].keys()):
-                for config_key in list(self.pools[project_id_key][env_key].keys()):
-                    for db_key, pool in list(self.pools[project_id_key][env_key][config_key].items()):
+        for project_id in list(self.pools.keys()):
+            for env_name in list(self.pools[project_id].keys()):
+                for config_name in list(self.pools[project_id][env_name].keys()):
+                    for database_name, pool in list(self.pools[project_id][env_name][config_name].items()):
                         await self._close_pool(pool)
-                        self.logger.info(
-                            f"连接池已关闭 [{project_id_key}/{env_key}/{config_key}/{db_key}]"
-                        )
+                        self.logger.info(f"连接池已关闭: [project_id={project_id}/{env_name}/{config_name}/{database_name}]")
         self.pools.clear()
         self.errors.clear()
 
-    async def get_or_create_pool(
-            self,
-            project_id: int,
-            env_name: str,
-            config_name: str,
-            database_name: str,
-    ) -> Any:
+    async def get_or_create_pool(self, project_id: Union[int, str], env_name: str, config_name: str, database_name: str) -> Any:
         """
         获取已有连接池；不存在则按配置表创建后返回。
 
@@ -587,34 +523,35 @@ class DBConnPoolFromConfig:
         :param config_name: 配置名称
         :param database_name: 数据库名
         :return: 连接池对象
+        :raises ConnectionError: 创建后仍无法取得连接池
         """
-        project_id_key, env_key, config_key, db_key = self._normalize_pool_keys(
+        project_id, env_name, config_name, database_name = self._normalize(
             project_id, env_name, config_name, database_name
         )
-
-        pool = self._get_pool(project_id_key, env_key, config_key, db_key)
+        pool = self._get_pool(project_id, env_name, config_name, database_name)
         if pool:
             return pool
 
         await self.create_pool(project_id, env_name, config_name, database_name)
-        pool = self._get_pool(project_id_key, env_key, config_key, db_key)
+        pool = self._get_pool(project_id, env_name, config_name, database_name)
         if pool:
             return pool
 
         error_message = (
-            self.errors.get(project_id_key, {})
-            .get(env_key, {})
-            .get(config_key, {})
-            .get(db_key)
+                self.errors.get(project_id, {})
+                .get(env_name, {})
+                .get(config_name, {})
+                .get(database_name)
+                or "未知错误"
         )
-        raise ConnectionError(f"连接池创建失败，错误信息：{error_message}")
+        raise ConnectionError(f"连接池创建失败：{error_message}")
 
 
 def get_app_database_pool() -> "DBConnPoolFromConfig":
     """
     返回绑定自动化环境配置表的单例连接池管理器。
 
-    :return: DBConnPoolFromConfig 单例
+    :return: DBConnPoolFromConfig单例
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
 
