@@ -566,9 +566,9 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
                 created_time = item["created_time"]
                 updated_time = item["updated_time"]
                 result.append({
-                    "env_id": str(bind_id),
-                    "project_id": str(item["project_id"]),
-                    "env_name": dict_name_map.get(item["env_id"], ""),
+                    "env_id": bind_id,
+                    "project_id": item["project_id"],
+                    "env_name": dict_name_map.get(item["env_id"]),
                     "env_type": item_env_type,
                     "created_time": (
                         created_time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
