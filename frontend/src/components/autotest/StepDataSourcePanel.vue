@@ -3,14 +3,20 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['step-editor-card', { 'is-collapsed': dataSourceCollapsed }]"
+      :class="[
+        'step-editor-card',
+        { 'is-collapsed': dataSourceCollapsed },
+        { 'is-unavailable': !isStepPersisted },
+      ]"
   >
     <template #header>
       <div class="card-header-row card-header-row--with-actions">
         <div
             class="panel-title-wrap"
+            :class="{ 'is-disabled': !isStepPersisted }"
             role="button"
-            tabindex="0"
+            :tabindex="isStepPersisted ? 0 : -1"
+            :aria-disabled="!isStepPersisted"
             @click="toggleDataSourceCollapsed"
             @keydown.enter.prevent="toggleDataSourceCollapsed"
         >
@@ -34,7 +40,7 @@
       </div>
     </template>
 
-    <n-collapse-transition :show="!dataSourceCollapsed">
+    <n-collapse-transition :show="!dataSourceCollapsed && isStepPersisted">
       <div class="data-source-content">
         <n-tabs type="line" animated class="data-source-tabs">
           <n-tab-pane name="preview" tab="数据预览">
@@ -44,7 +50,7 @@
                 <n-radio-group
                     v-model:value="axis"
                     size="small"
-                    :disabled="props.readonly"
+                    :disabled="panelReadonly"
                     @update:value="onAxisChange"
                 >
                   <n-radio-button :value="1">垂直模式</n-radio-button>
@@ -62,7 +68,7 @@
                       :options="dataSourceMoreOptions"
                       @select="onDataSourceMoreSelect"
                   >
-                    <n-button size="tiny" quaternary :disabled="props.readonly">
+                    <n-button size="tiny" quaternary :disabled="panelReadonly">
                       更多
                       <TheIcon icon="material-symbols:arrow-drop-down" :size="16" />
                     </n-button>
@@ -79,7 +85,7 @@
                     ref="luckysheetRef"
                     :data="sheetData"
                     :columns="sheetColumns"
-                    :readonly="props.readonly"
+                    :readonly="panelReadonly"
                     :protectedRowKeywords="FIXED_KEYWORDS"
                     @change="onSheetChange"
                     @protectedAction="onProtectedAction"
@@ -99,13 +105,13 @@
                       accept=".xlsx,.xls,.csv,.json,.yaml,.yml"
                       @change="onApiDocFileSelected"
                   >
-                    <n-button size="small" type="primary" tertiary :disabled="props.readonly">上传</n-button>
+                    <n-button size="small" type="primary" tertiary :disabled="panelReadonly">上传</n-button>
                   </n-upload>
                   <n-button
                       size="small"
                       type="primary"
                       tertiary
-                      :disabled="props.readonly"
+                      :disabled="panelReadonly"
                       @click="downloadApiDocTemplate"
                   >数据模板
                   </n-button>
@@ -113,7 +119,7 @@
               </div>
 
               <div class="data-source-subtitle">数据校验点</div>
-              <n-checkbox-group v-model:value="dataSource.validationPoints" :disabled="props.readonly">
+              <n-checkbox-group v-model:value="dataSource.validationPoints" :disabled="panelReadonly">
                 <n-space>
                   <n-checkbox value="required">必输性</n-checkbox>
                   <n-checkbox value="length">字段长度</n-checkbox>
@@ -216,6 +222,18 @@ const dataSourceDesc = computed({
 const route = useRoute()
 const dataSourceCollapsed = ref(true)
 
+/** 步骤已落库（可绑定数据源）：需同时具备 case_id、step_id、step_code */
+const isStepPersisted = computed(() => {
+  const original = props.step?.original || {}
+  const caseId = route.query.case_id ? Number(route.query.case_id) : null
+  const stepId = original.id != null ? Number(original.id) : null
+  const stepCode = String(original.step_code || '').trim()
+  return Boolean(caseId && stepId && stepCode)
+})
+
+/** 只读或未落库时，面板内操作均不可用 */
+const panelReadonly = computed(() => props.readonly || !isStepPersisted.value)
+
 const ts = () => new Date().toISOString().slice(0, 19).replace('T', ' ')
 const dataSource = reactive({
   apiDocFileName: '',
@@ -228,11 +246,14 @@ const dataSource = reactive({
 })
 
 const dataSourceTipText = computed(() => {
-  const dsName = String(dataSourceName.value || '').trim()
-  const dsDesc = String(dataSourceDesc.value || '').trim()
   const name = String(props.stepName || '').trim()
   const typeLabel = String(props.stepTypeLabel || '请求').trim() || '请求'
   const stepName = name || `${typeLabel}`
+  if (!isStepPersisted.value) {
+    return `${stepName}(本步骤) - 请先保存步骤后再使用数据源`
+  }
+  const dsName = String(dataSourceName.value || '').trim()
+  const dsDesc = String(dataSourceDesc.value || '').trim()
   if (dsName && dsDesc) return `${stepName}(本步骤) - ${dsName} (${dsDesc})`
   if (dsName) return `${stepName}(本步骤) - ${dsName}`
   return `${stepName}(本步骤) - 数据驱动文件上传或接口文档分析`
@@ -268,6 +289,9 @@ const hasDbRecord = ref(false)
 const isDirty = ref(false)
 const isLoading = ref(false)
 const hasLoaded = ref(false)
+/** 表格编辑缓存：步骤切换会销毁编辑器(key=step.id)，Luckysheet 先于本组件卸载，须用缓存拼 dataframe */
+const cachedMatrix = ref([])
+const cachedAxis = ref(1)
 
 const getCaseId = () => (route.query.case_id ? Number(route.query.case_id) : null)
 
@@ -314,8 +338,26 @@ const applyMatrixToSheet = (matrix) => {
   sheetData.value = matrix.slice(1).map((row) => normalizeMatrixRow(row, maxCol))
 }
 
+/** 将当前 sheetColumns/sheetData 写入缓存（Luckysheet 未就绪或已销毁时用） */
+const syncCacheFromSheetState = () => {
+  const headers = Array.isArray(sheetColumns.value) ? sheetColumns.value : []
+  const rows = Array.isArray(sheetData.value) ? sheetData.value : []
+  if (!headers.length) return
+  const maxCol = headers.length
+  cachedMatrix.value = [
+    normalizeMatrixRow(headers, maxCol),
+    ...rows.map((r) => normalizeMatrixRow(r, maxCol)),
+  ]
+  cachedAxis.value = axis.value
+}
+
 const loadStepDataframePreview = async (dataSourceIdOverride) => {
   if (isLoading.value) return
+  if (!isStepPersisted.value) {
+    hasLoaded.value = false
+    isDirty.value = false
+    return
+  }
   const ctx = getStepContext()
   lastStepContext.value = ctx
   const { caseId, stepId, stepCode } = ctx
@@ -328,49 +370,14 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
     hasDbRecord.value = false
     isDirty.value = false
     hasLoaded.value = true
+    syncCacheFromSheetState()
     return
   }
 
-  // 新增步骤尚未保存（无 stepId/stepCode）：
-  // - 若携带数据源（复制来的步骤），按 data_source_id 预加载原数据源内容，便于直接查看/编辑；
-  // - 否则查询当前用例下已落库数据源的场景列名，填充到空白模板列上，便于直接录入数据。
+  // 正常不应走到无 stepId/stepCode（上方 isStepPersisted 已拦截）；保留兜底避免空白崩溃
   if (!stepId || !stepCode) {
-    isLoading.value = true
-    let preloaded = false
-    try {
-      if (effectiveDataSourceId) {
-        const res = await api.getDataSource({ data_source_id: effectiveDataSourceId })
-        const info = res?.data || {}
-        const matrix = Array.isArray(info.dataframe) ? info.dataframe : []
-        if (matrix.length > 0) {
-          applyMatrixToSheet(matrix)
-          axis.value = info.axis === AXIS_HORIZONTAL ? AXIS_HORIZONTAL : AXIS_VERTICAL
-          if (info.file_name != null) dataSourceName.value = String(info.file_name)
-          if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
-          preloaded = true
-        }
-      }
-      if (!preloaded) {
-        const res = await api.getSceneNamesByCase({ case_id: caseId })
-        const scenes = Array.isArray(res?.data?.data_source_scene_name_set)
-            ? res.data.data_source_scene_name_set
-            : []
-        const { headers, data } = buildBlankTemplate(scenes)
-        sheetColumns.value = headers
-        sheetData.value = data
-        axis.value = AXIS_VERTICAL
-      }
-      hasDbRecord.value = false
-      isDirty.value = false
-    } catch (_) {
-      applyMatrixToSheet([])
-      axis.value = AXIS_VERTICAL
-      hasDbRecord.value = false
-      isDirty.value = false
-    } finally {
-      isLoading.value = false
-    }
-    hasLoaded.value = true
+    hasLoaded.value = false
+    isDirty.value = false
     return
   }
 
@@ -409,10 +416,12 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
   } finally {
     isLoading.value = false
     hasLoaded.value = true
+    syncCacheFromSheetState()
   }
 }
 
 const toggleDataSourceCollapsed = () => {
+  if (!isStepPersisted.value) return
   const wasCollapsed = dataSourceCollapsed.value
   dataSourceCollapsed.value = !dataSourceCollapsed.value
   if (wasCollapsed && !dataSourceCollapsed.value) {
@@ -422,6 +431,7 @@ const toggleDataSourceCollapsed = () => {
 
 const onSheetChange = () => {
   isDirty.value = true
+  refreshMatrixCache()
 }
 
 const onProtectedAction = (action) => {
@@ -432,21 +442,37 @@ const onProtectedAction = (action) => {
 
 /** 切换矩阵方向：将当前表格内容转置到目标方向（axis 已由 v-model 更新） */
 const onAxisChange = () => {
-  if (props.readonly) return
+  if (panelReadonly.value) return
   const matrix = getCurrentDataframeMatrix()
   applyMatrixToSheet(transposeMatrix(matrix))
   isDirty.value = true
+  // 转置后 Luckysheet 异步重建，下一拍再缓存，避免读到旧实例
+  Promise.resolve().then(() => refreshMatrixCache())
 }
 
 const getCurrentDataframeMatrix = () => {
-  if (!luckysheetRef.value) return []
-  const { headers = [], rows = [] } = luckysheetRef.value.getDataForSave() || {}
-  const maxCol = headers.length
-  const matrix = [normalizeMatrixRow(headers, maxCol)]
-  rows.forEach((row) => {
-    matrix.push(normalizeMatrixRow(row, maxCol))
-  })
-  return matrix
+  if (luckysheetRef.value?.getDataForSave) {
+    const { headers = [], rows = [] } = luckysheetRef.value.getDataForSave() || {}
+    const maxCol = headers.length
+    if (maxCol > 0) {
+      const matrix = [normalizeMatrixRow(headers, maxCol)]
+      rows.forEach((row) => {
+        matrix.push(normalizeMatrixRow(row, maxCol))
+      })
+      cachedMatrix.value = matrix
+      cachedAxis.value = axis.value
+      return matrix
+    }
+  }
+  return Array.isArray(cachedMatrix.value) ? cachedMatrix.value.map((row) => [...(row || [])]) : []
+}
+
+const refreshMatrixCache = () => {
+  const matrix = getCurrentDataframeMatrix()
+  if (matrix.length >= 2) {
+    cachedMatrix.value = matrix
+    cachedAxis.value = axis.value
+  }
 }
 
 const hasAnySceneData = (matrix) => {
@@ -471,10 +497,10 @@ const shouldSave = (force = false) => {
 }
 
 const saveWithContext = async (ctx, opts = {}) => {
-  if (props.readonly) return { success: true, skipped: true }
+  if (panelReadonly.value) return { success: true, skipped: true }
   const { caseId, caseCode, stepId, stepCode } = ctx || {}
   if (!caseId || !stepId || !stepCode) {
-    if (!opts.silent) $message.warning('当前步骤尚未保存入库，请先保存步骤树后再保存数据')
+    if (!opts.silent) $message.warning('当前步骤尚未保存入库，请先保存步骤树后再使用数据源')
     return { success: false, skipped: true }
   }
   if (!shouldSave(opts.force)) {
@@ -488,7 +514,7 @@ const saveWithContext = async (ctx, opts = {}) => {
       step_id: stepId,
       step_code: stepCode,
       dataframe: matrix,
-      axis: axis.value,
+      axis: axis.value ?? cachedAxis.value,
     })
     const info = res?.data || {}
     if (info.data_source_id != null) dataSourceId.value = info.data_source_id
@@ -526,13 +552,13 @@ const importLoading = ref(false)
 const exportLoading = ref(false)
 
 const dataSourceMoreOptions = computed(() => [
-  { label: '撤销', key: 'undo', disabled: props.readonly },
-  { label: '重做', key: 'redo', disabled: props.readonly },
+  { label: '撤销', key: 'undo', disabled: panelReadonly.value },
+  { label: '重做', key: 'redo', disabled: panelReadonly.value },
   { type: 'divider', key: 'd1' },
-  { label: '导入模板下载', key: 'downloadTemplate', disabled: props.readonly || downloadTemplateLoading.value },
-  { label: '导入', key: 'import', disabled: props.readonly || importLoading.value },
-  { label: '导出', key: 'export', disabled: props.readonly || exportLoading.value },
-  { label: '保存', key: 'save', disabled: props.readonly || saveLoading.value },
+  { label: '导入模板下载', key: 'downloadTemplate', disabled: panelReadonly.value || downloadTemplateLoading.value },
+  { label: '导入', key: 'import', disabled: panelReadonly.value || importLoading.value },
+  { label: '导出', key: 'export', disabled: panelReadonly.value || exportLoading.value },
+  { label: '保存', key: 'save', disabled: panelReadonly.value || saveLoading.value },
 ])
 
 const onDataSourceMoreSelect = (key) => {
@@ -545,7 +571,7 @@ const onDataSourceMoreSelect = (key) => {
 }
 
 const openImport = () => {
-  if (props.readonly) return
+  if (panelReadonly.value) return
   importFileRef.value?.click()
 }
 
@@ -737,13 +763,16 @@ const onApiDocFileSelected = (options) => {
 }
 
 /* ========================= 步骤切换自动保存 ========================= */
+// 注意：步骤编辑页右侧编辑器使用 :key="currentStep.id"，切换步骤会销毁整棵子树。
+// props.step.id 的 watch 往往来不及触发；实际走 onBeforeUnmount，且子组件 Luckysheet 会先销毁，
+// 因此必须依赖编辑过程中的 cachedMatrix，而不能再临时 getDataForSave()。
 watch(
     () => props.step?.id,
     async (newId, oldId) => {
-      if (oldId != null && oldId !== newId && isDirty.value && lastStepContext.value) {
+      if (oldId != null && oldId !== newId && isDirty.value && lastStepContext.value && isStepPersisted.value) {
         await saveWithContext(lastStepContext.value, { silent: true })
       }
-      if (!dataSourceCollapsed.value) {
+      if (!dataSourceCollapsed.value && isStepPersisted.value) {
         await loadStepDataframePreview()
       }
     },
@@ -753,32 +782,43 @@ watch(
 watch(
     () => [route.query.case_id, props.dataSourceId],
     async () => {
-      if (!dataSourceCollapsed.value) {
+      if (!dataSourceCollapsed.value && isStepPersisted.value) {
         await loadStepDataframePreview()
       }
     },
     { deep: false }
 )
 
-onBeforeUnmount(async () => {
-  if (!isDirty.value || !lastStepContext.value) return
+/** 步骤树保存后 original.id/step_code 回写：恢复可展开并在展开态下加载 */
+watch(isStepPersisted, (ok, prev) => {
+  if (!ok) {
+    dataSourceCollapsed.value = true
+    return
+  }
+  if (ok && !prev && !dataSourceCollapsed.value) {
+    loadStepDataframePreview()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (panelReadonly.value || !isDirty.value || !lastStepContext.value) return
   const ctx = lastStepContext.value
   const { caseId, caseCode, stepId, stepCode } = ctx
   if (!caseId || !stepId || !stepCode) return
-  try {
-    const matrix = getCurrentDataframeMatrix()
-    if (matrix.length < 2) return
-    await api.saveOrUpdateDataSource({
-      case_id: caseId,
-      case_code: caseCode,
-      step_id: stepId,
-      step_code: stepCode,
-      dataframe: matrix,
-      axis: axis.value,
-    })
-  } catch (_) {
+  const matrix = Array.isArray(cachedMatrix.value) ? cachedMatrix.value : []
+  if (matrix.length < 2) return
+  if (!hasDbRecord.value && !dataSourceId.value && !hasAnySceneData(matrix)) return
+  // 不 await：Vue 不会等待 async onBeforeUnmount；同步发出请求即可带上 dataframe
+  api.saveOrUpdateDataSource({
+    case_id: caseId,
+    case_code: caseCode,
+    step_id: stepId,
+    step_code: stepCode,
+    dataframe: matrix,
+    axis: cachedAxis.value,
+  }).catch(() => {
     /* 静默保存，错误由 http 拦截器统一提示 */
-  }
+  })
 })
 
 defineExpose({
@@ -802,6 +842,15 @@ defineExpose({
 
 .data-source-content {
   padding-top: 4px;
+}
+
+.step-editor-card.is-unavailable {
+  opacity: 0.55;
+}
+
+.panel-title-wrap.is-disabled {
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .data-source-axis-row {

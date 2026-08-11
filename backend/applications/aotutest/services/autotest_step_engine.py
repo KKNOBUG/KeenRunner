@@ -23,14 +23,21 @@ from urllib.parse import unquote
 import httpx
 import orjson
 from aiomysql import Pool
-from applications.aotutest.views.autotest_datagram_diff_view import compare_messages
-
-from backend.applications.aotutest.services.autotest_runtime.protocol_http import build_httpx_request_kwargs, assemble_http_body_payloads
-from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import select_tcp_payload, parse_tcp_response, parse_tcp_timeouts, \
-    resolve_tcp_request_extract_sources, tcp_body_source_for_assert
 
 if TYPE_CHECKING:
     from backend.applications.aotutest.dependencies import AutoTestApiServices
+
+from backend.applications.aotutest.services.autotest_runtime.protocol_http import (
+    build_httpx_request_kwargs,
+    assemble_http_body_payloads
+)
+from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import (
+    select_tcp_payload,
+    parse_tcp_response,
+    parse_tcp_timeouts,
+    resolve_tcp_request_extract_sources,
+    tcp_body_source_for_assert
+)
 
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
@@ -39,10 +46,11 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     ConditionsBase,
     DataBaseOperates,
     RedisOperates,
-    StepAssertValidatorItem,
     StepVariablesBase,
+    StepAssertValidatorItem,
     StepsExecuteConfigBase,
-    prepare_step_tree_item_for_execution, StepExtractVariableItem,
+    StepExtractVariableItem,
+    prepare_step_tree_item_for_execution,
 )
 from backend.applications.aotutest.services.autotest_runtime.sandbox import (
     RE_PLACEHOLDER,
@@ -3490,6 +3498,9 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
                 order_control = item["order_control"]
                 left_text = self._to_message_text(self._resolve_message_ref(item.get("left_text")))
                 right_text = self._to_message_text(self._resolve_message_ref(item.get("right_text")))
+                # 延迟导入，避免 services ↔ views 循环依赖导致应用启动失败
+                from backend.applications.aotutest.views.autotest_datagram_diff_view import compare_messages
+
                 diff_data = compare_messages(
                     left_text=left_text,
                     right_text=right_text,
