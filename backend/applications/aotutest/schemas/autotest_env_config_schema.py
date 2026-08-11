@@ -31,12 +31,12 @@ def _validate_db_required_fields(database_name: Any, database_type: Any, config_
 class AutoTestApiEnvConfigBase(BaseModel):
     """环境配置公共字段。"""
 
-    project_id: Optional[int] = Field(None, ge=1, description="应用ID")
-    env_id: Optional[int] = Field(None, ge=1, description="环境绑定ID")
-    env_name: Optional[str] = Field(None, max_length=64, description="环境名称(用于解析env_id，不落库)")
+    project_id: Optional[int] = Field(None, ge=1, description="应用ID(请求解析绑定用，不落配置表)")
+    env_id: Optional[int] = Field(None, ge=1, description="环境绑定主键(接口字段名保持env_id)")
+    env_name: Optional[str] = Field(None, max_length=64, description="环境名称(用于解析绑定，不落库)")
     config_name: Optional[str] = Field(None, max_length=128, description="配置名称")
     config_desc: Optional[str] = Field(None, max_length=2048, description="配置描述")
-    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(api/file/database/redis)")
+    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(请求解析绑定用，不落配置表)")
     config_host: Optional[str] = Field(None, max_length=128, description="主机地址")
     config_port: Optional[str] = Field(None, max_length=8, description="端口")
     config_group: Optional[str] = Field(None, max_length=128, description="分组")
@@ -54,8 +54,8 @@ class AutoTestApiEnvConfigCreate(AutoTestApiEnvConfigBase):
     """创建环境配置入参。"""
 
     project_id: int = Field(..., ge=1, description="应用ID")
-    env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
-    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
+    env_name: str = Field(..., max_length=64, description="环境名称(用于解析绑定)")
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(用于解析绑定)")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="主机地址")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
@@ -178,7 +178,7 @@ class APPEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     config_id: int = Field(..., ge=1, description="配置主键ID")
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
-    env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
+    env_name: str = Field(..., max_length=64, description="环境名称(用于解析绑定)")
     config_host: str = Field(..., max_length=128, description="主机地址")
     project_id: int = Field(..., ge=1, description="应用ID")
 
@@ -189,7 +189,7 @@ class FILEEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     config_id: int = Field(..., ge=1, description="配置主键ID")
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.FILE, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
-    env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
+    env_name: str = Field(..., max_length=64, description="环境名称(用于解析绑定)")
     config_host: str = Field(..., max_length=128, description="主机地址")
     project_id: int = Field(..., ge=1, description="应用ID")
 
@@ -200,7 +200,7 @@ class DBEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     config_id: int = Field(..., ge=1, description="配置主键ID")
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
-    env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
+    env_name: str = Field(..., max_length=64, description="环境名称(用于解析绑定)")
     config_host: str = Field(..., max_length=128, description="主机地址")
     project_id: int = Field(..., ge=1, description="应用ID")
     database_name: str = Field(..., max_length=128, description="数据库名称")
@@ -215,7 +215,7 @@ class RedisEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     config_id: int = Field(..., ge=1, description="配置主键ID")
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.REDIS, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
-    env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
+    env_name: str = Field(..., max_length=64, description="环境名称(用于解析绑定)")
     config_host: str = Field(..., max_length=128, description="主机地址")
     config_port: str = Field(..., max_length=8, description="Redis端口")
     project_id: int = Field(..., ge=1, description="应用ID")

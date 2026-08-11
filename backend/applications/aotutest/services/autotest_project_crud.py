@@ -12,7 +12,11 @@ from typing import Optional, Dict, Any, List, Tuple, Union, Set
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiProjectInfo, AutoTestApiEnvConfigInfo
+from backend.applications.aotutest.models.autotest_model import (
+    AutoTestApiProjectInfo,
+    AutoTestApiEnvBindInfo,
+    AutoTestApiEnvConfigInfo,
+)
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
@@ -246,7 +250,12 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
-        config_count = await AutoTestApiEnvConfigInfo.filter(project_id=pid, state__not=1).count()
+        config_count = 0
+        env_bind_ids = await AutoTestApiEnvBindInfo.filter(project_id=pid, state__not=1).values_list("id", flat=True)
+        if env_bind_ids:
+            config_count = await AutoTestApiEnvConfigInfo.filter(
+                env_bind_id__in=list(env_bind_ids), state__not=1
+            ).count()
         if config_count > 0:
             msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
             LOGGER.error(msg)

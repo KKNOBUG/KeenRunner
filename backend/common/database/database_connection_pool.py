@@ -111,7 +111,7 @@ class DBConnPoolFromConfig:
         # 必须带project_id与env_type，避免多应用同名环境或跨节点类型串库
         env_bind = await AutoTestApiEnvBindInfo.filter(
             project_id=project_id,
-            env_id__in=list(env_dict_ids),
+            env_enum_id__in=list(env_dict_ids),
             env_type=AutoTestConfigNodeType.DB,
             state__not=1,
         ).first()
@@ -123,9 +123,7 @@ class DBConnPoolFromConfig:
             return None
 
         config_obj = await self.config_model.filter(
-            project_id=project_id,
-            env_id=env_bind.id,
-            env_type=AutoTestConfigNodeType.DB,
+            env_bind_id=env_bind.id,
             state__not=1,
             config_name__iexact=config_name,
             database_name__iexact=database_name,

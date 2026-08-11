@@ -85,7 +85,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         """
         创建环境配置；同名软删记录则恢复启用。
 
-        :param config_in: 环境配置创建schema（字段名与表对齐；env_name仅解析绑定）
+        :param config_in: 环境配置创建schema（project_id/env_name/env_type用于解析绑定，不落配置表）
         :return: 配置ORM实例
         """
         env_type = config_in.env_type
@@ -99,18 +99,19 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_type=env_type,
             created_user=config_in.created_user,
         )
-        payload = config_in.model_dump(exclude_none=True, exclude_unset=True, exclude={"env_name"})
+        payload = config_in.model_dump(
+            exclude_none=True,
+            exclude_unset=True,
+            exclude={"env_name", "project_id", "env_type", "env_id"},
+        )
         payload.update({
-            "env_id": env_bind.id,
-            "env_type": env_type,
+            "env_bind_id": env_bind.id,
             "state": 0,
         })
 
         existing = await self.model.filter(
-            project_id=project_id,
-            env_id=env_bind.id,
+            env_bind_id=env_bind.id,
             config_name=config_name,
-            env_type=env_type,
         ).first()
         if existing:
             if existing.state == 0:
@@ -125,8 +126,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 raise DataBaseStorageException(message=error_message) from e
 
         await self._assert_host_unique(
-            project_id=project_id,
-            env_id=env_bind.id,
+            env_bind_id=env_bind.id,
             env_type=env_type,
             mapped=payload,
         )
@@ -156,24 +156,28 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
             config_id = instance.id
 
-        if config_in.project_id is not None and int(config_in.project_id) != int(instance.project_id):
+        bind = await AutoTestApiEnvBindInfo.filter(id=instance.env_bind_id).first()
+        if not bind:
+            raise NotFoundException(message=f"配置所属绑定不存在, env_bind_id={instance.env_bind_id}")
+
+        if config_in.project_id is not None and int(config_in.project_id) != int(bind.project_id):
             raise ParameterException(message="应用ID不匹配，请检查")
 
-        env_type = config_in.env_type if config_in.env_type is not None else instance.env_type
-        if instance.env_type != env_type:
+        env_type = config_in.env_type if config_in.env_type is not None else bind.env_type
+        if bind.env_type != env_type:
             raise ParameterException(
-                message=f"类型不匹配，记录类型为{instance.env_type}，请求类型为{env_type}"
+                message=f"类型不匹配，记录类型为{bind.env_type}，请求类型为{env_type}"
             )
 
+        env_crud = AutoTestApiEnvCrud()
         env_name = config_in.env_name
         if not env_name:
-            env_name_map = await AutoTestApiEnvCrud().get_env_name_map([instance.env_id])
-            env_name = env_name_map.get(instance.env_id, "")
+            env_name = (await env_crud.get_env_name_map([instance.env_bind_id])).get(instance.env_bind_id, "")
         if not env_name:
             raise ParameterException(message="参数[env_name]不允许为空")
 
         env_bind = await self._get_or_create_env_bind(
-            project_id=int(instance.project_id),
+            project_id=int(bind.project_id),
             env_name=env_name,
             env_type=env_type,
             created_user=config_in.updated_user,
@@ -181,25 +185,21 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         update_dict = config_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
-            exclude={"config_id", "config_code", "env_name", "project_id"},
+            exclude={"config_id", "config_code", "env_name", "project_id", "env_type", "env_id"},
         )
-        update_dict["env_id"] = env_bind.id
-        update_dict["env_type"] = env_type
+        update_dict["env_bind_id"] = env_bind.id
 
         config_name = update_dict.get("config_name", instance.config_name)
         name_dup = await self.model.filter(
-            project_id=instance.project_id,
-            env_id=env_bind.id,
+            env_bind_id=env_bind.id,
             config_name=config_name,
-            env_type=env_type,
             state=0,
         ).exclude(id=instance.id).first()
         if name_dup:
             raise DataAlreadyExistsException(message="当前应用+环境下已经存在相同的配置名称，不能重复")
 
         await self._assert_host_unique(
-            project_id=instance.project_id,
-            env_id=env_bind.id,
+            env_bind_id=env_bind.id,
             env_type=env_type,
             mapped={**update_dict, "config_host": update_dict.get("config_host", instance.config_host)},
             exclude_id=instance.id,
@@ -222,11 +222,13 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param config_in: 删除入参（config_id + env_type）
         :return: 软删除后的配置ORM实例
         """
-        env_type = config_in.env_type
         instance = await self.get_by_id(config_id=config_in.config_id, on_error=True)
-        if instance.env_type != env_type:
+        bind = await AutoTestApiEnvBindInfo.filter(id=instance.env_bind_id).first()
+        if not bind:
+            raise NotFoundException(message=f"配置所属绑定不存在, env_bind_id={instance.env_bind_id}")
+        if bind.env_type != config_in.env_type:
             raise ParameterException(
-                message=f"类型不匹配，记录类型为{instance.env_type}，请求类型为{env_type}"
+                message=f"类型不匹配，记录类型为{bind.env_type}，请求类型为{config_in.env_type}"
             )
         if instance.state == 1:
             return instance
@@ -299,29 +301,44 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         allowed_types = set(AutoTestConfigNodeType.get_values())
         empty_type_buckets = {t: {} for t in allowed_types}
 
-        env_config_instances: List[AutoTestApiEnvConfigInfo] = await self.model.filter(
+        bind_rows = await AutoTestApiEnvBindInfo.filter(
             project_id__in=distinct_project_ids,
+            state__not=1,
+        ).values("id", "project_id", "env_type")
+        if not bind_rows:
+            return classified_config_result
+
+        bind_meta = {
+            row["id"]: {"project_id": row["project_id"], "env_type": row["env_type"]}
+            for row in bind_rows
+        }
+        env_bind_ids = list(bind_meta.keys())
+        env_config_instances: List[AutoTestApiEnvConfigInfo] = await self.model.filter(
+            env_bind_id__in=env_bind_ids,
             state__not=1,
         ).all()
         if not env_config_instances:
             return classified_config_result
 
-        env_ids: List[int] = list({int(cfg.env_id) for cfg in env_config_instances})
-        env_name_map: Dict[int, str] = await AutoTestApiEnvCrud().get_env_name_map(env_ids)
+        env_crud = AutoTestApiEnvCrud()
+        env_name_map: Dict[int, str] = await env_crud.get_env_name_map(env_bind_ids)
 
         for cfg_instance in env_config_instances:
-            project_id: int = int(cfg_instance.project_id)
+            meta = bind_meta.get(int(cfg_instance.env_bind_id))
+            if not meta:
+                continue
+            project_id: int = int(meta["project_id"])
             if project_id not in classified_config_result:
                 continue
 
-            env_name: Optional[str] = env_name_map.get(int(cfg_instance.env_id))
+            env_name: Optional[str] = env_name_map.get(int(cfg_instance.env_bind_id))
             if not env_name:
                 LOGGER.warning(
-                    f"跳过无对应环境主表记录的配置: config_id={cfg_instance.id}, env_id={cfg_instance.env_id}"
+                    f"跳过无对应环境主表记录的配置: config_id={cfg_instance.id}, env_bind_id={cfg_instance.env_bind_id}"
                 )
                 continue
 
-            env_type = cfg_instance.env_type.value
+            env_type = meta["env_type"].value if hasattr(meta["env_type"], "value") else str(meta["env_type"])
             if env_type not in allowed_types:
                 LOGGER.warning(
                     f"跳过未知配置类型: project_id={project_id}, env={env_name}, env_type={env_type}"
@@ -349,35 +366,49 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         """
         未删除配置中config_name去重后的列表。
 
-        :param project_id: 应用ID
-        :param env_id: 环境ID
-        :param env_type: 配置类型
+        :param project_id: 应用ID，经绑定表过滤
+        :param env_id: 环境绑定主键
+        :param env_type: 节点类型，经绑定表过滤
         :return: 去重且升序排列的配置名称列表
         """
         stmt: QuerySet = self.model.filter(state__not=1)
-        if project_id is not None:
-            stmt = stmt.filter(project_id=project_id)
         if env_id is not None:
-            stmt = stmt.filter(env_id=env_id)
-        if env_type is not None:
-            stmt = stmt.filter(env_type=env_type)
+            stmt = stmt.filter(env_bind_id=env_id)
+        elif project_id is not None or env_type is not None:
+            env_bind_ids = await AutoTestApiEnvCrud().list_bind_ids(
+                project_id=project_id,
+                env_type=env_type,
+            )
+            if not env_bind_ids:
+                return []
+            stmt = stmt.filter(env_bind_id__in=env_bind_ids)
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
 
-    @staticmethod
-    async def serialize_config(instance: AutoTestApiEnvConfigInfo, env_name: str = "") -> Dict[str, Any]:
+    async def serialize_config(
+            self,
+            instance: AutoTestApiEnvConfigInfo,
+            env_name: str = "",
+            bind_meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
-        按表字段序列化配置，并附带env_name便于前端展示。
+        按表字段序列化配置，并附带绑定派生字段与env_name。
 
         :param instance: 配置ORM实例
         :param env_name: 环境名称
-        :return: 与表字段对齐的响应字典
+        :param bind_meta: 可选绑定维度 {project_id, env_type}
+        :return: 响应字典；接口字段保持config_id/env_id/project_id/env_type不变
         """
         data = await instance.to_dict(
-            exclude_fields={"reserve_1", "reserve_2", "reserve_3"},
+            exclude_fields={"reserve_1", "reserve_2", "reserve_3", "env_bind", "env_bind_id"},
             replace_fields={"id": "config_id"},
         )
+        if bind_meta is None:
+            bind_meta = (await AutoTestApiEnvCrud().get_bind_map([instance.env_bind_id])).get(instance.env_bind_id, {})
         data["env_name"] = env_name
+        data["env_id"] = instance.env_bind_id
+        data["project_id"] = bind_meta.get("project_id")
+        data["env_type"] = bind_meta.get("env_type")
         return data
 
     async def _get_or_create_env_bind(
@@ -413,18 +444,16 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
     async def _assert_host_unique(
             self,
             *,
-            project_id: int,
-            env_id: int,
+            env_bind_id: int,
             env_type: Union[AutoTestConfigNodeType, str],
             mapped: Dict[str, Any],
             exclude_id: Optional[int] = None,
     ) -> None:
         """
-        校验同应用+环境+类型下host/port(/database_name)唯一。
+        校验同绑定下host/port(/database_name)唯一。
 
-        :param project_id: 应用ID
-        :param env_id: 环境绑定ID
-        :param env_type: 配置类型
+        :param env_bind_id: 环境绑定ID
+        :param env_type: 节点类型（仅影响DB提示文案与database_name条件）
         :param mapped: 已映射的落库字段
         :param exclude_id: 更新时排除的配置ID
         :return: None
@@ -433,9 +462,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         if not host:
             return
         dup_q = self.model.filter(
-            project_id=project_id,
-            env_id=env_id,
-            env_type=env_type,
+            env_bind_id=env_bind_id,
             config_host=host,
             state=0,
         )
@@ -462,46 +489,45 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             page_size: int = 10,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        分页查询环境配置，响应字段与表对齐。
+        分页查询环境配置；project/env_name/env_type经绑定表过滤。
 
         :param project_id: 应用ID
         :param env_name: 环境名称
-        :param env_type: 配置类型(api/file/database/redis)；过滤绑定时对应env_type，同属AutoTestConfigNodeType
+        :param env_type: 节点类型(api/file/database/redis)
         :param page: 页码
         :param page_size: 每页条数
         :return: (总条数, 当前页列表)
         """
         try:
-            allowed_types = AutoTestConfigNodeType.get_values()
-            query = self.model.filter(state=0, env_type__in=allowed_types)
-            if project_id is not None:
-                query = query.filter(project_id=project_id)
-            if env_type is not None:
-                query = query.filter(env_type=env_type)
-            if env_name:
-                dict_ids = await AutoTestApiEnvCrud().get_dict_ids_by_name(env_name, exact=True)
-                if not dict_ids:
-                    return 0, []
-                # 配置.env_id存的是绑定主键；按字典名找到绑定后再用绑定id过滤配置
-                bind_filter = AutoTestApiEnvBindInfo.filter(
-                    env_id__in=dict_ids,
-                    state__not=1,
+            env_crud = AutoTestApiEnvCrud()
+            query = self.model.filter(state=0)
+            need_bind_filter = project_id is not None or env_name or env_type is not None
+            if need_bind_filter:
+                env_enum_ids = None
+                if env_name:
+                    env_enum_ids = await env_crud.get_dict_ids_by_name(env_name, exact=True)
+                    if not env_enum_ids:
+                        return 0, []
+                matched_bind_ids = await env_crud.list_bind_ids(
+                    project_id=project_id,
+                    env_type=env_type,
+                    env_enum_ids=env_enum_ids,
                 )
-                if project_id is not None:
-                    bind_filter = bind_filter.filter(project_id=project_id)
-                if env_type is not None:
-                    bind_filter = bind_filter.filter(env_type=env_type)
-                matched_bind_ids = await bind_filter.values_list("id", flat=True)
                 if not matched_bind_ids:
                     return 0, []
-                query = query.filter(env_id__in=list(matched_bind_ids))
+                query = query.filter(env_bind_id__in=list(matched_bind_ids))
 
             total = await query.count()
             instances = await query.offset((page - 1) * page_size).limit(page_size).all()
-            env_ids = list({obj.env_id for obj in instances})
-            env_name_map = await AutoTestApiEnvCrud().get_env_name_map(env_ids)
+            env_bind_ids = list({obj.env_bind_id for obj in instances})
+            env_name_map = await env_crud.get_env_name_map(env_bind_ids)
+            bind_map = await env_crud.get_bind_map(env_bind_ids)
             result = [
-                await self.serialize_config(obj, env_name_map.get(obj.env_id, ""))
+                await self.serialize_config(
+                    obj,
+                    env_name_map.get(obj.env_bind_id, ""),
+                    bind_map.get(obj.env_bind_id),
+                )
                 for obj in instances
             ]
             return total, result
@@ -540,11 +566,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         config = await self.model.filter(
             id=config_id,
-            project_id=project_id,
-            env_id=env_row.id,
+            env_bind_id=env_row.id,
             config_name=config_name,
             database_name=database_name,
-            env_type=AutoTestConfigNodeType.DB,
             state=0,
         ).first()
         if not config:

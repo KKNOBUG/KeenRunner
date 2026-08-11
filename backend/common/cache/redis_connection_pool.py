@@ -88,10 +88,10 @@ class RedisConnPoolFromConfig:
             return None
 
         field_names = self._config_model_field_names()
-        if "project_id" not in field_names or "env_id" not in field_names:
+        if "env_bind_id" not in field_names:
             raise ValueError(
                 f"config_model={getattr(self.config_model, '__name__', self.config_model)} "
-                f"字段无法识别为 Autotest(project_id+env_id)"
+                f"字段无法识别为 Autotest(env_bind_id)"
             )
 
         try:
@@ -109,37 +109,37 @@ class RedisConnPoolFromConfig:
             env_name__iexact=env,
             state__not=1,
         ).values_list("id", flat=True)
-        env_row = None
-        if dict_ids:
-            base_filter = {
-                "project_id": app_id_int,
-                "env_id__in": list(dict_ids),
-                "state__not": 1,
-            }
-            env_row = await AutoTestApiEnvBindInfo.filter(
-                env_type=AutoTestConfigNodeType.REDIS.value,
-                **base_filter,
-            ).first()
-            if not env_row:
-                env_row = await AutoTestApiEnvBindInfo.filter(**base_filter).first()
-        if not env_row:
+        if not dict_ids:
             self.logger.warning(
                 f"未找到环境 project_id={app_id_int}, env_name(忽略大小写)={env!r}"
             )
             return None
 
-        qs = self.config_model.filter(
+        env_row = await AutoTestApiEnvBindInfo.filter(
             project_id=app_id_int,
-            env_id=env_row.id,
-        ).filter(state__not=1)
-        if "env_type" in field_names:
-            qs = qs.filter(env_type=AutoTestConfigNodeType.REDIS.value)
-        config_obj = await qs.filter(
+            env_enum_id__in=list(dict_ids),
+            env_type=AutoTestConfigNodeType.REDIS,
+            state__not=1,
+        ).first()
+        if not env_row:
+            self.logger.warning(
+                f"未找到环境绑定 project_id={app_id_int}, "
+                f"env_name(忽略大小写)={env!r}, env_type={AutoTestConfigNodeType.REDIS.value}"
+            )
+            return None
+
+        config_obj = await self.config_model.filter(
+            env_bind_id=env_row.id,
+            state__not=1,
             config_name__iexact=config_name,
             database_name__iexact=db_name,
         ).first()
         if not config_obj:
-            config_obj = await qs.filter(config_name__iexact=config_name).first()
+            config_obj = await self.config_model.filter(
+                env_bind_id=env_row.id,
+                state__not=1,
+                config_name__iexact=config_name,
+            ).first()
         if not config_obj:
             return None
 

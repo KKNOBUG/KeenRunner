@@ -6,7 +6,6 @@
 @Module  : autotest_env_config_view
 @DateTime: 2026/4/16 15:54
 """
-import asyncio
 import traceback
 from typing import Optional
 
@@ -49,10 +48,10 @@ autotest_env_config = APIRouter()
 
 
 async def _serialize_config_response(services: AutoTestApiServices, instance, env_name: Optional[str] = None):
-    """将配置ORM序列化为响应字典；未传 env_name 时按 env_id 解析。"""
+    """将配置ORM序列化为响应字典；未传env_name时按env_bind_id解析。"""
     if env_name is None:
-        env_name_map = await services.env_curd.get_env_name_map([instance.env_id])
-        env_name = env_name_map.get(instance.env_id, "")
+        env_name_map = await services.env_curd.get_env_name_map([instance.env_bind_id])
+        env_name = env_name_map.get(instance.env_bind_id, "")
     return await services.env_config_curd.serialize_config(instance, env_name)
 
 
@@ -370,13 +369,17 @@ async def search_env_configs(
         if config_in.config_code:
             q &= Q(config_code=config_in.config_code)
         if config_in.env_id:
-            q &= Q(env_id=config_in.env_id)
-        if config_in.project_id:
-            q &= Q(project_id=config_in.project_id)
+            q &= Q(env_bind_id=config_in.env_id)
+        if config_in.project_id or config_in.env_type:
+            env_bind_ids = await services.env_curd.list_bind_ids(
+                project_id=config_in.project_id,
+                env_type=config_in.env_type.value if config_in.env_type else None,
+            )
+            if not env_bind_ids:
+                return SuccessResponse(message="查询成功", data=[], total=0)
+            q &= Q(env_bind_id__in=env_bind_ids)
         if config_in.config_name:
             q &= Q(config_name__contains=config_in.config_name)
-        if config_in.env_type:
-            q &= Q(env_type=config_in.env_type.value)
         if config_in.database_type:
             q &= Q(database_type=config_in.database_type.value)
         if config_in.created_user:
@@ -390,34 +393,29 @@ async def search_env_configs(
             page_size=config_in.page_size,
             order=config_in.order
         )
-        project_ids = [obj.project_id for obj in instances]
-        unique_project_ids = list(set(project_ids))
+        env_bind_ids = list({obj.env_bind_id for obj in instances})
+        bind_map = await services.env_curd.get_bind_map(env_bind_ids)
+        env_name_map = await services.env_curd.get_env_name_map(env_bind_ids)
+        project_ids = list({
+            meta["project_id"] for meta in bind_map.values() if meta.get("project_id") is not None
+        })
         project_name_map = {}
-        if unique_project_ids:
+        if project_ids:
             project_name_map = dict(
                 await services.project_curd.model.filter(
-                    id__in=unique_project_ids,
+                    id__in=project_ids,
                     state__not=1
                 ).values_list("id", "project_name")
             )
-        env_ids = [obj.env_id for obj in instances]
-        unique_env_ids = list(set(env_ids))
-        env_name_map = await services.env_curd.get_env_name_map(unique_env_ids)
-        report_instances = await asyncio.gather(*[
-            obj.to_dict(
-                exclude_fields={"state", "reserve_1", "reserve_2", "reserve_3"},
-                replace_fields={"id": "config_id"}
+        data = []
+        for obj in instances:
+            item = await services.env_config_curd.serialize_config(
+                obj,
+                env_name_map.get(obj.env_bind_id, ""),
+                bind_map.get(obj.env_bind_id),
             )
-            for obj in instances
-        ])
-        data = [
-            {
-                **item,
-                "project_name": project_name_map.get(item["project_id"], ""),
-                "env_name": env_name_map.get(item["env_id"], "")
-            }
-            for item in report_instances
-        ]
+            item["project_name"] = project_name_map.get(item.get("project_id"), "")
+            data.append(item)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

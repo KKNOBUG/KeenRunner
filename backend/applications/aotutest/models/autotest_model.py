@@ -62,8 +62,9 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """环境枚举主数据；主键对外语义为env_enum_id；仅存全局环境名。"""
+
     env_name = fields.CharField(max_length=128, unique=True, description="环境名称")
-    env_desc = fields.CharField(max_length=2048, null=True, description="环境描述")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
 
     class Meta:
@@ -77,20 +78,32 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
 
 
 class AutoTestApiEnvBindInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
+    """应用×环境枚举×节点类型的挂载点；主键对外语义为env_bind_id。"""
+
+    env_enum = fields.ForeignKeyField(
+        "models.AutoTestApiEnvInfo",
+        related_name="env_binds",
+        on_delete=fields.RESTRICT,
+        db_constraint=True,
+        index=True,
+        description="环境枚举",
+    )
     env_type = fields.CharEnumField(AutoTestConfigNodeType, default=AutoTestConfigNodeType.API, index=True, description="节点类型")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="绑定标识代码")
+    env_desc = fields.CharField(max_length=2048, null=True, description="绑定描述")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
 
     class Meta:
         table = "krun_autotest_env_bind"
         table_description = "自动化测试-环境绑定表"
         unique_together = (
-            ("env_id", "project_id", "env_type"),
+            ("env_enum", "project_id", "env_type"),
         )
         indexes = (
             ("project_id", "state"),
             ("env_type", "state"),
+            ("env_enum", "state"),
+            ("project_id", "env_type", "state"),
         )
         ordering = ["-updated_time"]
 
@@ -100,9 +113,16 @@ class AutoTestApiEnvBindInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
-    env_type = fields.CharEnumField(AutoTestConfigNodeType, description="节点类型")
-    project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
+    """挂载点下的连接明细；主键对外语义为env_config_id；project_id/env_type由绑定派生。"""
+
+    env_bind = fields.ForeignKeyField(
+        "models.AutoTestApiEnvBindInfo",
+        related_name="env_configs",
+        on_delete=fields.RESTRICT,
+        db_constraint=True,
+        index=True,
+        description="环境绑定",
+    )
     config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
@@ -122,12 +142,12 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
         table = "krun_autotest_env_config"
         table_description = "自动化测试-环境配置表"
         unique_together = (
-            ("env_id", "project_id", "config_name"),
+            ("env_bind", "config_name"),
         )
         indexes = (
-            ("env_id", "state"),
-            ("project_id", "state"),
+            ("env_bind", "state"),
             ("config_code", "state"),
+            ("config_host", "config_port"),
         )
         ordering = ["-updated_time"]
 

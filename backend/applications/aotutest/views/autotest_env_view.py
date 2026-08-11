@@ -218,7 +218,7 @@ async def search_environments(
             dict_ids = await services.env_curd.get_dict_ids_by_name(env_in.env_name)
             if not dict_ids:
                 return SuccessResponse(message="查询成功", data=[], total=0)
-            q &= Q(env_id__in=dict_ids)
+            q &= Q(env_enum_id__in=dict_ids)
         if env_in.created_user:
             q &= Q(created_user__iexact=env_in.created_user)
         if env_in.updated_user:

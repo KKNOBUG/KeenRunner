@@ -90,12 +90,12 @@ export default {
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
   /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
-  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type(api|file|database|redis)/ip/page/page_size；行主键字段为env_id(绑定主键) */
+  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type；响应env_id=绑定主键 */
   getEnvPage: (params = {}) => request.get('/autotest/env/page', { params }),
   /** 全部启用应用（环境侧）。Query: page/page_size */
   getAllApps: (params = {}) => request.get('/autotest/env/get_all_app', { params }),
 
-  // 环境配置（子表，按节点类型拆分）
+  // 环境配置（子表，挂载于绑定；project_id/env_type由绑定派生）
   getEnvConfig: (params = {}) => request.get('/autotest/config/get', { params }),
   /** 新增 API 类型配置。Body: APPEnvConfigCreate */
   createAppEnvConfig: (data = {}) => request.post('/autotest/config/app/create', data),
@@ -119,7 +119,7 @@ export default {
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
   /** 子表配置分页列表。Query: project_id/env_name/env_type(api|file|database|redis)/page/page_size */
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
-  /** Query: project_id、env_id、env_type(api|database|redis|file) 可选 */
+  /** Query: project_id、env_id(绑定主键)、env_type 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
   /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/config/query', data),

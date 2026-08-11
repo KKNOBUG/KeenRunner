@@ -188,10 +188,8 @@ class StepDebugService:
             only_one=True,
             on_error=False,
             state__not=1,
-            env_id=env_row.id,
-            project_id=project_id,
+            env_bind_id=env_row.id,
             config_name=config_name,
-            env_type=config_type,
         )
         if not env_config_instance:
             tmpl = config_not_found_template or "{label}, 目标环境下[{config_name}]配置不存在"
