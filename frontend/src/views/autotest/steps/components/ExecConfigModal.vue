@@ -462,17 +462,38 @@ const resetModalFormState = () => {
   debugEnvConfigDict.value = {}
 }
 
+/** 将选中值（环境名，或历史遗留的 bind env_id）解析为环境名称 */
+const resolveEnvName = (envKey) => {
+  if (envKey == null || envKey === '') return null
+  return debugEnvIdToName.value.get(String(envKey)) || null
+}
+
 const loadDebugEnvEnums = async () => {
   envLoading.value = true
   try {
-    const res = await api.getEnvList({ page: 1, page_size: 9999, state: 0 })
-    const list = Array.isArray(res?.data) ? res.data : []
-    debugEnvOptions.value = list
-        .map((x) => ({ label: x.env_name, value: x.env_id }))
-        .filter((x) => x.value != null)
+    // listEnvNames：{ project_id: { api|file|database|redis: env_name[] } }，第二层 key 为枚举 .value
+    const [namesRes, listRes] = await Promise.all([
+      api.listEnvNames({ project_id: [] }),
+      api.getEnvList({ page: 1, page_size: 9999, state: 0 }),
+    ])
+    const byProject = namesRes?.data || {}
+    const names = new Set()
+    Object.values(byProject).forEach((byType) => {
+      if (!byType || typeof byType !== 'object') return
+      Object.values(byType).forEach((arr) => {
+        if (Array.isArray(arr)) arr.forEach((n) => { if (n) names.add(n) })
+      })
+    })
+    const sorted = [...names].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'))
+    // 选项 value 用环境名，与 /config/query 分类字典第二层 key 对齐
+    debugEnvOptions.value = sorted.map((n) => ({ label: n, value: n }))
+
     const m = new Map()
+    sorted.forEach((n) => m.set(String(n), n))
+    // 兼容旧任务/本地缓存里存的 bind env_id
+    const list = Array.isArray(listRes?.data) ? listRes.data : []
     list.forEach((x) => {
-      if (x?.env_id != null) m.set(String(x.env_id), x.env_name)
+      if (x?.env_id != null && x?.env_name) m.set(String(x.env_id), x.env_name)
     })
     debugEnvIdToName.value = m
   } catch (e) {
@@ -533,11 +554,11 @@ const getEffectiveEnvIdForRow = (row) => (
 
 const getBucket = (row, configType) => {
   const dict = debugEnvConfigDict.value || {}
-  const envId = getEffectiveEnvIdForRow(row)
-  if (envId == null) return {}
+  const envName = resolveEnvName(getEffectiveEnvIdForRow(row))
+  if (!envName) return {}
+  // /config/query：project_id -> env_name -> api|file|database|redis -> config_name
   const p = dict?.[row.project_id] || dict?.[String(row.project_id)] || {}
-  const e = p?.[envId] || p?.[String(envId)] || {}
-  return e?.[configType] || {}
+  return p?.[envName]?.[configType] || {}
 }
 
 const getDbDatabaseDisplay = (row) => {
@@ -1029,7 +1050,7 @@ const confirmExecConfigBeforeRun = async (actionLabel, runAction) => {
     window.$message?.warning?.('请选择全局环境')
     return
   }
-  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  const env_name = resolveEnvName(debugGlobalEnvId.value)
   if (!env_name) {
     window.$message?.warning?.('全局环境无效，请重新选择')
     return
@@ -1168,7 +1189,10 @@ provide(
 
 const applySavedConfig = (cfg) => {
   if (!cfg || typeof cfg !== 'object') return
-  if (cfg.global_env_id != null) debugGlobalEnvId.value = cfg.global_env_id
+  if (cfg.global_env_id != null) {
+    // 选项 value 已改为环境名；兼容历史缓存里的 bind env_id
+    debugGlobalEnvId.value = resolveEnvName(cfg.global_env_id) || cfg.global_env_id
+  }
   if (cfg.env_mode === 'multi' || cfg.env_mode === 'single') debugEnvMode.value = cfg.env_mode
   const names = cfg.selected_dataset_names
   if (Array.isArray(names) && names.length) {
@@ -1195,7 +1219,7 @@ const pickSavedConfigForCases = (ids) => {
 }
 
 const buildConfigPayload = () => {
-  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  const env_name = resolveEnvName(debugGlobalEnvId.value)
   const payload = {
     steps_execute_config: buildStepExecConfigMap(env_name),
     global_env_id: debugGlobalEnvId.value,
@@ -1210,7 +1234,7 @@ const buildConfigPayload = () => {
 
 /** 多脚本：共享全局环境；数据源按脚本自动纳入各自全部数据集 */
 const buildConfigsPayload = () => {
-  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  const env_name = resolveEnvName(debugGlobalEnvId.value)
   const ids = resolveEmbeddedCaseIds()
   const shared = {
     global_env_id: debugGlobalEnvId.value,
@@ -1239,7 +1263,7 @@ const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) 
     if (!silent) window.$message?.warning?.('请选择全局环境')
     return false
   }
-  const env_name = debugEnvIdToName.value.get(String(debugGlobalEnvId.value)) || null
+  const env_name = resolveEnvName(debugGlobalEnvId.value)
   if (!env_name) {
     if (!silent) window.$message?.warning?.('全局环境无效，请重新选择')
     return false

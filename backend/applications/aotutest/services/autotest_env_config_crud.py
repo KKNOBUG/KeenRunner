@@ -321,7 +321,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 )
                 continue
 
-            env_type = str(cfg_instance.env_type)
+            env_type = cfg_instance.env_type.value
             if env_type not in allowed_types:
                 LOGGER.warning(
                     f"跳过未知配置类型: project_id={project_id}, env={env_name}, env_type={env_type}"
