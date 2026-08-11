@@ -596,16 +596,25 @@ async def get_scene_names_by_case(
                 "step_name": step_meta.get("step_name") or None,
                 "data_source_scene_names": scene_names,
             })
-
-        return SuccessResponse(
-            message="查询成功",
-            data={
-                "case_id": effective_case_id,
-                "data_source_info": data_source_info,
-                "data_source_scene_name_set": seen_scenes,
-            },
-            total=len(data_source_info),
-        )
+        data_source_len = len(data_source_info)
+        data_source_scenes: Dict[str, Any] = {
+            "case_id": effective_case_id,
+            "data_source_info": data_source_info,
+            "data_source_scene_name_set": seen_scenes,
+        }
+        if not data_source_len:
+            data_source_scenes["default"] = [
+                ["", "场景1名称", "场景2名称", "场景3名称"],
+                ["HEAD", "", "", ""],
+                ["", "", "", ""],
+                ["BODY", "", "", ""],
+                ["", "", "", ""],
+                ["ASSERT_HEAD", "", "", ""],
+                ["", "", "", ""],
+                ["ASSERT_BODY", "", "", ""],
+                ["", "", "", ""]
+            ]
+        return SuccessResponse(message="查询成功", data=data_source_scenes, total=data_source_len)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:

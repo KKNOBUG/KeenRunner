@@ -23,6 +23,7 @@ from urllib.parse import unquote
 import httpx
 import orjson
 from aiomysql import Pool
+from applications.aotutest.views.autotest_datagram_diff_view import compare_messages
 
 from backend.applications.aotutest.services.autotest_runtime.protocol_http import build_httpx_request_kwargs, assemble_http_body_payloads
 from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import select_tcp_payload, parse_tcp_response, parse_tcp_timeouts, \
@@ -3379,6 +3380,169 @@ class HttpStepExecutor(BaseStepExecutor):
         except Exception as e:
             result.success = False
             result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
+
+
+class DatagramDiffStepExecutor(BaseStepExecutor):
+    @staticmethod
+    def _to_message_text(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise StepExecutionError("【报文比对】bytes 报文 UTF-8 解码失败") from exc
+        if isinstance(value, (dict, list)):
+            return orjson.dumps(value, default=str).decode("UTF-8")
+        return str(value)
+
+    def _resolve_message_ref(self, raw: Any) -> Any:
+        if raw is None:
+            return None
+        text = str(raw).strip()
+        if not text:
+            return ""
+        if "${" not in text:
+            text = f"${{{text}}}"
+        resolved = self.context.resolve_placeholders(text, step_code=self.step_code)
+        if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
+            variable_name = resolved[2:-1].strip()
+            if variable_name:
+                try:
+                    return self.context.get_variable(variable_name)
+                except KeyError:
+                    return resolved
+        return resolved
+
+    @staticmethod
+    def _get_order_control(raw: Any) -> int:
+        if raw is None:
+            return 0
+        try:
+            order_control = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise StepExecutionError(f"【报文比对】order_control 必须是 0 或 1: {raw}") from exc
+        if order_control not in (0, 1):
+            raise StepExecutionError(f"【报文比对】order_control 必须是 0 或 1: {order_control}")
+        return order_control
+
+    def _load_comparisons(self) -> List[Dict[str, Any]]:
+        default_order_control = self._get_order_control(self.step.get("order_control"))
+        items = self.step.get("message_comparison")
+        if items:
+            if not isinstance(items, list) or not items:
+                raise StepExecutionError("【报文比对】message_comparison 必须是非空数组")
+            comparisons: List[Dict[str, Any]] = []
+            for index, item in enumerate(items):
+                if not isinstance(item, dict):
+                    raise StepExecutionError(f"【报文比对】message_comparison[{index}] 必须是对象")
+                left_text = item.get("left_text")
+                right_text = item.get("right_text")
+                if left_text is None or right_text is None:
+                    raise StepExecutionError(
+                        f"【报文比对】message_comparison[{index}] 缺少 left_text 或 right_text"
+                    )
+                comparisons.append(
+                    {
+                        "left_text": left_text,
+                        "right_text": right_text,
+                        "order_control": self._get_order_control(
+                            item.get("order_control", default_order_control)
+                        ),
+                    }
+                )
+            return comparisons
+        left_raw = self.step.get("left_text")
+        right_raw = self.step.get("right_text")
+        if left_raw is None or right_raw is None:
+            raise StepExecutionError("【报文比对】缺少必要参数: message_comparison")
+        left_list = left_raw if isinstance(left_raw, list) else [left_raw]
+        right_list = right_raw if isinstance(right_raw, list) else [right_raw]
+        if len(left_list) != len(right_list):
+            raise StepExecutionError(
+                f"【报文比对】left_text 与 right_text 数量不一致: {len(left_list)} vs {len(right_list)}"
+            )
+        return [
+            {
+                "left_text": left_text,
+                "right_text": right_text,
+                "order_control": default_order_control,
+            }
+            for left_text, right_text in zip(left_list, right_list)
+        ]
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        try:
+            comparisons_raw = self._load_comparisons()
+
+            self.context.log(
+                f"【报文比对】开始执行: 共 {len(comparisons_raw)} 组",
+                step_code=self.step_code,
+            )
+
+            message_comparison: List[Dict[str, Any]] = []
+            failed_indices: List[int] = []
+            for index, item in enumerate(comparisons_raw):
+                order_control = item["order_control"]
+                left_text = self._to_message_text(self._resolve_message_ref(item.get("left_text")))
+                right_text = self._to_message_text(self._resolve_message_ref(item.get("right_text")))
+                diff_data = compare_messages(
+                    left_text=left_text,
+                    right_text=right_text,
+                    order_control=order_control,
+                )
+                message_comparison.append(
+                    {
+                        "left_name": item.get("left_text"),
+                        "right_name": item.get("right_text"),
+                        "left_text": left_text,
+                        "right_text": right_text,
+                        "order_control": order_control,
+                        "is_equal": diff_data.is_equal,
+                        "format_type": diff_data.format_type,
+                        "order_consistent": diff_data.order_consistent,
+                        "order_message": diff_data.order_message,
+                        "rows": diff_data.model_dump().get("rows", []),
+                    }
+                )
+                if not diff_data.is_equal:
+                    failed_indices.append(index)
+
+            response_payload = {
+                "message_comparison": message_comparison,
+            }
+            result.request = {
+                "message_comparison": comparisons_raw,
+            }
+            result.response = {
+                "response_code": 200 if not failed_indices else 400,
+                "response_message": "success" if not failed_indices else "diff found",
+                "response_header": None,
+                "response_cookie": None,
+                "response_body": response_payload,
+                "response_text": orjson.dumps(response_payload, default=str).decode("UTF-8"),
+                "response_elapsed": None,
+                "response_bytes": None,
+            }
+
+            if failed_indices:
+                raise StepExecutionError(
+                    f"【报文比对】共 {len(failed_indices)} 组不一致(索引: {failed_indices}), 详情见报告明细"
+                )
+
+            self.context.log("【报文比对】执行成功", step_code=self.step_code)
+
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(
+                step=self.step, exception=e, is_child_step=False
+            )
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 

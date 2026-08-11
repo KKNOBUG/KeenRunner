@@ -43,6 +43,7 @@ class AutoTestStepType(StringEnum):
     DATABASE = "数据库请求"
     REDIS = "Redis请求"
     QUOTE = "引用公共脚本"
+    DIFF = "报文比对"
     ASSERT = "断言"
 
 

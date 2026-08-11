@@ -19,6 +19,8 @@ from .autotest_report_view import autotest_report
 from .autotest_step_view import autotest_step
 from .autotest_tag_view import autotest_tag
 from .autotest_task_view import autotest_task
+from .autotest_datagram_diff_view import rep_diff_router
+
 from .autotest_tcp_test_view import autotest_tcp_test
 from .autotest_tool_view import autotest_tool
 

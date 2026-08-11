@@ -393,8 +393,7 @@ async def search_cases(
         for instance in instances:
             serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={
-                    "state", "created_user", "updated_user",
-                    "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+                    "state", "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
                 },
                 replace_fields={"id": "case_id"}
             )
