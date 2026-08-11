@@ -14,6 +14,7 @@ import random
 import re
 import string
 import time
+import typing
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
@@ -31,6 +32,7 @@ _USER_CODE_EXTRA_BUILTINS: Dict[str, Any] = {
     "time": time,
     "datetime": datetime,
     "timedelta": timedelta,
+    "typing": typing,
     "string": string,
     "json": json,
 }
