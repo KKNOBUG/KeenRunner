@@ -15,6 +15,7 @@ import orjson
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepAssertValidatorItem,
     StepExtractVariableItem,
+    StepVariablesBase,
 )
 from backend.applications.aotutest.services.autotest_runtime.exchange.assert_pipeline import AssertPipeline
 from backend.applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline
@@ -51,9 +52,10 @@ class ExtractAssertPipeline:
         处理顺序：
         1. ExtractPipeline.run_extract_variables
         2. 若raise_on_failure且存在success=False的提取项→抛出ValueError
-        3. AssertPipeline.run_assert_validators
-        4. 若step_struct is not None → append_assert_validators追加数据驱动断言
-        5. 若raise_on_failure且存在失败断言→抛出ValueError
+        3. 将成功提取写入session_variables_lookup（及finished_variables，若支持），供同一步断言引用
+        4. AssertPipeline.run_assert_validators
+        5. 若step_struct is not None → append_assert_validators追加数据驱动断言
+        6. 若raise_on_failure且存在失败断言→抛出ValueError
 
         :param extract_variables: 提取规则；None视为空列表
         :param assert_validators: 断言规则；None视为空列表
@@ -79,7 +81,7 @@ class ExtractAssertPipeline:
         :return: (extract_results_list, assert_results_list)，元素为结果dict
             （含name/source/expr/success/error等字段）
         """
-        _, extract_results_list = ExtractPipeline.run_extract_variables(
+        extract_results_dict, extract_results_list = ExtractPipeline.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
             response_json=response_json,
@@ -97,6 +99,20 @@ class ExtractAssertPipeline:
             if extract_failed_items:
                 dumps = orjson.dumps(extract_failed_items, option=orjson.OPT_INDENT_2).decode("UTF-8")
                 raise ValueError(f"【变量提取】共计{len(extract_failed_items)}个提取失败: \n{dumps}")
+
+        # 同一步内断言可能引用刚提取的变量（变量池 / ${name}），须在断言前写入查找表与上下文
+        if extract_results_dict:
+            if session_variables_lookup is not None:
+                session_variables_lookup.update(extract_results_dict)
+            update_variables = getattr(finished_variables, "update_variables", None)
+            if callable(update_variables):
+                update_variables(
+                    [
+                        StepVariablesBase(key=str(name), value=value, desc="")
+                        for name, value in extract_results_dict.items()
+                    ],
+                    scope="session_variables",
+                )
 
         validator_results = AssertPipeline.run_assert_validators(
             assert_validators=assert_validators or [],
