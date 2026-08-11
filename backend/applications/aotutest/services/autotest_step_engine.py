@@ -686,12 +686,32 @@ class StepExecutionContext:
             )
             self.log(error_message)
             raise StepExecutionError(error_message)
-        result_serializer: str = orjson.dumps(result, option=orjson.OPT_INDENT_2).decode("UTF-8")
+        result = self._stringify_mapping_keys(result)
+        try:
+            result_serializer: str = orjson.dumps(result, option=orjson.OPT_INDENT_2).decode("UTF-8")
+        except TypeError:
+            result_serializer = repr(result)
         self.log(f"【代码请求(Python)】执行完成, 返回结果: \n{result_serializer}")
         # 对于f-string支持度不够，如下示例（暂未解决）：
         #     id_card = '${generate_ident_card_number()}'
-        #     birthday = f'${{generate_ident_card_birthday(ident_card_number={id_card})}}'
+        #     birthday = f'${{generate_ident_card_birthday(ident_card_number=${id_card})}}'
         return result
+
+    @staticmethod
+    def _stringify_mapping_keys(value: Any) -> Any:
+        """
+        递归将mapping的key转为str，便于orjson序列化与JSON落库。
+
+        :param value: 任意返回值（通常为 dict 或 list[dict]）
+        :return: key 已规范化后的同构结构
+        """
+        if isinstance(value, dict):
+            return {str(k): StepExecutionContext._stringify_mapping_keys(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [StepExecutionContext._stringify_mapping_keys(item) for item in value]
+        if isinstance(value, tuple):
+            return [StepExecutionContext._stringify_mapping_keys(item) for item in value]
+        return value
 
     @staticmethod
     def _validate_user_python_restricted(source: str) -> None:
