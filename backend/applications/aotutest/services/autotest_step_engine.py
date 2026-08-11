@@ -17,7 +17,7 @@ import types
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Union
 from urllib.parse import unquote
 
 import httpx
@@ -508,7 +508,7 @@ class StepExecutionContext:
             *,
             namespace: Optional[Dict[str, Any]] = None,
             step_result: Optional[StepExecutionResult] = None
-    ) -> Dict[str, Any]:
+    ) -> Union[Dict[str, Any], List[Dict[Any, Any]]]:
         """
         在受限内置与namespace下执行code，支持单函数定义或result变量。
 
@@ -516,7 +516,7 @@ class StepExecutionContext:
         :param code: Python 代码字符串，可为单行或多行
         :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过__builtins__注入
         :param step_result: 可选；传入时写入其request，记录原始代码快照（未经占位符解析与规范化的原始code）
-        :return: 代码中定义的 result 或单函数返回的dict；无结果时返回空字典
+        :return: 代码中定义的 result 或单函数返回值；支持 Dict[str, Any] 或 List[Dict]；无结果时返回空字典
         """
         if step_result is not None:
             step_result.request = {
@@ -658,10 +658,29 @@ class StepExecutionContext:
         if result is None:
             self.log(f"【代码请求(Python)】执行完成, 但无结果: {result!r}")
             return {}
-        if not isinstance(result, dict):
+        if isinstance(result, dict):
+            pass
+        elif isinstance(result, list):
+            invalid_items = [
+                (idx, type(item).__name__)
+                for idx, item in enumerate(result)
+                if not isinstance(item, dict)
+            ]
+            if invalid_items:
+                preview = ", ".join(f"[{idx}]={typ}" for idx, typ in invalid_items[:5])
+                error_message = (
+                    f"【代码请求(Python)】执行失败, 返回值类型不被接受: \n\t"
+                    f"预期类型: List[Dict[Any, Any]]\n\t"
+                    f"实际类型: list（存在非 dict 元素: {preview}"
+                    f"{' ...' if len(invalid_items) > 5 else ''}）\n\t"
+                    f"返回结果: {result!r}"
+                )
+                self.log(error_message)
+                raise StepExecutionError(error_message)
+        else:
             error_message: str = (
                 f"【代码请求(Python)】执行失败, 返回值类型不被接受: \n\t"
-                f"预期类型: Dict[str, Any]\n\t"
+                f"预期类型: Dict[str, Any] 或 List[Dict[Any, Any]]\n\t"
                 f"实际类型: {type(result).__name__}\n\t"
                 f"返回结果: {result!r}"
             )
@@ -2044,12 +2063,48 @@ class ConditionStepExecutor(BaseStepExecutor):
 
 class PythonStepExecutor(BaseStepExecutor):
     """
-    Python 代码步骤执行器：执行code，将返回的dict写入extract_variables与response；断言仅支持变量池。
+    Python 代码步骤执行器：执行code，将返回的dict/list写入extract_variables与response；断言仅支持变量池。
     """
+
+    @staticmethod
+    def _pack_python_executive_result(
+            executive_result: Union[Dict[str, Any], List[Dict[Any, Any]]],
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        将 Python 步骤返回值转为提取项与变量池增量。
+
+        Dict：各键写入变量池；List[Dict]：整体写入变量名 result。
+        """
+        if isinstance(executive_result, list):
+            extract_item = {
+                "name": "result",
+                "source": "执行代码(Python)",
+                "scope": "ALL",
+                "expr": None,
+                "index": None,
+                "extract_value": executive_result,
+                "success": True,
+                "error": "",
+            }
+            return [extract_item], {"result": executive_result}
+        extract_items = [
+            {
+                "name": k,
+                "source": "执行代码(Python)",
+                "scope": "ALL",
+                "expr": None,
+                "index": None,
+                "extract_value": v,
+                "success": True,
+                "error": "",
+            }
+            for k, v in executive_result.items()
+        ]
+        return extract_items, dict(executive_result)
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        在沙箱中执行步骤代码，合并返回字典并运行变量池断言。
+        在沙箱中执行步骤代码，合并返回字典/列表并运行变量池断言。
 
         :param result: 本步执行结果
         :return: None
@@ -2060,28 +2115,20 @@ class PythonStepExecutor(BaseStepExecutor):
                 raise StepExecutionError("【代码请求(Python)】缺少必要配置: code")
             try:
                 executive_st_time: datetime = datetime.now()
-                executive_result: Dict[str, Any] = self.context.run_python_code(code, namespace=self.context.clone_state(), step_result=result)
+                executive_result: Union[Dict[str, Any], List[Dict[Any, Any]]] = self.context.run_python_code(
+                    code, namespace=self.context.clone_state(), step_result=result
+                )
                 executive_ed_time: datetime = datetime.now()
             except StepExecutionError:
                 raise
             except Exception as e:
                 raise StepExecutionError(AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)) from e
 
-            if executive_result:
+            session_lookup_extra: Dict[str, Any] = {}
+            if isinstance(executive_result, list) or executive_result:
                 try:
-                    result.extract_variables = [
-                        {
-                            "name": k,
-                            "source": "执行代码(Python)",
-                            "scope": "ALL",
-                            "expr": None,
-                            "index": None,
-                            "extract_value": v,
-                            "success": True,
-                            "error": ""
-                        }
-                        for k, v in executive_result.items()
-                    ]
+                    extract_items, session_lookup_extra = self._pack_python_executive_result(executive_result)
+                    result.extract_variables = extract_items
                     result.response = {
                         "response_body": executive_result,
                         "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
@@ -2110,7 +2157,7 @@ class PythonStepExecutor(BaseStepExecutor):
                     step_label="代码请求(Python)",
                     extract_variables=[],
                     assert_validators=assert_validators,
-                    session_lookup_extra=executive_result or {},
+                    session_lookup_extra=session_lookup_extra,
                 )
         except StepExecutionError:
             raise

@@ -50,8 +50,8 @@
           <div class="hint-box step-editor-hint">
             <div class="hint-title">使用说明</div>
             <div class="hint-content">
-              <p>• 脚本以函数形式作为执行入口，<code>必须符合PEP8编码规范</code>，声明格式：<code>def func() -> dict: ...</code></p>
-              <p>• 脚本返回值固定要求为字典类型：<code>Dict[str, Any]</code>，运行结果同步存入会话变量池中，方便后续步骤使用</p>
+              <p>• 脚本以函数形式作为执行入口，<code>必须符合PEP8编码规范</code>，声明格式：<code>def func() -> dict | list: ...</code></p>
+              <p>• 脚本返回值支持 <code>Dict[str, Any]</code> 或 <code>List[Dict]</code>：字典时各键写入会话变量池；列表时整体写入变量 <code>result</code>，方便后续步骤使用</p>
               <p>• 脚本支持使用 <code>${函数名称}</code> 格式占位符调用系统内置函数，使用 <code>${变量名称}</code> 格式占位符引用上下文变量</p>
               <p>• 脚本支持针对执行结果进行断言校验，可<code>从会话变量池读取目标变量，与预设预期值完成各类型比较核验</code></p>
             </div>
@@ -344,11 +344,11 @@ const codeEditorRef = ref(null)
 const debugLoading = ref(false)
 const debugResponse = ref(null)
 
-// 后端调试接口：data = { result: Dict, assert_validators: List }；兼容旧版本直接返回 Dict
+// 后端调试接口：data = { result: Dict|List, assert_validators: List }；兼容旧版本直接返回 Dict
 const debugResultData = computed(() => {
   const d = debugResponse.value
   if (!d) return {}
-  if (typeof d === 'object' && d.result !== undefined) return d.result || {}
+  if (typeof d === 'object' && d.result !== undefined) return d.result ?? {}
   return d
 })
 
