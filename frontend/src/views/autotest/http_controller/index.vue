@@ -491,7 +491,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedDebugEnvId"
+          v-model:value="selectedDebugEnvName"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -1238,20 +1238,28 @@ const debugResultRef = ref(null)
 const debugModalVisible = ref(false)
 const envOptions = ref([])
 const envLoading = ref(false)
-/** 调试所选环境枚举 ID（下拉 label 为环境名称，与 schema 的 env_id 对应） */
-const selectedDebugEnvId = ref(null)
+/** 调试所选环境名称（与 /autotest/env/list、后端 schema 的 env_name 对应） */
+const selectedDebugEnvName = ref(null)
 
 const loadEnvNames = async () => {
+  const pid = Number(state.form.request_project_id)
+  if (!pid) {
+    envOptions.value = []
+    selectedDebugEnvName.value = null
+    return
+  }
   envLoading.value = true
   try {
-    const res = await api.getEnvList()
-    const list = res?.data ?? []
-    envOptions.value = list.map((row) => ({
-      label: row.env_name != null ? String(row.env_name) : String(row.env_id),
-      value: row.env_id,
-    }))
-    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
-      selectedDebugEnvId.value = envOptions.value[0].value
+    // { project_id: { api|file|database|redis: env_name[] } }
+    const res = await api.listEnvNames({ project_id: [pid] })
+    const byProject = res?.data || {}
+    const byType = byProject[pid] || byProject[String(pid)] || {}
+    const names = Array.isArray(byType.api) ? byType.api : []
+    envOptions.value = names
+        .filter((n) => n != null && String(n).trim() !== '')
+        .map((n) => ({ label: String(n), value: String(n) }))
+    if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
+      selectedDebugEnvName.value = envOptions.value[0].value
     }
   } catch (e) {
     console.error('加载环境列表失败', e)
@@ -1262,14 +1270,24 @@ const loadEnvNames = async () => {
 }
 
 const openDebugModal = () => {
-  selectedDebugEnvId.value = null
+  const pid = Number(state.form.request_project_id)
+  if (!pid) {
+    $message.warning('请先选择所属应用')
+    return
+  }
+  selectedDebugEnvName.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
+  const envName = selectedDebugEnvName.value
+  if (!envName || !String(envName).trim()) {
+    $message.warning('请选择执行环境')
+    return false
+  }
   debugModalVisible.value = false
-  doDebugRequest(selectedDebugEnvId.value)
+  doDebugRequest(String(envName).trim())
 }
 
 /* 调试方法：先选环境再发请求 */
@@ -1283,7 +1301,7 @@ const debugging = async () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_id) => {
+const doDebugRequest = async (env_name) => {
   const extractCheck = validateExtractList(buildExtractForBackend())
   if (!extractCheck.valid) {
     $message.error(extractCheck.message)
@@ -1327,7 +1345,7 @@ const doDebugRequest = async (env_id) => {
     const original = props.step?.original || {}
 
     const debugPayload = {
-      env_id: Number(env_id),
+      env_name: String(env_name || '').trim(),
       case_id: caseId,
       step_type: original.step_type || 'HTTP/HTTPS协议网络请求',
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
