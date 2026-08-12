@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any, Type
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from backend.applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramComparisonItem
 from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import (
     AutoTestStepType,
@@ -340,6 +341,14 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
+    # 报文比对步骤：左右报文引用列表与默认字段顺序控制
+    datagram_comparison: Optional[List[DatagramComparisonItem]] = Field(
+        None, description="报文比对配置列表(每项含left_text/right_text/datagram_field_sorted)"
+    )
+    datagram_field_sorted: Optional[int] = Field(
+        None, ge=0, le=1, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)"
+    )
+
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     @field_validator("conditions", mode="before")
@@ -373,6 +382,21 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
         if isinstance(v, list):
             return v or None
         raise ValueError(f"参数[branch_items]必须为null或对象列表，当前类型: {type(v).__name__}")
+
+    @field_validator("datagram_comparison", mode="before")
+    @classmethod
+    def _datagram_comparison_list_shape(cls, v: Any) -> Any:
+        """
+        校验datagram_comparison为数组或null；空数组归一为null。
+
+        :param v: 原始值
+        :return: 原值（合法且非空时），空数组返回None
+        """
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError(f"参数[datagram_comparison]必须为null或对象列表，当前类型: {type(v).__name__}")
+        return v or None
 
 
 class AutoTestApiStepChildren(BaseModel):

@@ -6,19 +6,34 @@
 @Module  : autotest_datagram_diff_schema.py
 @DateTime: 2026/8/11
 """
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 DiffType = Literal["equal", "left_only", "right_only", "modified", "empty"]
 
 
+class DatagramComparisonItem(BaseModel):
+    """报文比对步骤中的单组左右报文引用。"""
+
+    left_text: Any = Field(..., description="左侧报文(变量名/占位符/文本)")
+    right_text: Any = Field(..., description="右侧报文(变量名/占位符/文本)")
+    datagram_field_sorted: Optional[int] = Field(
+        None,
+        description="是否控制字段顺序，1按行序，0按字段名忽略顺序；缺省时用步骤级datagram_field_sorted",
+        ge=0,
+        le=1,
+    )
+
+
 class RepDiffRequest(BaseModel):
+    """工具箱/调试接口：单组报文比对入参。"""
+
     left_text: str = Field(..., description="左侧报文文本")
     right_text: str = Field(..., description="右侧报文文本")
-    order_control: int = Field(
+    datagram_field_sorted: int = Field(
         0,
-        description="是否控制比对顺序，1=按行顺序比对，0=按字段名比对忽略顺序",
+        description="是否控制字段顺序，1按行序比对，0按字段名比对忽略顺序",
         ge=0,
         le=1,
     )
@@ -34,7 +49,7 @@ class DiffLineItem(BaseModel):
     content: str = Field("", description="行文本内容")
     diff_type: DiffType = Field(
         ...,
-        description="equal=相同无高亮, left_only=左侧多标红, right_only=右侧多标绿, modified=同字段值不同标蓝, empty=占位",
+        description="equal相同, left_only左侧多, right_only右侧多, modified同字段值不同, empty占位",
     )
     key: Optional[str] = Field(None, description="字段名(JSON键名/XML标签名)")
     highlights: List[CharHighlight] = Field(default_factory=list, description="行内差异高亮区间")
@@ -49,6 +64,14 @@ class AlignedDiffRow(BaseModel):
 class RepDiffResponse(BaseModel):
     is_equal: bool = Field(..., description="两侧报文是否完全一致")
     format_type: str = Field(..., description="识别到的报文格式: json/xml/text")
-    order_consistent: bool = Field(True, description="字段顺序是否一致(order_control=1时有效)")
+    order_consistent: bool = Field(True, description="字段顺序是否一致(datagram_field_sorted=1时有效)")
     order_message: Optional[str] = Field(None, description="顺序不一致时的描述")
     rows: List[AlignedDiffRow] = Field(default_factory=list, description="左右对齐的逐行比对结果")
+
+    @field_validator("format_type")
+    @classmethod
+    def validate_format_type(cls, v: str) -> str:
+        allowed = {"json", "xml", "text"}
+        if v not in allowed:
+            raise ValueError(f"format_type必须为{sorted(allowed)}之一")
+        return v

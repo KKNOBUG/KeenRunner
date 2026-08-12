@@ -38,9 +38,11 @@ from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import
     resolve_tcp_request_extract_sources,
     tcp_body_source_for_assert
 )
+from backend.applications.aotutest.services.autotest_runtime.datagram.message_diff import compare_messages
 
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
+from backend.applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramComparisonItem
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     ConditionsBase,
@@ -1350,6 +1352,17 @@ class BaseStepExecutor:
             database_searched=actual_request.get("database_searched"),
             redis_operates=actual_request.get("redis_operates"),
             redis_searched=actual_request.get("redis_searched"),
+            # 报文比对配置快照：优先取执行态request，缺省回落步骤定义
+            datagram_comparison=(
+                actual_request.get("datagram_comparison")
+                if "datagram_comparison" in actual_request
+                else getattr(self.step, "datagram_comparison", None)
+            ),
+            datagram_field_sorted=(
+                actual_request.get("datagram_field_sorted")
+                if "datagram_field_sorted" in actual_request
+                else getattr(self.step, "datagram_field_sorted", None)
+            ),
             # 数据源相关
             dataset_name=dataset_name if have_data_driven else None,
             dataset_snapshot=dataset_snapshot if have_data_driven else None,
@@ -3393,8 +3406,14 @@ class HttpStepExecutor(BaseStepExecutor):
 
 
 class DatagramDiffStepExecutor(BaseStepExecutor):
+    """
+    报文比对步骤：解析datagram_comparison中的左右报文引用，调用compare_messages逐组比对。
+    任一组不一致则步骤失败，比对明细写入result.response供报告展示。
+    """
+
     @staticmethod
     def _to_message_text(value: Any) -> str:
+        """将变量值规范为比对用文本；dict/list序列化为JSON字符串。"""
         if value is None:
             return ""
         if isinstance(value, str):
@@ -3403,12 +3422,15 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
             try:
                 return value.decode("utf-8")
             except UnicodeDecodeError as exc:
-                raise StepExecutionError("【报文比对】bytes 报文 UTF-8 解码失败") from exc
+                raise StepExecutionError("【报文比对】bytes报文UTF-8解码失败") from exc
         if isinstance(value, (dict, list)):
             return orjson.dumps(value, default=str).decode("UTF-8")
         return str(value)
 
     def _resolve_message_ref(self, raw: Any) -> Any:
+        """
+        解析报文引用：裸变量名自动包成${name}；占位符未替换时再尝试从变量池取值。
+        """
         if raw is None:
             return None
         text = str(raw).strip()
@@ -3427,107 +3449,95 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
         return resolved
 
     @staticmethod
-    def _get_order_control(raw: Any) -> int:
+    def _get_datagram_field_sorted(raw: Any) -> int:
         if raw is None:
             return 0
         try:
-            order_control = int(raw)
+            field_sorted = int(raw)
         except (TypeError, ValueError) as exc:
-            raise StepExecutionError(f"【报文比对】order_control 必须是 0 或 1: {raw}") from exc
-        if order_control not in (0, 1):
-            raise StepExecutionError(f"【报文比对】order_control 必须是 0 或 1: {order_control}")
-        return order_control
+            raise StepExecutionError(f"【报文比对】datagram_field_sorted必须是0或1: {raw}") from exc
+        if field_sorted not in (0, 1):
+            raise StepExecutionError(f"【报文比对】datagram_field_sorted必须是0或1: {field_sorted}")
+        return field_sorted
 
     def _load_comparisons(self) -> List[Dict[str, Any]]:
-        default_order_control = self._get_order_control(self.step.get("order_control"))
-        items = self.step.get("message_comparison")
-        if items:
-            if not isinstance(items, list) or not items:
-                raise StepExecutionError("【报文比对】message_comparison 必须是非空数组")
-            comparisons: List[Dict[str, Any]] = []
-            for index, item in enumerate(items):
-                if not isinstance(item, dict):
-                    raise StepExecutionError(f"【报文比对】message_comparison[{index}] 必须是对象")
+        """从步骤配置加载比对组；项级datagram_field_sorted缺省时回落步骤级默认值。"""
+        default_field_sorted = self._get_datagram_field_sorted(
+            getattr(self.step, "datagram_field_sorted", None)
+        )
+        items = getattr(self.step, "datagram_comparison", None)
+        if not items:
+            raise StepExecutionError("【报文比对】缺少必要配置: datagram_comparison")
+        if not isinstance(items, list):
+            raise StepExecutionError("【报文比对】datagram_comparison必须是非空数组")
+
+        comparisons: List[Dict[str, Any]] = []
+        for index, item in enumerate(items):
+            if isinstance(item, DatagramComparisonItem):
+                left_text = item.left_text
+                right_text = item.right_text
+                item_sorted = item.datagram_field_sorted
+            elif isinstance(item, dict):
                 left_text = item.get("left_text")
                 right_text = item.get("right_text")
-                if left_text is None or right_text is None:
-                    raise StepExecutionError(
-                        f"【报文比对】message_comparison[{index}] 缺少 left_text 或 right_text"
-                    )
-                comparisons.append(
-                    {
-                        "left_text": left_text,
-                        "right_text": right_text,
-                        "order_control": self._get_order_control(
-                            item.get("order_control", default_order_control)
-                        ),
-                    }
+                item_sorted = item.get("datagram_field_sorted")
+            else:
+                raise StepExecutionError(f"【报文比对】datagram_comparison[{index}]必须是对象")
+            if left_text is None or right_text is None:
+                raise StepExecutionError(
+                    f"【报文比对】datagram_comparison[{index}]缺少left_text或right_text"
                 )
-            return comparisons
-        left_raw = self.step.get("left_text")
-        right_raw = self.step.get("right_text")
-        if left_raw is None or right_raw is None:
-            raise StepExecutionError("【报文比对】缺少必要参数: message_comparison")
-        left_list = left_raw if isinstance(left_raw, list) else [left_raw]
-        right_list = right_raw if isinstance(right_raw, list) else [right_raw]
-        if len(left_list) != len(right_list):
-            raise StepExecutionError(
-                f"【报文比对】left_text 与 right_text 数量不一致: {len(left_list)} vs {len(right_list)}"
+            comparisons.append(
+                {
+                    "left_text": left_text,
+                    "right_text": right_text,
+                    "datagram_field_sorted": self._get_datagram_field_sorted(
+                        default_field_sorted if item_sorted is None else item_sorted
+                    ),
+                }
             )
-        return [
-            {
-                "left_text": left_text,
-                "right_text": right_text,
-                "order_control": default_order_control,
-            }
-            for left_text, right_text in zip(left_list, right_list)
-        ]
+        return comparisons
 
     async def _execute(self, result: StepExecutionResult) -> None:
         try:
             comparisons_raw = self._load_comparisons()
-
             self.context.log(
-                f"【报文比对】开始执行: 共 {len(comparisons_raw)} 组",
+                f"【报文比对】开始执行: 共{len(comparisons_raw)}组",
                 step_code=self.step_code,
             )
 
-            message_comparison: List[Dict[str, Any]] = []
+            datagram_comparison: List[Dict[str, Any]] = []
             failed_indices: List[int] = []
             for index, item in enumerate(comparisons_raw):
-                order_control = item["order_control"]
-                left_text = self._to_message_text(self._resolve_message_ref(item.get("left_text")))
-                right_text = self._to_message_text(self._resolve_message_ref(item.get("right_text")))
-                # 延迟导入，避免 services ↔ views 循环依赖导致应用启动失败
-                from backend.applications.aotutest.views.autotest_datagram_diff_view import compare_messages
-
+                field_sorted = item["datagram_field_sorted"]
+                left_text = self._to_message_text(self._resolve_message_ref(item["left_text"]))
+                right_text = self._to_message_text(self._resolve_message_ref(item["right_text"]))
                 diff_data = compare_messages(
                     left_text=left_text,
                     right_text=right_text,
-                    order_control=order_control,
+                    order_control=field_sorted,
                 )
-                message_comparison.append(
+                datagram_comparison.append(
                     {
-                        "left_name": item.get("left_text"),
-                        "right_name": item.get("right_text"),
+                        "left_name": item["left_text"],
+                        "right_name": item["right_text"],
                         "left_text": left_text,
                         "right_text": right_text,
-                        "order_control": order_control,
+                        "datagram_field_sorted": field_sorted,
                         "is_equal": diff_data.is_equal,
                         "format_type": diff_data.format_type,
                         "order_consistent": diff_data.order_consistent,
                         "order_message": diff_data.order_message,
-                        "rows": diff_data.model_dump().get("rows", []),
+                        "rows": [row.model_dump() for row in diff_data.rows],
                     }
                 )
                 if not diff_data.is_equal:
                     failed_indices.append(index)
 
-            response_payload = {
-                "message_comparison": message_comparison,
-            }
+            response_payload = {"datagram_comparison": datagram_comparison}
             result.request = {
-                "message_comparison": comparisons_raw,
+                "datagram_comparison": comparisons_raw,
+                "datagram_field_sorted": getattr(self.step, "datagram_field_sorted", None),
             }
             result.response = {
                 "response_code": 200 if not failed_indices else 400,
@@ -3542,7 +3552,7 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
 
             if failed_indices:
                 raise StepExecutionError(
-                    f"【报文比对】共 {len(failed_indices)} 组不一致(索引: {failed_indices}), 详情见报告明细"
+                    f"【报文比对】共{len(failed_indices)}组不一致(索引: {failed_indices}), 详情见报告明细"
                 )
 
             self.context.log("【报文比对】执行成功", step_code=self.step_code)
@@ -3600,6 +3610,7 @@ class StepExecutorFactory:
         AutoTestStepType.ASSERT: AssertStepExecutor,
         AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
+        AutoTestStepType.DIFF: DatagramDiffStepExecutor,
     }
 
     @classmethod

@@ -112,11 +112,11 @@ class AutoTestApiDetailVarBase(BaseModel):
     step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
-    @field_validator("session_variables", "defined_variables", "extract_variables", "assert_validators", mode="before")
+    @field_validator("session_variables", "defined_variables", "extract_variables", "assert_validators", "datagram_comparison", mode="before")
     @classmethod
     def _empty_list_to_none(cls, v: Any) -> Any:
         """
-        session_variables/defined_variables/extract_variables/assert_validators字段空数组时归一为null值。
+        session_variables/defined_variables/extract_variables/assert_validators/datagram_comparison字段空数组时归一为null值。
 
         :param v: 原始值
         :return: 空数组时返回None，其余原样返回
@@ -243,6 +243,17 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["database_operates"] = None
                 executive_logger.append(f"字段[database_operates]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
+        datagram_comparison_value = v.get("datagram_comparison")
+        if datagram_comparison_value:
+            try:
+                v["datagram_comparison"] = [
+                    item.model_dump() if hasattr(item, "model_dump") else item
+                    for item in datagram_comparison_value
+                ]
+            except Exception as e:
+                v["datagram_comparison"] = None
+                executive_logger.append(f"字段[datagram_comparison]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+
         if executive_logger:
             base = v.get("step_exec_logger")
             extra = "\n".join(str(x) for x in executive_logger if x is not None and str(x) != "")
@@ -277,6 +288,10 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
     database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
     redis_searched: Optional[bool] = Field(default=None, description="本次执行是否启用Redis查到即止")
+    datagram_comparison: NON_LIST_DICT_TYPE = Field(default=None, description="报文比对配置列表(快照)")
+    datagram_field_sorted: Optional[int] = Field(
+        default=None, ge=0, le=1, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)"
+    )
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
