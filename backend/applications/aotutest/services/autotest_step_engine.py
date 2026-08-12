@@ -42,7 +42,7 @@ from backend.applications.aotutest.services.autotest_runtime.datagram.message_di
 
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
-from backend.applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramComparisonItem
+from backend.applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     ConditionsBase,
@@ -1353,15 +1353,15 @@ class BaseStepExecutor:
             redis_operates=actual_request.get("redis_operates"),
             redis_searched=actual_request.get("redis_searched"),
             # 报文比对配置快照：优先取执行态request，缺省回落步骤定义
-            datagram_comparison=(
-                actual_request.get("datagram_comparison")
-                if "datagram_comparison" in actual_request
-                else getattr(self.step, "datagram_comparison", None)
+            datagram_field_compare=(
+                actual_request.get("datagram_field_compare")
+                if "datagram_field_compare" in actual_request
+                else getattr(self.step, "datagram_field_compare", None)
             ),
-            datagram_field_sorted=(
-                actual_request.get("datagram_field_sorted")
-                if "datagram_field_sorted" in actual_request
-                else getattr(self.step, "datagram_field_sorted", None)
+            datagram_field_ordered=(
+                actual_request.get("datagram_field_ordered")
+                if "datagram_field_ordered" in actual_request
+                else getattr(self.step, "datagram_field_ordered", None)
             ),
             # 数据源相关
             dataset_name=dataset_name if have_data_driven else None,
@@ -3407,7 +3407,7 @@ class HttpStepExecutor(BaseStepExecutor):
 
 class DatagramDiffStepExecutor(BaseStepExecutor):
     """
-    报文比对步骤：解析datagram_comparison中的左右报文引用，调用compare_messages逐组比对。
+    报文比对步骤：解析datagram_field_compare中的左右报文引用，调用compare_messages逐组比对。
     任一组不一致则步骤失败，比对明细写入result.response供报告展示。
     """
 
@@ -3449,50 +3449,50 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
         return resolved
 
     @staticmethod
-    def _get_datagram_field_sorted(raw: Any) -> int:
+    def _get_datagram_field_ordered(raw: Any) -> int:
         if raw is None:
             return 0
         try:
-            field_sorted = int(raw)
+            field_ordered = int(raw)
         except (TypeError, ValueError) as exc:
-            raise StepExecutionError(f"【报文比对】datagram_field_sorted必须是0或1: {raw}") from exc
-        if field_sorted not in (0, 1):
-            raise StepExecutionError(f"【报文比对】datagram_field_sorted必须是0或1: {field_sorted}")
-        return field_sorted
+            raise StepExecutionError(f"【报文比对】datagram_field_ordered必须是0或1: {raw}") from exc
+        if field_ordered not in (0, 1):
+            raise StepExecutionError(f"【报文比对】datagram_field_ordered必须是0或1: {field_ordered}")
+        return field_ordered
 
     def _load_comparisons(self) -> List[Dict[str, Any]]:
-        """从步骤配置加载比对组；项级datagram_field_sorted缺省时回落步骤级默认值。"""
-        default_field_sorted = self._get_datagram_field_sorted(
-            getattr(self.step, "datagram_field_sorted", None)
+        """从步骤配置加载比对组；项级datagram_field_ordered缺省时回落步骤级默认值。"""
+        default_field_ordered = self._get_datagram_field_ordered(
+            getattr(self.step, "datagram_field_ordered", None)
         )
-        items = getattr(self.step, "datagram_comparison", None)
+        items = getattr(self.step, "datagram_field_compare", None)
         if not items:
-            raise StepExecutionError("【报文比对】缺少必要配置: datagram_comparison")
+            raise StepExecutionError("【报文比对】缺少必要配置: datagram_field_compare")
         if not isinstance(items, list):
-            raise StepExecutionError("【报文比对】datagram_comparison必须是非空数组")
+            raise StepExecutionError("【报文比对】datagram_field_compare必须是非空数组")
 
         comparisons: List[Dict[str, Any]] = []
         for index, item in enumerate(items):
-            if isinstance(item, DatagramComparisonItem):
+            if isinstance(item, DatagramFieldCompareItem):
                 left_text = item.left_text
                 right_text = item.right_text
-                item_sorted = item.datagram_field_sorted
+                item_ordered = item.datagram_field_ordered
             elif isinstance(item, dict):
                 left_text = item.get("left_text")
                 right_text = item.get("right_text")
-                item_sorted = item.get("datagram_field_sorted")
+                item_ordered = item.get("datagram_field_ordered")
             else:
-                raise StepExecutionError(f"【报文比对】datagram_comparison[{index}]必须是对象")
+                raise StepExecutionError(f"【报文比对】datagram_field_compare[{index}]必须是对象")
             if left_text is None or right_text is None:
                 raise StepExecutionError(
-                    f"【报文比对】datagram_comparison[{index}]缺少left_text或right_text"
+                    f"【报文比对】datagram_field_compare[{index}]缺少left_text或right_text"
                 )
             comparisons.append(
                 {
                     "left_text": left_text,
                     "right_text": right_text,
-                    "datagram_field_sorted": self._get_datagram_field_sorted(
-                        default_field_sorted if item_sorted is None else item_sorted
+                    "datagram_field_ordered": self._get_datagram_field_ordered(
+                        default_field_ordered if item_ordered is None else item_ordered
                     ),
                 }
             )
@@ -3506,24 +3506,24 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
                 step_code=self.step_code,
             )
 
-            datagram_comparison: List[Dict[str, Any]] = []
+            datagram_field_compare: List[Dict[str, Any]] = []
             failed_indices: List[int] = []
             for index, item in enumerate(comparisons_raw):
-                field_sorted = item["datagram_field_sorted"]
+                field_ordered = item["datagram_field_ordered"]
                 left_text = self._to_message_text(self._resolve_message_ref(item["left_text"]))
                 right_text = self._to_message_text(self._resolve_message_ref(item["right_text"]))
                 diff_data = compare_messages(
                     left_text=left_text,
                     right_text=right_text,
-                    order_control=field_sorted,
+                    order_control=field_ordered,
                 )
-                datagram_comparison.append(
+                datagram_field_compare.append(
                     {
                         "left_name": item["left_text"],
                         "right_name": item["right_text"],
                         "left_text": left_text,
                         "right_text": right_text,
-                        "datagram_field_sorted": field_sorted,
+                        "datagram_field_ordered": field_ordered,
                         "is_equal": diff_data.is_equal,
                         "format_type": diff_data.format_type,
                         "order_consistent": diff_data.order_consistent,
@@ -3534,10 +3534,10 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
                 if not diff_data.is_equal:
                     failed_indices.append(index)
 
-            response_payload = {"datagram_comparison": datagram_comparison}
+            response_payload = {"datagram_field_compare": datagram_field_compare}
             result.request = {
-                "datagram_comparison": comparisons_raw,
-                "datagram_field_sorted": getattr(self.step, "datagram_field_sorted", None),
+                "datagram_field_compare": comparisons_raw,
+                "datagram_field_ordered": getattr(self.step, "datagram_field_ordered", None),
             }
             result.response = {
                 "response_code": 200 if not failed_indices else 400,

@@ -10,7 +10,7 @@ from fastapi import APIRouter
 
 from .autotest_case_view import autotest_case
 from .autotest_data_source_view import autotest_data_source
-from .autotest_datagram_diff_view import rep_diff_router
+from .autotest_datagram_diff_view import datagram_diff_router
 from .autotest_detail_view import autotest_detail
 from .autotest_env_config_view import autotest_env_config
 from .autotest_env_view import autotest_env
@@ -39,4 +39,4 @@ autotest.include_router(autotest_tool, prefix="/tool", tags=["便捷工具:工�
 autotest.include_router(autotest_data_source, prefix="/data_source", tags=["自动化测试:数据源"])
 autotest.include_router(autotest_tcp_test, prefix="/tcp_test", tags=["自动化测试:调试"])
 autotest.include_router(autotest_http_xml_test, prefix="/http_xml_test", tags=["自动化测试:调试"])
-autotest.include_router(rep_diff_router, prefix="/datagram_diff", tags=["便捷工具:报文比对"])
+autotest.include_router(datagram_diff_router, prefix="/datagram_diff", tags=["便捷工具:报文比对"])

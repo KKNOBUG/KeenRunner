@@ -286,9 +286,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     redis_operates = fields.JSONField(null=True, description="Redis请求操作列表")
     redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续请求)")
 
-    # 报文比对：datagram_comparison为List[Dict]，项含left_text、right_text、datagram_field_sorted
-    datagram_comparison = fields.JSONField(null=True, description="报文比对配置列表")
-    datagram_field_sorted = fields.IntField(null=True, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)")
+    # 报文比对：datagram_field_compare为List[Dict]，项含left_text、right_text、datagram_field_ordered
+    datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表")
+    datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)")
 
     class Meta:
         table = "krun_autotest_step"
@@ -410,8 +410,8 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     # 报文比对配置快照(与步骤定义字段同名，保证历史报告可独立回放)
-    datagram_comparison = fields.JSONField(null=True, description="报文比对配置列表(快照)")
-    datagram_field_sorted = fields.IntField(null=True, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)")
+    datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表(快照)")
+    datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)")
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照(head/body/assert)，记录在明细更贴合「每步细节」
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称")
     dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照")

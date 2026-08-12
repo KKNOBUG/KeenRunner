@@ -13,14 +13,14 @@ from pydantic import BaseModel, Field, field_validator
 DiffType = Literal["equal", "left_only", "right_only", "modified", "empty"]
 
 
-class DatagramComparisonItem(BaseModel):
+class DatagramFieldCompareItem(BaseModel):
     """报文比对步骤中的单组左右报文引用。"""
 
     left_text: Any = Field(..., description="左侧报文(变量名/占位符/文本)")
     right_text: Any = Field(..., description="右侧报文(变量名/占位符/文本)")
-    datagram_field_sorted: Optional[int] = Field(
+    datagram_field_ordered: Optional[int] = Field(
         None,
-        description="是否控制字段顺序，1按行序，0按字段名忽略顺序；缺省时用步骤级datagram_field_sorted",
+        description="是否控制字段顺序，1按行序，0按字段名忽略顺序；缺省时用步骤级datagram_field_ordered",
         ge=0,
         le=1,
     )
@@ -31,7 +31,7 @@ class RepDiffRequest(BaseModel):
 
     left_text: str = Field(..., description="左侧报文文本")
     right_text: str = Field(..., description="右侧报文文本")
-    datagram_field_sorted: int = Field(
+    datagram_field_ordered: int = Field(
         0,
         description="是否控制字段顺序，1按行序比对，0按字段名比对忽略顺序",
         ge=0,
@@ -64,7 +64,7 @@ class AlignedDiffRow(BaseModel):
 class RepDiffResponse(BaseModel):
     is_equal: bool = Field(..., description="两侧报文是否完全一致")
     format_type: str = Field(..., description="识别到的报文格式: json/xml/text")
-    order_consistent: bool = Field(True, description="字段顺序是否一致(datagram_field_sorted=1时有效)")
+    order_consistent: bool = Field(True, description="字段顺序是否一致(datagram_field_ordered=1时有效)")
     order_message: Optional[str] = Field(None, description="顺序不一致时的描述")
     rows: List[AlignedDiffRow] = Field(default_factory=list, description="左右对齐的逐行比对结果")
 
