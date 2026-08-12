@@ -33,7 +33,7 @@ export const getFixedBranchStepDisplayName = (step) => {
         if (mode === '次数循环') return '循环结构(次数循环)'
         if (mode === '列表循环') return '循环结构(列表循环)'
         if (mode === '字典循环') return '循环结构(字典循环)'
-        if (mode === '条件循环') return '循环结构-(条件循环)'
+        if (mode === '条件循环') return '循环结构(条件循环)'
         return '循环结构'
     }
     return null
