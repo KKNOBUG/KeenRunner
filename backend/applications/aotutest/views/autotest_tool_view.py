@@ -66,8 +66,8 @@ def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
             # desc = doc.splitlines()[0].strip() if doc else ""
 
             result.append({
-                "value": func_full_name,
-                "key": doc
+                "name": func_full_name,
+                "desc": doc
             })
         except (ValueError, TypeError):
             continue
