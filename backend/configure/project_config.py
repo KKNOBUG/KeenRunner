@@ -213,6 +213,10 @@ class ProjectConfig(BaseSettings):
     REDIS_USERNAME: str = Field(default="", description="Redis用户名")
     REDIS_PASSWORD: str = Field(..., min_length=1, description="Redis密码")
 
+    # 自动化模块：数据库操作中Oracle连接模式，空值按thick；thin不兼容11g/部分12.1
+    ORACLE_CLIENT_MODE: str = Field(default="", description="Oracle Instant 连接模式，仅允许：thick/thin")
+    ORACLE_CLIENT_PATH: str = Field(default="", description="Oracle Instant Client 存放目录")
+
     @model_validator(mode="after")
     def validate_env_and_assemble_urls(self) -> Self:
         if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 64:
