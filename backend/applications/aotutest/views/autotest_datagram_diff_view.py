@@ -9,7 +9,7 @@
 from fastapi import APIRouter
 
 from backend.applications.aotutest.schemas.autotest_datagram_diff_schema import RepDiffRequest
-from backend.applications.aotutest.services.autotest_runtime.datagram.message_diff import compare_messages
+from backend.applications.aotutest.services.autotest_runtime.datagram.datagram_diff import compare_messages
 from backend.configure import LOGGER
 from backend.core.responses import FailureResponse, SuccessResponse
 

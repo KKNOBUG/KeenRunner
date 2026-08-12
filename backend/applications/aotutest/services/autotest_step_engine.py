@@ -38,7 +38,7 @@ from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import
     resolve_tcp_request_extract_sources,
     tcp_body_source_for_assert
 )
-from backend.applications.aotutest.services.autotest_runtime.datagram.message_diff import compare_messages
+from backend.applications.aotutest.services.autotest_runtime.datagram.datagram_diff import compare_messages
 
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
