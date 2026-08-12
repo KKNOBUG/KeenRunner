@@ -7,7 +7,7 @@ from typing import Any, Optional, Tuple, Union
 
 import orjson
 
-from enums import AutoTestReqArgsType
+from backend.enums import AutoTestReqArgsType
 
 
 @dataclass

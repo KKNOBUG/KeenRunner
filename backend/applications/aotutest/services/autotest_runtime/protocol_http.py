@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import quote
 
-from enums import AutoTestReqArgsType
+from backend.enums import AutoTestReqArgsType
 
 
 @dataclass
