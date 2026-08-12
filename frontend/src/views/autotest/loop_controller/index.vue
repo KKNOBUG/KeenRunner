@@ -27,10 +27,9 @@
       <div>
         <template v-if="form.loop_mode === '次数循环'">
           <n-form-item label="最大循环次数" required>
-            <n-input-number
+            <n-input
                 v-model:value="form.loop_maximums"
-                :min="1"
-                placeholder="请输入最大循环次数, 最多循环100次"
+                placeholder="正整数或变量占位符, 例如: 5 或 ${count}（执行时解析为1-100整数）"
                 :disabled="props.readonly"
             />
           </n-form-item>
@@ -206,11 +205,18 @@ const parseCondition = (c) => {
   }
 }
 
+const normalizeLoopMaximums = (v) => {
+  if (v === undefined || v === null || v === '') return '5'
+  return String(v)
+}
+
 const mergeConfigAndOriginal = (config, original) => {
   const merged = {
     loop_mode: normalizeLoopMode(config.loop_mode || original?.loop_mode),
     loop_on_error: config.loop_on_error || original?.loop_on_error || '中断循环',
-    loop_maximums: config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original?.loop_maximums ? Number(original.loop_maximums) : 5),
+    loop_maximums: config.loop_maximums !== undefined
+      ? normalizeLoopMaximums(config.loop_maximums)
+      : normalizeLoopMaximums(original?.loop_maximums),
     loop_interval: config.loop_interval !== undefined ? Number(config.loop_interval) : (original?.loop_interval ? Number(original.loop_interval) : 0),
     loop_iterable: config.loop_iterable !== undefined ? config.loop_iterable : (original?.loop_iterable || ''),
     loop_timeout: config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original?.loop_timeout ? Number(original.loop_timeout) : 0)
@@ -243,7 +249,7 @@ const mergeConfigAndOriginal = (config, original) => {
 const createDefaults = () => ({
   loop_mode: '次数循环',
   loop_on_error: '中断循环',
-  loop_maximums: 5,
+  loop_maximums: '5',
   loop_interval: 0,
   loop_iterable: '',
   loop_timeout: 0,
@@ -260,7 +266,7 @@ const buildLoopConfig = (f) => {
     loop_interval: f.loop_interval || 0
   }
   if (f.loop_mode === '次数循环') {
-    config.loop_maximums = f.loop_maximums
+    config.loop_maximums = normalizeLoopMaximums(f.loop_maximums)
   } else if (f.loop_mode === '列表循环' || f.loop_mode === '字典循环') {
     config.loop_iterable = f.loop_iterable
   } else if (f.loop_mode === '条件循环') {

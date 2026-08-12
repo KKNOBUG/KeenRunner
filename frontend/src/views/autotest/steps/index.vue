@@ -1695,7 +1695,7 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
   if (!def) return null
 
   const defaultConfig = type === 'loop'
-      ? {loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: 5}
+      ? {loop_mode: '次数循环', loop_on_error: '中断循环', loop_maximums: '5'}
       : type === 'if'
           ? {branch_items: [{_key: genId(), branch_type: 'if', branch_conditions: {condition_expr: '', condition_compare: '非空', condition_value: ''}, branch_desc: ''}]}
           : type === 'wait'

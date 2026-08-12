@@ -116,7 +116,7 @@ class VariableFlowValidation:
                     "request_url", "request_port", "request_text", "request_body",
                     "request_header", "request_params", "request_form_data",
                     "request_form_urlencoded", "request_form_file",
-                    "code", "loop_iterable", "wait",
+                    "code", "loop_iterable", "loop_maximums", "wait",
             ):
                 val = getattr(step, attr, None)
                 if val is not None:

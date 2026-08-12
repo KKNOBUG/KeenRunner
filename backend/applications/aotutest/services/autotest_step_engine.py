@@ -1342,7 +1342,12 @@ class BaseStepExecutor:
             wait=self.step.wait,
             loop_mode=self.step.loop_mode,
             loop_timeout=self.step.loop_timeout,
-            loop_maximums=self.step.loop_maximums,
+            # 次数循环：优先取执行态解析后的整数；步骤定义可能是占位符字符串，不能直接写入明细Int字段
+            loop_maximums=(
+                actual_request.get("loop_maximums")
+                if "loop_maximums" in actual_request
+                else None
+            ),
             loop_interval=self.step.loop_interval,
             loop_iterable=self.step.loop_iterable,
             loop_on_error=self.step.loop_on_error,
@@ -1534,22 +1539,98 @@ class LoopStepExecutor(BaseStepExecutor):
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
 
+    def _resolve_loop_maximums(self) -> int:
+        """
+        解析次数循环的loop_maximums：支持字面量整数与${...}变量占位符，最终必须得到1-100的正整数。
+
+        :return: 解析后的最大循环次数
+        """
+        raw = self.step.loop_maximums
+        if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+            raise StepExecutionError("【循环结构】次数循环模式不允许loop_maximums参数为空")
+
+        if isinstance(raw, bool):
+            raise StepExecutionError(
+                f"【循环结构】loop_maximums不允许为布尔值: \n\t原始值: {raw!r}"
+            )
+
+        if isinstance(raw, int):
+            resolved: Any = raw
+        else:
+            text = str(raw).strip()
+            try:
+                resolved = self.context.resolve_placeholders(variables=text, step_code=self.step_code)
+            except StepExecutionError:
+                raise
+            except Exception as e:
+                raise StepExecutionError(
+                    f"【循环结构】loop_maximums占位符解析异常: \n\t"
+                    f"原始值: {raw!r}\n\t错误描述: {e}"
+                ) from e
+
+            if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
+                variable_name = resolved[2:-1]
+                try:
+                    resolved = self.context.get_variable(variable_name)
+                except KeyError as e:
+                    raise StepExecutionError(
+                        f"【循环结构】loop_maximums引用的变量未定义: {variable_name}"
+                    ) from e
+
+        try:
+            if isinstance(resolved, bool):
+                raise ValueError(f"布尔值不能作为循环次数: {resolved!r}")
+            if isinstance(resolved, int):
+                loop_maximums = resolved
+            elif isinstance(resolved, float):
+                if not resolved.is_integer():
+                    raise ValueError(f"浮点数不是整数: {resolved!r}")
+                loop_maximums = int(resolved)
+            elif isinstance(resolved, str):
+                text = resolved.strip()
+                if not re.fullmatch(r"[+-]?\d+", text):
+                    raise ValueError(f"字符串不是整数: {resolved!r}")
+                loop_maximums = int(text)
+            else:
+                raise ValueError(f"不支持的类型: {type(resolved).__name__}, 值: {resolved!r}")
+        except ValueError as e:
+            raise StepExecutionError(
+                f"【循环结构】loop_maximums解析后不是合法正整数: \n\t"
+                f"原始值: {raw!r}\n\t解析值: {resolved!r}\n\t错误描述: {e}"
+            ) from e
+
+        if loop_maximums < 1:
+            raise StepExecutionError(
+                f"【循环结构】loop_maximums必须为正整数(>=1): \n\t"
+                f"原始值: {raw!r}\n\t解析值: {loop_maximums}"
+            )
+        if loop_maximums > 100:
+            raise StepExecutionError(
+                f"【循环结构】loop_maximums超过最大限制100次: \n\t"
+                f"原始值: {raw!r}\n\t解析值: {loop_maximums}"
+            )
+        return loop_maximums
+
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
         次数循环模式，根据loop_maximums 执行固定次数循环，可选loop_interval间隔；超100次强制终止。
+        loop_maximums 支持字面量或变量占位符，执行前解析为整数。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
         """
-        loop_maximums = self.step.loop_maximums
-        if not loop_maximums:
-            raise StepExecutionError("【循环结构】次数循环模式不允许loop_maximums参数为空")
+        loop_maximums = self._resolve_loop_maximums()
+        result.request = {"loop_maximums": loop_maximums}
 
         loop_interval = self.step.loop_interval
         guard_limit = 100
 
-        self.context.log(f"【循环结构】次数循环开始: 最大循环次数: {loop_maximums}", step_code=self.step_code)
+        self.context.log(
+            f"【循环结构】次数循环开始: 最大循环次数: {loop_maximums}"
+            f"（配置: {self.step.loop_maximums!r}）",
+            step_code=self.step_code,
+        )
         for iteration in range(1, loop_maximums + 1):
             if self.step_code:
                 self.context.step_cycle_index[self.step_code] = iteration

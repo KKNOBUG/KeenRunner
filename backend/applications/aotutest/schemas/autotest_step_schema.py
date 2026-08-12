@@ -328,7 +328,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     code: Optional[str] = Field(None, description="执行代码(Python)")
     wait: Optional[float] = Field(None, ge=0, le=300, description="等待控制(正浮点数, 单位:秒)")
     loop_mode: Optional[AutoTestLoopMode] = Field(None, description="循环模式类型")
-    loop_maximums: Optional[int] = Field(None, ge=1, le=100, description="最大循环次数(正整数)")
+    loop_maximums: Optional[str] = Field(None, max_length=512, description="最大循环次数(正整数或变量占位符, 执行时解析为1-100整数)")
     loop_interval: Optional[float] = Field(None, ge=0, le=60, description="每次循环间隔时间(正浮点数)")
     loop_iterable: Optional[str] = Field(None, max_length=512, description="循环对象来源(变量名或可迭代对象)")
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
@@ -349,6 +349,39 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     )
 
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+
+    @field_validator("loop_maximums", mode="before")
+    @classmethod
+    def _normalize_loop_maximums(cls, v: Any) -> Any:
+        """
+        规范化loop_maximums：兼容历史整数入参，统一存为字符串；字面量整数校验1-100，占位符交由执行期解析。
+
+        :param v: 原始值（int/str/None）
+        :return: 规范化后的字符串或None
+        """
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            raise ValueError("参数[loop_maximums]不允许为布尔值")
+        if isinstance(v, int):
+            if v < 1 or v > 100:
+                raise ValueError("参数[loop_maximums]字面量必须为1-100的正整数")
+            return str(v)
+        if isinstance(v, float):
+            if not v.is_integer() or v < 1 or v > 100:
+                raise ValueError("参数[loop_maximums]字面量必须为1-100的正整数")
+            return str(int(v))
+        if isinstance(v, str):
+            text = v.strip()
+            if not text:
+                return None
+            if text.isdigit():
+                number = int(text)
+                if number < 1 or number > 100:
+                    raise ValueError("参数[loop_maximums]字面量必须为1-100的正整数")
+                return text
+            return text
+        raise ValueError(f"参数[loop_maximums]必须为null、正整数或字符串，当前类型: {type(v).__name__}")
 
     @field_validator("loop_conditions", mode="before")
     @classmethod

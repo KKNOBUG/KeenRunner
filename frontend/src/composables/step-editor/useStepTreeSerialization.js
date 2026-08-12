@@ -234,7 +234,8 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.loop_interval = config.loop_interval !== undefined ? Number(config.loop_interval) : (original.loop_interval ? Number(original.loop_interval) : 0)
 
             if (backendStep.loop_mode === '次数循环') {
-                backendStep.loop_maximums = config.loop_maximums !== undefined ? Number(config.loop_maximums) : (original.loop_maximums != null ? Number(original.loop_maximums) : 5)
+                const rawMax = config.loop_maximums !== undefined ? config.loop_maximums : original.loop_maximums
+                backendStep.loop_maximums = rawMax != null && rawMax !== '' ? String(rawMax) : '5'
             } else if (backendStep.loop_mode === '列表循环') {
                 backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
             } else if (backendStep.loop_mode === '字典循环') {

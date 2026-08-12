@@ -107,7 +107,7 @@ export function mapBackendStep(step) {
     base.config = {
       loop_mode: step.loop_mode || '次数循环',
       loop_on_error: step.loop_on_error || '继续下一次循环',
-      loop_maximums: step.loop_maximums ? Number(step.loop_maximums) : null,
+      loop_maximums: step.loop_maximums != null && step.loop_maximums !== '' ? String(step.loop_maximums) : null,
       loop_interval: step.loop_interval ? Number(step.loop_interval) : 0,
       loop_iterable: step.loop_iterable || '',
       loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0,

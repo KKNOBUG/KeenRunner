@@ -254,7 +254,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
 
     # 循环控制相关
     loop_mode = fields.CharEnumField(AutoTestLoopMode, default=None, null=True, description="循环模式类型")
-    loop_maximums = fields.IntField(ge=1, null=True, description="最大循环次数(正整数)")
+    loop_maximums = fields.CharField(max_length=512, null=True, description="最大循环次数(正整数或变量占位符)")
     loop_interval = fields.FloatField(ge=0, null=True, description="每次循环间隔时间(正浮点数)")
     loop_iterable = fields.CharField(max_length=512, null=True, description="循环对象来源(变量名或可迭代对象)")
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="循环执行失败时的处理策略")
