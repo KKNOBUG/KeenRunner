@@ -746,41 +746,93 @@ async def execute_step_tree(
                         total=1,
                     )
 
-                # 参数化驱动：本项目按数据集同步循环执行
-                details: List[Dict[str, Any]] = []
+                # # 参数化驱动：本项目按数据集同步循环执行
+                # details: List[Dict[str, Any]] = []
+                # batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+                # for dataset_name in selected_dataset_names:
+                #     single_data = await services.step_curd.execute_single_case(
+                #         case_id=case_id,
+                #         steps_execute_config=steps_execute_config,
+                #         initial_variables=initial_variables or [],
+                #         report_type=AutoTestReportType.SYNC_EXEC,
+                #         batch_code=batch_code,
+                #         dataset_name=dataset_name,
+                #     )
+                #     single_data["dataset_name"] = dataset_name
+                #     details.append(single_data)
+                # execute_runs: int = len(details)
+                # success_runs: int = sum(1 for r in details if r.get("success"))
+                # failed_runs: int = execute_runs - success_runs
+                # case_ok: bool = execute_runs > 0 and failed_runs == 0
+                # success_rate: float = 100.0 if case_ok else 0.0
+                # return SuccessResponse(
+                #     message=(
+                #         f"参数化执行完成, 共{execute_runs}次运行, 成功{success_runs}次, "
+                #         f"失败{failed_runs}次, 用例成功率: {success_rate}%"
+                #     ),
+                #     data={
+                #         "parameterized": True,
+                #         "batch_code": batch_code,
+                #         "total_cases": 1,
+                #         "success_cases": 1 if case_ok else 0,
+                #         "failed_cases": 0 if case_ok else 1,
+                #         "success_rate": success_rate,
+                #         "execute_runs": execute_runs,
+                #         "details": details,
+                #     },
+                #     total=execute_runs,
+                # )
+
+                # 参数化驱动：下发Celery，由Worker池通过run_async执行协程
+                from backend.celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
+                from backend.services import get_current_username
+
                 batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
-                for dataset_name in selected_dataset_names:
-                    single_data = await services.step_curd.execute_single_case(
-                        case_id=case_id,
-                        steps_execute_config=steps_execute_config,
-                        initial_variables=initial_variables or [],
-                        report_type=AutoTestReportType.SYNC_EXEC,
-                        batch_code=batch_code,
-                        dataset_name=dataset_name,
-                    )
-                    single_data["dataset_name"] = dataset_name
-                    details.append(single_data)
-                execute_runs: int = len(details)
-                success_runs: int = sum(1 for r in details if r.get("success"))
-                failed_runs: int = execute_runs - success_runs
-                case_ok: bool = execute_runs > 0 and failed_runs == 0
-                success_rate: float = 100.0 if case_ok else 0.0
+                initial_variables_payload: List[Dict[str, Any]] = [
+                    item.model_dump() if isinstance(item, StepVariablesBase) else dict(item)
+                    for item in (initial_variables or [])
+                ]
+                steps_execute_config_payload: Optional[Dict[str, Any]] = None
+                if steps_execute_config:
+                    steps_execute_config_payload = {
+                        str(step_id): (
+                            cfg.model_dump() if isinstance(cfg, StepsExecuteConfigBase) else dict(cfg)
+                        )
+                        for step_id, cfg in steps_execute_config.items()
+                    }
+
+                apply_async_result = execute_step_tree_task.apply_async(
+                    kwargs={
+                        "case_id": case_id,
+                        "initial_variables": initial_variables_payload,
+                        "report_type": AutoTestReportType.ASYNC_EXEC.value,
+                        "batch_code": batch_code,
+                        "selected_dataset_names": selected_dataset_names,
+                        "steps_execute_config": steps_execute_config_payload,
+                        "created_user": get_current_username(),
+                    },
+                    queue="autotest_queue",
+                )
+                LOGGER.info(
+                    f"参数化执行任务已下发Celery: case_id={case_id}, batch_code={batch_code}, "
+                    f"celery_task_id={apply_async_result.task_id}, "
+                    f"dataset_count={len(selected_dataset_names)}"
+                )
                 return SuccessResponse(
                     message=(
-                        f"参数化执行完成, 共{execute_runs}次运行, 成功{success_runs}次, "
-                        f"失败{failed_runs}次, 用例成功率: {success_rate}%"
+                        f"参数化执行任务已提交后台, 共{len(selected_dataset_names)}个数据集, "
+                        f"请稍后在报告中心/执行记录查看结果"
                     ),
                     data={
                         "parameterized": True,
+                        "async": True,
+                        "celery_task_id": apply_async_result.task_id,
                         "batch_code": batch_code,
-                        "total_cases": 1,
-                        "success_cases": 1 if case_ok else 0,
-                        "failed_cases": 0 if case_ok else 1,
-                        "success_rate": success_rate,
-                        "execute_runs": execute_runs,
-                        "details": details,
+                        "case_id": case_id,
+                        "dataset_count": len(selected_dataset_names),
+                        "selected_dataset_names": selected_dataset_names,
                     },
-                    total=execute_runs,
+                    total=1,
                 )
             except NotFoundException as e:
                 return NotFoundResponse(message=str(e.message))
