@@ -43,13 +43,14 @@ class RedisOperates(BaseModel):
     expr: str = Field(..., max_length=4096, description="Redis命令")
     project_id: int = Field(..., ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
+    variable_name: List[str] = Field(..., description="存储变量名称")
     config_name: str = Field(..., max_length=128, description="所属环境配置名称")
     database_name: str = Field(..., max_length=128, description="Redis库编号")
     desc: Optional[str] = Field(None, max_length=2048, description="Redis操作描述")
 
 
 class ConditionsBase(BaseModel):
-    """条件/循环判断基础字段模型。"""
+    """条件循环判断基础字段模型。"""
 
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
@@ -102,7 +103,11 @@ class AutoTestApiDetailResBase(BaseModel):
 class AutoTestApiDetailVarBase(BaseModel):
     """步骤执行明细变量/断言/操作快照基础字段模型。"""
 
-    conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件/循环判断条件")
+    loop_conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件循环判断条件")
+    # 条件分支快照：仅记录本次命中的那一条（列表长度通常为1）；branch_index 给子步骤归属用
+    branch_items: NON_LIST_DICT_TYPE = Field(default=None, description="本次命中的条件分支快照(仅命中项,不含子步骤)")
+    branch_index: Optional[int] = Field(default=None, ge=0, description="所属分支序号快照(条件分支子步骤)")
+    branch_match: Optional[int] = Field(default=None, ge=0, description="本次命中的分支序号快照(条件分支父步骤)")
     session_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(所有步骤的执行结果持续累积)")
     defined_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="定义变量(用户自定义、引用函数的结果)")
     extract_variables: NON_LIST_DICT_TYPE = Field(default=None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
@@ -114,11 +119,19 @@ class AutoTestApiDetailVarBase(BaseModel):
     step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
-    @field_validator("session_variables", "defined_variables", "extract_variables", "assert_validators", "datagram_field_compare", mode="before")
+    @field_validator(
+        "session_variables",
+        "defined_variables",
+        "extract_variables",
+        "assert_validators",
+        "datagram_field_compare",
+        "branch_items",
+        mode="before",
+    )
     @classmethod
     def _empty_list_to_none(cls, v: Any) -> Any:
         """
-        session_variables/defined_variables/extract_variables/assert_validators/datagram_field_compare字段空数组时归一为null值。
+        列表型快照字段空数组时归一为null值。
 
         :param v: 原始值
         :return: 空数组时返回None，其余原样返回
@@ -191,13 +204,21 @@ class AutoTestApiDetailVarBase(BaseModel):
         if not isinstance(v, dict):
             return v
         executive_logger: List[str] = []
-        conditions_value: Optional[ConditionsBase] = v.get("conditions")
-        if conditions_value:
+        loop_conditions_value: Optional[ConditionsBase] = v.get("loop_conditions")
+        if loop_conditions_value:
             try:
-                v["conditions"] = conditions_value.model_dump()
+                v["loop_conditions"] = loop_conditions_value.model_dump()
             except Exception as e:
-                v["conditions"] = None
-                executive_logger.append(f"字段[conditions]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                v["loop_conditions"] = None
+                executive_logger.append(f"字段[loop_conditions]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+
+        branch_items_value = v.get("branch_items")
+        if branch_items_value:
+            try:
+                v["branch_items"] = orjson.loads(orjson.dumps(branch_items_value))
+            except Exception as e:
+                v["branch_items"] = None
+                executive_logger.append(f"字段[branch_items]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         session_variables_value: Optional[List[StepVariablesBase]] = v.get("session_variables")
         if session_variables_value:
@@ -278,7 +299,7 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     step_st_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行开始时间")
     step_ed_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行结束时间")
     step_elapsed: Optional[str] = Field(default=None, max_length=16, description="步骤执行消耗时间")
-    num_cycles: Optional[int] = Field(default=None, le=100, description="循环执行次数(第几次)")
+    loop_cycles: Optional[int] = Field(default=None, le=100, description="循环执行次数(第几次)")
 
     code: Optional[str] = Field(default=None, description="本次执行使用的代码(Python)")
     wait: Optional[float] = Field(default=None, ge=0, description="本次执行等待时间")

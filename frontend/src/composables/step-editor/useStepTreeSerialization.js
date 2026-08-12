@@ -240,11 +240,11 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             } else if (backendStep.loop_mode === '字典循环') {
                 backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
             } else if (backendStep.loop_mode === '条件循环') {
-                const fromConfigDict = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
-                    ? config.conditions
+                const fromConfigDict = config.loop_conditions && typeof config.loop_conditions === 'object' && !Array.isArray(config.loop_conditions)
+                    ? config.loop_conditions
                     : null
                 if (fromConfigDict) {
-                    backendStep.conditions = {
+                    backendStep.loop_conditions = {
                         condition_expr: fromConfigDict.condition_expr != null ? String(fromConfigDict.condition_expr) : '',
                         condition_compare: fromConfigDict.condition_compare || '非空',
                         condition_value: fromConfigDict.condition_value != null ? String(fromConfigDict.condition_value) : '',
@@ -254,20 +254,20 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                     || config.condition_compare !== undefined
                     || config.condition_value !== undefined
                 ) {
-                    backendStep.conditions = {
+                    backendStep.loop_conditions = {
                         condition_expr: config.condition_expr != null ? String(config.condition_expr) : '',
                         condition_compare: config.condition_compare || '非空',
                         condition_value: config.condition_value != null ? String(config.condition_value) : '',
                     }
-                } else if (original.conditions && typeof original.conditions === 'object' && !Array.isArray(original.conditions)) {
-                    const oc = original.conditions
-                    backendStep.conditions = {
+                } else if (original.loop_conditions && typeof original.loop_conditions === 'object' && !Array.isArray(original.loop_conditions)) {
+                    const oc = original.loop_conditions
+                    backendStep.loop_conditions = {
                         condition_expr: oc.condition_expr != null ? String(oc.condition_expr) : '',
                         condition_compare: oc.condition_compare || '非空',
                         condition_value: oc.condition_value != null ? String(oc.condition_value) : '',
                     }
                 } else {
-                    backendStep.conditions = null
+                    backendStep.loop_conditions = null
                 }
                 backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
             }
@@ -298,7 +298,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 branchPayload.branch_children = branchChildren.map((child) => convertStepToBackend(child, parentIdForChildren, stepNoMap))
                 return branchPayload
             })
-            backendStep.conditions = null
+            backendStep.loop_conditions = null
         } else if (step.type === 'wait') {
             backendStep.wait = config.seconds || original.wait || 0
         } else if (step.type === 'user_variables') {

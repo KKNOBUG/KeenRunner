@@ -121,8 +121,8 @@ class VariableFlowValidation:
                 val = getattr(step, attr, None)
                 if val is not None:
                     fields[attr] = val
-            if step.conditions is not None:
-                fields["conditions"] = step.conditions
+            if step.loop_conditions is not None:
+                fields["loop_conditions"] = step.loop_conditions
             if step.branch_items:
                 for bi, branch in enumerate(step.branch_items):
                     cond = branch.branch_conditions if hasattr(branch, "branch_conditions") else (

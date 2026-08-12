@@ -46,11 +46,10 @@ from backend.core.exceptions import (
 )
 from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, PUBLIC_CASE_TYPES
 
-# 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表「显式清空」，需回补以落库NULL
-# 注意：branch_items由更新路径单独处理（仅条件分支步骤），不在此集合内
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
-    "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates", "conditions",
+    "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
+    "loop_conditions",
 )
 
 
@@ -876,7 +875,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     create_step_dict["branch_items"] = [
                         b.model_dump(exclude={"branch_children"}) for b in step_data.branch_items
                     ]
-                    create_step_dict.pop("conditions", None)
+                    create_step_dict.pop("loop_conditions", None)
 
                 try:
                     new_step_instance: AutoTestApiStepInfo = await self.create(create_step_dict)
@@ -975,7 +974,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     update_dict["branch_items"] = [
                         b.model_dump(exclude={"branch_children"}) for b in step_data.branch_items
                     ]
-                    update_dict.pop("conditions", None)
+                    update_dict.pop("loop_conditions", None)
 
                 if "step_no" in update_dict:
                     case_id = update_dict.get("case_id", step_instance.case_id)

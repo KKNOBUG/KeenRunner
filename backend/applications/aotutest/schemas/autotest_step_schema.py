@@ -337,7 +337,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
     data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
-    conditions: Optional[ConditionsBase] = Field(None, description="判断条件(仅循环结构条件循环使用)")
+    loop_conditions: Optional[ConditionsBase] = Field(None, description="条件循环判断条件(仅循环结构条件循环使用)")
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
@@ -351,11 +351,11 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
 
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
-    @field_validator("conditions", mode="before")
+    @field_validator("loop_conditions", mode="before")
     @classmethod
-    def _conditions_must_be_object_or_none(cls, v: Any) -> Any:
+    def _loop_conditions_must_be_object_or_none(cls, v: Any) -> Any:
         """
-        校验conditions为对象、ConditionsBase实例或null。
+        校验loop_conditions为对象、ConditionsBase实例或null。
 
         :param v: 原始值
         :return: 原值（合法时）
@@ -366,7 +366,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
             return v
         if isinstance(v, dict):
             return v
-        raise ValueError(f"参数[conditions]必须为null或对象列表，当前类型: {type(v).__name__}")
+        raise ValueError(f"参数[loop_conditions]必须为null或对象，当前类型: {type(v).__name__}")
 
     @field_validator("branch_items", mode="before")
     @classmethod

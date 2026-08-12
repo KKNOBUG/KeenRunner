@@ -83,10 +83,16 @@
                       <NTag type="info">{{ currentDetail.step_type || '-' }}</NTag>
                     </div>
                   </div>
-                  <div class="step-info-row" v-if="currentDetail.num_cycles">
+                  <div class="step-info-row" v-if="currentDetail.loop_cycles">
                     <div class="step-info-label">循环次数：</div>
                     <div class="step-info-value">
-                      <NTag type="warning">第 {{ currentDetail.num_cycles }} 次循环</NTag>
+                      <NTag type="warning">第 {{ currentDetail.loop_cycles }} 次循环</NTag>
+                    </div>
+                  </div>
+                  <div class="step-info-row" v-if="currentDetail.branch_index != null">
+                    <div class="step-info-label">所属分支序号：</div>
+                    <div class="step-info-value">
+                      <NTag type="info" size="small">{{ currentDetail.branch_index }}</NTag>
                     </div>
                   </div>
                 </div>
@@ -94,6 +100,10 @@
 
               <NCard v-if="currentDetail.step_type === '循环结构'" title="循环结构配置" size="small" :bordered="false">
                 <div class="step-info-grid">
+                  <div class="step-info-row">
+                    <div class="step-info-label">循环模式：</div>
+                    <div class="step-info-value">{{ currentDetail.loop_mode || '-' }}</div>
+                  </div>
                   <div class="step-info-row">
                     <div class="step-info-label">最大循环次数：</div>
                     <div class="step-info-value">{{ currentDetail.loop_maximums || '-' }}</div>
@@ -129,17 +139,40 @@
                     <div class="step-info-value">{{ currentDetail.loop_timeout ? `${currentDetail.loop_timeout}s` : '-' }}</div>
                   </div>
                 </div>
+                <div v-if="currentDetail.loop_conditions" style="margin-top: 12px;">
+                  <div style="margin-bottom: 8px; color: var(--n-text-color-2);">条件循环判断条件（loop_conditions）：</div>
+                  <MonacoEditor
+                      :value="formatJson(currentDetail.loop_conditions)"
+                      :options="monacoEditorOptions(true)"
+                      style="min-height: 120px; height: auto;"
+                  />
+                </div>
               </NCard>
 
               <NCard v-if="currentDetail.step_type === '条件分支'" title="条件分支配置" size="small" :bordered="false">
-                <div v-if="detailConditionsSnapshot">
+                <div v-if="detailMatchedBranchSnapshot" class="step-info-grid" style="margin-bottom: 12px;">
+                  <div class="step-info-row">
+                    <div class="step-info-label">命中分支序号：</div>
+                    <div class="step-info-value">
+                      <NTag v-if="currentDetail.branch_match != null" type="success" size="small">
+                        {{ currentDetail.branch_match }}
+                      </NTag>
+                      <span v-else style="color: var(--n-text-color-3)">未命中</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="detailMatchedBranchSnapshot">
                   <MonacoEditor
-                      :value="formatJson(detailConditionsSnapshot)"
+                      :value="formatJson(detailMatchedBranchSnapshot)"
                       :options="monacoEditorOptions(true)"
                       style="min-height: 200px; height: auto;"
                   />
                 </div>
-                <NEmpty v-else description="本步明细未记录 conditions 快照" size="small" />
+                <NEmpty
+                    v-else
+                    :description="currentDetail.branch_match == null ? '本次未命中任何分支' : '本步明细未记录命中分支快照'"
+                    size="small"
+                />
               </NCard>
 
               <NCard v-if="currentDetail.step_type === '等待控制'" title="等待控制配置" size="small" :bordered="false">
@@ -519,17 +552,23 @@ const reportPythonCodeFromDetail = computed(() => {
   return s
 })
 
-/** 本步执行快照中的 conditions（明细表 krun_autotest_api_details），非步骤定义表 */
-const detailConditionsSnapshot = computed(() => {
-  const c = currentDetail.value?.conditions
-  if (c && typeof c === 'object' && !Array.isArray(c)) return c
+/** 本次命中的条件分支快照（明细表 branch_items 仅存命中项） */
+const detailMatchedBranchSnapshot = computed(() => {
+  const items = currentDetail.value?.branch_items
+  if (Array.isArray(items) && items.length) return items[0]
+  if (items && typeof items === 'object' && !Array.isArray(items)) return items
   return null
 })
 
-/** 普通执行日志：后端为 list[str]，与 HTTP 调试「执行日志」Tab 一致逐条 pre.log-item 展示 */
+/** 普通执行日志：后端落库为换行文本，兼容 list[str] */
 const normalizeLoggerLines = (raw) => {
-  if (raw == null || !Array.isArray(raw)) return []
-  return raw.map((x) => String(x)).filter((line) => line.length > 0)
+  if (raw == null) return []
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x)).filter((line) => line.length > 0)
+  }
+  const text = String(raw)
+  if (!text.trim()) return []
+  return text.split(/\r?\n/).filter((line) => line.length > 0)
 }
 
 const executionNormalLines = computed(() =>

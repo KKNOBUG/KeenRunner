@@ -135,8 +135,8 @@ class ExecutorFieldsValidation:
                             missing.append("loop_maximums")
                         elif mode in (AutoTestLoopMode.LIST, AutoTestLoopMode.DICT) and not step.loop_iterable:
                             missing.append("loop_iterable")
-                        elif mode == AutoTestLoopMode.CONDITION and not step.conditions:
-                            missing.append("conditions")
+                        elif mode == AutoTestLoopMode.CONDITION and not step.loop_conditions:
+                            missing.append("loop_conditions")
 
             elif step_type == AutoTestStepType.IF:
                 if not step.branch_items:

@@ -1322,7 +1322,7 @@ class BaseStepExecutor:
             step_elapsed=step_elapsed,
             step_exec_logger=step_exec_logger,
             step_exec_except=result.error,
-            num_cycles=num_cycles,
+            loop_cycles=num_cycles,
             # 请求相关
             request_url=actual_request.get("request_url"),
             request_port=actual_request.get("request_port"),
@@ -1347,7 +1347,10 @@ class BaseStepExecutor:
             loop_iterable=self.step.loop_iterable,
             loop_on_error=self.step.loop_on_error,
             code=actual_request.get("request_code"),
-            conditions=actual_request.get("conditions"),
+            loop_conditions=self._snapshot_loop_conditions(actual_request),
+            branch_items=self._snapshot_branch_items(actual_request),
+            branch_index=getattr(self.step, "branch_index", None),
+            branch_match=actual_request.get("branch_match"),
             database_operates=actual_request.get("database_operates"),
             database_searched=actual_request.get("database_searched"),
             redis_operates=actual_request.get("redis_operates"),
@@ -1380,6 +1383,49 @@ class BaseStepExecutor:
         )
         if self.context.pending_details is not None:
             self.context.pending_details.append(detail_create)
+
+    def _snapshot_loop_conditions(self, actual_request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        生成条件循环判断条件快照。
+
+        优先取执行态 result.request.loop_conditions；缺省回落步骤定义 self.step.loop_conditions。
+
+        :param actual_request: 本步骤 result.request 字典
+        :return: Dict(condition_expr/compare/value/desc) 或 None
+        """
+        from_request = actual_request.get("loop_conditions")
+        if isinstance(from_request, dict) and from_request:
+            return from_request
+        cond = getattr(self.step, "loop_conditions", None)
+        if cond is None:
+            return None
+        if hasattr(cond, "model_dump"):
+            return cond.model_dump()
+        if isinstance(cond, dict):
+            return cond
+        return None
+
+    def _snapshot_branch_items(self, actual_request: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """
+        生成条件分支执行快照：仅记录本次命中的那一条（不含 branch_children）。
+
+        :param actual_request: 本步骤 result.request 字典（含 branch_items / branch_match）
+        :return: 仅含命中分支的列表；未命中或非条件分支时返回 None
+        """
+        from_request = actual_request.get("branch_items")
+        if not isinstance(from_request, list) or not from_request:
+            return None
+        # 执行器已写入「仅命中项」；此处再收敛字段，避免误带 branch_children
+        snapshot: List[Dict[str, Any]] = []
+        for item in from_request:
+            if not isinstance(item, dict):
+                continue
+            snapshot.append({
+                "branch_type": item.get("branch_type"),
+                "branch_conditions": item.get("branch_conditions"),
+                "branch_desc": item.get("branch_desc"),
+            })
+        return snapshot or None
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -1795,20 +1841,20 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_condition_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        条件循环：while语义每轮先根据conditions判断是否继续；仅当条件满足时才执行子步骤，
+        条件循环：while语义每轮先根据loop_conditions判断是否继续；仅当条件满足时才执行子步骤，
         再进入间隔与下一轮判断。条件一开始就不满足时，子步骤一轮都不会执行。
         超时、条件评估异常、或子步骤根据策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
 
-        约定：conditions与ConditionsBase一致（condition_expr/condition_compare/condition_value），
+        约定：loop_conditions与ConditionsBase一致（condition_expr/condition_compare/condition_value），
         经compare_assertion评估；返回True表示继续循环，返回 False 表示结束循环。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
         """
-        condition = self.step.conditions
+        condition = self.step.loop_conditions
         if not condition:
-            raise StepExecutionError("【循环结构】条件循环模式下参数[conditions]不允许为空")
+            raise StepExecutionError("【循环结构】条件循环模式下参数[loop_conditions]不允许为空")
 
         loop_timeout = self.step.loop_timeout
         loop_interval = self.step.loop_interval
@@ -1818,6 +1864,12 @@ class LoopStepExecutor(BaseStepExecutor):
         guard_limit = 100
         should_continue = True
         start_time = time.time()
+        if hasattr(condition, "model_dump"):
+            result.request = {"loop_conditions": condition.model_dump()}
+        elif isinstance(condition, dict):
+            result.request = {"loop_conditions": condition}
+        else:
+            result.request = {"loop_conditions": None}
         self.context.log(
             f"【循环结构】条件循环开始: \n\t"
             f"循环超时时间配置: {loop_timeout}s",
@@ -2060,14 +2112,7 @@ class ConditionStepExecutor(BaseStepExecutor):
             if not branch_items:
                 raise StepExecutionError("【条件分支】参数异常: branch_items 为空，条件分支步骤必须配置 branch_items")
 
-            result.request = {"branch_items": [
-                {
-                    "branch_type": b.branch_type,
-                    "branch_conditions": b.branch_conditions.model_dump() if b.branch_conditions else None,
-                    "branch_desc": b.branch_desc,
-                }
-                for b in branch_items
-            ]}
+            result.request = {"branch_items": None, "branch_match": None}
 
             for i, branch in enumerate(branch_items):
                 if branch.branch_type == "else":
@@ -2081,6 +2126,13 @@ class ConditionStepExecutor(BaseStepExecutor):
                     desc = branch.branch_desc or branch.branch_type
                     result.success = True
                     result.message = f"【条件分支】命中分支[{branch.branch_type}]: {desc}"
+                    # 执行快照只记命中的那一条（不含 branch_children）
+                    result.request["branch_match"] = i
+                    result.request["branch_items"] = [{
+                        "branch_type": branch.branch_type,
+                        "branch_conditions": branch.branch_conditions.model_dump() if branch.branch_conditions else None,
+                        "branch_desc": branch.branch_desc,
+                    }]
                     self.context.log(result.message, step_code=self.step_code)
                     try:
                         branch_children = branch.branch_children or []

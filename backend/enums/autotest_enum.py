@@ -54,7 +54,7 @@ class AutoTestLoopMode(StringEnum):
     LIST = "列表循环"
     # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_key/loop_value)
     DICT = "字典循环"
-    # 循环模式：条件循环(loop_mode + conditions + loop_interval + loop_timeout)
+    # 循环模式：条件循环(loop_mode + loop_conditions + loop_interval + loop_timeout)
     CONDITION = "条件循环"
 
 
@@ -66,7 +66,7 @@ class AutoTestLoopErrorStrategy(StringEnum):
 
 class AutoTestAssertionOperation(StringEnum):
     """
-    断言/条件分支/条件循环中conditions.condition_compare的合法取值，与AutoTestToolService.compare_assertion支持集一致；新增比较方式时在此扩展成员即可。
+    断言/条件分支/条件循环中condition_compare的合法取值，与AutoTestToolService.compare_assertion支持集一致；新增比较方式时在此扩展成员即可。
     """
     EQUAL = "等于"
     NOT_EQUAL = "不等于"

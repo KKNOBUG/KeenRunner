@@ -216,8 +216,8 @@ const mergeConfigAndOriginal = (config, original) => {
     loop_timeout: config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original?.loop_timeout ? Number(original.loop_timeout) : 0)
   }
 
-  const fromConfigDict = config.conditions && typeof config.conditions === 'object' && !Array.isArray(config.conditions)
-      ? config.conditions
+  const fromConfigDict = config.loop_conditions && typeof config.loop_conditions === 'object' && !Array.isArray(config.loop_conditions)
+      ? config.loop_conditions
       : null
   if (fromConfigDict) {
     Object.assign(merged, parseCondition(fromConfigDict))
@@ -229,8 +229,8 @@ const mergeConfigAndOriginal = (config, original) => {
     merged.condition_expr = config.condition_expr != null ? String(config.condition_expr) : ''
     merged.condition_compare = config.condition_compare || DEFAULT_ASSERTION_OPERATION
     merged.condition_value = config.condition_value != null ? String(config.condition_value) : ''
-  } else if (original?.conditions) {
-    Object.assign(merged, parseCondition(original.conditions))
+  } else if (original?.loop_conditions) {
+    Object.assign(merged, parseCondition(original.loop_conditions))
   } else {
     merged.condition_expr = ''
     merged.condition_compare = DEFAULT_ASSERTION_OPERATION
@@ -264,7 +264,7 @@ const buildLoopConfig = (f) => {
   } else if (f.loop_mode === '列表循环' || f.loop_mode === '字典循环') {
     config.loop_iterable = f.loop_iterable
   } else if (f.loop_mode === '条件循环') {
-    config.conditions = {
+    config.loop_conditions = {
       condition_expr: f.condition_expr || '',
       condition_compare: f.condition_compare || DEFAULT_ASSERTION_OPERATION,
       condition_value: f.condition_value || ''

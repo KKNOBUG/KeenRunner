@@ -112,8 +112,8 @@ export function mapBackendStep(step) {
       loop_iterable: step.loop_iterable || '',
       loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0,
     }
-    if (step.conditions && typeof step.conditions === 'object' && !Array.isArray(step.conditions)) {
-      const condition = step.conditions
+    if (step.loop_conditions && typeof step.loop_conditions === 'object' && !Array.isArray(step.loop_conditions)) {
+      const condition = step.loop_conditions
       base.config.condition_expr = condition.condition_expr != null ? String(condition.condition_expr) : ''
       base.config.condition_compare = condition.condition_compare || '非空'
       base.config.condition_value = condition.condition_value != null ? String(condition.condition_value) : ''
