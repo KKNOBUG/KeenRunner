@@ -109,6 +109,8 @@ class AutoTestApiDetailVarBase(BaseModel):
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="数据库请求操作列表")
     redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="Redis请求操作列表")
+    datagram_field_compare: NON_LIST_DICT_TYPE = Field(default=None, description="报文比对配置列表(快照)")
+    datagram_field_ordered: Optional[int] = Field(default=None, ge=0, le=1, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)")
     step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
@@ -288,10 +290,6 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
     database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
     redis_searched: Optional[bool] = Field(default=None, description="本次执行是否启用Redis查到即止")
-    datagram_field_compare: NON_LIST_DICT_TYPE = Field(default=None, description="报文比对配置列表(快照)")
-    datagram_field_ordered: Optional[int] = Field(
-        default=None, ge=0, le=1, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)"
-    )
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
