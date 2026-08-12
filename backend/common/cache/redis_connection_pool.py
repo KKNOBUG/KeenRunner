@@ -8,7 +8,8 @@
 """
 import asyncio
 import shlex
-from typing import Any, Dict, List, Optional, Set, Type
+import traceback
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, ClassVar
 
 import redis.asyncio as aioredis
 from loguru import logger
@@ -16,319 +17,361 @@ from loguru import logger
 
 class RedisConnPoolFromConfig:
     """
-    基于自动化环境配置表的Redis连接管理器（单例）。
+    基于环境配置表的Redis连接管理器(单例)。
 
-    连接与错误按四层键缓存：app_id -> env -> config_name -> db_name。
+    客户端与错误按四层坐标缓存：project_id -> env_name -> config_name -> database_name。
+    其中database_name表示Redis库编号。
     """
 
-    __private_instance = None
-    __private_initialized = False
+    __private_instance: ClassVar[Optional["RedisConnPoolFromConfig"]] = None
+    __private_initialized: ClassVar[bool] = False
 
-    def __new__(cls, *args, **kwargs) -> object:
-        """
-        创建或返回单例实例。
-
-        :return: RedisConnPoolFromConfig单例
-        """
-        if cls.__private_instance is None and cls.__private_initialized is False:
+    def __new__(cls, *args: Any, **kwargs: Any) -> "RedisConnPoolFromConfig":
+        if cls.__private_instance is None:
             cls.__private_instance = super().__new__(cls)
         return cls.__private_instance
 
-    def __init__(self, config_model: Optional[Type], logger=logger):
+    def __init__(self, config_model: Optional[Type[Any]], logger: Any = logger) -> None:
         """
         初始化单例；重复构造时直接跳过。
 
         :param config_model: Tortoise环境配置模型类
         :param logger: 日志记录器，默认loguru.logger
         """
-        if self.__private_initialized:
+        if type(self).__private_initialized:
             return
         super().__init__()
-        self.__private_initialized = True
-        self.logger = logger
-        self.config_model = config_model
-        self.clients: Dict[str, Dict[str, Dict[str, Dict[str, Any]]]] = {}
-        self.errors: Dict[str, Dict[str, Dict[str, Dict[str, str]]]] = {}
+        type(self).__private_initialized = True
+        self.logger: Any = logger
+        self.config_model: Optional[Type[Any]] = config_model
+        self.clients: Dict[int, Dict[str, Dict[str, Dict[str, Any]]]] = {}
+        self.errors: Dict[int, Dict[str, Dict[str, Dict[str, str]]]] = {}
 
-    def _config_model_field_names(self) -> Set[str]:
-        """
-        读取config_model的Tortoise字段名集合。
-
-        :return: 字段名集合；模型无效时为空集合
-        """
-        meta = getattr(self.config_model, "_meta", None)
-        if not meta or not getattr(meta, "fields_map", None):
-            return set()
-        return set(meta.fields_map.keys())
-
-    async def _get_redis_config_from_orm(
-            self,
-            app_id: int,
-            env: str,
+    @staticmethod
+    def _normalize_cache_key(
+            project_id: Union[int, str],
+            env_name: str,
             config_name: str,
-            db_name: str,
-    ) -> Optional[Dict[str, Any]]:
+            database_name: str,
+    ) -> Tuple[int, str, str, str]:
         """
-        从环境配置表读取Redis连接参数。
+        规范化四层缓存坐标：应用ID转整数，名称类字段去空白并转小写。
 
-        :param app_id: 应用主键ID，对应project_id
-        :param env: 环境名称，忽略大小写匹配
-        :param config_name: 配置名称，忽略大小写匹配
-        :param db_name: Redis库序号或database_name
-        :return: 含host/port/username/password/db_index的字典；未找到时为None
-        :raises ValueError: 未提供config_model或模型字段无法识别
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: Redis库编号
+        :return: (project_id, env_name, config_name, database_name)
+        """
+        try:
+            project_id = int(str(project_id).strip())
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"应用ID不合法: {project_id!r}") from e
+        env_name = (env_name or "").strip().lower()
+        config_name = (config_name or "").strip().lower()
+        database_name = (database_name or "").strip().lower()
+        if project_id <= 0 or not env_name or not config_name or not database_name:
+            raise ValueError("应用ID、环境名称、配置名称、Redis库编号均不能为空")
+        return project_id, env_name, config_name, database_name
+
+    async def _load_env_config(
+            self,
+            project_id: int,
+            env_name: str,
+            config_name: str,
+    ) -> Optional[Any]:
+        """
+        从自动化环境配置表加载Redis配置行。
+
+        解析路径：环境枚举(env_name) -> 环境绑定(project_id+env_type=redis) -> 配置行。
+        配置表唯一键为(env_bind, config_name)，故按config_name加载；
+        Redis库编号由调用方database_name提供，不从配置行二次推断。
+
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :return: 配置表ORM对象；未找到为None
         """
         if not self.config_model:
             raise ValueError("未提供ORM模型，请通过config_model参数传入")
 
         try:
-            app_id_int = int(str(app_id).strip())
-        except (TypeError, ValueError) as e:
-            self.logger.error(f"app_id 无法解析为整数: {app_id!r}, {e}")
-            return None
-
-        field_names = self._config_model_field_names()
-        if "env_bind_id" not in field_names:
-            raise ValueError(
-                f"config_model={getattr(self.config_model, '__name__', self.config_model)} "
-                f"字段无法识别为 Autotest(env_bind_id)"
-            )
-
-        try:
-            # 必须与 Tortoise 初始化时注册的模块路径一致，否则模型无 default_connection
+            # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
             from backend.applications.aotutest.models.autotest_model import (
                 AutoTestApiEnvInfo,
                 AutoTestApiEnvBindInfo,
             )
             from backend.enums import AutoTestConfigNodeType
         except ImportError as e:
-            self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
-            return None
+            error_message = f"无法导入自动化测试环境模型或枚举: {e}"
+            self.logger.error(error_message)
+            raise RuntimeError(error_message) from e
 
-        dict_ids = await AutoTestApiEnvInfo.filter(
-            env_name__iexact=env,
+        # AutoTestApiEnvInfo主键对外语义为env_enum_id
+        env_enum_ids = await AutoTestApiEnvInfo.filter(
+            env_name__iexact=env_name,
             state__not=1,
         ).values_list("id", flat=True)
-        if not dict_ids:
-            self.logger.warning(
-                f"未找到环境 project_id={app_id_int}, env_name(忽略大小写)={env!r}"
-            )
+        if not env_enum_ids:
+            self.logger.warning(f"未找到环境枚举 env_name(忽略大小写)={env_name!r}")
             return None
 
-        env_row = await AutoTestApiEnvBindInfo.filter(
-            project_id=app_id_int,
-            env_enum_id__in=list(dict_ids),
+        # 必须带project_id与env_type，避免多应用同名环境或跨节点类型串配置
+        env_bind = await AutoTestApiEnvBindInfo.filter(
+            project_id=project_id,
+            env_enum_id__in=list(env_enum_ids),
             env_type=AutoTestConfigNodeType.REDIS,
             state__not=1,
         ).first()
-        if not env_row:
+        if not env_bind:
             self.logger.warning(
-                f"未找到环境绑定 project_id={app_id_int}, "
-                f"env_name(忽略大小写)={env!r}, env_type={AutoTestConfigNodeType.REDIS.value}"
+                f"未找到环境绑定 project_id={project_id}, "
+                f"env_name(忽略大小写)={env_name!r}, env_type={AutoTestConfigNodeType.REDIS.value}"
             )
             return None
 
-        config_obj = await self.config_model.filter(
-            env_bind_id=env_row.id,
+        return await self.config_model.filter(
+            env_bind_id=env_bind.id,
             state__not=1,
             config_name__iexact=config_name,
-            database_name__iexact=db_name,
         ).first()
-        if not config_obj:
-            config_obj = await self.config_model.filter(
-                env_bind_id=env_row.id,
-                state__not=1,
-                config_name__iexact=config_name,
-            ).first()
-        if not config_obj:
-            return None
 
-        port_raw = getattr(config_obj, "config_port", None) or "6379"
+    def _set_client(
+            self,
+            project_id: int,
+            env_name: str,
+            config_name: str,
+            database_name: str,
+            client: Any,
+    ) -> None:
+        """写入四层Redis客户端缓存。"""
+        self.clients.setdefault(project_id, {}).setdefault(env_name, {}).setdefault(config_name, {})[
+            database_name
+        ] = client
+
+    def _set_error(
+            self,
+            project_id: int,
+            env_name: str,
+            config_name: str,
+            database_name: str,
+            error_message: str,
+    ) -> None:
+        """写入四层建连错误缓存。"""
+        self.errors.setdefault(project_id, {}).setdefault(env_name, {}).setdefault(config_name, {})[
+            database_name
+        ] = error_message
+
+    def _clear_error(
+            self,
+            project_id: int,
+            env_name: str,
+            config_name: str,
+            database_name: str,
+    ) -> None:
+        """清除指定坐标的建连错误记录。"""
         try:
-            port = int(str(port_raw).strip())
-        except (TypeError, ValueError):
-            port = 6379
-
-        db_index_raw = db_name or getattr(config_obj, "database_name", None) or "0"
-        try:
-            db_index = int(str(db_index_raw).strip())
-        except (TypeError, ValueError):
-            db_index = 0
-
-        return {
-            "host": getattr(config_obj, "config_host", None),
-            "port": port,
-            "username": getattr(config_obj, "config_username", None) or None,
-            "password": getattr(config_obj, "config_password", None) or "",
-            "db_index": db_index,
-        }
-
-    def _set_client(self, app_id: str, env: str, config_name: str, db_name: str, client: Any):
-        """
-        缓存已建立的Redis客户端。
-
-        :param app_id: 应用ID缓存键
-        :param env: 环境名称缓存键
-        :param config_name: 配置名称缓存键
-        :param db_name: 库序号缓存键
-        :param client: redis.asyncio客户端实例
-        """
-        if app_id not in self.clients:
-            self.clients[app_id] = {}
-        if env not in self.clients[app_id]:
-            self.clients[app_id][env] = {}
-        if config_name not in self.clients[app_id][env]:
-            self.clients[app_id][env][config_name] = {}
-        self.clients[app_id][env][config_name][db_name] = client
-
-    def _set_error(self, app_id: str, env: str, config_name: str, db_name: str, error_msg: str):
-        """
-        记录指定四层键下的连接错误信息。
-
-        :param app_id: 应用ID缓存键
-        :param env: 环境名称缓存键
-        :param config_name: 配置名称缓存键
-        :param db_name: 库序号缓存键
-        :param error_msg: 错误描述
-        """
-        if app_id not in self.errors:
-            self.errors[app_id] = {}
-        if env not in self.errors[app_id]:
-            self.errors[app_id][env] = {}
-        if config_name not in self.errors[app_id][env]:
-            self.errors[app_id][env][config_name] = {}
-        self.errors[app_id][env][config_name][db_name] = error_msg
-
-    def _clear_error(self, app_id: str, env: str, config_name: str, db_name: str):
-        """
-        清除指定四层键下的连接错误信息。
-
-        :param app_id: 应用ID缓存键
-        :param env: 环境名称缓存键
-        :param config_name: 配置名称缓存键
-        :param db_name: 库序号缓存键
-        """
-        try:
-            del self.errors[app_id][env][config_name][db_name]
+            del self.errors[project_id][env_name][config_name][database_name]
         except KeyError:
             pass
 
-    def _get_client(self, app_id: str, env: str, config_name: str, db_name: str) -> Optional[Any]:
-        """
-        按四层键获取已缓存的Redis客户端。
-
-        :param app_id: 应用ID缓存键
-        :param env: 环境名称缓存键
-        :param config_name: 配置名称缓存键
-        :param db_name: 库序号缓存键
-        :return: 客户端实例；未缓存时为None
-        """
+    def _get_client(
+            self,
+            project_id: int,
+            env_name: str,
+            config_name: str,
+            database_name: str,
+    ) -> Optional[Any]:
+        """读取已缓存的Redis客户端。"""
         try:
-            return self.clients[app_id][env][config_name][db_name]
+            return self.clients[project_id][env_name][config_name][database_name]
         except KeyError:
             return None
 
-    async def connection(self, app_id: str, env: str, config_name: str, db_name: str, max_retries: int = 3) -> bool:
+    async def create_client(
+            self,
+            project_id: Union[int, str],
+            env_name: str,
+            config_name: str,
+            database_name: str,
+            max_retries: int = 3,
+    ) -> bool:
         """
-        创建并缓存Redis连接；已存在同键连接时直接返回False。
+        按配置创建Redis客户端；已存在则不重复创建。
 
-        :param app_id: 应用主键ID
-        :param env: 环境名称
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
         :param config_name: 配置名称
-        :param db_name: Redis库序号，缺省按0处理
-        :param max_retries: 建连失败时的最大重试次数
-        :return: 新创建连接为True；连接已存在为False
-        :raises ValueError: app_id/env/config_name为空
-        :raises Exception: 配置缺失或字段不完整
-        :raises ConnectionError: 重试耗尽后仍无法连接
+        :param database_name: Redis库编号
+        :param max_retries: 建连失败重试次数
+        :return: 新建成功为True；客户端已存在为False
         """
-        if not all([app_id, env, config_name]):
-            err_msg = "应用ID、环境、配置名称均不能为空"
-            self.logger.error(err_msg)
-            raise ValueError(err_msg)
-
-        app_id_key = app_id.strip()
-        env_clean = env.lower().strip()
-        config_clean = config_name.lower().strip()
-        db_clean = (db_name or "0").lower().strip()
-
-        existing = self._get_client(app_id_key, env_clean, config_clean, db_clean)
-        if existing:
+        cache_project_id, cache_env_name, cache_config_name, cache_database_name = (
+            self._normalize_cache_key(project_id, env_name, config_name, database_name)
+        )
+        if self._get_client(cache_project_id, cache_env_name, cache_config_name, cache_database_name):
             return False
 
-        try:
-            config = await self._get_redis_config_from_orm(app_id_key, env_clean, config_clean, db_clean)
-            if not config:
-                err_msg = (
-                    f"配置表未找到Redis记录 [app_id={app_id!r}, env={env_clean!r}, "
-                    f"config_name={config_clean!r}, database/db_index={db_clean!r}]"
-                )
-                self.logger.error(err_msg)
-                self._set_error(app_id_key, env_clean, config_clean, db_clean, err_msg)
-                raise Exception(err_msg)
-            if not config.get("host"):
-                err_msg = "Redis配置缺少必填字段：host"
-                self._set_error(app_id_key, env_clean, config_clean, db_clean, err_msg)
-                raise Exception(err_msg)
-        except Exception:
-            raise
+        if max_retries <= 0:
+            raise ValueError(f"建连重试次数非法: max_retries={max_retries}")
 
-        for retry in range(max_retries):
+        try:
+            redis_db = int(cache_database_name)
+        except (TypeError, ValueError) as e:
+            error_message = f"Redis库编号非法: {cache_database_name!r}"
+            self.logger.error(error_message)
+            self._set_error(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+            )
+            raise ValueError(error_message) from e
+        if redis_db < 0:
+            error_message = f"Redis库编号不能为负数: {redis_db}"
+            self.logger.error(error_message)
+            self._set_error(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+            )
+            raise ValueError(error_message)
+
+        try:
+            config_row = await self._load_env_config(
+                cache_project_id, cache_env_name, cache_config_name
+            )
+            if not config_row:
+                error_message = (
+                    f"配置表未找到Redis记录 [project_id={cache_project_id}, "
+                    f"env_name={cache_env_name!r}, config_name={cache_config_name!r}]"
+                )
+                self.logger.error(error_message)
+                self._set_error(
+                    cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+                )
+                raise ValueError(error_message)
+        except (ValueError, RuntimeError):
+            raise
+        except Exception as e:
+            error_message = f"查询Redis配置失败：{e}"
+            self.logger.error(f"{error_message}\n{traceback.format_exc()}")
+            self._set_error(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+            )
+            raise RuntimeError(error_message) from e
+
+        # 直接读取配置表字段；库编号使用调用方database_name，不做host/port二次映射
+        config_host: str = (config_row.config_host or "").strip()
+        config_username: Optional[str] = (config_row.config_username or "").strip() or None
+        config_password: Optional[str] = (config_row.config_password or "").strip() or None
+        config_port_text: str = str(config_row.config_port or "").strip()
+
+        missing_fields = [
+            field_name
+            for field_name, field_value in (
+                ("config_host", config_host),
+                ("config_port", config_port_text),
+            )
+            if not field_value
+        ]
+        if missing_fields:
+            error_message = f"Redis配置缺少必填字段：{missing_fields}"
+            self.logger.error(error_message)
+            self._set_error(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+            )
+            raise ValueError(error_message)
+
+        try:
+            config_port: int = int(config_port_text)
+        except (TypeError, ValueError) as e:
+            error_message = f"配置端口非法: {config_row.config_port!r}"
+            self.logger.error(error_message)
+            self._set_error(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+            )
+            raise ValueError(error_message) from e
+
+        last_error_detail: str = ""
+        for retry_index in range(max_retries):
             try:
                 client = aioredis.Redis(
-                    host=config["host"],
-                    port=config["port"],
-                    username=config.get("username") or None,
-                    password=config.get("password") or None,
-                    db=config.get("db_index", 0),
+                    host=config_host,
+                    port=config_port,
+                    username=config_username,
+                    password=config_password,
+                    db=redis_db,
                     decode_responses=True,
                 )
                 await client.ping()
-                self._set_client(app_id_key, env_clean, config_clean, db_clean, client)
-                self._clear_error(app_id_key, env_clean, config_clean, db_clean)
-                self.logger.info("Redis连接创建成功")
+                self._set_client(
+                    cache_project_id, cache_env_name, cache_config_name, cache_database_name, client
+                )
+                self._clear_error(
+                    cache_project_id, cache_env_name, cache_config_name, cache_database_name
+                )
+                self.logger.info(
+                    f"Redis连接创建成功 "
+                    f"[project_id={cache_project_id}, env_name={cache_env_name}, "
+                    f"config_name={cache_config_name}, database_name={cache_database_name}]"
+                )
                 return True
             except Exception as e:
-                if retry < max_retries - 1:
-                    self.logger.warning(f"Redis连接失败，{retry + 1}/{max_retries}次重试：{e}")
+                last_error_detail = str(e)
+                if retry_index < max_retries - 1:
+                    self.logger.warning(
+                        f"Redis连接失败，{retry_index + 1}/{max_retries}次重试：{last_error_detail}"
+                    )
                     await asyncio.sleep(2)
-                    continue
-                err_msg = f"Redis连接失败，错误信息：{e}"
-                self.logger.error(err_msg)
-                self._set_error(app_id_key, env_clean, config_clean, db_clean, err_msg)
-                raise ConnectionError(err_msg) from e
-        return False
 
-    async def get_or_create_client(self, app_id: str, env: str, config_name: str, db_name: str) -> Any:
+        error_message = f"Redis连接失败：{last_error_detail}"
+        self.logger.error(error_message)
+        self._set_error(
+            cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+        )
+        raise ConnectionError(error_message)
+
+    async def get_or_create_client(
+            self,
+            project_id: Union[int, str],
+            env_name: str,
+            config_name: str,
+            database_name: str,
+    ) -> Any:
         """
-        获取已缓存客户端；不存在时先建连再返回。
+        获取已有Redis客户端；不存在则按配置表创建后返回。
 
-        :param app_id: 应用主键ID
-        :param env: 环境名称
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
         :param config_name: 配置名称
-        :param db_name: Redis库序号，缺省按0处理
+        :param database_name: Redis库编号
         :return: redis.asyncio客户端实例
-        :raises ConnectionError: 建连失败或缓存中仍无客户端
         """
-        app_id_key = app_id.strip()
-        env_clean = env.lower().strip()
-        config_clean = config_name.lower().strip()
-        db_clean = (db_name or "0").lower().strip()
-
-        client = self._get_client(app_id_key, env_clean, config_clean, db_clean)
+        cache_project_id, cache_env_name, cache_config_name, cache_database_name = (
+            self._normalize_cache_key(project_id, env_name, config_name, database_name)
+        )
+        client = self._get_client(
+            cache_project_id, cache_env_name, cache_config_name, cache_database_name
+        )
         if client:
             return client
 
-        await self.connection(app_id, env, config_name, db_name or "0")
-        client = self._get_client(app_id_key, env_clean, config_clean, db_clean)
+        await self.create_client(
+            cache_project_id, cache_env_name, cache_config_name, cache_database_name
+        )
+        client = self._get_client(
+            cache_project_id, cache_env_name, cache_config_name, cache_database_name
+        )
         if client:
             return client
 
-        err_msg = self.errors.get(app_id_key, {}).get(env_clean, {}).get(config_clean, {}).get(db_clean)
-        raise ConnectionError(f"Redis连接创建失败，错误信息：{err_msg}")
+        error_message = (
+                self.errors.get(cache_project_id, {})
+                .get(cache_env_name, {})
+                .get(cache_config_name, {})
+                .get(cache_database_name)
+                or "未知错误"
+        )
+        raise ConnectionError(f"Redis连接创建失败：{error_message}")
 
     @staticmethod
-    def parse_redis_commands(expr: str) -> List[List[str]]:
+    def _parse_redis_commands(expr: str) -> List[List[str]]:
         """
         将多行Redis命令文本解析为参数列表。
 
@@ -361,9 +404,12 @@ class RedisConnPoolFromConfig:
         if isinstance(value, bytes):
             return value.decode("utf-8", errors="replace")
         if isinstance(value, (list, tuple)):
-            return [RedisConnPoolFromConfig._normalize_result(v) for v in value]
+            return [RedisConnPoolFromConfig._normalize_result(item) for item in value]
         if isinstance(value, dict):
-            return {str(k): RedisConnPoolFromConfig._normalize_result(v) for k, v in value.items()}
+            return {
+                str(key): RedisConnPoolFromConfig._normalize_result(item)
+                for key, item in value.items()
+            }
         return str(value)
 
     async def execute_commands(self, client: Any, expr: str) -> Dict[str, Any]:
@@ -372,24 +418,24 @@ class RedisConnPoolFromConfig:
 
         :param client: redis.asyncio客户端实例
         :param expr: 多行命令文本
-        :return: 含redis_data与redis_count的结果字典
-        :raises ValueError: 客户端为空或命令文本为空
+        :return: {"redis_data": 结果列表, "redis_count": 结果条数}
         """
         if not client:
-            raise ValueError("缺少Redis连接对象，请检查")
-        commands = self.parse_redis_commands(expr)
+            raise ValueError("缺少Redis连接对象")
+        commands = self._parse_redis_commands(expr)
         if not commands:
             raise ValueError("Redis命令不能为空")
 
         command_results: List[Any] = []
         for parts in commands:
-            cmd = parts[0].upper()
-            args = parts[1:]
-            result = await client.execute_command(cmd, *args)
-            if isinstance(self._normalize_result(result), list):
-                command_results.extend(result)
+            command_name = parts[0].upper()
+            command_args = parts[1:]
+            result = await client.execute_command(command_name, *command_args)
+            normalized_result = self._normalize_result(result)
+            if isinstance(normalized_result, list):
+                command_results.extend(normalized_result)
             else:
-                command_results.append(result)
+                command_results.append(normalized_result)
 
         return {
             "redis_data": command_results,
@@ -399,9 +445,9 @@ class RedisConnPoolFromConfig:
 
 def get_app_redis_pool() -> "RedisConnPoolFromConfig":
     """
-    获取绑定AutoTestApiEnvConfigInfo的Redis连接管理单例。
+    返回绑定自动化环境配置表的Redis连接管理单例。
 
-    :return: RedisConnPoolFromConfig实例
+    :return: RedisConnPoolFromConfig单例
     """
     from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
 

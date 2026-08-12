@@ -3018,10 +3018,10 @@ class RedisStepExecutor(BaseStepExecutor):
                         raise StepExecutionError(f"【Redis请求】{operate_no}：参数[variable_name]不能为空")
 
                     redis_client = await pool_manager.get_or_create_client(
-                        app_id=str(operate_project_id),
-                        env=str(env_name).strip(),
+                        project_id=operate_project_id,
+                        env_name=env_name,
                         config_name=operate_config_name,
-                        db_name=operate_database_name,
+                        database_name=operate_database_name,
                     )
                     expr_executive_result: Dict[str, Any] = await pool_manager.execute_commands(
                         client=redis_client,

@@ -943,10 +943,10 @@ class StepDebugService:
                 )
 
                 redis_client = await pool_manager.get_or_create_client(
-                    app_id=str(operate_project_id),
-                    env=env_name,
+                    project_id=operate_project_id,
+                    env_name=env_name,
                     config_name=operate_config_name,
-                    db_name=operate_database_name,
+                    database_name=operate_database_name,
                 )
                 expr_executive_result = await pool_manager.execute_commands(
                     client=redis_client, expr=operate_expr
