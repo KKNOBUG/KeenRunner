@@ -73,10 +73,7 @@ class AutoTestApiReportSelect(BaseModel):
     case_name: Optional[str] = Field(None, description="用例名称（模糊匹配）")
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
-    report_type: Optional[AutoTestReportType] = Field(
-        default=AutoTestReportType.ASYNC_EXEC,
-        description="报告类型（默认异步执行）",
-    )
+    report_type: Optional[AutoTestReportType] = Field(default=None, description="报告类型（不传则不按类型过滤，可查同步/异步/调试/定时）")
     task_code: Optional[str] = Field(None, description="任务标识代码（未传则仅查 task_code 为空的报告）")
     batch_code: Optional[str] = Field(None, description="批次标识代码")
     exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")

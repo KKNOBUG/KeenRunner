@@ -220,7 +220,6 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     step_desc = fields.CharField(max_length=2048, null=True, description="步骤描述")
     step_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="步骤标识代码")
     step_type = fields.CharEnumField(AutoTestStepType, description="步骤类型")
-
     # 用例信息ID（普通字段，不设外键，业务层验证）
     case_id = fields.BigIntField(null=True, index=True, description="步骤所属用例")
     # 父级步骤ID（普通字段，不设外键，避免自关联导致的ORM循环引用问题）
@@ -229,7 +228,6 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
     # 跳过/注释：执行时当作不存在该步骤（不写明细、不计入统计）；默认不跳过
     step_is_skipped = fields.BooleanField(default=False, description="步骤是否跳过执行")
-
     # 请求相关字段
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")
     request_port = fields.CharField(max_length=16, null=True, description="请求端口")
@@ -248,10 +246,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_project_id = fields.BigIntField(null=True, description="请求应用ID")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
     request_config_name = fields.CharField(max_length=128, null=True, description="请求环境配置名称")
-
-    # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")
     wait = fields.FloatField(ge=0, null=True, description="等待控制(正浮点数, 单位:秒)")
+    # 循环控制相关
     loop_mode = fields.CharEnumField(AutoTestLoopMode, default=None, null=True, description="循环模式类型")
     loop_maximums = fields.IntField(ge=1, null=True, description="最大循环次数(正整数)")
     loop_interval = fields.FloatField(ge=0, null=True, description="每次循环间隔时间(正浮点数)")
@@ -259,9 +256,9 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="循环执行失败时的处理策略")
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
     conditions = fields.JSONField(null=True, description="判断条件(仅循环结构条件循环使用)")
+    # IF分支相关
     branch_items = fields.JSONField(null=True, description="条件分支列表(仅条件分支步骤使用, 存储分支元数据)")
     branch_index = fields.IntField(null=True, description="所属分支序号(条件分支子步骤归属哪个分支)")
-
     # 变量、断言和逻辑处理
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
@@ -270,22 +267,18 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 expr、name、source、operation、except_value 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
-
     # 数据源相关
     data_source_id = fields.BigIntField(null=True, index=True, description="数据源ID")
     data_source_name = fields.CharField(max_length=2048, null=True, description="数据源名称")
     data_source_desc = fields.CharField(max_length=2048, null=True, description="数据源描述")
-
     # 数据库相关
     # database_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr、variable_name
     database_operates = fields.JSONField(null=True, description="数据库请求操作列表")
     database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续请求)")
-
     # Redis相关
     # redis_operates 存储为List[Dict[str, Any]]格式，每个元素包含 name、desc、project_name、config_name、database_name、expr
     redis_operates = fields.JSONField(null=True, description="Redis请求操作列表")
     redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续请求)")
-
     # 报文比对：datagram_field_compare为List[Dict]，项含left_text、right_text、datagram_field_ordered
     datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表")
     datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)")
@@ -386,9 +379,9 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     response_body = fields.JSONField(null=True, description="响应信息(body)")
     response_text = fields.TextField(null=True, description="响应信息(text)")
     response_elapsed = fields.CharField(max_length=16, null=True, description="响应信息(elapsed)")
-    # 逻辑相关
     code = fields.TextField(null=True, description="本次执行使用的代码(Python)(快照)")
     wait = fields.FloatField(ge=0, null=True, description="本次执行等待时间(快照)")
+    # 循环控制相关
     loop_mode = fields.CharEnumField(AutoTestLoopMode, default=None, null=True, description="本次执行循环模式(快照)")
     loop_maximums = fields.IntField(ge=1, null=True, description="本次执行最大循环次数(快照)")
     loop_interval = fields.FloatField(ge=0, null=True, description="本次执行循环间隔(快照)")
@@ -396,11 +389,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="本次执行循环错误策略(快照)")
     loop_timeout = fields.FloatField(ge=0, null=True, description="本次执行条件循环超时(快照)")
     conditions = fields.JSONField(null=True, description="本次执行条件/循环判断条件(快照)")
-    # 数据源相关
-    database_operates = fields.JSONField(null=True, description="数据库请求操作列表(快照)")
-    database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(快照)")
-    redis_operates = fields.JSONField(null=True, description="Redis请求操作列表(快照)")
-    redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(快照)")
+    num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
     # 变量相关
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项
     session_variables = fields.JSONField(null=True, description="会话变量(所有步骤的执行结果持续累积)")
@@ -409,13 +398,18 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     extract_variables = fields.JSONField(null=True, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     # assert_validators 存储为List[Dict[str, Any]]格式，每个元素包含 name、expr、operation、except_value、actual_value、success、error 项
     assert_validators = fields.JSONField(null=True, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
-    # 报文比对配置快照(与步骤定义字段同名，保证历史报告可独立回放)
-    datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表(快照)")
-    datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)")
-    # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照(head/body/assert)，记录在明细更贴合「每步细节」
+    # 数据源相关
+    database_operates = fields.JSONField(null=True, description="数据库请求操作列表(快照)")
+    database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(快照)")
+    # 数据源相关
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称")
     dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照")
-    num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
+    # Redis相关
+    redis_operates = fields.JSONField(null=True, description="Redis请求操作列表(快照)")
+    redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(快照)")
+    # 报文比对：datagram_field_compare为List[Dict]，项含left_text、right_text、datagram_field_ordered
+    datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表(快照)")
+    datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)")
 
     class Meta:
         table = "krun_autotest_details"
