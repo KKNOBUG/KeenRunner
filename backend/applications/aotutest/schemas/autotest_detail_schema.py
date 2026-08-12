@@ -55,7 +55,6 @@ class ConditionsBase(BaseModel):
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
     condition_value: Optional[Any] = Field(None, description="条件比对值")
-    condition_desc: Optional[str] = Field(None, max_length=2048, description="条件描述")
 
     @field_validator("condition_compare", mode="before")
     @classmethod

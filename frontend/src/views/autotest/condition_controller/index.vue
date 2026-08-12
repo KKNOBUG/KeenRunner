@@ -162,7 +162,6 @@ const emptyCondition = () => ({
   condition_expr: '',
   condition_compare: DEFAULT_ASSERTION_OPERATION,
   condition_value: '',
-  condition_desc: '',
 })
 
 const defaultBranchItems = () => ([
@@ -180,7 +179,6 @@ const hydrateBranchItems = (config) => {
         condition_expr: b.branch_conditions.condition_expr != null ? String(b.branch_conditions.condition_expr) : '',
         condition_compare: b.branch_conditions.condition_compare || DEFAULT_ASSERTION_OPERATION,
         condition_value: b.branch_conditions.condition_value != null ? String(b.branch_conditions.condition_value) : '',
-        condition_desc: b.branch_conditions.condition_desc != null ? String(b.branch_conditions.condition_desc) : '',
       } : emptyCondition(),
       branch_desc: b.branch_type === 'else' ? ELSE_FIXED_DESC : (b.branch_desc || ''),
     }))
@@ -202,7 +200,6 @@ const { form } = useStepEditorForm({
         condition_expr: String(b.branch_conditions?.condition_expr ?? ''),
         condition_compare: b.branch_conditions?.condition_compare || DEFAULT_ASSERTION_OPERATION,
         condition_value: String(b.branch_conditions?.condition_value ?? ''),
-        condition_desc: String(b.branch_conditions?.condition_desc ?? ''),
       } : null,
     })),
   }),

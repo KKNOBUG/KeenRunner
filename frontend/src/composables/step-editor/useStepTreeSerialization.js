@@ -290,7 +290,6 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                         condition_expr: branch.branch_conditions.condition_expr != null ? String(branch.branch_conditions.condition_expr) : '',
                         condition_compare: branch.branch_conditions.condition_compare || '非空',
                         condition_value: branch.branch_conditions.condition_value != null ? String(branch.branch_conditions.condition_value) : '',
-                        condition_desc: branch.branch_conditions.condition_desc != null ? String(branch.branch_conditions.condition_desc) : '',
                     }
                 }
                 const branchChildren = childrenByBranch[bi] || []

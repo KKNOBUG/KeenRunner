@@ -259,11 +259,11 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     loop_iterable = fields.CharField(max_length=512, null=True, description="循环对象来源(变量名或可迭代对象)")
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="循环执行失败时的处理策略")
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
-    # loop_conditions 存储为Dict[str, Any]格式, 包含condition_expr、condition_compare、condition_value、condition_desc项
+    # loop_conditions 存储为Dict[str, Any]格式, 包含condition_expr、condition_compare、condition_value项
     loop_conditions = fields.JSONField(null=True, description="条件循环判断条件")
 
     # IF分支相关
-    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_conditions{condition_expr,condition_compare,condition_value,condition_desc}、branch_desc（不含branch_children，子步骤独立落库）项
+    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
     branch_items = fields.JSONField(null=True, description="条件分支列表(仅条件分支步骤使用, 存储分支元数据)")
     branch_index = fields.IntField(null=True, description="所属分支序号(条件分支子步骤归属哪个分支)")
 
@@ -408,15 +408,15 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     loop_iterable = fields.CharField(max_length=512, null=True, description="循环对象来源(变量名或可迭代对象)")
     loop_on_error = fields.CharEnumField(AutoTestLoopErrorStrategy, default=None, null=True, description="循环执行失败时的处理策略")
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
-    # loop_conditions存储为Dict[str, Any]格式, 包含condition_expr、condition_compare、condition_value、condition_desc（条件循环快照）项
+    # loop_conditions存储为Dict[str, Any]格式, 包含condition_expr、condition_compare、condition_value项
     loop_conditions = fields.JSONField(null=True, description="条件循环判断条件")
     loop_cycles = fields.IntField(null=True, description="循环执行圈数")
 
-    # IF分支相关快照
-    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_conditions{...}、branch_desc（不含branch_children）项
-    branch_items = fields.JSONField(null=True, description="条件分支列表(仅条件分支步骤使用, 存储分支元数据)")
-    branch_index = fields.IntField(null=True, description="所属分支序号(条件分支子步骤归属哪个分支)")
-    branch_match = fields.IntField(null=True, description="命中的分支序号")
+    # IF分支相关
+    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
+    branch_items = fields.JSONField(null=True, description="本次命中的条件分支快照(仅命中项,不含子步骤)")
+    branch_index = fields.IntField(null=True, description="所属分支序号快照(条件分支子步骤归属)")
+    branch_match = fields.IntField(null=True, description="本次命中的分支序号快照(条件分支父步骤)")
 
     # 变量相关
     # session_variables、defined_variables 存储为List[Dict[str, Any]]格式, 每个元素包含key、value、desc项

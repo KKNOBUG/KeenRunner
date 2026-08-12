@@ -160,6 +160,10 @@
                       <span v-else style="color: var(--n-text-color-3)">未命中</span>
                     </div>
                   </div>
+                  <div class="step-info-row">
+                    <div class="step-info-label">分支描述：</div>
+                    <div class="step-info-value">{{ detailMatchedBranchSnapshot.branch_desc || '-' }}</div>
+                  </div>
                 </div>
                 <div v-if="detailMatchedBranchSnapshot">
                   <MonacoEditor
