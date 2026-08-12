@@ -816,7 +816,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     only_one=True,
                     on_error=False,
                     state__not=1,
-                    conditions={"case_id": case_id, "step_no": step_no, "step_code": step_code},
+                    case_id=case_id,
+                    step_no=step_no,
+                    step_code=step_code,
                 )
                 if existing_step_instance:
                     error_message: str = (
