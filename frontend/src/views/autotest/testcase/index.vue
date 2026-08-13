@@ -1,7 +1,7 @@
 <script setup>
 import {h, onMounted, ref, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NAlert, NSpace, NDatePicker, NPopconfirm} from 'naive-ui'
+import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NAlert, NSpace, NPopconfirm} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
@@ -17,39 +17,61 @@ import {useAutotestStore, usePermissionStore, useTagsStore, useUserStore} from '
 
 defineOptions({name: '测试用例'})
 
+/**
+ * 与后端 AutoTestApiCaseSelect 对齐的可查询字段（不含仅 UI 态字段）。
+ * 后端类型过滤认 case_types；页面下拉仍用 case_type，提交时映射为 case_types。
+ */
+const CASE_SEARCH_BODY_KEYS = new Set([
+  'case_id', 'case_code', 'case_types', 'case_steps', 'case_state', 'case_last_time', 'case_version',
+  'case_name', 'case_tags', 'case_attr', 'case_project', 'session_variables',
+  'page', 'page_size', 'order',
+  'step_type', 'request_args_type', 'created_user', 'updated_user', 'state',
+])
+
 const $table = ref(null)
+/** 查询表单：仅保留后端支持的筛选项；case_type 为 UI 单选，请求前转为 case_types */
 const queryItems = ref({
-  case_tags: [], // 初始化为空数组
-  date_from: null,
-  date_to: null,
+  case_name: null,
+  case_attr: null,
+  case_type: null,
+  case_project: null,
+  case_tags: [],
+  created_user: null,
+  updated_user: null,
 })
 
-/** 创建日期范围（对齐测试报告「执行日期」：daterange → date_from / date_to） */
-const createdDateRange = ref(null)
-const formatDateForQuery = (ts) => {
-  if (ts == null) return null
-  const d = new Date(ts)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-const handleCreatedDateRangeChange = (value) => {
-  if (value == null) {
-    queryItems.value.date_from = null
-    queryItems.value.date_to = null
+/**
+ * 将 CrudTable 传入的 params 规范为 AutoTestApiCaseSelect 请求体。
+ * - 去掉 schema 外字段
+ * - 空串/空数组/null 不传
+ * - case_type → case_types: [case_type]
+ */
+function buildCaseSearchBody(params = {}) {
+  const raw = {...params}
+  const caseType = raw.case_type
+  delete raw.case_type
+  if (caseType != null && String(caseType).trim() !== '') {
+    raw.case_types = [caseType]
   } else {
-    queryItems.value.date_from = formatDateForQuery(value[0])
-    queryItems.value.date_to = formatDateForQuery(value[1])
+    delete raw.case_types
   }
+
+  const body = {state: 0}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!CASE_SEARCH_BODY_KEYS.has(key)) continue
+    if (value === null || value === undefined) continue
+    if (typeof value === 'string' && value.trim() === '') continue
+    if (Array.isArray(value) && value.length === 0) continue
+    body[key] = typeof value === 'string' ? value.trim() : value
+  }
+  if (body.page == null) body.page = 1
+  if (body.page_size == null) body.page_size = 10
+  return body
 }
-// CrudTable 重置后同步清空日期选择器
-watch(
-    () => [queryItems.value.date_from, queryItems.value.date_to],
-    ([from, to]) => {
-      if (from == null && to == null) {
-        createdDateRange.value = null
-      }
-    },
-)
+
+function fetchCaseList(params = {}) {
+  return api.getApiTestcaseList(buildCaseSearchBody(params))
+}
 
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
@@ -877,7 +899,7 @@ const columns = computed(() => {
         :query-bar-props="queryBarProps"
         :is-pagination="true"
         :columns="columns"
-        :get-data="api.getApiTestcaseList"
+        :get-data="fetchCaseList"
         :row-key="'case_id'"
         :scroll-x="2100"
         :single-line="true"
@@ -983,16 +1005,6 @@ const columns = computed(() => {
               </div>
             </template>
           </NPopover>
-        </QueryBarItem>
-        <QueryBarItem label="创建日期：">
-          <NDatePicker
-              v-model:value="createdDateRange"
-              type="daterange"
-              clearable
-              class="query-input"
-              placeholder="请选择创建日期范围"
-              @update:value="handleCreatedDateRangeChange"
-          />
         </QueryBarItem>
         <QueryBarItem label="创建人员：">
           <NInput
