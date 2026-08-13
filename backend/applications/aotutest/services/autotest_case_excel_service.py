@@ -200,7 +200,7 @@ async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[Li
 # ---------------------------------------------------------------------------
 
 def build_export_file_name(username: Optional[str]) -> str:
-    return _file_name(username, "接口报文")
+    return _file_name(username, "接口报文数据")
 
 
 def _kv_to_pairs(kv_list: Optional[List[Any]]) -> List[Tuple[str, Any]]:
@@ -370,7 +370,7 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
 # ---------------------------------------------------------------------------
 
 def build_script_file_name(username: Optional[str]) -> str:
-    return _file_name(username, "接口数据")
+    return _file_name(username, "接口详情数据")
 
 
 def _kv_to_lines(

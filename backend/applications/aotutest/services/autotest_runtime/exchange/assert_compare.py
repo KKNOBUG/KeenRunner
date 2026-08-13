@@ -19,46 +19,110 @@ class AssertionCompare:
     """对实际值与期望值根据断言操作符执行比较。"""
 
     @classmethod
+    def _is_leading_zero_digit_string(cls, value: str) -> bool:
+        """
+        判断是否为带前导零的整数字符串，如响应码：000000，此类值在相等/集合比较中应保留字符串形态。
+
+        :param value: 待判断字符串
+        :return: 是否为带前导零的整数字符串
+        """
+        if not value:
+            return False
+        if value.startswith("-") and len(value) > 1:
+            body = value[1:]
+            return body.isdigit() and len(body) > 1 and body.startswith("0")
+        return value.isdigit() and len(value) > 1 and value.startswith("0")
+
+    @classmethod
     def _normalize_value(cls, value: Any) -> Any:
         """
-        将值标准化为便于比较的类型：数字字符串转int或float, true或false转bool, 其余原样返回。
+        将值标准化为便于比较的类型：普通数字字符串转int或float, true或false转bool；
+        带前导零的整数字符串保留原串（避免响应码等被抹成0后误相等）。
 
         :param value: 任意值
         :return: 标准化后的值, 或原值
         """
         if value is None:
             return None
-        if isinstance(value, (int, float, bool)):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
             return value
         if isinstance(value, str):
-            if value.isdigit() or (value.startswith('-') and value[1:].isdigit()):
+            if cls._is_leading_zero_digit_string(value):
+                return value
+            if value.isdigit() or (value.startswith("-") and len(value) > 1 and value[1:].isdigit()):
                 return int(value)
             try:
-                if '.' in value:
+                if "." in value:
                     return float(value)
             except ValueError:
                 pass
-            if value.lower() == 'true':
+            lowered = value.lower()
+            if lowered == "true":
                 return True
-            if value.lower() == 'false':
+            if lowered == "false":
                 return False
         return value
+
+    @classmethod
+    def _coerce_number_for_ordering(cls, value: Any) -> Any:
+        """
+        大小比较专用数值化：允许带前导零的数字串按数值参与比较；无法转换则返回原值。
+
+        :param value: 任意值
+        :return: int/float 或原值
+        """
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return value
+            if text.isdigit() or (text.startswith("-") and len(text) > 1 and text[1:].isdigit()):
+                return int(text)
+            try:
+                if "." in text:
+                    return float(text)
+            except ValueError:
+                pass
+        return value
+
+    @classmethod
+    def _is_bool_vs_number(cls, left: Any, right: Any) -> bool:
+        """
+        判断是否一侧为bool、另一侧为非bool的int/float（Python中True==1/False==0为真，断言中禁止此类宽松相等）。
+
+        :param left: 左值
+        :param right: 右值
+        :return: 是否为bool与数值的交叉组合
+        """
+        left_is_bool = isinstance(left, bool)
+        right_is_bool = isinstance(right, bool)
+        left_is_number = isinstance(left, (int, float)) and not left_is_bool
+        right_is_number = isinstance(right, (int, float)) and not right_is_bool
+        return (left_is_bool and right_is_number) or (right_is_bool and left_is_number)
 
     @classmethod
     def _type_aware_equals(cls, actual: Any, expected: Any) -> bool:
         """
         类型感知的相等比较：先直接比较, 若不等则对两值做_normalize_value后再比较。
+        bool与数值（含True/1、False/0）一律视为不等；true/false字符串仍可与bool相等。
 
         :param actual: 实际值
         :param expected: 期望值
         :return: 是否相等
         """
-        # 直接比较
+        if cls._is_bool_vs_number(actual, expected):
+            return False
         if actual == expected:
             return True
-        # 标准化后比较
         norm_actual = cls._normalize_value(actual)
         norm_expected = cls._normalize_value(expected)
+        if cls._is_bool_vs_number(norm_actual, norm_expected):
+            return False
         return norm_actual == norm_expected
 
     @classmethod
@@ -69,19 +133,22 @@ class AssertionCompare:
             comparator: Callable[[Any, Any], bool],
     ) -> bool:
         """
-        类型感知的大小比较：先标准化再比较；若标准化后均为数值则用数值比较, 否则用字符串比较。
+        类型感知的大小比较：优先按数值比较（含前导零数字串），否则回落字符串比较。
 
         :param actual: 实际值
         :param expected: 期望值
         :param comparator: 二元谓词(左, 右) -> bool, 例如operator.gt
         :return: 比较结果
         """
-        norm_actual = cls._normalize_value(actual)
-        norm_expected = cls._normalize_value(expected)
-        # 确保都是数值类型才能进行大小比较
-        if isinstance(norm_actual, (int, float)) and isinstance(norm_expected, (int, float)):
-            return comparator(norm_actual, norm_expected)
-        # 如果不是数值, 尝试字符串比较
+        num_actual = cls._coerce_number_for_ordering(actual)
+        num_expected = cls._coerce_number_for_ordering(expected)
+        if (
+                isinstance(num_actual, (int, float))
+                and not isinstance(num_actual, bool)
+                and isinstance(num_expected, (int, float))
+                and not isinstance(num_expected, bool)
+        ):
+            return comparator(num_actual, num_expected)
         return comparator(str(actual), str(expected))
 
     @classmethod
