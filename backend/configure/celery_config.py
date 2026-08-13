@@ -37,7 +37,7 @@ class CeleryConfig(BaseSettings):
         self.CELERY_RESULT_BACKEND = project.build_redis_url(db=2)
         self.CELERY_REDBEAT_REDIS_URL = project.build_redis_url(db=3)
 
-        self.CELERY_LOG_DIR = os.path.join(project.OUTPUT_LOGS_DIR, "celery")
+        self.CELERY_LOG_DIR = os.path.join(project.OUTPUT_LOGS_DIR, "celery_logs")
         os.makedirs(self.CELERY_LOG_DIR, exist_ok=True)
         self.CELERY_WORKER_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_worker.log")
         self.CELERY_BEAT_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_beat.log")
