@@ -128,7 +128,7 @@ def _file_name(username: Optional[str], label: str) -> str:
 
 def _get(item: Any, name: str, default: Any = None) -> Any:
     """
-    兼容dict / schema对象字段读取。
+    兼容dict/schema对象字段读取。
     """
     return item.get(name, default) if isinstance(item, dict) else getattr(item, name, default)
 
@@ -241,10 +241,10 @@ def _xml_local_name(tag: str) -> str:
 
 def _flatten_xml_to_jsonpath_pairs(xml_text: str) -> List[Tuple[str, Any]]:
     """
-    按 XML 文档序将叶子字段展平为 JSONPath 列（不经 xmltodict，保留空标签与声明序）。
+    按XML文档序将叶子字段展平为JSONPath列（不经xmltodict，保留空标签与声明序）。
 
-    路径约定与 JSON 展平对齐：``$.Root.Child``；同名兄弟仅在重复时加 0-based 下标；
-    属性为 ``$.Path.@attr``。非法 XML 回退 ``$.raw``。
+    路径约定与JSON展平对齐：$.Root.Child；同名兄弟仅在重复时加0-based下标；
+    属性为$.Path.@attr。非法XML回退$.raw。
     """
     text = str(xml_text or "").strip()
     if not text:
@@ -851,7 +851,6 @@ async def import_script_rows(
                     obj_in={
                         "case_desc": item["case_desc"],
                         "case_tags": None,
-                        # 与 update_case 对齐：导入更新同样递增版本
                         "case_version": (getattr(existing_case, "case_version", None) or 1) + 1,
                     },
                 )
