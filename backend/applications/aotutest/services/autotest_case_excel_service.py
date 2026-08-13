@@ -49,7 +49,7 @@ _COL_WIDTH_MIN, _COL_WIDTH_MAX = 8, 60
 
 _SCRIPT_COLUMNS: Tuple[str, ...] = (
     "接口名称", "所属应用", "协议类型", "接口描述",
-    "请求名称", "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
+    "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
     "变量", "提取", "断言", "所属人员",
 )
 _DATA_START_ROW = 3
@@ -481,7 +481,6 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
             "所属应用": item["project_name"],
             "协议类型": _HTTP if is_http else _TCP,
             "接口描述": getattr(case, "case_desc", None) or "",
-            "请求名称": case_name,
             "请求方式": method if is_http else "",
             "配置名称": getattr(step, "request_config_name", None) or "",
             "请求路径": (getattr(step, "request_url", None) or "") if is_http else "",
