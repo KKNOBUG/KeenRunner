@@ -121,7 +121,7 @@ class StepExtractVariableItem(BaseModel):
     """步骤定义中的单条提取规则；scope表示ALL/SOME，对应extract_from_source的range_type参数。"""
     name: str = Field(..., max_length=256, description="提取项名称")
     source: str = Field(..., max_length=128, description="数据源")
-    expr: str = Field(..., max_length=4096, description="提取表达式")
+    expr: Optional[str] = Field(None, max_length=4096, description="提取表达式(SOME必填, ALL可省略)")
     scope: Optional[str] = Field(None, max_length=32, description="ALL或SOME")
     index: Optional[int] = Field(None, description="多匹配时索引")
 
