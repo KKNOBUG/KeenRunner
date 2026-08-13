@@ -199,7 +199,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         table = "krun_autotest_case"
         table_description = "自动化测试-用例信息表"
         unique_together = (
-            ("case_name", "case_project", "created_user"),
+            ("case_project", "case_name", "case_type", "created_user"),
         )
         indexes = (
             ("case_project", "state", "created_time"),

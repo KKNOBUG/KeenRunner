@@ -134,7 +134,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
         """
-        创建用例，校验标签存在及同项目下用例名唯一。
+        创建用例，校验标签存在及同应用同类型下用例名唯一。
 
         :param case_in: 用例创建schema
         :return: 创建后的用例实例
@@ -152,11 +152,12 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             on_error=False,
             case_project=case_project,
             case_name=case_name,
+            case_type=case_type,
             state__not=1
         )
         if existing_case:
             error_message: str = (
-                f"相同应用下用例名称不允许重复, "
+                f"相同应用下同类型用例名称不允许重复, "
                 f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}]"
             )
             LOGGER.error(error_message)
@@ -232,18 +233,20 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             update_dict["case_tags"] = normalized_tags
             await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
-        if "case_name" in update_dict or "case_project" in update_dict:
+        if "case_name" in update_dict or "case_project" in update_dict or "case_type" in update_dict:
             case_name = update_dict.get("case_name", instance.case_name)
             case_project = update_dict.get("case_project", instance.case_project)
+            unique_case_type = update_dict.get("case_type", instance.case_type)
             existing_case = await self.model.filter(
                 case_project=case_project,
                 case_name=case_name,
+                case_type=unique_case_type,
                 state__not=1
             ).exclude(id=case_id).first()
             if existing_case:
                 error_message: str = (
-                    f"相同应用下用例名称不允许重复, "
-                    f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}]"
+                    f"相同应用下同类型用例名称不允许重复, "
+                    f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={unique_case_type}]"
                 )
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
@@ -399,7 +402,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 )
                 if existing_case_instance:
                     error_message: str = (
-                        f"第{cid}条用例新增失败, 相同应用下用例名称不允许重复, "
+                        f"第{cid}条用例新增失败, 相同应用下同类型用例名称不允许重复, "
                         f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}]"
                     )
                     LOGGER.error(error_message)
@@ -464,16 +467,20 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     update_case_dict["case_tags"] = normalized_tags
                     await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
-                if "case_name" in update_case_dict or "case_project" in update_case_dict:
+                if "case_name" in update_case_dict or "case_project" in update_case_dict or "case_type" in update_case_dict:
                     unique_name = update_case_dict.get("case_name", case_instance.case_name)
                     unique_project = update_case_dict.get("case_project", case_instance.case_project)
+                    unique_type = update_case_dict.get("case_type", case_instance.case_type)
                     existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.model.filter(
-                        case_project=unique_project, case_name=unique_name, state__not=1
+                        case_project=unique_project,
+                        case_name=unique_name,
+                        case_type=unique_type,
+                        state__not=1
                     ).exclude(id=case_id).first()
                     if existing_case_instance:
                         error_message: str = (
-                            f"第{cid}条用例更新失败, 相同应用下用例名称不允许重复, "
-                            f"查询条件: [case_project={unique_project}, case_name={unique_name}, case_type={case_type}]"
+                            f"第{cid}条用例更新失败, 相同应用下同类型用例名称不允许重复, "
+                            f"查询条件: [case_project={unique_project}, case_name={unique_name}, case_type={unique_type}]"
                         )
                         LOGGER.error(error_message)
                         raise DataAlreadyExistsException(message=error_message)
