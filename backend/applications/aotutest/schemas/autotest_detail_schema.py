@@ -114,7 +114,6 @@ class AutoTestApiDetailVarBase(BaseModel):
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="数据库请求操作列表")
     redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="Redis请求操作列表")
     datagram_field_compare: NON_LIST_DICT_TYPE = Field(default=None, description="报文比对配置列表(快照)")
-    datagram_field_ordered: Optional[int] = Field(default=None, ge=0, le=1, description="报文比对默认字段顺序控制(快照,0忽略顺序,1控制顺序)")
     step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 

@@ -340,12 +340,9 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
-    # 报文比对步骤：左右报文引用列表与默认字段顺序控制
+    # 报文比对步骤：左右报文引用列表(每项自带datagram_field_ordered)
     datagram_field_compare: Optional[List[DatagramFieldCompareItem]] = Field(
         None, description="报文比对配置列表(每项含left_text/right_text/datagram_field_ordered)"
-    )
-    datagram_field_ordered: Optional[int] = Field(
-        None, ge=0, le=1, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)"
     )
 
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

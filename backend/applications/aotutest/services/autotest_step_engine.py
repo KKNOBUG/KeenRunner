@@ -1360,17 +1360,8 @@ class BaseStepExecutor:
             database_searched=actual_request.get("database_searched"),
             redis_operates=actual_request.get("redis_operates"),
             redis_searched=actual_request.get("redis_searched"),
-            # 报文比对配置快照：优先取执行态request，缺省回落步骤定义
-            datagram_field_compare=(
-                actual_request.get("datagram_field_compare")
-                if "datagram_field_compare" in actual_request
-                else getattr(self.step, "datagram_field_compare", None)
-            ),
-            datagram_field_ordered=(
-                actual_request.get("datagram_field_ordered")
-                if "datagram_field_ordered" in actual_request
-                else getattr(self.step, "datagram_field_ordered", None)
-            ),
+            # 报文比对配置快照
+            datagram_field_compare=actual_request.get("datagram_field_compare"),
             # 数据源相关
             dataset_name=dataset_name if have_data_driven else None,
             dataset_snapshot=dataset_snapshot if have_data_driven else None,
@@ -3594,10 +3585,7 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
         return field_ordered
 
     def _load_comparisons(self) -> List[Dict[str, Any]]:
-        """从步骤配置加载比对组；项级datagram_field_ordered缺省时回落步骤级默认值。"""
-        default_field_ordered = self._get_datagram_field_ordered(
-            getattr(self.step, "datagram_field_ordered", None)
-        )
+        """从步骤配置加载比对组；项级datagram_field_ordered缺省为0(忽略顺序)。"""
         items = getattr(self.step, "datagram_field_compare", None)
         if not items:
             raise StepExecutionError("【报文比对】缺少必要配置: datagram_field_compare")
@@ -3624,9 +3612,7 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
                 {
                     "left_text": left_text,
                     "right_text": right_text,
-                    "datagram_field_ordered": self._get_datagram_field_ordered(
-                        default_field_ordered if item_ordered is None else item_ordered
-                    ),
+                    "datagram_field_ordered": self._get_datagram_field_ordered(item_ordered),
                 }
             )
         return comparisons
@@ -3668,10 +3654,7 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
                     failed_indices.append(index)
 
             response_payload = {"datagram_field_compare": datagram_field_compare}
-            result.request = {
-                "datagram_field_compare": comparisons_raw,
-                "datagram_field_ordered": getattr(self.step, "datagram_field_ordered", None),
-            }
+            result.request = {"datagram_field_compare": comparisons_raw}
             result.response = {
                 "response_code": 200 if not failed_indices else 400,
                 "response_message": "success" if not failed_indices else "diff found",

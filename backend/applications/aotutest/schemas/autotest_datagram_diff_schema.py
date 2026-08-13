@@ -6,7 +6,7 @@
 @Module  : autotest_datagram_diff_schema.py
 @DateTime: 2026/8/11
 """
-from typing import Any, List, Literal, Optional
+from typing import Any, List, Literal, Optional, Set
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -18,12 +18,7 @@ class DatagramFieldCompareItem(BaseModel):
 
     left_text: Any = Field(..., description="左侧报文(变量名/占位符/文本)")
     right_text: Any = Field(..., description="右侧报文(变量名/占位符/文本)")
-    datagram_field_ordered: Optional[int] = Field(
-        None,
-        description="是否控制字段顺序，1按行序，0按字段名忽略顺序；缺省时用步骤级datagram_field_ordered",
-        ge=0,
-        le=1,
-    )
+    datagram_field_ordered: Optional[int] = Field(None, ge=0, le=1, description="报文比对字段顺序控制(0忽略顺序,1控制顺序)")
 
 
 class RepDiffRequest(BaseModel):
@@ -31,12 +26,7 @@ class RepDiffRequest(BaseModel):
 
     left_text: str = Field(..., description="左侧报文文本")
     right_text: str = Field(..., description="右侧报文文本")
-    datagram_field_ordered: int = Field(
-        0,
-        description="是否控制字段顺序，1按行序比对，0按字段名比对忽略顺序",
-        ge=0,
-        le=1,
-    )
+    datagram_field_ordered: Optional[int] = Field(None, ge=0, le=1, description="报文比对字段顺序控制(0忽略顺序,1控制顺序)")
 
 
 class CharHighlight(BaseModel):
@@ -47,10 +37,7 @@ class CharHighlight(BaseModel):
 class DiffLineItem(BaseModel):
     source_line_no: Optional[int] = Field(None, description="原文行号，占位行为空")
     content: str = Field("", description="行文本内容")
-    diff_type: DiffType = Field(
-        ...,
-        description="equal相同, left_only左侧多, right_only右侧多, modified同字段值不同, empty占位",
-    )
+    diff_type: DiffType = Field(..., description="equal相同, left_only左侧多, right_only右侧多, modified同字段值不同, empty占位")
     key: Optional[str] = Field(None, description="字段名(JSON键名/XML标签名)")
     highlights: List[CharHighlight] = Field(default_factory=list, description="行内差异高亮区间")
 
@@ -71,7 +58,7 @@ class RepDiffResponse(BaseModel):
     @field_validator("format_type")
     @classmethod
     def validate_format_type(cls, v: str) -> str:
-        allowed = {"json", "xml", "text"}
+        allowed: Set[str] = {"json", "xml", "text"}
         if v not in allowed:
-            raise ValueError(f"format_type必须为{sorted(allowed)}之一")
+            raise ValueError(f"参数[format_type]必须为{sorted(allowed)}之一")
         return v

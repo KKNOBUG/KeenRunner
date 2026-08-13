@@ -294,7 +294,6 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # 数据比对相关
     # datagram_field_compare 存储为List[Dict[str, Any]]格式, 每个元素包含left_text、right_text、datagram_field_ordered项
     datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表")
-    datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)")
 
     class Meta:
         table = "krun_autotest_step"
@@ -445,7 +444,6 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     # 数据比对相关
     # datagram_field_compare 存储为List[Dict[str, Any]]格式, 每个元素包含left_text、right_text、datagram_field_ordered项
     datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表")
-    datagram_field_ordered = fields.IntField(null=True, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)")
 
     class Meta:
         table = "krun_autotest_details"
