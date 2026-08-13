@@ -175,7 +175,11 @@ class AutoTestApiStepReqBase(BaseModel):
     tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析：json|xml|text|bytes")
 
     @field_validator(
-        "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file",
+        "request_header",
+        "request_params",
+        "request_form_data",
+        "request_form_urlencoded",
+        "request_form_file",
         mode="before"
     )
     @classmethod
@@ -351,7 +355,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     @classmethod
     def _normalize_loop_maximums(cls, v: Any) -> Any:
         """
-        规范化loop_maximums：兼容历史整数入参，统一存为字符串；字面量整数校验1-100，占位符交由执行期解析。
+        规范化loop_maximums：整数入参，统一存为字符串；字面量整数校验1-100，占位符交由执行期解析。
 
         :param v: 原始值（int/str/None）
         :return: 规范化后的字符串或None
