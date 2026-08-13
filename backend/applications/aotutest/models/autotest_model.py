@@ -561,7 +561,11 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     # 存储格式：“dataset_{case_id}_{step_code}”
     cache_key = fields.CharField(max_length=128, description="获取Redis中该步骤数据的缓存键名")
     dataframe = fields.JSONField(default=list, null=True, description="数据驱动文件解析前的二维矩阵")
-    axis = fields.SmallIntField(default=0, validators=[MinValueValidator(0), MaxValueValidator(1)], description="数据矩阵(0:水平模式, 1:垂直模式)")
+    axis = fields.SmallIntField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(1)],
+        description="数据矩阵(0:水平模式, 1:垂直模式)"
+    )
     data_source_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
 
     class Meta:
