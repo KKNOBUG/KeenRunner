@@ -795,12 +795,9 @@ async def execute_step_tree(
                 steps_execute_config_payload: Optional[Dict[str, Any]] = None
                 if steps_execute_config:
                     steps_execute_config_payload = {
-                        str(step_id): (
-                            cfg.model_dump() if isinstance(cfg, StepsExecuteConfigBase) else dict(cfg)
-                        )
+                        str(step_id): cfg.model_dump() if isinstance(cfg, StepsExecuteConfigBase) else dict(cfg)
                         for step_id, cfg in steps_execute_config.items()
                     }
-
                 apply_async_result = execute_step_tree_task.apply_async(
                     kwargs={
                         "case_id": case_id,
@@ -905,11 +902,13 @@ async def execute_step_tree(
                 await services.detail_curd.create_detail(detail_in=detail_create)
             case_state: bool = statistics.get("failed_steps", 0) == 0
             case_last_time: str = defer_create_report.case_ed_time
-            await services.case_curd.update_case(AutoTestApiCaseUpdate(
-                case_id=case_id,
-                case_state=case_state,
-                case_last_time=case_last_time,
-            ))
+            await services.case_curd.update_case(
+                AutoTestApiCaseUpdate(
+                    case_id=case_id,
+                    case_state=case_state,
+                    case_last_time=case_last_time,
+                )
+            )
 
         final_m: Dict[str, StepVariablesBase] = {}
         for it in merged_variables:
@@ -919,7 +918,6 @@ async def execute_step_tree(
             if isinstance(it, StepVariablesBase) and it.key:
                 final_m[it.key] = it
         final_session_variables = [v.model_dump(mode="json") for v in final_m.values()]
-
         total_steps: int = statistics.get("total_steps", 0)
         success_steps: int = statistics.get("success_steps", 0)
         failed_steps: int = statistics.get("failed_steps", 0)
