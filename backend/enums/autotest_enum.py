@@ -82,7 +82,7 @@ class AutoTestAssertionOperation(StringEnum):
     NOT_IN_SET = "不属于集合"
     STARTS_WITH = "以...开始"
     ENDS_WITH = "以...结束"
-    NOT_EMPTY = "非空"
+    NOT_EMPTY = "不为空"
     IS_EMPTY = "为空"
 
 
