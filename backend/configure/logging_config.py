@@ -20,26 +20,19 @@ from loguru import logger
 from backend.common.request_context import get_parent_span_id, get_span_id, get_trace_id
 from backend.configure.project_config import PROJECT_CONFIG
 
-# 自定义日志格式(控制台与文件共用；文件设置colorize=False)
-# trace_id（X-Trace-ID）/ span_id（X-Span-ID）由 patcher 注入，未绑定则为 -
+# 自定义日志格式
 LOG_FORMAT = (
-    # 时间信息
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-    # 日志级别，居中对齐
     "<level>{level: ^8}</level> | "
-    # 分布式追踪：TraceID（一次前端操作） + SpanID（当前入站/任务）
     "<yellow>{extra[trace_id]}</yellow>:<yellow>{extra[span_id]}</yellow> | "
-    # 进程和线程信息
     "process [<cyan>{process}</cyan>]:<cyan>{thread}</cyan> | "
-    # 文件、函数和行号
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -> "
-    # 日志消息
     "<level>{message}</level>"
 )
 
 
 def _inject_trace_context(record: dict) -> None:
-    """Loguru patcher：每条日志自动附带 trace_id / span_id。"""
+    """Loguru patcher：每条日志自动附带trace_id/span_id。"""
     extra = record["extra"]
     if not extra.get("trace_id"):
         extra["trace_id"] = get_trace_id()
@@ -64,13 +57,12 @@ _WIRED_STD_LOGGER_NAMES = (
 )
 
 _intercept_handler: Optional["InterceptHandler"] = None
-# 防止 InterceptHandler -> Loguru -> 再次触发 stdlib logging 的递归
 _intercept_guard = threading.local()
 
 
 def rotation_to_max_bytes(rotation: str) -> int:
     """
-    将 project_config 中的 LOGGER_ROTATION 字符串转为 ConcurrentRotatingFileHandler 的 maxBytes
+    将project_config中的LOGGER_ROTATION字符串转为ConcurrentRotatingFileHandler的maxBytes
     :param rotation: 文件大小
     :return:
     """
@@ -83,56 +75,68 @@ def rotation_to_max_bytes(rotation: str) -> int:
     return int(value * {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}[unit])
 
 
-def build_log_path(level_label: str) -> str:
+def build_log_path() -> str:
     """
-    根据日期与级别标签生成当日日志文件路径
-    :param level_label: 文件名中的级别段，如 INFO、ERROR
-    :return:
+    根据启动时刻生成日志文件路径：年月日-时分秒-执行日志.log
     """
     prefix = PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX
-    day = datetime.now().strftime("%Y%m%d")
-    return os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, f"{day}-{level_label}-{prefix}.log")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, f"{stamp}-{prefix}.log")
 
 
-def registry_file_handler(*, level_label: str, min_level: str, max_level: Optional[str] = None) -> None:
+def cleanup_stale_log_lock_files() -> None:
     """
-    注册一个根据级别分流的文件处理器
+    删除日志目录中非今日的ConcurrentRotatingFileHandler锁文件。
+    """
+    logs_dir = PROJECT_CONFIG.OUTPUT_LOGS_DIR
+    if not os.path.isdir(logs_dir):
+        return
+    today = datetime.now().strftime("%Y%m%d")
+    suffix = f"-{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.lock"
+    for name in os.listdir(logs_dir):
+        if not name.startswith(".__") or not name.endswith(suffix):
+            continue
+        inner = name[3:-len(suffix)]
+        date_part = inner[:8]
+        if len(date_part) == 8 and date_part.isdigit() and date_part == today:
+            continue
+        lock_path = os.path.join(logs_dir, name)
+        try:
+            os.remove(lock_path)
+        except OSError:
+            pass
 
-    :param level_label: 文件名中的级别段，如 INFO、ERROR
-    :param min_level: Loguru 最低级别
-    :param max_level: 若指定，则只记录严格低于该级别的日志
+
+def registry_file_handler() -> None:
+    """
+    注册文件处理器：INFO及以上全部写入同一日志文件。
     """
     os.makedirs(PROJECT_CONFIG.OUTPUT_LOGS_DIR, exist_ok=True)
     handler = ConcurrentRotatingFileHandler(
-        filename=build_log_path(level_label),
+        filename=build_log_path(),
         maxBytes=rotation_to_max_bytes(PROJECT_CONFIG.LOGGER_ROTATION),
         backupCount=PROJECT_CONFIG.LOGGER_ROTATION_BACKUP_COUNT,
         encoding="utf-8",
     )
     handler.setFormatter(_HANDLER_PASSTHROUGH)
-
-    kwargs = dict(
+    logger.add(
         sink=handler,
         format=LOG_FORMAT,
-        level=min_level,
+        level="INFO",
         colorize=False,
         enqueue=True,
         backtrace=True,
         diagnose=False,
     )
-    if max_level is not None:
-        ceiling = logger.level(max_level).no
-        kwargs["filter"] = lambda record: record["level"].no < ceiling
-    logger.add(**kwargs)
 
 
 class InterceptHandler(logging.Handler):
     """
     将Python标准库logging.LogRecord重定向到Loguru
 
-    - 使用 logger.opt(depth=...) 尽量保留真实调用栈（模块/函数/行号）
-    - EXCLUDED_LOGGERS 过滤噪声或易引发递归的 logger（如 loguru、文件锁库）
-    - _intercept_guard 在同一线程内避免 emit 重入
+    - 使用logger.opt(depth=...)尽量保留真实调用栈（模块/函数/行号）
+    - EXCLUDED_LOGGERS 过滤噪声或易引发递归的logger
+    - _intercept_guard 在同一线程内避免emit重入
     """
 
     EXCLUDED_LOGGERS = frozenset({
@@ -177,7 +181,6 @@ class InterceptHandler(logging.Handler):
         if self.is_excluded(record.name) or getattr(_intercept_guard, "active", False):
             return
 
-        # 跳过 logging 内部栈帧，使 Loguru 显示的调用位置指向业务代码
         frame, depth = logging.currentframe(), 2
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
@@ -203,7 +206,7 @@ def _get_intercept_handler() -> InterceptHandler:
 
 def wire_standard_loggers() -> None:
     """
-    将 root 及 uvicorn/gunicorn 相关 logger 的 handler 替换为 InterceptHandler。
+    将root及uvicorn/gunicorn相关logger的handler替换为InterceptHandler。
 
     调用时机：
     - loguru_logging() 末尾（import 应用时）；
@@ -230,9 +233,8 @@ def loguru_logging() -> logger:
     - SERVER_DEBUG=False：仅写文件（生产常见）。
     """
     logger.remove()
-
-    registry_file_handler(level_label="ERROR", min_level="ERROR")
-    registry_file_handler(level_label="INFO", min_level="INFO", max_level="ERROR")
+    cleanup_stale_log_lock_files()
+    registry_file_handler()
 
     if PROJECT_CONFIG.SERVER_DEBUG:
         logger.add(
