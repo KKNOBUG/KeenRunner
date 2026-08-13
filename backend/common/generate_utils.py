@@ -263,7 +263,7 @@ class GenerateUtils:
 
     def generate_datetime(self, year: int = 0, month: int = 0, day: int = 0,
                           hour: int = 0, minute: int = 0, second: int = 0,
-                          fmt: Optional[Union[int, str]] = None, isMicrosecond: bool = False) -> Union[datetime, str]:
+                          fmt: Optional[Union[int, str]] = None, is_microsecond: bool = False) -> Union[datetime, str]:
         """
         根据当前日期时间自定义修改年、月、日、时、分、秒和格式
 
@@ -274,12 +274,12 @@ class GenerateUtils:
         :param minute: 非必填项，分钟偏移量，默认0
         :param second: 非必填项，秒数偏移量，默认0
         :param fmt: 非必填项，输出格式；可为formats字段中的键或自定义格式串，默认不格式化
-        :param isMicrosecond: 非必填项，是否保留微秒，默认 False 时清零微秒
+        :param is_microsecond: 非必填项，是否保留微秒，默认 False 时清零微秒
         :return: 未指定fmt时返回datetime对象；指定fmt时返回格式化后的字符串，默认YYYY-MM-DD HH:MM:SS
         """
         # 获取当前日期时间
         current_datetime = datetime.now()
-        if not isMicrosecond:
+        if not is_microsecond:
             current_datetime = current_datetime.replace(microsecond=0)
 
         # 计算偏移量
@@ -345,18 +345,22 @@ class GenerateUtils:
         }
         return resp
 
-    def generate_global_serial_number(self):
-        """
-        生成随机3条结构相同、后缀不同全局流水号
+    def generate_global_serial_number(self, channel_no: str = "300103"):
+        stamp = self.generate_datetime(fmt=51, is_microsecond=True)
+        point = self.generate_string(length=10)
+        g1 = stamp[:8] + str(channel_no) + point + stamp[-4:]
+        return g1
 
-        格式：年+月+日+时+分+秒+毫秒+固定后缀9999+4位随机字符，合计约28位
-
-        :return: 三元组 (g1, g2, g3)，均为流水号字符串
+    def generate_global_serial_numbers(self):
         """
-        stamp = self.generate_datetime(fmt=51, isMicrosecond=True)
-        g1 = stamp + "9999" + self.generate_string(length=4)
-        g2 = stamp + "9999" + self.generate_string(length=4)
-        g3 = stamp + "9999" + self.generate_string(length=4)
+        全局流水号，28位（年 + 月 + 日 + 时 + 分 + 秒 + 毫秒 + 9999 + 4位随机数）
+        消费方流水号：本系统交易日期(8位)+363001（6位）+流水序号（16位）
+        """
+        stamp = self.generate_datetime(fmt=51, is_microsecond=True)
+        point = self.generate_string(length=13)
+        g1 = stamp + "9999" + point[:4]
+        g2 = stamp[:8] + "36300103" + point + "1"
+        g3 = stamp[:8] + "36300103" + point + "2"
         return g1, g2, g3
 
     @classmethod

@@ -69,7 +69,7 @@ async def generate_info(
     for y in datetimeOption:
         if y == "now":
             for key, value in formats.items():
-                item = GENERATE.generate_datetime(fmt=key, isMicrosecond=key > 50)
+                item = GENERATE.generate_datetime(fmt=key, is_microsecond=key > 50)
                 data.setdefault(y, {}).setdefault(value, item)
         elif y == "history":
             year = GENERATE.generate_random_int(-50, -10)
@@ -80,9 +80,15 @@ async def generate_info(
             second = GENERATE.generate_random_int(-60, -1)
             for key, value in formats.items():
                 item = GENERATE.generate_datetime(
-                    year=year, month=month, day=day,
-                    hour=hour, minute=minute, second=second,
-                    fmt=key, isMicrosecond=key > 50)
+                    year=year,
+                    month=month,
+                    day=day,
+                    hour=hour,
+                    minute=minute,
+                    second=second,
+                    fmt=key,
+                    is_microsecond=key > 50
+                )
                 data.setdefault(y, {}).setdefault(value, item)
         elif y == "future":
             year = GENERATE.generate_random_int(5, 50)
@@ -93,9 +99,15 @@ async def generate_info(
             second = GENERATE.generate_random_int(1, 60)
             for key, value in formats.items():
                 item = GENERATE.generate_datetime(
-                    year=year, month=month, day=day,
-                    hour=hour, minute=minute, second=second,
-                    fmt=key, isMicrosecond=key > 50)
+                    year=year,
+                    month=month,
+                    day=day,
+                    hour=hour,
+                    minute=minute,
+                    second=second,
+                    fmt=key,
+                    is_microsecond=key > 50
+                )
                 data.setdefault(y, {}).setdefault(value, item)
 
     # 随机数字
