@@ -247,7 +247,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 if (fromConfigDict) {
                     backendStep.loop_conditions = {
                         condition_expr: fromConfigDict.condition_expr != null ? String(fromConfigDict.condition_expr) : '',
-                        condition_compare: fromConfigDict.condition_compare || '非空',
+                        condition_compare: fromConfigDict.condition_compare || '不为空',
                         condition_value: fromConfigDict.condition_value != null ? String(fromConfigDict.condition_value) : '',
                     }
                 } else if (
@@ -257,14 +257,14 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 ) {
                     backendStep.loop_conditions = {
                         condition_expr: config.condition_expr != null ? String(config.condition_expr) : '',
-                        condition_compare: config.condition_compare || '非空',
+                        condition_compare: config.condition_compare || '不为空',
                         condition_value: config.condition_value != null ? String(config.condition_value) : '',
                     }
                 } else if (original.loop_conditions && typeof original.loop_conditions === 'object' && !Array.isArray(original.loop_conditions)) {
                     const oc = original.loop_conditions
                     backendStep.loop_conditions = {
                         condition_expr: oc.condition_expr != null ? String(oc.condition_expr) : '',
-                        condition_compare: oc.condition_compare || '非空',
+                        condition_compare: oc.condition_compare || '不为空',
                         condition_value: oc.condition_value != null ? String(oc.condition_value) : '',
                     }
                 } else {
@@ -289,7 +289,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 if (branch.branch_type !== 'else' && branch.branch_conditions) {
                     branchPayload.branch_conditions = {
                         condition_expr: branch.branch_conditions.condition_expr != null ? String(branch.branch_conditions.condition_expr) : '',
-                        condition_compare: branch.branch_conditions.condition_compare || '非空',
+                        condition_compare: branch.branch_conditions.condition_compare || '不为空',
                         condition_value: branch.branch_conditions.condition_value != null ? String(branch.branch_conditions.condition_value) : '',
                     }
                 }

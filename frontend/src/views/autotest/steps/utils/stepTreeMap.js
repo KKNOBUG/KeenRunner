@@ -115,11 +115,11 @@ export function mapBackendStep(step) {
     if (step.loop_conditions && typeof step.loop_conditions === 'object' && !Array.isArray(step.loop_conditions)) {
       const condition = step.loop_conditions
       base.config.condition_expr = condition.condition_expr != null ? String(condition.condition_expr) : ''
-      base.config.condition_compare = condition.condition_compare || '非空'
+      base.config.condition_compare = condition.condition_compare || '不为空'
       base.config.condition_value = condition.condition_value != null ? String(condition.condition_value) : ''
     } else {
       base.config.condition_expr = ''
-      base.config.condition_compare = '非空'
+      base.config.condition_compare = '不为空'
       base.config.condition_value = ''
     }
     base.children = []
@@ -179,7 +179,7 @@ export function mapBackendStep(step) {
           branch_type: b.branch_type || 'if',
           branch_conditions: b.branch_conditions && typeof b.branch_conditions === 'object' ? {
             condition_expr: b.branch_conditions.condition_expr != null ? String(b.branch_conditions.condition_expr) : '',
-            condition_compare: b.branch_conditions.condition_compare || '非空',
+            condition_compare: b.branch_conditions.condition_compare || '不为空',
             condition_value: b.branch_conditions.condition_value != null ? String(b.branch_conditions.condition_value) : '',
           } : null,
           branch_desc: b.branch_desc || '',
@@ -208,7 +208,7 @@ export function mapBackendStep(step) {
         branch_type: 'if',
         branch_conditions: {
           condition_expr: '',
-          condition_compare: '非空',
+          condition_compare: '不为空',
           condition_value: '',
         },
         branch_desc: '',

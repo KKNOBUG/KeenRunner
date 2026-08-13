@@ -122,7 +122,7 @@
                 <n-form-item label="条件比较值" class="step-ev-fi">
                   <n-input
                       v-model:value="branch.branch_conditions.condition_value"
-                      placeholder="${target} 或具体数据（非空/为空时可不填）"
+                      placeholder="${target} 或具体数据（不为空/为空时可不填）"
                       :disabled="props.readonly"
                   />
                 </n-form-item>

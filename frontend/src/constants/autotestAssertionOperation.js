@@ -17,7 +17,7 @@ export const AUTO_TEST_ASSERTION_OPERATION_VALUES = Object.freeze([
     '不属于集合',
     '以...开始',
     '以...结束',
-    '非空',
+    '不为空',
     '为空',
 ])
 
@@ -27,4 +27,4 @@ export const assertionOperationSelectOptions = AUTO_TEST_ASSERTION_OPERATION_VAL
     value: v,
 }))
 
-export const DEFAULT_ASSERTION_OPERATION = '非空'
+export const DEFAULT_ASSERTION_OPERATION = '不为空'
