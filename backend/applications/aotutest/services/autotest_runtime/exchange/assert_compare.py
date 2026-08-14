@@ -208,7 +208,7 @@ class AssertionCompare:
         """
         解析集合字面量内部文本：统一全角/半角逗号后分割，去掉可选首尾引号，再经_normalize_value转类型。
 
-        :param text: 去掉外层[]或{}后的内容
+        :param text: 去掉外层[]、{}或()后的内容
         :return: 元素列表
         """
         elements: List[Any] = []
@@ -226,8 +226,8 @@ class AssertionCompare:
         """
         将期望值规范为成员判断用的列表。
 
-        支持list/tuple/set/frozenset、JSON数组字符串、{张三, 李四, 10086}字面量；
-        其余标量视为单元素集合；dict与JSON对象拒绝。
+        支持list/tuple/set/frozenset，以及以[]、{}、()包裹的字面量（JSON数组优先）；
+        未使用这三种括号、括号不配对、dict与JSON对象均拒绝。
 
         :param expected: 用户给定的集合或可解析为集合的值
         :return: 元素列表
@@ -237,33 +237,44 @@ class AssertionCompare:
         if isinstance(expected, (list, tuple, set, frozenset)):
             return list(expected)
         if isinstance(expected, dict):
-            raise ValueError("集合期望值不支持Dict，请使用List/Set或集合字面量")
+            raise ValueError("集合期望值不支持Dict，请使用List/Set或[]、{}、()字面量")
         if not isinstance(expected, str):
-            return [expected]
+            raise ValueError(
+                "集合期望值必须使用[]、{}或()包裹，例如[元素1, 元素2]、{元素1, 元素2}或(元素1, 元素2)"
+            )
 
         text = expected.strip()
         if not text:
             raise ValueError("集合期望值不允许为空字符串")
 
-        if text.startswith("[") and text.endswith("]"):
+        pairs = {"[": "]", "{": "}", "(": ")"}
+        opener = text[0]
+        closer = pairs.get(opener)
+        if closer is None or len(text) < 2 or not text.endswith(closer):
+            raise ValueError(
+                "集合期望值必须使用[]、{}或()包裹，例如[元素1, 元素2]、{元素1, 元素2}或(元素1, 元素2)"
+            )
+
+        inner = text[1:-1]
+        if opener == "[":
             try:
                 parsed = json.loads(text)
             except (json.JSONDecodeError, TypeError, ValueError):
                 parsed = None
             if isinstance(parsed, list):
                 return parsed
-            return cls._parse_set_literal(text[1:-1])
+            return cls._parse_set_literal(inner)
 
-        if text.startswith("{") and text.endswith("}"):
+        if opener == "{":
             try:
                 parsed = json.loads(text)
             except (json.JSONDecodeError, TypeError, ValueError):
                 parsed = None
             if isinstance(parsed, dict):
-                raise ValueError("集合期望值不支持JSON对象，请使用[元素1, 元素2]或{元素1, 元素2}写法")
-            return cls._parse_set_literal(text[1:-1])
+                raise ValueError("集合期望值不支持JSON对象，请使用[元素1, 元素2]、{元素1, 元素2}或(元素1, 元素2)写法")
+            return cls._parse_set_literal(inner)
 
-        return [cls._normalize_value(text)]
+        return cls._parse_set_literal(inner)
 
     @classmethod
     def _assertion_in_set(cls, actual: Any, expected: Any) -> bool:
@@ -271,7 +282,7 @@ class AssertionCompare:
         判断实际值是否属于期望集合（类型感知相等）。
 
         :param actual: 实际值
-        :param expected: 集合（list/set/JSON数组/{张三, 李四, 10086}）
+        :param expected: 集合（list/set，或[]、{}、()字面量）
         :return: 是否属于集合
         """
         return any(cls._type_aware_equals(actual, item) for item in cls._coerce_to_collection(expected))
