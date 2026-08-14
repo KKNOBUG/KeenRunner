@@ -1037,17 +1037,31 @@ class BaseStepExecutor:
         from backend.applications.aotutest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
-    def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:
+    def get_execute_config(
+            self,
+            database_operates_index: Optional[int] = None,
+            expected_config_type: Optional[Union[AutoTestConfigNodeType, Iterable[AutoTestConfigNodeType]]] = None,
+    ) -> Optional[StepsExecuteConfigBase]:
         """
-        获取当前步骤的执行配置（HTTP请求、TCP请求、SQL请求）。
-        执行配置KEY组成规则：step_id优先、其次是@@step_name、如果是SQL请求则需要继续拼接操作序号
+        获取当前步骤的执行配置（HTTP/TCP/DB/Redis）。
+        KEY：step_id 优先，否则@@step_name；DB/Redis多操作再拼_@@{index}。
+        指定expected_config_type时，类型不匹配视为未命中（避免HTTP误用database配置）。
 
-        :param database_operates_index: 数据库多操作时的操作序号（拼接配置 key 后缀）
-        :return: 执行配置；未配置或解析失败时返回 None
+        :param database_operates_index: 数据库/Redis 多操作时的操作序号
+        :param expected_config_type: 期望的配置类型（单个或可迭代多种）
+        :return: 执行配置；未配置、类型不匹配或解析失败时返回 None
         """
         step_exec_config_map: Dict[str, Any] = self.context.steps_execute_config
         if not step_exec_config_map or not isinstance(step_exec_config_map, dict):
             return None
+
+        expected_types: Optional[Set[AutoTestConfigNodeType]] = None
+        if expected_config_type is not None:
+            if isinstance(expected_config_type, AutoTestConfigNodeType):
+                expected_types = {expected_config_type}
+            else:
+                expected_types = set(expected_config_type)
+
         step_id: Optional[int] = self.step.step_id
         step_name: Optional[str] = self.step.step_name
         cfg_key: str = str(step_id) if step_id else f"@@{str(step_name).strip()}"
@@ -1056,14 +1070,20 @@ class BaseStepExecutor:
         cfg_value: Any = step_exec_config_map.get(cfg_key)
         if not cfg_value:
             return None
-        elif isinstance(cfg_value, StepsExecuteConfigBase):
-            return cfg_value
+
+        cfg: Optional[StepsExecuteConfigBase] = None
+        if isinstance(cfg_value, StepsExecuteConfigBase):
+            cfg = cfg_value
         elif isinstance(cfg_value, dict):
             try:
-                return StepsExecuteConfigBase.model_validate(cfg_value)
+                cfg = StepsExecuteConfigBase.model_validate(cfg_value)
             except Exception:
                 return None
-        return None
+        if cfg is None:
+            return None
+        if expected_types is not None and cfg.config_type not in expected_types:
+            return None
+        return cfg
 
     def apply_extract_and_assert(
             self,
@@ -2581,14 +2601,14 @@ class TcpStepExecutor(BaseStepExecutor):
             env_name: Optional[str] = None
             request_url = (self.step.request_url or "").strip()
             request_port = self.step.request_port
-            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
+            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+                expected_config_type=AutoTestConfigNodeType.API,
+            )
             if current_step_config:
-                config_type: AutoTestConfigNodeType = current_step_config.config_type
-                if current_step_config and config_type == AutoTestConfigNodeType.API:
-                    request_url: str = current_step_config.config_host
-                    request_port: str = current_step_config.config_port
-                    self.step.request_config_name = current_step_config.config_name
-                    env_name = current_step_config.env_name
+                request_url: str = current_step_config.config_host
+                request_port: str = current_step_config.config_port
+                self.step.request_config_name = current_step_config.config_name
+                env_name = current_step_config.env_name
             if not any((env_name, request_url, request_port)):
                 error_message: str = f"【TCP请求】执行配置异常, 存在未明确项"
                 raise StepExecutionError(error_message)
@@ -2802,8 +2822,11 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         f"预期类型: DataBaseOperates\n\t"
                         f"实际类型: {type(db_operate).__name__}"
                     )
-                current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(database_operates_index=db_idx)
-                if current_op_execute_cfg and current_op_execute_cfg.config_type == AutoTestConfigNodeType.DB:
+                current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+                    database_operates_index=db_idx,
+                    expected_config_type=AutoTestConfigNodeType.DB,
+                )
+                if current_op_execute_cfg:
                     env_name: str = str(current_op_execute_cfg.env_name or "").strip()
                     config_host: str = current_op_execute_cfg.config_host
                     config_port: str = current_op_execute_cfg.config_port
@@ -3064,9 +3087,10 @@ class RedisStepExecutor(BaseStepExecutor):
                         f"实际类型: {type(redis_operate).__name__}"
                     )
                 current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(
-                    database_operates_index=redis_idx
+                    database_operates_index=redis_idx,
+                    expected_config_type=AutoTestConfigNodeType.REDIS,
                 )
-                if current_op_execute_cfg and current_op_execute_cfg.config_type == AutoTestConfigNodeType.REDIS:
+                if current_op_execute_cfg:
                     env_name = str(current_op_execute_cfg.env_name or "").strip()
                     config_host = current_op_execute_cfg.config_host
                     config_port = current_op_execute_cfg.config_port
@@ -3306,22 +3330,23 @@ class HttpStepExecutor(BaseStepExecutor):
         try:
             request_url: str = (self.step.request_url or "").strip().lstrip("/")
             request_method: HTTPMethod = self.step.request_method
-            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
+            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+                expected_config_type=AutoTestConfigNodeType.API,
+            )
             env_name: Optional[str] = None
             if current_step_config:
-                if current_step_config.config_type == AutoTestConfigNodeType.API:
-                    env_name = current_step_config.env_name
-                    config_name: str = current_step_config.config_name
-                    config_host: str = (current_step_config.config_host or "").strip().rstrip("/").rstrip(":")
-                    config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
-                    self.step.request_config_name = config_name
-                    if config_host and not config_host.lower().startswith(("http://", "https://")):
-                        config_host = f"http://{config_host}"
-                    request_url = (
-                        f"{config_host}/{request_url}"
-                        if not config_port
-                        else f"{config_host}:{config_port}/{request_url}"
-                    )
+                env_name = current_step_config.env_name
+                config_name: str = current_step_config.config_name
+                config_host: str = (current_step_config.config_host or "").strip().rstrip("/").rstrip(":")
+                config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
+                self.step.request_config_name = config_name
+                if config_host and not config_host.lower().startswith(("http://", "https://")):
+                    config_host = f"http://{config_host}"
+                request_url = (
+                    f"{config_host}/{request_url}"
+                    if not config_port
+                    else f"{config_host}:{config_port}/{request_url}"
+                )
 
             if not request_url or not request_url.lower().startswith("http") or not env_name:
                 raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")
