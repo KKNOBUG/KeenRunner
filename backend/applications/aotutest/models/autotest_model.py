@@ -332,6 +332,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
     task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次执行使用的数据集/场景名称(参数化)")
+    involve_envs = fields.JSONField(default=list, null=True, description="脚本执行时涉及应用环境列表")
 
     class Meta:
         table = "krun_autotest_report"

@@ -30,6 +30,7 @@ class AutoTestApiReportBase(BaseModel):
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
     batch_code: Optional[str] = Field(None, max_length=64, description="批次标识代码")
     dataset_name: Optional[str] = Field(None, max_length=255, description="本次执行使用的数据集/场景名称(参数化)")
+    involve_envs: Optional[List[str]] = Field(None, description="脚本执行时涉及应用环境列表")
 
 
 class AutoTestApiReportCreate(AutoTestApiReportBase):

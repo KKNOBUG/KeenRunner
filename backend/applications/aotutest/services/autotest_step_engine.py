@@ -17,7 +17,7 @@ import types
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Union, Set
 from urllib.parse import unquote
 
 import httpx
@@ -3877,8 +3877,11 @@ class AutoTestStepExecutionEngine:
             case_state: bool = failed_steps == 0
             defer_create_report: Optional[AutoTestApiReportCreate] = None
             pending_create_details: Optional[List[AutoTestApiDetailCreate]] = None
+            involve_envs: Set[str] = {
+                var.env_name if isinstance(var, StepsExecuteConfigBase) else var.get("env_name")
+                for key, var in steps_execute_config.items()
+            }
             if self._save_report and report_code:
-                # 优先取上下文用户名；兼容旧逻辑仅有 user_id 时不再写入数字 ID
                 user_name: Optional[str] = get_current_username()
                 final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
                 defer_create_report = AutoTestApiReportCreate(
@@ -3898,6 +3901,7 @@ class AutoTestStepExecutionEngine:
                     task_code=self._task_code,
                     batch_code=self._batch_code,
                     dataset_name=(dataset_name or None),
+                    involve_envs=list(involve_envs),
                 )
                 pending_create_details = list(self._pending_details)
 
