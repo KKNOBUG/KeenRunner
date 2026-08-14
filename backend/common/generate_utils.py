@@ -11,7 +11,7 @@ import string
 import threading
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, List
 
 from dateutil.relativedelta import relativedelta
 from faker import Faker
@@ -261,9 +261,17 @@ class GenerateUtils:
 
         return generate_string[::-1]
 
-    def generate_datetime(self, year: int = 0, month: int = 0, day: int = 0,
-                          hour: int = 0, minute: int = 0, second: int = 0,
-                          fmt: Optional[Union[int, str]] = None, is_microsecond: bool = False) -> Union[datetime, str]:
+    def generate_datetime(
+            self,
+            year: int = 0,
+            month: int = 0,
+            day: int = 0,
+            hour: int = 0,
+            minute: int = 0,
+            second: int = 0,
+            fmt: Optional[Union[int, str]] = None,
+            is_microsecond: bool = False
+    ) -> Union[datetime, str]:
         """
         根据当前日期时间自定义修改年、月、日、时、分、秒和格式
 
@@ -346,22 +354,30 @@ class GenerateUtils:
         return resp
 
     def generate_global_serial_number(self, channel_no: str = "300103"):
+        """
+        生成28位全局流水号，由年月日 + 6位渠道号 + 时分秒 + 随机数组成。
+        :param channel_no: 渠道号
+        :return:
+        """
         stamp = self.generate_datetime(fmt=51, is_microsecond=True)
-        point = self.generate_string(length=10)
-        g1 = stamp[:8] + str(channel_no) + point + stamp[-4:]
+        date_str, time_str, mico_str = stamp[:8], stamp[8:14], stamp[-6:]
+        g1 = date_str + str(channel_no) + time_str + "00" + mico_str
         return g1
 
-    def generate_global_serial_numbers(self):
+    def generate_global_serial_numbers(self, channel_no: str = "300103", count: int = 3):
         """
-        全局流水号，28位（年 + 月 + 日 + 时 + 分 + 秒 + 毫秒 + 9999 + 4位随机数）
-        消费方流水号：本系统交易日期(8位)+363001（6位）+流水序号（16位）
+        生成多个28位全局流水号(默认3个)，由年月日 + 6位渠道号 + 时分秒 + 随机数组成。
+        :param channel_no: 渠道号
+        :param count: 生成数量
+        :return:
         """
-        stamp = self.generate_datetime(fmt=51, is_microsecond=True)
-        point = self.generate_string(length=13)
-        g1 = stamp + "9999" + point[:4]
-        g2 = stamp[:8] + "36300103" + point + "1"
-        g3 = stamp[:8] + "36300103" + point + "2"
-        return g1, g2, g3
+        serial_numbers: List[str] = []
+        for i in range(count):
+            stamp = self.generate_datetime(fmt=51, is_microsecond=True)
+            date_str, time_str, mico_str = stamp[:8], stamp[8:14], stamp[-6:]
+            serial_number = date_str + str(channel_no) + time_str + f"0{i}" + mico_str
+            serial_numbers.append(serial_number)
+        return serial_numbers
 
     @classmethod
     def generate_uuid(cls):
@@ -470,6 +486,7 @@ if __name__ == '__main__':
     print(vd.generate_string(length=10, digit=True))
     print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
     # print(vd.generate_random_int(1, 20))
+    print(vd.generate_global_serial_number())
     # print(vd.generate_global_serial_number())
     # print(vd.generate_seconds_until_22h())
     # print(vd.generate_seconds_until())
