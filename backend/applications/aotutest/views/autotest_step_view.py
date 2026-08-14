@@ -730,7 +730,7 @@ async def execute_step_tree(
                         case_id=case_id,
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
-                        report_type=AutoTestReportType.SYNC_EXEC,
+                        report_type=AutoTestReportType.ASYNC_EXEC,
                         batch_code=batch_code,
                     )
                     total_steps: int = int(result_data.get("total_steps") or 0)
