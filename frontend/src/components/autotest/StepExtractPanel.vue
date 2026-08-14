@@ -193,7 +193,7 @@ const isVariableSource = computed(() => isVariableNameExtractMode(props.mode))
 const variableScopeHint = computed(() =>
     props.mode === EXTRACT_MODE_REDIS
         ? '部分提取需填写 JSONPath（相对所选 variable_name 的 redis_data）；全部提取取该 redis_data 整项'
-        : '部分提取需填写 JSONPath（相对所选来源对应的那条执行结果对象）；全部提取取该对象整项（含 sql_data、sql_count 等）'
+        : '部分提取需填写 JSONPath（相对所选来源对应的那条执行结果对象外层字段）；全部提取取该对象整项（含 sql_data、sql_count、env_name 等）'
 )
 
 const collapseState = reactive({})

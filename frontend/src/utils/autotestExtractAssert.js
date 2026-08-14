@@ -37,13 +37,13 @@ export const RESPONSE_ASSERT_OBJECT_OPTIONS = [
 export const PYTHON_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
 
 export const DB_JSONPATH_PLACEHOLDER =
-    '如 $.sql_data[0].列名 或 $.sql_count（相对该 variable_name 对应执行结果项）'
+    '如 $.sql_data[0].列名、$.sql_count、$.env_name（相对该 variable_name 对应执行结果项，字段均在外层）'
 
 export const REDIS_JSONPATH_PLACEHOLDER =
     '如 $.[0] 或 $.[1][0]（相对该 variable_name 对应 redis_data 命令结果列表）'
 
 export const DB_SOURCE_HINT =
-    '与执行结果列表中该 variable_name 对应项匹配；JSONPath 写在该项对象上，例如 $.sql_data[0].列名、$.sql_count。'
+    '与执行结果列表中该 variable_name 对应项匹配；JSONPath 写在该项外层字段上，例如 $.sql_data[0].列名、$.sql_count、$.config_name。'
 
 export const REDIS_SOURCE_HINT =
     '与执行结果列表中该 variable_name 对应项匹配；JSONPath 相对 redis_data，例如 $.[0] 表示第一条命令返回值。'
