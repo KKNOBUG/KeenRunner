@@ -101,7 +101,7 @@ class Extractors:
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
         :param invalid_xml_message: 解析失败时的错误文案前缀
-        :return: 元素text或tostring结果；ALL时返回原文
+        :return: 叶子元素返回text；有子节点时返回整元素序列化；ALL时返回原文
         """
         if not text:
             raise ValueError(empty_message)
@@ -125,10 +125,8 @@ class Extractors:
                         f"【{operation_type}】数组越界, "
                         f"给定索引[{index_int}]不可大于数组长度[{len(elements)}]"
                     )
-                element = elements[index_int]
-                return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
-            element = elements[-1]
-            return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+                return XPathUtils.element_extract_value(elements[index_int])
+            return XPathUtils.element_extract_value(elements[-1])
         except ElementTree.ParseError as e:
             raise ValueError(f"{invalid_xml_message}, 错误描述: {e}") from e
         except ValueError:

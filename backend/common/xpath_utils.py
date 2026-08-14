@@ -372,7 +372,20 @@ class XPathUtils:
         if not elements:
             return None
 
-        element = elements[-1]
+        return cls.element_extract_value(elements[-1])
+
+    @classmethod
+    def element_extract_value(cls, element: ElementTree.Element) -> str:
+        """
+        提取单个元素的值：有子节点时返回整段序列化，否则返回叶子文本。
+
+        父节点的element.text往往是子标签前的换行/缩进，不能当作有效取值。
+
+        :param element: 已匹配到的元素
+        :return: 叶子text，或整元素的XML字符串
+        """
+        if len(element) > 0:
+            return ElementTree.tostring(element, encoding="unicode")
         return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
 
 
