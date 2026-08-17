@@ -25,7 +25,7 @@ const CASE_SEARCH_BODY_KEYS = new Set([
   'case_id', 'case_code', 'case_types', 'case_steps', 'case_state', 'case_last_time', 'case_version',
   'case_name', 'case_tags', 'case_attr', 'case_project', 'session_variables',
   'page', 'page_size', 'order',
-  'step_type', 'request_args_type', 'created_user', 'updated_user', 'state',
+  'step_type', 'request_args_type', 'created_user', 'owner_user', 'updated_user', 'state',
 ])
 
 const $table = ref(null)
@@ -37,6 +37,7 @@ const queryItems = ref({
   case_project: null,
   case_tags: [],
   created_user: null,
+  owner_user: null,
   updated_user: null,
 })
 
@@ -760,6 +761,13 @@ const columns = computed(() => {
       },
     },
     {
+      title: '所属人员',
+      key: 'owner_user',
+      width: 150,
+      align: 'center',
+      ellipsis: {tooltip: true},
+    },
+    {
       title: '创建人员',
       key: 'created_user',
       width: 150,
@@ -1005,6 +1013,16 @@ const columns = computed(() => {
               </div>
             </template>
           </NPopover>
+        </QueryBarItem>
+        <QueryBarItem label="所属人员：">
+          <NInput
+              v-model:value="queryItems.owner_user"
+              clearable
+              type="text"
+              placeholder="请输入所属人员"
+              class="query-input"
+              @keypress.enter="$table?.handleSearch()"
+          />
         </QueryBarItem>
         <QueryBarItem label="创建人员：">
           <NInput

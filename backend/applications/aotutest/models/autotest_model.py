@@ -16,7 +16,8 @@ from backend.applications.base.services.scaffold import (
     StateModel,
     ReserveFields,
     unique_identify,
-    JSONTextField
+    JSONTextField,
+    UpperCharField,
 )
 from backend.enums import (
     AutoTestCaseType,
@@ -194,17 +195,20 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
     # session_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项；空池统一落NULL，不使用空数组占位
     session_variables = fields.JSONField(default=None, null=True, description="会话变量(初始变量池)")
+    # owner_user与created_user同一套账号规范；创建时等于创建人，仅转让接口可改
+    owner_user = UpperCharField(max_length=16, default=None, null=True, index=True, description="用例所属人员")
 
     class Meta:
         table = "krun_autotest_case"
         table_description = "自动化测试-用例信息表"
         unique_together = (
-            ("case_project", "case_name", "case_type", "created_user"),
+            ("case_project", "case_name", "case_type", "owner_user"),
         )
         indexes = (
             ("case_project", "state", "created_time"),
             ("case_project", "case_name", "case_type"),
             ("case_project", "case_name", "state"),
+            ("case_project", "owner_user", "state"),
             ("case_name", "state"),
         )
         ordering = ["-updated_time"]
@@ -212,6 +216,27 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     def __str__(self):
         """返回用例名称。"""
         return self.case_name
+
+
+class AutoTestApiCaseTransferInfo(ScaffoldModel):
+    case_id = fields.BigIntField(index=True, description="用例ID")
+    prev_owner_user = UpperCharField(max_length=16, description="转出前归属人")
+    next_owner_user = UpperCharField(max_length=16, description="转出后归属人")
+    created_user = UpperCharField(max_length=16, default=None, null=True, description="操作人")
+    created_time = fields.DatetimeField(auto_now_add=True, description="操作时间")
+    transfer_desc = fields.CharField(max_length=2048, null=True, description="操作描述")
+
+    class Meta:
+        table = "krun_autotest_case_transfer"
+        table_description = "自动化测试-用例转让记录表"
+        indexes = (
+            ("case_id", "created_time"),
+            ("created_user", "created_time"),
+        )
+        ordering = ["-created_time"]
+
+    def __str__(self):
+        return f"{self.case_id}:{self.prev_owner_user}->{self.next_owner_user}"
 
 
 class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):

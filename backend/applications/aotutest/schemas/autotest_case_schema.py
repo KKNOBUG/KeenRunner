@@ -78,5 +78,6 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    owner_user: Optional[UpperStr] = Field(None, max_length=16, description="所属人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

@@ -346,6 +346,8 @@ async def search_cases(
             q &= Q(case_attr=case_in.case_attr.value)
         if case_in.created_user:
             q &= Q(created_user=case_in.created_user)
+        if case_in.owner_user:
+            q &= Q(owner_user=case_in.owner_user)
         if case_in.updated_user:
             q &= Q(updated_user=case_in.updated_user)
         q &= Q(state=case_in.state)

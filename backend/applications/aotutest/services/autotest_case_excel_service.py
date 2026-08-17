@@ -36,6 +36,7 @@ from backend.enums import (
     AutoTestStepType,
     HTTPMethod,
 )
+from backend.services import get_current_username
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -490,7 +491,7 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
             "变量": variables_text,
             "提取": _extract_to_lines(getattr(step, "extract_variables", None)),
             "断言": _assert_to_lines(getattr(step, "assert_validators", None)),
-            "所属人员": getattr(case, "created_user", None) or "",
+            "所属人员": getattr(case, "owner_user", None) or getattr(case, "created_user", None) or "",
         })
     LOGGER.info(f"导出脚本准备完成: 有效{len(rows)}个, 不合规{len(invalid)}个")
     return rows, invalid
@@ -744,11 +745,12 @@ async def import_script_rows(
         rows: List[Dict[str, Any]], services: Any
 ) -> Tuple[Dict[str, int], List[Dict[str, Any]]]:
     """
-    根据所属应用与接口名称匹配公共接口，存在则更新、不存在则新增，校验通过后单事务落库。
+    按所属应用、接口名称、当前登录所属人匹配公共接口，含软删，存在则更新或恢复覆盖、不存在则新增，校验通过后单事务落库。
     """
     prepared: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
     project_cache: Dict[str, Optional[int]] = {}
+    owner_user = get_current_username()
 
     seen: Dict[Tuple[str, str], int] = {}
     duplicates: set = set()
@@ -778,23 +780,33 @@ async def import_script_rows(
         existing_case: Optional[AutoTestApiCaseInfo] = None
         existing_step: Optional[AutoTestApiStepInfo] = None
         if project_id is not None:
-            matched_cases = await AutoTestApiCaseInfo.filter(
-                case_project=project_id,
-                case_name=row["case_name"],
-                case_type=AutoTestCaseType.PUBLIC_API,
-                state__not=1,
-            ).all()
-            if len(matched_cases) > 1:
-                errors.append(f"应用({project_name})下存在多条同名公共接口({row['case_name']}), 无法定位")
-            elif matched_cases:
-                existing_case = matched_cases[0]
-                root_steps = await AutoTestApiStepInfo.filter(
-                    case_id=existing_case.id, parent_step_id=None, state__not=1
+            if not owner_user:
+                errors.append("当前登录账号为空, 无法按所属人员定位公共接口")
+            else:
+                matched_cases = await AutoTestApiCaseInfo.filter(
+                    case_project=project_id,
+                    case_name=row["case_name"],
+                    case_type=AutoTestCaseType.PUBLIC_API,
+                    owner_user=owner_user,
                 ).all()
-                if len(root_steps) != 1:
-                    errors.append(f"存量公共接口({row['case_name']})根步骤数为{len(root_steps)}, 形态异常")
-                else:
-                    existing_step = root_steps[0]
+                if len(matched_cases) > 1:
+                    errors.append(
+                        f"应用({project_name})下所属人({owner_user})存在多条同名公共接口({row['case_name']}), 无法定位"
+                    )
+                elif matched_cases:
+                    existing_case = matched_cases[0]
+                    if existing_case.state != 1:
+                        root_steps = await AutoTestApiStepInfo.filter(
+                            case_id=existing_case.id, parent_step_id=None, state__not=1
+                        ).all()
+                    else:
+                        root_steps = await AutoTestApiStepInfo.filter(
+                            case_id=existing_case.id, parent_step_id=None
+                        ).all()
+                    if len(root_steps) != 1:
+                        errors.append(f"存量公共接口({row['case_name']})根步骤数为{len(root_steps)}, 形态异常")
+                    else:
+                        existing_step = root_steps[0]
 
         if errors:
             invalid.append({"row": row["row_no"], "reason": "；".join(errors)})
@@ -841,6 +853,7 @@ async def import_script_rows(
                     "case_tags": None,
                     "session_variables": None,
                     "case_steps": 1,
+                    "owner_user": owner_user,
                 })
                 await services.step_curd.create(obj_in={"case_id": new_case.id, "step_no": 1, **step_payload})
                 created += 1
@@ -852,9 +865,13 @@ async def import_script_rows(
                         "case_desc": item["case_desc"],
                         "case_tags": None,
                         "case_version": (getattr(existing_case, "case_version", None) or 1) + 1,
+                        "state": 0,
                     },
                 )
-                await services.step_curd.update(id=item["existing_step"].id, obj_in=step_payload)
+                await services.step_curd.update(
+                    id=item["existing_step"].id,
+                    obj_in={**step_payload, "state": 0},
+                )
                 updated += 1
     LOGGER.info(f"导入脚本落库完成: 新增{created}个, 更新{updated}个")
     return {"created_count": created, "updated_count": updated}, []
