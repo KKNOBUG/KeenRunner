@@ -172,6 +172,25 @@ class AssertionCompare:
         return actual_len == int(nb)
 
     @classmethod
+    def _assertion_array_length_equal(cls, actual: Any, expected: Any) -> bool:
+        """
+        比较数组长度是否等于期望值。仅list/tuple 视为数组；字符串、字典等返回 False。
+
+        :param actual: 实际值
+        :param expected: 期望长度（数字字符串会经_normalize_value转换）
+        :return: 是否为数组且长度相等
+        """
+        if not isinstance(actual, (list, tuple)):
+            return False
+        nb = cls._normalize_value(expected)
+        if nb is None:
+            return False
+        try:
+            return len(actual) == int(nb)
+        except (TypeError, ValueError):
+            return False
+
+    @classmethod
     def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
         """
         判断实际值是否为空。
@@ -310,6 +329,7 @@ class AssertionCompare:
             AutoTestAssertionOperation.LESS_THAN: lambda a, e: cls._type_aware_compare(a, e, operator.lt),
             AutoTestAssertionOperation.LESS_OR_EQUAL: lambda a, e: cls._type_aware_compare(a, e, operator.le),
             AutoTestAssertionOperation.LENGTH_EQUAL: cls._assertion_length_equal,
+            AutoTestAssertionOperation.ARRAY_LENGTH_EQUAL: cls._assertion_array_length_equal,
             AutoTestAssertionOperation.CONTAINS: lambda a, e: str(e) in str(a),
             AutoTestAssertionOperation.NOT_CONTAINS: lambda a, e: str(e) not in str(a),
             AutoTestAssertionOperation.IN_SET: cls._assertion_in_set,
