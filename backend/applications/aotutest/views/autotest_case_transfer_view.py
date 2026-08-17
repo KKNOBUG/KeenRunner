@@ -36,7 +36,7 @@ from backend.core.responses import (
 autotest_case_transfer = APIRouter()
 
 
-@autotest_case_transfer.post("/create", summary="转让用例", description="将用例所属人转让给指定人员并写入转让记录")
+@autotest_case_transfer.post("/create", summary="更新用例所属人", description="将用例所属人转让给指定人员并写入转让记录")
 async def transfer_case(
         transfer_in: AutoTestApiCaseTransferCreate = Body(..., description="转让信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

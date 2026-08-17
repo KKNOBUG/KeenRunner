@@ -16,11 +16,7 @@ from backend.core.responses import FailureResponse, SuccessResponse
 datagram_diff_router = APIRouter()
 
 
-@datagram_diff_router.post(
-    "/compare",
-    summary="报文比对",
-    description="比对左右报文并返回对齐后的逐行差异结果",
-)
+@datagram_diff_router.post("/compare", summary="执行报文比对", description="比对左右报文并返回对齐后的逐行差异结果")
 async def compare_datagram(body: RepDiffRequest):
     """
     单组报文比对接口，供工具箱或前端调试页调用。
