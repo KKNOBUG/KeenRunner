@@ -217,7 +217,7 @@ class StepExecutionContext:
         """
         try:
             if self._http_client is None:
-                client = httpx.AsyncClient(timeout=httpx.Timeout(timeout=self.timeout, connect=self.connect))
+                client = httpx.AsyncClient(timeout=httpx.Timeout(timeout=self.timeout, connect=self.connect), trust_env=False)
                 self._http_client = await self._exit_stack.enter_async_context(client)
             return self
         except Exception as e:
