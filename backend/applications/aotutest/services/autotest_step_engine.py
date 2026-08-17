@@ -28,8 +28,10 @@ if TYPE_CHECKING:
     from backend.applications.aotutest.dependencies import AutoTestApiServices
 
 from backend.applications.aotutest.services.autotest_runtime.protocol_http import (
+    assemble_http_body_payloads,
+    build_absolute_http_url,
     build_httpx_request_kwargs,
-    assemble_http_body_payloads
+    is_absolute_http_url,
 )
 from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import (
     select_tcp_payload,
@@ -3328,7 +3330,7 @@ class HttpStepExecutor(BaseStepExecutor):
         :return: None
         """
         try:
-            request_url: str = (self.step.request_url or "").strip().lstrip("/")
+            request_url: str = (self.step.request_url or "").strip()
             request_method: HTTPMethod = self.step.request_method
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
                 expected_config_type=AutoTestConfigNodeType.API,
@@ -3337,16 +3339,11 @@ class HttpStepExecutor(BaseStepExecutor):
             if current_step_config:
                 env_name = current_step_config.env_name
                 config_name: str = current_step_config.config_name
-                config_host: str = (current_step_config.config_host or "").strip().rstrip("/").rstrip(":")
+                config_host: str = (current_step_config.config_host or "").strip()
                 config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
                 self.step.request_config_name = config_name
-                if config_host and not config_host.lower().startswith(("http://", "https://")):
-                    config_host = f"http://{config_host}"
-                request_url = (
-                    f"{config_host}/{request_url}"
-                    if not config_port
-                    else f"{config_host}:{config_port}/{request_url}"
-                )
+                if not is_absolute_http_url(request_url):
+                    request_url = build_absolute_http_url(config_host, config_port, request_url)
 
             if not request_url or not request_url.lower().startswith("http") or not env_name:
                 raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")

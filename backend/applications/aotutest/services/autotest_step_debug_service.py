@@ -27,6 +27,7 @@ from backend.applications.aotutest.services.autotest_runtime.protocol_http impor
     build_httpx_request_kwargs,
     format_byte_size,
     infer_http_actual_body,
+    is_absolute_http_url,
 )
 from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import (
     parse_tcp_response,
@@ -354,7 +355,7 @@ class StepDebugService:
         request_project_id = debug_in.request_project_id
         request_config_name = debug_in.request_config_name
         request_args_type: Optional[AutoTestReqArgsType] = debug_in.request_args_type
-        request_url = (debug_in.request_url or "").lstrip("/")
+        request_url = (debug_in.request_url or "").strip()
         request_method = (debug_in.request_method or "GET")
         if hasattr(request_method, "value"):
             request_method = str(request_method.value).upper()
@@ -377,7 +378,7 @@ class StepDebugService:
         logger = cls.make_debug_logger(step_name)
         log = logger.append
 
-        if request_url and not request_url.lower().startswith("http"):
+        if not is_absolute_http_url(request_url):
             endpoint = await cls.resolve_env_config(
                 services,
                 project_id=request_project_id,

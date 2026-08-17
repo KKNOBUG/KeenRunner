@@ -192,18 +192,25 @@ def format_byte_size(size: int) -> str:
     将字节数格式化为可读字符串。
 
     :param size: 字节数
-    :return: 如 ``12.34KB`` 或 ``512B``
+    :return: 如12.34KB或512B
     """
     return f"{size / 1024:.2f}KB" if size > 1024 else f"{size}B"
+
+
+def is_absolute_http_url(url: Optional[str]) -> bool:
+    """判断是否已是带协议的绝对HTTP/HTTPS地址。"""
+    return (url or "").strip().lower().startswith(("http://", "https://"))
 
 
 def build_absolute_http_url(host: str, port: Optional[str], path: str) -> str:
     """
     将环境host/port与相对路径拼成绝对HTTP URL。
 
+    path 为/或空时表示站点根路径，结果带末尾斜杠，避免 httpx 收到无协议的空 URL。
+
     :param host: 主机（可带或不带协议）
     :param port: 端口字符串，可空
-    :param path: 已去掉前导斜杠的相对路径
+    :param path: 相对路径
     :return: 绝对URL
     """
     host = (host or "").strip().rstrip("/").rstrip(":")
@@ -211,6 +218,5 @@ def build_absolute_http_url(host: str, port: Optional[str], path: str) -> str:
     path = (path or "").lstrip("/")
     if not host.lower().startswith(("http://", "https://")):
         host = f"http://{host}"
-    if not port:
-        return f"{host}/{path}" if path else host
-    return f"{host}:{port}/{path}" if path else f"{host}:{port}"
+    origin = f"{host}:{port}" if port else host
+    return f"{origin}/{path}" if path else f"{origin}/"
