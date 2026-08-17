@@ -354,15 +354,39 @@ async def batch_update_steps_tree(
 
         # 1.5 校验HTTP/TCP步骤的数据源场景列名一致性
         def _collect_http_tcp_with_ds(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """递归收集步骤树中拥有data_source_id的HTTP/TCP步骤。"""
+            """收集步骤树中已绑定数据源的HTTP/TCP步骤，含 children 与条件分支子步骤。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
-            for s in steps:
-                if s.step_type and str(s.step_type) in (str(AutoTestStepType.HTTP), str(AutoTestStepType.TCP)):
-                    if s.data_source_id:
-                        collected.append(s)
+            for s in steps or []:
+                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) and s.data_source_id:
+                    collected.append(s)
                 if s.children:
                     collected.extend(_collect_http_tcp_with_ds(s.children))
+                for branch in s.branch_items or []:
+                    if branch.branch_children:
+                        collected.extend(_collect_http_tcp_with_ds(branch.branch_children))
             return collected
+
+        def _data_source_scene_names(ds: Any) -> Optional[List[str]]:
+            """
+            取出数据源场景列顺序：优先 dataset 的插入序（即表格列序），否则 dataset_names。
+            仅去掉空白名称，不去重、不排序；没有任何有效名称则返回 None，不参与对齐比较。
+            批量按场景执行按列位对齐，列序不同会导致同名场景取到错位数据。
+            """
+            if isinstance(getattr(ds, "dataset", None), dict) and ds.dataset:
+                raw = list(ds.dataset.keys())
+            elif isinstance(getattr(ds, "dataset_names", None), list):
+                raw = list(ds.dataset_names)
+            else:
+                return None
+            names: List[str] = []
+            for item in raw:
+                name = str(item).strip() if item is not None else ""
+                if not name:
+                    continue
+                names.append(name)
+            if not names:
+                return None
+            return names
 
         http_tcp_steps = _collect_http_tcp_with_ds(steps_data)
         if http_tcp_steps:
@@ -378,7 +402,9 @@ async def batch_update_steps_tree(
                 ds = ds_map.get(s.data_source_id)
                 if not ds:
                     continue
-                current_names = ds.dataset_names if isinstance(ds.dataset_names, list) else []
+                current_names = _data_source_scene_names(ds)
+                if current_names is None:
+                    continue
                 step_label = s.step_name or s.step_code or f"步骤ID:{s.step_id}"
                 if baseline_names is None:
                     baseline_names = current_names
@@ -455,7 +481,7 @@ async def batch_update_steps_tree(
                             )
                             await services.step_curd.model.filter(step_code__in=missing_step_codes).delete()
                             # 同步硬删除被删步骤关联的数据源与数据生成记录
-                            await delete_step_create(case_id=case_id, step_code_list=list(missing_step_codes))
+                            await delete_step_create(case_id=int(case_id), step_code_list=list(missing_step_codes))
                 # 2.4 步骤全部删除：当 steps 为空且用例已存在时，硬删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
