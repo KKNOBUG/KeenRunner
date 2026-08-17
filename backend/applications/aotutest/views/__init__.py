@@ -8,6 +8,7 @@
 """
 from fastapi import APIRouter
 
+from .autotest_case_transfer_view import autotest_case_transfer
 from .autotest_case_view import autotest_case
 from .autotest_data_source_view import autotest_data_source
 from .autotest_datagram_diff_view import datagram_diff_router
@@ -27,6 +28,7 @@ autotest = APIRouter()
 
 # tags 采用「一级目录:二级模块」，与侧边栏菜单对齐，便于角色权限按模块制定规则
 autotest.include_router(autotest_case, prefix="/case", tags=["自动化测试:用例"])
+autotest.include_router(autotest_case_transfer, prefix="/case/transfer", tags=["自动化测试:用例"])
 autotest.include_router(autotest_step, prefix="/step", tags=["自动化测试:步骤"])
 autotest.include_router(autotest_report, prefix="/report", tags=["自动化测试:报告"])
 autotest.include_router(autotest_detail, prefix="/detail", tags=["自动化测试:明细"])
