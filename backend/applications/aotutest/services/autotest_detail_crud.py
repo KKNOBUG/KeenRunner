@@ -12,13 +12,13 @@ from typing import Optional, List, Tuple
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiDetailInfo
+from backend.applications.aotutest.models.autotest_detail_model import AutoTestDetailModel
 from backend.applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
     AutoTestApiDetailUpdate
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
+from backend.applications.aotutest.services.autotest_report_crud import AutoTestReportCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -28,12 +28,12 @@ from backend.core.exceptions import (
 )
 
 
-class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
+class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiDetailInfo)
+        super().__init__(model=AutoTestDetailModel)
 
-    async def get_by_id(self, detail_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
+    async def get_by_id(self, detail_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestDetailModel]:
         """
         根据主键ID查询明细。
 
@@ -54,7 +54,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDetailInfo]:
+    async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDetailModel]:
         """
         根据报告标识代码查询明细。
 
@@ -75,7 +75,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestApiDetailInfo:
+    async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestDetailModel:
         """
         创建执行明细，校验用例与报告存在(可跳过报告校验)。
 
@@ -86,7 +86,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
 
-        await AutoTestApiCaseCrud().get_by_conditions(
+        await AutoTestCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
@@ -96,7 +96,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
         if not skip_report_check:
             report_code: str = detail_in.report_code
-            await AutoTestApiReportCrud().get_by_conditions(
+            await AutoTestReportCrud().get_by_conditions(
                 only_one=True,
                 on_error=True,
                 case_id=case_id,
@@ -117,7 +117,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
+    async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestDetailModel:
         """
         更新明细，需提供detail_id或(report_code, step_code)定位。
 
@@ -127,7 +127,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
 
-        await AutoTestApiCaseCrud().get_by_conditions(
+        await AutoTestCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
@@ -136,7 +136,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         )
 
         report_code = detail_in.report_code
-        await AutoTestApiReportCrud().get_by_conditions(
+        await AutoTestReportCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             case_id=case_id,
@@ -180,7 +180,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             detail_id: Optional[int] = None,
             step_code: Optional[str] = None,
             report_code: Optional[str] = None
-    ) -> AutoTestApiDetailInfo:
+    ) -> AutoTestDetailModel:
         """
         软删除明细，需提供detail_id或(report_code, step_code)。
 
@@ -206,7 +206,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             )
         return await self.soft_delete(id=instance.id)
 
-    async def select_details(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDetailInfo]]:
+    async def select_details(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDetailModel]]:
         """
         根据条件分页查询明细列表。
 

@@ -14,18 +14,15 @@ from typing import Optional, Dict, Any, List, Tuple, Union
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import (
-    AutoTestApiEnvInfo,
-    AutoTestApiEnvBindInfo,
-    AutoTestApiEnvConfigInfo,
-    AutoTestApiProjectInfo,
-)
+from backend.applications.aotutest.models.autotest_env_config_model import AutoTestEnvBindModel, AutoTestEnvConfigModel
+from backend.applications.aotutest.models.autotest_env_model import AutoTestEnvModel
+from backend.applications.aotutest.models.autotest_project_model import AutoTestProjectModel
 from backend.applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvDelete,
 )
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import GLOBAL_CONFIG, LOGGER
 from backend.core.exceptions import (
@@ -36,12 +33,12 @@ from backend.core.exceptions import (
 from backend.enums import AutoTestConfigNodeType
 
 
-class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCreate, AutoTestApiEnvUpdate]):
+class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, AutoTestApiEnvUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiEnvBindInfo)
+        super().__init__(model=AutoTestEnvBindModel)
 
-    async def get_by_id(self, env_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvBindInfo]:
+    async def get_by_id(self, env_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestEnvBindModel]:
         """
         根据主键ID查询环境绑定。
 
@@ -62,7 +59,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, env_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvBindInfo]:
+    async def get_by_code(self, env_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestEnvBindModel]:
         """
         根据标识代码查询环境绑定。
 
@@ -89,7 +86,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             env_name: str,
             env_type: Optional[Union[AutoTestConfigNodeType, str]] = None,
             on_error: bool = False,
-    ) -> Optional[AutoTestApiEnvBindInfo]:
+    ) -> Optional[AutoTestEnvBindModel]:
         """
         按应用+环境名称解析环境绑定；指定env_type时仅匹配该类型。
 
@@ -105,10 +102,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        dict_ids = await AutoTestApiEnvInfo.filter(
+        dict_ids = await AutoTestEnvModel.filter(
             env_name__iexact=name, state__not=1
         ).values_list("id", flat=True)
-        instance: Optional[AutoTestApiEnvBindInfo] = None
+        instance: Optional[AutoTestEnvBindModel] = None
         if dict_ids:
             filters: Dict[str, Any] = {
                 "project_id": int(project_id),
@@ -138,7 +135,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         name = (env_name or "").strip()
         if not name:
             return []
-        query = AutoTestApiEnvInfo.filter(state__not=1)
+        query = AutoTestEnvModel.filter(state__not=1)
         if exact:
             query = query.filter(env_name__iexact=name)
         else:
@@ -161,7 +158,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         if not dict_ids:
             return {}
         dict_name_map = dict(
-            await AutoTestApiEnvInfo.filter(id__in=list(dict_ids)).values_list("id", "env_name")
+            await AutoTestEnvModel.filter(id__in=list(dict_ids)).values_list("id", "env_name")
         )
         return {row["id"]: dict_name_map.get(row["env_enum_id"], "") for row in bind_rows}
 
@@ -218,7 +215,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             self,
             env_name: str,
             user: Optional[str] = None,
-    ) -> AutoTestApiEnvInfo:
+    ) -> AutoTestEnvModel:
         """
         按环境名称获取或创建全局环境枚举记录。
 
@@ -232,42 +229,42 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        dict_row = await AutoTestApiEnvInfo.filter(env_name=name).first()
+        dict_row = await AutoTestEnvModel.filter(env_name=name).first()
         if dict_row:
             if dict_row.state == 1:
                 update_dict: Dict[str, Any] = {"state": 0}
                 if user:
                     update_dict["updated_user"] = user
-                await AutoTestApiEnvInfo.filter(id=dict_row.id).update(**update_dict)
-                dict_row = await AutoTestApiEnvInfo.get(id=dict_row.id)
+                await AutoTestEnvModel.filter(id=dict_row.id).update(**update_dict)
+                dict_row = await AutoTestEnvModel.get(id=dict_row.id)
             return dict_row
         try:
-            return await AutoTestApiEnvInfo.create(
+            return await AutoTestEnvModel.create(
                 env_name=name,
                 created_user=user,
             )
         except IntegrityError as e:
             # 并发创建触发唯一约束时回查既有记录
-            dict_row = await AutoTestApiEnvInfo.filter(env_name=name).first()
+            dict_row = await AutoTestEnvModel.filter(env_name=name).first()
             if dict_row:
                 return dict_row
             error_message: str = f"新增环境枚举信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def create_env(self, env_in: AutoTestApiEnvCreate) -> AutoTestApiEnvBindInfo:
+    async def create_env(self, env_in: AutoTestApiEnvCreate) -> AutoTestEnvBindModel:
         """
         创建环境绑定；同应用+环境+类型已存在则恢复启用。
 
         :param env_in: 环境创建schema（含 project_id / env_type）
         :return: 创建或恢复后的环境绑定实例
         """
-        await AutoTestApiProjectCrud().get_by_id(project_id=env_in.project_id, on_error=True, state__not=1)
+        await AutoTestProjectCrud().get_by_id(project_id=env_in.project_id, on_error=True, state__not=1)
         dict_row = await self._get_or_create_env_dict(
             env_name=env_in.env_name,
             user=env_in.created_user,
         )
-        existing_bind: Optional[AutoTestApiEnvBindInfo] = await self.model.filter(
+        existing_bind: Optional[AutoTestEnvBindModel] = await self.model.filter(
             env_enum_id=dict_row.id,
             project_id=env_in.project_id,
             env_type=env_in.env_type,
@@ -301,7 +298,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_env(self, env_in: AutoTestApiEnvUpdate) -> AutoTestApiEnvBindInfo:
+    async def update_env(self, env_in: AutoTestApiEnvUpdate) -> AutoTestEnvBindModel:
         """
         按env_id/env_code精准更新单条环境绑定；描述写在绑定表，不影响同名其他节点类型。
 
@@ -355,7 +352,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_env(self, env_id: Optional[int] = None, env_code: Optional[str] = None) -> AutoTestApiEnvBindInfo:
+    async def delete_env(self, env_id: Optional[int] = None, env_code: Optional[str] = None) -> AutoTestEnvBindModel:
         """
         软删除环境绑定。
 
@@ -388,7 +385,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        targets: List[AutoTestApiEnvBindInfo] = []
+        targets: List[AutoTestEnvBindModel] = []
         if env_ids:
             for eid in env_ids:
                 targets.append(await self.get_by_id(env_id=eid, on_error=True, state__not=1))
@@ -401,7 +398,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
 
         return len(targets)
 
-    async def select_envs(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvBindInfo]]:
+    async def select_envs(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestEnvBindModel]]:
         """
         根据条件分页查询环境绑定列表。
 
@@ -424,9 +421,9 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
 
         :return: 环境名称列表
         """
-        return await AutoTestApiEnvInfo.filter(state__not=1).distinct().values_list("env_name", flat=True)
+        return await AutoTestEnvModel.filter(state__not=1).distinct().values_list("env_name", flat=True)
 
-    async def serialize_env(self, bind: AutoTestApiEnvBindInfo, with_audit: bool = False) -> Dict[str, Any]:
+    async def serialize_env(self, bind: AutoTestEnvBindModel, with_audit: bool = False) -> Dict[str, Any]:
         """
         将环境绑定实例与字典信息拼装为响应结构。
 
@@ -434,10 +431,10 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         :param with_audit: 是否附带审计字段(创建/更新人员与时间)
         :return: 环境响应字典
         """
-        dict_row = await AutoTestApiEnvInfo.filter(id=bind.env_enum_id).first()
+        dict_row = await AutoTestEnvModel.filter(id=bind.env_enum_id).first()
         return await self._assemble_env_dict(bind, dict_row, with_audit)
 
-    async def serialize_envs(self, binds: List[AutoTestApiEnvBindInfo], with_audit: bool = False) -> List[Dict[str, Any]]:
+    async def serialize_envs(self, binds: List[AutoTestEnvBindModel], with_audit: bool = False) -> List[Dict[str, Any]]:
         """
         批量拼装环境绑定列表响应结构。
 
@@ -446,7 +443,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         :return: 环境响应字典列表
         """
         dict_ids = list({bind.env_enum_id for bind in binds})
-        dict_rows = await AutoTestApiEnvInfo.filter(id__in=dict_ids).all() if dict_ids else []
+        dict_rows = await AutoTestEnvModel.filter(id__in=dict_ids).all() if dict_ids else []
         dict_map = {row.id: row for row in dict_rows}
         return [
             await self._assemble_env_dict(bind, dict_map.get(bind.env_enum_id), with_audit)
@@ -455,8 +452,8 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
 
     @staticmethod
     async def _assemble_env_dict(
-            bind: AutoTestApiEnvBindInfo,
-            dict_row: Optional[AutoTestApiEnvInfo],
+            bind: AutoTestEnvBindModel,
+            dict_row: Optional[AutoTestEnvModel],
             with_audit: bool,
     ) -> Dict[str, Any]:
         """
@@ -537,7 +534,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
         """批量查询字典ID到环境名称的映射。"""
         if not dict_ids:
             return {}
-        return dict(await AutoTestApiEnvInfo.filter(id__in=list(dict_ids)).values_list("id", "env_name"))
+        return dict(await AutoTestEnvModel.filter(id__in=list(dict_ids)).values_list("id", "env_name"))
 
     async def get_env_search_list(
             self,
@@ -557,7 +554,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             base_qs = self.model.filter(state=0)
 
             if ip:
-                matched_bind_ids = await AutoTestApiEnvConfigInfo.filter(
+                matched_bind_ids = await AutoTestEnvConfigModel.filter(
                     state=0,
                     config_host__contains=ip,
                 ).values_list("env_bind_id", flat=True)
@@ -575,7 +572,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             if env_type is not None:
                 base_qs = base_qs.filter(env_type=env_type)
 
-            active_project_ids = await AutoTestApiProjectInfo.filter(state=0).values_list("id", flat=True)
+            active_project_ids = await AutoTestProjectModel.filter(state=0).values_list("id", flat=True)
             if active_project_ids:
                 base_qs = base_qs.filter(project_id__in=list(active_project_ids))
 
@@ -591,13 +588,13 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
             project_map = {}
             if project_ids:
                 project_map = dict(
-                    await AutoTestApiProjectInfo.filter(id__in=project_ids, state=0).values_list("id", "project_name")
+                    await AutoTestProjectModel.filter(id__in=project_ids, state=0).values_list("id", "project_name")
                 )
 
             check_ids = [item["id"] for item in page_rows]
             sub_exists = set()
             if check_ids:
-                config_rows = await AutoTestApiEnvConfigInfo.filter(
+                config_rows = await AutoTestEnvConfigModel.filter(
                     env_bind_id__in=check_ids,
                     state=0,
                 ).values_list("env_bind_id", flat=True)

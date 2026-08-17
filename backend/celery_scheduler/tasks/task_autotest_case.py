@@ -12,8 +12,8 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
+from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
 from backend.celery_scheduler.celery_base import (
     check_task_expired,
     get_scheduled_tasks,
@@ -54,7 +54,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
     :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """
     span_id = get_span_id_for_log()
-    task = await AutoTestApiTaskInfo.get_or_none(id=task_id)
+    task = await AutoTestTaskModel.get_or_none(id=task_id)
     if not task:
         LOGGER.warning(f"{_LOG_PREFIX}【span_id={span_id}】任务不存在: task_id={task_id}")
         return {"success": False, "error": "任务不存在", "task_id": task_id}
@@ -95,7 +95,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         if not cases_execute_config and isinstance(task_kwargs, dict):
             cases_execute_config = task_kwargs.get("cases_execute_config") or {}
         started = datetime.now()
-        result = await AutoTestApiStepCrud().batch_execute_cases(
+        result = await AutoTestStepCrud().batch_execute_cases(
             case_ids=case_ids,
             report_type=exec_report_type,
             initial_variables=(task_kwargs.get("initial_variables") or []) if isinstance(task_kwargs, dict) else [],

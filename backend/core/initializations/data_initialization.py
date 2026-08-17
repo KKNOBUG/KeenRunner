@@ -10,7 +10,7 @@ from typing import List
 
 from fastapi import FastAPI
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiTagInfo
+from backend.applications.aotutest.models.autotest_tag_model import AutoTestTagModel
 from backend.applications.aotutest.schemas.autotest_env_config_schema import (
     APPEnvConfigCreate,
     DBEnvConfigCreate,
@@ -18,10 +18,10 @@ from backend.applications.aotutest.schemas.autotest_env_config_schema import (
 )
 from backend.applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
 from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
-from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvCrud
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
+from backend.applications.aotutest.services.autotest_env_crud import AutoTestEnvCrud
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
+from backend.applications.aotutest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.menu_schema import MenuCreate
@@ -660,7 +660,7 @@ async def init_database_router(app: FastAPI):
 
 
 async def init_database_project():
-    project_crud = AutoTestApiProjectCrud()
+    project_crud = AutoTestProjectCrud()
     if await project_crud.model.exists():
         LOGGER.info("[应用]已有数据，跳过初始化")
         return
@@ -683,12 +683,12 @@ async def init_database_project():
 
 
 async def init_database_tag():
-    tag_crud = AutoTestApiTagCrud()
+    tag_crud = AutoTestTagCrud()
     if await tag_crud.model.exists():
         LOGGER.info("[标签]已有数据，跳过初始化")
         return
 
-    project_crud = AutoTestApiProjectCrud()
+    project_crud = AutoTestProjectCrud()
     project = await project_crud.model.filter(project_name="ToolBox工具箱").first()
     if not project:
         LOGGER.error("[标签]初始化失败: 未找到应用 ToolBox工具箱")
@@ -712,7 +712,7 @@ async def init_database_tag():
     ]
     await tag_crud.model.bulk_create(
         [
-            AutoTestApiTagInfo(**tag.model_dump())
+            AutoTestTagModel(**tag.model_dump())
             for tag in tag_data
         ]
     )
@@ -720,18 +720,18 @@ async def init_database_tag():
 
 
 async def init_database_env_config():
-    project_crud = AutoTestApiProjectCrud()
+    project_crud = AutoTestProjectCrud()
     project = await project_crud.model.filter(project_name="ToolBox工具箱", state__not=1).first()
     if not project:
         LOGGER.error("[环境配置]初始化失败: 未找到应用 ToolBox工具箱")
         return
 
-    env_crud = AutoTestApiEnvCrud()
+    env_crud = AutoTestEnvCrud()
     if await env_crud.model.filter(project_id=project.id, state__not=1).exists():
         LOGGER.info("[环境配置]已有数据，跳过初始化")
         return
 
-    config_crud = AutoTestApiEnvConfigCrud()
+    config_crud = AutoTestEnvConfigCrud()
     env_name = "SIT1"
     project_id = int(project.id)
 

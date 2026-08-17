@@ -186,8 +186,8 @@ async def _create_task_record(
     :param request_kwargs: Celery任务入参快照
     :return: None
     """
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-    from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
+    from backend.applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
     from backend.celery_scheduler.celery_task_contract import resolve_task_meta
     from backend.enums import AutoTestTaskStatus
 
@@ -224,7 +224,7 @@ async def _create_task_record(
         data["case_ids"] = [req_kwargs.get("case_id")]
 
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
-        task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
+        task_instance = await AutoTestTaskModel.filter(id=task_id).first()
         if task_instance:
             kwargs = getattr(task_instance, "task_kwargs", None) or {}
             if not isinstance(kwargs, dict):
@@ -272,7 +272,7 @@ async def _create_task_record(
         })
     if username:
         data["created_user"] = username
-    await AutoTestApiTaskRecordCrud().create_record(data)
+    await AutoTestRecordCrud().create_record(data)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={get_span_id()}】创建执行记录成功: "
         f"celery_id={celery_id}, task_id={task_id}, "
@@ -302,7 +302,7 @@ async def _update_task_record_on_end(
     """
     if not celery_id:
         return
-    from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from backend.applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
     from backend.celery_scheduler.celery_task_contract import normalize_task_summary
     from backend.enums import AutoTestTaskStatus
 
@@ -338,7 +338,7 @@ async def _update_task_record_on_end(
     if resolved_batch:
         data["batch_code"] = resolved_batch
         summary_obj["batch_code"] = resolved_batch
-    record_crud = AutoTestApiTaskRecordCrud()
+    record_crud = AutoTestRecordCrud()
     record = await record_crud.get_by_celery_id(celery_id=celery_id, state__not=1)
     if not record:
         LOGGER.error(

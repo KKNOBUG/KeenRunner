@@ -20,7 +20,7 @@ import pandas as pd
 # 数据模型
 # =============================
 from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateUpdate
-from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestApiDataCreateCrud
+from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataCreateCrud
 
 
 @dataclass
@@ -392,7 +392,7 @@ async def generate_test_data(input_excel: str, output_excel: str, rules: List[st
     :param create_id: 数据源生成记录主键
     :return: None
     """
-    data_create_crud = AutoTestApiDataCreateCrud()
+    data_create_crud = AutoTestDataCreateCrud()
     await data_create_crud.update_data_create(
         data_in=(
             AutoTestApiDataCreateUpdate(

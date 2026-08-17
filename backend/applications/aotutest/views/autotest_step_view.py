@@ -16,7 +16,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
+from backend.applications.aotutest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -855,7 +855,7 @@ async def execute_step_tree(
                 "case_name": first_step.get("case_name"),
             }
         if not case_info:
-            case_instance: AutoTestApiCaseInfo = await services.case_curd.get_by_id(
+            case_instance: AutoTestCaseModel = await services.case_curd.get_by_id(
                 case_id=case_id,
                 on_error=True,
                 state__not=1

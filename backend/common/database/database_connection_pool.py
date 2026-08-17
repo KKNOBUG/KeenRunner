@@ -189,18 +189,16 @@ class DBConnPoolFromConfig:
 
         try:
             # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
-            from backend.applications.aotutest.models.autotest_model import (
-                AutoTestApiEnvInfo,
-                AutoTestApiEnvBindInfo,
-            )
+            from backend.applications.aotutest.models.autotest_env_config_model import AutoTestEnvBindModel
+            from backend.applications.aotutest.models.autotest_env_model import AutoTestEnvModel
             from backend.enums import AutoTestConfigNodeType
         except ImportError as e:
             error_message = f"无法导入自动化测试环境模型或枚举: {e}"
             self.logger.error(error_message)
             raise RuntimeError(error_message) from e
 
-        # AutoTestApiEnvInfo主键对外语义为env_enum_id
-        env_enum_ids = await AutoTestApiEnvInfo.filter(
+        # AutoTestEnvModel主键对外语义为env_enum_id
+        env_enum_ids = await AutoTestEnvModel.filter(
             env_name__iexact=env_name,
             state__not=1,
         ).values_list("id", flat=True)
@@ -209,7 +207,7 @@ class DBConnPoolFromConfig:
             return None
 
         # 必须带project_id与env_type，避免多应用同名环境或跨节点类型串库
-        env_bind = await AutoTestApiEnvBindInfo.filter(
+        env_bind = await AutoTestEnvBindModel.filter(
             project_id=project_id,
             env_enum_id__in=list(env_enum_ids),
             env_type=AutoTestConfigNodeType.DB,
@@ -673,6 +671,6 @@ def get_app_database_pool() -> "DBConnPoolFromConfig":
 
     :return: DBConnPoolFromConfig单例
     """
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
+    from backend.applications.aotutest.models.autotest_env_config_model import AutoTestEnvConfigModel
 
-    return DBConnPoolFromConfig(config_model=AutoTestApiEnvConfigInfo)
+    return DBConnPoolFromConfig(config_model=AutoTestEnvConfigModel)

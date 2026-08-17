@@ -3317,7 +3317,7 @@ class RedisStepExecutor(BaseStepExecutor):
 class HttpStepExecutor(BaseStepExecutor):
     """
     HTTP 步骤执行器：发请求、解析占位符、根据request_project_id取项目下环境补全 URL，并执行变量提取与断言。
-    参数化驱动仅在此执行器内处理：根据dataset_name + case_id/step_code查AutoTestApiDataSourceInfo取数。
+    参数化驱动仅在此执行器内处理：根据dataset_name + case_id/step_code查AutoTestDataSourceModel取数。
     """
 
     async def _execute(self, result: StepExecutionResult) -> None:
@@ -3351,7 +3351,7 @@ class HttpStepExecutor(BaseStepExecutor):
             if not request_url or not request_url.lower().startswith("http") or not env_name:
                 raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")
 
-            # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestApiDataSourceInfo 取该步骤数据集
+            # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestDataSourceModel 取该步骤数据集
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
             step_struct: Optional[Dict[str, Dict[str, Any]]] = await AutoTestToolService.load_dataset_for_request_step(

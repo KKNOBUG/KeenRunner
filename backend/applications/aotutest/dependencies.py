@@ -8,35 +8,35 @@
 """
 from dataclasses import dataclass
 
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_case_transfer_crud import AutoTestApiCaseTransferCrud
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
+from backend.applications.aotutest.services.autotest_case_transfer_crud import AutoTestCaseTransferCrud
 from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
-from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvCrud
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
-from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
-from backend.applications.aotutest.services.autotest_task_crud import AutoTestApiTaskCrud
+from backend.applications.aotutest.services.autotest_detail_crud import AutoTestDetailCrud
+from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
+from backend.applications.aotutest.services.autotest_env_crud import AutoTestEnvCrud
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
+from backend.applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
+from backend.applications.aotutest.services.autotest_report_crud import AutoTestReportCrud
+from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+from backend.applications.aotutest.services.autotest_tag_crud import AutoTestTagCrud
+from backend.applications.aotutest.services.autotest_task_crud import AutoTestTaskCrud
 
 
 @dataclass
 class AutoTestApiServices:
     """自动化测试相关CRUD服务聚合，供视图层依赖注入。"""
-    case_curd: AutoTestApiCaseCrud
-    case_transfer_curd: AutoTestApiCaseTransferCrud
+    case_curd: AutoTestCaseCrud
+    case_transfer_curd: AutoTestCaseTransferCrud
     data_source_curd: AutoTestDataSourceCrud
-    detail_curd: AutoTestApiDetailCrud
-    env_config_curd: AutoTestApiEnvConfigCrud
-    env_curd: AutoTestApiEnvCrud
-    project_curd: AutoTestApiProjectCrud
-    record_curd: AutoTestApiTaskRecordCrud
-    report_curd: AutoTestApiReportCrud
-    step_curd: AutoTestApiStepCrud
-    tag_curd: AutoTestApiTagCrud
-    task_curd: AutoTestApiTaskCrud
+    detail_curd: AutoTestDetailCrud
+    env_config_curd: AutoTestEnvConfigCrud
+    env_curd: AutoTestEnvCrud
+    project_curd: AutoTestProjectCrud
+    record_curd: AutoTestRecordCrud
+    report_curd: AutoTestReportCrud
+    step_curd: AutoTestStepCrud
+    tag_curd: AutoTestTagCrud
+    task_curd: AutoTestTaskCrud
 
 
 async def get_autotest_api_services() -> AutoTestApiServices:
@@ -46,16 +46,16 @@ async def get_autotest_api_services() -> AutoTestApiServices:
     :return: AutoTestApiServices 实例
     """
     return AutoTestApiServices(
-        case_curd=AutoTestApiCaseCrud(),
-        case_transfer_curd=AutoTestApiCaseTransferCrud(),
+        case_curd=AutoTestCaseCrud(),
+        case_transfer_curd=AutoTestCaseTransferCrud(),
         data_source_curd=AutoTestDataSourceCrud(),
-        detail_curd=AutoTestApiDetailCrud(),
-        env_config_curd=AutoTestApiEnvConfigCrud(),
-        env_curd=AutoTestApiEnvCrud(),
-        project_curd=AutoTestApiProjectCrud(),
-        record_curd=AutoTestApiTaskRecordCrud(),
-        report_curd=AutoTestApiReportCrud(),
-        step_curd=AutoTestApiStepCrud(),
-        tag_curd=AutoTestApiTagCrud(),
-        task_curd=AutoTestApiTaskCrud(),
+        detail_curd=AutoTestDetailCrud(),
+        env_config_curd=AutoTestEnvConfigCrud(),
+        env_curd=AutoTestEnvCrud(),
+        project_curd=AutoTestProjectCrud(),
+        record_curd=AutoTestRecordCrud(),
+        report_curd=AutoTestReportCrud(),
+        step_curd=AutoTestStepCrud(),
+        tag_curd=AutoTestTagCrud(),
+        task_curd=AutoTestTaskCrud(),
     )

@@ -13,7 +13,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
 from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
 from backend.configure import LOGGER
@@ -78,7 +78,7 @@ async def _execute_step_tree_impl(
     if not batch_code:
         batch_code = _new_batch_code()
 
-    step_crud = AutoTestApiStepCrud()
+    step_crud = AutoTestStepCrud()
     if not selected_dataset_names:
         result = await step_crud.execute_single_case(
             case_id=case_id,

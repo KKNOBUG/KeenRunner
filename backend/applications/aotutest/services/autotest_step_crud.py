@@ -15,10 +15,8 @@ from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import (
-    AutoTestApiStepInfo,
-    AutoTestApiCaseInfo,
-)
+from backend.applications.aotutest.models.autotest_case_model import AutoTestCaseModel
+from backend.applications.aotutest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
@@ -31,9 +29,9 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     step_tree_item_from_storage,
     step_variables_list_from_storage,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud, _readd_explicit_null_fields
-from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud, _readd_explicit_null_fields
+from backend.applications.aotutest.services.autotest_detail_crud import AutoTestDetailCrud
+from backend.applications.aotutest.services.autotest_report_crud import AutoTestReportCrud
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -53,15 +51,15 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
 )
 
 
-class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
+class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
 
     def __init__(self):
         """
-        初始化CRUD，绑定模型AutoTestApiStepInfo。
+        初始化CRUD，绑定模型AutoTestStepModel。
         """
-        super().__init__(model=AutoTestApiStepInfo)
+        super().__init__(model=AutoTestStepModel)
 
-    async def get_by_id(self, step_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
+    async def get_by_id(self, step_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestStepModel]:
         """
         根据主键ID查询步骤。
 
@@ -81,7 +79,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, step_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiStepInfo]:
+    async def get_by_code(self, step_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestStepModel]:
         """
         根据步骤标识代码查询步骤。
 
@@ -110,7 +108,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param case_code: 用例标识代码，与case_id二选一
         :return: AutoTestCaseStepTreeLoadResult(根步骤为AutoTestStepTreeUpdateItem)
         """
-        case_crud = AutoTestApiCaseCrud()
+        case_crud = AutoTestCaseCrud()
         if case_id:
             case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
@@ -118,7 +116,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             case_id: int = case_instance.id
 
         # 获取所有根步骤（没有父步骤的步骤）
-        root_steps: List[AutoTestApiStepInfo] = await self.model.filter(
+        root_steps: List[AutoTestStepModel] = await self.model.filter(
             case_id=case_id,
             parent_step_id__isnull=True,
             state__not=1
@@ -139,7 +137,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         }
 
         # 递归构建步骤树
-        async def build_step_tree(step: AutoTestApiStepInfo, is_quote: bool = False) -> Dict[str, Any]:
+        async def build_step_tree(step: AutoTestStepModel, is_quote: bool = False) -> Dict[str, Any]:
             """递归构建单步及其子步骤、引用脚本步骤的树形字典。"""
             # 统计步骤数量
             step_counter["total_steps"] += 1
@@ -181,7 +179,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.info(f"获取步骤[step_id={step.id}, step_no={step.step_no}]所属用例信息完成")
 
             # 获取子步骤（递归构建）
-            children: List[AutoTestApiStepInfo] = await self.model.filter(
+            children: List[AutoTestStepModel] = await self.model.filter(
                 parent_step_id=step.id,
                 state__not=1
             ).order_by("branch_index", "step_no").all()
@@ -217,7 +215,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 return step_dict
 
             # 获取引用的公共脚本的所有步骤(包含子步骤, 递归构建)
-            quote_case_root_steps: List[AutoTestApiStepInfo] = await self.model.filter(
+            quote_case_root_steps: List[AutoTestStepModel] = await self.model.filter(
                 case_id=step.quote_case_id,
                 parent_step_id__isnull=True,
                 state__not=1
@@ -374,7 +372,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         return {"case": case_info or {}, "steps": steps}
 
-    async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestApiStepInfo:
+    async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestStepModel:
         """
         创建单条步骤，校验用例存在、父步骤存在且同用例，若同用例下step_no已存在则恢复并更新。
 
@@ -383,7 +381,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         """
         case_id: int = step_in.case_id
         step_no: int = step_in.step_no
-        case_crud = AutoTestApiCaseCrud()
+        case_crud = AutoTestCaseCrud()
         await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
 
         if step_in.parent_step_id:
@@ -413,7 +411,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         existing_step = await self.model.filter(case_id=case_id, step_no=step_no).first()
         if not existing_step:
             try:
-                instance: AutoTestApiStepInfo = await self.create(step_dict)
+                instance: AutoTestStepModel = await self.create(step_dict)
                 return instance
             except IntegrityError as e:
                 error_message: str = f"新增步骤信息失败, 违反约束规则: {e}"
@@ -422,14 +420,14 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         try:
             step_dict["state"] = 0
-            instance: AutoTestApiStepInfo = await self.update(id=existing_step.id, obj_in=step_dict)
+            instance: AutoTestStepModel = await self.update(id=existing_step.id, obj_in=step_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
             error_message: str = f"新增(更新)步骤信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_step(self, step_in: AutoTestApiStepUpdate) -> AutoTestApiStepInfo:
+    async def update_step(self, step_in: AutoTestApiStepUpdate) -> AutoTestStepModel:
         """
         更新单条步骤，支持根据step_id或step_code定位；校验step_no唯一、父步骤存在且无循环引用。
 
@@ -471,12 +469,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         if "case_id" in update_dict:
             case_id: int = update_dict.get("case_id", instance.case_id)
-            await AutoTestApiCaseCrud().get_by_id(case_id=case_id, on_error=True, state__not=1)
+            await AutoTestCaseCrud().get_by_id(case_id=case_id, on_error=True, state__not=1)
 
         if "parent_step_id" in update_dict:
             parent_step_id: Optional[int] = update_dict["parent_step_id"]
             if parent_step_id:
-                parent_step: AutoTestApiStepInfo = await self.model.filter(
+                parent_step: AutoTestStepModel = await self.model.filter(
                     id=parent_step_id,
                     state__not=1,
                     step_type__in=[AutoTestStepType.IF.value, AutoTestStepType.LOOP.value]
@@ -517,7 +515,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
             quote_case_id: int = update_dict["quote_case_id"]
-            quote_case = await AutoTestApiCaseCrud().get_by_conditions(
+            quote_case = await AutoTestCaseCrud().get_by_conditions(
                 only_one=True,
                 on_error=False,
                 id=quote_case_id,
@@ -541,7 +539,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_step(self, step_id: Optional[int] = None, step_code: Optional[str] = None) -> AutoTestApiStepInfo:
+    async def delete_step(self, step_id: Optional[int] = None, step_code: Optional[str] = None) -> AutoTestStepModel:
         """
         软删除单条步骤，需无子步骤。
 
@@ -594,7 +592,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         # 记录本次软删除的步骤，根据用例归类，事务提交后同步清理其数据源
         deleted_by_case: Dict[int, List[str]] = {}
 
-        async def delete_step_and_children(step_instance: AutoTestApiStepInfo) -> int:
+        async def delete_step_and_children(step_instance: AutoTestStepModel) -> int:
             """递归软删除当前步骤及其所有子步骤，返回本次删除数量。"""
             deleted: int = 0
             # 先删除所有子步骤（软删除）
@@ -658,7 +656,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         return deleted_count
 
-    async def select_steps(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiStepInfo]]:
+    async def select_steps(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestStepModel]]:
         """
         根据条件分页查询步骤列表。
 
@@ -765,7 +763,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         success_detail: List[Dict[str, Any]] = []
         processed_step_codes: Dict[int, Set[str]] = {}
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
-        case_crud = AutoTestApiCaseCrud()
+        case_crud = AutoTestCaseCrud()
 
         # 公共家族约束（仅根级调用校验）：公共脚本/公共接口均不可引用其他脚本、全树不可绑定数据源；
         # 公共接口另有形态约束（有且仅有 1 个 HTTP/TCP 根步骤）。
@@ -783,10 +781,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             step_no: Optional[int] = step_data.step_no
             step_code: Optional[str] = step_data.step_code
             if step_id:
-                step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
+                step_instance: Optional[AutoTestStepModel] = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
                 step_code = step_instance.step_code
             elif step_code:
-                step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_code(
+                step_instance: Optional[AutoTestStepModel] = await self.get_by_code(
                     step_code=step_code,
                     on_error=True,
                     state__not=1,
@@ -812,7 +810,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 case_instance = await case_crud.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
 
-                existing_step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_conditions(
+                existing_step_instance: Optional[AutoTestStepModel] = await self.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     state__not=1,
@@ -880,7 +878,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     create_step_dict.pop("loop_conditions", None)
 
                 try:
-                    new_step_instance: AutoTestApiStepInfo = await self.create(create_step_dict)
+                    new_step_instance: AutoTestStepModel = await self.create(create_step_dict)
                 except Exception as e:
                     error_message: str = f"第{sid}条步骤新增失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
@@ -998,7 +996,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
                 if "case_id" in update_dict:
                     case_id: int = update_dict.get("case_id", step_instance.case_id)
-                    case: Optional[AutoTestApiCaseInfo] = await case_crud.get_by_id(
+                    case: Optional[AutoTestCaseModel] = await case_crud.get_by_id(
                         case_id=case_id,
                         on_error=False,
                         state__not=1
@@ -1164,7 +1162,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             initial_variables = []
 
         # 1. 查询用例信息
-        case_crud = AutoTestApiCaseCrud()
+        case_crud = AutoTestCaseCrud()
         case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
         case_dict = await case_instance.to_dict(
             include_fields={"id", "case_code", "case_name"},
@@ -1216,9 +1214,9 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             dataset_name=dataset_name,
         )
         async with in_transaction():
-            report_instance = await AutoTestApiReportCrud().create_report(report_in=defer_create_report)
+            report_instance = await AutoTestReportCrud().create_report(report_in=defer_create_report)
             for detail_create in (pending_create_details or []):
-                await AutoTestApiDetailCrud().create_detail(detail_in=detail_create)
+                await AutoTestDetailCrud().create_detail(detail_in=detail_create)
             case_state = statistics.get("failed_steps", 0) == 0
             case_last_time = defer_create_report.case_ed_time
             await case_crud.update_case(AutoTestApiCaseUpdate(

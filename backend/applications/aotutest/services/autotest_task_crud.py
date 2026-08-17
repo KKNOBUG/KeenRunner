@@ -13,9 +13,9 @@ from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q, RawSQL
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
+from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
 from backend.applications.aotutest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+from backend.applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -93,10 +93,10 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     return cleaned
 
 
-class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
+class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiTaskInfo)
+        super().__init__(model=AutoTestTaskModel)
 
     @staticmethod
     def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -131,7 +131,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
                 task_dict["task_kwargs"] = normalize_task_kwargs(kwargs)
         return task_dict
 
-    async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
+    async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestTaskModel]:
         """
         根据主键ID查询任务。
 
@@ -151,7 +151,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, task_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTaskInfo]:
+    async def get_by_code(self, task_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestTaskModel]:
         """
         根据任务标识代码查询任务。
 
@@ -171,7 +171,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestApiTaskInfo:
+    async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestTaskModel:
         """
         创建任务，校验应用存在及(task_name, task_project)唯一。
 
@@ -182,7 +182,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         task_project: int = task_in.task_project
 
         # 业务层验证：检查应用是否存在
-        await AutoTestApiProjectCrud().get_by_id(project_id=task_project, on_error=True, state__not=1)
+        await AutoTestProjectCrud().get_by_id(project_id=task_project, on_error=True, state__not=1)
 
         # 业务层验证：检查 (task_name, task_project) 唯一
         existing_task = await self.model.filter(task_name=task_name, task_project=task_project, state__not=1).first()
@@ -204,7 +204,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestApiTaskInfo:
+    async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestTaskModel:
         """
         更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。
 
@@ -262,7 +262,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_task(self, task_id: Optional[int] = None, task_code: Optional[str] = None) -> AutoTestApiTaskInfo:
+    async def delete_task(self, task_id: Optional[int] = None, task_code: Optional[str] = None) -> AutoTestTaskModel:
         """
         软删除任务并关闭调度。
 
@@ -280,7 +280,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         await instance.save(update_fields=["task_enabled"])
         return instance
 
-    async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:
+    async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestTaskModel:
         """
         设置任务是否启用调度(仅切换task_enabled，触发依赖crontab)。
 
@@ -293,7 +293,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         await instance.save(update_fields=["task_enabled"])
         return instance
 
-    async def select_tasks(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTaskInfo]]:
+    async def select_tasks(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestTaskModel]]:
         """
         根据条件分页查询任务列表；默认根据最后执行时间倒序，未执行过的排在后面。
 

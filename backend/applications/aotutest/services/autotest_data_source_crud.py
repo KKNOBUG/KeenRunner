@@ -16,11 +16,9 @@ from tortoise.exceptions import FieldError
 from tortoise.exceptions import IntegrityError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import (
-    AutoTestApiDataCreateInfo,
-    AutoTestApiDataSourceInfo,
-    AutoTestApiStepInfo,
-)
+from backend.applications.aotutest.models.autotest_data_create_model import AutoTestDataCreateModel
+from backend.applications.aotutest.models.autotest_data_source_model import AutoTestDataSourceModel
+from backend.applications.aotutest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate
 from backend.applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -40,12 +38,12 @@ def make_cache_key(case_id: int, step_code: str) -> str:
     return f"dataset_{case_id}_{step_code}"
 
 
-class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDataSourceCreate, AutoTestDataSourceUpdate]):
+class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataSourceCreate, AutoTestDataSourceUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiDataSourceInfo)
+        super().__init__(model=AutoTestDataSourceModel)
 
-    async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
         """
         根据主键ID查询数据源。
 
@@ -66,7 +64,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, data_source_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_code(self, data_source_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
         """
         根据data_source_code查询数据源。
 
@@ -87,7 +85,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
         """
         根据文件哈希查询数据源。
 
@@ -116,7 +114,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             step_code: Optional[str] = None,
             on_error: bool = False,
             **kwargs
-    ) -> Optional[Union[AutoTestApiDataSourceInfo, List[AutoTestApiDataSourceInfo]]]:
+    ) -> Optional[Union[AutoTestDataSourceModel, List[AutoTestDataSourceModel]]]:
         """
         根据用例与步骤标识查询数据源，可返回单条或列表。
 
@@ -162,7 +160,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             raise NotFoundException(message=error_message, data=conditions)
         return instances
 
-    async def get_by_case_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataSourceInfo]:
+    async def get_by_case_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
         """
         根据用例ID取最新一条数据源。
 
@@ -205,7 +203,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             return None
         return record.dataset.get((dataset_name or "").strip())
 
-    async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestApiDataSourceInfo:
+    async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestDataSourceModel:
         """
         创建数据源，根据用例与步骤定位，已删除则恢复，已启用则拒绝。
 
@@ -259,7 +257,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         LOGGER.error(error_message)
         raise DataAlreadyExistsException(message=error_message)
 
-    async def update_data_source(self, data_source_in: AutoTestDataSourceUpdate) -> AutoTestApiDataSourceInfo:
+    async def update_data_source(self, data_source_in: AutoTestDataSourceUpdate) -> AutoTestDataSourceModel:
         """
         更新数据源，根据id/code或用例步骤组合定位。
 
@@ -274,19 +272,19 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         data_source_code: Optional[str] = data_source_in.data_source_code
 
         if data_source_id:
-            instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
+            instance: Optional[AutoTestDataSourceModel] = await self.get_by_id(
                 data_source_id=data_source_id,
                 on_error=True,
                 state__not=1
             )
         elif (data_source_code or "").strip():
-            instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_code(
+            instance: Optional[AutoTestDataSourceModel] = await self.get_by_code(
                 data_source_code=data_source_code.strip(),
                 on_error=True,
                 state__not=1
             )
         elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
-            instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_case_step(
+            instance: Optional[AutoTestDataSourceModel] = await self.get_by_case_step(
                 case_id=case_id,
                 case_code=case_code,
                 step_id=step_id,
@@ -326,7 +324,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             case_code: Optional[str] = None,
             step_id: Optional[int] = None,
             step_code: Optional[str] = None,
-    ) -> AutoTestApiDataSourceInfo:
+    ) -> AutoTestDataSourceModel:
         """
         软删除数据源，根据id/code或用例步骤组合定位。
 
@@ -339,19 +337,19 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :return: 软删除后的实例
         """
         if data_source_id:
-            instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
+            instance: Optional[AutoTestDataSourceModel] = await self.get_by_id(
                 data_source_id=data_source_id,
                 on_error=True,
                 state__not=1
             )
         elif (data_source_code or "").strip():
-            instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_code(
+            instance: Optional[AutoTestDataSourceModel] = await self.get_by_code(
                 data_source_code=data_source_code.strip(),
                 on_error=True,
                 state__not=1
             )
         elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
-            instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_case_step(
+            instance: Optional[AutoTestDataSourceModel] = await self.get_by_case_step(
                 case_id=case_id,
                 case_code=case_code,
                 step_id=step_id,
@@ -380,18 +378,18 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         source_ids = await self.model.filter(case_id=case_id, state=0).values_list("id", flat=True)
         deleted_count: int = await self.soft_delete_batch(ids=list(source_ids))
-        from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-        step_crud = AutoTestApiStepCrud()
+        from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+        step_crud = AutoTestStepCrud()
         step_vals: Dict[str, Any] = {
             "data_source_id": None,
             "data_source_name": None,
             "data_source_desc": None,
         }
         step_crud._fill_updated_user(step_vals)
-        cleared_count: int = await AutoTestApiStepInfo.filter(case_id=case_id, state=0).update(**step_vals)
+        cleared_count: int = await AutoTestStepModel.filter(case_id=case_id, state=0).update(**step_vals)
         return {"data_source": deleted_count, "step": cleared_count}
 
-    async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataSourceInfo]]:
+    async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDataSourceModel]]:
         """
         根据条件分页查询数据源列表。
 
@@ -426,7 +424,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         dataset_name: str = dataset_name.strip()
         condition: Dict[str, Any] = {"case_id": case_id, "step_code": step_code}
         LOGGER.info(f"查询数据源信息条件(此时不判断dataset_name是否存在于dataset中)：{condition}")
-        source_instance: AutoTestApiDataSourceInfo = await self.model.filter(**condition, **kwargs).first()
+        source_instance: AutoTestDataSourceModel = await self.model.filter(**condition, **kwargs).first()
         if not source_instance:
             error_message: str = f"查询数据源信息失败, 暂无满足[{condition}]查询条件的记录"
             LOGGER.error(error_message)
@@ -462,7 +460,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             dataframe: Optional[List[Any]] = None,
             axis: int = 0,
             created_user: Optional[str] = None,
-    ) -> AutoTestApiDataSourceInfo:
+    ) -> AutoTestDataSourceModel:
         """
         上传解析场景：根据case_id+step_id+step_code若已存在则更新，否则创建。
 
@@ -542,7 +540,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             )
         )
 
-    async def list_by_case(self, case_id: int, state: int = 0) -> List[AutoTestApiDataSourceInfo]:
+    async def list_by_case(self, case_id: int, state: int = 0) -> List[AutoTestDataSourceModel]:
         """
         查询指定用例下的数据源列表。
 
@@ -601,12 +599,12 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         return new_record.id
 
 
-class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
+class AutoTestDataCreateCrud(ScaffoldCrud[AutoTestDataCreateModel, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiDataCreateInfo)
+        super().__init__(model=AutoTestDataCreateModel)
 
-    async def get_by_code(self, create_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataCreateInfo]:
+    async def get_by_code(self, create_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataCreateModel]:
         """
         根据create_code查询数据源生成记录。
 
@@ -627,7 +625,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_step(self, step_code: str, on_error: bool = False, limit_num: int = 3, **kwargs) -> List[AutoTestApiDataCreateInfo]:
+    async def get_by_step(self, step_code: str, on_error: bool = False, limit_num: int = 3, **kwargs) -> List[AutoTestDataCreateModel]:
         """
         根据步骤标识查询最近N条数据源生成记录，默认最多3条。
 
@@ -649,7 +647,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiDataCreateInfo]:
+    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataCreateModel]:
         """
         根据文件哈希查询数据源生成记录。
 
@@ -670,7 +668,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_data_create(self, data_in: AutoTestApiDataCreateCreate) -> AutoTestApiDataCreateInfo:
+    async def create_data_create(self, data_in: AutoTestApiDataCreateCreate) -> AutoTestDataCreateModel:
         """
         创建数据源生成记录；若同file_hash已存在则重置状态并更新路径。
 
@@ -697,7 +695,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestApiDataCreateInfo:
+    async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestDataCreateModel:
         """
         根据主键更新数据源生成记录。
 
@@ -713,7 +711,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestApiDataCreateInfo:
+    async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestDataCreateModel:
         """
         根据create_code软删除数据源生成记录。
 
@@ -728,7 +726,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         instance = await self.get_by_code(create_code=create_code, on_error=True, state__not=1)
         return await self.soft_delete(id=instance.id)
 
-    async def select_data_source(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataCreateInfo]]:
+    async def select_data_source(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDataCreateModel]]:
         """
         根据条件分页查询数据源生成记录。
 
@@ -755,7 +753,7 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     :return: None
     """
     data_source_crud = AutoTestDataSourceCrud()
-    data_create_crud = AutoTestApiDataCreateCrud()
+    data_create_crud = AutoTestDataCreateCrud()
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
     steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
     await data_source_crud.model.filter(step_code__in=step_code_list).delete()

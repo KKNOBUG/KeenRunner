@@ -12,9 +12,10 @@ from typing import Optional, Dict, Any, List, Set, Tuple
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
+from backend.applications.aotutest.models.autotest_case_model import AutoTestCaseModel
+from backend.applications.aotutest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from backend.applications.aotutest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -68,12 +69,12 @@ def _duplicate_case_message(case_project: Any, case_name: Any, case_type: Any, o
     )
 
 
-class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
+class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiCaseInfo)
+        super().__init__(model=AutoTestCaseModel)
 
-    async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
+    async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestCaseModel]:
         """
         根据主键ID查询用例。
 
@@ -94,7 +95,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, case_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiCaseInfo]:
+    async def get_by_code(self, case_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestCaseModel]:
         """
         根据用例标识代码查询用例。
 
@@ -139,7 +140,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         if request_args_type is not None:
             step_q &= Q(request_args_type=request_args_type.value)
 
-        case_ids: List[int] = await AutoTestApiStepInfo.filter(step_q).distinct().values_list("case_id", flat=True)
+        case_ids: List[int] = await AutoTestStepModel.filter(step_q).distinct().values_list("case_id", flat=True)
         return case_ids
 
     async def _get_by_owner_key(
@@ -149,7 +150,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             case_type: Optional[AutoTestCaseType],
             owner_user: Optional[str],
             exclude_id: Optional[int] = None,
-    ) -> Optional[AutoTestApiCaseInfo]:
+    ) -> Optional[AutoTestCaseModel]:
         """
         按业务唯一键查找用例，含软删，不滤state。
 
@@ -176,9 +177,9 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def _restore_and_overwrite_case(
             self,
-            existing: AutoTestApiCaseInfo,
+            existing: AutoTestCaseModel,
             overwrite: Dict[str, Any],
-    ) -> AutoTestApiCaseInfo:
+    ) -> AutoTestCaseModel:
         """
         唤醒软删用例并按本次创建数据覆盖表头，不改created_user、owner_user、case_code。
 
@@ -193,7 +194,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         overwrite["case_version"] = (existing.case_version or 1) + 1
         return await self.update(id=existing.id, obj_in=overwrite)
 
-    async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
+    async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestCaseModel:
         """
         创建用例。同应用同类型同所属人同名：启用则拒绝，软删则恢复并覆盖表头。
 
@@ -213,7 +214,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise ParameterException(message=error_message)
 
         if case_tags:
-            await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+            await AutoTestTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
 
         existing_case = await self._get_by_owner_key(
             case_project=case_project,
@@ -246,7 +247,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise DataBaseStorageException(message=error_message) from e
 
     @staticmethod
-    async def _cascade_public_api_step_project(case_instance: AutoTestApiCaseInfo) -> None:
+    async def _cascade_public_api_step_project(case_instance: AutoTestCaseModel) -> None:
         """
         将公共接口请求步骤所属应用级联对齐为用例所属应用。
 
@@ -254,7 +255,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         """
         if case_instance.case_type != AutoTestCaseType.PUBLIC_API or not case_instance.case_project:
             return
-        updated_count: int = await AutoTestApiStepInfo.filter(
+        updated_count: int = await AutoTestStepModel.filter(
             case_id=case_instance.id, state__not=1
         ).exclude(request_project_id=case_instance.case_project).update(
             request_project_id=case_instance.case_project
@@ -264,7 +265,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 f"公共接口用例[id={case_instance.id}]级联对齐请求步骤所属应用为[{case_instance.case_project}]记录, 更新{updated_count}条"
             )
 
-    async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestApiCaseInfo:
+    async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestCaseModel:
         """
         更新用例，根据case_id或case_code定位并递增case_version。
 
@@ -303,7 +304,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raw_tags = update_dict.get("case_tags", instance.case_tags)
             normalized_tags = _normalize_case_tags(effective_type, raw_tags, context="更新用例信息失败")
             update_dict["case_tags"] = normalized_tags
-            await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
+            await AutoTestTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
         if "case_name" in update_dict or "case_project" in update_dict or "case_type" in update_dict:
             case_name = update_dict.get("case_name", instance.case_name)
@@ -343,7 +344,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestApiCaseInfo:
+    async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseModel:
         """
         软删除用例，并软删除该用例下所有步骤；公共脚本需无引用。
 
@@ -363,19 +364,19 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         case_type: AutoTestCaseType = instance.case_type
         if case_type in PUBLIC_CASE_TYPES:
-            quote_steps_count = await AutoTestApiStepInfo.filter(quote_case_id=case_id, state__not=1).count()
+            quote_steps_count = await AutoTestStepModel.filter(quote_case_id=case_id, state__not=1).count()
             if quote_steps_count > 0:
                 error_message: str = f"删除用例信息失败, 记录[id={case_id}]存在{quote_steps_count}个引用, 无法直接删除"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-        step_crud = AutoTestApiStepCrud()
+        from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+        step_crud = AutoTestStepCrud()
         step_ids = await step_crud.model.filter(case_id=case_id, state__not=1).values_list("id", flat=True)
         await step_crud.soft_delete_batch(ids=list(step_ids))
         return await self.soft_delete(id=instance.id)
 
-    async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiCaseInfo]]:
+    async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestCaseModel]]:
         """
         根据条件分页查询用例。
 
@@ -393,13 +394,13 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             raise ParameterException(message=error_message) from e
 
     @staticmethod
-    async def _validate_switch_to_public_api(case_instance: AutoTestApiCaseInfo) -> None:
+    async def _validate_switch_to_public_api(case_instance: AutoTestCaseModel) -> None:
         """
         校验切换为公共接口前存量步骤树形态是否合规。
 
         :param case_instance: 待切换的用例实例
         """
-        root_steps: List[AutoTestApiStepInfo] = await AutoTestApiStepInfo.filter(
+        root_steps: List[AutoTestStepModel] = await AutoTestStepModel.filter(
             case_id=case_instance.id, parent_step_id=None, state__not=1
         )
         if len(root_steps) != 1:
@@ -409,7 +410,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             )
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        only_step: AutoTestApiStepInfo = root_steps[0]
+        only_step: AutoTestStepModel = root_steps[0]
         if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
             error_message: str = (
                 f"用例({case_instance.case_name})不允许切换为公共接口, "
@@ -443,7 +444,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             if not case_id and not case_code:
                 case_instance = None
             else:
-                case_instance: Optional[AutoTestApiCaseInfo] = await self.get_by_conditions(
+                case_instance: Optional[AutoTestCaseModel] = await self.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     id=case_id,
@@ -454,7 +455,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             if not case_instance:
                 case_tags = _normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
                 if case_tags:
-                    await AutoTestApiTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
+                    await AutoTestTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
                 if not case_name:
                     error_message: str = f"第{cid}条用例新增失败, 参数[case_name]不允许为空"
                     LOGGER.error(error_message)
@@ -469,7 +470,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 
-                existing_case_instance: Optional[AutoTestApiCaseInfo] = await self._get_by_owner_key(
+                existing_case_instance: Optional[AutoTestCaseModel] = await self._get_by_owner_key(
                     case_project=case_project,
                     case_name=case_name,
                     case_type=case_type,
@@ -498,7 +499,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                         )
                     else:
                         create_case_dict["owner_user"] = owner_user
-                        new_case_instance: AutoTestApiCaseInfo = await self.create(obj_in=create_case_dict)
+                        new_case_instance: AutoTestCaseModel = await self.create(obj_in=create_case_dict)
                 except Exception as e:
                     error_message: str = f"第{cid}条用例新增失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
@@ -552,13 +553,13 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                         effective_type, raw_tags, context=f"第{cid}条用例更新失败"
                     )
                     update_case_dict["case_tags"] = normalized_tags
-                    await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
+                    await AutoTestTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
                 if "case_name" in update_case_dict or "case_project" in update_case_dict or "case_type" in update_case_dict:
                     unique_name = update_case_dict.get("case_name", case_instance.case_name)
                     unique_project = update_case_dict.get("case_project", case_instance.case_project)
                     unique_type = update_case_dict.get("case_type", case_instance.case_type)
-                    existing_case_instance: Optional[AutoTestApiCaseInfo] = await self._get_by_owner_key(
+                    existing_case_instance: Optional[AutoTestCaseModel] = await self._get_by_owner_key(
                         case_project=unique_project,
                         case_name=unique_name,
                         case_type=unique_type,
@@ -575,7 +576,7 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
                 try:
                     update_case_dict["case_version"] = case_instance.case_version + 1
-                    updated_instance: AutoTestApiCaseInfo = await self.update(id=case_id, obj_in=update_case_dict)
+                    updated_instance: AutoTestCaseModel = await self.update(id=case_id, obj_in=update_case_dict)
                 except Exception as e:
                     error_message: str = f"第{cid}条用例更新失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")

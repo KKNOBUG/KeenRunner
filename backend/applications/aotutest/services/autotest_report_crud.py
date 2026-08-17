@@ -14,14 +14,14 @@ from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiReportInfo
+from backend.applications.aotutest.models.autotest_report_model import AutoTestReportModel
 from backend.applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
     AutoTestApiReportUpdate,
     AutoTestApiReportBatchSelect,
     AutoTestApiReportBatchItem,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -32,12 +32,12 @@ from backend.core.exceptions import (
 from backend.enums import AutoTestTaskStatus
 
 
-class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
+class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiReportInfo)
+        super().__init__(model=AutoTestReportModel)
 
-    async def get_by_id(self, report_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiReportInfo]:
+    async def get_by_id(self, report_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestReportModel]:
         """
         根据主键ID查询报告。
 
@@ -58,7 +58,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_code(self, report_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiReportInfo]:
+    async def get_by_code(self, report_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestReportModel]:
         """
         根据报告标识代码查询报告。
 
@@ -79,7 +79,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_report(self, report_in: AutoTestApiReportCreate) -> AutoTestApiReportInfo:
+    async def create_report(self, report_in: AutoTestApiReportCreate) -> AutoTestReportModel:
         """
         创建报告，校验用例存在。
 
@@ -89,7 +89,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
 
-        await AutoTestApiCaseCrud().get_by_conditions(
+        await AutoTestCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
             id=case_id,
@@ -106,7 +106,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_report(self, report_in: AutoTestApiReportUpdate) -> AutoTestApiReportInfo:
+    async def update_report(self, report_in: AutoTestApiReportUpdate) -> AutoTestReportModel:
         """
         更新报告，根据report_id或report_code定位。
 
@@ -135,7 +135,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_report(self, report_id: Optional[int] = None, report_code: Optional[str] = None) -> AutoTestApiReportInfo:
+    async def delete_report(self, report_id: Optional[int] = None, report_code: Optional[str] = None) -> AutoTestReportModel:
         """
         软删除报告，并同步软删除该报告下所有明细。
 
@@ -150,8 +150,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         async with in_transaction():
             report_code = instance.report_code
-            from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-            detail_crud = AutoTestApiDetailCrud()
+            from backend.applications.aotutest.services.autotest_detail_crud import AutoTestDetailCrud
+            detail_crud = AutoTestDetailCrud()
             detail_ids = await detail_crud.model.filter(
                 report_code=report_code, state__not=1
             ).values_list("id", flat=True)
@@ -160,7 +160,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         return await self.soft_delete(id=instance.id)
 
-    async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiReportInfo]]:
+    async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestReportModel]]:
         """
         根据条件分页查询报告列表。
 
@@ -245,7 +245,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             raise ParameterException(message="参数[task_code]不允许为空")
 
         state = 0 if batch_in.state is None else batch_in.state
-        instances: List[AutoTestApiReportInfo] = await self.model.filter(
+        instances: List[AutoTestReportModel] = await self.model.filter(
             task_code=task_code,
             state=state,
         ).order_by("case_st_time").all()
@@ -257,7 +257,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         case_name_map: Dict[int, str] = {}
         if case_ids:
             case_name_map = dict(
-                await AutoTestApiCaseCrud().model.filter(
+                await AutoTestCaseCrud().model.filter(
                     id__in=case_ids,
                     state__not=1
                 ).values_list("id", "case_name")

@@ -139,14 +139,14 @@ async def get_scheduled_tasks(task_type: Any) -> List[Any]:
     拉取未删除、已启用且配置了Cron表达式的自动化任务。
 
     :param task_type: 任务类型枚举或字符串(如AutoTestTaskType.AUTOTEST_API)
-    :return: 满足条件的AutoTestApiTaskInfo列表；参数无效时返回空列表
+    :return: 满足条件的AutoTestTaskModel列表；参数无效时返回空列表
     """
     if not task_type:
         return []
     type_val = getattr(task_type, "value", task_type)
     if not type_val:
         return []
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
+    from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
 
     q = (
             Q(state=0)
@@ -155,7 +155,7 @@ async def get_scheduled_tasks(task_type: Any) -> List[Any]:
             & ~Q(task_crontabs_expr__isnull=True)
             & ~Q(task_crontabs_expr="")
     )
-    return list(await AutoTestApiTaskInfo.filter(q).all())
+    return list(await AutoTestTaskModel.filter(q).all())
 
 
 def check_task_expired(task: Any) -> bool:

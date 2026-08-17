@@ -22,7 +22,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
+from backend.applications.aotutest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceCreate,
     AutoTestDataSourceUpdate,
@@ -60,7 +60,7 @@ from backend.services.file_transfer import FileTransfer
 autotest_data_source = APIRouter()
 
 
-async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[str, Any]:
+async def _serialize_data_source(instance: AutoTestDataSourceModel) -> Dict[str, Any]:
     """序列化单条数据源。"""
     data = await instance.to_dict(
         exclude_fields={
@@ -264,19 +264,19 @@ async def save_or_update_data_source(
         data_id: Optional[int] = data_source_in.data_source_id
         data_code: Optional[str] = data_source_in.data_source_code
         if data_id:
-            data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_id(
+            data_source_instance: Optional[AutoTestDataSourceModel] = await services.data_source_curd.get_by_id(
                 data_source_id=data_id,
                 on_error=False,
                 state__not=1
             )
         elif data_code:
-            data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_code(
+            data_source_instance: Optional[AutoTestDataSourceModel] = await services.data_source_curd.get_by_code(
                 data_source_code=data_code,
                 on_error=False,
                 state__not=1
             )
         elif (case_id or case_code) or (step_id or step_code):
-            data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_case_step(
+            data_source_instance: Optional[AutoTestDataSourceModel] = await services.data_source_curd.get_by_case_step(
                 case_id=case_id,
                 step_id=step_id,
                 case_code=case_code,

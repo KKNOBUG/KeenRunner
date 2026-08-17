@@ -12,18 +12,15 @@ from typing import Optional, Dict, Any, List, Tuple, Union, Set
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import (
-    AutoTestApiProjectInfo,
-    AutoTestApiEnvBindInfo,
-    AutoTestApiEnvConfigInfo,
-)
+from backend.applications.aotutest.models.autotest_env_config_model import AutoTestEnvBindModel, AutoTestEnvConfigModel
+from backend.applications.aotutest.models.autotest_project_model import AutoTestProjectModel
 from backend.applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
     AutoTestApiProjectDelete,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from backend.applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
+from backend.applications.aotutest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -34,12 +31,12 @@ from backend.core.exceptions import (
 )
 
 
-class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiProjectCreate, AutoTestApiProjectUpdate]):
+class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectCreate, AutoTestApiProjectUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiProjectInfo)
+        super().__init__(model=AutoTestProjectModel)
 
-    async def get_by_id(self, project_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
+    async def get_by_id(self, project_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestProjectModel]:
         """
         根据主键ID查询应用。
 
@@ -65,7 +62,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             project_ids: List[int],
             on_error: bool = False,
             **kwargs
-    ) -> Optional[Union[bool, List[AutoTestApiProjectInfo]]]:
+    ) -> Optional[Union[bool, List[AutoTestProjectModel]]]:
         """
         根据主键ID列表批量查询应用。
 
@@ -93,7 +90,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             return False
         return await self.model.filter(id__in=project_ids, **kwargs).all()
 
-    async def get_by_code(self, project_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
+    async def get_by_code(self, project_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestProjectModel]:
         """
         根据应用标识代码查询应用。
 
@@ -114,7 +111,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_name(self, project_name: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
+    async def get_by_name(self, project_name: str, on_error: bool = False, **kwargs) -> Optional[AutoTestProjectModel]:
         """
         根据应用名称查询应用。
 
@@ -135,7 +132,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_project(self, project_in: AutoTestApiProjectCreate) -> AutoTestApiProjectInfo:
+    async def create_project(self, project_in: AutoTestApiProjectCreate) -> AutoTestProjectModel:
         """
         创建应用；若同名记录已存在则恢复并更新。
 
@@ -144,7 +141,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """
         project_name: str = project_in.project_name
 
-        existing_project: Optional[AutoTestApiProjectInfo] = await self.model.filter(project_name=project_name).first()
+        existing_project: Optional[AutoTestProjectModel] = await self.model.filter(project_name=project_name).first()
         project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
         for owner_field in (
                 "project_dev_owners",
@@ -157,7 +154,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
                 project_dict[owner_field] = sorted(owners, key=str.lower)
         if not existing_project:
             try:
-                instance: AutoTestApiProjectInfo = await self.create(obj_in=project_dict)
+                instance: AutoTestProjectModel = await self.create(obj_in=project_dict)
                 return instance
             except IntegrityError as e:
                 error_message: str = f"新增应用信息异常, 违反约束规则: {e}"
@@ -166,14 +163,14 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         try:
             project_dict["state"] = 0
-            instance: AutoTestApiProjectInfo = await self.update(id=existing_project.id, obj_in=project_dict)
+            instance: AutoTestProjectModel = await self.update(id=existing_project.id, obj_in=project_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
             error_message: str = f"更新应用信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_project(self, project_in: AutoTestApiProjectUpdate) -> AutoTestApiProjectInfo:
+    async def update_project(self, project_in: AutoTestApiProjectUpdate) -> AutoTestProjectModel:
         """
         更新应用，根据project_id或project_code定位并校验名称唯一。
 
@@ -227,7 +224,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             self,
             project_id: Optional[int] = None,
             project_code: Optional[str] = None
-    ) -> AutoTestApiProjectInfo:
+    ) -> AutoTestProjectModel:
         """
         软删除应用；需无关联用例、环境配置明细、标签。
 
@@ -245,22 +242,22 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
 
         pid: int = instance.id
-        cases_count = await AutoTestApiCaseCrud().model.filter(case_project=pid, state__not=1).count()
+        cases_count = await AutoTestCaseCrud().model.filter(case_project=pid, state__not=1).count()
         if cases_count > 0:
             msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
         config_count = 0
-        env_bind_ids = await AutoTestApiEnvBindInfo.filter(project_id=pid, state__not=1).values_list("id", flat=True)
+        env_bind_ids = await AutoTestEnvBindModel.filter(project_id=pid, state__not=1).values_list("id", flat=True)
         if env_bind_ids:
-            config_count = await AutoTestApiEnvConfigInfo.filter(
+            config_count = await AutoTestEnvConfigModel.filter(
                 env_bind_id__in=list(env_bind_ids), state__not=1
             ).count()
         if config_count > 0:
             msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
-        tag_count = await AutoTestApiTagCrud().model.filter(tag_project=pid, state__not=1).count()
+        tag_count = await AutoTestTagCrud().model.filter(tag_project=pid, state__not=1).count()
         if tag_count > 0:
             msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"
             LOGGER.error(msg)
@@ -282,7 +279,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        targets: List[AutoTestApiProjectInfo] = []
+        targets: List[AutoTestProjectModel] = []
         if project_ids:
             for pid in project_ids:
                 targets.append(await self.get_by_id(project_id=pid, on_error=True, state__not=1))
@@ -295,7 +292,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         return len(targets)
 
-    async def select_projects(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiProjectInfo]]:
+    async def select_projects(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestProjectModel]]:
         """
         根据条件分页查询应用列表。
 
