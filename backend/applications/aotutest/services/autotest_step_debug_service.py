@@ -459,7 +459,7 @@ class StepDebugService:
         )
 
         start_time = time.time()
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0), trust_env=False) as client:
             try:
                 response = await client.request(method=request_method, url=request_url, **request_kwargs)
             except httpx.TimeoutException as e:
