@@ -76,6 +76,20 @@ class KvUtils:
                 result[item["key"]] = item.get("value")
         return result
 
+    @classmethod
+    def merge_mapping_dicts(cls, *parts: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        按参数顺序合并映射，后写覆盖先写；全部为空时返回 None。
+
+        :param parts: Form-Data、X-WWW-Form-Urlencoded 等键值字典
+        :return: 合并后的字典；无有效键时返回 None
+        """
+        merged: Dict[str, Any] = {}
+        for part in parts:
+            if isinstance(part, dict) and part:
+                merged.update(part)
+        return merged or None
+
     @staticmethod
     def get_value_from_list(variables: Optional[Sequence[StepVariablesBase]], name: str) -> Any:
         """

@@ -1100,6 +1100,7 @@ class BaseStepExecutor:
             request_json: Optional[Any] = None,
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
+            request_form_data: Optional[Dict[str, Any]] = None,
             extract_variables: Optional[Any] = None,
             assert_validators: Optional[Any] = None,
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -1119,6 +1120,7 @@ class BaseStepExecutor:
         :param request_json: 请求JSON对象
         :param request_headers: 请求头字典
         :param request_cookies: 请求Cookie字典
+        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param extract_variables: 变量提取规则，缺省时使用步骤自身的 extract_variables
         :param assert_validators: 断言校验规则，缺省时使用步骤自身的assert_validators
         :param step_struct: 步骤结构映射，供提取断言管线解析引用
@@ -1144,6 +1146,7 @@ class BaseStepExecutor:
                 request_json=request_json,
                 request_headers=request_headers,
                 request_cookies=request_cookies,
+                request_form_data=request_form_data,
                 session_variables_lookup=session_lookup,
                 log_callback=lambda msg: self.context.log(msg, step_code=self.step_code),
                 finished_variables=self.context,
@@ -3536,6 +3539,9 @@ class HttpStepExecutor(BaseStepExecutor):
                 request_json=request_json_for_extract,
                 request_headers=request_header,
                 request_cookies=AutoTestToolService.parse_cookie_header(request_header),
+                request_form_data=AutoTestToolService.merge_mapping_dicts(
+                    request_form_urlencoded, request_form_data
+                ),
                 step_struct=step_struct,
             )
         except StepExecutionError:

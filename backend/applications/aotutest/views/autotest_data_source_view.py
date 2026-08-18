@@ -17,6 +17,7 @@ from urllib.parse import quote
 
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Form, Body, Query, Depends
+from pydantic import ValidationError
 from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
@@ -28,13 +29,26 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUpdate,
     AutoTestDataSourceSaveOrUpdate,
     AutoTestDataSourceSelect,
+    AutoTestDataSourceUnbindCase,
 )
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_VERTICAL,
     json_safe_value,
-    parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
     parse_xlsx_to_parsed_data_async,
+)
+from backend.applications.aotutest.services.autotest_data_source_service import (
+    apply_dataframe_payload,
+    build_vertical_matrix_from_step,
+    clear_step_data_source_meta,
+    DEFAULT_SCENE_NAMES,
+    ensure_case_allows_data_source,
+    ensure_request_step,
+    fill_create_identity,
+    resolve_case,
+    resolve_case_and_step,
+    resolve_enabled_data_source,
+    sync_step_data_source_meta,
 )
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import (
@@ -108,34 +122,66 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
     return clean
 
 
-@autotest_data_source.post("/create", summary="新增数据源", description="新增数据源信息")
+@autotest_data_source.post("/create", summary="新增数据源", description="为指定用例步骤绑定一条数据源")
 async def create_data_source(
         data_source_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    新增数据源。
+    为指定用例步骤创建数据源。
+
+    定位：(case_id或case_code)且(step_id或step_code)。该步骤已有启用数据源时拒绝；
+    若仅有软删记录则启用并覆盖。带dataframe时按axis清洗并生成dataset。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.data_source_curd.create_data_source(data_source_in=data_source_in)
+        case, step = await resolve_case_and_step(
+            services,
+            case_id=data_source_in.case_id,
+            case_code=data_source_in.case_code,
+            step_id=data_source_in.step_id,
+            step_code=data_source_in.step_code,
+        )
+        ensure_request_step(step)
+        ensure_case_allows_data_source(case)
+        parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        effective = data_source_in
+        if parsed:
+            effective = data_source_in.model_copy(update=parsed)
+        effective = fill_create_identity(effective, case, step)
+        async with in_transaction():
+            instance = await services.data_source_curd.create_data_source(data_source_in=effective)
+            await sync_step_data_source_meta(
+                services,
+                case_id=case.id,
+                step_code=step.step_code,
+                data_source_id=instance.id,
+                file_name=instance.file_name,
+                file_desc=instance.file_desc,
+            )
         data = await _serialize_data_source(instance)
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except ValidationError as e:
+        return ParameterResponse(message=str(e))
+    except ValueError as e:
+        return BadReqResponse(message=f"解析表格数据失败: {e}")
     except Exception as e:
         LOGGER.error(f"新增数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源信息")
+@autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源并解绑步骤指针")
 async def delete_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
@@ -146,7 +192,9 @@ async def delete_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    软删除数据源信息。
+    软删除数据源并清空对应步骤的data_source_id/name/desc。
+
+    定位：data_source_id或data_source_code优先；否则(case_id或case_code)且(step_id或step_code)。
 
     :param data_source_id: 数据源主键ID
     :param data_source_code: 数据源业务标识
@@ -158,15 +206,24 @@ async def delete_data_source(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.data_source_curd.delete_data_source(
+        instance = await resolve_enabled_data_source(
+            services,
             data_source_id=data_source_id,
             data_source_code=data_source_code,
             case_id=case_id,
             case_code=case_code,
             step_id=step_id,
             step_code=step_code,
+            on_error=True,
         )
-        data = await _serialize_data_source(instance)
+        async with in_transaction():
+            deleted = await services.data_source_curd.soft_delete(id=instance.id)
+            await clear_step_data_source_meta(
+                services,
+                case_id=instance.case_id,
+                step_code=instance.step_code,
+            )
+        data = await _serialize_data_source(deleted)
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -177,21 +234,25 @@ async def delete_data_source(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/unbind_case", summary="更新数据源(解绑)", description="解绑用例下全部数据源")
+@autotest_data_source.post("/unbind_case", summary="更新数据源(解绑)", description="解绑用例下全部HTTP/TCP步骤数据源")
 async def unbind_case_data_source(
-        case_id: int = Body(..., description="用例ID", embed=True),
+        data_in: AutoTestDataSourceUnbindCase = Body(..., description="用例定位"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    解绑用例下全部数据源：软删除该用例所有数据源记录，并清空步骤上的数据源指针。
+    解绑指定用例下全部HTTP/TCP请求步骤的数据源：软删记录并清空步骤指针。
 
-    :param case_id: 用例主键ID
+    :param data_in: case_id或case_code
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        result = await services.data_source_curd.unbind_case_data_sources(case_id=case_id)
+        case = await resolve_case(services, case_id=data_in.case_id, case_code=data_in.case_code)
+        async with in_transaction():
+            result = await services.data_source_curd.unbind_case_data_sources(case_id=case.id)
         return SuccessResponse(message="解绑成功", data=result)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
@@ -205,30 +266,41 @@ async def update_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    更新数据源。
+    更新已存在的数据源。定位规则与删除相同；记录不存在则失败，不新建。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        effective = data_source_in
-        if data_source_in.dataframe is not None:
-            try:
-                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_source_in.dataframe)
-            except ValueError as e:
-                return BadReqResponse(message=f"解析表格数据失败: {e}")
-            updated_user = get_current_username()
-            effective = data_source_in.model_copy(
-                update={
-                    "dataset": step_data,
-                    "dataset_names": dataset_names,
-                    "dataframe": norm_matrix,
-                    "axis": axis,
-                    "updated_user": updated_user,
-                }
+        existing = await resolve_enabled_data_source(
+            services,
+            data_source_id=data_source_in.data_source_id,
+            data_source_code=data_source_in.data_source_code,
+            case_id=data_source_in.case_id,
+            case_code=data_source_in.case_code,
+            step_id=data_source_in.step_id,
+            step_code=data_source_in.step_code,
+            on_error=True,
+        )
+        parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        updates: Dict[str, Any] = {
+            "data_source_id": existing.id,
+            "updated_user": get_current_username(),
+        }
+        if parsed:
+            updates.update(parsed)
+        effective = data_source_in.model_copy(update=updates)
+        async with in_transaction():
+            instance = await services.data_source_curd.update_data_source(data_source_in=effective)
+            await sync_step_data_source_meta(
+                services,
+                case_id=instance.case_id,
+                step_code=instance.step_code,
+                data_source_id=instance.id,
+                file_name=instance.file_name,
+                file_desc=instance.file_desc,
             )
-        instance = await services.data_source_curd.update_data_source(data_source_in=effective)
         data = await _serialize_data_source(instance)
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
@@ -237,6 +309,10 @@ async def update_data_source(
         return ParameterResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except ValidationError as e:
+        return ParameterResponse(message=str(e))
+    except ValueError as e:
+        return BadReqResponse(message=f"解析表格数据失败: {e}")
     except Exception as e:
         LOGGER.error(f"更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
@@ -248,77 +324,77 @@ async def save_or_update_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    保存或更新数据源信息。
+    保存或更新数据源。
 
-    根据case_id、step_id、step_code定位：存在则更新，不存在则新增；case_code缺失时自动查询用例表补齐。
+    有data_source_id或data_source_code时直接更新已有记录；
+    否则按(case_id或case_code)且(step_id或step_code)定位，有则更新、无则新增。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        case_id: int = data_source_in.case_id
-        case_code: str = data_source_in.case_code
-        step_id: int = data_source_in.step_id
-        step_code: str = data_source_in.step_code
-        data_id: Optional[int] = data_source_in.data_source_id
-        data_code: Optional[str] = data_source_in.data_source_code
-        if data_id:
-            data_source_instance: Optional[AutoTestDataSourceModel] = await services.data_source_curd.get_by_id(
-                data_source_id=data_id,
-                on_error=False,
-                state__not=1
-            )
-        elif data_code:
-            data_source_instance: Optional[AutoTestDataSourceModel] = await services.data_source_curd.get_by_code(
-                data_source_code=data_code,
-                on_error=False,
-                state__not=1
-            )
-        elif (case_id or case_code) or (step_id or step_code):
-            data_source_instance: Optional[AutoTestDataSourceModel] = await services.data_source_curd.get_by_case_step(
-                case_id=case_id,
-                step_id=step_id,
-                case_code=case_code,
-                step_code=step_code,
-                on_error=False,
-                state__not=1
-            )
-        else:
-            return ParameterResponse(
-                message="请提供参数[data_source_id, data_source_code]或[case_id, case_code, step_id, step_code]进行保存或更新"
-            )
+        has_ds_locator = bool(data_source_in.data_source_id) or bool((data_source_in.data_source_code or "").strip())
+        parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        if parsed:
+            data_source_in = data_source_in.model_copy(update=parsed)
 
-        if data_source_in.dataframe is not None:
-            try:
-                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_source_in.dataframe)
-            except ValueError as e:
-                return BadReqResponse(message=f"解析表格数据失败: {e}")
-            data_source_in.dataset = step_data
-            data_source_in.dataset_names = dataset_names
-            data_source_in.dataframe = norm_matrix
-            data_source_in.axis = axis
+        async with in_transaction():
+            if has_ds_locator:
+                existing = await resolve_enabled_data_source(
+                    services,
+                    data_source_id=data_source_in.data_source_id,
+                    data_source_code=data_source_in.data_source_code,
+                    on_error=True,
+                )
+                data_source_in.updated_user = get_current_username()
+                update_in = AutoTestDataSourceUpdate.model_validate({
+                    **data_source_in.model_dump(),
+                    "data_source_id": existing.id,
+                })
+                instance = await services.data_source_curd.update_data_source(data_source_in=update_in)
+            else:
+                case, step = await resolve_case_and_step(
+                    services,
+                    case_id=data_source_in.case_id,
+                    case_code=data_source_in.case_code,
+                    step_id=data_source_in.step_id,
+                    step_code=data_source_in.step_code,
+                )
+                ensure_request_step(step)
+                ensure_case_allows_data_source(case)
+                existing = await services.data_source_curd.get_by_case_step(
+                    case_id=case.id,
+                    step_code=step.step_code,
+                    on_error=False,
+                    state__not=1,
+                )
+                if existing:
+                    data_source_in.updated_user = get_current_username()
+                    update_in = AutoTestDataSourceUpdate.model_validate({
+                        **data_source_in.model_dump(),
+                        "data_source_id": existing.id,
+                    })
+                    instance = await services.data_source_curd.update_data_source(data_source_in=update_in)
+                else:
+                    create_in = AutoTestDataSourceCreate.model_validate({
+                        **data_source_in.model_dump(),
+                        "case_id": case.id,
+                        "case_code": case.case_code,
+                        "step_id": step.id,
+                        "step_code": step.step_code,
+                    })
+                    create_in = fill_create_identity(create_in, case, step)
+                    instance = await services.data_source_curd.create_data_source(data_source_in=create_in)
 
-        if data_source_instance:
-            # 已有启用记录 → 更新
-            data_source_in.updated_user = get_current_username()
-            instance = await services.data_source_curd.update_data_source(data_source_in=data_source_in)
-        else:
-            # 无启用记录 → 新增（case_code 缺失则自动查询补齐）
-            data_source_in.data_source_id = None
-            data_source_in.created_user = get_current_username()
-            data_source_in.cache_key = f"dataset_{case_id}_{step_code}"
-            instance = await services.data_source_curd.create_data_source(data_source_in=data_source_in)
-
-        # 同步步骤数据源元信息
-        await _sync_step_data_source_meta(
-            services=services,
-            case_id=case_id,
-            step_code=step_code,
-            data_source_id=instance.id,
-            file_name=instance.file_name,
-            file_desc=instance.file_desc,
-        )
+            await sync_step_data_source_meta(
+                services,
+                case_id=instance.case_id,
+                step_code=instance.step_code,
+                data_source_id=instance.id,
+                file_name=instance.file_name,
+                file_desc=instance.file_desc,
+            )
 
         data = await _serialize_data_source(instance)
         return SuccessResponse(message="保存成功", data=data, total=1)
@@ -326,11 +402,93 @@ async def save_or_update_data_source(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except ValidationError as e:
+        return ParameterResponse(message=str(e))
+    except ValueError as e:
+        return BadReqResponse(message=f"解析表格数据失败: {e}")
     except Exception as e:
         LOGGER.error(f"保存或更新数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"保存失败，异常描述: {e}")
+
+
+@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵")
+async def build_data_source(
+        data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
+        data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
+        case_id: Optional[int] = Query(None, description="用例ID"),
+        case_code: Optional[str] = Query(None, description="用例标识代码"),
+        step_id: Optional[int] = Query(None, description="步骤ID"),
+        step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    获取用例下指定步骤的数据源结构，只查询不落库。
+
+    能定位到已有数据源时直接返回其dataframe；否则根据当前HTTP/TCP步骤报文构建垂直矩阵。
+
+    :param data_source_id: 数据源主键ID
+    :param data_source_code: 数据源业务标识
+    :param case_id: 用例主键ID
+    :param case_code: 用例业务标识
+    :param step_id: 步骤主键ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        has_ds_locator = bool(data_source_id) or bool((data_source_code or "").strip())
+        if has_ds_locator:
+            instance = await resolve_enabled_data_source(
+                services,
+                data_source_id=data_source_id,
+                data_source_code=data_source_code,
+                on_error=True,
+            )
+            data = await _serialize_data_source(instance)
+            return SuccessResponse(message="查询成功", data=data, total=1)
+
+        case, step = await resolve_case_and_step(
+            services,
+            case_id=case_id,
+            case_code=case_code,
+            step_id=step_id,
+            step_code=step_code,
+        )
+        ensure_request_step(step)
+        existing = await services.data_source_curd.get_by_case_step(
+            case_id=case.id,
+            step_code=step.step_code,
+            on_error=False,
+            state__not=1,
+        )
+        if existing:
+            data = await _serialize_data_source(existing)
+            return SuccessResponse(message="查询成功", data=data, total=1)
+
+        matrix = build_vertical_matrix_from_step(step)
+        data = {
+            "case_id": case.id,
+            "case_code": case.case_code,
+            "step_id": step.id,
+            "step_code": step.step_code,
+            "dataframe": matrix,
+            "axis": AXIS_VERTICAL,
+            "dataset": {},
+            "dataset_names": list(DEFAULT_SCENE_NAMES),
+            "data_source_id": None,
+        }
+        return SuccessResponse(message="构建成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message), data=getattr(e, "data", None))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"构建数据源矩阵失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/get", summary="查询数据源", description="根据条件查询单条数据源信息")

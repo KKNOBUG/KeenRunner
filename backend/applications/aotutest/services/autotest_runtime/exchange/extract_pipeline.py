@@ -30,6 +30,7 @@ class ExtractPipeline:
             request_json: Optional[Union[list, dict]] = None,
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
+            request_form_data: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -48,6 +49,7 @@ class ExtractPipeline:
         :param request_json: 请求JSON
         :param request_headers: 请求头
         :param request_cookies: 请求Cookie
+        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调(str) -> None
         :return: (name->value字典, 逐项结果列表)；成功项才写入字典
@@ -94,6 +96,7 @@ class ExtractPipeline:
                     request_json=request_json,
                     request_headers=request_headers,
                     request_cookies=request_cookies,
+                    request_form_data=request_form_data,
                     session_variables_lookup=session_variables_lookup,
                     operation_type="变量提取",
                 )

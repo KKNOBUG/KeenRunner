@@ -52,6 +52,7 @@ class AutoTestToolService:
     # --- 数据的平铺和分组转换 / 日志收集 ---
     list_to_dict = KvUtils.list_to_dict
     convert_list_to_dict_for_http = KvUtils.convert_list_to_dict_for_http
+    merge_mapping_dicts = KvUtils.merge_mapping_dicts
     get_value_from_list = KvUtils.get_value_from_list
     try_serialize_request_body = KvUtils.try_serialize_request_body
     format_step_error_message = KvUtils.format_step_error_message

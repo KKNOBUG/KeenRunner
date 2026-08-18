@@ -34,6 +34,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
 )
 from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
+from backend.applications.aotutest.services.autotest_data_source_service import data_source_scene_names
 from backend.applications.aotutest.services.autotest_step_debug_service import StepDebugService, StepDebugException
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
@@ -352,60 +353,56 @@ async def batch_update_steps_tree(
             LOGGER.error(error_message)
             return BadReqResponse(message=f"步骤树结构校验失败", data=error_msg)
 
-        # 1.5 校验HTTP/TCP步骤的数据源场景列名一致性
-        def _collect_http_tcp_with_ds(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """收集步骤树中已绑定数据源的HTTP/TCP步骤，含 children 与条件分支子步骤。"""
+        # 1.5 校验HTTP/TCP步骤的数据源场景列名一致性（含树上尚未带回 data_source_id、但库中已落库的数据源）
+        def _walk_http_tcp_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
+            """收集步骤树中全部HTTP/TCP步骤，含 children 与条件分支子步骤。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
             for s in steps or []:
-                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) and s.data_source_id:
+                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
                     collected.append(s)
                 if s.children:
-                    collected.extend(_collect_http_tcp_with_ds(s.children))
+                    collected.extend(_walk_http_tcp_steps(s.children))
                 for branch in s.branch_items or []:
                     if branch.branch_children:
-                        collected.extend(_collect_http_tcp_with_ds(branch.branch_children))
+                        collected.extend(_walk_http_tcp_steps(branch.branch_children))
             return collected
 
-        def _data_source_scene_names(ds: Any) -> Optional[List[str]]:
-            """
-            取出数据源场景列顺序：优先 dataset 的插入序（即表格列序），否则 dataset_names。
-            仅去掉空白名称，不去重、不排序；没有任何有效名称则返回 None，不参与对齐比较。
-            批量按场景执行按列位对齐，列序不同会导致同名场景取到错位数据。
-            """
-            if isinstance(getattr(ds, "dataset", None), dict) and ds.dataset:
-                raw = list(ds.dataset.keys())
-            elif isinstance(getattr(ds, "dataset_names", None), list):
-                raw = list(ds.dataset_names)
-            else:
-                return None
-            names: List[str] = []
-            for item in raw:
-                name = str(item).strip() if item is not None else ""
-                if not name:
-                    continue
-                names.append(name)
-            if not names:
-                return None
-            return names
-
-        http_tcp_steps = _collect_http_tcp_with_ds(steps_data)
+        http_tcp_steps = _walk_http_tcp_steps(steps_data)
         if http_tcp_steps:
             ds_ids = list({s.data_source_id for s in http_tcp_steps if s.data_source_id})
-            ds_records = await services.data_source_curd.model.filter(
-                id__in=ds_ids, state__not=1
-            ).all()
-            ds_map = {ds.id: ds for ds in ds_records}
+            step_codes = {s.step_code for s in http_tcp_steps if (s.step_code or "").strip()}
+            case_id = getattr(case_data, "case_id", None)
+            ds_records = []
+            if case_id:
+                # 仅校验「本用例」已落库的数据源；新建用例(无case_id)时步骤上若仍携带源用例
+                # data_source_id，不得拿外键去比对源库场景列（整用例复制/未落库副本常见）。
+                case_ds = await services.data_source_curd.model.filter(
+                    case_id=case_id, state__not=1
+                ).all()
+                ds_records = [
+                    ds for ds in case_ds
+                    if (ds.id in ds_ids) or ((ds.step_code or "") in step_codes)
+                ]
 
             baseline_names: Optional[List[str]] = None
             baseline_step_label: Optional[str] = None
-            for s in http_tcp_steps:
-                ds = ds_map.get(s.data_source_id)
-                if not ds:
-                    continue
-                current_names = _data_source_scene_names(ds)
+            step_label_by_code = {
+                s.step_code: (s.step_name or s.step_code or f"步骤ID:{s.step_id}")
+                for s in http_tcp_steps if s.step_code
+            }
+            step_label_by_ds_id = {
+                s.data_source_id: (s.step_name or s.step_code or f"步骤ID:{s.step_id}")
+                for s in http_tcp_steps if s.data_source_id
+            }
+            for ds in ds_records:
+                current_names = data_source_scene_names(ds)
                 if current_names is None:
                     continue
-                step_label = s.step_name or s.step_code or f"步骤ID:{s.step_id}"
+                step_label = (
+                    step_label_by_code.get(ds.step_code)
+                    or step_label_by_ds_id.get(ds.id)
+                    or f"步骤ID:{ds.step_id}"
+                )
                 if baseline_names is None:
                     baseline_names = current_names
                     baseline_step_label = step_label

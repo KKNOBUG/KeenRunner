@@ -17,21 +17,41 @@ export const ASSERT_MODE_REDIS = 'redis'
 export const ASSERT_MODE_PYTHON = 'python'
 
 export const RESPONSE_EXTRACT_OBJECT_OPTIONS = [
-  { label: 'Request Json', value: 'Request Json' },
-  { label: 'Request Text', value: 'Request Text' },
-  { label: 'Request XML', value: 'Request XML' },
-  { label: 'Request Header', value: 'Request Header' },
-  { label: 'Request Cookie', value: 'Request Cookie' },
-  { label: 'Response Json', value: 'Response Json' },
-  { label: 'Response Text', value: 'Response Text' },
-  { label: 'Response XML', value: 'Response XML' },
-  { label: 'Response Header', value: 'Response Header' },
-  { label: 'Response Cookie', value: 'Response Cookie' },
+  {
+    type: 'group',
+    label: '请求',
+    key: 'extract-request',
+    children: [
+      { label: 'Request Json', value: 'Request Json' },
+      { label: 'Request Text', value: 'Request Text' },
+      { label: 'Request XML', value: 'Request XML' },
+      { label: 'Request Headers', value: 'Request Headers' },
+      { label: 'Request Cookie', value: 'Request Cookie' },
+      { label: 'Request Form-Data', value: 'Request Form-Data' },
+    ],
+  },
+  {
+    type: 'group',
+    label: '响应',
+    key: 'extract-response',
+    children: [
+      { label: 'Response Json', value: 'Response Json' },
+      { label: 'Response Text', value: 'Response Text' },
+      { label: 'Response XML', value: 'Response XML' },
+      { label: 'Response Headers', value: 'Response Headers' },
+      { label: 'Response Cookie', value: 'Response Cookie' },
+    ],
+  },
 ]
 
 export const RESPONSE_ASSERT_OBJECT_OPTIONS = [
   ...RESPONSE_EXTRACT_OBJECT_OPTIONS,
-  { label: '变量池', value: '变量池' },
+  {
+    type: 'group',
+    label: '变量',
+    key: 'assert-session',
+    children: [{ label: '变量池', value: '变量池' }],
+  },
 ]
 
 export const PYTHON_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
@@ -83,11 +103,25 @@ export function resolveDatabaseSourceVar(item) {
   return srcVar || null
 }
 
+function findSelectOptionByValue(options, value) {
+  if (!options) return null
+  for (const opt of options) {
+    if (!opt) continue
+    if (opt.type === 'group') {
+      const found = findSelectOptionByValue(opt.children, value)
+      if (found) return found
+    } else if (opt.type !== 'divider' && opt.value === value) {
+      return opt
+    }
+  }
+  return null
+}
+
 export function getExtractObjectLabel(value) {
   const option =
-      RESPONSE_EXTRACT_OBJECT_OPTIONS.find((opt) => opt.value === value)
-      || RESPONSE_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
-      || PYTHON_ASSERT_OBJECT_OPTIONS.find((opt) => opt.value === value)
+      findSelectOptionByValue(RESPONSE_EXTRACT_OBJECT_OPTIONS, value)
+      || findSelectOptionByValue(RESPONSE_ASSERT_OBJECT_OPTIONS, value)
+      || findSelectOptionByValue(PYTHON_ASSERT_OBJECT_OPTIONS, value)
   return option ? option.label : value || ''
 }
 
@@ -96,12 +130,13 @@ export function getExtractPlaceholder(object) {
     'Request Json': '请输入JSONPath表达式，如：$.data.name',
     'Request Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
     'Request XML': '请输入XPath表达式，如：/store/book[1]/title',
-    'Request Header': '请输入JSONPath表达式，如：$.Content-Type',
+    'Request Headers': '请输入JSONPath表达式，如：$.Content-Type',
     'Request Cookie': '请输入JSONPath表达式，如：$.Auth',
+    'Request Form-Data': '请输入JSONPath表达式，如：$.code',
     'Response Json': '请输入JSONPath表达式，如：$.data.name',
     'Response Text': '请输入正则表达式，如：^[A-Za-z0-9]+$',
     'Response XML': '请输入XPath表达式，如：/store/book[1]/title',
-    'Response Header': '请输入JSONPath表达式，如：$.Content-Type',
+    'Response Headers': '请输入JSONPath表达式，如：$.Content-Type',
     'Response Cookie': '请输入JSONPath表达式，如：$.Auth',
   }
   return placeholderMap[object] || '请输入表达式'

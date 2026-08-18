@@ -55,13 +55,17 @@ export function stringifyStepTreePayload(payload, space = 2) {
 export function stripIdentityFieldsForNewCase(payload) {
   if (!payload || typeof payload !== 'object') return payload
 
-  const stripStep = (step) => {
+    const stripStep = (step) => {
     if (!step || typeof step !== 'object' || Array.isArray(step)) return step
     const next = { ...step }
     next.step_id = null
     next.step_code = null
     next.case_id = null
     next.parent_step_id = null
+    // 新建/副本不得携带源用例数据源指针，否则会误触发外键场景列校验
+    next.data_source_id = null
+    next.data_source_name = null
+    next.data_source_desc = null
     delete next.case
     delete next.id
     if (Array.isArray(next.children)) {

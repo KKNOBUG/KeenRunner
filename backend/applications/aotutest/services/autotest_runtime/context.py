@@ -39,6 +39,7 @@ class ExchangeContext:
     request_json: Optional[Any] = None
     request_headers: Optional[Dict[str, Any]] = None
     request_cookies: Optional[Dict[str, Any]] = None
+    request_form_data: Optional[Dict[str, Any]] = None
     session_lookup: Optional[Dict[str, Any]] = None
 
 

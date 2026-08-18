@@ -54,11 +54,17 @@ _SCRIPT_COLUMNS: Tuple[str, ...] = (
 _DATA_START_ROW = 3
 _SCOPE_ALL, _SCOPE_SOME = "整个返回数据", "提取部分"
 _EXTRACT_SOURCES = frozenset({
-    "Request Form-Data", "Request Text", "Request Json", "Request XML", "Request Headers",
-    "Response Text", "Response Json", "Response XML", "Response Headers", "Response Cookie",
+    "Request Form-Data", "Request Text", "Request Json", "Request XML",
+    "Request Headers", "Request Cookie",
+    "Response Text", "Response Json", "Response XML",
+    "Response Headers", "Response Cookie",
 })
 _ASSERT_SOURCES = frozenset({
-    "Response Text", "Response Json", "Response XML", "Response Headers", "Response Cookie", "变量池",
+    "Request Form-Data", "Request Text", "Request Json", "Request XML",
+    "Request Headers", "Request Cookie",
+    "Response Text", "Response Json", "Response XML",
+    "Response Headers", "Response Cookie",
+    "变量池",
 })
 _ASSERT_OPS = frozenset(e.value for e in AutoTestAssertionOperation)
 _HTTP_METHODS = frozenset(e.value for e in HTTPMethod)

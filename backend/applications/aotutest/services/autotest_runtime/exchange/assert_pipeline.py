@@ -32,6 +32,7 @@ class AssertPipeline:
             request_json: Optional[Union[list, dict]] = None,
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
+            request_form_data: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
             finished_variables: Optional[Any] = None,
@@ -52,6 +53,7 @@ class AssertPipeline:
         :param request_json: 请求JSON
         :param request_headers: 请求头
         :param request_cookies: 请求Cookie
+        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调(str) -> None；占位符解析时亦作logger
         :param finished_variables: 非空时对except_value先做占位符解析
@@ -101,6 +103,7 @@ class AssertPipeline:
                     request_json=request_json,
                     request_headers=request_headers,
                     request_cookies=request_cookies,
+                    request_form_data=request_form_data,
                     session_variables_lookup=session_variables_lookup,
                     operation_type="断言验证",
                 )

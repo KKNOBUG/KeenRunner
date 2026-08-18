@@ -6,17 +6,17 @@
       :class="[
         'step-editor-card',
         { 'is-collapsed': dataSourceCollapsed },
-        { 'is-unavailable': !isStepPersisted },
+        { 'is-unavailable': !canUseDataSource },
       ]"
   >
     <template #header>
       <div class="card-header-row card-header-row--with-actions">
         <div
             class="panel-title-wrap"
-            :class="{ 'is-disabled': !isStepPersisted }"
+            :class="{ 'is-disabled': !canUseDataSource }"
             role="button"
-            :tabindex="isStepPersisted ? 0 : -1"
-            :aria-disabled="!isStepPersisted"
+            :tabindex="canUseDataSource ? 0 : -1"
+            :aria-disabled="!canUseDataSource"
             @click="toggleDataSourceCollapsed"
             @keydown.enter.prevent="toggleDataSourceCollapsed"
         >
@@ -40,7 +40,7 @@
       </div>
     </template>
 
-    <n-collapse-transition :show="!dataSourceCollapsed && isStepPersisted">
+    <n-collapse-transition :show="!dataSourceCollapsed && canUseDataSource">
       <div class="data-source-content">
         <n-tabs type="line" animated class="data-source-tabs">
           <n-tab-pane name="preview" tab="数据预览">
@@ -222,17 +222,27 @@ const dataSourceDesc = computed({
 const route = useRoute()
 const dataSourceCollapsed = ref(true)
 
-/** 步骤已落库（可绑定数据源）：需同时具备 case_id、step_id、step_code */
+const REQUEST_STEP_TYPES = new Set(['HTTP请求', 'TCP请求', 'http', 'tcp'])
+
+/** 步骤已落库：具备 step_id 或 step_code */
 const isStepPersisted = computed(() => {
   const original = props.step?.original || {}
-  const caseId = route.query.case_id ? Number(route.query.case_id) : null
-  const stepId = original.id != null ? Number(original.id) : null
+  const stepId = original.id != null ? Number(original.id) : NaN
   const stepCode = String(original.step_code || '').trim()
-  return Boolean(caseId && stepId && stepCode)
+  return Boolean((Number.isFinite(stepId) && stepId > 0) || stepCode)
 })
 
+const isRequestStepType = computed(() => {
+  const original = props.step?.original || {}
+  const typeValue = String(original.step_type || props.step?.type || props.stepTypeLabel || '').trim()
+  return REQUEST_STEP_TYPES.has(typeValue)
+})
+
+/** 仅已落库的 HTTP/TCP 请求步骤可展开 DataSource */
+const canUseDataSource = computed(() => isStepPersisted.value && isRequestStepType.value)
+
 /** 只读或未落库时，面板内操作均不可用 */
-const panelReadonly = computed(() => props.readonly || !isStepPersisted.value)
+const panelReadonly = computed(() => props.readonly || !canUseDataSource.value)
 
 const ts = () => new Date().toISOString().slice(0, 19).replace('T', ' ')
 const dataSource = reactive({
@@ -252,6 +262,9 @@ const dataSourceTipText = computed(() => {
   if (!isStepPersisted.value) {
     return `${stepName}(本步骤) - 请先保存步骤后再使用数据源`
   }
+  if (!isRequestStepType.value) {
+    return `${stepName}(本步骤) - 仅HTTP/TCP请求步骤可使用数据源`
+  }
   const dsName = String(dataSourceName.value || '').trim()
   const dsDesc = String(dataSourceDesc.value || '').trim()
   if (dsName && dsDesc) return `${stepName}(本步骤) - ${dsName} (${dsDesc})`
@@ -265,6 +278,22 @@ const FIXED_KEYWORDS = ['HEAD', 'BODY', 'ASSERT_HEAD', 'ASSERT_BODY']
 const AXIS_HORIZONTAL = 0
 const AXIS_VERTICAL = 1
 const axis = ref(AXIS_VERTICAL)
+
+const isSectionMarker = (value) => {
+  const text = value == null ? '' : String(value).trim().toUpperCase()
+  return FIXED_KEYWORDS.includes(text)
+}
+
+/** 按分区标记识别矩阵方向，避免沿用库中默认 axis=0 误判垂直矩阵 */
+const detectAxisFromMatrix = (matrix) => {
+  if (!Array.isArray(matrix) || !matrix.length) return AXIS_VERTICAL
+  const header = Array.isArray(matrix[0]) ? matrix[0] : []
+  if (header.some(isSectionMarker)) return AXIS_HORIZONTAL
+  for (let r = 1; r < matrix.length; r++) {
+    if (isSectionMarker(matrix[r]?.[0])) return AXIS_VERTICAL
+  }
+  return AXIS_VERTICAL
+}
 
 /** 矩阵转置（水平 ↔ 垂直互换） */
 const transposeMatrix = (matrix) => {
@@ -298,8 +327,9 @@ const getCaseId = () => (route.query.case_id ? Number(route.query.case_id) : nul
 const getStepContext = () => {
   const original = props.step?.original || {}
   const caseCode = String(original.case_code ?? original.case?.case_code ?? route.query.case_code ?? '').trim()
+  const originalCaseId = original.case_id != null ? Number(original.case_id) : null
   return {
-    caseId: getCaseId(),
+    caseId: getCaseId() || originalCaseId,
     caseCode,
     stepId: original.id ? Number(original.id) : null,
     stepCode: String(original.step_code || '').trim(),
@@ -353,18 +383,17 @@ const syncCacheFromSheetState = () => {
 
 const loadStepDataframePreview = async (dataSourceIdOverride) => {
   if (isLoading.value) return
-  if (!isStepPersisted.value) {
+  if (!canUseDataSource.value) {
     hasLoaded.value = false
     isDirty.value = false
     return
   }
   const ctx = getStepContext()
   lastStepContext.value = ctx
-  const { caseId, stepId, stepCode } = ctx
-  // 导入刚完成时 props.dataSourceId 尚未回流到本组件，用显式传入的新 id 兜底，避免误载空白模板
+  const { caseId, caseCode, stepId, stepCode } = ctx
   const effectiveDataSourceId = dataSourceIdOverride != null ? dataSourceIdOverride : dataSourceId.value
 
-  if (!caseId) {
+  if (!caseId && !caseCode && !stepId && !stepCode && !effectiveDataSourceId) {
     applyMatrixToSheet([])
     axis.value = AXIS_VERTICAL
     hasDbRecord.value = false
@@ -374,39 +403,26 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
     return
   }
 
-  // 正常不应走到无 stepId/stepCode（上方 isStepPersisted 已拦截）；保留兜底避免空白崩溃
-  if (!stepId || !stepCode) {
-    hasLoaded.value = false
-    isDirty.value = false
-    return
-  }
-
   isLoading.value = true
   try {
+    const params = {}
     if (effectiveDataSourceId) {
-      const res = await api.getDataSourceByCaseStep({
-        case_id: caseId,
-        step_id: stepId,
-        step_code: stepCode,
-      })
-      const info = res?.data || {}
-      const matrix = Array.isArray(info.dataframe) ? info.dataframe : []
-      applyMatrixToSheet(matrix)
-      axis.value = info.axis === AXIS_HORIZONTAL ? AXIS_HORIZONTAL : AXIS_VERTICAL
-      hasDbRecord.value = true
-      if (info.file_name != null) dataSourceName.value = String(info.file_name)
-      if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
+      params.data_source_id = effectiveDataSourceId
     } else {
-      const res = await api.getSceneNamesByCase({ case_id: caseId })
-      const scenes = Array.isArray(res?.data?.data_source_scene_name_set)
-          ? res.data.data_source_scene_name_set
-          : []
-      const { headers, data } = buildBlankTemplate(scenes)
-      sheetColumns.value = headers
-      sheetData.value = data
-      axis.value = AXIS_VERTICAL
-      hasDbRecord.value = false
+      if (caseId) params.case_id = caseId
+      if (caseCode) params.case_code = caseCode
+      if (stepId) params.step_id = stepId
+      if (stepCode) params.step_code = stepCode
     }
+    const res = await api.buildDataSource(params)
+    const info = res?.data || {}
+    const matrix = Array.isArray(info.dataframe) ? info.dataframe : []
+    applyMatrixToSheet(matrix)
+    axis.value = detectAxisFromMatrix(matrix)
+    hasDbRecord.value = info.data_source_id != null
+    if (info.data_source_id != null) dataSourceId.value = info.data_source_id
+    if (info.file_name != null) dataSourceName.value = String(info.file_name)
+    if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
     isDirty.value = false
   } catch (_) {
     applyMatrixToSheet([])
@@ -421,7 +437,7 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
 }
 
 const toggleDataSourceCollapsed = () => {
-  if (!isStepPersisted.value) return
+  if (!canUseDataSource.value) return
   const wasCollapsed = dataSourceCollapsed.value
   dataSourceCollapsed.value = !dataSourceCollapsed.value
   if (wasCollapsed && !dataSourceCollapsed.value) {
@@ -486,20 +502,43 @@ const hasAnySceneData = (matrix) => {
   return false
 }
 
+/** 垂直矩阵：第 0 行第 1 列起为场景名 */
+const extractSceneNamesFromMatrix = (matrix) => {
+  if (!Array.isArray(matrix) || !matrix.length) return []
+  const header = Array.isArray(matrix[0]) ? matrix[0] : []
+  const names = []
+  for (let c = 1; c < header.length; c++) {
+    const text = header[c] == null ? '' : String(header[c]).trim()
+    if (text) names.push(text)
+  }
+  return names
+}
+
 const shouldSave = (force = false) => {
   if (!force && !isDirty.value) return false
   // force 保存（步骤树保存按钮触发）时，必须确保数据已加载，避免空白模板覆盖已有数据源
   if (force && !isDirty.value && !hasLoaded.value) return false
   const matrix = getCurrentDataframeMatrix()
   if (matrix.length < 2) return false
-  if (hasDbRecord.value || dataSourceId.value) return true
+  // /build 默认矩阵只有场景名、字段值全空，不允许落库
   return hasAnySceneData(matrix)
 }
 
+/** 供步骤树保存前读取当前面板待落库的场景列名；无字段值时不参与一致性预检 */
+const getPendingSceneNames = () => {
+  if (!canUseDataSource.value && !hasLoaded.value) return null
+  const matrix = getCurrentDataframeMatrix()
+  if (!hasAnySceneData(matrix)) return null
+  const names = extractSceneNamesFromMatrix(matrix)
+  return names.length ? names : null
+}
+
 const saveWithContext = async (ctx, opts = {}) => {
-  if (panelReadonly.value) return { success: true, skipped: true }
+  // 引用内嵌只读步骤不写库；步骤切换卸载时不要用 canUseDataSource 当闸门，
+  // 卸载过程中 step props 可能已空，会导致误判只读而跳过自动保存。
+  if (props.readonly) return { success: true, skipped: true }
   const { caseId, caseCode, stepId, stepCode } = ctx || {}
-  if (!caseId || !stepId || !stepCode) {
+  if (!(caseId || caseCode) || !(stepId || stepCode)) {
     if (!opts.silent) $message.warning('当前步骤尚未保存入库，请先保存步骤树后再使用数据源')
     return { success: false, skipped: true }
   }
@@ -508,14 +547,16 @@ const saveWithContext = async (ctx, opts = {}) => {
   }
   try {
     const matrix = getCurrentDataframeMatrix()
-    const res = await api.saveOrUpdateDataSource({
-      case_id: caseId,
-      case_code: caseCode,
-      step_id: stepId,
-      step_code: stepCode,
+    const payload = {
+      case_id: caseId || undefined,
+      case_code: caseCode || undefined,
+      step_id: Number.isFinite(Number(stepId)) ? Number(stepId) : undefined,
+      step_code: stepCode || undefined,
       dataframe: matrix,
-      axis: axis.value ?? cachedAxis.value,
-    })
+      axis: detectAxisFromMatrix(matrix),
+    }
+    if (dataSourceId.value) payload.data_source_id = dataSourceId.value
+    const res = await api.saveOrUpdateDataSource(payload)
     const info = res?.data || {}
     if (info.data_source_id != null) dataSourceId.value = info.data_source_id
     if (info.file_name != null) dataSourceName.value = String(info.file_name)
@@ -769,10 +810,10 @@ const onApiDocFileSelected = (options) => {
 watch(
     () => props.step?.id,
     async (newId, oldId) => {
-      if (oldId != null && oldId !== newId && isDirty.value && lastStepContext.value && isStepPersisted.value) {
+      if (oldId != null && oldId !== newId && isDirty.value && lastStepContext.value && canUseDataSource.value) {
         await saveWithContext(lastStepContext.value, { silent: true })
       }
-      if (!dataSourceCollapsed.value && isStepPersisted.value) {
+      if (!dataSourceCollapsed.value && canUseDataSource.value) {
         await loadStepDataframePreview()
       }
     },
@@ -782,7 +823,8 @@ watch(
 watch(
     () => [route.query.case_id, props.dataSourceId],
     async () => {
-      if (!dataSourceCollapsed.value && isStepPersisted.value) {
+      if (isDirty.value) return
+      if (!dataSourceCollapsed.value && canUseDataSource.value) {
         await loadStepDataframePreview()
       }
     },
@@ -790,7 +832,7 @@ watch(
 )
 
 /** 步骤树保存后 original.id/step_code 回写：恢复可展开并在展开态下加载 */
-watch(isStepPersisted, (ok, prev) => {
+watch(canUseDataSource, (ok, prev) => {
   if (!ok) {
     dataSourceCollapsed.value = true
     return
@@ -801,28 +843,31 @@ watch(isStepPersisted, (ok, prev) => {
 })
 
 onBeforeUnmount(() => {
-  if (panelReadonly.value || !isDirty.value || !lastStepContext.value) return
-  const ctx = lastStepContext.value
-  const { caseId, caseCode, stepId, stepCode } = ctx
-  if (!caseId || !stepId || !stepCode) return
-  const matrix = Array.isArray(cachedMatrix.value) ? cachedMatrix.value : []
+  if (props.readonly || !isDirty.value) return
+  const ctx = lastStepContext.value || getStepContext()
+  const { caseId, caseCode, stepId, stepCode } = ctx || {}
+  if (!(caseId || caseCode) || !(stepId || stepCode)) return
+  // Luckysheet 已先卸载，只能用编辑过程中的 cachedMatrix
+  const matrix = Array.isArray(cachedMatrix.value) ? cachedMatrix.value.map((row) => [...(row || [])]) : []
   if (matrix.length < 2) return
   if (!hasDbRecord.value && !dataSourceId.value && !hasAnySceneData(matrix)) return
-  // 不 await：Vue 不会等待 async onBeforeUnmount；同步发出请求即可带上 dataframe
-  api.saveOrUpdateDataSource({
-    case_id: caseId,
-    case_code: caseCode,
-    step_id: stepId,
-    step_code: stepCode,
+  const payload = {
+    case_id: caseId || undefined,
+    case_code: caseCode || undefined,
+    step_id: Number.isFinite(Number(stepId)) ? Number(stepId) : undefined,
+    step_code: stepCode || undefined,
     dataframe: matrix,
-    axis: cachedAxis.value,
-  }).catch(() => {
+    axis: detectAxisFromMatrix(matrix),
+  }
+  if (dataSourceId.value) payload.data_source_id = dataSourceId.value
+  api.saveOrUpdateDataSource(payload).catch(() => {
     /* 静默保存，错误由 http 拦截器统一提示 */
   })
 })
 
 defineExpose({
   save: dataSourceSave,
+  getPendingSceneNames,
 })
 </script>
 

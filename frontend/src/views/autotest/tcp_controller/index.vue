@@ -1292,10 +1292,13 @@ const doDebugRequest = async (env_id) => {
 }
 
 const dataSourcePanelRef = ref(null)
-const saveDataSource = async () => {
-  return await dataSourcePanelRef.value?.save?.({ silent: true })
+const saveDataSource = async (opts = {}) => {
+  return await dataSourcePanelRef.value?.save?.({ silent: true, ...opts })
 }
-defineExpose({ saveDataSource })
+const getPendingDataSourceSceneNames = () => {
+  return dataSourcePanelRef.value?.getPendingSceneNames?.() ?? null
+}
+defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 </script>
 
 <style scoped>

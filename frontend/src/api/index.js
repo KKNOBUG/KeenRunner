@@ -261,6 +261,8 @@ export default {
   queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),
   updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),
   saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
+  /** Query：data_source_id/code 或 (case_id|case_code)+(step_id|step_code) —— 已有矩阵直接返回，否则按报文构建 */
+  buildDataSource: (params = {}) => request.get('/autotest/data_source/build', { params }),
   /** FormData：case_id、step_id、step_code、file_desc?、file —— 单步骤数据源上传 */
   singleStepDatasetUpload: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
   /** params：case_id、step_id、step_code —— 单步骤数据源下载（blob） */

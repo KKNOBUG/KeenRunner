@@ -83,10 +83,21 @@ _SECTION_LABEL_TO_KEY = {
     "assert_body": "assert_body",
 }
 _DATASET_SECTION_KEYS = ("head", "body", "assert_head", "assert_body")
+_SECTION_MARKERS_UPPER = {"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"}
 
 # 数据矩阵方向：水平(场景为行) / 垂直(场景为列)
 AXIS_HORIZONTAL = 0
 AXIS_VERTICAL = 1
+
+
+def is_section_marker(value: Any) -> bool:
+    """
+    判断单元格是否为分区标记。
+
+    :param value: 单元格值
+    :return: HEAD/BODY/ASSERT_HEAD/ASSERT_BODY(大小写不敏感)返回True
+    """
+    return isinstance(value, str) and value.strip().upper() in _SECTION_MARKERS_UPPER
 
 
 def _row_has_section_marker(cells: Any) -> bool:
@@ -117,6 +128,28 @@ def detect_matrix_axis(values: Any) -> int:
     if _row_has_section_marker(first_col):
         return AXIS_VERTICAL
     raise ValueError("无法识别数据矩阵方向：第 0 行或第 0 列需包含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 分区标记")
+
+
+def resolve_matrix_axis(matrix: List[List[Any]], declared_axis: Optional[int] = None) -> int:
+    """
+    按分区标记识别矩阵方向；识别失败时回落到调用方声明的 axis。
+
+    客户端/库中的 axis 可能与矩阵结构不一致（例如模型默认 0，实际为垂直矩阵），
+    清洗与解析必须以矩阵本身为准。
+
+    :param matrix: 二维矩阵
+    :param declared_axis: 调用方声明的方向
+    :return: 实际使用的方向
+    """
+    padded = _pad_matrix(matrix)
+    if not padded:
+        return declared_axis if declared_axis in (AXIS_HORIZONTAL, AXIS_VERTICAL) else AXIS_VERTICAL
+    try:
+        return detect_matrix_axis(pd.DataFrame(padded).values)
+    except ValueError:
+        if declared_axis in (AXIS_HORIZONTAL, AXIS_VERTICAL):
+            return declared_axis
+        raise
 
 
 def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -297,6 +330,138 @@ def _cell_is_blank(value: Any) -> bool:
     return False
 
 
+def _pad_matrix(matrix: List[List[Any]]) -> List[List[Any]]:
+    """
+    将不规则二维列表补齐为矩形矩阵。
+
+    :param matrix: 原始二维列表
+    :return: 列宽对齐后的矩阵，短行右侧补None
+    """
+    if not matrix:
+        return []
+    width = 0
+    for row in matrix:
+        if isinstance(row, list) and len(row) > width:
+            width = len(row)
+    padded: List[List[Any]] = []
+    for row in matrix:
+        cells = list(row) if isinstance(row, list) else []
+        if len(cells) < width:
+            cells.extend([None] * (width - len(cells)))
+        padded.append([json_safe_value(c) for c in cells[:width]])
+    return padded
+
+
+def extract_scene_names_from_matrix(matrix: List[List[Any]], axis: int) -> List[str]:
+    """
+    按矩阵方向提取场景名，保留出现顺序，不去重、不排序。
+
+    :param matrix: 已对齐的二维矩阵
+    :param axis: 0水平(第0列场景名) / 1垂直(第0行场景名)
+    :return: 非空场景名列表
+    """
+    names: List[str] = []
+    if not matrix:
+        return names
+    if axis == AXIS_HORIZONTAL:
+        for row in matrix[1:]:
+            if not row:
+                continue
+            text = "" if row[0] is None else str(row[0]).strip()
+            if text:
+                names.append(text)
+        return names
+    header = matrix[0] if matrix else []
+    for cell in header[1:]:
+        text = "" if cell is None else str(cell).strip()
+        if text:
+            names.append(text)
+    return names
+
+
+def _drop_empty_scene_rows(padded: List[List[Any]]) -> List[List[Any]]:
+    """
+    水平模式：剔除第0行以外、第0列以外全部为空的场景行。
+
+    :param padded: 已对齐的矩形矩阵
+    :return: 去掉空场景行后的矩阵，第0行始终保留
+    """
+    if not padded:
+        return padded
+    kept: List[List[Any]] = [padded[0]]
+    for row in padded[1:]:
+        if not all(_cell_is_blank(cell) for cell in row[1:]):
+            kept.append(row)
+    return kept
+
+
+def _drop_empty_scene_cols(padded: List[List[Any]]) -> List[List[Any]]:
+    """
+    垂直模式：剔除第0列以外、第0行以外全部为空的场景列。
+
+    :param padded: 已对齐的矩形矩阵
+    :return: 去掉空场景列后的矩阵，第0列始终保留
+    """
+    if not padded:
+        return padded
+    col_count = len(padded[0])
+    row_count = len(padded)
+    keep_cols: List[int] = [0]
+    for col_idx in range(1, col_count):
+        if not all(_cell_is_blank(padded[row_idx][col_idx]) for row_idx in range(1, row_count)):
+            keep_cols.append(col_idx)
+    return [[row[col_idx] for col_idx in keep_cols] for row in padded]
+
+
+def clean_matrix_by_axis(matrix: List[List[Any]], axis: int) -> List[List[Any]]:
+    """
+    按矩阵方向剔除空白字段行/列，以及无数据的场景行/列；分区标记始终保留。
+
+    水平模式(axis=0)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY列以外的整列为空列，
+    再剔除第0行以外、第0列以外全部为空的场景行。
+    垂直模式(axis=1)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY行以外的整行为空行，
+    再剔除第0列以外、第0行以外全部为空的场景列。
+    第0列(垂直字段名 / 水平场景名)与第0行始终保留。
+
+    :param matrix: 原始二维矩阵
+    :param axis: 0水平 / 1垂直
+    :return: 清洗后的二维矩阵
+    """
+    padded = _pad_matrix(matrix)
+    if not padded:
+        return []
+    row_count = len(padded)
+    col_count = len(padded[0])
+
+    if axis == AXIS_HORIZONTAL:
+        keep_cols: List[int] = []
+        for col_idx in range(col_count):
+            if col_idx == 0:
+                keep_cols.append(col_idx)
+                continue
+            header_cell = padded[0][col_idx] if row_count else None
+            if is_section_marker(header_cell):
+                keep_cols.append(col_idx)
+                continue
+            column_cells = [padded[row_idx][col_idx] for row_idx in range(row_count)]
+            if not all(_cell_is_blank(cell) for cell in column_cells):
+                keep_cols.append(col_idx)
+        trimmed = [[row[col_idx] for col_idx in keep_cols] for row in padded]
+        return _drop_empty_scene_rows(trimmed)
+
+    kept_rows: List[List[Any]] = []
+    for row_idx, row in enumerate(padded):
+        if row_idx == 0:
+            kept_rows.append(row)
+            continue
+        if row and is_section_marker(row[0]):
+            kept_rows.append(row)
+            continue
+        if not all(_cell_is_blank(cell) for cell in row):
+            kept_rows.append(row)
+    return _drop_empty_scene_cols(kept_rows)
+
+
 def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     """
     将DataFrame转为二维矩阵，剔除全空白(None/NaN/空串)的行与列(第0列始终保留)。
@@ -348,24 +513,45 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
     return parsed_data, sheet_axes, sheet_matrices
 
 
-async def parse_dataframe_matrix_async(matrix: List[List[Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
+async def parse_dataframe_matrix_async(
+        matrix: List[List[Any]],
+        axis: Optional[int] = None,
+) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
     """
-    将二维矩阵解析为dataset结构，自动识别水平或垂直方向。
+    将二维矩阵按方向清洗后解析为dataset结构。
 
     :param matrix: 二维列表(与单步骤xlsx首sheet、header=None结构一致)
-    :return: (step_data, dataset_names, norm_matrix, axis)
+    :param axis: 调用方声明的方向，仅在无法从矩阵识别时回落；与矩阵结构冲突时以分区标记为准
+    :return: (step_data, dataset_names, norm_matrix, axis)，dataset_names保持矩阵中的场景顺序
     """
     if not isinstance(matrix, list):
         raise ValueError("dataframe 须为二维列表")
     if not matrix:
-        return {}, [], [], AXIS_VERTICAL
-    df = pd.DataFrame(matrix)
+        return {}, [], [], AXIS_VERTICAL if axis not in (AXIS_HORIZONTAL, AXIS_VERTICAL) else axis
+
+    axis = resolve_matrix_axis(matrix, declared_axis=axis)
+    norm_matrix = clean_matrix_by_axis(matrix, axis)
+    if not norm_matrix:
+        return {}, [], [], axis
+
+    df = pd.DataFrame(norm_matrix)
     if df.empty:
-        return {}, [], [], AXIS_VERTICAL
-    axis = detect_matrix_axis(df.values)
-    step_data = await _parse_sheet_async(df, axis)
-    dataset_names = sorted(step_data.keys()) if step_data else []
-    norm_matrix = _dataframe_to_matrix(df)
+        return {}, [], [], axis
+
+    parsed = await _parse_sheet_async(df, axis)
+    ordered_names = extract_scene_names_from_matrix(norm_matrix, axis)
+    step_data: Dict[str, Dict[str, Any]] = {}
+    dataset_names: List[str] = []
+    for scene_name in ordered_names:
+        record = parsed.get(scene_name)
+        if not record:
+            continue
+        step_data[scene_name] = normalize_dataset_record(record)
+        dataset_names.append(scene_name)
+    for scene_name, record in parsed.items():
+        if scene_name not in step_data:
+            step_data[scene_name] = normalize_dataset_record(record)
+            dataset_names.append(scene_name)
     return step_data, dataset_names, norm_matrix, axis
 
 

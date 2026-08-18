@@ -38,6 +38,7 @@ class ExtractAssertPipeline:
             request_json: Optional[Union[list, dict]] = None,
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
+            request_form_data: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             log_callback: Optional[Callable[[str], None]] = None,
             finished_variables: Optional[Any] = None,
@@ -67,6 +68,7 @@ class ExtractAssertPipeline:
         :param request_json: 请求JSON
         :param request_headers: 请求头；未传request_cookies时可用于解析Cookie
         :param request_cookies: 请求Cookie；优先于从请求头解析
+        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param session_variables_lookup: 变量池字典（session_variables/变量池source）
         :param log_callback: 可选日志回调(str) -> None
         :param finished_variables: 断言期望值占位符解析上下文；引擎传StepExecutionContext
@@ -91,6 +93,7 @@ class ExtractAssertPipeline:
             request_json=request_json,
             request_headers=request_headers,
             request_cookies=request_cookies,
+            request_form_data=request_form_data,
             session_variables_lookup=session_variables_lookup,
             log_callback=log_callback,
         )
@@ -124,6 +127,7 @@ class ExtractAssertPipeline:
             request_json=request_json,
             request_headers=request_headers,
             request_cookies=request_cookies,
+            request_form_data=request_form_data,
             session_variables_lookup=session_variables_lookup,
             log_callback=log_callback,
             finished_variables=finished_variables,

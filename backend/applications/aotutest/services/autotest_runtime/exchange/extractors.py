@@ -20,19 +20,12 @@ from backend.common.xpath_utils import XPathUtils
 
 
 class Extractors:
-    """JSON/XML/Text/Headers/Cookies/变量池提取实现与统一入口。"""
+    """JSON/XML/Text/Headers/Cookies/Form-Data/变量池提取实现与统一入口。"""
 
     @classmethod
     def _normalize_extract_source(cls, source: Optional[str]) -> str:
-        """统一提取来源别名（兼容Header/Headers、Cookie/Cookies单复数）。"""
-        source_strip_lower: str = (source or "").strip().lower()
-        aliases = {
-            "response header": "response headers",
-            "response cookie": "response cookies",
-            "request header": "request headers",
-            "request cookie": "request cookies",
-        }
-        return aliases.get(source_strip_lower, source_strip_lower)
+        """将提取来源规范为小写，用于匹配 EXTRACTORS 注册键。"""
+        return (source or "").strip().lower()
 
     @classmethod
     def _extract_json_payload(
@@ -265,18 +258,19 @@ class Extractors:
             request_json: Optional[Union[list, dict]] = None,
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
+            request_form_data: Optional[Dict[str, Any]] = None,
             session_variables_lookup: Optional[Dict[str, Any]] = None,
             operation_type: str = "变量提取",
     ) -> Any:
         """
         从source指定来源根据表达式提取单个值（HTTP调试与步骤引擎共用）。
 
-        标准来源（如response/request json、xml、text、headers、cookies、
-        session_variables/变量池）经规范化别名后查EXTRACTORS注册表执行。
+        标准来源（如response/request json、xml、text、headers、cookie、form-data、
+        session_variables/变量池）规范化为小写后查EXTRACTORS注册表执行。
         未命中注册表时，若response_json为DB/Redis操作结果列表，则根据
         source与项内variable_name匹配后走JSON提取回退逻辑，回退路径同样支持ALL/SOME。
 
-        :param source: 来源类型或DB/Redis的variable_name；支持Header/Cookie单复数别名
+        :param source: 来源类型或DB/Redis的variable_name
         :param expr: 提取表达式（JSONPath/XPath/正则）；SOME模式通常必填
         :param range_type: ALL返回整段数据，SOME（默认）根据expr取值
         :param index: 多匹配结果为列表时的下标；越界抛ValueError
@@ -288,6 +282,7 @@ class Extractors:
         :param request_json: 请求JSON
         :param request_headers: 请求头；当request_cookies为None时用于解析Cookie
         :param request_cookies: 请求Cookie映射
+        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并后的键值映射
         :param session_variables_lookup: 变量池Dict[str, Any]，根据JSONPath取值
         :param operation_type: 错误信息前缀，如变量提取、断言验证
         :return: 提取得到的值
@@ -307,6 +302,7 @@ class Extractors:
             request_json=request_json,
             request_headers=request_headers,
             request_cookies=resolved_request_cookies,
+            request_form_data=request_form_data,
             session_lookup=session_variables_lookup,
         )
         extractor = EXTRACTORS.get(source_key)
@@ -453,11 +449,14 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         "request headers": mapping_side(
             "request_headers", "请求 Headers 为空", "请求 Headers JSONPath匹配失败"
         ),
-        "response cookies": mapping_side(
+        "response cookie": mapping_side(
             "response_cookies", "响应 Cookies 为空", "响应 Cookies JSONPath匹配失败"
         ),
-        "request cookies": mapping_side(
+        "request cookie": mapping_side(
             "request_cookies", "请求 Cookies 为空", "请求 Cookies JSONPath匹配失败"
+        ),
+        "request form-data": mapping_side(
+            "request_form_data", "请求 Form-Data 为空", "请求 Form-Data JSONPath匹配失败"
         ),
         "session_variables": session_vars,
         "变量池": session_vars,

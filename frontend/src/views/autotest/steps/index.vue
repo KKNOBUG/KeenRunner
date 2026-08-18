@@ -1321,6 +1321,39 @@ const handleSaveAll = async () => {
       }
     }
 
+    // 先保存当前步骤数据源，再组步骤树请求。否则 payload 仍是旧的 data_source_id，
+    // 树接口校验看不到刚写入的数据源，会出现第一次保存放过、第二次才报场景列不一致。
+    const pendingSceneNames = activeStepEditorRef.value?.getPendingDataSourceSceneNames?.() ?? null
+    const dataSourceSavedBefore = await activeStepEditorRef.value?.saveDataSource?.()
+    if (dataSourceSavedBefore && dataSourceSavedBefore.success === false && !dataSourceSavedBefore.skipped) {
+      return
+    }
+    // 新步骤尚无 step_code 时数据源会 skipped：在树保存前用当前面板场景列与用例已落库数据源比对
+    if (dataSourceSavedBefore?.skipped && Array.isArray(pendingSceneNames) && pendingSceneNames.length) {
+      const caseIdForDs = toPositiveCaseId(caseId.value) ?? toPositiveCaseId(caseInfo?.case_id)
+      if (caseIdForDs) {
+        try {
+          const sceneRes = await api.getSceneNamesByCase({ case_id: caseIdForDs })
+          const infoList = Array.isArray(sceneRes?.data?.data_source_info)
+              ? sceneRes.data.data_source_info
+              : []
+          const baseline = infoList
+              .map((item) => (Array.isArray(item?.data_source_scene_names) ? item.data_source_scene_names : []))
+              .find((names) => names.length > 0)
+          if (baseline && (baseline.length !== pendingSceneNames.length
+              || baseline.some((name, idx) => name !== pendingSceneNames[idx]))) {
+            window.$message?.error?.(
+                '数据源场景列名不一致，请先统一各步骤数据源的场景列'
+            )
+            return
+          }
+        } catch (_) {
+          /* 场景预检失败不阻断；树保存与落库后的数据源接口仍会再校验 */
+        }
+      }
+    }
+    await nextTick()
+
     // 按照树的前序遍历顺序分配 step_no，确保唯一且按顺序递增
     const stepNoMap = assignStepNumbers(steps.value)
 
@@ -1338,11 +1371,7 @@ const handleSaveAll = async () => {
       payload = stripIdentityFieldsForNewCase(payload)
     }
 
-    // 调用后端接口前，先保存当前步骤编辑器中的数据源（如有未提交的编辑）
     // 复制的新步骤此时尚无 step_code，会返回 skipped，待步骤落库获得 step_code 后再补存
-    const dataSourceSavedBefore = await activeStepEditorRef.value?.saveDataSource?.()
-
-    // 调用新的后端接口
     const res = await api.updateOrCreateStepTree(payload)
     if (res?.code === '000000' || res?.code === 200 || res?.code === 0) {
       window.$message?.success?.(res?.message || '保存成功')
@@ -1354,7 +1383,12 @@ const handleSaveAll = async () => {
         // 复制的新步骤保存前无 step_code，数据源未保存；步骤落库获得 step_code 后再保存一次数据源（含用户在面板的修改）
         if (dataSourceSavedBefore?.skipped) {
           await nextTick()
-          await activeStepEditorRef.value?.saveDataSource?.()
+          const dataSourceSavedAfter = await activeStepEditorRef.value?.saveDataSource?.()
+          if (dataSourceSavedAfter && dataSourceSavedAfter.success === false && !dataSourceSavedAfter.skipped) {
+            window.$message?.warning?.(
+                '步骤树已保存，但数据源未写入：场景列与同用例其他步骤不一致，请统一后再保存数据源'
+            )
+          }
         }
       }
 
@@ -1461,10 +1495,27 @@ const loadStepsFromCopy = (caseInfo) => {
   caseInfoPanelRef.value?.reloadFromRoute?.()
 
   const rawSteps = Array.isArray(caseInfo.steps) ? caseInfo.steps : []
-  const mappedSteps = rawSteps.map(mapBackendStep).filter(Boolean)
+  const clearCopiedDataSource = (step) => {
+    if (!step || typeof step !== 'object') return step
+    const next = {
+      ...step,
+      data_source_id: null,
+      data_source_name: null,
+      data_source_desc: null,
+    }
+    if (Array.isArray(step.children)) {
+      next.children = step.children.map(clearCopiedDataSource)
+    }
+    if (Array.isArray(step.quote_steps)) {
+      next.quote_steps = step.quote_steps.map(clearCopiedDataSource)
+    }
+    return next
+  }
+  const cleanedRawSteps = rawSteps.map(clearCopiedDataSource)
+  const mappedSteps = cleanedRawSteps.map(mapBackendStep).filter(Boolean)
   steps.value = mappedSteps
   selectedKeys.value = [mappedSteps[0]?.id].filter(Boolean)
-  fillQuoteStepsMapFromRawData(rawSteps, mappedSteps)
+  fillQuoteStepsMapFromRawData(cleanedRawSteps, mappedSteps)
   initializeStepExpandStates()
   updateStepDisplayNames()
   return true
@@ -1537,7 +1588,16 @@ const loadSteps = async ({ force = false } = {}) => {
 }
 
 /** 左侧树选中步骤，驱动右侧编辑器 */
-const handleSelect = (keys) => {
+const handleSelect = async (keys) => {
+  const prevKey = selectedKeys.value?.[0]
+  const nextKey = keys?.[0]
+  if (prevKey && prevKey !== nextKey) {
+    try {
+      await activeStepEditorRef.value?.saveDataSource?.({ force: false })
+    } catch (_) {
+      /* 错误由 http 拦截器统一提示 */
+    }
+  }
   selectedKeys.value = keys
 }
 
@@ -1908,6 +1968,21 @@ const handleDeleteStep = (id) => {
 }
 
 
+/** 复制步骤不得携带源步骤数据源指针，否则会复用/改写原数据源记录 */
+const clearStepDataSourceBinding = (node) => {
+  if (!node || typeof node !== 'object') return
+  if (node.config && typeof node.config === 'object') {
+    node.config.data_source_id = null
+    node.config.data_source_name = ''
+    node.config.data_source_desc = ''
+  }
+  if (node.original && typeof node.original === 'object') {
+    node.original.data_source_id = null
+    node.original.data_source_name = null
+    node.original.data_source_desc = null
+  }
+}
+
 /** 复制步骤（含子树）并插入到同级下一位置 */
 const handleCopyStep = (id) => {
   const step = findStep(id)
@@ -1924,6 +1999,7 @@ const handleCopyStep = (id) => {
     delete copiedStep.original.step_code
     // 保留其他 original 字段（如 case_id, step_type 等），但清除标识字段
   }
+  clearStepDataSourceBinding(copiedStep)
 
   // 确保结构规范：非 loop/if 类型不应该有 children 字段
   const def = stepDefinitions[copiedStep.type]
@@ -1943,6 +2019,7 @@ const handleCopyStep = (id) => {
       delete node.original.id
       delete node.original.step_code
     }
+    clearStepDataSourceBinding(node)
     const nodeDef = stepDefinitions[node.type]
     // 确保每个子步骤的结构规范
     if (nodeDef && !nodeDef.allowChildren && node.children !== undefined) {

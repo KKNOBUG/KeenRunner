@@ -233,6 +233,7 @@ class StepDebugService:
             request_json: Optional[Any] = None,
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
+            request_form_data: Optional[Dict[str, Any]] = None,
             prepend_extract_results: Optional[List[Dict[str, Any]]] = None,
             sync_extract_into_lookup: bool = True,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -252,6 +253,7 @@ class StepDebugService:
         :param request_json: 请求JSON
         :param request_headers: 请求头
         :param request_cookies: 请求Cookie
+        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param prepend_extract_results: 需前置合并的提取结果（如Redis自动写入）
         :param sync_extract_into_lookup: 是否将提取结果同步写入session_variables_lookup；
             Redis历史调试接口仅写入finished_variables，需传False以保持契约
@@ -267,6 +269,7 @@ class StepDebugService:
             request_json=request_json,
             request_headers=request_headers,
             request_cookies=request_cookies,
+            request_form_data=request_form_data,
             session_variables_lookup=session_variables_lookup,
             log_callback=log,
         )
@@ -288,6 +291,7 @@ class StepDebugService:
             request_json=request_json,
             request_headers=request_headers,
             request_cookies=request_cookies,
+            request_form_data=request_form_data,
             session_variables_lookup=session_variables_lookup,
             log_callback=log,
             finished_variables=finished_variables,
@@ -525,6 +529,7 @@ class StepDebugService:
             request_json=request_json_for_extract,
             request_headers=headers,
             request_cookies=AutoTestToolService.parse_cookie_header(headers),
+            request_form_data=AutoTestToolService.merge_mapping_dicts(urlencoded, form_data),
         )
 
         actual_body_type, actual_body = infer_http_actual_body(

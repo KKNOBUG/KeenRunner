@@ -212,9 +212,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         data_dict: Dict[str, Any] = data_source_in.model_dump(exclude_none=True, exclude_unset=True)
         case_id = data_dict.get("case_id")
-        case_code = data_dict.get("case_code")
-        step_id = data_dict.get("step_id")
         step_code = data_dict.get("step_code")
+        if not case_id or not str(step_code or "").strip():
+            error_message: str = "新增数据源失败, 参数[case_id, step_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
 
         # 模型非空字段兜底：cache_key/dataset/dataset_names
         if not str(data_dict.get("cache_key") or "").strip():
@@ -224,7 +226,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         if data_dict.get("dataset_names") is None:
             data_dict["dataset_names"] = []
 
-        existing = await self.model.filter(case_id=case_id, case_code=case_code, step_id=step_id, step_code=step_code).first()
+        existing = await self.model.filter(case_id=case_id, step_code=step_code).first()
 
         if not existing:
             try:
@@ -251,8 +253,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
                 raise DataBaseStorageException(message=error_message) from e
 
         error_message: str = (
-            f"新增数据源失败, 已存在启用状态记录, "
-            f"查询条件: [(case_id={case_id}, case_code={case_code}, step_id={step_id}, step_code={step_code}]"
+            f"新增数据源失败, 该步骤已绑定启用中的数据源, "
+            f"查询条件: [case_id={case_id}, step_code={step_code}]"
         )
         LOGGER.error(error_message)
         raise DataAlreadyExistsException(message=error_message)
@@ -379,6 +381,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         source_ids = await self.model.filter(case_id=case_id, state=0).values_list("id", flat=True)
         deleted_count: int = await self.soft_delete_batch(ids=list(source_ids))
         from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+        from backend.enums import AutoTestStepType
         step_crud = AutoTestStepCrud()
         step_vals: Dict[str, Any] = {
             "data_source_id": None,
@@ -386,7 +389,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             "data_source_desc": None,
         }
         step_crud._fill_updated_user(step_vals)
-        cleared_count: int = await AutoTestStepModel.filter(case_id=case_id, state=0).update(**step_vals)
+        cleared_count: int = await AutoTestStepModel.filter(
+            case_id=case_id,
+            state=0,
+            step_type__in=[AutoTestStepType.HTTP, AutoTestStepType.TCP],
+        ).update(**step_vals)
         return {"data_source": deleted_count, "step": cleared_count}
 
     async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDataSourceModel]]:

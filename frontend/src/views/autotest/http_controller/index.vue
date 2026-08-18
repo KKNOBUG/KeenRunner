@@ -1440,12 +1440,13 @@ const extractColumns = [
         'Request Json': 'Request Json',
         'Request Text': 'Request Text',
         'Request XML': 'Request XML',
-        'Request Header': 'Request Header',
+        'Request Headers': 'Request Headers',
         'Request Cookie': 'Request Cookie',
+        'Request Form-Data': 'Request Form-Data',
         'Response Json': 'Response Json',
         'Response Text': 'Response Text',
         'Response XML': 'Response XML',
-        'Response Header': 'Response Header',
+        'Response Headers': 'Response Headers',
         'Response Cookie': 'Response Cookie'
       }
       return sourceMap[row.source] || row.source
@@ -1516,12 +1517,13 @@ const validatorColumns = [
         'Request Json': 'requestJson',
         'Request Text': 'requestText',
         'Request XML': 'requestXml',
-        'Request Header': 'requestHeader',
+        'Request Headers': 'requestHeaders',
         'Request Cookie': 'requestCookie',
+        'Request Form-Data': 'requestFormData',
         'Response Json': 'responseJson',
         'Response Text': 'responseText',
         'Response XML': 'responseXml',
-        'Response Header': 'responseHeader',
+        'Response Headers': 'responseHeaders',
         'Response Cookie': 'responseCookie',
         '变量池': '变量池'
       }
@@ -1584,10 +1586,13 @@ const validatorColumns = [
 ]
 
 const dataSourcePanelRef = ref(null)
-const saveDataSource = async () => {
-  return await dataSourcePanelRef.value?.save?.({ silent: true })
+const saveDataSource = async (opts = {}) => {
+  return await dataSourcePanelRef.value?.save?.({ silent: true, ...opts })
 }
-defineExpose({ saveDataSource })
+const getPendingDataSourceSceneNames = () => {
+  return dataSourcePanelRef.value?.getPendingSceneNames?.() ?? null
+}
+defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 
 </script>
 
