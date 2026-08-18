@@ -10,7 +10,7 @@ import {useDark} from '@vueuse/core'
  * Luckysheet Vue3 封装组件
  *
  * Props:
- *   - data: 二维数组，每个元素为单元格值或 null
+ *   - data: 二维数组，单元格可为 number/boolean/string/null（对齐 Excel 类型）
  *   - columns: 表头数组，第 0 项为第一列表头（通常留空），其余为场景列名
  *   - readonly: 是否只读
  *   - options: 透传给 luckysheet 的额外配置
@@ -103,6 +103,65 @@ const isDark = useDark()
 /** 受保护行背景色：跟随应用深/浅色模式（深色用深灰、浅色用浅灰） */
 const PROTECTED_ROW_BG = computed(() => (isDark.value ? '#3a3a3a' : '#f0f0f0'))
 
+const isEmptyCellValue = (value) => value == null || value === ''
+
+const looksLikeNumberText = (text) => /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)
+
+const needsExcelTextFormat = (text) => {
+  if (typeof text !== 'string' || text === '') return false
+  const token = text.toLowerCase()
+  return token === 'true' || token === 'false' || token === 'null' || looksLikeNumberText(text)
+}
+
+/** 将 dataset/矩阵值转为 Luckysheet 单元格，对齐 Excel 类型（数字/布尔/文本） */
+const valueToLuckysheetCell = (value, extra = {}) => {
+  if (isEmptyCellValue(value)) {
+    return {ct: {fa: 'General', t: 'g'}, m: '', v: '', ht: 0, vt: 0, ...extra}
+  }
+  if (typeof value === 'boolean') {
+    const m = value ? 'TRUE' : 'FALSE'
+    return {ct: {fa: 'General', t: 'b'}, m, v: value, ht: 0, vt: 0, ...extra}
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return {ct: {fa: 'General', t: 'n'}, m: String(value), v: value, ht: 0, vt: 0, ...extra}
+  }
+  const text = String(value)
+  if (needsExcelTextFormat(text)) {
+    return {ct: {fa: '@', t: 's'}, m: text, v: text, ht: 0, vt: 0, ...extra}
+  }
+  return {ct: {fa: 'General', t: 'g'}, m: text, v: text, ht: 0, vt: 0, ...extra}
+}
+
+/**
+ * 读取 Luckysheet 单元格为矩阵值。
+ * 不在编辑钩子里改写格子，以免破坏复制/粘贴/撤销。
+ * 前导 ' 仅在读取时去掉，作为 Excel 强制文本前缀。
+ */
+const readLuckysheetCell = (cell, {asText = false} = {}) => {
+  if (cell == null) return asText ? '' : null
+  const raw = cell.v !== undefined && cell.v !== null ? cell.v : cell.m
+  if (raw === undefined || raw === null || raw === '') return asText ? '' : null
+  if (asText) {
+    const text = String(raw)
+    return text.startsWith("'") ? text.slice(1) : text
+  }
+  const ctType = cell.ct && cell.ct.t
+  if (ctType === 'n' && typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (ctType === 'b') {
+    if (typeof raw === 'boolean') return raw
+    const token = String(raw).toLowerCase()
+    if (token === 'true') return true
+    if (token === 'false') return false
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'boolean') return raw
+  const text = String(raw)
+  if (text.startsWith("'")) return text.slice(1)
+  return text
+}
+
+const hasUserInput = (value) => value != null && value !== ''
+
 const buildLuckysheetData = () => {
   const celldata = []
   const columns = Array.isArray(props.columns) ? props.columns : []
@@ -110,13 +169,13 @@ const buildLuckysheetData = () => {
   const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
   const keywordSet = new Set(keywords.map((k) => String(k).trim().toUpperCase()))
 
-  // 第一行：表头
+  // 第一行：表头（始终文本）
   columns.forEach((col, c) => {
     const value = col == null ? '' : String(col)
-    celldata.push({r: 0, c, v: {ct: {fa: 'General', t: 'g'}, m: value, v: value, ht: 0, vt: 0}})
+    celldata.push({r: 0, c, v: valueToLuckysheetCell(value)})
   })
 
-  // 数据行
+  // 数据行：第 0 列为字段名/分区标记（文本），其余格按 Excel 类型写入
   dataRows.forEach((row, r) => {
     const rowIndex = r + 1
     const rowArr = Array.isArray(row) ? row : []
@@ -125,16 +184,11 @@ const buildLuckysheetData = () => {
     const numCols = Math.max(columns.length, rowArr.length)
 
     for (let c = 0; c < numCols; c++) {
-      const cellValue = rowArr[c] == null ? '' : String(rowArr[c])
-      // 非保护行跳过空单元格，保护行则生成全部列以应用置灰样式
-      if (cellValue === '' && !isProtected) continue
-
-      const cellObj = {ct: {fa: 'General', t: 'g'}, m: cellValue, v: cellValue, ht: 0, vt: 0}
-      if (isProtected) {
-        cellObj.bg = PROTECTED_ROW_BG.value
-        cellObj.bl = 1
-      }
-      celldata.push({r: rowIndex, c, v: cellObj})
+      const raw = c < rowArr.length ? rowArr[c] : null
+      if (isEmptyCellValue(raw) && !isProtected) continue
+      const extra = isProtected ? {bg: PROTECTED_ROW_BG.value, bl: 1} : {}
+      const cellValue = c === 0 ? (raw == null ? '' : String(raw)) : raw
+      celldata.push({r: rowIndex, c, v: valueToLuckysheetCell(cellValue, extra)})
     }
   })
 
@@ -205,6 +259,7 @@ const setupDeletionProtection = () => {
     }
   }
   const interceptKeydown = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (shouldBlock()) {
         e.stopImmediatePropagation()
@@ -298,6 +353,7 @@ const initLuckysheet = async () => {
       },
     ],
     hook: {
+      // 只通知上层变脏，不在此改写单元格，避免打断 Luckysheet 自带的复制/粘贴/撤销
       cellUpdated: () => {
         emit('change')
       },
@@ -366,7 +422,7 @@ const getData = () => {
     const row = []
     for (let c = 0; c < cols; c++) {
       const cell = sheetData[r]?.[c]
-      row.push(cell?.v ?? cell?.m ?? '')
+      row.push(readLuckysheetCell(cell, {asText: r === 0 || c === 0}))
     }
     result.push(row)
   }
@@ -377,41 +433,29 @@ const getDataForSave = () => {
   const raw = getData()
   if (!raw.length) return {headers: [], rows: []}
 
-  // 第一行视为表头
-  const headers = raw[0].map((h) => (h == null || h === '' ? null : String(h)))
+  const headers = raw[0].map((h) => (h == null || h === '' ? '' : String(h)))
   const dataRows = raw.slice(1)
 
-  // 清理完全空白的列（排除第一列）
   const blankCols = new Set()
   for (let c = 1; c < headers.length; c++) {
-    const hasHeader = headers[c] != null
-    const hasData = dataRows.some((row) => row[c] != null && String(row[c]).trim() !== '')
+    const hasHeader = headers[c] !== ''
+    const hasData = dataRows.some((row) => hasUserInput(row[c]))
     if (!hasHeader && !hasData) blankCols.add(c)
   }
 
-  // 清理完全空白的行，并将行列投影到保留列（移除空白列而非标记 null）
   const keepCols = []
   for (let c = 0; c < headers.length; c++) {
     if (!blankCols.has(c)) keepCols.push(c)
   }
 
   const filteredRows = dataRows
-      .filter((row) => {
-        for (const c of keepCols) {
-          if (row[c] != null && String(row[c]).trim() !== '') return true
-        }
-        return false
-      })
+      .filter((row) => keepCols.some((c) => hasUserInput(row[c])))
       .map((row) => keepCols.map((c) => {
         const v = row[c]
-        return v == null ? '' : String(v)
+        return v == null ? '' : v
       }))
 
-  const filteredHeaders = keepCols.map((c) => {
-    const h = headers[c]
-    return h == null ? '' : h
-  })
-
+  const filteredHeaders = keepCols.map((c) => headers[c] == null ? '' : headers[c])
   return {headers: filteredHeaders, rows: filteredRows}
 }
 

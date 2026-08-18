@@ -223,13 +223,13 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         for section, rows in sections.items():
             for r in rows:
                 key = first_col[r]
-                value = data_values[r, col_idx]
-                if key and pd.notna(value):
-                    safe_val = json_safe_value(value)
-                    if safe_val is None and not isinstance(value, str):
-                        continue
-                    record[section][str(key).strip()] = safe_val
-                    has_data = True
+                if not key:
+                    continue
+                typed = _dataset_field_value(data_values[r, col_idx])
+                if typed is _CELL_OMIT:
+                    continue
+                record[section][str(key).strip()] = typed
+                has_data = True
 
         if has_data:
             # 即使某分区无字段，四键已由记录初始化补齐
@@ -274,13 +274,11 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         record = {k: {} for k in _DATASET_SECTION_KEYS}
         has_data = False
         for col_idx, section, field_key in field_columns:
-            value = data_values[row_idx, col_idx]
-            if pd.notna(value):
-                safe_val = json_safe_value(value)
-                if safe_val is None and not isinstance(value, str):
-                    continue
-                record[section][field_key] = safe_val
-                has_data = True
+            typed = _dataset_field_value(data_values[row_idx, col_idx])
+            if typed is _CELL_OMIT:
+                continue
+            record[section][field_key] = typed
+            has_data = True
         if has_data:
             result[scene_name] = record
     return result
@@ -311,12 +309,18 @@ async def _parse_sheet_async(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str,
     return await loop.run_in_executor(_executor, _parse_sheet_by_axis, df, axis)
 
 
+# dataset 字段省略标记：未填写的单元格不覆盖步骤原值
+_CELL_OMIT = object()
+
+
 def _cell_is_blank(value: Any) -> bool:
     """
-    判断单元格是否为空白。
+    判断单元格是否未填写。
+
+    None/NaN/空串视为未填；单空格、0、False 视为已填写。
 
     :param value: 单元格值
-    :return: None/NaN/纯空白字符串返回True，否则False
+    :return: 未填写返回True
     """
     if value is None:
         return True
@@ -325,9 +329,46 @@ def _cell_is_blank(value: Any) -> bool:
             return True
     except (TypeError, ValueError):
         pass
-    if isinstance(value, str) and not value.strip():
+    return isinstance(value, str) and value == ""
+
+
+def _excel_typed_value(value: Any) -> Any:
+    """
+    按 Excel 编写习惯解释单元格类型。
+
+    前导单引号强制为文本（引号本身不落库）；含 ${} 占位符保持字符串；
+    整格为 true/false/null（大小写不敏感）时转为布尔 / JSON null。
+
+    :param value: 原始单元格值
+    :return: 供 dataset 使用的类型化值
+    """
+    if not isinstance(value, str):
+        return value
+    if value.startswith("'"):
+        return value[1:]
+    if "${" in value:
+        return value
+    token = value.lower()
+    if token == "true":
         return True
-    return False
+    if token == "false":
+        return False
+    if token == "null":
+        return None
+    return value
+
+
+def _dataset_field_value(value: Any) -> Any:
+    """
+    将单元格转为 dataset 字段值。
+
+    :param value: 原始单元格
+    :return: _CELL_OMIT 表示省略；None 表示显式 JSON null
+    """
+    safe = json_safe_value(value)
+    if _cell_is_blank(safe):
+        return _CELL_OMIT
+    return _excel_typed_value(safe)
 
 
 def _pad_matrix(matrix: List[List[Any]]) -> List[List[Any]]:
@@ -534,7 +575,7 @@ async def parse_dataframe_matrix_async(
     if not norm_matrix:
         return {}, [], [], axis
 
-    df = pd.DataFrame(norm_matrix)
+    df = pd.DataFrame(norm_matrix, dtype=object)
     if df.empty:
         return {}, [], [], axis
 

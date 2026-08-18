@@ -15,6 +15,20 @@ import orjson
 from backend.common import JSONPathUtils
 
 
+def _as_wire_string(value: Any) -> str:
+    """
+    将数据源值转为 header/form/urlencoded/XML 文本。
+
+    JSON body 保持原类型；仅协议上必须是字符串的通道在写出时转换。
+    bool 使用 true/false，避免 Python 的 True/False。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 class JsonDatagram:
     """根据JSONPath映射原地（或解析后）更新JSON请求报文。"""
 
@@ -138,12 +152,16 @@ class JsonDatagram:
             for json_path, json_value in path_map.items():
                 if not json_path:
                     continue
-                JsonDatagram._by_jsonpath_modify_inner_content(form_data, json_path, json_value)
+                JsonDatagram._by_jsonpath_modify_inner_content(
+                    form_data, json_path, _as_wire_string(json_value)
+                )
         if isinstance(urlencoded, dict):
             for json_path, json_value in path_map.items():
                 if not json_path:
                     continue
-                JsonDatagram._by_jsonpath_modify_inner_content(urlencoded, json_path, json_value)
+                JsonDatagram._by_jsonpath_modify_inner_content(
+                    urlencoded, json_path, _as_wire_string(json_value)
+                )
         return rb
 
     @staticmethod
@@ -181,7 +199,7 @@ class JsonDatagram:
                     continue
                 key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
                 if key and key in request_headers:
-                    request_headers[key] = json_value
+                    request_headers[key] = _as_wire_string(json_value)
 
         rb = request_body
         rb = JsonDatagram._by_jsonpath_modify_request_params(

@@ -345,12 +345,25 @@ const buildBlankTemplate = (sceneNames = []) => {
   return { headers, data }
 }
 
-const normalizeMatrixRow = (row, length) => {
+const normalizeHeaderRow = (row, length) => {
   const arr = Array.isArray(row) ? row : []
   const result = []
   for (let i = 0; i < length; i++) {
     const v = arr[i]
-    result.push(v == null ? '' : String(v))
+    result.push(v == null || v === '' ? '' : String(v))
+  }
+  return result
+}
+
+const padTypedRow = (row, length) => {
+  const arr = Array.isArray(row) ? row : []
+  const result = []
+  for (let i = 0; i < length; i++) {
+    if (i >= arr.length || arr[i] === undefined || arr[i] === null) {
+      result.push(i === 0 ? '' : null)
+      continue
+    }
+    result.push(arr[i])
   }
   return result
 }
@@ -364,8 +377,8 @@ const applyMatrixToSheet = (matrix) => {
     return
   }
   const maxCol = Math.max(...matrix.map((row) => (Array.isArray(row) ? row.length : 0)))
-  sheetColumns.value = normalizeMatrixRow(matrix[0], maxCol)
-  sheetData.value = matrix.slice(1).map((row) => normalizeMatrixRow(row, maxCol))
+  sheetColumns.value = normalizeHeaderRow(matrix[0], maxCol)
+  sheetData.value = matrix.slice(1).map((row) => padTypedRow(row, maxCol))
 }
 
 /** 将当前 sheetColumns/sheetData 写入缓存（Luckysheet 未就绪或已销毁时用） */
@@ -375,8 +388,8 @@ const syncCacheFromSheetState = () => {
   if (!headers.length) return
   const maxCol = headers.length
   cachedMatrix.value = [
-    normalizeMatrixRow(headers, maxCol),
-    ...rows.map((r) => normalizeMatrixRow(r, maxCol)),
+    normalizeHeaderRow(headers, maxCol),
+    ...rows.map((r) => padTypedRow(r, maxCol)),
   ]
   cachedAxis.value = axis.value
 }
@@ -471,9 +484,9 @@ const getCurrentDataframeMatrix = () => {
     const { headers = [], rows = [] } = luckysheetRef.value.getDataForSave() || {}
     const maxCol = headers.length
     if (maxCol > 0) {
-      const matrix = [normalizeMatrixRow(headers, maxCol)]
+      const matrix = [normalizeHeaderRow(headers, maxCol)]
       rows.forEach((row) => {
-        matrix.push(normalizeMatrixRow(row, maxCol))
+        matrix.push(padTypedRow(row, maxCol))
       })
       cachedMatrix.value = matrix
       cachedAxis.value = axis.value
@@ -496,7 +509,7 @@ const hasAnySceneData = (matrix) => {
   for (let r = 1; r < matrix.length; r++) {
     const row = matrix[r]
     for (let c = 1; c < row.length; c++) {
-      if (row[c] != null && String(row[c]).trim() !== '') return true
+      if (row[c] != null && row[c] !== '') return true
     }
   }
   return false
