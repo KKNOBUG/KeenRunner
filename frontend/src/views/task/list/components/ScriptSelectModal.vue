@@ -52,8 +52,8 @@ const tagPopoverShow = ref(false)
 const inited = ref(false)
 
 const caseAttrOptions = [
-  { label: '正用例', value: '正用例' },
-  { label: '反用例', value: '反用例' },
+  { label: '正案例', value: '正案例' },
+  { label: '反案例', value: '反案例' },
 ]
 
 const isExpanded = computed(() => expandedNames.value.includes('add'))
@@ -203,7 +203,7 @@ const columns = computed(() => {
       width: 100,
       align: 'center',
       render(row) {
-        const mode = row.case_attr === '反用例' ? 'primary' : 'success'
+        const mode = row.case_attr === '反案例' ? 'primary' : 'success'
         return h(NTag, { type: mode, round: true, bordered: true }, { default: () => row.case_attr || '-' })
       },
     },

@@ -435,8 +435,8 @@ const projectOptions = ref([])
 const projectLoading = ref(false)
 // 用例属性选项
 const caseAttrOptions = [
-  { label: '正用例', value: '正用例' },
-  { label: '反用例', value: '反用例' }
+  { label: '正案例', value: '正案例' },
+  { label: '反案例', value: '反案例' }
 ]
 // 用例类型选项（与后端 AutoTestCaseType 一致）
 const caseTypeOptions = [
@@ -699,7 +699,7 @@ const columns = computed(() => {
         let mode = "success"
         let round = true
         let bordered = true
-        if (row.case_attr === '反用例') {
+        if (row.case_attr === '反案例') {
           mode = 'primary'
         }
         return h(

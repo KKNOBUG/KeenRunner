@@ -4,7 +4,7 @@ import { ENV_TYPE } from './envType'
  * 环境配置子表展示列（字段名与后端表对齐）。
  * 操作列由使用方追加。
  *
- * @param {string} type 配置类型：api/file/database/redis
+ * @param {string} type 配置类型：app/file/database/redis
  * @returns {Array} Naive UI DataTable 列定义
  */
 export function buildConfigDisplayColumns(type) {

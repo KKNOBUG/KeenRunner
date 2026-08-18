@@ -10,8 +10,8 @@ from backend.enums.base_enum_cls import StringEnum
 
 
 class AutoTestCaseAttr(StringEnum):
-    TRUE_CASE = "正用例"
-    FALSE_CASE = "反用例"
+    TRUE_CASE = "正案例"
+    FALSE_CASE = "反案例"
 
 
 class AutoTestCaseType(StringEnum):
@@ -135,7 +135,7 @@ class AutoTestDataBaseType(StringEnum):
 
 
 class AutoTestConfigNodeType(StringEnum):
-    API = "api"
+    APP = "app"
     DB = "database"
     REDIS = "redis"
     FILE = "file"

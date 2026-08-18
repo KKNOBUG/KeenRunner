@@ -296,7 +296,7 @@ async def list_environments(
 async def page_environments(
         project_id: Optional[int] = Query(None, description="应用ID", ge=1),
         env_name: Optional[str] = Query(None, description="环境名称"),
-        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(api/file/database/redis)"),
+        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(app/file/database/redis)"),
         ip: Optional[str] = Query(None, description="IP地址"),
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),

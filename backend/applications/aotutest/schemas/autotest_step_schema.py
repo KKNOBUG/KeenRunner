@@ -110,7 +110,7 @@ class StepsExecuteConfigBase(BaseModel):
     """步骤执行时环境配置覆盖基础字段模型。"""
 
     env_name: str = Field(..., max_length=128, description="环境名称")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(api/file/database/redis)")
+    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(app/file/database/redis)")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="配置主机")
     config_port: str = Field(..., max_length=8, description="配置端口")

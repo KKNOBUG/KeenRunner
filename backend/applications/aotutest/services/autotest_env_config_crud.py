@@ -424,7 +424,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
 
         :param project_id: 应用ID
         :param env_name: 环境名称（会规范化为大写）
-        :param env_type: 节点类型(api/file/database/redis)
+        :param env_type: 节点类型(app/file/database/redis)
         :param created_user: 无登录上下文时的回落创建人；有登录上下文时由Scaffold覆盖
         :return: 环境绑定实例
         """
@@ -493,7 +493,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
 
         :param project_id: 应用ID
         :param env_name: 环境名称
-        :param env_type: 节点类型(api/file/database/redis)
+        :param env_type: 节点类型(app/file/database/redis)
         :param page: 页码
         :param page_size: 每页条数
         :return: (总条数, 当前页列表)

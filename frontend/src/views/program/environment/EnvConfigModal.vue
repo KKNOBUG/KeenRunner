@@ -23,7 +23,7 @@
           <NInput v-model:value="form.env_name" maxlength="64" placeholder="如 SIT、UAT" :disabled="true"/>
         </NFormItem>
 
-        <template v-if="configType === ENV_TYPE.API">
+        <template v-if="configType === ENV_TYPE.APP">
           <NFormItem
               label="主机地址"
               path="config_host"
@@ -170,7 +170,7 @@ const props = defineProps({
   show: { type: Boolean, default: false },
   /** create | edit | copy */
   mode: { type: String, default: 'create' },
-  /** api/file/database/redis */
+  /** app/file/database/redis */
   configType: { type: String, required: true },
   /** 主表绑定行 */
   envRow: { type: Object, required: true },
@@ -294,7 +294,7 @@ async function handleSave() {
     const payload = buildPayload()
     const t = props.configType
     const isEditMode = props.mode === 'edit'
-    if (t === ENV_TYPE.API) await (isEditMode ? api.updateAppEnvConfig(payload) : api.createAppEnvConfig(payload))
+    if (t === ENV_TYPE.APP) await (isEditMode ? api.updateAppEnvConfig(payload) : api.createAppEnvConfig(payload))
     else if (t === ENV_TYPE.FILE) await (isEditMode ? api.updateFileEnvConfig(payload) : api.createFileEnvConfig(payload))
     else if (t === ENV_TYPE.DB) await (isEditMode ? api.updateDbEnvConfig(payload) : api.createDbEnvConfig(payload))
     else if (t === ENV_TYPE.REDIS) await (isEditMode ? api.updateRedisEnvConfig(payload) : api.createRedisEnvConfig(payload))

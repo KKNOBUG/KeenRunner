@@ -161,7 +161,7 @@
                       </div>
                       <div class="col addr">
                         <n-input
-                            :value="panel.getRowAddrPreview(row, 'api')"
+                            :value="panel.getRowAddrPreview(row, 'app')"
                             size="small"
                             disabled
                             :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"

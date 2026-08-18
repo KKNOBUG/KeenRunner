@@ -157,8 +157,8 @@ import api from '@/api/index.js'
 
 /** 与 CaseInfoPanel 选项顺序一致 */
 const caseAttrOptions = [
-  { label: '正用例', value: '正用例' },
-  { label: '反用例', value: '反用例' },
+  { label: '正案例', value: '正案例' },
+  { label: '反案例', value: '反案例' },
 ]
 
 const caseTypeOptions = [

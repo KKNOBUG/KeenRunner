@@ -2607,7 +2607,7 @@ class TcpStepExecutor(BaseStepExecutor):
             request_url = (self.step.request_url or "").strip()
             request_port = self.step.request_port
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
-                expected_config_type=AutoTestConfigNodeType.API,
+                expected_config_type=AutoTestConfigNodeType.APP,
             )
             if current_step_config:
                 request_url: str = current_step_config.config_host
@@ -3336,7 +3336,7 @@ class HttpStepExecutor(BaseStepExecutor):
             request_url: str = (self.step.request_url or "").strip()
             request_method: HTTPMethod = self.step.request_method
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
-                expected_config_type=AutoTestConfigNodeType.API,
+                expected_config_type=AutoTestConfigNodeType.APP,
             )
             env_name: Optional[str] = None
             if current_step_config:

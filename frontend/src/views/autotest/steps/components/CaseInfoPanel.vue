@@ -309,8 +309,8 @@ const anyDropdownOpen = computed(() =>
 )
 
 const caseAttrOptions = [
-  { label: '正用例', value: '正用例' },
-  { label: '反用例', value: '反用例' },
+  { label: '正案例', value: '正案例' },
+  { label: '反案例', value: '反案例' },
 ]
 
 const caseTypeOptions = [
@@ -538,12 +538,12 @@ watch(
     { immediate: true },
 )
 
-// 公共接口：锁定正用例；公共脚本/公共接口：清空标签（与后端口径一致）
+// 公共接口：锁定正案例；公共脚本/公共接口：清空标签（与后端口径一致）
 watch(
     () => caseForm.case_type,
     (caseType) => {
       if (caseType === '公共接口') {
-        caseForm.case_attr = '正用例'
+        caseForm.case_attr = '正案例'
       }
       if (['公共脚本', '公共接口'].includes(caseType)) {
         caseForm.case_tags = []

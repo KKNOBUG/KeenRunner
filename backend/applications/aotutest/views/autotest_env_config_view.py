@@ -487,7 +487,7 @@ async def get_env_config_names(
 async def list_env_configs(
         project_id: Optional[int] = Query(None, description="应用ID"),
         env_name: Optional[str] = Query(None, description="环境名称"),
-        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(api/file/database/redis)"),
+        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(app/file/database/redis)"),
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

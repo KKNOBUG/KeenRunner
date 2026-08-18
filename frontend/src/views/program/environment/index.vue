@@ -49,7 +49,7 @@ const editingEnvRow = ref(null)
 
 const configModalShow = ref(false)
 const configModalMode = ref('create')
-const configModalType = ref(ENV_TYPE.API)
+const configModalType = ref(ENV_TYPE.APP)
 const configEnvRow = ref(null)
 /** 递增后通知已展开的子表重新拉取配置，避免必须手动折叠再展开 */
 const expandRefreshKey = ref(0)
@@ -66,7 +66,7 @@ function openEditBind(row) {
 
 function openAddConfig(row) {
   configEnvRow.value = row
-  configModalType.value = row.env_type || ENV_TYPE.API
+  configModalType.value = row.env_type || ENV_TYPE.APP
   configModalMode.value = 'create'
   configModalShow.value = true
 }
@@ -207,7 +207,7 @@ const columns = computed(() => {
                     },
                     { icon: renderIcon('material-symbols:add', { size: 16 }) }
                 ),
-                [[vPermission, apiPermissionKey('post', CREATE_CONFIG_PERM[row.env_type] || CREATE_CONFIG_PERM[ENV_TYPE.API])]]
+                [[vPermission, apiPermissionKey('post', CREATE_CONFIG_PERM[row.env_type] || CREATE_CONFIG_PERM[ENV_TYPE.APP])]]
             ),
             withDirectives(
                 h(

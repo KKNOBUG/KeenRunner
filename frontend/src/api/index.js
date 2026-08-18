@@ -113,11 +113,11 @@ export default {
   updateDbEnvConfig: (data = {}) => request.post('/autotest/config/database/update', data),
   /** 更新 Redis 类型配置。Body: RedisEnvConfigUpdate */
   updateRedisEnvConfig: (data = {}) => request.post('/autotest/config/redis/update', data),
-  /** 删除子表配置（单条）。Body: { config_id, env_type(api|file|database|redis), updated_user? } */
+  /** 删除子表配置（单条）。Body: { config_id, env_type(app|file|database|redis), updated_user? } */
   deleteEnvConfig: (data = {}) => request.post('/autotest/config/delete', data),
   /** 子表配置分页搜索（含 project_name/env_name）。Body: AutoTestApiEnvConfigSelect */
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
-  /** 子表配置分页列表。Query: project_id/env_name/env_type(api|file|database|redis)/page/page_size */
+  /** 子表配置分页列表。Query: project_id/env_name/env_type(app|file|database|redis)/page/page_size */
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
   /** Query: project_id、env_id(绑定主键)、env_type 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),

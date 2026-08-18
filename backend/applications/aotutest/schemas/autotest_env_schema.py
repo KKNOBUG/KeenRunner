@@ -19,7 +19,7 @@ class AutoTestApiEnvBase(BaseModel):
 
     env_name: Optional[UpperStr] = Field(None, max_length=64, description="环境名称")
     project_id: Optional[int] = Field(None, ge=1, description="应用ID")
-    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(api/file/database/redis)")
+    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(app/file/database/redis)")
     env_desc: Optional[str] = Field(None, max_length=2048, description="绑定描述(按节点类型独立)")
 
 
@@ -28,7 +28,7 @@ class AutoTestApiEnvCreate(AutoTestApiEnvBase):
 
     env_name: UpperStr = Field(..., max_length=64, description="环境名称")
     project_id: int = Field(..., ge=1, description="应用ID")
-    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(app/file/database/redis)")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 

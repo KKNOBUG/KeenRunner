@@ -556,7 +556,7 @@ const getBucket = (row, configType) => {
   const dict = debugEnvConfigDict.value || {}
   const envName = resolveEnvName(getEffectiveEnvIdForRow(row))
   if (!envName) return {}
-  // /config/query：project_id -> env_name -> api|file|database|redis -> config_name
+  // /config/query：project_id -> env_name -> app|file|database|redis -> config_name
   const p = dict?.[row.project_id] || dict?.[String(row.project_id)] || {}
   return p?.[envName]?.[configType] || {}
 }
@@ -575,7 +575,7 @@ const getDbDatabaseDisplay = (row) => {
 
 const getRowAddrPreview = (row, configType) => {
   const bucket = getBucket(row, configType)
-  const name = configType === 'api' ? row.request_config_name : row.config_name
+  const name = configType === 'app' ? row.request_config_name : row.config_name
   const info = name ? bucket?.[name] : null
   return info?.config_host ? `${info.config_host}${info.config_port ? `:${info.config_port}` : ''}` : ''
 }
@@ -771,17 +771,17 @@ const collectExecConfigMissingRows = () => {
   const checkApiRow = (row) => {
     const envId = getEffectiveEnvIdForRow(row)
     if (envId == null || String(envId).trim() === '') {
-      push('api', row, '环境未选择')
+      push('app', row, '环境未选择')
       return
     }
     const cfgName = row.request_config_name
     if (!cfgName || !String(cfgName).trim()) {
-      push('api', row, '配置名未填写')
+      push('app', row, '配置名未填写')
       return
     }
-    const addr = getRowAddrPreview(row, 'api')
+    const addr = getRowAddrPreview(row, 'app')
     if (!addr || !String(addr).trim()) {
-      push('api', row, `${String(cfgName).trim()}(IP/端口未获取)`)
+      push('app', row, `${String(cfgName).trim()}(IP/端口未获取)`)
     }
   }
 
@@ -951,7 +951,7 @@ const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
 
   debugRows.value.apiRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
-    const bucket = getBucket({ ...r, env_id: envId }, 'api')
+    const bucket = getBucket({ ...r, env_id: envId }, 'app')
     const name = r.request_config_name
     const info = name ? bucket?.[name] : null
     if (!env_name || !name || !info) return
@@ -960,7 +960,7 @@ const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
       if (!targetBelongs(t)) return
       map[String(t.backend_key)] = {
         env_name,
-        config_type: 'api',
+        config_type: 'app',
         config_name: name,
         config_host: info.config_host,
         config_port: info.config_port,

@@ -92,7 +92,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
 
         :param project_id: 应用主键ID
         :param env_name: 环境名称(忽略大小写)
-        :param env_type: 节点类型(api/file/database/redis)，为空则取首条启用绑定
+        :param env_type: 节点类型(app/file/database/redis)，为空则取首条启用绑定
         :param on_error: 未找到时是否抛出NotFoundException
         :return: 环境绑定实例或None
         """
@@ -485,7 +485,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
         按节点类型聚合环境名称（读环境绑定表并联字典）。
 
         :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用
-        :return: {api/file/database/redis: [...]} 或 {project_id: {api/file/database/redis: [...]}}
+        :return: {app/file/database/redis: [...]} 或 {project_id: {app/file/database/redis: [...]}}
         """
         try:
             allowed_types = set(AutoTestConfigNodeType.get_values())

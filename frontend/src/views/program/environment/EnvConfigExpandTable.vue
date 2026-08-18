@@ -43,7 +43,7 @@ const props = defineProps({
 
 const vPermission = resolveDirective('permission')
 const userStore = useUserStore()
-const envType = props.envRow.env_type || ENV_TYPE.API
+const envType = props.envRow.env_type || ENV_TYPE.APP
 
 const EDIT_PERM = UPDATE_CONFIG_PERM
 const CREATE_PERM = CREATE_CONFIG_PERM

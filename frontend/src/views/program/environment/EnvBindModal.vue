@@ -96,7 +96,7 @@ const projectSelectOptions = computed(() =>
 
 const form = reactive({
   project_id: undefined,
-  env_type: ENV_TYPE.API,
+  env_type: ENV_TYPE.APP,
   env_name: null,
   env_desc: '',
 })
@@ -129,7 +129,7 @@ function ensureEnvNameOption(name) {
 
 async function loadEditDetail() {
   form.project_id = Number(props.envRow.project_id)
-  form.env_type = props.envRow.env_type || ENV_TYPE.API
+  form.env_type = props.envRow.env_type || ENV_TYPE.APP
   form.env_name = String(props.envRow.env_name || '').trim().toUpperCase() || null
   form.env_desc = ''
   ensureEnvNameOption(form.env_name)
@@ -186,7 +186,7 @@ watch(
         await loadEditDetail()
       } else {
         form.project_id = undefined
-        form.env_type = ENV_TYPE.API
+        form.env_type = ENV_TYPE.APP
         form.env_name = null
         form.env_desc = ''
       }

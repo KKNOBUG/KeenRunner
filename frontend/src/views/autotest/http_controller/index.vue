@@ -891,7 +891,7 @@ const loadHttpConfigNames = async (projectId) => {
   }
   httpConfigNameLoading.value = true
   try {
-    const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'api' })
+    const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'app' })
     const list = Array.isArray(res?.data) ? res.data : []
     httpConfigNameOptions.value = list.map((name) => ({ label: name, value: name }))
   } catch (e) {

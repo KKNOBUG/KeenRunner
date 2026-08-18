@@ -106,7 +106,7 @@ class AutoTestApiEnvConfigTypedDelete(BaseModel):
     """按节点类型删除单条环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(api/file/database/redis)")
+    env_type: AutoTestConfigNodeType = Field(..., description="节点类型(app/file/database/redis)")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
@@ -141,9 +141,9 @@ class TestDBConnectionRequest(BaseModel):
 
 
 class APPEnvConfigCreate(AutoTestApiEnvConfigCreate):
-    """新增APP(api)类型环境配置入参。"""
+    """新增APP类型环境配置入参。"""
 
-    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="节点类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.APP, description="节点类型")
 
 
 class FILEEnvConfigCreate(AutoTestApiEnvConfigCreate):
@@ -173,10 +173,10 @@ class RedisEnvConfigCreate(AutoTestApiEnvConfigCreate):
 
 
 class APPEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
-    """修改APP(api)类型环境配置入参。"""
+    """修改APP类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="节点类型")
+    env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.APP, description="节点类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析绑定)")
     config_host: str = Field(..., max_length=128, description="主机地址")

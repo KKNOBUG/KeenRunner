@@ -388,7 +388,7 @@ class StepDebugService:
                 project_id=request_project_id,
                 env_name=env_name,
                 config_name=request_config_name,
-                config_type=AutoTestConfigNodeType.API,
+                config_type=AutoTestConfigNodeType.APP,
                 label="HTTP请求调试失败",
             )
             host = (endpoint.config_host or "").strip()
@@ -630,7 +630,7 @@ class StepDebugService:
                 project_id=request_project_id,
                 env_name=env_name,
                 config_name=request_config_name,
-                config_type=AutoTestConfigNodeType.API,
+                config_type=AutoTestConfigNodeType.APP,
                 label="TCP请求调试失败",
                 config_not_found_template="{label}, 环境配置[{config_name}]不存在",
             )
