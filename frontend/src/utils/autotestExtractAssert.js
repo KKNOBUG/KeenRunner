@@ -25,9 +25,9 @@ export const RESPONSE_EXTRACT_OBJECT_OPTIONS = [
       { label: 'Request Json', value: 'Request Json' },
       { label: 'Request Text', value: 'Request Text' },
       { label: 'Request XML', value: 'Request XML' },
+      { label: 'Request Form-Data', value: 'Request Form-Data' },
       { label: 'Request Headers', value: 'Request Headers' },
       { label: 'Request Cookie', value: 'Request Cookie' },
-      { label: 'Request Form-Data', value: 'Request Form-Data' },
     ],
   },
   {
