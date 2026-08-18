@@ -311,7 +311,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
 
     async def get_all_project(self, page: int = 1, page_size: int = 10000) -> Tuple[List[Dict[str, Any]], int]:
         """
-        查询全部启用应用（LXD /getallApp）。
+        查询全部启用应用。
 
         :return: ([{id, project_name, project_mark}], total)；project_mark 取 project_code
         """
@@ -322,7 +322,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         )
         data = [
             {
-                "id": row["id"],
+                "env_id": row["id"],
                 "project_name": row["project_name"],
                 "project_mark": row["project_code"],
             }
