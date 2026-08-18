@@ -30,6 +30,7 @@ from backend.applications.aotutest.services.autotest_runtime.protocol_http impor
     is_absolute_http_url,
 )
 from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import (
+    build_tcp_debug_request_info_body,
     parse_tcp_response,
     parse_tcp_timeouts,
     resolve_tcp_debug_request_extract_sources,
@@ -728,8 +729,14 @@ class StepDebugService:
                 "method": "TCP",
                 "headers": {},
                 "params": {},
-                "body_type": request_args_type,
-                "body": payload,
+                "body_type": (
+                    request_args_type.value
+                    if hasattr(request_args_type, "value")
+                    else request_args_type
+                ),
+                "body": build_tcp_debug_request_info_body(
+                    request_args_type, request_text=request_text, request_body=request_body
+                ),
             },
         )
         LOGGER.info(f"TCP请求调试完成: 耗时: {duration}ms")

@@ -49,18 +49,49 @@ def select_tcp_debug_payload(
         request_body: Any,
 ) -> Any:
     """
-    调试接口历史契约：JSON将dict/list序列化为字符串；其它类型仅取request_text。
+    调试接口发送载荷：JSON将dict/list序列化为字符串（AioTcpClient对list不会走orjson）；其它类型仅取request_text。
 
-    与引擎侧select_tcp_payload刻意区分，避免改变已对外的request_info.body形态。
+    request_info.body 请用 build_tcp_debug_request_info_body，与引擎落库的 request_body 形态一致。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
     :param request_body: JSON载荷
-    :return: 调试路径发送与回显用的payload
+    :return: 调试路径实际发送用的payload
     """
     if request_args_type == AutoTestReqArgsType.JSON:
         if isinstance(request_body, (dict, list)):
             return orjson.dumps(request_body).decode("UTF-8")
+        return request_body
+    return request_text
+
+
+def build_tcp_debug_request_info_body(
+        request_args_type: Optional[AutoTestReqArgsType],
+        *,
+        request_text: Optional[str],
+        request_body: Any,
+) -> Any:
+    """
+    组装TCP调试回显的request_info.body，形态对齐 execute_or_debugging 落库的 request_body。
+
+    JSON 返回 dict/list（前端再缩进格式化）；字符串若为合法JSON则解析为对象。
+    XML/RAW 返回 request_text。
+
+    :param request_args_type: 请求体类型
+    :param request_text: 文本/XML/RAW载荷
+    :param request_body: JSON载荷
+    :return: 回显用请求体
+    """
+    if request_args_type == AutoTestReqArgsType.JSON:
+        if isinstance(request_body, (dict, list)):
+            return request_body
+        if isinstance(request_body, str) and request_body.strip():
+            try:
+                parsed = orjson.loads(request_body)
+                if isinstance(parsed, (dict, list)):
+                    return parsed
+            except (orjson.JSONDecodeError, ValueError, TypeError):
+                return request_body
         return request_body
     return request_text
 
