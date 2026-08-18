@@ -75,9 +75,14 @@ initLoginInfo()
 
 function initLoginInfo() {
   const localLoginInfo = lStorage.get('loginInfo')
-  if (localLoginInfo) {
-    loginInfo.value.username = localLoginInfo.username || ''
-    loginInfo.value.password = localLoginInfo.password || ''
+  if (localLoginInfo?.username && localLoginInfo?.password) {
+    loginInfo.value.username = localLoginInfo.username
+    loginInfo.value.password = localLoginInfo.password
+    return
+  }
+  if (import.meta.env.DEV) {
+    loginInfo.value.username = 'admin'
+    loginInfo.value.password = 'KFuser01@!'
   }
 }
 
@@ -94,6 +99,7 @@ async function handleLogin() {
     $message.loading(t('views.login.message_login_success'))
     const res = await api.login({username, password: password.toString()})
     $message.success(t('views.login.message_login_success'))
+    lStorage.set('loginInfo', {username, password})
 
     // 登录成功后设置 token
     // debugger
