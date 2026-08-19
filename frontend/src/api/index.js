@@ -260,6 +260,8 @@ export default {
   /** Form：case_id */
   queryDatasetNames: (formData) => request.post('/autotest/data_source/query_dataset_names', formData),
   updateDataSource: (data = {}) => request.post('/autotest/data_source/update', data),
+  /** Query：data_source_id/code 或 (case_id|case_code)+(step_id|step_code) —— 软删除数据源并解绑步骤指针 */
+  deleteDataSource: (params = {}) => request.delete('/autotest/data_source/delete', { params }),
   saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
   /** Query：data_source_id/code 或 (case_id|case_code)+(step_id|step_code) —— 已有矩阵直接返回，否则按报文构建 */
   buildDataSource: (params = {}) => request.get('/autotest/data_source/build', { params }),

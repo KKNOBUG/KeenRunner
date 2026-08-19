@@ -60,7 +60,7 @@
                   {{ axis === 0 ? '场景为行、字段为列' : '场景为列、字段为行' }}
                 </n-text>
               </div>
-              <div class="luckysheet-wrap">
+              <div ref="luckysheetWrapRef" class="luckysheet-wrap" :class="{ 'is-fullscreen': isFullscreen }">
                 <div class="luckysheet-more-dropdown">
                   <n-dropdown
                       trigger="click"
@@ -167,7 +167,7 @@
 <script setup>
 defineOptions({ name: 'StepDataSourcePanel' })
 
-import { computed, h, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NButton,
@@ -202,6 +202,8 @@ const props = defineProps({
   dataSourceId: { type: [Number, String], default: null },
   dataSourceName: { type: String, default: '' },
   dataSourceDesc: { type: String, default: '' },
+  /** 外部布局变化触发器（如步骤树折叠/展开），用于通知表格重新计算尺寸 */
+  resizeTrigger: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['update:dataSourceId', 'update:dataSourceName', 'update:dataSourceDesc'])
@@ -312,6 +314,7 @@ const transposeMatrix = (matrix) => {
 
 /* ========================= Luckysheet 数据状态 ========================= */
 const luckysheetRef = ref(null)
+const luckysheetWrapRef = ref(null)
 const sheetColumns = ref([])
 const sheetData = ref([])
 const hasDbRecord = ref(false)
@@ -613,6 +616,9 @@ const dataSourceMoreOptions = computed(() => [
   { label: '导入', key: 'import', disabled: panelReadonly.value || importLoading.value },
   { label: '导出', key: 'export', disabled: panelReadonly.value || exportLoading.value },
   { label: '保存', key: 'save', disabled: panelReadonly.value || saveLoading.value },
+  { type: 'divider', key: 'd2' },
+  { label: isFullscreen.value ? '退出全屏' : '全屏', key: 'fullscreen' },
+  { label: '解绑', key: 'unbind', disabled: panelReadonly.value || !hasDbRecord.value },
 ])
 
 const onDataSourceMoreSelect = (key) => {
@@ -622,6 +628,8 @@ const onDataSourceMoreSelect = (key) => {
   else if (key === 'import') openImport()
   else if (key === 'export') dataSourceExport()
   else if (key === 'save') dataSourceSave()
+  else if (key === 'fullscreen') toggleFullscreen()
+  else if (key === 'unbind') unbindDataSource()
 }
 
 const openImport = () => {
@@ -878,6 +886,84 @@ onBeforeUnmount(() => {
   })
 })
 
+/* ========================= 全屏（CSS 铺满页面窗口） ========================= */
+const isFullscreen = ref(false)
+
+const BODY_FULLSCREEN_CLASS = 'luckysheet-fullscreen-active'
+
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+  document.body.classList.toggle(BODY_FULLSCREEN_CLASS, isFullscreen.value)
+  nextTick(() => {
+    try {
+      luckysheetRef.value?.getLuckysheet()?.resize?.()
+    } catch (_) {}
+  })
+}
+
+const onFullscreenKeydown = (e) => {
+  if (e.key === 'Escape' && isFullscreen.value) {
+    isFullscreen.value = false
+    document.body.classList.remove(BODY_FULLSCREEN_CLASS)
+    nextTick(() => {
+      try {
+        luckysheetRef.value?.getLuckysheet()?.resize?.()
+      } catch (_) {}
+    })
+  }
+}
+
+/* ========================= 解绑（硬删） ========================= */
+const unbindLoading = ref(false)
+const unbindDataSource = async () => {
+  if (unbindLoading.value) return
+  if (!dataSourceId.value) {
+    $message.warning('当前步骤未绑定数据源')
+    return
+  }
+  unbindLoading.value = true
+  try {
+    await api.deleteDataSource({ data_source_id: dataSourceId.value })
+    dataSourceId.value = null
+    dataSourceName.value = ''
+    dataSourceDesc.value = ''
+    hasDbRecord.value = false
+    isDirty.value = false
+    cachedMatrix.value = []
+    applyMatrixToSheet([])
+    axis.value = 1
+    $message.success('解绑成功')
+  } catch (e) {
+    $message.error('解绑失败：' + (e?.message || ''))
+  } finally {
+    unbindLoading.value = false
+  }
+}
+
+/* ========================= 布局变化 → 表格尺寸重算 ========================= */
+watch(
+    () => props.resizeTrigger,
+    () => {
+      if (!luckysheetRef.value?.isReady) return
+      nextTick(() => {
+        setTimeout(() => {
+          try {
+            luckysheetRef.value?.getLuckysheet()?.resize?.()
+          } catch (_) {}
+        }, 100)
+      })
+    }
+)
+
+onMounted(() => {
+  document.addEventListener('keydown', onFullscreenKeydown, true)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onFullscreenKeydown, true)
+  document.body.classList.remove(BODY_FULLSCREEN_CLASS)
+})
+
 defineExpose({
   save: dataSourceSave,
   getPendingSceneNames,
@@ -964,5 +1050,33 @@ defineExpose({
   display: flex;
   align-items: center;
   height: 28px;
+}
+
+/* 全屏模式：CSS 铺满当前页面窗口 */
+.luckysheet-wrap.is-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  border-radius: 0;
+  border: none;
+  background: var(--n-color);
+  padding: 8px;
+}
+
+.luckysheet-wrap.is-fullscreen > .luckysheet-more-dropdown {
+  z-index: 10000;
+}
+</style>
+
+<!-- 全屏时 Luckysheet 输入框/编辑器挂载在 body 上，需提升其 z-index 使其不被全屏容器遮挡 -->
+<style>
+body.luckysheet-fullscreen-active #luckysheet-input-box,
+body.luckysheet-fullscreen-active #luckysheet-rightclick-menu,
+body.luckysheet-fullscreen-active .luckysheet-cols-menu,
+body.luckysheet-fullscreen-active .luckysheet-cols-rows-shift-panel {
+  z-index: 10001 !important;
 }
 </style>

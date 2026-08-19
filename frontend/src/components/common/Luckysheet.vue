@@ -105,59 +105,27 @@ const PROTECTED_ROW_BG = computed(() => (isDark.value ? '#3a3a3a' : '#f0f0f0'))
 
 const isEmptyCellValue = (value) => value == null || value === ''
 
-const looksLikeNumberText = (text) => /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)
-
-const needsExcelTextFormat = (text) => {
-  if (typeof text !== 'string' || text === '') return false
-  const token = text.toLowerCase()
-  return token === 'true' || token === 'false' || token === 'null' || looksLikeNumberText(text)
-}
-
-/** 将 dataset/矩阵值转为 Luckysheet 单元格，对齐 Excel 类型（数字/布尔/文本） */
+/**
+ * 将值写入 Luckysheet 单元格（原生数据通道）。
+ * 使用 t:'s' 文本格式，Luckysheet 不做任何自动类型转换。
+ * 前端不做任何数据处理，所有类型转换由后端负责。
+ */
 const valueToLuckysheetCell = (value, extra = {}) => {
-  if (isEmptyCellValue(value)) {
-    return {ct: {fa: 'General', t: 'g'}, m: '', v: '', ht: 0, vt: 0, ...extra}
+  if (value == null || value === '') {
+    return {ct: {fa: '@', t: 's'}, m: '', v: '', ht: 0, vt: 0, ...extra}
   }
-  if (typeof value === 'boolean') {
-    const m = value ? 'TRUE' : 'FALSE'
-    return {ct: {fa: 'General', t: 'b'}, m, v: value, ht: 0, vt: 0, ...extra}
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return {ct: {fa: 'General', t: 'n'}, m: String(value), v: value, ht: 0, vt: 0, ...extra}
-  }
-  const text = String(value)
-  if (needsExcelTextFormat(text)) {
-    return {ct: {fa: '@', t: 's'}, m: text, v: text, ht: 0, vt: 0, ...extra}
-  }
-  return {ct: {fa: 'General', t: 'g'}, m: text, v: text, ht: 0, vt: 0, ...extra}
+  return {ct: {fa: '@', t: 's'}, m: value, v: value, ht: 0, vt: 0, ...extra}
 }
 
 /**
- * 读取 Luckysheet 单元格为矩阵值。
- * 不在编辑钩子里改写格子，以免破坏复制/粘贴/撤销。
- * 前导 ' 仅在读取时去掉，作为 Excel 强制文本前缀。
+ * 读取 Luckysheet 单元格原始值。
+ * 不做任何类型转换，直接返回 Luckysheet 存储的值。
  */
-const readLuckysheetCell = (cell, {asText = false} = {}) => {
-  if (cell == null) return asText ? '' : null
+const readLuckysheetCell = (cell) => {
+  if (cell == null) return null
   const raw = cell.v !== undefined && cell.v !== null ? cell.v : cell.m
-  if (raw === undefined || raw === null || raw === '') return asText ? '' : null
-  if (asText) {
-    const text = String(raw)
-    return text.startsWith("'") ? text.slice(1) : text
-  }
-  const ctType = cell.ct && cell.ct.t
-  if (ctType === 'n' && typeof raw === 'number' && Number.isFinite(raw)) return raw
-  if (ctType === 'b') {
-    if (typeof raw === 'boolean') return raw
-    const token = String(raw).toLowerCase()
-    if (token === 'true') return true
-    if (token === 'false') return false
-  }
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
-  if (typeof raw === 'boolean') return raw
-  const text = String(raw)
-  if (text.startsWith("'")) return text.slice(1)
-  return text
+  if (raw === undefined || raw === null || raw === '') return null
+  return raw
 }
 
 const hasUserInput = (value) => value != null && value !== ''
@@ -169,13 +137,12 @@ const buildLuckysheetData = () => {
   const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
   const keywordSet = new Set(keywords.map((k) => String(k).trim().toUpperCase()))
 
-  // 第一行：表头（始终文本）
+  // 第一行：表头
   columns.forEach((col, c) => {
-    const value = col == null ? '' : String(col)
-    celldata.push({r: 0, c, v: valueToLuckysheetCell(value)})
+    celldata.push({r: 0, c, v: valueToLuckysheetCell(col == null ? '' : col)})
   })
 
-  // 数据行：第 0 列为字段名/分区标记（文本），其余格按 Excel 类型写入
+  // 数据行
   dataRows.forEach((row, r) => {
     const rowIndex = r + 1
     const rowArr = Array.isArray(row) ? row : []
@@ -187,8 +154,7 @@ const buildLuckysheetData = () => {
       const raw = c < rowArr.length ? rowArr[c] : null
       if (isEmptyCellValue(raw) && !isProtected) continue
       const extra = isProtected ? {bg: PROTECTED_ROW_BG.value, bl: 1} : {}
-      const cellValue = c === 0 ? (raw == null ? '' : String(raw)) : raw
-      celldata.push({r: rowIndex, c, v: valueToLuckysheetCell(cellValue, extra)})
+      celldata.push({r: rowIndex, c, v: valueToLuckysheetCell(raw, extra)})
     }
   })
 
@@ -241,6 +207,96 @@ const isSelectionColumnWide = () => {
 }
 
 let deletionProtectionCleanup = []
+let editModeKeyFixCleanup = []
+
+/**
+ * 修复 Luckysheet "第一个按键被吃掉" 的问题。
+ *
+ * Luckysheet 点击单元格后处于"选择模式"，按下可打印字符时它会进入编辑态，
+ * 但触发编辑的那个字符不会自动填入 input（因为 keydown 触发时 input 尚未获焦）。
+ * 此函数在 capture 阶段拦截可打印字符 keydown，若当前未处于编辑态，
+ * 则记住该字符，等 Luckysheet 完成编辑态切换后手动注入到 contenteditable div。
+ */
+const setupEditModeKeyFix = () => {
+  editModeKeyFixCleanup.forEach((fn) => fn())
+  editModeKeyFixCleanup = []
+  if (typeof document === 'undefined') return
+  if (props.readonly) return
+
+  const container = document.getElementById(containerId.value)
+  if (!container) return
+
+  const isEditing = () => {
+    try {
+      const inputBox = document.getElementById('luckysheet-input-box')
+      if (!inputBox) return false
+      const top = parseInt(inputBox.style.top, 10)
+      return !isNaN(top) && top > 0
+    } catch (_) {
+      return false
+    }
+  }
+
+  const isPrintableKey = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return false
+    if (e.keyCode === 229) return true
+    if (e.key.length !== 1) return false
+    if (e.key <= ' ' || e.key === 'Delete') return false
+    return true
+  }
+
+  const handler = (e) => {
+    // IME 输入（keyCode 229）：Luckysheet 不处理 229，需手动进入编辑态
+    if (e.keyCode === 229 && !isEditing()) {
+      try {
+        const selections = luckysheetRef.value?.getluckysheet_select_save?.() || []
+        if (!selections.length) return
+        const sel = selections[selections.length - 1]
+        const row = sel.row_focus ?? sel.row?.[0]
+        const col = sel.column_focus ?? sel.column?.[0]
+        if (row == null || col == null) return
+        const inputBox = document.getElementById('luckysheet-input-box')
+        const editor = document.getElementById('luckysheet-rich-text-editor')
+        if (!inputBox || !editor) return
+        // 获取单元格像素位置，显示输入框
+        const cellPos = luckysheetRef.value?.getcellposition?.(row, col)
+        if (cellPos) {
+          const {top, left, height} = cellPos
+          inputBox.style.top = `${top + height}px`
+          inputBox.style.left = `${left}px`
+          inputBox.style.display = 'block'
+        }
+        editor.focus()
+      } catch (_) { /* ignore */ }
+      // 阻止 Luckysheet 处理 keyCode 229，避免干扰 IME 组合输入
+      e.stopPropagation()
+      return
+    }
+    if (!isPrintableKey(e)) return
+    if (isEditing()) return
+    // 当前未处于编辑态，记住即将被 Luckysheet "吃掉" 的字符
+    const char = e.key
+    // 等 Luckysheet 处理完 keydown（进入编辑态）后，手动注入字符
+    const inject = () => {
+      requestAnimationFrame(() => {
+        if (!isEditing()) return
+        const editor = document.getElementById('luckysheet-rich-text-editor')
+        if (!editor) return
+        // 仅在编辑器为空（刚进入编辑态）时注入
+        const currentText = editor.textContent || ''
+        if (currentText.length === 0 || currentText === '\u200B') {
+          editor.textContent = char
+          // 触发 input 事件让 Luckysheet 同步内部状态
+          editor.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+      })
+    }
+    setTimeout(inject, 0)
+  }
+
+  container.addEventListener('keydown', handler, true)
+  editModeKeyFixCleanup.push(() => container.removeEventListener('keydown', handler, true))
+}
 
 const setupDeletionProtection = () => {
   deletionProtectionCleanup.forEach((fn) => fn())
@@ -379,6 +435,7 @@ const initLuckysheet = async () => {
 
     luckysheet.create(config)
     isReady.value = true
+    setupEditModeKeyFix()
     setupDeletionProtection()
   } catch (e) {
     console.error('[Luckysheet] create failed:', e)
@@ -391,6 +448,8 @@ const initLuckysheet = async () => {
 const destroyLuckysheet = () => {
   deletionProtectionCleanup.forEach((fn) => fn())
   deletionProtectionCleanup = []
+  editModeKeyFixCleanup.forEach((fn) => fn())
+  editModeKeyFixCleanup = []
   if (!luckysheetRef.value) return
   try {
     if (typeof luckysheetRef.value.destroy === 'function') {
@@ -421,8 +480,7 @@ const getData = () => {
   for (let r = 0; r < rows; r++) {
     const row = []
     for (let c = 0; c < cols; c++) {
-      const cell = sheetData[r]?.[c]
-      row.push(readLuckysheetCell(cell, {asText: r === 0 || c === 0}))
+      row.push(readLuckysheetCell(sheetData[r]?.[c]))
     }
     result.push(row)
   }

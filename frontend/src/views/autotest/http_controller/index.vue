@@ -6,6 +6,7 @@
       :readonly="props.readonly"
       :step-name="state.form.step_name"
       step-type-label="HTTP请求"
+      :resize-trigger="props.layoutVersion"
       v-model:data-source-id="state.form.data_source_id"
       v-model:data-source-name="state.form.data_source_name"
       v-model:data-source-desc="state.form.data_source_desc"
@@ -613,7 +614,9 @@ const props = defineProps({
   caseDesc: {type: String, default: null},
   /** 公共接口用例：Request 面板「步骤名称」锁定（只读），值为用例名称 */
   lockStepName: {type: Boolean, default: false},
-  caseName: {type: String, default: null}
+  caseName: {type: String, default: null},
+  /** 外部布局变化触发器，透传给数据源面板 */
+  layoutVersion: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['update:config'])

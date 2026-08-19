@@ -221,11 +221,13 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
                         has_data = True
 
         for section, rows in sections.items():
+            # HEAD/ASSERT_HEAD 分区不转换布尔值和 null，保持原始字符串
+            is_head_section = section in ("head", "assert_head")
             for r in rows:
                 key = first_col[r]
                 if not key:
                     continue
-                typed = _dataset_field_value(data_values[r, col_idx])
+                typed = _dataset_field_value(data_values[r, col_idx], skip_bool_null=is_head_section)
                 if typed is _CELL_OMIT:
                     continue
                 record[section][str(key).strip()] = typed
@@ -274,7 +276,9 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         record = {k: {} for k in _DATASET_SECTION_KEYS}
         has_data = False
         for col_idx, section, field_key in field_columns:
-            typed = _dataset_field_value(data_values[row_idx, col_idx])
+            # HEAD/ASSERT_HEAD 分区不转换布尔值和 null，保持原始字符串
+            is_head_section = section in ("head", "assert_head")
+            typed = _dataset_field_value(data_values[row_idx, col_idx], skip_bool_null=is_head_section)
             if typed is _CELL_OMIT:
                 continue
             record[section][field_key] = typed
@@ -332,14 +336,21 @@ def _cell_is_blank(value: Any) -> bool:
     return isinstance(value, str) and value == ""
 
 
-def _excel_typed_value(value: Any) -> Any:
+# 严格数字正则：不匹配前导零（0 本身、0.x、.x 除外），用于 _excel_typed_value 类型推断
+_STRICT_NUMBER_RE = re.compile(r'^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$')
+
+
+def _excel_typed_value(value: Any, skip_bool_null: bool = False) -> Any:
     """
     按 Excel 编写习惯解释单元格类型。
 
     前导单引号强制为文本（引号本身不落库）；含 ${} 占位符保持字符串；
-    整格为 true/false/null（大小写不敏感）时转为布尔 / JSON null。
+    整格为 true/false/null（大小写不敏感）时转为布尔 / JSON null；
+    无前导零的数字文本转为 int/float（如 "1"→1, "1.5"→1.5），
+    有前导零的保持字符串（如 "00001991" 不变）。
 
     :param value: 原始单元格值
+    :param skip_bool_null: 为 True 时跳过 true/false/null 转换（用于 HEAD/ASSERT_HEAD 分区）
     :return: 供 dataset 使用的类型化值
     """
     if not isinstance(value, str):
@@ -348,27 +359,37 @@ def _excel_typed_value(value: Any) -> Any:
         return value[1:]
     if "${" in value:
         return value
-    token = value.lower()
-    if token == "true":
-        return True
-    if token == "false":
-        return False
-    if token == "null":
-        return None
+    if not skip_bool_null:
+        token = value.lower()
+        if token == "true":
+            return True
+        if token == "false":
+            return False
+        if token == "null":
+            return None
+    # 数字转换：无前导零的纯数字文本 → int/float
+    if _STRICT_NUMBER_RE.match(value):
+        try:
+            if '.' in value or 'e' in value.lower():
+                return float(value)
+            return int(value)
+        except (ValueError, OverflowError):
+            return value
     return value
 
 
-def _dataset_field_value(value: Any) -> Any:
+def _dataset_field_value(value: Any, skip_bool_null: bool = False) -> Any:
     """
     将单元格转为 dataset 字段值。
 
     :param value: 原始单元格
+    :param skip_bool_null: 为 True 时跳过 true/false/null 转换（用于 HEAD/ASSERT_HEAD 分区）
     :return: _CELL_OMIT 表示省略；None 表示显式 JSON null
     """
     safe = json_safe_value(value)
     if _cell_is_blank(safe):
         return _CELL_OMIT
-    return _excel_typed_value(safe)
+    return _excel_typed_value(safe, skip_bool_null=skip_bool_null)
 
 
 def _pad_matrix(matrix: List[List[Any]]) -> List[List[Any]]:

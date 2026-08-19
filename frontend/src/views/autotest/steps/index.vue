@@ -422,6 +422,12 @@ const {
   expandLeftPanel,
 } = useLeftPanelResize()
 
+/** 布局变化计数器：步骤树折叠/展开/拖拽调宽时递增，通知右侧编辑器内表格重算尺寸 */
+const layoutVersion = ref(0)
+watch([leftPanelCollapsed, leftPanelWidth], () => {
+  layoutVersion.value++
+})
+
 const {
   resolveCaseMetaForPayload,
   convertStepToBackend,
@@ -1710,6 +1716,7 @@ const editorComponentProps = computed(() => {
     // 公共接口：Request 面板「步骤名称」锁定为用例名称（只读），由父级监听强制同步
     props.lockStepName = isPublicApiCase.value
     props.caseName = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_name ?? '') : null
+    props.layoutVersion = layoutVersion.value
   }
   return props
 })
