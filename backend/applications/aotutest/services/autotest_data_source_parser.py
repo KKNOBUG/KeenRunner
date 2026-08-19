@@ -475,6 +475,38 @@ def _drop_empty_scene_cols(padded: List[List[Any]]) -> List[List[Any]]:
     return [[row[col_idx] for col_idx in keep_cols] for row in padded]
 
 
+def _trim_matrix_strings(matrix: List[List[Any]]) -> List[List[Any]]:
+    """
+    对矩阵中每个字符串值执行清洗：
+    - 前导 ' 的值：强制文本标记，保持不变（不做 trim、不做类型推断）
+    - 非空纯空白字符串（如 "   "）：添加前导 ' 保护，避免空格丢失
+    - 空串：保持空串（空单元格无需保护，避免产生裸 ' 脏值）
+    - 其他字符串：去除首尾空白
+    - 非字符串值：保持不变
+    """
+    result = []
+    for row in matrix:
+        new_row = []
+        for cell in row:
+            if isinstance(cell, str):
+                if cell.startswith("'"):
+                    # 强制文本标记，保持不变
+                    new_row.append(cell)
+                elif cell == '':
+                    # 空串保持原样
+                    new_row.append(cell)
+                elif cell.strip() == '':
+                    # 非空纯空白值，添加 ' 保护
+                    new_row.append(f"'{cell}")
+                else:
+                    # 普通字符串，trim
+                    new_row.append(cell.strip())
+            else:
+                new_row.append(cell)
+        result.append(new_row)
+    return result
+
+
 def clean_matrix_by_axis(matrix: List[List[Any]], axis: int) -> List[List[Any]]:
     """
     按矩阵方向剔除空白字段行/列，以及无数据的场景行/列；分区标记始终保留。
@@ -595,6 +627,7 @@ async def parse_dataframe_matrix_async(
     norm_matrix = clean_matrix_by_axis(matrix, axis)
     if not norm_matrix:
         return {}, [], [], axis
+    norm_matrix = _trim_matrix_strings(norm_matrix)
 
     df = pd.DataFrame(norm_matrix, dtype=object)
     if df.empty:

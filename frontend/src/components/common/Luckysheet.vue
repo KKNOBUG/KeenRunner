@@ -105,33 +105,90 @@ const PROTECTED_ROW_BG = computed(() => (isDark.value ? '#3a3a3a' : '#f0f0f0'))
 
 const isEmptyCellValue = (value) => value == null || value === ''
 
+/** 判断字符串是否全部由空白字符组成（空格、制表符等） */
+const isBlankString = (value) => typeof value === 'string' && value.trim() === ''
+
 /**
- * 将值写入 Luckysheet 单元格（原生数据通道）。
- * 使用 t:'s' 文本格式，Luckysheet 不做任何自动类型转换。
- * 前端不做任何数据处理，所有类型转换由后端负责。
+ * 严格数字正则（与后端 _STRICT_NUMBER_RE 保持一致）：
+ * 不匹配前导零（0 本身、0.x、.x 除外），用于读回时的数字类型重推断。
+ */
+const NUMBER_RE = /^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
+
+/**
+ * 将值写入 Luckysheet 单元格。
+ * 前导 ' 是"强制文本"协议标记（对齐 Excel）：标记本身不展示给用户，
+ * 通过单元格 qp=1 属性承载，保证内容原样保留（含首尾空白、前导零）。
+ * - number → t:'n'；boolean → t:'b'；普通 string → t:'s' 文本格式
+ * - ' 前缀 string：剥去标记，写入 qp=1 文本单元格
+ * - 纯空白 string：写入 qp=1 保护（Luckysheet 判空会吞掉纯空白）
  */
 const valueToLuckysheetCell = (value, extra = {}) => {
   if (value == null || value === '') {
-    return {ct: {fa: '@', t: 's'}, m: '', v: '', ht: 0, vt: 0, ...extra}
+    return {ct: {fa: 'General', t: 'g'}, m: '', v: '', ht: 0, vt: 0, ...extra}
   }
-  return {ct: {fa: '@', t: 's'}, m: value, v: value, ht: 0, vt: 0, ...extra}
+  if (typeof value === 'number') {
+    return {ct: {fa: 'General', t: 'n'}, m: String(value), v: value, ht: 0, vt: 0, ...extra}
+  }
+  if (typeof value === 'boolean') {
+    return {ct: {fa: 'General', t: 'b'}, m: String(value), v: value, ht: 0, vt: 0, ...extra}
+  }
+  // 字符串值：使用文本格式，防止 Luckysheet 自动转换 true→TRUE / 000000→0
+  let text = value
+  let forcedText = false
+  if (text.startsWith("'")) {
+    // 协议标记：剥去 '，用 qp=1 承载强制文本语义
+    text = text.slice(1)
+    forcedText = true
+  } else if (isBlankString(text)) {
+    forcedText = true
+  }
+  return {ct: {fa: '@', t: 's'}, m: text, v: text, ht: 0, vt: 0, ...(forcedText ? {qp: 1} : {}), ...extra}
 }
 
 /**
- * 读取 Luckysheet 单元格原始值。
- * 不做任何类型转换，直接返回 Luckysheet 存储的值。
+ * 读取 Luckysheet 单元格值（Excel 语义）：
+ * - qp=1（用户输入过前导 '，或加载的强制文本）：返回 ' + 原文，原样保留
+ * - 纯数字文本：重推断为 number，允许编辑改变类型（'000200 → 18 → 数字 18）
+ * - 其他字符串：trim 后返回；true/false 保持字符串
+ * - 非字符串值（number/boolean）：原样返回
  */
 const readLuckysheetCell = (cell) => {
   if (cell == null) return null
   const raw = cell.v !== undefined && cell.v !== null ? cell.v : cell.m
   if (raw === undefined || raw === null || raw === '') return null
-  return raw
+  if (typeof raw !== 'string') return raw
+  if (cell.qp === 1) return `'${raw}`
+  if (NUMBER_RE.test(raw)) return Number(raw)
+  return raw.trim()
 }
 
 const hasUserInput = (value) => value != null && value !== ''
 
+/**
+ * 纯空白 qp 单元格（如 "'   "）不能走 celldata 初始化路径：
+ * luckysheet.create → buildGridData 内部写值函数开头会判空（纯空白视为空），
+ * 直接删除 v/m，导致重载后双击显示 "'null"。收集这些位置，create 后直写 flowdata。
+ */
+let pendingBlankCells = []
+
+/** 将纯空白值补写入活动 sheet data（绕过内部写值的判空路径） */
+const applyPendingBlankCells = () => {
+  const luckysheet = luckysheetRef.value
+  const cells = pendingBlankCells
+  pendingBlankCells = []
+  if (!luckysheet || !cells.length) return
+  const data = luckysheet.getSheetData()
+  if (!data) return
+  for (const {r, c, text} of cells) {
+    if (!data[r]) continue
+    data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0}
+  }
+  luckysheet.refresh()
+}
+
 const buildLuckysheetData = () => {
   const celldata = []
+  pendingBlankCells = []
   const columns = Array.isArray(props.columns) ? props.columns : []
   const dataRows = Array.isArray(props.data) ? props.data : []
   const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
@@ -139,7 +196,12 @@ const buildLuckysheetData = () => {
 
   // 第一行：表头
   columns.forEach((col, c) => {
-    celldata.push({r: 0, c, v: valueToLuckysheetCell(col == null ? '' : col)})
+    const value = col == null ? '' : col
+    if (typeof value === 'string' && value !== '' && isBlankString(value)) {
+      pendingBlankCells.push({r: 0, c, text: value})
+      return
+    }
+    celldata.push({r: 0, c, v: valueToLuckysheetCell(value)})
   })
 
   // 数据行
@@ -154,6 +216,11 @@ const buildLuckysheetData = () => {
       const raw = c < rowArr.length ? rowArr[c] : null
       if (isEmptyCellValue(raw) && !isProtected) continue
       const extra = isProtected ? {bg: PROTECTED_ROW_BG.value, bl: 1} : {}
+      if (typeof raw === 'string' && isBlankString(raw)) {
+        // 纯空白值（含 "'   " 剥离标记后）：跳过 celldata，create 后直写
+        pendingBlankCells.push({r: rowIndex, c, text: raw.startsWith("'") ? raw.slice(1) : raw})
+        continue
+      }
       celldata.push({r: rowIndex, c, v: valueToLuckysheetCell(raw, extra)})
     }
   })
@@ -208,6 +275,44 @@ const isSelectionColumnWide = () => {
 
 let deletionProtectionCleanup = []
 let editModeKeyFixCleanup = []
+
+/**
+ * 提交快照：cellUpdateBefore 阶段记录用户提交的原始文本，
+ * 供 cellUpdated 后处理判断（Luckysheet 判空会吞掉纯空白，需事后恢复）。
+ */
+const lastCommittedText = ref(null)
+
+/**
+ * 恢复被 Luckysheet 判空逻辑吞掉的纯空白值：
+ * 直接写入活动 sheet data（绕过 setCellValue 的判空路径），再整体重绘。
+ */
+const restoreBlankCell = (r, c, text) => {
+  const luckysheet = luckysheetRef.value
+  if (!luckysheet) return
+  const data = luckysheet.getSheetData()
+  if (!data || !data[r]) return
+  data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0}
+  luckysheet.refresh()
+}
+
+/**
+ * cellUpdated 后处理（对齐 Excel 语义）：
+ * 用户不带前导 ' 编辑了 qp（强制文本）单元格 → 解除 qp 文本锁，
+ * 读回时按新内容重新推断类型（'000200 → 输入 18 → 数字 18；输入 abc → 普通文本）。
+ * 纯空白的恢复在 cellUpdateBefore 阶段完成（Luckysheet 判空后直接 cancel，不触发本钩子）。
+ */
+const postProcessCellUpdate = (r, c, newCell) => {
+  const committed = lastCommittedText.value
+  lastCommittedText.value = null
+  if (committed == null || committed === '') return
+  if (!committed.startsWith("'") && newCell && newCell.qp === 1) {
+    try {
+      // 同步清除 qp 锁（必须在 emit('change') 引发的矩阵读回之前完成），
+      // 对象分支属性覆盖不重新触发类型推断；其内部再触发的 cellUpdated 因快照为空而跳过
+      luckysheetRef.value?.setCellValue?.(r, c, {qp: 0})
+    } catch (_) { /* ignore */ }
+  }
+}
 
 /**
  * 修复 Luckysheet "第一个按键被吃掉" 的问题。
@@ -409,14 +514,26 @@ const initLuckysheet = async () => {
       },
     ],
     hook: {
-      // 只通知上层变脏，不在此改写单元格，避免打断 Luckysheet 自带的复制/粘贴/撤销
-      cellUpdated: () => {
+      cellUpdated: (r, c, oldValue, newValue, isRefresh) => {
+        postProcessCellUpdate(r, c, newValue)
         emit('change')
       },
       cellUpdateBefore: (row, col, value, isRefresh) => {
         if (isProtectedRow(row)) return false
+        if (typeof value === 'string') {
+          // 纯空白（非空串）：Luckysheet 判空会吞掉并直接 cancel（不触发 cellUpdated），
+          // 在此直接写入 qp=1 保护单元格并拦截默认处理（对齐 Excel：允许保存空格）
+          if (value !== '' && isBlankString(value)) {
+            restoreBlankCell(row, col, value)
+            return false
+          }
+          // 记录提交原文，供 cellUpdated 后处理判断是否解除 qp 文本锁
+          lastCommittedText.value = value
+        }
       },
       rangePasteBefore: (selectSave) => {
+        // 粘贴不走 cellUpdateBefore/cellUpdated，作废编辑提交快照避免状态串扰
+        lastCommittedText.value = null
         if (!selectSave || !Array.isArray(selectSave)) return true
         for (const sel of selectSave) {
           if (!sel || !sel.row || !Array.isArray(sel.row)) continue
@@ -434,6 +551,8 @@ const initLuckysheet = async () => {
   }
 
     luckysheet.create(config)
+    // 纯空白 qp 单元格绕过 celldata/Cs 判空路径，直接补写 flowdata
+    applyPendingBlankCells()
     isReady.value = true
     setupEditModeKeyFix()
     setupDeletionProtection()
