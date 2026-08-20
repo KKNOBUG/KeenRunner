@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from xml.etree import ElementTree
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Border, PatternFill, Side
+from openpyxl.styles import Alignment, Border, PatternFill, Font, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
 from tortoise.transactions import in_transaction
@@ -43,6 +43,7 @@ from backend.services import get_current_username
 
 _HTTP, _TCP = "HTTP", "TCP"
 _MARKER_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
+_MARKER_FONT = Font(bold=True)
 _CENTER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 _SIDE = Side(style="thin", color="000000")
 _CELL_BORDER = Border(left=_SIDE, right=_SIDE, top=_SIDE, bottom=_SIDE)
@@ -381,6 +382,7 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
             for cell in row:
                 if cell.value in ("HEAD", "BODY"):
                     cell.fill = _MARKER_FILL
+                    cell.font = _MARKER_FONT
         _style_sheet_cells(sheet, start_row=1, row_height=_ROW_HEIGHT)
         _auto_size_sheet_columns(sheet)
     return workbook
@@ -423,6 +425,7 @@ def style_data_source_sheet(sheet) -> None:
             cell.border = _CELL_BORDER
             if cell.row in marker_rows or cell.column in marker_cols:
                 cell.fill = _MARKER_FILL
+                cell.font = _MARKER_FONT
             if isinstance(cell.value, str) and cell.value.startswith("'"):
                 cell.value = cell.value[1:]
                 cell.quotePrefix = True
