@@ -18,8 +18,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from xml.etree import ElementTree
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, PatternFill
+from openpyxl.styles import Alignment, Border, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.hyperlink import Hyperlink
 from tortoise.transactions import in_transaction
 
 from backend.applications.aotutest.models.autotest_case_model import AutoTestCaseModel
@@ -43,8 +44,14 @@ from backend.services import get_current_username
 _HTTP, _TCP = "HTTP", "TCP"
 _MARKER_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
 _CENTER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_SIDE = Side(style="thin", color="000000")
+_CELL_BORDER = Border(left=_SIDE, right=_SIDE, top=_SIDE, bottom=_SIDE)
 _ROW_HEIGHT = 40
 _COL_WIDTH_MIN, _COL_WIDTH_MAX = 8, 60
+# 报文导出目录 sheet 阈值：导出用例数超过该值才创建目录
+_DIRECTORY_THRESHOLD = 10
+# 数据源分区标记（与 autotest_data_source_parser._SECTION_MARKERS_UPPER 保持一致）
+_SECTION_MARKERS = frozenset({"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"})
 
 _SCRIPT_COLUMNS: Tuple[str, ...] = (
     "接口名称", "所属应用", "协议类型", "接口描述",
@@ -112,7 +119,7 @@ def _auto_size_sheet_columns(sheet) -> None:
 
 def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float] = _ROW_HEIGHT) -> None:
     """
-    数据区水平/垂直居中；可选统一行高。
+    数据区水平/垂直居中并设置四边边框；可选统一行高。
     """
     max_row = sheet.max_row or 0
     max_column = sheet.max_column or 0
@@ -123,6 +130,7 @@ def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float]
             sheet.row_dimensions[row[0].row].height = row_height
         for cell in row:
             cell.alignment = _CENTER_ALIGN
+            cell.border = _CELL_BORDER
 
 
 def _file_name(username: Optional[str], label: str) -> str:
@@ -319,7 +327,7 @@ async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List
 
 def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
     """
-    根据一用例一sheet构建导出工作簿，多于1个时前置目录sheet。
+    根据一用例一sheet构建导出工作簿，导出数量超过_DIRECTORY_THRESHOLD时前置目录sheet。
     """
     workbook = Workbook()
     workbook.remove(workbook.active)
@@ -348,7 +356,7 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
         sheet.append(values)
         sheet_titles.append((title, case_data))
 
-    if len(sheet_titles) > 1:
+    if len(sheet_titles) > _DIRECTORY_THRESHOLD:
         directory = workbook.create_sheet(title="目录", index=0)
         directory.append(["序号", "接口名称", "所属应用", "接口描述", "所属人", "协议类型"])
         for index, (title, case_data) in enumerate(sheet_titles, start=1):
@@ -357,7 +365,15 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
                 case_data.get("case_desc"), case_data.get("created_user"), case_data.get("protocol"),
             ])
             cell = directory.cell(row=index + 1, column=2)
-            cell.hyperlink = f"#'{title}'!A1"
+            # 内部跳转链接必须用 location 属性（标准 OOXML 写法），Excel/WPS 均兼容；
+            # 若写成 target="#'sheet'!A1"，openpyxl 会生成外部关系引用，WPS 无法识别跳转；
+            # sheet 名中的单引号在引用中需双写转义
+            escaped = title.replace("'", "''")
+            cell.hyperlink = Hyperlink(
+                ref=cell.coordinate,
+                location=f"'{escaped}'!A1",
+                display=str(case_data.get("case_name") or title),
+            )
             cell.style = "Hyperlink"
 
     for sheet in workbook.worksheets:
@@ -368,6 +384,39 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
         _style_sheet_cells(sheet, start_row=1, row_height=_ROW_HEIGHT)
         _auto_size_sheet_columns(sheet)
     return workbook
+
+
+def style_data_source_sheet(sheet) -> None:
+    """
+    数据源 sheet 统一样式（与报文导出风格一致）：
+    - 分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行(垂直模式第0列标记)/
+      列(水平模式表头行标记)整行/整列黄底；
+    - 全部单元格水平/垂直居中、四边边框并自动换行，统一行高；
+    - 列宽按内容自适应（[_COL_WIDTH_MIN, _COL_WIDTH_MAX]）。
+    只调整样式不改写单元格值（含前导 ' 强制文本标记，保证导出后再导入往返保真）。
+    """
+    max_row = sheet.max_row or 0
+    max_col = sheet.max_column or 0
+    if max_row < 1 or max_col < 1:
+        return
+    marker_rows: set = set()
+    for row_idx in range(2, max_row + 1):
+        value = str(sheet.cell(row=row_idx, column=1).value or "").strip().upper()
+        if value in _SECTION_MARKERS:
+            marker_rows.add(row_idx)
+    marker_cols: set = set()
+    for col_idx in range(2, max_col + 1):
+        value = str(sheet.cell(row=1, column=col_idx).value or "").strip().upper()
+        if value in _SECTION_MARKERS:
+            marker_cols.add(col_idx)
+    for row in sheet.iter_rows(min_row=1, max_row=max_row, max_col=max_col):
+        sheet.row_dimensions[row[0].row].height = _ROW_HEIGHT
+        for cell in row:
+            cell.alignment = _CENTER_ALIGN
+            cell.border = _CELL_BORDER
+            if cell.row in marker_rows or cell.column in marker_cols:
+                cell.fill = _MARKER_FILL
+    _auto_size_sheet_columns(sheet)
 
 
 # ---------------------------------------------------------------------------

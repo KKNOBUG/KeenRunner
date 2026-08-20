@@ -31,6 +31,7 @@ from backend.applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceSelect,
     AutoTestDataSourceUnbindCase,
 )
+from backend.applications.aotutest.services.autotest_case_excel_service import style_data_source_sheet
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_VERTICAL,
     json_safe_value,
@@ -994,6 +995,8 @@ async def single_step_dataset_download(
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name="Sheet1")
+            # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
+            style_data_source_sheet(writer.sheets["Sheet1"])
         output.seek(0)
 
         file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
@@ -1202,7 +1205,10 @@ async def batch_step_dataset_download(
                 step_name = step_name_map.get(dataset_code) or step_name_map.get(dataset_id)
                 dataset_dataframe = data_source.dataframe if isinstance(data_source.dataframe, list) else []
                 df = pd.DataFrame(dataset_dataframe if dataset_dataframe else [[]])
-                df.to_excel(writer, index=False, header=False, sheet_name=_safe_sheet_name(step_name, used_names))
+                safe_name = _safe_sheet_name(step_name, used_names)
+                df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
+                # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
+                style_data_source_sheet(writer.sheets[safe_name])
         output.seek(0)
 
         file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
