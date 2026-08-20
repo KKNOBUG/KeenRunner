@@ -221,9 +221,9 @@ const refreshGrid = () => {
  * create 内部存在异步初始化环节（flowdata 同步、首次渲染），且期间可能
  * 发生 destroy/重建（实例更替），因此：延迟启动 + 重试写入 + 校验目标数组
  * 仍是当前实例的 data（实例已更替时放弃，由新一轮 create 自行补写）。 */
-const writeBlankCellOnce = (data, r, c, text) => {
+const writeBlankCellOnce = (data, r, c, text, extra = {}) => {
   if (!data[r]) return false
-  data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0}
+  data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0, ...extra}
   return true
 }
 
@@ -238,7 +238,7 @@ const applyPendingBlankCells = () => {
     // 实例已销毁/容器已更替：放弃，避免把旧单元格写进新实例
     if (!luckysheetRef.value || !isReady.value || containerId.value !== containerAtApply) return
     const data = getLiveSheetData()
-    const ok = data && cells.every(({r, c, text}) => writeBlankCellOnce(data, r, c, text))
+    const ok = data && cells.every(({r, c, text, extra}) => writeBlankCellOnce(data, r, c, text, extra))
     if (ok) {
       refreshGrid()
       return
@@ -256,16 +256,22 @@ const buildLuckysheetData = () => {
   const dataRows = Array.isArray(props.data) ? props.data : []
   const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
   const keywordSet = new Set(keywords.map((k) => String(k).trim().toUpperCase()))
+  // 水平模式：分区标记出现在表头行 → 受保护的是整列；垂直模式标记在第 0 列 → 受保护的是整行
+  const protectedColSet = new Set()
+  columns.forEach((col, c) => {
+    if (keywordSet.has(String(col == null ? '' : col).trim().toUpperCase())) protectedColSet.add(c)
+  })
+  const protectedStyle = {bg: PROTECTED_ROW_BG.value, bl: 1}
 
   // 第一行：表头
   columns.forEach((col, c) => {
     const value = col == null ? '' : col
     const blankText = extractForcedBlankText(value)
     if (blankText != null) {
-      pendingBlankCells.push({r: 0, c, text: blankText})
+      pendingBlankCells.push({r: 0, c, text: blankText, extra: protectedColSet.has(c) ? {...protectedStyle} : {}})
       return
     }
-    celldata.push({r: 0, c, v: valueToLuckysheetCell(value)})
+    celldata.push({r: 0, c, v: valueToLuckysheetCell(value, protectedColSet.has(c) ? {...protectedStyle} : {})})
   })
 
   // 数据行
@@ -278,13 +284,15 @@ const buildLuckysheetData = () => {
 
     for (let c = 0; c < numCols; c++) {
       const raw = c < rowArr.length ? rowArr[c] : null
-      if (isEmptyCellValue(raw) && !isProtected) continue
-      const extra = isProtected ? {bg: PROTECTED_ROW_BG.value, bl: 1} : {}
+      const isColProtected = protectedColSet.has(c)
+      // 保护行/列的空单元格也要写入灰底样式，不能跳过
+      if (isEmptyCellValue(raw) && !isProtected && !isColProtected) continue
+      const extra = (isProtected || isColProtected) ? {...protectedStyle} : {}
       const blankText = extractForcedBlankText(raw)
       if (blankText != null) {
         // 非空纯空白值（先剥前导 ' 再判空，覆盖 "'   " 场景）：
         // 跳过 celldata，create 后直写（空串不受判空影响，保留 celldata 路径以保住保护行样式）
-        pendingBlankCells.push({r: rowIndex, c, text: blankText})
+        pendingBlankCells.push({r: rowIndex, c, text: blankText, extra})
         continue
       }
       celldata.push({r: rowIndex, c, v: valueToLuckysheetCell(raw, extra)})
@@ -300,6 +308,21 @@ const isProtectedRow = (rowIndex) => {
   try {
     const sheetData = luckysheetRef.value.getSheetData() || []
     const cell = sheetData[rowIndex]?.[0]
+    if (!cell) return false
+    const value = String(cell.v ?? cell.m ?? '').trim().toUpperCase()
+    return keywords.some((kw) => String(kw).trim().toUpperCase() === value)
+  } catch (_) {
+    return false
+  }
+}
+
+/** 水平模式：分区标记在表头行，受保护的是整列（垂直模式下表头是场景名，不会命中） */
+const isProtectedColumn = (colIndex) => {
+  const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
+  if (!keywords.length || !luckysheetRef.value || !isReady.value) return false
+  try {
+    const sheetData = luckysheetRef.value.getSheetData() || []
+    const cell = sheetData[0]?.[colIndex]
     if (!cell) return false
     const value = String(cell.v ?? cell.m ?? '').trim().toUpperCase()
     return keywords.some((kw) => String(kw).trim().toUpperCase() === value)
@@ -324,6 +347,22 @@ const hasProtectedRowInSelection = () => {
   return false
 }
 
+const hasProtectedColumnInSelection = () => {
+  if (!luckysheetRef.value || !isReady.value) return false
+  const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
+  if (!keywords.length) return false
+  try {
+    const selections = luckysheetRef.value.getluckysheet_select_save() || []
+    for (const sel of selections) {
+      if (!sel || !sel.column || !Array.isArray(sel.column)) continue
+      for (let c = sel.column[0]; c <= sel.column[1]; c++) {
+        if (isProtectedColumn(c)) return true
+      }
+    }
+  } catch (_) {}
+  return false
+}
+
 const isSelectionColumnWide = () => {
   if (!luckysheetRef.value || !isReady.value) return false
   try {
@@ -341,6 +380,90 @@ const isSelectionColumnWide = () => {
 
 let deletionProtectionCleanup = []
 let editModeKeyFixCleanup = []
+
+/** 分区标记关键字集合（归一化后），供渲染钩子高频判断使用，避免逐单元格重建 */
+const protectedKeywordSet = computed(() => {
+  const keywords = Array.isArray(props.protectedRowKeywords) ? props.protectedRowKeywords : []
+  return new Set(keywords.map((k) => String(k).trim().toUpperCase()))
+})
+
+const markText = (cell) => (cell ? String(cell.v ?? cell.m ?? '').trim().toUpperCase() : '')
+
+/**
+ * 样式修正重绘调度：Luckysheet 主渲染函数在触发 cellRenderBefore 之前已读取
+ * bg/ht 等属性，钩子内的修改当次渲染来不及；发现缺失时合并调度一次延迟重绘，
+ * 下一轮渲染即生效（重绘后样式已正确，不会再次触发，自然收敛）。
+ */
+let styleFixScheduled = false
+let styleFixNeedsChangeEmit = false
+const scheduleStyleFix = (notifyChange = false) => {
+  if (notifyChange) styleFixNeedsChangeEmit = true
+  if (styleFixScheduled) return
+  styleFixScheduled = true
+  setTimeout(() => {
+    styleFixScheduled = false
+    const needEmit = styleFixNeedsChangeEmit
+    styleFixNeedsChangeEmit = false
+    refreshGrid()
+    // 内容被清空（保护行/列粘贴拦截）属于数据变更，需通知上层刷新矩阵缓存
+    if (needEmit) emit('change')
+  }, 0)
+}
+
+/**
+ * 渲染兜底（统一机制）：分区标记所在行/列默认灰底。
+ * 不区分单元格来源——右键插入、底部新增、手动输入、undo/redo 产生的单元格
+ * 都不带样式，渲染到哪个就在哪个上补，发现缺失自动调度一次重绘。
+ * 主渲染读取 bg 在钩子之前，故修改在下一轮渲染生效（由 scheduleStyleFix 保证）。
+ */
+const ensureProtectedCellStyle = (cell, position) => {
+  if (!position || !protectedKeywordSet.value.size) return
+  const data = getLiveSheetData()
+  if (!data) return
+  const {r, c} = position
+  const kwSet = protectedKeywordSet.value
+  const rowMark = data[r] ? markText(data[r][0]) : ''
+  const colMark = data[0] ? markText(data[0][c]) : ''
+  if (!kwSet.has(rowMark) && !kwSet.has(colMark)) return
+  const bg = PROTECTED_ROW_BG.value
+  if (cell && cell.bg === bg && cell.bl === 1) return
+  let target = cell
+  if (!target) {
+    if (!data[r]) return
+    target = data[r][c] = {}
+  }
+  target.bg = bg
+  target.bl = 1
+  scheduleStyleFix()
+}
+
+/**
+ * 渲染兜底（内容清空）：分区标记所在行/列不允许任何用户内容。
+ * Ctrl+V 键盘粘贴走内部 pasteHandlerOfCopyPaste，不触发 rangePasteBefore 钩子，
+ * 钩子拦不住；此处在渲染时统一兜底——保护行/列的非标记单元格（垂直模式标记在
+ * 第 0 列、水平模式标记在表头行，标记单元格本身除外）一旦带内容就清空 v/m/f/qp，
+ * 覆盖键盘粘贴、右键粘贴、剪切粘贴、undo/redo 等全部路径（下一轮渲染生效，自然收敛）。
+ */
+const ensureProtectedCellEmpty = (cell, position) => {
+  if (!position || !cell || !protectedKeywordSet.value.size) return
+  const data = getLiveSheetData()
+  if (!data) return
+  const {r, c} = position
+  const kwSet = protectedKeywordSet.value
+  const rowMark = data[r] ? markText(data[r][0]) : ''
+  const colMark = data[0] ? markText(data[0][c]) : ''
+  const rowProtected = kwSet.has(rowMark)
+  const colProtected = kwSet.has(colMark)
+  if (!rowProtected && !colProtected) return
+  // 标记单元格本身保留内容（垂直模式第 0 列 / 水平模式表头行）
+  if ((rowProtected && c === 0) || (colProtected && r === 0)) return
+  if (cell.v == null || cell.v === '') return
+  delete cell.v
+  delete cell.m
+  delete cell.f
+  delete cell.qp
+  scheduleStyleFix(true)
+}
 
 /**
  * 提交快照：cellUpdateBefore 阶段记录用户提交的原始文本，
@@ -362,14 +485,21 @@ const restoreBlankCell = (r, c, text) => {
 /**
  * 单元格对齐约定：全部水平垂直居中（ht:0=center，vt:0=middle）。
  * Luckysheet 渲染时单元格无 ht 默认左对齐（内部 ts() 兜底为 "1"），
- * 用户新输入/粘贴产生的单元格对象不带 ht/vt，需在两处兜底：
- * 1. cellUpdated 后对刚编辑的单元格直写活动 data 并重绘（主渲染函数在钩子前已读 ht，必须主动重绘）；
- * 2. cellRenderBefore 渲染钩子兜底粘贴等漏网单元格（当次渲染来不及，下一次渲染生效）。
+ * 用户新输入/粘贴产生的单元格对象不带 ht/vt；由 cellRenderBefore 渲染钩子
+ * 统一兜底（与保护行/列样式同机制），发现缺失自动调度一次重绘。
  */
 const forceCellCenterAlign = (cell) => {
   if (!cell || typeof cell !== 'object') return
-  if (cell.ht !== 0) cell.ht = 0
-  if (cell.vt !== 0) cell.vt = 0
+  let changed = false
+  if (cell.ht !== 0) {
+    cell.ht = 0
+    changed = true
+  }
+  if (cell.vt !== 0) {
+    cell.vt = 0
+    changed = true
+  }
+  if (changed) scheduleStyleFix()
 }
 
 /**
@@ -381,14 +511,7 @@ const forceCellCenterAlign = (cell) => {
 const postProcessCellUpdate = (r, c, newCell) => {
   const committed = lastCommittedText.value
   lastCommittedText.value = null
-  // 用户编辑产生的单元格无 ht/vt，渲染默认左对齐：直写活动 data 强制居中
-  // （不用 setCellValue：对象分支对 v 为纯空白的单元格会误走判空路径丢值）
-  const live = getLiveSheetData()
-  if (live && live[r]) {
-    forceCellCenterAlign(live[r][c])
-    // 主渲染函数在钩子触发前已读取对齐属性，需重绘一次才能生效
-    refreshGrid()
-  }
+  // 对齐/保护样式由 cellRenderBefore 渲染钩子统一兜底，此处只处理 qp 文本锁
   if (committed == null || committed === '') return
   if (!committed.startsWith("'") && newCell && newCell.qp === 1) {
     try {
@@ -494,7 +617,8 @@ const setupDeletionProtection = () => {
   if (typeof document === 'undefined') return
   if (!Array.isArray(props.protectedRowKeywords) || !props.protectedRowKeywords.length) return
 
-  const shouldBlock = () => hasProtectedRowInSelection() && !isSelectionColumnWide()
+  const shouldBlock = () =>
+      ((hasProtectedRowInSelection() && !isSelectionColumnWide()) || hasProtectedColumnInSelection())
   const interceptClick = (e) => {
     if (shouldBlock()) {
       e.stopImmediatePropagation()
@@ -521,6 +645,7 @@ const setupDeletionProtection = () => {
     'luckysheet-del-selected',
     'luckysheet-del-selected_t',
     'luckysheet-delRows',
+    'luckysheet-delCols',
     'luckysheet-delCellsMoveUp',
   ]
   delBtnIds.forEach((id) => {
@@ -599,16 +724,19 @@ const initLuckysheet = async () => {
       },
     ],
     hook: {
-      // 渲染兜底：粘贴等路径不触发 cellUpdated，渲染前强制居中（返回 undefined 继续默认渲染）
-      cellRenderBefore: (cell) => {
+      // 渲染兜底：粘贴/undo 等路径不触发 cellUpdated，渲染前强制居中与保护行/列样式
+      //（主渲染函数在钩子前已读取 bg/ht 等属性，修改在下一轮渲染生效，插入场景另有延迟重绘兼容）
+      cellRenderBefore: (cell, position) => {
         forceCellCenterAlign(cell)
+        ensureProtectedCellStyle(cell, position)
+        ensureProtectedCellEmpty(cell, position)
       },
       cellUpdated: (r, c, oldValue, newValue, isRefresh) => {
         postProcessCellUpdate(r, c, newValue)
         emit('change')
       },
       cellUpdateBefore: (row, col, value, isRefresh) => {
-        if (isProtectedRow(row)) return false
+        if (isProtectedRow(row) || isProtectedColumn(col)) return false
         if (typeof value === 'string') {
           // 纯空白（非空串）：Luckysheet 判空会吞掉并直接 cancel（不触发 cellUpdated），
           // 在此直接写入 qp=1 保护单元格并拦截默认处理（对齐 Excel：允许保存空格）
@@ -625,13 +753,18 @@ const initLuckysheet = async () => {
         lastCommittedText.value = null
         if (!selectSave || !Array.isArray(selectSave)) return true
         for (const sel of selectSave) {
-          if (!sel || !sel.row || !Array.isArray(sel.row)) continue
-          for (let r = sel.row[0]; r <= sel.row[1]; r++) {
-            if (isProtectedRow(r)) return false
+          if (!sel) continue
+          if (Array.isArray(sel.row)) {
+            for (let r = sel.row[0]; r <= sel.row[1]; r++) {
+              if (isProtectedRow(r)) return false
+            }
+          }
+          if (Array.isArray(sel.column)) {
+            for (let c = sel.column[0]; c <= sel.column[1]; c++) {
+              if (isProtectedColumn(c)) return false
+            }
           }
         }
-        // 粘贴产生的单元格无 ht/vt：cellRenderBefore 已改写属性但当次渲染来不及，延迟重绘一次使居中生效
-        setTimeout(() => refreshGrid(), 0)
         return true
       },
       cellDeleteBefore: () => {
@@ -697,9 +830,34 @@ const getData = () => {
   return result
 }
 
+/**
+ * 保存出口兜底：剔除分区标记所在行/列的用户内容（标记单元格本身保留）。
+ * 与渲染钩子同规则双保险：即使内容尚未经过渲染兜底清空（如粘贴后立即保存），
+ * 落库数据也不会携带保护行/列的脏值。
+ */
+const sanitizeProtectedMatrix = (matrix) => {
+  const kwSet = protectedKeywordSet.value
+  if (!kwSet.size || !matrix.length) return matrix
+  const header = Array.isArray(matrix[0]) ? matrix[0] : []
+  const protectedCols = new Set()
+  for (let c = 1; c < header.length; c++) {
+    if (kwSet.has(String(header[c] ?? '').trim().toUpperCase())) protectedCols.add(c)
+  }
+  for (let r = 1; r < matrix.length; r++) {
+    const row = Array.isArray(matrix[r]) ? matrix[r] : []
+    const rowProtected = kwSet.has(String(row[0] ?? '').trim().toUpperCase())
+    if (!rowProtected && !protectedCols.size) continue
+    for (let c = 1; c < row.length; c++) {
+      if ((rowProtected || protectedCols.has(c)) && hasUserInput(row[c])) row[c] = ''
+    }
+  }
+  return matrix
+}
+
 const getDataForSave = () => {
   const raw = getData()
   if (!raw.length) return {headers: [], rows: []}
+  sanitizeProtectedMatrix(raw)
 
   const headers = raw[0].map((h) => (h == null || h === '' ? '' : String(h)))
   const dataRows = raw.slice(1)

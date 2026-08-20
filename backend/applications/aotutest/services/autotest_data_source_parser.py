@@ -507,6 +507,33 @@ def _trim_matrix_strings(matrix: List[List[Any]]) -> List[List[Any]]:
     return result
 
 
+def _clear_section_marker_cells(matrix: List[List[Any]]) -> List[List[Any]]:
+    """
+    分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行/列不允许任何用户内容，
+    后端保存时统一剔除（与前端拦截双保险）：
+    - 垂直模式：第0列为分区标记的行，剔除第0列以外的全部单元格内容
+    - 水平模式：第0行为分区标记的列，剔除第0行以外的全部单元格内容
+    两个方向同时处理（不依赖 axis），标记单元格本身始终保留。
+
+    :param matrix: 已对齐的矩形矩阵
+    :return: 剔除后的矩阵（原地修改）
+    """
+    if not matrix:
+        return matrix
+    header = matrix[0] if isinstance(matrix[0], list) else []
+    marker_cols = {c for c in range(1, len(header)) if is_section_marker(header[c])}
+    for row_idx, row in enumerate(matrix):
+        if not isinstance(row, list):
+            continue
+        row_is_marker = row_idx > 0 and row and is_section_marker(row[0])
+        if not row_is_marker and not marker_cols:
+            continue
+        for col_idx in range(1, len(row)):
+            if row_is_marker or col_idx in marker_cols:
+                row[col_idx] = ''
+    return matrix
+
+
 def clean_matrix_by_axis(matrix: List[List[Any]], axis: int) -> List[List[Any]]:
     """
     按矩阵方向剔除空白字段行/列，以及无数据的场景行/列；分区标记始终保留。
@@ -627,6 +654,8 @@ async def parse_dataframe_matrix_async(
     norm_matrix = clean_matrix_by_axis(matrix, axis)
     if not norm_matrix:
         return {}, [], [], axis
+    # 分区标记所在行/列不允许用户内容（防粘贴等绕过前端拦截的脏值），先剔除再做空白保护
+    norm_matrix = _clear_section_marker_cells(norm_matrix)
     norm_matrix = _trim_matrix_strings(norm_matrix)
 
     df = pd.DataFrame(norm_matrix, dtype=object)
