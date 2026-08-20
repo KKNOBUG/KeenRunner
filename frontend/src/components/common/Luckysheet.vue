@@ -165,25 +165,88 @@ const readLuckysheetCell = (cell) => {
 const hasUserInput = (value) => value != null && value !== ''
 
 /**
+ * 判断字符串剥离前导 ' 标记后是否为非空纯空白（如 "   " 或 "'   "）。
+ * 注意必须先剥标记再判空："'   ".trim() 仍含 '，直接 isBlankString 会漏判。
+ */
+const extractForcedBlankText = (value) => {
+  if (typeof value !== 'string') return null
+  const text = value.startsWith("'") ? value.slice(1) : value
+  if (text !== '' && isBlankString(text)) return text
+  return null
+}
+
+/**
  * 纯空白 qp 单元格（如 "'   "）不能走 celldata 初始化路径：
  * luckysheet.create → buildGridData 内部写值函数开头会判空（纯空白视为空），
  * 直接删除 v/m，导致重载后双击显示 "'null"。收集这些位置，create 后直写 flowdata。
  */
 let pendingBlankCells = []
 
-/** 将纯空白值补写入活动 sheet data（绕过内部写值的判空路径） */
-const applyPendingBlankCells = () => {
+/**
+ * 获取当前活动 sheet 的 data 矩阵的【活动引用】（luckysheetfile[active].data）。
+ * 关键陷阱：导出的 getSheetData() 内部用 $.extend(true, [], data) 深拷贝返回，
+ * 直写到它的返回值上等于写进副本，下一次读取即丢失（实测验证）。
+ * 只有 getLuckysheetfile() 返回的 luckysheetfile 数组里活动 sheet 的 data 才是真实本体，
+ * 补写/恢复单元格必须写这里。每次调用都重新取，避免 destroy/create 后持有陈旧引用。
+ */
+const getLiveSheetData = () => {
   const luckysheet = luckysheetRef.value
+  if (!luckysheet) return null
+  try {
+    const file = luckysheet.getLuckysheetfile?.()
+    if (!Array.isArray(file) || !file.length) return null
+    const active = file.find((s) => s && s.status == 1) || file[0]
+    const data = active && active.data
+    if (data && data.length) return data
+  } catch (_) { /* ignore */ }
+  return null
+}
+
+/**
+ * 重绘表格。注意：Luckysheet 2.1.13 未导出 refresh 方法，
+ * 直写 flowdata 后需用导出的 jfrefreshgrid(data) 触发重绘。
+ */
+const refreshGrid = () => {
+  const luckysheet = luckysheetRef.value
+  if (!luckysheet) return
+  try {
+    const data = getLiveSheetData()
+    if (typeof luckysheet.jfrefreshgrid === 'function' && data) {
+      luckysheet.jfrefreshgrid(data)
+    }
+  } catch (_) { /* 重绘失败不影响已写入的单元格值，后续交互会重绘 */ }
+}
+
+/** 将纯空白值补写入活动 sheet data（绕过内部写值的判空路径）。
+ * create 内部存在异步初始化环节（flowdata 同步、首次渲染），且期间可能
+ * 发生 destroy/重建（实例更替），因此：延迟启动 + 重试写入 + 校验目标数组
+ * 仍是当前实例的 data（实例已更替时放弃，由新一轮 create 自行补写）。 */
+const writeBlankCellOnce = (data, r, c, text) => {
+  if (!data[r]) return false
+  data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0}
+  return true
+}
+
+const applyPendingBlankCells = () => {
   const cells = pendingBlankCells
   pendingBlankCells = []
-  if (!luckysheet || !cells.length) return
-  const data = luckysheet.getSheetData()
-  if (!data) return
-  for (const {r, c, text} of cells) {
-    if (!data[r]) continue
-    data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0}
+  if (!cells.length) return
+  const containerAtApply = containerId.value
+  let attempts = 0
+  const attempt = () => {
+    attempts += 1
+    // 实例已销毁/容器已更替：放弃，避免把旧单元格写进新实例
+    if (!luckysheetRef.value || !isReady.value || containerId.value !== containerAtApply) return
+    const data = getLiveSheetData()
+    const ok = data && cells.every(({r, c, text}) => writeBlankCellOnce(data, r, c, text))
+    if (ok) {
+      refreshGrid()
+      return
+    }
+    if (attempts < 40) setTimeout(attempt, 50)
   }
-  luckysheet.refresh()
+  // 延迟一拍启动：等 create 同步尾部与首个微任务完成
+  setTimeout(attempt, 0)
 }
 
 const buildLuckysheetData = () => {
@@ -197,8 +260,9 @@ const buildLuckysheetData = () => {
   // 第一行：表头
   columns.forEach((col, c) => {
     const value = col == null ? '' : col
-    if (typeof value === 'string' && value !== '' && isBlankString(value)) {
-      pendingBlankCells.push({r: 0, c, text: value})
+    const blankText = extractForcedBlankText(value)
+    if (blankText != null) {
+      pendingBlankCells.push({r: 0, c, text: blankText})
       return
     }
     celldata.push({r: 0, c, v: valueToLuckysheetCell(value)})
@@ -216,9 +280,11 @@ const buildLuckysheetData = () => {
       const raw = c < rowArr.length ? rowArr[c] : null
       if (isEmptyCellValue(raw) && !isProtected) continue
       const extra = isProtected ? {bg: PROTECTED_ROW_BG.value, bl: 1} : {}
-      if (typeof raw === 'string' && isBlankString(raw)) {
-        // 纯空白值（含 "'   " 剥离标记后）：跳过 celldata，create 后直写
-        pendingBlankCells.push({r: rowIndex, c, text: raw.startsWith("'") ? raw.slice(1) : raw})
+      const blankText = extractForcedBlankText(raw)
+      if (blankText != null) {
+        // 非空纯空白值（先剥前导 ' 再判空，覆盖 "'   " 场景）：
+        // 跳过 celldata，create 后直写（空串不受判空影响，保留 celldata 路径以保住保护行样式）
+        pendingBlankCells.push({r: rowIndex, c, text: blankText})
         continue
       }
       celldata.push({r: rowIndex, c, v: valueToLuckysheetCell(raw, extra)})
@@ -287,12 +353,10 @@ const lastCommittedText = ref(null)
  * 直接写入活动 sheet data（绕过 setCellValue 的判空路径），再整体重绘。
  */
 const restoreBlankCell = (r, c, text) => {
-  const luckysheet = luckysheetRef.value
-  if (!luckysheet) return
-  const data = luckysheet.getSheetData()
+  const data = getLiveSheetData()
   if (!data || !data[r]) return
   data[r][c] = {ct: {fa: '@', t: 's'}, m: text, v: text, qp: 1, ht: 0, vt: 0}
-  luckysheet.refresh()
+  refreshGrid()
 }
 
 /**
