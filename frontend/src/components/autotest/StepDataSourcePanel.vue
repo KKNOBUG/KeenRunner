@@ -66,6 +66,7 @@
                       trigger="click"
                       placement="bottom-end"
                       :options="dataSourceMoreOptions"
+                      :z-index="10002"
                       @select="onDataSourceMoreSelect"
                   >
                     <n-button size="tiny" quaternary :disabled="panelReadonly">

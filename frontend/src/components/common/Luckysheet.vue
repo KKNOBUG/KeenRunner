@@ -360,6 +360,19 @@ const restoreBlankCell = (r, c, text) => {
 }
 
 /**
+ * 单元格对齐约定：全部水平垂直居中（ht:0=center，vt:0=middle）。
+ * Luckysheet 渲染时单元格无 ht 默认左对齐（内部 ts() 兜底为 "1"），
+ * 用户新输入/粘贴产生的单元格对象不带 ht/vt，需在两处兜底：
+ * 1. cellUpdated 后对刚编辑的单元格直写活动 data 并重绘（主渲染函数在钩子前已读 ht，必须主动重绘）；
+ * 2. cellRenderBefore 渲染钩子兜底粘贴等漏网单元格（当次渲染来不及，下一次渲染生效）。
+ */
+const forceCellCenterAlign = (cell) => {
+  if (!cell || typeof cell !== 'object') return
+  if (cell.ht !== 0) cell.ht = 0
+  if (cell.vt !== 0) cell.vt = 0
+}
+
+/**
  * cellUpdated 后处理（对齐 Excel 语义）：
  * 用户不带前导 ' 编辑了 qp（强制文本）单元格 → 解除 qp 文本锁，
  * 读回时按新内容重新推断类型（'000200 → 输入 18 → 数字 18；输入 abc → 普通文本）。
@@ -368,6 +381,14 @@ const restoreBlankCell = (r, c, text) => {
 const postProcessCellUpdate = (r, c, newCell) => {
   const committed = lastCommittedText.value
   lastCommittedText.value = null
+  // 用户编辑产生的单元格无 ht/vt，渲染默认左对齐：直写活动 data 强制居中
+  // （不用 setCellValue：对象分支对 v 为纯空白的单元格会误走判空路径丢值）
+  const live = getLiveSheetData()
+  if (live && live[r]) {
+    forceCellCenterAlign(live[r][c])
+    // 主渲染函数在钩子触发前已读取对齐属性，需重绘一次才能生效
+    refreshGrid()
+  }
   if (committed == null || committed === '') return
   if (!committed.startsWith("'") && newCell && newCell.qp === 1) {
     try {
@@ -578,6 +599,10 @@ const initLuckysheet = async () => {
       },
     ],
     hook: {
+      // 渲染兜底：粘贴等路径不触发 cellUpdated，渲染前强制居中（返回 undefined 继续默认渲染）
+      cellRenderBefore: (cell) => {
+        forceCellCenterAlign(cell)
+      },
       cellUpdated: (r, c, oldValue, newValue, isRefresh) => {
         postProcessCellUpdate(r, c, newValue)
         emit('change')
@@ -605,6 +630,8 @@ const initLuckysheet = async () => {
             if (isProtectedRow(r)) return false
           }
         }
+        // 粘贴产生的单元格无 ht/vt：cellRenderBefore 已改写属性但当次渲染来不及，延迟重绘一次使居中生效
+        setTimeout(() => refreshGrid(), 0)
         return true
       },
       cellDeleteBefore: () => {
