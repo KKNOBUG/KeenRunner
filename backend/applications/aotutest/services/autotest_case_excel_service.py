@@ -49,7 +49,7 @@ _CELL_BORDER = Border(left=_SIDE, right=_SIDE, top=_SIDE, bottom=_SIDE)
 _ROW_HEIGHT = 40
 _COL_WIDTH_MIN, _COL_WIDTH_MAX = 8, 60
 # 报文导出目录 sheet 阈值：导出用例数超过该值才创建目录
-_DIRECTORY_THRESHOLD = 10
+_DIRECTORY_THRESHOLD = 2
 # 数据源分区标记（与 autotest_data_source_parser._SECTION_MARKERS_UPPER 保持一致）
 _SECTION_MARKERS = frozenset({"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"})
 
@@ -392,8 +392,15 @@ def style_data_source_sheet(sheet) -> None:
     - 分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行(垂直模式第0列标记)/
       列(水平模式表头行标记)整行/整列黄底；
     - 全部单元格水平/垂直居中、四边边框并自动换行，统一行高；
-    - 列宽按内容自适应（[_COL_WIDTH_MIN, _COL_WIDTH_MAX]）。
-    只调整样式不改写单元格值（含前导 ' 强制文本标记，保证导出后再导入往返保真）。
+    - 列宽按内容自适应（[_COL_WIDTH_MIN, _COL_WIDTH_MAX]）；
+    - 前导 ' 协议标记转为 Excel 原生文本前缀（quotePrefix 角标）。
+
+    前导 ' 处理说明：dataframe 中的 "'000200" 是我们的强制文本协议标记，
+    若原样写入，Excel 会把 ' 当作普通字符显示（只有双击编辑后 Excel 才会
+    重新解析输入、剥离 ' 并置 quotePrefix）；正确做法是去掉 ' 后写值并置
+    quotePrefix=True，即用户手动输入 '000200 后 Excel 存储的原生形态，
+    Office/WPS 均显示为绿色角标且保持文本语义。导入侧会从 quotePrefix
+    还原 ' 标记（见 parser 层），导出→再导入往返保真。
     """
     max_row = sheet.max_row or 0
     max_col = sheet.max_column or 0
@@ -416,6 +423,9 @@ def style_data_source_sheet(sheet) -> None:
             cell.border = _CELL_BORDER
             if cell.row in marker_rows or cell.column in marker_cols:
                 cell.fill = _MARKER_FILL
+            if isinstance(cell.value, str) and cell.value.startswith("'"):
+                cell.value = cell.value[1:]
+                cell.quotePrefix = True
     _auto_size_sheet_columns(sheet)
 
 
