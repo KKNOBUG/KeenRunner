@@ -371,6 +371,20 @@ def collect_body_paths(step: AutoTestStepModel) -> List[str]:
     return []
 
 
+def build_blank_vertical_matrix() -> List[List[Any]]:
+    """
+    构建含分区标记的空白垂直矩阵模板。
+
+    每个分区标记后跟随一行空白填充区；用例无已存数据源时使用。
+    """
+    empty: List[str] = [""] * len(DEFAULT_SCENE_NAMES)
+    matrix: List[List[Any]] = [["", *DEFAULT_SCENE_NAMES]]
+    for marker in ("HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"):
+        matrix.append([marker, *empty])
+        matrix.append(list(empty))
+    return matrix
+
+
 def build_vertical_matrix_from_step(step: AutoTestStepModel) -> List[List[Any]]:
     """
     按垂直模式根据当前步骤报文构建空白场景矩阵。
@@ -406,7 +420,7 @@ async def sync_step_data_source_meta(
         "data_source_name": (file_name or "")[:2048] or None,
         "data_source_desc": (file_desc or "")[:2048] or None,
     }
-    services.step_curd._fill_updated_user(step_vals)
+    services.step_curd.fill_updated_user(step_vals)
     await services.step_curd.model.filter(
         case_id=case_id,
         step_code=step_code,
@@ -426,7 +440,7 @@ async def clear_step_data_source_meta(
         "data_source_name": None,
         "data_source_desc": None,
     }
-    services.step_curd._fill_updated_user(step_vals)
+    services.step_curd.fill_updated_user(step_vals)
     filters: Dict[str, Any] = {
         "case_id": case_id,
         "state": 0,

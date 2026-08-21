@@ -11,8 +11,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Union
 
 import orjson
+from jsonpath_ng import parse
 
 from backend.common import JSONPathUtils
+from backend.configure import LOGGER
 
 
 def _as_wire_string(value: Any) -> str:
@@ -27,6 +29,38 @@ def _as_wire_string(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
+
+
+def _jsonpath_hits(json_path: str, *candidates: Any) -> bool:
+    """
+    判定JSONPath是否在任一候选数据中命中；两段内嵌路径仅按第一段判定。
+
+    :param json_path: JSONPath表达式，可含'outer@JSON@inner'两段形式
+    :param candidates: 候选数据（dict/list或可解析为dict的JSON字符串）
+    :return: 任一候选命中即为True
+    """
+    if not json_path or not isinstance(json_path, str):
+        return False
+    outer_path = json_path.split("@JSON@", 1)[0].strip()
+    if not outer_path:
+        return False
+    try:
+        expr = parse(outer_path)
+    except Exception:
+        return False
+    for data in candidates:
+        if data is None:
+            continue
+        if isinstance(data, str):
+            try:
+                data = orjson.loads(data) if data.strip() else None
+            except (TypeError, orjson.JSONDecodeError):
+                continue
+        if not isinstance(data, (dict, list)):
+            continue
+        if expr.find(data):
+            return True
+    return False
 
 
 class JsonDatagram:
@@ -193,6 +227,19 @@ class JsonDatagram:
         """
         head_map = head_map or {}
         body_map = body_map or {}
+        channels = (request_body, form_data, urlencoded)
+        missed_paths: List[str] = []
+        for json_path in head_map:
+            if not json_path:
+                continue
+            header_key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
+            if (request_headers is not None and header_key in request_headers) or _jsonpath_hits(json_path, *channels):
+                continue
+            missed_paths.append(json_path)
+        for json_path in body_map:
+            if not json_path or _jsonpath_hits(json_path, *channels):
+                continue
+            missed_paths.append(json_path)
         if request_headers is not None:
             for json_path, json_value in head_map.items():
                 if not json_path:
@@ -208,6 +255,8 @@ class JsonDatagram:
         rb = JsonDatagram._by_jsonpath_modify_request_params(
             body_map, request_body=rb, form_data=form_data, urlencoded=urlencoded
         )
+        if missed_paths:
+            LOGGER.info(f"【JSON报文替换】数据源路径在报文中未命中已跳过: {', '.join(missed_paths)}")
         return {
             "headers": request_headers,
             "request_body": rb,

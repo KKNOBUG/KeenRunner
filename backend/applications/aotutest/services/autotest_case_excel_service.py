@@ -27,6 +27,7 @@ from backend.applications.aotutest.models.autotest_case_model import AutoTestCas
 from backend.applications.aotutest.models.autotest_project_model import AutoTestProjectModel
 from backend.applications.aotutest.models.autotest_step_model import AutoTestStepModel
 from backend.configure import LOGGER, PROJECT_CONFIG
+from backend.core.exceptions import NotFoundException
 from backend.enums import (
     AutoTestAssertionOperation,
     AutoTestCaseAttr,
@@ -170,7 +171,7 @@ async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[Li
     invalid: List[Dict[str, Any]] = []
     project_names: Dict[Any, str] = {}
     for case_id in case_ids:
-        case = await services.case_curd.get_by_id(case_id)
+        case = await services.case_curd.get_by_id(case_id, state__not=1)
         case_name = (getattr(case, "case_name", None) or str(case_id)) if case else str(case_id)
         if not case:
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "用例不存在"})
@@ -178,7 +179,11 @@ async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[Li
         if getattr(case, "case_type", None) != AutoTestCaseType.PUBLIC_API:
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "非公共接口用例"})
             continue
-        load = await services.step_curd.get_by_case_id(case_id=case_id)
+        try:
+            load = await services.step_curd.get_by_case_id(case_id=case_id)
+        except NotFoundException as e:
+            invalid.append({"case_id": case_id, "case_name": case_name, "reason": str(e.message)})
+            continue
         own_steps = _collect_own_steps(getattr(load, "root_steps", None))
         if len(own_steps) != 1:
             invalid.append({
@@ -501,14 +506,14 @@ def _assert_to_lines(assert_list: Optional[List[Any]]) -> str:
 
 
 def _step_body_cell(step: Any) -> str:
+    """非表单类请求体序列化；调用方已拦截表单类，此处仅处理JSON/XML/RAW。"""
     args = _enum_val(getattr(step, "request_args_type", None))
     if args == AutoTestReqArgsType.JSON.value:
         body = getattr(step, "request_body", None)
         return json.dumps(body, ensure_ascii=False) if isinstance(body, dict) else ""
     if args in (AutoTestReqArgsType.XML.value, AutoTestReqArgsType.RAW.value):
         return getattr(step, "request_text", None) or ""
-    attr = _FORM_ATTR.get(args)
-    return _kv_to_lines(getattr(step, attr, None)) if attr else ""
+    return ""
 
 
 async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
@@ -534,11 +539,23 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
             body_text = _kv_to_lines(getattr(step, form_attr, None), column="请求体", problems=problems)
         else:
             body_text = _step_body_cell(step)
+        for extract_item in getattr(step, "extract_variables", None) or []:
+            extract_name = str(_get(extract_item, "name") or "")
+            extract_expr = str(_get(extract_item, "expr") or "")
+            if ":" in extract_name or "\n" in extract_name:
+                problems.append(f"「提取」({extract_name})的变量名含冒号或换行, 模板格式无法安全往返")
+            if ":" in extract_expr or "\n" in extract_expr:
+                problems.append(f"「提取」({extract_name})的提取表达式含冒号或换行, 导入时无法正确解析")
         for assert_item in getattr(step, "assert_validators", None) or []:
-            if ":" in str(_get(assert_item, "expr") or ""):
-                problems.append(
-                    f"「断言」({_get(assert_item, 'name') or ''})的断言表达式含冒号, 导入时无法正确解析"
-                )
+            assert_name = str(_get(assert_item, "name") or "")
+            assert_expr = str(_get(assert_item, "expr") or "")
+            assert_except = str(_get(assert_item, "except_value") or "")
+            if ":" in assert_name or "\n" in assert_name:
+                problems.append(f"「断言」({assert_name})的断言名称含冒号或换行, 模板格式无法安全往返")
+            if ":" in assert_expr or "\n" in assert_expr:
+                problems.append(f"「断言」({assert_name})的断言表达式含冒号或换行, 导入时无法正确解析")
+            if "\n" in assert_except:
+                problems.append(f"「断言」({assert_name})的预期值含换行, 模板格式无法安全往返")
         if problems:
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "；".join(problems)})
             continue
@@ -692,6 +709,7 @@ def _parse_body(args_type: str, body_text: str, errors: List[str]) -> Dict[str, 
     if args_type == AutoTestReqArgsType.NONE.value:
         if body_text:
             errors.append("请求体类型为none时「请求体」不允许填写")
+        # none类型请求体本就为空，允许空值导入，保证与导出往返一致
         return result
     if not body_text:
         errors.append(f"请求体类型为{args_type}时「请求体」不允许为空")

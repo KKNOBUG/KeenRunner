@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import api from '@/api'
+import { downloadBlobResponse } from '@/utils/common/downloadFile'
 
 /**
  * 数据源批量上传/下载
@@ -55,23 +56,7 @@ export function useDataSourceBatch({ caseId, loadSteps }) {
         summaryDownloadLoading.value = true
         try {
             const res = await api.batchStepDatasetDownload({ case_id: caseId.value })
-            const contentType = res?.headers?.['content-type'] || ''
-            if (contentType.includes('application/json')) {
-                const body = JSON.parse(await res.data.text())
-                window.$message?.error?.(body?.message || '下载失败')
-                return
-            }
-            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-            const url = window.URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
-            const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd)
-            link.download = matched?.[1] ? decodeURIComponent(matched[1]) : '数据源汇总.xlsx'
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            window.URL.revokeObjectURL(url)
+            await downloadBlobResponse(res, '数据源汇总.xlsx')
             window.$message?.success?.('下载成功')
         } catch (e) {
             window.$message?.error?.(e?.message || '下载失败')

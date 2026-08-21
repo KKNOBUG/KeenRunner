@@ -18,8 +18,6 @@ from tortoise.expressions import Q
 
 from backend.applications.aotutest.models.autotest_data_create_model import AutoTestDataCreateModel
 from backend.applications.aotutest.models.autotest_data_source_model import AutoTestDataSourceModel
-from backend.applications.aotutest.models.autotest_step_model import AutoTestStepModel
-from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate
 from backend.applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER, PROJECT_CONFIG
@@ -85,27 +83,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
-        """
-        根据文件哈希查询数据源。
-
-        :param file_hash: 文件哈希
-        :param on_error: 为True时未找到则抛出NotFoundException
-        :param kwargs: 额外过滤条件
-        :return: 数据源实例或None
-        """
-        if not file_hash:
-            error_message: str = "查询数据源信息失败, 参数[file_hash]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(file_hash=file_hash, **kwargs).first()
-        if not instance and on_error:
-            error_message: str = f"查询数据源信息失败, 记录[file_hash={file_hash}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
     async def get_by_case_step(
             self,
             case_id: Optional[int] = None,
@@ -159,27 +136,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(f"{error_message}, 条件明细: {conditions}")
             raise NotFoundException(message=error_message, data=conditions)
         return instances
-
-    async def get_by_case_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
-        """
-        根据用例ID取最新一条数据源。
-
-        :param case_id: 用例主键
-        :param on_error: 为True时未找到则抛出NotFoundException
-        :param kwargs: 额外过滤条件
-        :return: 数据源实例或None
-        """
-        if not case_id:
-            error_message: str = "查询数据源失败, 参数[case_id]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(case_id=case_id, **kwargs).order_by("-id").first()
-        if not instance and on_error:
-            error_message: str = f"查询数据源失败, 记录[case_id={case_id}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
 
     async def get_dataset_scenario(self, case_id: int, step_code: str, dataset_name: str, **kwargs) -> Optional[Dict[str, Any]]:
         """
@@ -318,84 +274,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_data_source(
-            self,
-            data_source_id: Optional[int] = None,
-            data_source_code: Optional[str] = None,
-            case_id: Optional[int] = None,
-            case_code: Optional[str] = None,
-            step_id: Optional[int] = None,
-            step_code: Optional[str] = None,
-    ) -> AutoTestDataSourceModel:
-        """
-        软删除数据源，根据id/code或用例步骤组合定位。
-
-        :param data_source_id: 主键ID
-        :param data_source_code: 数据驱动标识代码
-        :param case_id: 用例主键(与step组合定位)
-        :param case_code: 用例标识代码
-        :param step_id: 步骤主键
-        :param step_code: 步骤标识代码
-        :return: 软删除后的实例
-        """
-        if data_source_id:
-            instance: Optional[AutoTestDataSourceModel] = await self.get_by_id(
-                data_source_id=data_source_id,
-                on_error=True,
-                state__not=1
-            )
-        elif (data_source_code or "").strip():
-            instance: Optional[AutoTestDataSourceModel] = await self.get_by_code(
-                data_source_code=data_source_code.strip(),
-                on_error=True,
-                state__not=1
-            )
-        elif (case_id or (case_code or "").strip()) and (step_id or (step_code or "").strip()):
-            instance: Optional[AutoTestDataSourceModel] = await self.get_by_case_step(
-                case_id=case_id,
-                case_code=case_code,
-                step_id=step_id,
-                step_code=step_code,
-                on_error=True,
-                state__not=1
-            )
-        else:
-            error_message: str = "删除数据源失败, 参数[data_source_id]或[data_source_code]或[case_id, case_code, step_id, step_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        return await self.soft_delete(id=instance.id)
-
-    async def unbind_case_data_sources(self, case_id: int) -> Dict[str, int]:
-        """
-        解绑用例下全部数据源：软删记录并清空步骤上的数据源指针。
-
-        :param case_id: 用例主键
-        :return: {"data_source": 软删记录数, "step": 清空指针的步骤数}
-        """
-        if not case_id:
-            error_message: str = "解绑用例数据源失败, 参数[case_id]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        source_ids = await self.model.filter(case_id=case_id, state=0).values_list("id", flat=True)
-        deleted_count: int = await self.soft_delete_batch(ids=list(source_ids))
-        from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
-        from backend.enums import AutoTestStepType
-        step_crud = AutoTestStepCrud()
-        step_vals: Dict[str, Any] = {
-            "data_source_id": None,
-            "data_source_name": None,
-            "data_source_desc": None,
-        }
-        step_crud._fill_updated_user(step_vals)
-        cleared_count: int = await AutoTestStepModel.filter(
-            case_id=case_id,
-            state=0,
-            step_type__in=[AutoTestStepType.HTTP, AutoTestStepType.TCP],
-        ).update(**step_vals)
-        return {"data_source": deleted_count, "step": cleared_count}
-
     async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDataSourceModel]]:
         """
         根据条件分页查询数据源列表。
@@ -412,45 +290,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             error_message: str = f"查询数据源异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
-
-    async def query_dataset(self, case_id: str, step_code: str, dataset_name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
-        """
-        根据用例ID与步骤标识查询dataset；可再根据场景名收窄为单场景。
-
-        :param case_id: 用例主键
-        :param step_code: 步骤标识代码
-        :param dataset_name: 场景名；为空则返回完整dataset
-        :param kwargs: 额外过滤条件
-        :return: 含dataset字段的字典
-        """
-        if not case_id or not step_code:
-            error_message: str = "查询数据源信息失败, 参数[case_id, step_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        dataset_name: str = dataset_name.strip()
-        condition: Dict[str, Any] = {"case_id": case_id, "step_code": step_code}
-        LOGGER.info(f"查询数据源信息条件(此时不判断dataset_name是否存在于dataset中)：{condition}")
-        source_instance: AutoTestDataSourceModel = await self.model.filter(**condition, **kwargs).first()
-        if not source_instance:
-            error_message: str = f"查询数据源信息失败, 暂无满足[{condition}]查询条件的记录"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-
-        source_dict: Dict[str, Any] = await source_instance.to_dict(include_fields=["dataset"])
-        if not dataset_name:
-            return source_dict
-
-        dataset: Dict[str, Any] = source_dict.get("dataset") or {}
-        if dataset:
-            single_dataset = dataset.get(dataset_name)
-            if not single_dataset:
-                error_message: str = f"查询数据源信息失败, 指定场景名称[{dataset_name}]下数据为空"
-                LOGGER.error(error_message)
-                raise NotFoundException(message=error_message)
-            source_dict["dataset"] = single_dataset
-
-        return source_dict
 
     async def create_data_sources_from_parsed(
             self,
@@ -547,20 +386,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             )
         )
 
-    async def list_by_case(self, case_id: int, state: int = 0) -> List[AutoTestDataSourceModel]:
-        """
-        查询指定用例下的数据源列表。
-
-        :param case_id: 用例主键
-        :param state: 状态过滤，默认0(启用)
-        :return: 根据updated_time倒序及步骤字段排序的列表
-        """
-        if not case_id:
-            error_message: str = "参数[case_id]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        return await self.model.filter(case_id=case_id, state=state).order_by("-updated_time", "step_id", "step_code").all()
-
     async def copy_data_source_for_step(
             self,
             case_id: int,
@@ -606,151 +431,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         return new_record.id
 
 
-class AutoTestDataCreateCrud(ScaffoldCrud[AutoTestDataCreateModel, AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate]):
-
-    def __init__(self):
-        super().__init__(model=AutoTestDataCreateModel)
-
-    async def get_by_code(self, create_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataCreateModel]:
-        """
-        根据create_code查询数据源生成记录。
-
-        :param create_code: 生成任务标识
-        :param on_error: 为True时未找到则抛出NotFoundException
-        :param kwargs: 额外过滤条件
-        :return: 生成记录或None
-        """
-        if not create_code:
-            error_message: str = "查询数据源生成信息失败, 参数[create_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(create_code=create_code, **kwargs).first()
-        if not instance and on_error:
-            error_message: str = f"查询数据源生成信息失败, 记录[create_code={create_code}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def get_by_step(self, step_code: str, on_error: bool = False, limit_num: int = 3, **kwargs) -> List[AutoTestDataCreateModel]:
-        """
-        根据步骤标识查询最近N条数据源生成记录，默认最多3条。
-
-        :param step_code: 步骤标识代码
-        :param limit_num: 最近多少条数据
-        :param on_error: 为True时无记录则抛出NotFoundException
-        :param kwargs: 额外过滤条件
-        :return: 生成记录列表
-        """
-        if not step_code:
-            error_message: str = "查询数据源生成信息失败, 参数[step_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(step_code=step_code, **kwargs).order_by("-id").limit(limit_num)
-        if not instance and on_error:
-            error_message: str = f"查询数据源生成信息失败, 记录[step_code={step_code}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def get_by_hash(self, file_hash: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDataCreateModel]:
-        """
-        根据文件哈希查询数据源生成记录。
-
-        :param file_hash: 文件哈希
-        :param on_error: 为True时未找到则抛出NotFoundException
-        :param kwargs: 额外过滤条件
-        :return: 生成记录或None
-        """
-        if not file_hash:
-            error_message: str = "查询数据源生成信息失败, 参数[file_hash]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.model.filter(file_hash=file_hash, **kwargs).first()
-        if not instance and on_error:
-            error_message: str = f"查询数据源生成信息失败, 记录[file_hash={file_hash}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def create_data_create(self, data_in: AutoTestApiDataCreateCreate) -> AutoTestDataCreateModel:
-        """
-        创建数据源生成记录；若同file_hash已存在则重置状态并更新路径。
-
-        :param data_in: 创建入参
-        :return: 创建或更新后的生成记录
-        """
-        try:
-            instance = await self.get_by_hash(file_hash=data_in.file_hash, state__not=1)
-            if instance:
-                instance = await self.update_data_create(
-                    data_in=AutoTestApiDataCreateUpdate(
-                        id=instance.id,
-                        create_status="0",
-                        file_path=data_in.file_path,
-                        file_desc=data_in.file_desc
-                    )
-                )
-                return instance
-            data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
-            instance = await self.create(data_dict)
-            return instance
-        except Exception as e:
-            error_message: str = f"新增数据源生成信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataBaseStorageException(message=error_message) from e
-
-    async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestDataCreateModel:
-        """
-        根据主键更新数据源生成记录。
-
-        :param data_in: 更新入参
-        :return: 更新后的生成记录
-        """
-        try:
-            data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
-            instance = await self.update(id=data_in.id, obj_in=data_dict)
-            return instance
-        except Exception as e:
-            error_message: str = f"更新数据源生成信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataBaseStorageException(message=error_message) from e
-
-    async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestDataCreateModel:
-        """
-        根据create_code软删除数据源生成记录。
-
-        :param create_code: 生成任务标识
-        :return: 软删除后的记录
-        """
-        if not create_code:
-            error_message: str = "删除数据源生成信息失败, 参数[create_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-
-        instance = await self.get_by_code(create_code=create_code, on_error=True, state__not=1)
-        return await self.soft_delete(id=instance.id)
-
-    async def select_data_source(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDataCreateModel]]:
-        """
-        根据条件分页查询数据源生成记录。
-
-        :param search: Tortoise Q条件
-        :param page: 页码
-        :param page_size: 每页条数
-        :param order: 排序字段列表
-        :return: (总数, 实例列表)
-        """
-        try:
-            return await self.list(page=page, page_size=page_size, search=search, order=order)
-        except FieldError as e:
-            error_message: str = f"查询数据源生成信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-
 async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     硬删除指定步骤的数据源与生成记录，并清理关联本地文件。
@@ -759,16 +439,13 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     :param step_code_list: 待清理的步骤标识列表
     :return: None
     """
-    data_source_crud = AutoTestDataSourceCrud()
-    data_create_crud = AutoTestDataCreateCrud()
-    instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
-    steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
-    await data_source_crud.model.filter(step_code__in=step_code_list).delete()
-    await data_create_crud.model.filter(step_code__in=step_code_list).delete()
+    instance_list = await AutoTestDataSourceModel.filter(step_code__in=step_code_list).all()
+    steps_info = await AutoTestDataCreateModel.filter(step_code__in=step_code_list).all()
+    await AutoTestDataSourceModel.filter(step_code__in=step_code_list).delete()
+    await AutoTestDataCreateModel.filter(step_code__in=step_code_list).delete()
     for instance in instance_list:
-        if instance.file_hash and not instance.file_hash.endswith("X"):
-            if await aos.path.exists(instance.file_hash):
-                await aos.remove(instance.file_hash)
+        if instance.file_path and await aos.path.exists(instance.file_path):
+            await aos.remove(instance.file_path)
     LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]关联数据已被清理")
     for step_info in steps_info:
         if step_info and step_info.file_name:

@@ -378,9 +378,9 @@ class ReserveFields:
     """
     备用字段Mixin，为模型预留扩展字段。
     """
-    reserve_1 = fields.CharField(max_length=64, default=None, null=True, description="备用字段1")
-    reserve_2 = fields.CharField(max_length=128, default=None, null=True, description="备用字段2")
-    reserve_3 = fields.CharField(max_length=255, default=None, null=True, description="备用字段3")
+    reserve_1 = fields.CharField(max_length=255, default=None, null=True, description="备用字段1")
+    reserve_2 = fields.JSONField(default=None, null=True, description="备用字段2")
+    reserve_3 = fields.TextField(default=None, null=True, description="备用字段3")
 
 
 # 类型变量定义，用于泛型约束
@@ -413,7 +413,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
-    def _fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
+    def fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
         创建时自动写入created_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
 
@@ -433,7 +433,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if isinstance(existing, str) and existing.strip():
             obj_dict["created_user"] = existing.strip().upper()[:16]
 
-    def _fill_updated_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
+    def fill_updated_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
         更新时自动写入updated_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
 
@@ -462,7 +462,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         values: Dict[str, Any] = {"state": 1}
         if updated_user is not None and str(updated_user).strip():
             values["updated_user"] = updated_user
-        self._fill_updated_user(values)
+        self.fill_updated_user(values)
         if not hasattr(self.model, "updated_user"):
             values.pop("updated_user", None)
         return values
@@ -477,7 +477,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         values: Dict[str, Any] = {"state": 0}
         if updated_user is not None and str(updated_user).strip():
             values["updated_user"] = updated_user
-        self._fill_updated_user(values)
+        self.fill_updated_user(values)
         if not hasattr(self.model, "updated_user"):
             values.pop("updated_user", None)
         return values
@@ -593,7 +593,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_dict = dict(obj_in)
         else:
             obj_dict = obj_in.model_dump(warnings=False)
-        self._fill_created_user(obj_dict)
+        self.fill_created_user(obj_dict)
         obj = self.model(**obj_dict)
         await obj.save()
         return obj
@@ -614,7 +614,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(warnings=False)
-            self._fill_created_user(obj_dict)
+            self.fill_created_user(obj_dict)
             obj = self.model(**obj_dict)
             await obj.save()
             instances.append(obj)
@@ -635,7 +635,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_dict = dict(obj_in)
         else:
             obj_dict = obj_in.model_dump(exclude_unset=True, exclude={"id"})
-        self._fill_updated_user(obj_dict)
+        self.fill_updated_user(obj_dict)
         obj = obj.update_from_dict(obj_dict)
         await obj.save()
         LOGGER.info(f"更新成功: {self.model.__name__}(id={id}), 字段: {list(obj_dict.keys())}")
@@ -687,7 +687,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if not update_dict:
                 continue
 
-            self._fill_updated_user(update_dict)
+            self.fill_updated_user(update_dict)
 
             # 执行更新
             count = await self.model.filter(**{key_field: key_value}).update(**update_dict)
@@ -877,7 +877,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(warnings=False)
-            self._fill_created_user(obj_dict)
+            self.fill_created_user(obj_dict)
             obj = self.model(**obj_dict)
             await obj.save(using_db=connection)
 
@@ -896,7 +896,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                             item_dict = item.model_dump(warnings=False)
                         # 关联模型若含维护字段，同样按当前用户规则补齐（CTX 优先覆盖）
                         if related_model is None or hasattr(related_model, "created_user"):
-                            self._fill_created_user(item_dict, model=related_model)
+                            self.fill_created_user(item_dict, model=related_model)
                         await related_manager.create(**item_dict, using_db=connection)
 
             LOGGER.info(f"事务创建成功: {self.model.__name__}(id={obj.id})")
@@ -923,7 +923,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(exclude_unset=True, exclude={"id"})
-            self._fill_updated_user(obj_dict)
+            self.fill_updated_user(obj_dict)
             obj = obj.update_from_dict(obj_dict)
             await obj.save(using_db=connection)
 
@@ -940,7 +940,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                         item_data = dict(item.get("data", {}) or {})
                         if item_id:
                             if related_model is None or hasattr(related_model, "updated_user"):
-                                self._fill_updated_user(item_data, model=related_model)
+                                self.fill_updated_user(item_data, model=related_model)
                             await related_manager.filter(id=item_id).update(**item_data, using_db=connection)
 
             LOGGER.info(f"事务更新成功: {self.model.__name__}(id={id})")

@@ -118,7 +118,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
             if hasattr(record, k) and (v is not None or (k in allow_none_keys and k in raw))
         }
         # 有CTX时以登录用户为准；Celery等无上下文时保留入参，再回落到创建人员
-        self._fill_updated_user(update_dict)
+        self.fill_updated_user(update_dict)
         if not update_dict.get("updated_user"):
             username = str(record.created_user).strip() if record.created_user else None
             if username:

@@ -612,6 +612,16 @@ def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     return rows
 
 
+def _read_excel_all_sheets(file_path: str) -> Dict[str, pd.DataFrame]:
+    """读取xlsx全部sheet(header=None)，属同步阻塞IO，仅可在线程池中执行。"""
+    return pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
+
+
+def _read_excel_first_sheet(file_path: str) -> pd.DataFrame:
+    """读取xlsx首个sheet(header=None)，属同步阻塞IO，仅可在线程池中执行。"""
+    return pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
+
+
 async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int], Dict[str, List[List[Any]]]]:
     """
     读取xlsx全部sheet，逐sheet检测方向并异步解析。
@@ -619,7 +629,8 @@ async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict
     :param file_path: xlsx文件路径
     :return: (parsed_data, sheet_axes, sheet_matrices)，分别为各sheet场景数据、方向与原始二维矩阵
     """
-    sheets: Dict[str, pd.DataFrame] = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
+    loop = asyncio.get_running_loop()
+    sheets: Dict[str, pd.DataFrame] = await loop.run_in_executor(_executor, _read_excel_all_sheets, file_path)
     sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
 
     async def _parse_one(df: pd.DataFrame) -> Tuple[Dict[str, Dict[str, Any]], int]:
@@ -688,8 +699,9 @@ async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[s
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
-    # 只读第一个 sheet
-    df = pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
+    # 只读第一个 sheet，阻塞IO移入线程池避免卡住事件循环
+    loop = asyncio.get_running_loop()
+    df = await loop.run_in_executor(_executor, _read_excel_first_sheet, file_path)
     if df.empty:
         return {}, [], [], AXIS_VERTICAL
     axis = detect_matrix_axis(df.values)

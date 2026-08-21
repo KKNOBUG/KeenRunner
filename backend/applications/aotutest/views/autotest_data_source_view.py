@@ -16,6 +16,7 @@ from typing import Optional, List, Dict, Any, Set, Union
 from urllib.parse import quote
 
 import pandas as pd
+import aiofiles.os as aos
 from fastapi import APIRouter, UploadFile, File, Form, Body, Query, Depends
 from pydantic import ValidationError
 from starlette.responses import StreamingResponse
@@ -40,6 +41,7 @@ from backend.applications.aotutest.services.autotest_data_source_parser import (
 )
 from backend.applications.aotutest.services.autotest_data_source_service import (
     apply_dataframe_payload,
+    build_blank_vertical_matrix,
     build_vertical_matrix_from_step,
     clear_step_data_source_meta,
     DEFAULT_SCENE_NAMES,
@@ -89,24 +91,13 @@ async def _serialize_data_source(instance: AutoTestDataSourceModel) -> Dict[str,
     return json_safe_value(data)
 
 
-async def _sync_step_data_source_meta(
-        services: AutoTestApiServices,
-        case_id: int,
-        step_code: str,
-        data_source_id: Optional[int],
-        file_name: Optional[str],
-        file_desc: Optional[str],
-) -> None:
-    """上传数据源后，同步回写步骤上的数据源元信息，供前端步骤编辑页直接回显。"""
-    await services.step_curd.model.filter(
-        case_id=case_id,
-        step_code=step_code,
-        state=0,
-    ).update(
-        data_source_id=data_source_id,
-        data_source_name=(file_name or "")[:2048] or None,
-        data_source_desc=(file_desc or "")[:2048] or None,
-    )
+async def _remove_upload_file(file_path: str) -> None:
+    """解析或校验失败时清理已落盘的上传文件，避免残留孤儿文件。"""
+    try:
+        if file_path and await aos.path.exists(file_path):
+            await aos.remove(file_path)
+    except Exception as e:
+        LOGGER.warning(f"清理上传文件[{file_path}]失败, 异常描述: {e}")
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
@@ -250,8 +241,13 @@ async def unbind_case_data_source(
     try:
         case = await resolve_case(services, case_id=data_in.case_id, case_code=data_in.case_code)
         async with in_transaction():
-            result = await services.data_source_curd.unbind_case_data_sources(case_id=case.id)
-        return SuccessResponse(message="解绑成功", data=result)
+            source_ids = await services.data_source_curd.model.filter(
+                case_id=case.id,
+                state=0,
+            ).values_list("id", flat=True)
+            deleted_count: int = await services.data_source_curd.soft_delete_batch(ids=list(source_ids))
+            cleared_count: int = await clear_step_data_source_meta(services, case_id=case.id)
+        return SuccessResponse(message="解绑成功", data={"data_source": deleted_count, "step": cleared_count})
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -348,10 +344,10 @@ async def save_or_update_data_source(
                     data_source_code=data_source_in.data_source_code,
                     on_error=True,
                 )
-                data_source_in.updated_user = get_current_username()
                 update_in = AutoTestDataSourceUpdate.model_validate({
                     **data_source_in.model_dump(),
                     "data_source_id": existing.id,
+                    "updated_user": get_current_username(),
                 })
                 instance = await services.data_source_curd.update_data_source(data_source_in=update_in)
             else:
@@ -371,10 +367,10 @@ async def save_or_update_data_source(
                     state__not=1,
                 )
                 if existing:
-                    data_source_in.updated_user = get_current_username()
                     update_in = AutoTestDataSourceUpdate.model_validate({
                         **data_source_in.model_dump(),
                         "data_source_id": existing.id,
+                        "updated_user": get_current_username(),
                     })
                     instance = await services.data_source_curd.update_data_source(data_source_in=update_in)
                 else:
@@ -762,17 +758,7 @@ async def get_scene_names_by_case(
             "data_source_scene_name_set": seen_scenes,
         }
         if not data_source_len:
-            data_source_scenes["default"] = [
-                ["", "场景1名称", "场景2名称", "场景3名称"],
-                ["HEAD", "", "", ""],
-                ["", "", "", ""],
-                ["BODY", "", "", ""],
-                ["", "", "", ""],
-                ["ASSERT_HEAD", "", "", ""],
-                ["", "", "", ""],
-                ["ASSERT_BODY", "", "", ""],
-                ["", "", "", ""]
-            ]
+            data_source_scenes["default"] = build_blank_vertical_matrix()
         return SuccessResponse(message="查询成功", data=data_source_scenes, total=data_source_len)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -920,10 +906,13 @@ async def single_step_dataset_upload(
     try:
         step_data, dataset_names, dataframe, axis = await parse_xlsx_first_sheet_async(file_path)
     except FileNotFoundError as e:
+        await _remove_upload_file(file_path)
         return FailureResponse(message=f"解析文件失败，异常描述: {e}")
     except ValueError as e:
+        await _remove_upload_file(file_path)
         return BadReqResponse(message=f"解析失败: {str(e)}")
     if not step_data:
+        await _remove_upload_file(file_path)
         return BadReqResponse(message="解析结果为空, 第1个sheet无有效数据")
     try:
         created_user = get_current_username()
@@ -943,19 +932,24 @@ async def single_step_dataset_upload(
             created_user=created_user,
         )
     except NotFoundException as e:
+        await _remove_upload_file(file_path)
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
+        await _remove_upload_file(file_path)
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
+        await _remove_upload_file(file_path)
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
+        await _remove_upload_file(file_path)
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
+        await _remove_upload_file(file_path)
         LOGGER.error(f"数据源保存失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"数据源保存失败，异常描述: {e}")
 
-    await _sync_step_data_source_meta(
-        services=services,
+    await sync_step_data_source_meta(
+        services,
         case_id=case_id,
         step_code=step_code,
         data_source_id=instance.id,
@@ -1051,12 +1045,19 @@ async def batch_step_dataset_upload(
         return FailureResponse(message=f"查询步骤树失败，异常描述: {e}")
 
     step_map: Dict[str, Dict[str, Any]] = {}
+    duplicate_step_names: Set[str] = set()
     for step in all_steps:
         if step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
             continue
         step_name: str = step.step_name
-        if step_name:
-            step_map[step_name] = {"step_id": step.id, "step_code": step.step_code}
+        if not step_name:
+            continue
+        if step_name in step_map:
+            duplicate_step_names.add(step_name)
+            continue
+        step_map[step_name] = {"step_id": step.id, "step_code": step.step_code}
+    if duplicate_step_names:
+        return BadReqResponse(message=f"用例中存在同名的HTTP/TCP请求步骤, 无法唯一定位步骤: {', '.join(sorted(duplicate_step_names))}")
     if not step_map:
         return BadReqResponse(message="该用例步骤树中没有HTTP/TCP请求步骤，无法批量上传数据源")
 
@@ -1099,26 +1100,32 @@ async def batch_step_dataset_upload(
     try:
         full_parsed, _, sheet_axes, sheet_dataframes = await parse_xlsx_to_parsed_data_async(file_path)
     except FileNotFoundError as e:
+        await _remove_upload_file(file_path)
         return FailureResponse(message=f"解析文件失败，异常描述: {e}")
     except ValueError as e:
+        await _remove_upload_file(file_path)
         return BadReqResponse(message=f"解析失败: {str(e)}")
     if not full_parsed:
+        await _remove_upload_file(file_path)
         return BadReqResponse(message="解析结果为空")
 
     # 校验一：每个sheet名均须匹配到HTTP/TCP请求步骤
     unmatched = [str(name) for name in full_parsed if name not in step_map]
     if unmatched:
+        await _remove_upload_file(file_path)
         return BadReqResponse(message=f"含sheet未匹配到HTTP/TCP请求步骤：{', '.join(unmatched)}")
 
     # 校验二：各sheet场景数量一致
     scene_lists = {name: list(scenes.keys()) for name, scenes in full_parsed.items()}
     if len({len(scenes) for scenes in scene_lists.values()}) > 1:
+        await _remove_upload_file(file_path)
         return BadReqResponse(message="各sheet的场景数量不一致，请检查后重新上传")
 
     # 校验三：各sheet场景名称及顺序一致
     reference_scenes = next(iter(scene_lists.values()))
     for name, scenes in scene_lists.items():
         if scenes != reference_scenes:
+            await _remove_upload_file(file_path)
             return BadReqResponse(message=f"各sheet的场景名称或顺序不一致：sheet[{name}]")
 
     # 事务内逐步骤创建数据源：一致性操作，任一步骤失败则整体回滚
@@ -1146,8 +1153,8 @@ async def batch_step_dataset_upload(
                     created_user=created_user,
                 )
                 created.append(await _serialize_data_source(instance))
-                await _sync_step_data_source_meta(
-                    services=services,
+                await sync_step_data_source_meta(
+                    services,
                     case_id=case_id,
                     step_code=step_code,
                     data_source_id=instance.id,
@@ -1155,6 +1162,7 @@ async def batch_step_dataset_upload(
                     file_desc=file_desc,
                 )
     except Exception as e:
+        await _remove_upload_file(file_path)
         LOGGER.error(f"批量上传数据源失败, 已全部回滚: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"批量上传数据源失败，已全部回滚: {e}")
 

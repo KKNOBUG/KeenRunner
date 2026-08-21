@@ -42,156 +42,80 @@
 
     <n-collapse-transition :show="!dataSourceCollapsed && canUseDataSource">
       <div class="data-source-content">
-        <n-tabs type="line" animated class="data-source-tabs">
-          <n-tab-pane name="preview" tab="数据预览">
-            <n-space vertical :size="12">
-              <div class="data-source-axis-row">
-                <span class="data-source-axis-label">矩阵方向：</span>
-                <n-radio-group
-                    v-model:value="axis"
-                    size="small"
-                    :disabled="panelReadonly"
-                    @update:value="onAxisChange"
-                >
-                  <n-radio-button :value="1">垂直模式</n-radio-button>
-                  <n-radio-button :value="0">水平模式</n-radio-button>
-                </n-radio-group>
-                <n-text depth="3" class="data-source-axis-tip">
-                  {{ axis === 0 ? '场景为行、字段为列' : '场景为列、字段为行' }}
-                </n-text>
-              </div>
-              <div ref="luckysheetWrapRef" class="luckysheet-wrap" :class="{ 'is-fullscreen': isFullscreen }">
-                <div class="luckysheet-more-dropdown">
-                  <n-dropdown
-                      trigger="click"
-                      placement="bottom-end"
-                      :options="dataSourceMoreOptions"
-                      :z-index="10002"
-                      @select="onDataSourceMoreSelect"
-                  >
-                    <n-button size="tiny" quaternary :disabled="panelReadonly">
-                      更多
-                      <TheIcon icon="material-symbols:arrow-drop-down" :size="16" />
-                    </n-button>
-                  </n-dropdown>
-                </div>
-                <input
-                    ref="importFileRef"
-                    type="file"
-                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    style="display: none"
-                    @change="onImportFileChange"
-                />
-                <Luckysheet
-                    ref="luckysheetRef"
-                    :data="sheetData"
-                    :columns="sheetColumns"
-                    :readonly="panelReadonly"
-                    :protectedRowKeywords="FIXED_KEYWORDS"
-                    @change="onSheetChange"
-                    @protectedAction="onProtectedAction"
-                />
-              </div>
-            </n-space>
-          </n-tab-pane>
-
-          <n-tab-pane name="generate" tab="数据生成">
-            <n-space vertical :size="12">
-              <div class="data-source-row">
-                <div class="data-source-row-label">接口文档：</div>
-                <n-space>
-                  <n-upload
-                      :default-upload="false"
-                      :show-file-list="false"
-                      accept=".xlsx,.xls,.csv,.json,.yaml,.yml"
-                      @change="onApiDocFileSelected"
-                  >
-                    <n-button size="small" type="primary" tertiary :disabled="panelReadonly">上传</n-button>
-                  </n-upload>
-                  <n-button
-                      size="small"
-                      type="primary"
-                      tertiary
-                      :disabled="panelReadonly"
-                      @click="downloadApiDocTemplate"
-                  >数据模板
-                  </n-button>
-                </n-space>
-              </div>
-
-              <div class="data-source-subtitle">数据校验点</div>
-              <n-checkbox-group v-model:value="dataSource.validationPoints" :disabled="panelReadonly">
-                <n-space>
-                  <n-checkbox value="required">必输性</n-checkbox>
-                  <n-checkbox value="length">字段长度</n-checkbox>
-                  <n-checkbox value="type">类型</n-checkbox>
-                  <n-checkbox value="enum">枚举值</n-checkbox>
-                  <n-checkbox value="decimal">小数点位数</n-checkbox>
-                </n-space>
-              </n-checkbox-group>
-
-              <n-data-table
-                  :row-key="dataSourceGeneratedRowKey"
-                  :columns="dataSourceGeneratedColumns"
-                  :data="dataSource.generatedRows"
-                  :bordered="false"
-                  :scroll-x="900"
-                  size="small"
-              />
-            </n-space>
-          </n-tab-pane>
-        </n-tabs>
+        <n-space vertical :size="12">
+          <div class="data-source-axis-row">
+            <span class="data-source-axis-label">矩阵方向：</span>
+            <n-radio-group
+                v-model:value="axis"
+                size="small"
+                :disabled="panelReadonly"
+                @update:value="onAxisChange"
+            >
+              <n-radio-button :value="1">垂直模式</n-radio-button>
+              <n-radio-button :value="0">水平模式</n-radio-button>
+            </n-radio-group>
+            <n-text depth="3" class="data-source-axis-tip">
+              {{ axis === 0 ? '场景为行、字段为列' : '场景为列、字段为行' }}
+            </n-text>
+          </div>
+          <div ref="luckysheetWrapRef" class="luckysheet-wrap" :class="{ 'is-fullscreen': isFullscreen }">
+            <div class="luckysheet-more-dropdown">
+              <n-dropdown
+                  trigger="click"
+                  placement="bottom-end"
+                  :options="dataSourceMoreOptions"
+                  :z-index="10002"
+                  @select="onDataSourceMoreSelect"
+              >
+                <n-button size="tiny" quaternary :disabled="panelReadonly">
+                  更多
+                  <TheIcon icon="material-symbols:arrow-drop-down" :size="16" />
+                </n-button>
+              </n-dropdown>
+            </div>
+            <input
+                ref="importFileRef"
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                style="display: none"
+                @change="onImportFileChange"
+            />
+            <Luckysheet
+                ref="luckysheetRef"
+                :data="sheetData"
+                :columns="sheetColumns"
+                :readonly="panelReadonly"
+                :protectedRowKeywords="FIXED_KEYWORDS"
+                @change="onSheetChange"
+                @protectedAction="onProtectedAction"
+            />
+          </div>
+        </n-space>
       </div>
     </n-collapse-transition>
   </n-card>
-
-  <!-- DataSource 行编辑弹窗 -->
-  <n-modal
-      v-model:show="dataSourceEditModalVisible"
-      preset="dialog"
-      title="编辑数据"
-      positive-text="确定"
-      negative-text="取消"
-      @positive-click="confirmDataSourceEdit"
-  >
-    <div style="padding: 8px 0;">
-      <n-space vertical :size="10">
-        <div v-for="cell in dataSourceEditForm.cells" :key="cell.key">
-          <div style="margin-bottom: 6px;">{{ cell.label }}：</div>
-          <n-input v-model:value="cell.value" clearable/>
-        </div>
-      </n-space>
-    </div>
-  </n-modal>
 </template>
 
 <script setup>
 defineOptions({ name: 'StepDataSourcePanel' })
 
-import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NButton,
   NCard,
-  NCheckbox,
-  NCheckboxGroup,
   NCollapseTransition,
-  NDataTable,
   NDropdown,
-  NInput,
-  NModal,
   NRadioButton,
   NRadioGroup,
   NSpace,
-  NTabPane,
-  NTabs,
   NText,
   NTooltip,
-  NUpload,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import Luckysheet from '@/components/common/Luckysheet.vue'
 import api from '@/api'
+import { downloadBlobResponse } from '@/utils/common/downloadFile'
 
 const props = defineProps({
   step: { type: Object, default: () => ({}) },
@@ -247,17 +171,6 @@ const canUseDataSource = computed(() => isStepPersisted.value && isRequestStepTy
 /** 只读或未落库时，面板内操作均不可用 */
 const panelReadonly = computed(() => props.readonly || !canUseDataSource.value)
 
-const ts = () => new Date().toISOString().slice(0, 19).replace('T', ' ')
-const dataSource = reactive({
-  apiDocFileName: '',
-  validationPoints: [],
-  generatedRows: [
-    { id: 'gen-1', name: '生成数据1', remark: '备注1', generatedAt: ts() },
-    { id: 'gen-2', name: '生成数据2', remark: '备注2', generatedAt: ts() },
-    { id: 'gen-3', name: '生成数据3', remark: '备注3', generatedAt: ts() },
-  ],
-})
-
 const dataSourceTipText = computed(() => {
   const name = String(props.stepName || '').trim()
   const typeLabel = String(props.stepTypeLabel || '请求').trim() || '请求'
@@ -272,7 +185,7 @@ const dataSourceTipText = computed(() => {
   const dsDesc = String(dataSourceDesc.value || '').trim()
   if (dsName && dsDesc) return `${stepName}(本步骤) - ${dsName} (${dsDesc})`
   if (dsName) return `${stepName}(本步骤) - ${dsName}`
-  return `${stepName}(本步骤) - 数据驱动文件上传或接口文档分析`
+  return `${stepName}(本步骤) - 数据驱动文件上传或在线编辑`
 })
 
 const FIXED_KEYWORDS = ['HEAD', 'BODY', 'ASSERT_HEAD', 'ASSERT_BODY']
@@ -550,6 +463,21 @@ const getPendingSceneNames = () => {
   return names.length ? names : null
 }
 
+/** 组装数据源保存入参：定位字段取自步骤上下文，方向以分区标记识别为准 */
+const buildSavePayload = (ctx, matrix) => {
+  const { caseId, caseCode, stepId, stepCode } = ctx || {}
+  const payload = {
+    case_id: caseId || undefined,
+    case_code: caseCode || undefined,
+    step_id: Number.isFinite(Number(stepId)) ? Number(stepId) : undefined,
+    step_code: stepCode || undefined,
+    dataframe: matrix,
+    axis: detectAxisFromMatrix(matrix),
+  }
+  if (dataSourceId.value) payload.data_source_id = dataSourceId.value
+  return payload
+}
+
 const saveWithContext = async (ctx, opts = {}) => {
   // 引用内嵌只读步骤不写库；步骤切换卸载时不要用 canUseDataSource 当闸门，
   // 卸载过程中 step props 可能已空，会导致误判只读而跳过自动保存。
@@ -564,15 +492,7 @@ const saveWithContext = async (ctx, opts = {}) => {
   }
   try {
     const matrix = getCurrentDataframeMatrix()
-    const payload = {
-      case_id: caseId || undefined,
-      case_code: caseCode || undefined,
-      step_id: Number.isFinite(Number(stepId)) ? Number(stepId) : undefined,
-      step_code: stepCode || undefined,
-      dataframe: matrix,
-      axis: detectAxisFromMatrix(matrix),
-    }
-    if (dataSourceId.value) payload.data_source_id = dataSourceId.value
+    const payload = buildSavePayload(ctx, matrix)
     const res = await api.saveOrUpdateDataSource(payload)
     const info = res?.data || {}
     if (info.data_source_id != null) dataSourceId.value = info.data_source_id
@@ -685,24 +605,8 @@ const dataSourceExport = async () => {
   exportLoading.value = true
   try {
     const res = await api.singleStepDatasetDownload({ case_id: caseId, step_id: stepId, step_code: stepCode })
-    const contentType = res?.headers?.['content-type'] || ''
-    if (contentType.includes('application/json')) {
-      const body = JSON.parse(await res.data.text())
-      $message.error(body?.message || '导出失败')
-      return
-    }
-    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
-    const m = /filename\*=UTF-8''([^;]+)/i.exec(cd)
     const stepName = String(props.stepName || '').trim() || String(props.stepTypeLabel || '请求').trim()
-    link.download = m?.[1] ? decodeURIComponent(m[1]) : `${stepName}_数据源.xlsx`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    await downloadBlobResponse(res, `${stepName}_数据源.xlsx`)
     $message.success('导出成功')
   } catch (e) {
     $message.error(`导出失败：${e?.message || e}`)
@@ -718,110 +622,12 @@ const downloadStepDataTemplate = async () => {
   try {
     downloadTemplateLoading.value = true
     const res = await api.downloadHttpStepDatasetImportTemplate()
-    const blob = new Blob([res.data], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
-    const m = /filename\*=UTF-8''([^;]+)/i.exec(cd)
-    const fileName = m?.[1] ? decodeURIComponent(m[1]) : '测试用例HTTP请求步骤数据源模板.xlsx'
-    link.download = fileName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    await downloadBlobResponse(res, '测试用例HTTP请求步骤数据源模板.xlsx')
     $message.success('下载成功')
   } catch (e) {
     $message.error(`下载失败：${e?.message || e}`)
   } finally {
     downloadTemplateLoading.value = false
-  }
-}
-
-const downloadApiDocTemplate = () => $message.info('后端暂未实现：下载接口文档模板')
-
-/* ========================= 数据生成（占位） ========================= */
-const dataSourceEditModalVisible = ref(false)
-const dataSourceEditForm = reactive({ rowKey: null, type: 'generated', cells: [] })
-
-const openDataSourceEdit = (type, row) => {
-  dataSourceEditForm.rowKey = row?.__rowKey ?? row?.id ?? null
-  dataSourceEditForm.type = type
-  dataSourceEditForm.cells = []
-  dataSourceEditModalVisible.value = true
-}
-
-const confirmDataSourceEdit = () => {
-  $message.success('已更新')
-  dataSourceEditModalVisible.value = false
-}
-
-const removeDataSourceRow = (type, row) => {
-  const list = type === 'generated' ? dataSource.generatedRows : []
-  const idx = list.findIndex((x) => x.id === row?.id)
-  if (idx >= 0) {
-    list.splice(idx, 1)
-    $message.success('已删除')
-  }
-}
-
-const dataSourceGeneratedColumns = [
-  {
-    title: '名称',
-    key: 'name',
-    align: 'center',
-    ellipsis: { tooltip: true },
-  },
-  { title: '备注', key: 'remark', align: 'center', ellipsis: { tooltip: true } },
-  { title: '生成时间', key: 'generatedAt', align: 'center', ellipsis: { tooltip: true } },
-  {
-    title: '操作',
-    key: 'actions',
-    fixed: 'right',
-    width: 90,
-    render: (row) =>
-        h(
-            NSpace,
-            { size: 8 },
-            {
-              default: () => [
-                h(
-                    NButton,
-                    {
-                      text: true,
-                      type: 'error',
-                      size: 'small',
-                      onClick: () => removeDataSourceRow('generated', row),
-                    },
-                    { default: () => '删除' }
-                ),
-                h(
-                    NButton,
-                    {
-                      text: true,
-                      type: 'info',
-                      size: 'small',
-                      onClick: () => openDataSourceEdit('generated', row),
-                    },
-                    { default: () => '修改' }
-                ),
-              ],
-            }
-        ),
-  },
-]
-
-function dataSourceGeneratedRowKey(row) {
-  return row.id
-}
-
-const onApiDocFileSelected = (options) => {
-  const file = options?.file?.file
-  dataSource.apiDocFileName = file?.name || ''
-  if (dataSource.apiDocFileName) {
-    $message.info(`已选择接口文档：${dataSource.apiDocFileName}（后端暂未实现上传）`)
   }
 }
 
@@ -873,18 +679,8 @@ onBeforeUnmount(() => {
   const matrix = Array.isArray(cachedMatrix.value) ? cachedMatrix.value.map((row) => [...(row || [])]) : []
   if (matrix.length < 2) return
   if (!hasDbRecord.value && !dataSourceId.value && !hasAnySceneData(matrix)) return
-  const payload = {
-    case_id: caseId || undefined,
-    case_code: caseCode || undefined,
-    step_id: Number.isFinite(Number(stepId)) ? Number(stepId) : undefined,
-    step_code: stepCode || undefined,
-    dataframe: matrix,
-    axis: detectAxisFromMatrix(matrix),
-  }
-  if (dataSourceId.value) payload.data_source_id = dataSourceId.value
-  api.saveOrUpdateDataSource(payload).catch(() => {
-    /* 静默保存，错误由 http 拦截器统一提示 */
-  })
+  // 静默保存，错误由 http 拦截器统一提示
+  api.saveOrUpdateDataSource(buildSavePayload(ctx, matrix)).catch(() => {})
 })
 
 /* ========================= 全屏（CSS 铺满页面窗口） ========================= */
@@ -1010,27 +806,6 @@ defineExpose({
 
 .data-source-axis-tip {
   font-size: 12px;
-}
-
-.data-source-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.data-source-row-label {
-  min-width: 130px;
-}
-
-.data-source-subtitle {
-  margin-top: 12px;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-.data-source-tabs {
-  margin-top: 4px;
 }
 
 .luckysheet-wrap {
