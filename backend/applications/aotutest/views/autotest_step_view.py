@@ -410,20 +410,20 @@ async def batch_update_steps_tree(
                 duplicate_names = data_source_duplicate_scene_names(ds)
                 if duplicate_names:
                     error_detail = (
-                        f"步骤[{step_label}]的数据源场景列名称重复: {duplicate_names}"
+                        f"步骤[{step_label}]的数据源场景名称重复: {duplicate_names}"
                     )
                     LOGGER.error(error_detail)
-                    return BadReqResponse(message="同一步骤绑定的数据源，场景列名称不允许重复", data=error_detail)
+                    return BadReqResponse(message="同一步骤绑定的数据源，场景名称不允许重复", data=error_detail)
                 if baseline_names is None:
                     baseline_names = current_names
                     baseline_step_label = step_label
                 elif current_names != baseline_names:
                     error_detail = (
-                        f"步骤[{step_label}]的数据源场景列名与步骤[{baseline_step_label}]不一致: "
+                        f"步骤[{step_label}]与步骤[{baseline_step_label}]的数据源场景名称不一致: "
                         f"前者: {current_names}, 后者: {baseline_names}"
                     )
                     LOGGER.error(error_detail)
-                    return BadReqResponse(message="数据源场景列名不一致，请先统一各步骤数据源的场景列", data=error_detail)
+                    return BadReqResponse(message="数据源场景名称不一致，请先统一各步骤数据源的场景名称", data=error_detail)
 
         try:
             # 2. 使用事务执行批量更新/新增
