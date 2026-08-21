@@ -1,1 +1,0 @@
-import{_ as e}from"./AppPage-7ae629d0.js";import{o as a,k as t,w as o,l as s}from"./index-6352ab0f.js";const _=s("h3",null,"AI Manage - agent",-1),m={__name:"index",setup(n){return(r,c)=>(a(),t(e,null,{default:o(()=>[_]),_:1}))}};export{m as default};

@@ -1,1 +1,0 @@
-import{_ as a}from"./AppPage-7ae629d0.js";import{B as s,bl as o,o as r,k as n,w as c,l as e}from"./index-6352ab0f.js";const l=["src"],f={__name:"index",setup(_){const t=s(o+"/static/pythonHelpDoc/index.html");return(i,m)=>(r(),n(a,null,{default:c(()=>[e("div",null,[e("iframe",{src:t.value,width:"100%",height:"800px",frameborder:"0"},null,8,l)])]),_:1}))}};export{f as default};
