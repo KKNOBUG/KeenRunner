@@ -507,6 +507,33 @@ def data_source_scene_names(ds: Any) -> Optional[List[str]]:
     )
 
 
+def data_source_duplicate_scene_names(ds: Any) -> List[str]:
+    """
+    提取单个数据源内重复的场景列名称。
+
+    优先从dataframe矩阵提取（保留重复出现），缺失时回落dataset_names；
+    dataset的dict键天然去重，不可用于重复检测。
+
+    :param ds: 数据源记录
+    :return: 按首次出现顺序返回重复名称，无重复返回空列表
+    """
+    names = _scene_names_from_dataframe(getattr(ds, "dataframe", None), getattr(ds, "axis", None))
+    if names is None:
+        raw = getattr(ds, "dataset_names", None)
+        if isinstance(raw, list):
+            names = [str(item).strip() for item in raw if item is not None and str(item).strip()]
+    if not names:
+        return []
+    counter = Counter(names)
+    seen: set = set()
+    duplicates: List[str] = []
+    for name in names:
+        if counter[name] > 1 and name not in seen:
+            seen.add(name)
+            duplicates.append(name)
+    return duplicates
+
+
 def fill_create_identity(
         data_in: AutoTestDataSourceCreate,
         case: AutoTestCaseModel,

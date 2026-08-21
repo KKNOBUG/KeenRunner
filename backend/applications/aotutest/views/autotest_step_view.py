@@ -34,7 +34,10 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
 )
 from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
-from backend.applications.aotutest.services.autotest_data_source_service import data_source_scene_names
+from backend.applications.aotutest.services.autotest_data_source_service import (
+    data_source_duplicate_scene_names,
+    data_source_scene_names,
+)
 from backend.applications.aotutest.services.autotest_step_debug_service import StepDebugService, StepDebugException
 from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
@@ -403,6 +406,14 @@ async def batch_update_steps_tree(
                     or step_label_by_ds_id.get(ds.id)
                     or f"步骤ID:{ds.step_id}"
                 )
+                # 同一数据源内场景列名称重复：先拒绝，再做跨步骤一致性比对
+                duplicate_names = data_source_duplicate_scene_names(ds)
+                if duplicate_names:
+                    error_detail = (
+                        f"步骤[{step_label}]的数据源场景列名称重复: {duplicate_names}"
+                    )
+                    LOGGER.error(error_detail)
+                    return BadReqResponse(message="同一步骤绑定的数据源，场景列名称不允许重复", data=error_detail)
                 if baseline_names is None:
                     baseline_names = current_names
                     baseline_step_label = step_label
