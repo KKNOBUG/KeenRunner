@@ -17,54 +17,54 @@ from backend.common import JSONPathUtils
 from backend.configure import LOGGER
 
 
-def _as_wire_string(value: Any) -> str:
-    """
-    将数据源值转为 header/form/urlencoded/XML 文本。
-
-    JSON body 保持原类型；仅协议上必须是字符串的通道在写出时转换。
-    bool 使用 true/false，避免 Python 的 True/False。
-    """
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
-
-
-def _jsonpath_hits(json_path: str, *candidates: Any) -> bool:
-    """
-    判定JSONPath是否在任一候选数据中命中；两段内嵌路径仅按第一段判定。
-
-    :param json_path: JSONPath表达式，可含'outer@JSON@inner'两段形式
-    :param candidates: 候选数据（dict/list或可解析为dict的JSON字符串）
-    :return: 任一候选命中即为True
-    """
-    if not json_path or not isinstance(json_path, str):
-        return False
-    outer_path = json_path.split("@JSON@", 1)[0].strip()
-    if not outer_path:
-        return False
-    try:
-        expr = parse(outer_path)
-    except Exception:
-        return False
-    for data in candidates:
-        if data is None:
-            continue
-        if isinstance(data, str):
-            try:
-                data = orjson.loads(data) if data.strip() else None
-            except (TypeError, orjson.JSONDecodeError):
-                continue
-        if not isinstance(data, (dict, list)):
-            continue
-        if expr.find(data):
-            return True
-    return False
-
-
 class JsonDatagram:
     """根据JSONPath映射原地（或解析后）更新JSON请求报文。"""
+
+    @staticmethod
+    def _as_wire_string(value: Any) -> str:
+        """
+        将数据源值转为 header/form/urlencoded/XML 文本。
+
+        JSON body 保持原类型；仅协议上必须是字符串的通道在写出时转换。
+        bool 使用 true/false，避免 Python 的 True/False。
+        """
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    @staticmethod
+    def _jsonpath_hits(json_path: str, *candidates: Any) -> bool:
+        """
+        判定JSONPath是否在任一候选数据中命中；两段内嵌路径仅按第一段判定。
+
+        :param json_path: JSONPath表达式，可含'outer@JSON@inner'两段形式
+        :param candidates: 候选数据（dict/list或可解析为dict的JSON字符串）
+        :return: 任一候选命中即为True
+        """
+        if not json_path or not isinstance(json_path, str):
+            return False
+        outer_path = json_path.split("@JSON@", 1)[0].strip()
+        if not outer_path:
+            return False
+        try:
+            expr = parse(outer_path)
+        except Exception:
+            return False
+        for data in candidates:
+            if data is None:
+                continue
+            if isinstance(data, str):
+                try:
+                    data = orjson.loads(data) if data.strip() else None
+                except (TypeError, orjson.JSONDecodeError):
+                    continue
+            if not isinstance(data, (dict, list)):
+                continue
+            if expr.find(data):
+                return True
+        return False
 
     @staticmethod
     def _by_jsonpath_modify_inner_content(datagram: Dict[str, Any], json_path: str, json_value: Any, split_symbol: str = "@JSON@") -> None:
@@ -187,14 +187,14 @@ class JsonDatagram:
                 if not json_path:
                     continue
                 JsonDatagram._by_jsonpath_modify_inner_content(
-                    form_data, json_path, _as_wire_string(json_value)
+                    form_data, json_path, JsonDatagram._as_wire_string(json_value)
                 )
         if isinstance(urlencoded, dict):
             for json_path, json_value in path_map.items():
                 if not json_path:
                     continue
                 JsonDatagram._by_jsonpath_modify_inner_content(
-                    urlencoded, json_path, _as_wire_string(json_value)
+                    urlencoded, json_path, JsonDatagram._as_wire_string(json_value)
                 )
         return rb
 
@@ -233,11 +233,11 @@ class JsonDatagram:
             if not json_path:
                 continue
             header_key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
-            if (request_headers is not None and header_key in request_headers) or _jsonpath_hits(json_path, *channels):
+            if (request_headers is not None and header_key in request_headers) or JsonDatagram._jsonpath_hits(json_path, *channels):
                 continue
             missed_paths.append(json_path)
         for json_path in body_map:
-            if not json_path or _jsonpath_hits(json_path, *channels):
+            if not json_path or JsonDatagram._jsonpath_hits(json_path, *channels):
                 continue
             missed_paths.append(json_path)
         if request_headers is not None:
@@ -246,7 +246,7 @@ class JsonDatagram:
                     continue
                 key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
                 if key and key in request_headers:
-                    request_headers[key] = _as_wire_string(json_value)
+                    request_headers[key] = JsonDatagram._as_wire_string(json_value)
 
         rb = request_body
         rb = JsonDatagram._by_jsonpath_modify_request_params(

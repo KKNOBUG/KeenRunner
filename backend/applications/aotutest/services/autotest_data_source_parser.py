@@ -18,8 +18,37 @@ import pandas as pd
 
 from backend.configure import LOGGER
 
+# ---------------------------------------------------------------------------
+# 常量
+# ---------------------------------------------------------------------------
+
+# 阻塞IO/解析共用线程池
 _executor = ThreadPoolExecutor(max_workers=5)
 
+# 落库固定四键；Excel 分区标签（不区分大小写）→ 落库键
+_SECTION_LABEL_TO_KEY = {
+    "head": "head",
+    "body": "body",
+    "assert_head": "assert_head",
+    "assert_body": "assert_body",
+}
+_DATASET_SECTION_KEYS = ("head", "body", "assert_head", "assert_body")
+_SECTION_MARKERS_UPPER = {"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"}
+
+# 数据矩阵方向：水平(场景为行) / 垂直(场景为列)
+AXIS_HORIZONTAL = 0
+AXIS_VERTICAL = 1
+
+# dataset 字段省略标记：未填写的单元格不覆盖步骤原值
+_CELL_OMIT = object()
+
+# 严格数字正则：不匹配前导零（0 本身、0.x、.x 除外），用于 _excel_typed_value 类型推断
+_STRICT_NUMBER_RE = re.compile(r'^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$')
+
+
+# ---------------------------------------------------------------------------
+# 通用工具
+# ---------------------------------------------------------------------------
 
 def json_safe_value(value: Any) -> Any:
     """
@@ -75,20 +104,9 @@ def parse_kv_string(text: str) -> Dict[str, str]:
     return result
 
 
-# 落库固定四键；Excel 分区标签（不区分大小写）→ 落库键
-_SECTION_LABEL_TO_KEY = {
-    "head": "head",
-    "body": "body",
-    "assert_head": "assert_head",
-    "assert_body": "assert_body",
-}
-_DATASET_SECTION_KEYS = ("head", "body", "assert_head", "assert_body")
-_SECTION_MARKERS_UPPER = {"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"}
-
-# 数据矩阵方向：水平(场景为行) / 垂直(场景为列)
-AXIS_HORIZONTAL = 0
-AXIS_VERTICAL = 1
-
+# ---------------------------------------------------------------------------
+# 分区标记与方向识别
+# ---------------------------------------------------------------------------
 
 def is_section_marker(value: Any) -> bool:
     """
@@ -165,6 +183,10 @@ def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, D
         for key in _DATASET_SECTION_KEYS
     }
 
+
+# ---------------------------------------------------------------------------
+# sheet解析
+# ---------------------------------------------------------------------------
 
 def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
     """
@@ -313,9 +335,9 @@ async def _parse_sheet_async(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str,
     return await loop.run_in_executor(_executor, _parse_sheet_by_axis, df, axis)
 
 
-# dataset 字段省略标记：未填写的单元格不覆盖步骤原值
-_CELL_OMIT = object()
-
+# ---------------------------------------------------------------------------
+# 单元格类型转换
+# ---------------------------------------------------------------------------
 
 def _cell_is_blank(value: Any) -> bool:
     """
@@ -334,10 +356,6 @@ def _cell_is_blank(value: Any) -> bool:
     except (TypeError, ValueError):
         pass
     return isinstance(value, str) and value == ""
-
-
-# 严格数字正则：不匹配前导零（0 本身、0.x、.x 除外），用于 _excel_typed_value 类型推断
-_STRICT_NUMBER_RE = re.compile(r'^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$')
 
 
 def _excel_typed_value(value: Any, skip_bool_null: bool = False) -> Any:
@@ -391,6 +409,10 @@ def _dataset_field_value(value: Any, skip_bool_null: bool = False) -> Any:
         return _CELL_OMIT
     return _excel_typed_value(safe, skip_bool_null=skip_bool_null)
 
+
+# ---------------------------------------------------------------------------
+# 矩阵清洗
+# ---------------------------------------------------------------------------
 
 def _pad_matrix(matrix: List[List[Any]]) -> List[List[Any]]:
     """
@@ -582,6 +604,10 @@ def clean_matrix_by_axis(matrix: List[List[Any]], axis: int) -> List[List[Any]]:
             kept_rows.append(row)
     return _drop_empty_scene_cols(kept_rows)
 
+
+# ---------------------------------------------------------------------------
+# Excel读取与异步入口
+# ---------------------------------------------------------------------------
 
 def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     """

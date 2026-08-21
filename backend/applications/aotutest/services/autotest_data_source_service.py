@@ -23,6 +23,7 @@ from backend.applications.aotutest.services.autotest_data_source_crud import mak
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_HORIZONTAL,
     AXIS_VERTICAL,
+    extract_scene_names_from_matrix,
     parse_dataframe_matrix_async,
 )
 from backend.core.exceptions import NotFoundException, ParameterException
@@ -32,6 +33,10 @@ from backend.services import get_current_username
 DEFAULT_SCENE_NAMES = ("场景1名称", "场景2名称", "场景3名称")
 _REQUEST_STEP_TYPES = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
 
+
+# ---------------------------------------------------------------------------
+# 通用工具
+# ---------------------------------------------------------------------------
 
 def _text(value: Optional[str]) -> str:
     """去空白后的字符串。"""
@@ -51,6 +56,10 @@ def _enum_value(raw: Any) -> str:
         return ""
     return str(getattr(raw, "value", raw) or "")
 
+
+# ---------------------------------------------------------------------------
+# 用例/步骤/数据源定位
+# ---------------------------------------------------------------------------
 
 async def resolve_case(
         services: AutoTestApiServices,
@@ -216,6 +225,10 @@ async def apply_dataframe_payload(
         "axis": used_axis,
     }
 
+
+# ---------------------------------------------------------------------------
+# 路径收集与矩阵构建
+# ---------------------------------------------------------------------------
 
 def _kv_jsonpaths(kv_list: Optional[List[Any]], *, skip_file: bool = False) -> List[str]:
     """
@@ -405,6 +418,10 @@ def build_vertical_matrix_from_step(step: AutoTestStepModel) -> List[List[Any]]:
     return matrix
 
 
+# ---------------------------------------------------------------------------
+# 步骤元信息回写
+# ---------------------------------------------------------------------------
+
 async def sync_step_data_source_meta(
         services: AutoTestApiServices,
         *,
@@ -451,15 +468,14 @@ async def clear_step_data_source_meta(
     return await services.step_curd.model.filter(**filters).update(**step_vals)
 
 
+# ---------------------------------------------------------------------------
+# 场景名称与身份补齐
+# ---------------------------------------------------------------------------
+
 def _scene_names_from_dataframe(dataframe: Any, axis: Any = None) -> Optional[List[str]]:
     """从 dataframe 矩阵头/首列提取场景名（单元格全空时仍可得到列名）。"""
     if not isinstance(dataframe, list) or not dataframe:
         return None
-    from backend.applications.aotutest.services.autotest_data_source_parser import (
-        AXIS_HORIZONTAL,
-        AXIS_VERTICAL,
-        extract_scene_names_from_matrix,
-    )
     used_axis = axis if axis in (AXIS_HORIZONTAL, AXIS_VERTICAL) else AXIS_VERTICAL
     names = extract_scene_names_from_matrix(dataframe, used_axis)
     return names or None

@@ -42,7 +42,12 @@ from backend.services import get_current_username
 # 常量
 # ---------------------------------------------------------------------------
 
+# 协议标识与导出目录阈值
 _HTTP, _TCP = "HTTP", "TCP"
+# 报文导出目录 sheet 阈值：导出用例数超过该值才创建目录
+_DIRECTORY_THRESHOLD = 2
+
+# Excel样式
 _MARKER_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
 _MARKER_FONT = Font(bold=True)
 _CENTER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -50,11 +55,11 @@ _SIDE = Side(style="thin", color="000000")
 _CELL_BORDER = Border(left=_SIDE, right=_SIDE, top=_SIDE, bottom=_SIDE)
 _ROW_HEIGHT = 40
 _COL_WIDTH_MIN, _COL_WIDTH_MAX = 8, 60
-# 报文导出目录 sheet 阈值：导出用例数超过该值才创建目录
-_DIRECTORY_THRESHOLD = 2
+
 # 数据源分区标记（与 autotest_data_source_parser._SECTION_MARKERS_UPPER 保持一致）
 _SECTION_MARKERS = frozenset({"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"})
 
+# 脚本模板列定义与解析约定
 _SCRIPT_COLUMNS: Tuple[str, ...] = (
     "接口名称", "所属应用", "协议类型", "接口描述",
     "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
@@ -62,6 +67,8 @@ _SCRIPT_COLUMNS: Tuple[str, ...] = (
 )
 _DATA_START_ROW = 3
 _SCOPE_ALL, _SCOPE_SOME = "整个返回数据", "提取部分"
+
+# 脚本导入校验集合
 _EXTRACT_SOURCES = frozenset({
     "Request Form-Data", "Request Text", "Request Json", "Request XML",
     "Request Headers", "Request Cookie",
@@ -87,6 +94,8 @@ _FORM_ATTR = {
     AutoTestReqArgsType.X_WWW_FORM_URLENCODED.value: "request_form_urlencoded",
     AutoTestReqArgsType.PARAMS.value: "request_params",
 }
+
+# 模板文件路径
 _SCRIPT_TEMPLATE = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口导入导出模板.xlsx")
 
 
@@ -438,7 +447,7 @@ def style_data_source_sheet(sheet) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 通道 B：导出/导入脚本（15 列模板）
+# 通道 B：导出/导入脚本（14 列模板）
 # ---------------------------------------------------------------------------
 
 def build_script_file_name(username: Optional[str]) -> str:

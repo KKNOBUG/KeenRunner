@@ -1,0 +1,1 @@
+import{_ as e}from"./AppPage-7ae629d0.js";import{o as a,k as t,w as o,l as s}from"./index-6352ab0f.js";const _=s("h3",null,"AI Manage - mcp",-1),p={__name:"index",setup(c){return(n,r)=>(a(),t(e,null,{default:o(()=>[_]),_:1}))}};export{p as default};
