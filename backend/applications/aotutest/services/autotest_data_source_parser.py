@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
+from openpyxl import load_workbook
 
 from backend.configure import LOGGER
 
@@ -44,6 +45,9 @@ _CELL_OMIT = object()
 
 # 严格数字正则：不匹配前导零（0 本身、0.x、.x 除外），用于 _excel_typed_value 类型推断
 _STRICT_NUMBER_RE = re.compile(r'^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$')
+
+# orjson序列化仅支持64位整数，超出范围的整数文本保持字符串落库
+_INT64_MIN, _INT64_MAX = -(2 ** 63), 2 ** 63 - 1
 
 
 # ---------------------------------------------------------------------------
@@ -385,14 +389,17 @@ def _excel_typed_value(value: Any, skip_bool_null: bool = False) -> Any:
             return False
         if token == "null":
             return None
-    # 数字转换：无前导零的纯数字文本 → int/float
+    # 数字转换：无前导零的纯数字文本 → int/float；超64位整数与inf溢出保持字符串
     if _STRICT_NUMBER_RE.match(value):
         try:
             if '.' in value or 'e' in value.lower():
-                return float(value)
-            return int(value)
+                number = float(value)
+                return value if math.isinf(number) else number
+            number = int(value)
+            if _INT64_MIN <= number <= _INT64_MAX:
+                return number
         except (ValueError, OverflowError):
-            return value
+            pass
     return value
 
 
@@ -638,14 +645,63 @@ def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
     return rows
 
 
+def _restore_quote_prefix_marks(df: pd.DataFrame, sheet) -> pd.DataFrame:
+    """
+    还原quotePrefix单元格的前导'标记，与数据源表格保存格式对齐。
+
+    导出时前导'协议标记被转为Excel原生quotePrefix形态，pandas读取不感知该样式位，
+    此处逐格还原，否则强制文本语义丢失（如'1被误转数字、空格保护失效）。
+
+    :param df: header=None读入的sheet DataFrame
+    :param sheet: 同一sheet页的openpyxl worksheet对象
+    :return: 还原后的DataFrame，含非object列时返回astype副本
+    """
+    max_row, max_col = df.shape
+    # 统一object dtype，避免纯数字列写字符串报dtype不兼容
+    if df.dtypes.ne(object).any():
+        df = df.astype(object)
+    for row in sheet.iter_rows(max_row=max_row, max_col=max_col):
+        for cell in row:
+            if not cell.quotePrefix:
+                continue
+            value = df.iat[cell.row - 1, cell.column - 1]
+            if value is None or pd.isna(value):
+                continue
+            # float值优先取单元格内部XML文本，避免'200被pandas读成200.0后还原为'200.0
+            raw_text = getattr(cell, "_value", None)
+            if isinstance(value, float) and isinstance(raw_text, str) and raw_text:
+                text = raw_text
+            else:
+                text = str(value)
+            if not text.startswith("'"):
+                df.iat[cell.row - 1, cell.column - 1] = f"'{text}"
+    return df
+
+
 def _read_excel_all_sheets(file_path: str) -> Dict[str, pd.DataFrame]:
-    """读取xlsx全部sheet(header=None)，属同步阻塞IO，仅可在线程池中执行。"""
-    return pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
+    """读取xlsx全部sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
+    sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
+    workbook = load_workbook(file_path)
+    try:
+        for sheet in workbook.worksheets:
+            df = sheets.get(sheet.title)
+            if df is not None and not df.empty:
+                sheets[sheet.title] = _restore_quote_prefix_marks(df, sheet)
+    finally:
+        workbook.close()
+    return sheets
 
 
 def _read_excel_first_sheet(file_path: str) -> pd.DataFrame:
-    """读取xlsx首个sheet(header=None)，属同步阻塞IO，仅可在线程池中执行。"""
-    return pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
+    """读取xlsx首个sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
+    df = pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
+    workbook = load_workbook(file_path)
+    try:
+        if not df.empty:
+            df = _restore_quote_prefix_marks(df, workbook.worksheets[0])
+    finally:
+        workbook.close()
+    return df
 
 
 async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int], Dict[str, List[List[Any]]]]:
