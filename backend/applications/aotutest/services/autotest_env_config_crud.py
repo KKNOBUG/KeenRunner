@@ -147,7 +147,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
         config_id: Optional[int] = config_in.config_id
         config_code: Optional[str] = config_in.config_code
         if not config_id and not config_code:
-            error_message = "更新环境配置失败, 参数[config_id]或[config_code]不允许为空"
+            error_message = "更新环境配置失败, 参数[config_id | config_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if config_id:

@@ -37,9 +37,9 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @classmethod
     def normalize_project_dev_owners(cls, v):
         """
-        将开发负责人字段规范为列表（逗号分隔字符串拆分）。
+        将开发负责人字段规范为列表。
 
-        :param v: 原始值（null/str/list）
+        :param v: 原始值
         :return: 人员列表或原值
         """
         if v is None:
@@ -54,9 +54,9 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @classmethod
     def normalize_project_developers(cls, v):
         """
-        将开发人员字段规范为列表（逗号分隔字符串拆分）。
+        将开发人员字段规范为列表。
 
-        :param v: 原始值（null/str/list）
+        :param v: 原始值
         :return: 人员列表或原值
         """
         if v is None:
@@ -71,9 +71,9 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @classmethod
     def normalize_project_test_owners(cls, v):
         """
-        将测试负责人字段规范为列表（逗号分隔字符串拆分）。
+        将测试负责人字段规范为列表。
 
-        :param v: 原始值（null/str/list）
+        :param v: 原始值
         :return: 人员列表或原值
         """
         if v is None:
@@ -88,9 +88,9 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
     @classmethod
     def normalize_project_testers(cls, v):
         """
-        将测试人员字段规范为列表（逗号分隔字符串拆分）。
+        将测试人员字段规范为列表。
 
-        :param v: 原始值（null/str/list）
+        :param v: 原始值
         :return: 人员列表或原值
         """
         if v is None:

@@ -46,11 +46,7 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
     step_pass_ratio: float = Field(default=0.0, ge=0, description="用例步骤成功率(含所有子级步骤)")
 
     report_type: AutoTestReportType = Field(..., description="报告类型")
-    report_code: Optional[str] = Field(
-        None,
-        max_length=64,
-        description="报告标识代码；执行引擎落库时传入与明细一致的预生成code，未传时由ORM默认生成",
-    )
+    report_code: Optional[str] = Field(None, max_length=64, description="报告标识代码")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
@@ -71,11 +67,11 @@ class AutoTestApiReportSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, description="用例标识代码")
-    case_name: Optional[str] = Field(None, description="用例名称（模糊匹配）")
+    case_name: Optional[str] = Field(None, description="用例名称")
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
-    report_type: Optional[AutoTestReportType] = Field(default=None, description="报告类型（不传则不按类型过滤，可查同步/异步/调试/定时）")
-    task_code: Optional[str] = Field(None, description="任务标识代码（未传则仅查 task_code 为空的报告）")
+    report_type: Optional[AutoTestReportType] = Field(default=None, description="报告类型")
+    task_code: Optional[str] = Field(None, description="任务标识代码")
     batch_code: Optional[str] = Field(None, description="批次标识代码")
     exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")
 
@@ -102,12 +98,12 @@ class AutoTestApiReportBatchSelect(BaseModel):
 class AutoTestApiReportBatchItem(BaseModel):
     """单次任务执行（一个 batch_code）的汇总行。"""
 
-    batch_code: Optional[str] = Field(None, description="批次标识；空表示无 batch_code 的单报孤立行")
+    batch_code: Optional[str] = Field(None, description="批次标识")
     execute_result: AutoTestTaskStatus = Field(..., description="批次执行结果(成功/失败/部分成功)")
-    pass_rate: Optional[float] = Field(None, description="通过率(0-100)，成功报告数/总报告数")
+    pass_rate: Optional[float] = Field(None, description="通过率(0-100)")
     pass_count: int = Field(default=0, description="成功报告数")
     report_count: int = Field(default=0, description="本批次报告总数")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="执行人员")
-    execute_time: Optional[str] = Field(None, description="执行时间（本批次最早 case_st_time）")
-    elapsed_seconds: float = Field(default=0.0, description="本批次耗时合计（秒）")
-    reports: List[Dict[str, Any]] = Field(default_factory=list, description="本批次报告明细（含 case_name）")
+    execute_time: Optional[str] = Field(None, description="执行时间")
+    elapsed_seconds: float = Field(default=0.0, description="本批次耗时合计")
+    reports: List[Dict[str, Any]] = Field(default_factory=list, description="本批次报告明细")

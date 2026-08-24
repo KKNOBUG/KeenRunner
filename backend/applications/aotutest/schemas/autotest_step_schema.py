@@ -92,9 +92,9 @@ class BranchItem(BaseModel):
     @model_validator(mode="after")
     def validate_conditions_presence(self):
         if self.branch_type in ("if", "elif") and not self.branch_conditions:
-            raise ValueError(f"参数[branch_type]为{self.branch_type}分支时必须配置[branch_conditions]")
+            raise ValueError(f"参数[branch_type]为[{self.branch_type}]时必须配置[branch_conditions]")
         if self.branch_type == "else" and self.branch_conditions is not None:
-            raise ValueError("参数[branch_type]为else分支时不允许配置[branch_conditions]")
+            raise ValueError("参数[branch_type]为[else]时不允许配置[branch_conditions]")
         return self
 
 
@@ -139,7 +139,7 @@ class StepAssertValidatorItem(BaseModel):
     @classmethod
     def validate_operation(cls, v: Any) -> str:
         """
-        校验并规范化比较符为AutoTestAssertionOperation枚举值（与HTTP步骤断言一致）。
+        校验并规范化比较符为AutoTestAssertionOperation枚举值。
 
         :param v: 原始比较符
         :return: 规范化后的比较符字符串
@@ -495,8 +495,10 @@ class AutoTestCaseStepTreeLoadResult(BaseModel):
     """仓储层从DB构建步骤树后的对外结果：根步骤均为已校验模型。"""
     root_steps: List["AutoTestStepTreeUpdateItem"] = Field(default_factory=list)
     step_counter: StepTreeCounter
-    case_only_when_no_steps: Optional[AutoTestApiCaseUpdate] = Field(default=None,
-                                                                     description="无任何根步骤时，与历史接口中单节点仅含case的占位信息对应")
+    case_only_when_no_steps: Optional[AutoTestApiCaseUpdate] = Field(
+        default=None,
+        description="无任何根步骤时，与历史接口中单节点仅含case的占位信息对应"
+    )
 
 
 class AutoTestStepTreeUpdateList(BaseModel):
@@ -548,7 +550,7 @@ class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase
         :return: 当前模型实例
         """
         if not self.redis_operates:
-            raise ValueError("参数[redis_operates]至少包含一条Redis操作配置")
+            raise ValueError("参数[redis_operates]不允许为空, 请至少提供一条Redis操作配置")
         return self
 
 

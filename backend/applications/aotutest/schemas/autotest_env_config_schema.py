@@ -25,7 +25,7 @@ def _validate_db_required_fields(database_name: Any, database_type: Any, config_
         ) if val in (None, "")
     ]
     if missing:
-        raise ValueError(f"DB配置缺少必填字段: {', '.join(missing)}")
+        raise ValueError(f"DB配置缺少必填字段: [{', '.join(missing)}]")
 
 
 class AutoTestApiEnvConfigBase(BaseModel):

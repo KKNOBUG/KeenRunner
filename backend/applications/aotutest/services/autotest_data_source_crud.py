@@ -104,7 +104,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         :return: 单条实例、列表或None
         """
         if not case_id and not (case_code or "").strip():
-            error_message: str = "查询数据源失败, 参数[case_id]或[case_code]不允许为空"
+            error_message: str = "查询数据源失败, 参数[case_id | case_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 

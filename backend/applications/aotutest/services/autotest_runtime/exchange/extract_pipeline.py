@@ -60,12 +60,12 @@ class ExtractPipeline:
             return extract_results_dict, extract_results_list
         if not isinstance(extract_variables, (list, tuple)):
             raise TypeError(
-                f"extract_variables 必须为序列类型 StepExtractVariableItem，当前: {type(extract_variables).__name__}"
+                f"参数[extract_variables]必须为StepExtractVariableItem对象, 当前: {type(extract_variables).__name__}"
             )
         for extract_config in extract_variables:
             if not isinstance(extract_config, StepExtractVariableItem):
                 raise TypeError(
-                    f"extract_variables 子项必须为 StepExtractVariableItem，当前: {type(extract_config).__name__}"
+                    f"参数[extract_variables]子项必须为StepExtractVariableItem对象, 当前: {type(extract_config).__name__}"
                 )
             name = extract_config.name
             expr = extract_config.expr

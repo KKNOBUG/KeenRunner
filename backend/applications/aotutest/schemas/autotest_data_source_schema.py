@@ -47,7 +47,7 @@ class AutoTestDataSourceCreate(AutoTestDataSourceBase):
         has_case = bool(self.case_id) or _has_text(self.case_code)
         has_step = bool(self.step_id) or _has_text(self.step_code)
         if not (has_case and has_step):
-            raise ValueError("请提供(case_id或case_code)且(step_id或step_code)以绑定数据源")
+            raise ValueError("请提供参数[case_id | case_code]以及[step_id | step_code]完成数据源绑定")
         return self
 
 
@@ -66,9 +66,7 @@ class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
         has_case = bool(self.case_id) or _has_text(self.case_code)
         has_step = bool(self.step_id) or _has_text(self.step_code)
         if not (has_case and has_step):
-            raise ValueError(
-                "请提供[data_source_id或data_source_code]，或提供(case_id或case_code)且(step_id或step_code)"
-            )
+            raise ValueError("请提供参数[data_source_id | data_source_code], 或[case_id | case_code]以及[step_id | step_code]完成数据源更新")
         return self
 
 
@@ -88,9 +86,7 @@ class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
         has_case = bool(self.case_id) or _has_text(self.case_code)
         has_step = bool(self.step_id) or _has_text(self.step_code)
         if not (has_case and has_step):
-            raise ValueError(
-                "请提供[data_source_id或data_source_code]，或提供(case_id或case_code)且(step_id或step_code)"
-            )
+            raise ValueError("请提供参数[data_source_id | data_source_code], 或[case_id | case_code]以及[step_id | step_code]完成数据源更新")
         return self
 
 
@@ -104,7 +100,7 @@ class AutoTestDataSourceUnbindCase(BaseModel):
     def _require_case(self):
         """解绑必须定位到用例。"""
         if not self.case_id and not _has_text(self.case_code):
-            raise ValueError("请提供[case_id或case_code]以解绑用例数据源")
+            raise ValueError("请提供参数[case_id | case_code]完成数据源解绑")
         return self
 
 

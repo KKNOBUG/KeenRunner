@@ -66,7 +66,7 @@ class ConditionsBase(BaseModel):
         :return: 规范化后的比较符字符串
         """
         if v is None or (isinstance(v, str) and not str(v).strip()):
-            raise ValueError("条件比较符不能为空")
+            raise ValueError("参数[condition_compare]不允许为空")
         return AutoTestAssertionOperation(str(v).strip()).value
 
 
@@ -143,10 +143,9 @@ class AutoTestApiDetailVarBase(BaseModel):
     def normalize_step_exec_logger(cls, v: Any) -> Optional[str]:
         """
         将step_exec_logger规范为多行文本或null。
-        兼容引擎传入的 List[str]：过滤空项后以换行拼接。
 
-        :param v: 原始日志字段（str / List[str] / null）
-        :return: 规范化后的日志文本，全空则返回 None
+        :param v: 原始日志字段
+        :return: 规范化后的日志文本
         """
         if v is None:
             return None
@@ -160,9 +159,9 @@ class AutoTestApiDetailVarBase(BaseModel):
     @classmethod
     def normalize_database_operates(cls, v):
         """
-        将单条 database_operates 对象包装为列表。
+        将单条database_operates对象包装为列表。
 
-        :param v: 原始值（null/dict/list）
+        :param v: 原始值
         :return: 列表形式或原值
         """
         if v is None:
@@ -179,7 +178,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         """
         将单条redis_operates对象包装为列表。
 
-        :param v: 原始值（null/dict/list）
+        :param v: 原始值
         :return: 列表形式或原值
         """
         if v is None:
@@ -208,7 +207,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["loop_conditions"] = loop_conditions_value.model_dump()
             except Exception as e:
                 v["loop_conditions"] = None
-                executive_logger.append(f"字段[loop_conditions]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[loop_conditions]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         branch_items_value = v.get("branch_items")
         if branch_items_value:
@@ -216,7 +215,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["branch_items"] = orjson.loads(orjson.dumps(branch_items_value))
             except Exception as e:
                 v["branch_items"] = None
-                executive_logger.append(f"字段[branch_items]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[branch_items]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         session_variables_value: Optional[List[StepVariablesBase]] = v.get("session_variables")
         if session_variables_value:
@@ -227,7 +226,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 ]
             except Exception as e:
                 v["session_variables"] = None
-                executive_logger.append(f"字段[session_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[session_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         defined_variables_value: Optional[List[StepVariablesBase]] = v.get("defined_variables")
         if defined_variables_value:
@@ -238,7 +237,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 ]
             except Exception as e:
                 v["defined_variables"] = None
-                executive_logger.append(f"字段[defined_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[defined_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         extract_variables_value: Optional[List[Dict[str, Any]]] = v.get("extract_variables")
         if extract_variables_value:
@@ -246,7 +245,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["extract_variables"] = orjson.loads(orjson.dumps(extract_variables_value))
             except Exception as e:
                 v["extract_variables"] = None
-                executive_logger.append(f"字段[extract_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[extract_variables]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         assert_validators_value: Optional[List[Dict[str, Any]]] = v.get("assert_validators")
         if assert_validators_value:
@@ -254,7 +253,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["assert_validators"] = orjson.loads(orjson.dumps(assert_validators_value))
             except Exception as e:
                 v["assert_validators"] = None
-                executive_logger.append(f"字段[assert_validators]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[assert_validators]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         database_operates_value: Optional[List[Dict[str, Any]]] = v.get("database_operates")
         if database_operates_value:
@@ -262,7 +261,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 v["database_operates"] = orjson.loads(orjson.dumps(database_operates_value))
             except Exception as e:
                 v["database_operates"] = None
-                executive_logger.append(f"字段[database_operates]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[database_operates]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         datagram_field_compare_value = v.get("datagram_field_compare")
         if datagram_field_compare_value:
@@ -273,7 +272,7 @@ class AutoTestApiDetailVarBase(BaseModel):
                 ]
             except Exception as e:
                 v["datagram_field_compare"] = None
-                executive_logger.append(f"字段[datagram_field_compare]标准化失败, 无法写入, 已置空, 错误描述: {e}")
+                executive_logger.append(f"参数[datagram_field_compare]标准化失败, 无法写入, 已置空, 错误描述: {e}")
 
         if executive_logger:
             base = v.get("step_exec_logger")

@@ -67,12 +67,12 @@ class AssertPipeline:
             return validator_results
         if not isinstance(assert_validators, (list, tuple)):
             raise TypeError(
-                f"assert_validators 必须为序列类型 StepAssertValidatorItem，当前: {type(assert_validators).__name__}"
+                f"参数[assert_validators]必须为StepAssertValidatorItem对象，当前: {type(assert_validators).__name__}"
             )
         for validator_config in assert_validators:
             if not isinstance(validator_config, StepAssertValidatorItem):
                 raise TypeError(
-                    f"assert_validators 子项必须为 StepAssertValidatorItem，当前: {type(validator_config).__name__}"
+                    f"参数[assert_validators]子项必须为StepAssertValidatorItem对象，当前: {type(validator_config).__name__}"
                 )
             name = validator_config.name
             expr = validator_config.expr
@@ -83,7 +83,7 @@ class AssertPipeline:
                 if log_callback:
                     log_callback(
                         f"【断言验证】表达式子项解析无效(跳过断言): \n\t"
-                        f"参数[name, expr, operation, source]是必须的, 非空断言时需添加[except_value]参数"
+                        f"参数[name, expr, operation, source]不允许为空, 非空断言时需添加[except_value]参数"
                     )
                 continue
             error_message: str = "实际值与预期值不满足指定操作符比较"

@@ -60,5 +60,5 @@ class RepDiffResponse(BaseModel):
     def validate_format_type(cls, v: str) -> str:
         allowed: Set[str] = {"json", "xml", "text"}
         if v not in allowed:
-            raise ValueError(f"参数[format_type]必须为{sorted(allowed)}之一")
+            raise ValueError(f"参数[format_type]必须为[json|xml|text], 当前: {v!r}")
         return v

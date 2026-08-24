@@ -54,7 +54,7 @@ class Extractors:
         if range_type == "all":
             return data
         if not expr:
-            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的JSONPath表达式")
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要有效的JSONPath表达式")
         try:
             extract_value = Extractors._resolve_json_path(data=data, expr=expr)
         except Exception as e:
@@ -101,7 +101,7 @@ class Extractors:
         if range_type == "all":
             return text
         if not expr:
-            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的XPath表达式")
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要有效的XPath表达式")
         try:
             xml_root = ElementTree.fromstring(text)
             # 兼容默认命名空间：无 xmlns 走原路径，有 xmlns 时自动回退 {*} 匹配
@@ -155,7 +155,7 @@ class Extractors:
         if range_type == "all":
             return text
         if not expr:
-            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效的正则表达式")
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要有效的正则表达式")
         try:
             match = re.search(expr, text, re.S)
             if not match:
@@ -207,7 +207,7 @@ class Extractors:
         if range_type == "all":
             return data
         if not expr:
-            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要是有效JSONPath表达式")
+            raise ValueError(f"【{operation_type}】模式[SOME]下参数[expr]是必须的, 并且需要有效JSONPath表达式")
         try:
             return Extractors._resolve_json_path(data=data, expr=expr)
         except Exception as e:
