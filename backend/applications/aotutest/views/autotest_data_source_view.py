@@ -809,7 +809,7 @@ async def download_import_template():
 
     :return: 文件流响应
     """
-    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
+    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP和TCP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
         return NotFoundResponse(message="导入模板文件不存在，请确认已部署 output/template 下模板文件")
     file_name = os.path.basename(filepath)
