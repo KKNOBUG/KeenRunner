@@ -5,6 +5,16 @@
 @Project : Krun
 @Module  : autotest_case_excel_service.py
 @DateTime: 2026/8/1
+
+用例Excel导入导出服务，含两条独立通道：
+- 通道A(报文导出)：用例步骤的HEAD/请求体展平为JSONPath风格矩阵，仅展示用途，
+  与数据源表无关联；入口prepare_export_cases → build_export_workbook
+- 通道B(脚本导出/导入)：14列文本模板，导出为key:value:desc;多行格式，
+  导入需往返安全(冒号/换行拦截)；入口prepare_script_export_rows → build_script_workbook，
+  parse_script_workbook → import_script_rows
+
+两条通道均为同步视图与异步Celery任务双通道消费(视图预校验+任务内二次校验)，
+文件名由build_export_file_name/build_script_file_name统一生成。
 """
 from __future__ import annotations
 
@@ -38,35 +48,48 @@ from backend.enums import (
 )
 from backend.services import get_current_username
 
+__all__ = [
+    "build_export_file_name",
+    "prepare_export_cases",
+    "build_export_workbook",
+    "style_data_source_sheet",
+    "build_script_file_name",
+    "prepare_script_export_rows",
+    "build_script_workbook",
+    "parse_script_workbook",
+    "import_script_rows",
+]
+
 # ---------------------------------------------------------------------------
 # 常量
 # ---------------------------------------------------------------------------
 
 # 协议标识与导出目录阈值
-_HTTP, _TCP = "HTTP", "TCP"
-# 报文导出目录 sheet 阈值：导出用例数超过该值才创建目录
-_DIRECTORY_THRESHOLD = 2
-
+_HTTP_PROTOCOL, _TCP_PROTOCOL = "HTTP", "TCP"
+# 报文导出目录sheet阈值：导出用例数超过该值才创建目录
+_MARK_DIRECTORY_THRESHOLD = 2
 # Excel样式
-_MARKER_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
-_MARKER_FONT = Font(bold=True)
-_CENTER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
-_SIDE = Side(style="thin", color="000000")
-_CELL_BORDER = Border(left=_SIDE, right=_SIDE, top=_SIDE, bottom=_SIDE)
-_ROW_HEIGHT = 40
-_COL_WIDTH_MIN, _COL_WIDTH_MAX = 8, 60
+_MARK_FONT = Font(bold=True)
+_MARK_SIDE = Side(style="thin", color="000000")
+_MARK_PATTERN_FILL = PatternFill(fill_type="solid", fgColor="FFFF00")
+_MARK_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_MARK_BORDER = Border(left=_MARK_SIDE, right=_MARK_SIDE, top=_MARK_SIDE, bottom=_MARK_SIDE)
+_MARK_ROW_HEIGHT = 40
+_MARK_COL_WIDTH_MIN = 8
+_MARK_COL_WIDTH_MAX = 60
 
-# 数据源分区标记（与 autotest_data_source_parser._SECTION_MARKERS_UPPER 保持一致）
-_SECTION_MARKERS = frozenset({"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"})
+# 数据源分区标记
+_DATAGRAM_SECTION_MARKS = frozenset({"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"})
 
 # 脚本模板列定义与解析约定
-_SCRIPT_COLUMNS: Tuple[str, ...] = (
+_DATAGRAM_SECTION_COLUMNS: Tuple[str, ...] = (
     "接口名称", "所属应用", "协议类型", "接口描述",
     "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
     "变量", "提取", "断言", "所属人员",
 )
-_DATA_START_ROW = 3
-_SCOPE_ALL, _SCOPE_SOME = "整个返回数据", "提取部分"
+_DATAGRAM_START_ROW = 3
+_DATAGRAM_SCOPE_ALL = "整个返回数据"
+_DATAGRAM_SCOPE_SOME = "提取部分"
 
 # 脚本导入校验集合
 _EXTRACT_SOURCES = frozenset({
@@ -82,19 +105,16 @@ _ASSERT_SOURCES = frozenset({
     "Response Headers", "Response Cookie",
     "变量池",
 })
-_ASSERT_OPS = frozenset(e.value for e in AutoTestAssertionOperation)
+_ASSERT_OPERATIONS = frozenset(e.value for e in AutoTestAssertionOperation)
 _HTTP_METHODS = frozenset(e.value for e in HTTPMethod)
-_ARGS_TYPES = frozenset(e.value for e in AutoTestReqArgsType)
-_TCP_ARGS = frozenset({
-    AutoTestReqArgsType.XML.value, AutoTestReqArgsType.JSON.value, AutoTestReqArgsType.RAW.value,
-})
+_REQ_ARGS_TYPE = frozenset(e.value for e in AutoTestReqArgsType)
+_TCP_ARGS_TYPE = frozenset({AutoTestReqArgsType.XML.value, AutoTestReqArgsType.JSON.value, AutoTestReqArgsType.RAW.value})
 # 表单类请求体：args_type → 步骤字段名（导出矩阵/脚本序列化/往返检测共用）
-_FORM_ATTR = {
+_FORM_RAGS_TYPE = {
     AutoTestReqArgsType.FORM_DATA.value: "request_form_data",
     AutoTestReqArgsType.X_WWW_FORM_URLENCODED.value: "request_form_urlencoded",
     AutoTestReqArgsType.PARAMS.value: "request_params",
 }
-
 # 模板文件路径
 _SCRIPT_TEMPLATE = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口导入导出模板.xlsx")
 
@@ -124,11 +144,11 @@ def _auto_size_sheet_columns(sheet) -> None:
                 continue
             for line in str(value).splitlines() or [""]:
                 max_len = max(max_len, _display_text_width(line))
-        width = min(_COL_WIDTH_MAX, max(_COL_WIDTH_MIN, max_len + 2))
+        width = min(_MARK_COL_WIDTH_MAX, max(_MARK_COL_WIDTH_MIN, max_len + 2))
         sheet.column_dimensions[get_column_letter(col_idx)].width = width
 
 
-def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float] = _ROW_HEIGHT) -> None:
+def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float] = _MARK_ROW_HEIGHT) -> None:
     """
     数据区水平/垂直居中并设置四边边框；可选统一行高。
     """
@@ -140,8 +160,8 @@ def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float]
         if row_height is not None:
             sheet.row_dimensions[row[0].row].height = row_height
         for cell in row:
-            cell.alignment = _CENTER_ALIGN
-            cell.border = _CELL_BORDER
+            cell.alignment = _MARK_ALIGNMENT
+            cell.border = _MARK_BORDER
 
 
 def _file_name(username: Optional[str], label: str) -> str:
@@ -158,7 +178,7 @@ def _get(item: Any, name: str, default: Any = None) -> Any:
 
 
 def _enum_val(raw: Any) -> str:
-    """CharEnum / 字符串 → 枚举值文本。"""
+    """CharEnum/字符串 → 枚举值文本。"""
     if raw is None:
         return ""
     return getattr(raw, "value", raw) or ""
@@ -321,7 +341,7 @@ def _body_to_pairs(step: Any) -> List[Tuple[str, Any]]:
     if args == AutoTestReqArgsType.RAW:
         text = getattr(step, "request_text", None) or ""
         return [("$.raw", text)] if text else []
-    attr = _FORM_ATTR.get(_enum_val(args))
+    attr = _FORM_RAGS_TYPE.get(_enum_val(args))
     return _kv_to_pairs(getattr(step, attr, None)) if attr else []
 
 
@@ -329,14 +349,14 @@ async def prepare_export_cases(case_ids: List[int], services: Any) -> Tuple[List
     loaded, invalid = await _load_public_api_cases(case_ids, services)
     valid = [{
         "case_name": item["case_name"],
-        "protocol": _HTTP if item["is_http"] else _TCP,
+        "protocol": _HTTP_PROTOCOL if item["is_http"] else _TCP_PROTOCOL,
         "project_name": item["project_name"],
         "case_desc": getattr(item["case"], "case_desc", None) or "",
         "created_user": getattr(item["case"], "created_user", None) or "",
         "head_pairs": _kv_to_pairs(getattr(item["step"], "request_header", None)),
         "body_pairs": _body_to_pairs(item["step"]),
     } for item in loaded]
-    LOGGER.info(f"导出用例准备完成: 有效{len(valid)}个, 不合规{len(invalid)}个")
+    LOGGER.info(f"导出用例准备完成: 有效{len(valid)}个, 无效{len(invalid)}个")
     return valid, invalid
 
 
@@ -371,7 +391,7 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
         sheet.append(values)
         sheet_titles.append((title, case_data))
 
-    if len(sheet_titles) > _DIRECTORY_THRESHOLD:
+    if len(sheet_titles) > _MARK_DIRECTORY_THRESHOLD:
         directory = workbook.create_sheet(title="目录", index=0)
         directory.append(["序号", "接口名称", "所属应用", "接口描述", "所属人", "协议类型"])
         for index, (title, case_data) in enumerate(sheet_titles, start=1):
@@ -395,9 +415,9 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
         for row in sheet.iter_rows():
             for cell in row:
                 if cell.value in ("HEAD", "BODY"):
-                    cell.fill = _MARKER_FILL
-                    cell.font = _MARKER_FONT
-        _style_sheet_cells(sheet, start_row=1, row_height=_ROW_HEIGHT)
+                    cell.fill = _MARK_PATTERN_FILL
+                    cell.font = _MARK_FONT
+        _style_sheet_cells(sheet, start_row=1, row_height=_MARK_ROW_HEIGHT)
         _auto_size_sheet_columns(sheet)
     return workbook
 
@@ -408,15 +428,13 @@ def style_data_source_sheet(sheet) -> None:
     - 分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行(垂直模式第0列标记)/
       列(水平模式表头行标记)整行/整列黄底；
     - 全部单元格水平/垂直居中、四边边框并自动换行，统一行高；
-    - 列宽按内容自适应（[_COL_WIDTH_MIN, _COL_WIDTH_MAX]）；
-    - 前导 ' 协议标记转为 Excel 原生文本前缀（quotePrefix 角标）。
+    - 列宽按内容自适应（[_MARK_COL_WIDTH_MIN, _MARK_COL_WIDTH_MAX]）；
+    - 前导'协议标记转为 Excel 原生文本前缀（quotePrefix 角标）。
 
-    前导 ' 处理说明：dataframe 中的 "'000200" 是我们的强制文本协议标记，
-    若原样写入，Excel 会把 ' 当作普通字符显示（只有双击编辑后 Excel 才会
-    重新解析输入、剥离 ' 并置 quotePrefix）；正确做法是去掉 ' 后写值并置
-    quotePrefix=True，即用户手动输入 '000200 后 Excel 存储的原生形态，
-    Office/WPS 均显示为绿色角标且保持文本语义。导入侧会从 quotePrefix
-    还原 ' 标记（见 parser 层），导出→再导入往返保真。
+    前导'处理说明：dataframe 中的 "'000200" 是我们的强制文本协议标记，
+    若原样写入，Excel会把'当作普通字符显示（只有双击编辑后 Excel 才会、剥离'并置 quotePrefix）；
+    正确做法是去掉'后写值并置quotePrefix=True，即用户手动输入'000200后Excel存储的原生形态，Office/WPS均显示为绿色角标且保持文本语义。
+    导入侧会从 quotePrefix还原'标记（见 parser 层），导出→再导入往返保真。
     """
     max_row = sheet.max_row or 0
     max_col = sheet.max_column or 0
@@ -425,21 +443,21 @@ def style_data_source_sheet(sheet) -> None:
     marker_rows: set = set()
     for row_idx in range(2, max_row + 1):
         value = str(sheet.cell(row=row_idx, column=1).value or "").strip().upper()
-        if value in _SECTION_MARKERS:
+        if value in _DATAGRAM_SECTION_MARKS:
             marker_rows.add(row_idx)
     marker_cols: set = set()
     for col_idx in range(2, max_col + 1):
         value = str(sheet.cell(row=1, column=col_idx).value or "").strip().upper()
-        if value in _SECTION_MARKERS:
+        if value in _DATAGRAM_SECTION_MARKS:
             marker_cols.add(col_idx)
     for row in sheet.iter_rows(min_row=1, max_row=max_row, max_col=max_col):
-        sheet.row_dimensions[row[0].row].height = _ROW_HEIGHT
+        sheet.row_dimensions[row[0].row].height = _MARK_ROW_HEIGHT
         for cell in row:
-            cell.alignment = _CENTER_ALIGN
-            cell.border = _CELL_BORDER
+            cell.alignment = _MARK_ALIGNMENT
+            cell.border = _MARK_BORDER
             if cell.row in marker_rows or cell.column in marker_cols:
-                cell.fill = _MARKER_FILL
-                cell.font = _MARKER_FONT
+                cell.fill = _MARK_PATTERN_FILL
+                cell.font = _MARK_FONT
             if isinstance(cell.value, str) and cell.value.startswith("'"):
                 cell.value = cell.value[1:]
                 cell.quotePrefix = True
@@ -488,10 +506,10 @@ def _extract_to_lines(extract_list: Optional[List[Any]]) -> str:
         if not name or not source:
             continue
         if _get(item, "scope") == "ALL":
-            lines.append(f"{name}:{source}:{_SCOPE_ALL};")
+            lines.append(f"{name}:{source}:{_DATAGRAM_SCOPE_ALL};")
             continue
         expr = str(_get(item, "expr") or "").strip()
-        seg = f"{name}:{source}:{_SCOPE_SOME}:{expr}"
+        seg = f"{name}:{source}:{_DATAGRAM_SCOPE_SOME}:{expr}"
         index = _get(item, "index")
         if index is not None:
             seg += f":{int(index)}"
@@ -542,7 +560,7 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
         variables_text = _kv_to_lines(
             getattr(step, "defined_variables", None), column="变量", problems=problems
         )
-        form_attr = _FORM_ATTR.get(args)
+        form_attr = _FORM_RAGS_TYPE.get(args)
         if form_attr:
             # 表单类请求体：检测与序列化合一；非表单类走 _step_body_cell
             body_text = _kv_to_lines(getattr(step, form_attr, None), column="请求体", problems=problems)
@@ -572,7 +590,7 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
         rows.append({
             "接口名称": case_name,
             "所属应用": item["project_name"],
-            "协议类型": _HTTP if is_http else _TCP,
+            "协议类型": _HTTP_PROTOCOL if is_http else _TCP_PROTOCOL,
             "接口描述": getattr(case, "case_desc", None) or "",
             "请求方式": method if is_http else "",
             "配置名称": getattr(step, "request_config_name", None) or "",
@@ -594,15 +612,15 @@ def build_script_workbook(rows: List[Dict[str, str]]) -> Workbook:
         raise RuntimeError(f"模板文件不存在: {_SCRIPT_TEMPLATE}")
     workbook = load_workbook(_SCRIPT_TEMPLATE)
     sheet = workbook[workbook.sheetnames[0]]
-    header = [cell.value for cell in sheet[1][: len(_SCRIPT_COLUMNS)]]
-    if header != list(_SCRIPT_COLUMNS):
-        raise RuntimeError(f"模板表头已被改动，与预定义不一致: 模板={header}, 期望={list(_SCRIPT_COLUMNS)}")
-    for row_index, row in enumerate(rows, start=_DATA_START_ROW):
-        for col_index, column in enumerate(_SCRIPT_COLUMNS, start=1):
+    header = [cell.value for cell in sheet[1][: len(_DATAGRAM_SECTION_COLUMNS)]]
+    if header != list(_DATAGRAM_SECTION_COLUMNS):
+        raise RuntimeError(f"模板表头已被改动，与预定义不一致: 模板={header}, 期望={list(_DATAGRAM_SECTION_COLUMNS)}")
+    for row_index, row in enumerate(rows, start=_DATAGRAM_START_ROW):
+        for col_index, column in enumerate(_DATAGRAM_SECTION_COLUMNS, start=1):
             sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
     # 数据区从第 3 行起：居中 + 统一行高；列宽根据全表内容自适应
     if rows:
-        _style_sheet_cells(sheet, start_row=_DATA_START_ROW, row_height=_ROW_HEIGHT)
+        _style_sheet_cells(sheet, start_row=_DATAGRAM_START_ROW, row_height=_MARK_ROW_HEIGHT)
     _auto_size_sheet_columns(sheet)
     return workbook
 
@@ -657,12 +675,12 @@ def _parse_extract(text: str, errors: List[str]) -> Optional[List[Dict[str, Any]
         if source not in _EXTRACT_SOURCES:
             errors.append(f"「提取」提取来源({source})非法, 合法集: {'/'.join(sorted(_EXTRACT_SOURCES))}")
             continue
-        if scope == _SCOPE_ALL:
+        if scope == _DATAGRAM_SCOPE_ALL:
             if len(parts) > 3:
                 errors.append(f"「提取」整个返回数据不应携带提取表达式: {raw.strip()!r}")
                 continue
             items.append({"name": name, "source": source, "expr": "", "scope": "ALL", "index": None})
-        elif scope == _SCOPE_SOME:
+        elif scope == _DATAGRAM_SCOPE_SOME:
             tail = parts[3:]
             index_val: Optional[int] = None
             if len(tail) >= 2 and re.fullmatch(r"-?\d+", tail[-1].strip()):
@@ -674,7 +692,7 @@ def _parse_extract(text: str, errors: List[str]) -> Optional[List[Dict[str, Any]
                 continue
             items.append({"name": name, "source": source, "expr": expr, "scope": "SOME", "index": index_val})
         else:
-            errors.append(f"「提取」提取范围({scope})须为「{_SCOPE_ALL}」或「{_SCOPE_SOME}」")
+            errors.append(f"「提取」提取范围({scope})须为「{_DATAGRAM_SCOPE_ALL}」或「{_DATAGRAM_SCOPE_SOME}」")
     return items or None
 
 
@@ -700,8 +718,8 @@ def _parse_assert(text: str, errors: List[str]) -> Optional[List[Dict[str, Any]]
         if not expr:
             errors.append(f"「断言」断言表达式不允许为空: {raw.strip()!r}")
             continue
-        if operation not in _ASSERT_OPS:
-            errors.append(f"「断言」匹配规则({operation})非法, 合法集: {'/'.join(sorted(_ASSERT_OPS))}")
+        if operation not in _ASSERT_OPERATIONS:
+            errors.append(f"「断言」匹配规则({operation})非法, 合法集: {'/'.join(sorted(_ASSERT_OPERATIONS))}")
             continue
         items.append({
             "name": name, "source": source, "expr": expr,
@@ -735,28 +753,28 @@ def _parse_body(args_type: str, body_text: str, errors: List[str]) -> Dict[str, 
         result["request_body"] = parsed
     elif args_type in (AutoTestReqArgsType.XML.value, AutoTestReqArgsType.RAW.value):
         result["request_text"] = body_text
-    elif args_type in _FORM_ATTR:
-        result[_FORM_ATTR[args_type]] = _parse_kv(body_text, errors, "请求体")
+    elif args_type in _FORM_RAGS_TYPE:
+        result[_FORM_RAGS_TYPE[args_type]] = _parse_kv(body_text, errors, "请求体")
     return result
 
 
 def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     workbook = load_workbook(io.BytesIO(content), data_only=True)
     sheet = workbook[workbook.sheetnames[0]]
-    header = [_cell_text(cell.value) for cell in sheet[1][: len(_SCRIPT_COLUMNS)]]
-    if header != list(_SCRIPT_COLUMNS):
+    header = [_cell_text(cell.value) for cell in sheet[1][: len(_DATAGRAM_SECTION_COLUMNS)]]
+    if header != list(_DATAGRAM_SECTION_COLUMNS):
         return [], [{
             "row": 1,
-            "reason": f"表头与模板不一致(期望前{len(_SCRIPT_COLUMNS)}列为: {'/'.join(_SCRIPT_COLUMNS)})，请使用最新模板",
+            "reason": f"表头与模板不一致(期望前{len(_DATAGRAM_SECTION_COLUMNS)}列为: {'/'.join(_DATAGRAM_SECTION_COLUMNS)})，请使用最新模板",
         }]
 
     rows: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
     for row_no, excel_row in enumerate(
-            sheet.iter_rows(min_row=_DATA_START_ROW, max_col=len(_SCRIPT_COLUMNS), values_only=True),
-            start=_DATA_START_ROW,
+            sheet.iter_rows(min_row=_DATAGRAM_START_ROW, max_col=len(_DATAGRAM_SECTION_COLUMNS), values_only=True),
+            start=_DATAGRAM_START_ROW,
     ):
-        cells = {col: _cell_text(val) for col, val in zip(_SCRIPT_COLUMNS, excel_row)}
+        cells = {col: _cell_text(val) for col, val in zip(_DATAGRAM_SECTION_COLUMNS, excel_row)}
         if not any(cells.values()):
             continue
 
@@ -768,19 +786,19 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
             errors.append("「接口名称」不允许为空")
         if not project_name:
             errors.append("「所属应用」不允许为空")
-        if protocol not in (_HTTP, _TCP):
+        if protocol not in (_HTTP_PROTOCOL, _TCP_PROTOCOL):
             errors.append(f"「协议类型」({protocol_raw})须为HTTP或TCP")
             protocol = None
 
         method, request_url, header_text = cells["请求方式"].upper(), cells["请求路径"], cells["请求头"]
-        if protocol == _HTTP:
+        if protocol == _HTTP_PROTOCOL:
             if not method:
                 errors.append("HTTP协议时「请求方式」不允许为空")
             elif method not in _HTTP_METHODS:
                 errors.append(f"「请求方式」({method})非法, 合法集: {'/'.join(sorted(_HTTP_METHODS))}")
             if not request_url:
                 errors.append("HTTP协议时「请求路径」不允许为空")
-        elif protocol == _TCP:
+        elif protocol == _TCP_PROTOCOL:
             if method:
                 errors.append("TCP协议时「请求方式」勿填")
             if request_url:
@@ -791,19 +809,19 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
         args_type = cells["请求体类型"]
         if not args_type:
             errors.append("「请求体类型」不允许为空")
-        elif args_type not in _ARGS_TYPES:
+        elif args_type not in _REQ_ARGS_TYPE:
             errors.append(f"「请求体类型」({args_type})非法, 合法集: {'/'.join(e.value for e in AutoTestReqArgsType)}")
-        elif protocol == _TCP and args_type not in _TCP_ARGS:
-            errors.append(f"TCP协议时「请求体类型」({args_type})仅支持: {'/'.join(sorted(_TCP_ARGS))}")
+        elif protocol == _TCP_PROTOCOL and args_type not in _TCP_ARGS_TYPE:
+            errors.append(f"TCP协议时「请求体类型」({args_type})仅支持: {'/'.join(sorted(_TCP_ARGS_TYPE))}")
 
         # 协议/请求体类型非法时跳过依赖项解析；其余列继续解析，保证单行错误一次给全
         args_ok = (
-                protocol in (_HTTP, _TCP)
-                and args_type in _ARGS_TYPES
-                and (protocol == _HTTP or args_type in _TCP_ARGS)
+                protocol in (_HTTP_PROTOCOL, _TCP_PROTOCOL)
+                and args_type in _REQ_ARGS_TYPE
+                and (protocol == _HTTP_PROTOCOL or args_type in _TCP_ARGS_TYPE)
         )
         body_fields = _parse_body(args_type, cells["请求体"], errors) if args_ok else {}
-        request_header = _parse_kv(header_text, errors, "请求头") if protocol == _HTTP else None
+        request_header = _parse_kv(header_text, errors, "请求头") if protocol == _HTTP_PROTOCOL else None
         defined_variables = _parse_kv(cells["变量"], errors, "变量")
         extract_variables = _parse_extract(cells["提取"], errors)
         assert_validators = _parse_assert(cells["断言"], errors)
@@ -829,7 +847,7 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
             **body_fields,
         })
     if not rows and not invalid:
-        invalid.append({"row": _DATA_START_ROW, "reason": "文件无有效数据行"})
+        invalid.append({"row": _DATAGRAM_START_ROW, "reason": "文件无有效数据行"})
     LOGGER.info(f"导入脚本解析完成: 有效{len(rows)}行, 不合规{len(invalid)}行")
     return rows, invalid
 
@@ -920,7 +938,7 @@ async def import_script_rows(
             step_payload = {
                 "step_name": item["step_name"],
                 "step_desc": item["case_desc"] or "",
-                "step_type": AutoTestStepType.HTTP if item["protocol"] == _HTTP else AutoTestStepType.TCP,
+                "step_type": AutoTestStepType.HTTP if item["protocol"] == _HTTP_PROTOCOL else AutoTestStepType.TCP,
                 "request_project_id": item["project_id"],
                 "request_method": item["request_method"],
                 "request_url": item["request_url"],

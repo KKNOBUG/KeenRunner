@@ -5,6 +5,16 @@
 @Project : Krun
 @Module  : autotest_data_source_service.py
 @DateTime: 2026/8/17
+
+数据源业务服务：位于视图层与CRUD/解析器之间的无状态函数集合。
+
+职责分组（按数据源操作链路组织）：
+- 用例/步骤/数据源定位：resolve_case/resolve_step/resolve_case_and_step/
+  resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
+- 矩阵落库：apply_dataframe_payload（前端矩阵解析清洗）
+- 路径收集与矩阵构建：从步骤报文采集JSONPath/XPath生成垂直矩阵（/build接口）
+- 步骤元信息回写：sync_step_data_source_meta/clear_step_data_source_meta
+- 场景名称与身份补齐：场景列提取、重复检测、新建身份生成（树保存一致性校验消费）
 """
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,9 +26,7 @@ from backend.applications.aotutest.dependencies import AutoTestApiServices
 from backend.applications.aotutest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.aotutest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.aotutest.models.autotest_step_model import AutoTestStepModel
-from backend.applications.aotutest.schemas.autotest_data_source_schema import (
-    AutoTestDataSourceCreate,
-)
+from backend.applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate
 from backend.applications.aotutest.services.autotest_data_source_crud import make_cache_key
 from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_HORIZONTAL,
@@ -29,6 +37,24 @@ from backend.applications.aotutest.services.autotest_data_source_parser import (
 from backend.core.exceptions import NotFoundException, ParameterException
 from backend.enums import AutoTestReqArgsType, AutoTestStepType, PUBLIC_CASE_TYPES
 from backend.services import get_current_username
+
+__all__ = [
+    "DEFAULT_SCENE_NAMES",
+    "resolve_case",
+    "resolve_step",
+    "resolve_case_and_step",
+    "ensure_request_step",
+    "ensure_case_allows_data_source",
+    "resolve_enabled_data_source",
+    "apply_dataframe_payload",
+    "build_blank_vertical_matrix",
+    "build_vertical_matrix_from_step",
+    "sync_step_data_source_meta",
+    "clear_step_data_source_meta",
+    "data_source_scene_names",
+    "data_source_duplicate_scene_names",
+    "fill_create_identity",
+]
 
 DEFAULT_SCENE_NAMES = ("场景1名称", )
 _REQUEST_STEP_TYPES = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
@@ -356,12 +382,12 @@ def _parse_json_body(request_body: Any) -> Any:
     return None
 
 
-def collect_head_paths(step: AutoTestStepModel) -> List[str]:
+def _collect_head_paths(step: AutoTestStepModel) -> List[str]:
     """请求头键转为$.HeaderName。"""
     return _kv_jsonpaths(getattr(step, "request_header", None))
 
 
-def collect_body_paths(step: AutoTestStepModel) -> List[str]:
+def _collect_body_paths(step: AutoTestStepModel) -> List[str]:
     """
     按请求参数类型收集BODY分区路径。
 
@@ -408,10 +434,10 @@ def build_vertical_matrix_from_step(step: AutoTestStepModel) -> List[List[Any]]:
     empty = [""] * len(DEFAULT_SCENE_NAMES)
     matrix: List[List[Any]] = [["", *DEFAULT_SCENE_NAMES]]
     matrix.append(["HEAD", *empty])
-    for path in collect_head_paths(step):
+    for path in _collect_head_paths(step):
         matrix.append([path, *empty])
     matrix.append(["BODY", *empty])
-    for path in collect_body_paths(step):
+    for path in _collect_body_paths(step):
         matrix.append([path, *empty])
     matrix.append(["ASSERT_HEAD", *empty])
     matrix.append(["ASSERT_BODY", *empty])
