@@ -895,7 +895,8 @@ async def single_step_dataset_upload(
 
     file_hash: str = ""
     file_path: str = path_or_error
-    file_name: str = (getattr(file, "filename", None) or "").strip()[:255]
+    # 落库文件名取磁盘实际文件名(清洗后含步骤标识前缀)，与存储文件保持一致
+    file_name: str = os.path.basename(file_path)[:255]
     try:
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
@@ -1089,7 +1090,8 @@ async def batch_step_dataset_upload(
 
     file_hash: str = ""
     file_path: str = path_or_error
-    file_name: str = (getattr(file, "filename", None) or "").strip()[:255]
+    # 落库文件名取磁盘实际文件名(清洗后含时间戳前缀)，与存储文件保持一致
+    file_name: str = os.path.basename(file_path)[:255]
     try:
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()

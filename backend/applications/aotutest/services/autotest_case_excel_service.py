@@ -167,7 +167,8 @@ def _style_sheet_cells(sheet, *, start_row: int = 1, row_height: Optional[float]
 def _file_name(username: Optional[str], label: str) -> str:
     safe = re.sub(r'[\\/:*?"<>|\s]', "_", str(username or "").strip())
     prefix = f"{safe}_{label}" if safe else label
-    return f"{prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    stamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
+    return f"{prefix}_{stamp}.xlsx"
 
 
 def _get(item: Any, name: str, default: Any = None) -> Any:
@@ -424,9 +425,8 @@ def build_export_workbook(cases_data: List[Dict[str, Any]]) -> Workbook:
 
 def style_data_source_sheet(sheet) -> None:
     """
-    数据源 sheet 统一样式（与报文导出风格一致）：
-    - 分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行(垂直模式第0列标记)/
-      列(水平模式表头行标记)整行/整列黄底；
+    数据源sheet统一样式：
+    - 分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行(垂直模式第0列标记)/列(水平模式表头行标记)整行/整列黄底；
     - 全部单元格水平/垂直居中、四边边框并自动换行，统一行高；
     - 列宽按内容自适应（[_MARK_COL_WIDTH_MIN, _MARK_COL_WIDTH_MAX]）；
     - 前导'协议标记转为 Excel 原生文本前缀（quotePrefix 角标）。
