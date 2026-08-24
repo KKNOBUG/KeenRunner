@@ -558,7 +558,7 @@ def _clear_section_marker_cells(matrix: List[List[Any]]) -> List[List[Any]]:
         if not row_is_marker and not marker_cols:
             continue
         for col_idx in range(1, len(row)):
-            if row_is_marker or col_idx in marker_cols:
+            if row_is_marker or (col_idx in marker_cols and row_idx > 0):
                 row[col_idx] = ''
     return matrix
 
