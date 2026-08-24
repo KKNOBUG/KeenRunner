@@ -20,11 +20,10 @@ class PlaceholderFunctions:
     @classmethod
     def _parse_funcname_funcargs(cls, func_string: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """
-        从func_name(key1=val1, key2=val2)格式的字符串中解析出函数名与参数字典。
+        从func_name(key1=val1)格式字符串中解析函数名与参数字典，仅支持关键字参数。
 
-        注意：当前仅支持关键字参数[如: key=value), 并使用ast.literal_eval进行字面量解析, 不包含=的内容会被忽略(即位置参数不会被解析和记录)
         :param func_string: 函数调用形式的字符串
-        :return: 二元组(函数名, 参数字典), 无法解析时返回(None, None)
+        :return: 二元组(函数名, 参数字典)，无法解析时返回(None, None)
         """
         if not isinstance(func_string, str):
             return None, None

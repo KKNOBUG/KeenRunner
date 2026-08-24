@@ -36,11 +36,10 @@ class AssertionCompare:
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:
         """
-        将值标准化为便于比较的类型：普通数字字符串转int或float, true或false转bool；
-        带前导零的整数字符串保留原串（避免响应码等被抹成0后误相等）。
+        将值标准化为便于比较的类型：数字字符串转int/float，true/false转bool，前导零串保留原串。
 
         :param value: 任意值
-        :return: 标准化后的值, 或原值
+        :return: 标准化后的值或原值
         """
         if value is None:
             return None
@@ -93,7 +92,7 @@ class AssertionCompare:
     @classmethod
     def _is_bool_vs_number(cls, left: Any, right: Any) -> bool:
         """
-        判断是否一侧为bool、另一侧为非bool的int/float（Python中True==1/False==0为真，断言中禁止此类宽松相等）。
+        判断是否一侧为bool、另一侧为非bool的数值（Python中True==1为真，断言中禁止此类宽松相等）。
 
         :param left: 左值
         :param right: 右值
@@ -108,8 +107,7 @@ class AssertionCompare:
     @classmethod
     def _type_aware_equals(cls, actual: Any, expected: Any) -> bool:
         """
-        类型感知的相等比较：先直接比较, 若不等则对两值做_normalize_value后再比较。
-        bool与数值（含True/1、False/0）一律视为不等；true/false字符串仍可与bool相等。
+        类型感知的相等比较：先直接比较，不等则标准化后再比较，bool与数值一律视为不等。
 
         :param actual: 实际值
         :param expected: 期望值
@@ -154,12 +152,10 @@ class AssertionCompare:
     @classmethod
     def _assertion_length_equal(cls, actual: Any, expected: Any) -> bool:
         """
-        比较实际值长度是否等于期望长度。
-
-        有__len__的类型（list/dict/str/set/tuple）用len(actual)，无__len__的类型（int/float/bool）用len(str(actual))取字符长度，None返回False。
+        比较实际值长度是否等于期望长度，无__len__的类型取str长度。
 
         :param actual: 实际值
-        :param expected: 期望长度（数字字符串会经_normalize_value转换）
+        :param expected: 期望长度
         :return: 长度是否相等
         """
         nb = cls._normalize_value(expected)
@@ -193,9 +189,7 @@ class AssertionCompare:
     @classmethod
     def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
         """
-        判断实际值是否为空。
-
-        None、空字符串、空容器（list/dict/set/tuple长度为0）均为空，数值/布尔等为非空。
+        判断实际值是否为空：None、空串、空容器均为空。
 
         :param actual: 实际值
         :param expected: 期望值（忽略）
@@ -225,7 +219,7 @@ class AssertionCompare:
     @classmethod
     def _parse_set_literal(cls, text: str) -> List[Any]:
         """
-        解析集合字面量内部文本：统一全角/半角逗号后分割，去掉可选首尾引号，再经_normalize_value转类型。
+        解析集合字面量内部文本：统一逗号分割，去可选引号，再经标准化转类型。
 
         :param text: 去掉外层[]、{}或()后的内容
         :return: 元素列表
@@ -243,10 +237,7 @@ class AssertionCompare:
     @classmethod
     def _coerce_to_collection(cls, expected: Any) -> List[Any]:
         """
-        将期望值规范为成员判断用的列表。
-
-        支持list/tuple/set/frozenset，以及以[]、{}、()包裹的字面量（JSON数组优先）；
-        未使用这三种括号、括号不配对、dict与JSON对象均拒绝。
+        将期望值规范为成员判断用的列表，支持原生容器及[]、{}、()包裹的字面量。
 
         :param expected: 用户给定的集合或可解析为集合的值
         :return: 元素列表
@@ -270,9 +261,7 @@ class AssertionCompare:
         opener = text[0]
         closer = pairs.get(opener)
         if closer is None or len(text) < 2 or not text.endswith(closer):
-            raise ValueError(
-                "集合期望值必须使用[]、{}或()包裹，例如[元素1, 元素2]、{元素1, 元素2}或(元素1, 元素2)"
-            )
+            raise ValueError("集合期望值必须使用[]、{}或()包裹，例如[元素1, 元素2]、{元素1, 元素2}或(元素1, 元素2)")
 
         inner = text[1:-1]
         if opener == "[":

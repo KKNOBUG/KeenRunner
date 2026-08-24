@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : protocol_http.py
+@DateTime: 2025/12/28 16:15
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +17,7 @@ from backend.enums import AutoTestReqArgsType
 
 @dataclass
 class HttpBodyPayloads:
+    """HTTP请求体装配结果。"""
     json_payload: Optional[Any] = None
     data_payload: Optional[Any] = None
     content_payload: Optional[Any] = None
@@ -46,7 +54,7 @@ def assemble_http_body_payloads(
     out_headers = headers
 
     if request_args_type is None:
-        # 未配置时保持兼容：优先raw -> form-data -> urlencoded作为data，若有request_body且未产生data则作为json
+        # 未指定类型时按优先级推断: raw -> form-data -> urlencoded -> json
         if request_text:
             data_payload = request_text
         elif form_data or form_files:
@@ -181,7 +189,7 @@ def infer_http_actual_body(
             actual_body_type = "form-data" if (form_data or form_files) else "x-www-form-urlencoded"
         actual_body = data_payload
     if file_payload is not None:
-        # 与历史调试接口保持一致：直接展开合并（非dict时由调用方失败路径承接）
+        # 文件载荷以__files键合并入请求体
         actual_body = actual_body or {}
         actual_body = {**actual_body, "__files": file_payload}
     return actual_body_type, actual_body
@@ -206,7 +214,7 @@ def build_absolute_http_url(host: str, port: Optional[str], path: str) -> str:
     """
     将环境host/port与相对路径拼成绝对HTTP URL。
 
-    path 为/或空时表示站点根路径，结果带末尾斜杠，避免 httpx 收到无协议的空 URL。
+    path为空或/时表示根路径，结果带末尾斜杠。
 
     :param host: 主机（可带或不带协议）
     :param port: 端口字符串，可空

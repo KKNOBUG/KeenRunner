@@ -21,7 +21,7 @@ class VariableResolver(Protocol):
         """
         根据变量名取值。
 
-        :param name: 变量名（占位符${name}中的name）
+        :param name: 变量名
         :return: 变量值
         """
         ...
@@ -48,7 +48,7 @@ class ListVariableResolver:
 
     def __init__(self, variables: Optional[Sequence[StepVariablesBase]]) -> None:
         """
-        以StepVariablesBase列表构造解析器。
+        构造变量解析器。
 
         :param variables: 变量列表；可为None（视为空列表）
         """
@@ -75,7 +75,7 @@ def coerce_variable_resolver(
         is_core_engine: bool,
 ) -> Any:
     """
-    将历史(is_core_engine, finished_variables)转为可get_variable的对象。
+    将历史变量上下文转为可get_variable的对象。
 
     引擎上下文原样返回；列表路径包装为ListVariableResolver。
 

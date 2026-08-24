@@ -18,15 +18,15 @@ import typing
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
-# 1.匹配裸的占位符，如: ${xxx}（报文占位符与 Python 代码占位符共用）
+# 匹配裸占位符: ${xxx}
 _RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
-# 2.匹配同一引号包裹的占位符，如: "${var}"
+# 匹配引号包裹的占位符: "${var}"
 _RE_QUOTED_PLACEHOLDER = re.compile(r"(['\"])\$\{([^}]+)}\1")
-# 3.匹配同一引号内的拼接，如: "prefix_${var}_suffix"
+# 匹配引号内拼接: "prefix_${var}_suffix"
 _RE_QUOTED_CONCAT = re.compile(r"(['\"])((?:(?!\1).)*?)\$\{([^}]+)}((?:(?!\1).)*?)\1")
 
-# 用户 Python 步骤：允许的 import 根名 → 预注入 builtins（单一配置；扩展时只改此处）
-# 注：datetime 预绑定为 datetime 类（兼容直接写 datetime.now()）；import datetime 仍得到标准库模块
+# 用户Python步骤: 白名单根模块预注入builtins
+# datetime预绑定为类，import datetime仍得到标准库模块
 _USER_CODE_EXTRA_BUILTINS: Dict[str, Any] = {
     "random": random,
     "time": time,
@@ -48,7 +48,7 @@ def _safe_user_code_import(
         level: int = 0,
 ) -> Any:
     """
-    供run_python_code的exec使用：__import__仅加载白名单根模块，禁止相对导入。
+    受限导入，仅加载白名单根模块，禁止相对导入。
 
     :param name: 模块名
     :param globals: 全局命名空间
@@ -67,7 +67,7 @@ def _safe_user_code_import(
     return _builtin_import(name, globals, locals, fromlist, level)
 
 
-# 对外公开别名（步骤引擎等应导入下列名称，勿依赖下划线私有符号）
+# 对外公开别名，勿依赖下划线私有符号
 RE_PLACEHOLDER = _RE_PLACEHOLDER
 RE_QUOTED_PLACEHOLDER = _RE_QUOTED_PLACEHOLDER
 RE_QUOTED_CONCAT = _RE_QUOTED_CONCAT

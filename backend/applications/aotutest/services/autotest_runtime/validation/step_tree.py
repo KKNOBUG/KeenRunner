@@ -14,6 +14,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestS
 
 
 class StepTreeValidation:
+    """校验步骤树结构：无自循环引用，且仅允许特定类型包含子步骤。"""
 
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> Tuple[bool, Optional[str]]:
@@ -25,18 +26,16 @@ class StepTreeValidation:
         """
         from backend.enums import AutoTestStepType
 
-        # 允许有子步骤的步骤类型
+        # 仅允许循环结构和条件分支包含子步骤
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
 
         def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: Set[Any], path: List[Any]) -> Tuple[bool, Optional[str]]:
             """
-            递归校验单个步骤节点及其children。
-
-            检查step_id/step_code自循环，并检查非允许类型是否包含children。
+            递归校验单个步骤节点及其子步骤，检查自循环与子步骤类型合法性。
 
             :param step: 当前步骤节点
-            :param visited_ids: 已访问step_id集合(用于检测自循环)
-            :param path: 访问路径step_code列表(用于检测自循环)
+            :param visited_ids: 已访问step_id集合
+            :param path: 访问路径step_code列表
             :return: (True, None)表示通过；(False, str)表示失败及错误信息
             """
             step_id = step.step_id

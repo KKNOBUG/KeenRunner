@@ -59,10 +59,9 @@ class KvUtils:
     @classmethod
     def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
         """
-        将HTTP步骤中的key/value列表（列表项优先为StepVariablesBase）转为字典。
-        历史JSON仍为dict时在边界model_validate后应已为模型，此处仅作有限兼容。
-
-        :param data: key/value列表或空
+        将HTTP步骤中的键值列表转为字典。
+        
+        :param data: 键值列表或空
         :return: 请求参数字典
         """
         if not data or not isinstance(data, list):
@@ -109,8 +108,8 @@ class KvUtils:
     @staticmethod
     def try_serialize_request_body(raw: Any) -> Any:
         """
-        将步骤中的request_body规范为对象：JSON字符串尽量解析为dict，否则保持原样，空字符串返回{}。
-
+        规范化request_body: JSON字符串尽量解析为对象，否则保持原样。
+        
         :param raw: 原始request_body
         :return: 解析后的对象或原值
         """

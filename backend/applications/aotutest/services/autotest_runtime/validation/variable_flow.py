@@ -18,6 +18,7 @@ from backend.applications.aotutest.services.autotest_runtime.sandbox import RE_P
 
 
 class VariableFlowValidation:
+    """校验步骤树中变量引用与产出的对应关系。"""
     @classmethod
     def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
@@ -41,18 +42,12 @@ class VariableFlowValidation:
             steps: List[AutoTestStepTreeUpdateItem],
     ) -> List[Dict[str, Any]]:
         """
-        校验步骤树中${var}引用是否有对应的变量产出（第四层校验）。
-
-        收集所有变量产出源（session_variables、defined_variables、extract_variables、
-        数据库/Redis操作产出的variable_name及variable_name_count、
-        循环注入的loop_index/loop_value/loop_key），再遍历所有字符串值中的${...}引用，
-        检查是否存在未匹配的引用。
+        校验步骤树中${var}引用是否有对应的变量产出。
 
         :param steps: 根步骤列表
         :return: 未匹配的引用错误项列表
         """
         produced: Set[str] = set()
-        # 引擎内置循环变量
         produced.update({"loop_index", "loop_value", "loop_key"})
 
         def _collect_produced(step: AutoTestStepTreeUpdateItem) -> None:
@@ -69,7 +64,7 @@ class VariableFlowValidation:
                 name = getattr(ext, "name", None) or (ext.get("name") if isinstance(ext, dict) else None)
                 if name:
                     produced.add(str(name))
-            # 数据库/Redis 操作自动产出 {variable_name} 和 {variable_name}_count
+            # 数据库/Redis操作自动产出variable_name及variable_name_count
             for op in (step.database_operates or []):
                 vn = getattr(op, "variable_name", None) or (op.get("variable_name") if isinstance(op, dict) else None)
                 if vn:
@@ -97,7 +92,7 @@ class VariableFlowValidation:
             if isinstance(value, str):
                 for match in RE_PLACEHOLDER.finditer(value):
                     inner = match.group(1).strip()
-                    # 排除函数调用形式，如 generate_phone()
+                    # 排除函数调用形式
                     if "(" in inner and inner.endswith(")"):
                         continue
                     refs.append(inner)

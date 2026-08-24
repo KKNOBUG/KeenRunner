@@ -263,28 +263,23 @@ class Extractors:
             operation_type: str = "变量提取",
     ) -> Any:
         """
-        从source指定来源根据表达式提取单个值（HTTP调试与步骤引擎共用）。
-
-        标准来源（如response/request json、xml、text、headers、cookie、form-data、
-        session_variables/变量池）规范化为小写后查EXTRACTORS注册表执行。
-        未命中注册表时，若response_json为DB/Redis操作结果列表，则根据
-        source与项内variable_name匹配后走JSON提取回退逻辑，回退路径同样支持ALL/SOME。
+        从source指定来源根据表达式提取值，未命中注册表时回退DB/Redis逻辑。
 
         :param source: 来源类型或DB/Redis的variable_name
-        :param expr: 提取表达式（JSONPath/XPath/正则）；SOME模式通常必填
-        :param range_type: ALL返回整段数据，SOME（默认）根据expr取值
-        :param index: 多匹配结果为列表时的下标；越界抛ValueError
+        :param expr: 提取表达式（JSONPath/XPath/正则）
+        :param range_type: ALL返回整段数据，SOME根据expr取值
+        :param index: 多匹配结果列表下标；越界抛ValueError
         :param response_text: 响应正文
-        :param response_json: 响应JSON，或DB/Redis的List[Dict]操作结果
+        :param response_json: 响应JSON，或DB/Redis操作结果
         :param response_headers: 响应头
         :param response_cookies: 响应Cookie
         :param request_text: 请求正文
         :param request_json: 请求JSON
-        :param request_headers: 请求头；当request_cookies为None时用于解析Cookie
+        :param request_headers: 请求头
         :param request_cookies: 请求Cookie映射
-        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并后的键值映射
-        :param session_variables_lookup: 变量池Dict[str, Any]，根据JSONPath取值
-        :param operation_type: 错误信息前缀，如变量提取、断言验证
+        :param request_form_data: 请求Form-Data/X-WWW-Form-Urlencoded合并映射
+        :param session_variables_lookup: 变量池字典
+        :param operation_type: 错误信息前缀
         :return: 提取得到的值
         """
         range_type_n: str = (range_type or "SOME").strip().lower()

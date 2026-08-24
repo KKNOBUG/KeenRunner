@@ -48,40 +48,27 @@ class ExtractAssertPipeline:
             body_source: str = "response json",
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
-        统一执行变量提取与断言验证（引擎主路径）。
-
-        处理顺序：
-        1. ExtractPipeline.run_extract_variables
-        2. 若raise_on_failure且存在success=False的提取项→抛出ValueError
-        3. 将成功提取写入session_variables_lookup（及finished_variables，若支持），供同一步断言引用
-        4. AssertPipeline.run_assert_validators
-        5. 若step_struct is not None → append_assert_validators追加数据驱动断言
-        6. 若raise_on_failure且存在失败断言→抛出ValueError
+        统一执行变量提取与断言验证：先提取写入变量池，再执行断言，最后追加数据驱动断言。
 
         :param extract_variables: 提取规则；None视为空列表
         :param assert_validators: 断言规则；None视为空列表
-        :param response_text: 响应正文（Text/XML提取与断言）
-        :param response_json: 响应JSON，或DB/Redis步骤的操作结果列表
+        :param response_text: 响应正文
+        :param response_json: 响应JSON，或DB/Redis操作结果列表
         :param response_headers: 响应头
         :param response_cookies: 响应Cookie
         :param request_text: 请求正文
         :param request_json: 请求JSON
-        :param request_headers: 请求头；未传request_cookies时可用于解析Cookie
-        :param request_cookies: 请求Cookie；优先于从请求头解析
-        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
-        :param session_variables_lookup: 变量池字典（session_variables/变量池source）
-        :param log_callback: 可选日志回调(str) -> None
-        :param finished_variables: 断言期望值占位符解析上下文；引擎传StepExecutionContext
-        :param is_core_engine: True时finished_variables需提供get_variable；
-            False时根据StepVariablesBase列表解析（调试视图）
+        :param request_headers: 请求头
+        :param request_cookies: 请求Cookie
+        :param request_form_data: 请求Form-Data/X-WWW-Form-Urlencoded合并映射
+        :param session_variables_lookup: 变量池字典
+        :param log_callback: 可选日志回调
+        :param finished_variables: 断言期望值占位符解析上下文
+        :param is_core_engine: 占位符解析模式
         :param step_struct: 数据驱动结构；非None时追加assert_head/assert_body
-            （即使内部各块为空也会进入追加逻辑，仅在结构非法时直接跳过）
-        :param raise_on_failure: True时提取或断言存在失败项即抛ValueError（文案与历史引擎一致）；
-            False时仅返回结果列表，由调用方自行判断
-        :param body_source: 保留参数，当前未生效；assert_body来源根据表达式前缀自动识别
-            （$. → response json，./或// → response xml，其他 → response text）
-        :return: (extract_results_list, assert_results_list)，元素为结果dict
-            （含name/source/expr/success/error等字段）
+        :param raise_on_failure: True时提取或断言失败即抛ValueError
+        :param body_source: 保留参数，当前未生效
+        :return: (extract_results_list, assert_results_list)
         """
         extract_results_dict, extract_results_list = ExtractPipeline.run_extract_variables(
             extract_variables=extract_variables or [],

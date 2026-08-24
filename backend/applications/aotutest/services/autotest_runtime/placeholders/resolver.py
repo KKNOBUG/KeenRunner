@@ -259,20 +259,10 @@ class PlaceholderResolver:
     @classmethod
     def resolve_placeholders(cls, value: Any, logger_object: Callable, is_core_engine: bool = False, finished_variables: Optional[Any] = None) -> Any:
         """
-        递归解析str/dict/list中的${...}占位符。
-
-        【字符串】单/多占位符解析变量或GenerateUtils函数（花括号内同时含括号时根据函数处理）。全部占位符解析成功且值均可视为数字、模板骨架为算术字符时，对合并表达式安全求值（如(${a}+10)*${b}/${c}）；否则根据字符串拼接。若整串以{/[开头且可JSON反序列化，则对内部str节点递归替换后再dumps。
-
-        【字典】递归每个value（key不替换，与历史行为一致）
-
-        【列表】元素为StepVariablesBase时只解析其value并model_copy；其余元素（含普通dict/list/str）整项递归resolve_placeholders
-
-        【其它类型】原样返回
-
-        解析失败：对应占位符保留原文；外层异常时记录日志并返回原value。
+        递归解析str/dict/list中的${...}占位符，全部占位符可数值化且骨架合法时安全求值，否则字符串拼接。
 
         :param value: 待解析对象
-        :param logger_object: 日志回调，签名(str) -> None（解析路径中会调用，勿传None）
+        :param logger_object: 日志回调，签名(str) -> None
         :param is_core_engine: True时finished_variables需提供get_variable
         :param finished_variables: 引擎上下文或StepVariablesBase列表
         :return: 结构形状不变；dict/list为新建容器后的结果

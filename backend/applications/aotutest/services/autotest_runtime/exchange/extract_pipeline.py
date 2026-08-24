@@ -35,12 +35,9 @@ class ExtractPipeline:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        根据StepExtractVariableItem列表从请求/响应/变量池中提取变量。
+        根据提取规则列表从请求/响应/变量池中提取变量，不完整规则跳过，异常记入该项且不中断其余项。
 
-        不完整规则（缺name/source，或SOME模式缺expr）会跳过该项并可选记日志，
-        不中断其余项；单条提取异常记入该项error/success=False，不向外抛出。
-
-        :param extract_variables: 提取规则列表（元素须为StepExtractVariableItem）
+        :param extract_variables: 提取规则列表
         :param response_text: 响应正文
         :param response_json: 响应JSON，或DB/Redis步骤的操作结果列表
         :param response_headers: 响应头
@@ -49,9 +46,9 @@ class ExtractPipeline:
         :param request_json: 请求JSON
         :param request_headers: 请求头
         :param request_cookies: 请求Cookie
-        :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
+        :param request_form_data: 请求Form-Data/X-WWW-Form-Urlencoded合并映射
         :param session_variables_lookup: 变量池字典
-        :param log_callback: 可选日志回调(str) -> None
+        :param log_callback: 可选日志回调
         :return: (name->value字典, 逐项结果列表)；成功项才写入字典
         """
         extract_results_dict: Dict[str, Any] = {}

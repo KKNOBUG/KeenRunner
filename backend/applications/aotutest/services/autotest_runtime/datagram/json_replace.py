@@ -22,12 +22,7 @@ class JsonDatagram:
 
     @staticmethod
     def _as_wire_string(value: Any) -> str:
-        """
-        将数据源值转为 header/form/urlencoded/XML 文本。
-
-        JSON body 保持原类型；仅协议上必须是字符串的通道在写出时转换。
-        bool 使用 true/false，避免 Python 的 True/False。
-        """
+        """将值转为协议文本：bool用true/false，None为空串，其余取str。"""
         if value is None:
             return ""
         if isinstance(value, bool):
@@ -100,7 +95,7 @@ class JsonDatagram:
         if outer_value == [] or outer_value is None:
             return
 
-        # JSONPath 可能返回多个命中；这里根据“单命中”处理（符合你描述的两段链路）
+        # JSONPath可能返回多个命中，此处按单命中处理
         if isinstance(outer_value, list):
             if len(outer_value) != 1:
                 return
@@ -112,7 +107,7 @@ class JsonDatagram:
             except (TypeError, orjson.JSONDecodeError):
                 return
             updated_inner_json = JSONPathUtils.update(inner_obj, inner_path, json_value)
-            # 回写时保持 outer 类型仍为字符串 JSON
+            # 回写时保持outer类型为字符串JSON
             JSONPathUtils.update(datagram, outer_path, updated_inner_json)
             return
 
@@ -122,11 +117,11 @@ class JsonDatagram:
                 updated_inner_obj = orjson.loads(updated_inner_json)
             except (TypeError, orjson.JSONDecodeError):
                 updated_inner_obj = outer_value
-            # 回写时保持 outer 类型仍为 dict
+            # 回写时保持outer类型为dict
             JSONPathUtils.update(datagram, outer_path, updated_inner_obj)
             return
 
-        # 其他类型暂不处理（例如 int/float/bool）
+        # 其他类型暂不处理
         return
 
     @staticmethod
@@ -153,14 +148,13 @@ class JsonDatagram:
             urlencoded: Optional[Dict[str, Any]],
     ) -> Any:
         """
-        将JSONPath->值的映射写入request_body（dict或可解析为dict的JSON字符串）、form-data、urlencoded，
-        原地修改dict，找不到路径则忽略（与JSONPathUtils行为一致）。
+        将JSONPath映射写入body/form/urlencoded，原地修改dict，找不到路径则忽略。
 
         :param path_map: JSONPath->值的映射
         :param request_body: 原始body（dict或可解析为dict的JSON字符串）
         :param form_data: form-data字典，原地修改；可为None
         :param urlencoded: x-www-form-urlencoded字典，原地修改；可为None
-        :return: 写入后的request_body，字符串body解析为dict时返回该dict，否则返回原值
+        :return: 写入后的request_body
         """
         if not path_map:
             return request_body
@@ -209,21 +203,15 @@ class JsonDatagram:
             urlencoded: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        数据驱动报文替换：先根据head_map更新请求头键值，再依次将head_map、body_map
-        根据JSONPath应用到request_body/form_data/urlencoded。
-
-        规则说明：head_map中路径会先解析为请求头字段名，仅当该键已存在于request_headers时覆盖；
-        head_map与body_map均会写入body/form/urlencoded（request_body中也可能出现head侧路径）；
-        支持'outer@JSON@inner'两段内嵌JSONPath，找不到路径时忽略（与JSONPathUtils一致）。
+        数据驱动报文替换：根据head_map和body_map将JSONPath应用到body/form/urlencoded。
 
         :param head_map: 请求头/报文侧JSONPath->值
         :param body_map: 报文体JSONPath->值
         :param request_body: 原始body（dict或可解析为dict的JSON字符串）
-        :param request_headers: 请求头字典；可为None（则不改头）
+        :param request_headers: 请求头字典；可为None
         :param form_data: form-data字典；可为None
         :param urlencoded: x-www-form-urlencoded字典；可为None
-        :return: 含'headers'/'request_body'/'form_data'/'urlencoded'的字典
-            （dict入参多为原地修改后的同一引用）
+        :return: 含headers/request_body/form_data/urlencoded的字典
         """
         head_map = head_map or {}
         body_map = body_map or {}

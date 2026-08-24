@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : message_diff.py
+@Module  : datagram_diff.py
 @DateTime: 2026/8/11
 """
 from __future__ import annotations

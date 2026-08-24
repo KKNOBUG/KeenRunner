@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : protocol_tcp.py
+@DateTime: 2025/12/28 16:15
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +19,7 @@ from backend.enums import AutoTestReqArgsType
 
 @dataclass
 class TcpParsedResponse:
+    """TCP响应解析结果。"""
     response_text: str
     response_json: Optional[Any]
     response_data: Optional[Union[str, dict, list]]
@@ -24,7 +32,7 @@ def select_tcp_payload(
         request_body: Any,
 ) -> Any:
     """
-    按request_args_type选择TCP发送载荷，语义对齐TcpStepExecutor。
+    按请求体类型选择TCP发送载荷。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
@@ -49,9 +57,7 @@ def select_tcp_debug_payload(
         request_body: Any,
 ) -> Any:
     """
-    调试接口发送载荷：JSON将dict/list序列化为字符串（AioTcpClient对list不会走orjson）；其它类型仅取request_text。
-
-    request_info.body 请用 build_tcp_debug_request_info_body，与引擎落库的 request_body 形态一致。
+    组装TCP调试发送载荷，JSON类型将对象序列化为字符串。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
@@ -72,10 +78,9 @@ def build_tcp_debug_request_info_body(
         request_body: Any,
 ) -> Any:
     """
-    组装TCP调试回显的request_info.body，形态对齐 execute_or_debugging 落库的 request_body。
+    组装TCP调试回显的请求体，形态对齐引擎落库的request_body。
 
-    JSON 返回 dict/list（前端再缩进格式化）；字符串若为合法JSON则解析为对象。
-    XML/RAW 返回 request_text。
+    JSON返回原始对象供前端格式化，XML/RAW返回文本。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
@@ -102,7 +107,7 @@ def resolve_tcp_debug_request_extract_sources(
         request_text: Optional[str],
 ) -> Tuple[Optional[Any], Optional[str]]:
     """
-    调试接口历史契约下的TCP提取请求侧来源（与改造前view一致）。
+    解析TCP提取请求侧的数据来源。
 
     :param request_body: 请求体
     :param request_text: 请求文本
@@ -158,7 +163,7 @@ def parse_tcp_response(
         response_type: str,
 ) -> TcpParsedResponse:
     """
-    按tcp_response_type本地解析原始字节，避免解析失败时重发请求。
+    按响应类型本地解析原始字节，避免解析失败时重发请求。
 
     :param raw_bytes: TCP响应原始字节
     :param encoding: 解码字符集

@@ -14,6 +14,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestS
 
 
 class ExecutorFieldsValidation:
+    """根据步骤类型校验各执行器的必填字段组合。"""
 
     @classmethod
     def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:
