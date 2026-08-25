@@ -60,15 +60,6 @@ def _readd_explicit_null_fields(payload: Any, update_dict: Dict[str, Any], field
             update_dict[field_name] = None
 
 
-def _duplicate_case_message(case_project: Any, case_name: Any, case_type: Any, owner_user: Any) -> str:
-    """构造业务唯一冲突文案。"""
-    return (
-        f"相同应用下同类型同所属人用例名称不允许重复, "
-        f"查询条件: [case_project={case_project}, case_name={case_name}, "
-        f"case_type={case_type}, owner_user={owner_user}]"
-    )
-
-
 class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
 
     def __init__(self):
@@ -223,9 +214,12 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
             owner_user=owner_user,
         )
         if existing_case and existing_case.state != 1:
-            error_message: str = _duplicate_case_message(case_project, case_name, case_type, owner_user)
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+            message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+            LOGGER.error(
+                f"{message_error}, "
+                f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
+            )
+            raise DataAlreadyExistsException(message=message_error)
         try:
             case_dict = case_in.model_dump(exclude_none=True, exclude_unset=True)
             case_dict.pop("created_user", None)
@@ -318,11 +312,12 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
                 exclude_id=case_id,
             )
             if existing_case:
-                error_message: str = _duplicate_case_message(
-                    case_project, case_name, unique_case_type, instance.owner_user
+                message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                LOGGER.error(
+                    f"{message_error}, "
+                    f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={unique_case_type}, owner_user={instance.owner_user}]"
                 )
-                LOGGER.error(error_message)
-                raise DataAlreadyExistsException(message=error_message)
+                raise DataAlreadyExistsException(message=message_error)
 
         if case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API:
             await self._validate_switch_to_public_api(instance)
@@ -483,12 +478,12 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    error_message: str = (
-                        f"第{cid}条用例新增失败, "
-                        f"{_duplicate_case_message(case_project, case_name, case_type, owner_user)}"
+                    message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                    LOGGER.error(
+                        f"第{cid}条用例新增失败, {message_error}, "
+                        f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
                     )
-                    LOGGER.error(error_message)
-                    raise DataAlreadyExistsException(message=error_message)
+                    raise DataAlreadyExistsException(message=message_error)
                 try:
                     if existing_case_instance:
                         new_case_instance = await self._restore_and_overwrite_case(
@@ -549,30 +544,28 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
                         "case_type" in update_case_dict and case_instance.case_type in PUBLIC_CASE_TYPES
                 ):
                     raw_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    normalized_tags = _normalize_case_tags(
-                        effective_type, raw_tags, context=f"第{cid}条用例更新失败"
-                    )
+                    normalized_tags = _normalize_case_tags(effective_type, raw_tags, context=f"第{cid}条用例更新失败")
                     update_case_dict["case_tags"] = normalized_tags
                     await AutoTestTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
                 if "case_name" in update_case_dict or "case_project" in update_case_dict or "case_type" in update_case_dict:
-                    unique_name = update_case_dict.get("case_name", case_instance.case_name)
+                    unique_case_name = update_case_dict.get("case_name", case_instance.case_name)
+                    unique_case_type = update_case_dict.get("case_type", case_instance.case_type)
                     unique_project = update_case_dict.get("case_project", case_instance.case_project)
-                    unique_type = update_case_dict.get("case_type", case_instance.case_type)
                     existing_case_instance: Optional[AutoTestCaseModel] = await self._get_by_owner_key(
                         case_project=unique_project,
-                        case_name=unique_name,
-                        case_type=unique_type,
+                        case_name=unique_case_name,
+                        case_type=unique_case_type,
                         owner_user=case_instance.owner_user,
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        error_message: str = (
-                            f"第{cid}条用例更新失败, "
-                            f"{_duplicate_case_message(unique_project, unique_name, unique_type, case_instance.owner_user)}"
+                        message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                        LOGGER.error(
+                            f"第{cid}条用例新增失败, {message_error}, "
+                            f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, case_type={unique_case_type}, owner_user={case_instance.owner_user}]"
                         )
-                        LOGGER.error(error_message)
-                        raise DataAlreadyExistsException(message=error_message)
+                        raise DataAlreadyExistsException(message=message_error)
 
                 try:
                     update_case_dict["case_version"] = case_instance.case_version + 1
