@@ -112,6 +112,71 @@ chmod -R 777 deploy.sh
 
 # 运行脚本
 ./deploy.sh
+
+
+用户执行: ./deploy.sh full_deploy
+    │
+    ▼
+┌─────────────────┐
+│  1. fastapi_stop │  ← 停止 FastAPI (Gunicorn)
+│     - 读取 gunicorn.pid
+│     - kill -TERM (优雅停止)
+│     - 等待15秒
+│     - 未退出则 kill -9
+│     - 清理残留 worker 进程
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  2. celery_stop  │  ← 停止 Celery
+│     - celery_stop_beat (先停调度器)
+│     - celery_stop_worker (后停工作器)
+│     - 同样 TERM → KILL 渐进式
+│     - 清理残留进程
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   sleep 2       │  ← 等待资源释放
+│   (关键!)        │    确保端口/文件句柄释放
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  3. fastapi_pull │  ← 拉取最新代码
+│     - 检查 git/expect 命令
+│     - 检查 GIT_USERNAME/GIT_PASSWORD
+│     - expect 交互式 git fetch
+│     - git reset --hard 强制覆盖
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  4. celery_start │  ← 启动 Celery
+│     - celery_start_worker (先启工作器)
+│     - celery_start_beat (后启调度器)
+│     - nohup + & 后台启动
+│     - 等待10秒检测启动状态
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  5. fastapi_start│  ← 启动 FastAPI
+│     - nohup + & 后台启动 Gunicorn
+│     - 等待15秒检测启动状态
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  6. fastapi_status│ ← 显示 FastAPI 状态
+│     - 运行状态/PID/Worker数/日志大小
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  7. celery_status │ ← 显示 Celery 状态
+│     - Worker/Beat 状态/日志大小
+└─────────────────┘
 ```
 
 
