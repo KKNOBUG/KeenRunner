@@ -104,6 +104,27 @@ class AutoTestDataSourceUnbindCase(BaseModel):
         return self
 
 
+class AutoTestDataSourceUpdateFields(BaseModel):
+    """按步骤报文同步数据源字段入参。定位：data_source_id/code，或(case_id或case_code)且(step_id或step_code)。"""
+
+    data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
+    data_source_code: Optional[str] = Field(None, max_length=64, description="数据源标识代码")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
+    case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
+    step_id: Optional[int] = Field(None, ge=1, description="步骤ID")
+    step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
+
+    @model_validator(mode="after")
+    def _require_locator(self):
+        """必须能定位到数据源与步骤。"""
+        has_ds = bool(self.data_source_id) or _has_text(self.data_source_code)
+        has_case = bool(self.case_id) or _has_text(self.case_code)
+        has_step = bool(self.step_id) or _has_text(self.step_code)
+        if not (has_ds or (has_case and has_step)):
+            raise ValueError("请提供参数[data_source_id | data_source_code], 或[case_id | case_code]以及[step_id | step_code]")
+        return self
+
+
 class AutoTestDataSourceSelect(BaseModel):
     """分页查询数据驱动文件入参。"""
     page: int = Field(default=1, ge=1, description="页码")

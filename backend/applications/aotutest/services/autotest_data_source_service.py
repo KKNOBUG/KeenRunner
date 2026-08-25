@@ -13,6 +13,7 @@
   resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
 - 矩阵落库：apply_dataframe_payload（前端矩阵解析清洗）
 - 路径收集与矩阵构建：从步骤报文采集JSONPath/XPath生成垂直矩阵（/build接口）
+- 字段同步：sync_data_source_fields（按报文最新字段重建矩阵，/update_fields接口）
 - 步骤元信息回写：sync_step_data_source_meta/clear_step_data_source_meta
 - 场景名称与身份补齐：场景列提取、重复检测、新建身份生成（树保存一致性校验消费）
 """
@@ -32,7 +33,9 @@ from backend.applications.aotutest.services.autotest_data_source_parser import (
     AXIS_HORIZONTAL,
     AXIS_VERTICAL,
     extract_scene_names_from_matrix,
+    is_section_marker,
     parse_dataframe_matrix_async,
+    resolve_matrix_axis,
 )
 from backend.core.exceptions import NotFoundException, ParameterException
 from backend.enums import AutoTestReqArgsType, AutoTestStepType, PUBLIC_CASE_TYPES
@@ -49,6 +52,7 @@ __all__ = [
     "apply_dataframe_payload",
     "build_blank_vertical_matrix",
     "build_vertical_matrix_from_step",
+    "sync_data_source_fields",
     "sync_step_data_source_meta",
     "clear_step_data_source_meta",
     "data_source_scene_names",
@@ -492,6 +496,151 @@ async def clear_step_data_source_meta(
     if _text(step_code):
         filters["step_code"] = _text(step_code)
     return await services.step_curd.model.filter(**filters).update(**step_vals)
+
+
+# ---------------------------------------------------------------------------
+# 字段同步
+# ---------------------------------------------------------------------------
+
+def _rebuild_vertical_matrix(
+        matrix: List[List[Any]],
+        head_paths: List[str],
+        body_paths: List[str],
+) -> List[List[Any]]:
+    """
+    垂直模式字段同步：以报文最新路径为准重建HEAD/BODY分区行，ASSERT分区原样保留。
+
+    保留字段的场景值从原矩阵按路径匹配搬移；新增字段场景值为空；删除字段整行剔除。
+
+    :param matrix: 原垂直矩阵
+    :param head_paths: 报文最新HEAD路径
+    :param body_paths: 报文最新BODY路径
+    :return: 重建后的垂直矩阵
+    """
+    scene_names = extract_scene_names_from_matrix(matrix, AXIS_VERTICAL)
+    col_count = 1 + len(scene_names)
+    empty = [""] * len(scene_names)
+    # 原矩阵按分区+路径索引场景值，供保留字段搬移
+    old_values: Dict[Tuple[str, str], List[Any]] = {}
+    section: Optional[str] = None
+    assert_rows: List[List[Any]] = []
+    for row in matrix[1:]:
+        if not row:
+            continue
+        cell = "" if row[0] is None else str(row[0]).strip()
+        if is_section_marker(cell):
+            section = cell.upper()
+            if section in ("ASSERT_HEAD", "ASSERT_BODY"):
+                assert_rows.append(list(row[:col_count]))
+            continue
+        if section in ("HEAD", "BODY") and cell:
+            old_values[(section, cell)] = list(row[1:col_count])
+        elif section in ("ASSERT_HEAD", "ASSERT_BODY"):
+            assert_rows.append(list(row[:col_count]))
+    result: List[List[Any]] = [list(matrix[0][:col_count])]
+    result.append(["HEAD", *empty])
+    for path in head_paths:
+        result.append([path, *old_values.get(("HEAD", path), empty)])
+    result.append(["BODY", *empty])
+    for path in body_paths:
+        result.append([path, *old_values.get(("BODY", path), empty)])
+    result.extend(assert_rows)
+    return result
+
+
+def _rebuild_horizontal_matrix(
+        matrix: List[List[Any]],
+        head_paths: List[str],
+        body_paths: List[str],
+) -> List[List[Any]]:
+    """
+    水平模式字段同步：以报文最新路径为准重建HEAD/BODY分区列，ASSERT分区原样保留。
+
+    保留字段的场景值从原矩阵按路径匹配搬移；新增字段场景值为空；删除字段整列剔除。
+
+    :param matrix: 原水平矩阵
+    :param head_paths: 报文最新HEAD路径
+    :param body_paths: 报文最新BODY路径
+    :return: 重建后的水平矩阵
+    """
+    scene_names = extract_scene_names_from_matrix(matrix, AXIS_HORIZONTAL)
+    # 原矩阵按分区+路径索引列，供保留字段搬移
+    old_cols: Dict[Tuple[str, str], int] = {}
+    section: Optional[str] = None
+    assert_col_indices: List[int] = []
+    header = matrix[0]
+    for col_idx in range(1, len(header)):
+        cell = "" if header[col_idx] is None else str(header[col_idx]).strip()
+        if is_section_marker(cell):
+            section = cell.upper()
+            if section in ("ASSERT_HEAD", "ASSERT_BODY"):
+                assert_col_indices.append(col_idx)
+            continue
+        if section in ("HEAD", "BODY") and cell:
+            old_cols[(section, cell)] = col_idx
+        elif section in ("ASSERT_HEAD", "ASSERT_BODY"):
+            assert_col_indices.append(col_idx)
+    # 新列顺序：场景名列 + HEAD标记+字段列 + BODY标记+字段列 + ASSERT列原样
+    new_header: List[Any] = [header[0] if header else ""]
+    new_col_map: List[Optional[int]] = [0]
+    new_header.append("HEAD")
+    new_col_map.append(None)
+    for path in head_paths:
+        new_header.append(path)
+        new_col_map.append(old_cols.get(("HEAD", path)))
+    new_header.append("BODY")
+    new_col_map.append(None)
+    for path in body_paths:
+        new_header.append(path)
+        new_col_map.append(old_cols.get(("BODY", path)))
+    for col_idx in assert_col_indices:
+        new_header.append(header[col_idx])
+        new_col_map.append(col_idx)
+    result: List[List[Any]] = [new_header]
+    for row in matrix[1:]:
+        new_row: List[Any] = []
+        for src_col in new_col_map:
+            if src_col is None:
+                new_row.append("")
+            elif src_col < len(row):
+                new_row.append(row[src_col])
+            else:
+                new_row.append("")
+        result.append(new_row)
+    return result
+
+
+async def sync_data_source_fields(
+        step: AutoTestStepModel,
+        dataframe: List[Any],
+        axis: Optional[int],
+) -> Dict[str, Any]:
+    """
+    按步骤当前报文同步数据源矩阵字段：新增字段补空值，删除字段剔除，保留字段场景值不动。
+
+    仅同步HEAD/BODY分区，ASSERT分区原样保留；方向以矩阵实际结构为准。
+
+    :param step: 步骤实例(取request_args_type与报文)
+    :param dataframe: 数据源当前二维矩阵
+    :param axis: 数据源声明方向(仅作回落)
+    :return: {dataset, dataset_names, dataframe, axis}更新载荷
+    """
+    used_axis = resolve_matrix_axis(dataframe, declared_axis=axis)
+    head_paths = _collect_head_paths(step)
+    body_paths = _collect_body_paths(step)
+    if used_axis == AXIS_VERTICAL:
+        new_matrix = _rebuild_vertical_matrix(dataframe, head_paths, body_paths)
+    else:
+        new_matrix = _rebuild_horizontal_matrix(dataframe, head_paths, body_paths)
+    step_data, dataset_names, norm_matrix, final_axis = await parse_dataframe_matrix_async(
+        new_matrix, axis=used_axis
+    )
+    return {
+        "dataset": step_data,
+        "dataset_names": dataset_names,
+        "dataframe": norm_matrix,
+        "axis": final_axis,
+    }
 
 
 # ---------------------------------------------------------------------------

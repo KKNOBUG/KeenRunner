@@ -533,6 +533,7 @@ const dataSourceMoreOptions = computed(() => [
   { label: '撤销', key: 'undo', disabled: panelReadonly.value },
   { label: '重做', key: 'redo', disabled: panelReadonly.value },
   { type: 'divider', key: 'd1' },
+  { label: '同步报文字段', key: 'syncFields', disabled: panelReadonly.value || !hasDbRecord.value || syncFieldsLoading.value },
   { label: '导入模板下载', key: 'downloadTemplate', disabled: panelReadonly.value || downloadTemplateLoading.value },
   { label: '导入', key: 'import', disabled: panelReadonly.value || importLoading.value },
   { label: '导出', key: 'export', disabled: panelReadonly.value || exportLoading.value },
@@ -545,6 +546,7 @@ const dataSourceMoreOptions = computed(() => [
 const onDataSourceMoreSelect = (key) => {
   if (key === 'undo') luckysheetRef.value?.getLuckysheet()?.undo?.()
   else if (key === 'redo') luckysheetRef.value?.getLuckysheet()?.redo?.()
+  else if (key === 'syncFields') syncReportFields()
   else if (key === 'downloadTemplate') downloadStepDataTemplate()
   else if (key === 'import') openImport()
   else if (key === 'export') dataSourceExport()
@@ -612,6 +614,33 @@ const dataSourceExport = async () => {
     $message.error(`导出失败：${e?.message || e}`)
   } finally {
     exportLoading.value = false
+  }
+}
+
+/* ========================= 同步报文字段 ========================= */
+const syncFieldsLoading = ref(false)
+const syncReportFields = async () => {
+  if (syncFieldsLoading.value) return
+  const { caseId, caseCode, stepId, stepCode } = getStepContext()
+  if (!caseId && !caseCode && !stepId && !stepCode) {
+    $message.warning('请先保存步骤后再同步报文字段')
+    return
+  }
+  syncFieldsLoading.value = true
+  try {
+    const payload = {}
+    if (dataSourceId.value) payload.data_source_id = dataSourceId.value
+    if (caseId) payload.case_id = caseId
+    if (caseCode) payload.case_code = caseCode
+    if (stepId) payload.step_id = stepId
+    if (stepCode) payload.step_code = stepCode
+    const res = await api.updateDataSourceFields(payload)
+    $message.success(res?.message || '字段同步成功')
+    await loadStepDataframePreview()
+  } catch (e) {
+    /* 错误信息由 http 拦截器统一提示 */
+  } finally {
+    syncFieldsLoading.value = false
   }
 }
 

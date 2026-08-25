@@ -278,6 +278,8 @@ export default {
   ),
   /** Body：{ case_id } —— 解绑用例全部数据源（软删记录并清空步骤指针），公共家族(脚本/接口)保存时调用 */
   unbindCaseDataSource: (data = {}) => request.post('/autotest/data_source/unbind_case', data),
+  /** Body：{ data_source_id?, data_source_code?, case_id?, case_code?, step_id?, step_code? } —— 按步骤当前报文同步数据源矩阵字段 */
+  updateDataSourceFields: (data = {}) => request.post('/autotest/data_source/update_fields', data),
   /** FormData：case_id、file —— 多步骤数据源批量上传（sheet 名对应步骤名） */
   batchStepDatasetUpload: (formData) => request.post('/autotest/data_source/batch_step_dataset_upload', formData),
   /** params：case_id —— 汇总下载用例所有步骤数据源（blob） */
