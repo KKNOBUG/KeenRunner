@@ -524,6 +524,7 @@ def _rebuild_vertical_matrix(
     old_values: Dict[Tuple[str, str], List[Any]] = {}
     section: Optional[str] = None
     assert_rows: List[List[Any]] = []
+    header_row = list(matrix[0][:col_count]) if matrix else [""]
     for row in matrix[1:]:
         if not row:
             continue
@@ -537,7 +538,7 @@ def _rebuild_vertical_matrix(
             old_values[(section, cell)] = list(row[1:col_count])
         elif section in ("ASSERT_HEAD", "ASSERT_BODY"):
             assert_rows.append(list(row[:col_count]))
-    result: List[List[Any]] = [list(matrix[0][:col_count])]
+    result: List[List[Any]] = [header_row]
     result.append(["HEAD", *empty])
     for path in head_paths:
         result.append([path, *old_values.get(("HEAD", path), empty)])
@@ -568,7 +569,7 @@ def _rebuild_horizontal_matrix(
     old_cols: Dict[Tuple[str, str], int] = {}
     section: Optional[str] = None
     assert_col_indices: List[int] = []
-    header = matrix[0]
+    header = list(matrix[0]) if matrix else []
     for col_idx in range(1, len(header)):
         cell = "" if header[col_idx] is None else str(header[col_idx]).strip()
         if is_section_marker(cell):
