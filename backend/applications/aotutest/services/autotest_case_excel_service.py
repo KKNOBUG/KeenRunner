@@ -609,12 +609,14 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
 
 def build_script_workbook(rows: List[Dict[str, str]]) -> Workbook:
     if not os.path.isfile(_SCRIPT_TEMPLATE):
-        raise RuntimeError(f"模板文件不存在: {_SCRIPT_TEMPLATE}")
+        LOGGER.error(f"脚本模板文件不存在: {_SCRIPT_TEMPLATE}")
+        raise RuntimeError("脚本模板文件不存在，请联系管理员部署")
     workbook = load_workbook(_SCRIPT_TEMPLATE)
     sheet = workbook[workbook.sheetnames[0]]
     header = [cell.value for cell in sheet[1][: len(_DATAGRAM_SECTION_COLUMNS)]]
     if header != list(_DATAGRAM_SECTION_COLUMNS):
-        raise RuntimeError(f"模板表头已被改动，与预定义不一致: 模板={header}, 期望={list(_DATAGRAM_SECTION_COLUMNS)}")
+        LOGGER.error(f"脚本模板表头与预定义不一致: 模板={header}, 期望={list(_DATAGRAM_SECTION_COLUMNS)}")
+        raise RuntimeError("脚本模板表头已被改动，请联系管理员恢复")
     for row_index, row in enumerate(rows, start=_DATAGRAM_START_ROW):
         for col_index, column in enumerate(_DATAGRAM_SECTION_COLUMNS, start=1):
             sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")

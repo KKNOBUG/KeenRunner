@@ -915,7 +915,7 @@ async def execute_step_tree(
 
         if selected_dataset_names:
             if len(selected_dataset_names) != 1:
-                return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
+                return BadReqResponse(message="调试模式下, 参数[selected_dataset_names]仅可传递一个数据场景")
             debug_dataset_name: str = selected_dataset_names[0]
         else:
             debug_dataset_name: Optional[str] = None

@@ -97,7 +97,7 @@ async def parse_dataframe_matrix_async(
     :return: (step_data, dataset_names, norm_matrix, axis)，dataset_names保持矩阵中的场景顺序
     """
     if not isinstance(matrix, list):
-        raise ValueError("dataframe 须为二维列表")
+        raise ValueError("参数[dataframe]必须是List[List[Any]]类型")
     if not matrix:
         return {}, [], [], AXIS_VERTICAL if axis not in (AXIS_HORIZONTAL, AXIS_VERTICAL) else axis
 
@@ -298,7 +298,7 @@ def detect_matrix_axis(values: Any) -> int:
     first_col = values[1:, 0] if values.shape[0] > 1 else np.array([])
     if _row_has_section_marker(first_col):
         return AXIS_VERTICAL
-    raise ValueError("无法识别数据矩阵方向：第 0 行或第 0 列需包含 HEAD/BODY/ASSERT_HEAD/ASSERT_BODY 分区标记")
+    raise ValueError("无法识别数据矩阵方向：第0行/列未识别到[HEAD/BODY/ASSERT_HEAD/ASSERT_BODY]分区标记")
 
 
 def resolve_matrix_axis(matrix: List[List[Any]], declared_axis: Optional[int] = None) -> int:

@@ -51,7 +51,7 @@ async def _fuzzy_json_list_ids(
 
     :param table: 表名
     :param field: JSON列表字段名
-    :param keywords: 关键字列表（已去空白）
+    :param keywords: 关键字列表
     :param state: 状态过滤
     :return: 命中的主键id列表；无有效关键字时返回空列表
     """

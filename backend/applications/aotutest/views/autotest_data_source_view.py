@@ -572,11 +572,13 @@ async def get_data_source(
                 state__not=1
             )
         else:
-            return ParameterResponse(
-                message="请提供参数[data_source_id, data_source_code]或[case_id, case_code, step_id, step_code]进行查询"
+            LOGGER.error(
+                f"查询数据源参数不足: data_source_id={data_source_id}, data_source_code={data_source_code}, "
+                f"case_id={case_id}, case_code={case_code}, step_id={step_id}, step_code={step_code}"
             )
+            return ParameterResponse(message="请提供数据源标识或用例与步骤标识进行查询")
         if isinstance(instance, list):
-            return ParameterResponse(message="当前条件匹配多条记录，请使用get_by_case_step或search接口")
+            return ParameterResponse(message="当前条件匹配多条记录，请改用列表查询接口")
         data = await _serialize_data_source(instance)
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
@@ -856,7 +858,8 @@ async def download_import_template():
     """
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP和TCP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
-        return NotFoundResponse(message="导入模板文件不存在，请确认已部署 output/template 下模板文件")
+        LOGGER.error(f"导入模板文件不存在: {filepath}")
+        return NotFoundResponse(message="导入模板文件不存在，请联系管理员部署")
     file_name = os.path.basename(filepath)
     quoted_name = quote(file_name)
     headers = {
@@ -936,7 +939,8 @@ async def single_step_dataset_upload(
         upload_file_size="tiny",
     )
     if not ok:
-        return FailureResponse(message=f"数据驱动文件上传失败: {path_or_error}")
+        LOGGER.error(f"单步骤数据驱动文件上传失败: {path_or_error}")
+        return FailureResponse(message="数据驱动文件上传失败")
 
     file_hash: str = ""
     file_path: str = path_or_error
@@ -1131,7 +1135,8 @@ async def batch_step_dataset_upload(
         upload_file_size="small",
     )
     if not ok:
-        return FailureResponse(message=f"文件保存失败: {path_or_error}")
+        LOGGER.error(f"批量上传文件保存失败: {path_or_error}")
+        return FailureResponse(message="文件保存失败")
 
     file_hash: str = ""
     file_path: str = path_or_error
