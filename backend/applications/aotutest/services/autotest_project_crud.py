@@ -180,7 +180,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         project_id: Optional[int] = project_in.project_id
         project_code: Optional[str] = project_in.project_code
         if not project_id and not project_code:
-            error_message: str = "更新应用信息失败, 参数[project_id]或[project_code]不允许为空"
+            error_message: str = "更新应用信息失败, 参数[project_id, project_code]不允许同时为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if project_id:
@@ -233,7 +233,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         :return: 软删除后的应用实例
         """
         if not project_id and not project_code:
-            error_message: str = "删除应用信息失败, 参数[project_id]或[project_code]不允许为空"
+            error_message: str = "删除应用信息失败, 参数[project_id, project_code]不允许同时为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if project_id:
@@ -275,7 +275,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         project_ids: Optional[List[int]] = project_in.project_ids
         project_codes: Optional[List[str]] = project_in.project_codes
         if not project_ids and not project_codes:
-            error_message: str = "删除应用信息失败, 参数[project_ids]或[project_codes]不允许为空"
+            error_message: str = "删除应用信息失败, 参数[project_ids, project_codes]不允许同时为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -313,7 +313,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         """
         查询全部启用应用。
 
-        :return: ([{id, project_name, project_mark}], total)；project_mark 取 project_code
+        :return: ([{id, project_name, project_mark}], total)；project_mark取project_code
         """
         query = self.model.filter(state=0)
         total = await query.count()

@@ -163,7 +163,7 @@ async def get_role(
     """
     try:
         if not role_id and not code and not name:
-            return ParameterResponse(message="查询角色信息失败, 参数[id]或[code]或[name]不允许为空")
+            return ParameterResponse(message="查询角色信息失败, 参数[id, code, name]不允许同时为空")
         if role_id:
             instance = await role_crud.get_by_id(role_id=role_id, on_error=True)
         elif code:

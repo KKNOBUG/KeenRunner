@@ -25,13 +25,13 @@ BUSINESS_PREFIXES = ("应用管理:", "自动化测试:", "任务管理:", "便�
 SELF_SERVICE_SUMMARIES = frozenset({"更新用户密码(个人)", "用户登出"})
 SUMMARY_NO_WARN_EXACT = SELF_SERVICE_SUMMARIES | frozenset({"生成访问令牌"})
 
+ACTION_OPS = "ops"
 ACTION_READ = "read"
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
 ACTION_DELETE = "delete"
 ACTION_EXECUTE = "execute"
 ACTION_IMPORT = "import"
-ACTION_OPS = "ops"
 ACTION_UNKNOWN = "unknown"
 
 # 判定优先级：靠前优先匹配
