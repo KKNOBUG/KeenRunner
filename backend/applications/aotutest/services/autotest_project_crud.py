@@ -75,7 +75,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
             error_message: str = "查询应用信息失败, 参数[project_ids]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        if not isinstance(project_ids, list):
+        if not isinstance(project_ids, list) or any(type(pid) is not int for pid in project_ids):
             error_message: str = "查询应用信息失败, 参数[project_ids]必须是List[int]类型"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
