@@ -45,7 +45,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
         根据主键ID查询环境配置。
 
         :param config_id: 配置主键
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 配置实例或None
         """
@@ -65,7 +65,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
         根据配置标识代码查询环境配置。
 
         :param config_code: 配置标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 配置实例或None
         """

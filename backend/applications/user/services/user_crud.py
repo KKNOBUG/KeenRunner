@@ -38,7 +38,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         根据主键ID查询用户。
 
         :param user_id: 用户ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
         """
@@ -58,7 +58,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         根据登录账号查询用户。
 
         :param username: 用户账号
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
         """
@@ -78,7 +78,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         根据用户姓名(alias)查询单条用户。
 
         :param alias: 用户姓名
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
         """

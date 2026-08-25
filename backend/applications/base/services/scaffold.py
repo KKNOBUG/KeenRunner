@@ -516,7 +516,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         根据条件查询对象。
 
         :param only_one: True返回单条记录，False返回列表
-        :param on_error: True时未找到则抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 查询条件字段
         :return: 单条记录、记录列表或None
         """

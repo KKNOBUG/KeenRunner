@@ -136,7 +136,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         根据主键ID查询任务。
 
         :param task_id: 任务主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 任务实例或None
         """
@@ -156,7 +156,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         根据任务标识代码查询任务。
 
         :param task_code: 任务标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 任务实例或None
         """

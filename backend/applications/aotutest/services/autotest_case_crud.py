@@ -70,7 +70,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
         根据主键ID查询用例。
 
         :param case_id: 用例主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
         """
@@ -91,7 +91,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
         根据用例标识代码查询用例。
 
         :param case_code: 用例标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
         """

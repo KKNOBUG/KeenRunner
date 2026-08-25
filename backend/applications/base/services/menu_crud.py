@@ -27,7 +27,7 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         根据主键ID查询菜单。
 
         :param menu_id: 菜单ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 菜单实例或None
         """
@@ -47,7 +47,7 @@ class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):
         根据菜单路径查询单条菜单。
 
         :param path: 菜单路径
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 菜单实例或None
         """

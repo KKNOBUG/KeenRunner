@@ -46,7 +46,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         根据主键ID查询数据源。
 
         :param data_source_id: 数据源主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
         """
@@ -67,7 +67,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         根据data_source_code查询数据源。
 
         :param data_source_code: 数据驱动标识代码
-        :param on_error: 为True时若未找到则抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
         """
@@ -99,7 +99,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         :param case_code: 用例标识代码
         :param step_id: 步骤主键
         :param step_code: 步骤标识代码
-        :param on_error: 为True时若未找到则抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 单条实例、列表或None
         """

@@ -34,7 +34,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
         根据主键ID查询执行记录。
 
         :param record_id: 执行记录主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 执行记录实例或None
         """

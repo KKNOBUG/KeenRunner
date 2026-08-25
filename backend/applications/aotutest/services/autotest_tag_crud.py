@@ -38,7 +38,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
         根据主键ID查询标签。
 
         :param tag_id: 标签主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 标签实例或None
         """
@@ -59,7 +59,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
         校验一批标签ID是否均存在；全部存在时返回实例列表。
 
         :param tag_ids: 标签主键ID列表
-        :param on_error: 有缺失时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 全部存在时返回标签列表；有缺失且on_error为False时返回False
         """
@@ -87,7 +87,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
         根据标签标识代码查询标签。
 
         :param tag_code: 标签标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 标签实例或None
         """

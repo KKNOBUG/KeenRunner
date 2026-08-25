@@ -29,7 +29,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         根据主键ID查询路由。
 
         :param router_id: 路由ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 路由实例或None
         """
@@ -49,7 +49,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         根据路径查询路由列表(同一path可能对应多种method)。
 
         :param path: 路由路径
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
         """
@@ -69,7 +69,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         根据HTTP方法查询路由列表。
 
         :param method: HTTP方法(如GET、POST)
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
         """
@@ -89,7 +89,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         根据接口摘要查询路由列表。
 
         :param summary: 接口摘要
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
         """
@@ -109,7 +109,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         根据标签字符串查询路由列表。
 
         :param tags: 标签(库内逗号拼接存储)
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
         """

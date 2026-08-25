@@ -43,7 +43,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
         根据主键ID查询环境绑定。
 
         :param env_id: 环境绑定主键
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 环境绑定实例或None
         """
@@ -64,7 +64,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
         根据标识代码查询环境绑定。
 
         :param env_code: 绑定标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 环境绑定实例或None
         """
@@ -93,7 +93,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
         :param project_id: 应用主键ID
         :param env_name: 环境名称(忽略大小写)
         :param env_type: 节点类型(app/file/database/redis)，为空则取首条启用绑定
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :return: 环境绑定实例或None
         """
         name = (env_name or "").strip()

@@ -48,7 +48,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         根据主键ID查询单条审计日志。
 
         :param audit_id: 审计日志ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :return: 审计日志实例或None
         """
         if not audit_id:
@@ -67,7 +67,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         根据用户ID查询该用户的全部审计日志。
 
         :param user_id: 用户ID
-        :param on_error: 无记录时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :return: 审计日志列表；无匹配且on_error为False时为空列表
         """
         if not user_id:

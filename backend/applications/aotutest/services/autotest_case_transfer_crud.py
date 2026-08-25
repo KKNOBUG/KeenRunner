@@ -42,7 +42,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestA
         根据主键ID查询转让记录。
 
         :param transfer_id: 转让记录主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 转让记录或None
         """

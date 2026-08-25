@@ -42,7 +42,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
         根据主键ID查询报告。
 
         :param report_id: 报告主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 报告实例或None
         """
@@ -63,7 +63,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
         根据报告标识代码查询报告。
 
         :param report_code: 报告标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 报告实例或None
         """

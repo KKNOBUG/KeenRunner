@@ -41,7 +41,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         根据主键ID查询应用。
 
         :param project_id: 应用主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
         """
@@ -67,7 +67,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         根据主键ID列表批量查询应用。
 
         :param project_ids: 应用主键ID列表
-        :param on_error: 存在缺失ID时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用列表；缺失且on_error为False时返回False
         """
@@ -95,7 +95,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         根据应用标识代码查询应用。
 
         :param project_code: 应用标识代码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
         """
@@ -116,7 +116,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         根据应用名称查询应用。
 
         :param project_name: 应用名称
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
         """

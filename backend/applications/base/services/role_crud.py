@@ -29,7 +29,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         根据主键ID查询角色。
 
         :param role_id: 角色ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 角色实例或None
         """
@@ -49,7 +49,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         根据角色编码查询单条角色。
 
         :param role_code: 角色编码
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 角色实例或None
         """
@@ -69,7 +69,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         根据角色名称查询单条角色。
 
         :param role_name: 角色名称
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 角色实例或None
         """

@@ -38,7 +38,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
         根据主键ID查询明细。
 
         :param detail_id: 明细主键ID
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
         """
@@ -59,7 +59,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
         根据报告标识代码查询明细。
 
         :param detail_code: 报告标识代码report_code
-        :param on_error: 未找到时是否抛出NotFoundException
+        :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
         """

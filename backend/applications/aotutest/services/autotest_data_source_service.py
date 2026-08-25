@@ -192,7 +192,7 @@ async def resolve_enabled_data_source(
     :param case_code: 用例标识
     :param step_id: 步骤主键
     :param step_code: 步骤标识
-    :param on_error: 未找到时是否抛出NotFoundException
+    :param on_error: 未找到时是否抛出异常
     :return: 数据源实例或None
     """
     if data_source_id:
