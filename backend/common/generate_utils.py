@@ -64,10 +64,12 @@ class GenerateUtils:
             14: "%H",
             15: "%M",
             16: "%S",
+            17: "%f",
 
             21: "%Y%m%d",
             22: "%Y-%m-%d",
             23: "%Y{0}%m{1}%d{2}".format("年", "月", "日"),
+            24: "%Y/%m/%d",
 
             31: "%H%M%S",
             32: "%H:%M:%S",
@@ -131,7 +133,7 @@ class GenerateUtils:
 
     @classmethod
     def generate_week_number(cls):
-        """获取当前日期在ISO日历中的周数(1～53 的整数)"""
+        """获取当前日期在ISO日历中的周数(1～53的整数)"""
         today = datetime.today()
         return today.isocalendar()[1]
 
@@ -141,7 +143,7 @@ class GenerateUtils:
 
     @classmethod
     def generate_day(cls):
-        """获取当前日期在当年中的第几天(1～366 的整数)"""
+        """获取当前日期在当年中的第几天(1～366的整数)"""
         return datetime.now().timetuple().tm_yday
 
     def generate_am_or_pm(self):
@@ -469,6 +471,7 @@ if __name__ == '__main__':
     # print("反射：", vd.generate_invoke(func_name="simple_profile", func_args={"sex": "M"}))
     # print("个人档案：", vd.generate_invoke(func_name="profile"))
     # print("个人档案：", vd.generate_information())
+    print("时间：", vd.generate_datetime(fmt=17, is_microsecond=True))
     # print("时间：", vd.generate_datetime(fmt=11))
     # print("时间：", vd.generate_datetime(fmt=21))
     # print("时间：", vd.generate_datetime(fmt=31))
@@ -480,13 +483,13 @@ if __name__ == '__main__':
     # print("拼音：", vd.generate_pinyin("上海银行"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-"))
     # print("拼音：", vd.generate_pinyin("上海银行", splitter="-", convert="upper"))
-    print(vd.generate_string(length=10))
-    print(vd.generate_string(length=10, char=True))
-    print(vd.generate_string(length=10, chinese=True))
-    print(vd.generate_string(length=10, digit=True))
-    print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
+    # print(vd.generate_string(length=10))
+    # print(vd.generate_string(length=10, char=True))
+    # print(vd.generate_string(length=10, chinese=True))
+    # print(vd.generate_string(length=10, digit=True))
+    # print(vd.generate_string(length=10, char=True, chinese=True, digit=True))
     # print(vd.generate_random_int(1, 20))
-    print(vd.generate_global_serial_number())
+    # print(vd.generate_global_serial_number())
     # print(vd.generate_global_serial_number())
     # print(vd.generate_seconds_until_22h())
     # print(vd.generate_seconds_until())
