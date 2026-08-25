@@ -15,8 +15,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Set, Union
 from urllib.parse import quote
 
-import pandas as pd
 import aiofiles.os as aos
+import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Form, Body, Query, Depends
 from pydantic import ValidationError
 from starlette.responses import StreamingResponse
@@ -325,6 +325,7 @@ async def save_or_update_data_source(
 
     有data_source_id或data_source_code时直接更新已有记录；
     否则按(case_id或case_code)且(step_id或step_code)定位，有则更新、无则新增。
+    表格无任何有效场景数据时自动解绑该步骤已绑定的数据源(软删记录并清空步骤指针)，未绑定则视为无操作。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
@@ -332,10 +333,15 @@ async def save_or_update_data_source(
     """
     try:
         has_ds_locator = bool(data_source_in.data_source_id) or bool((data_source_in.data_source_code or "").strip())
-        parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        try:
+            parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        except ParameterException:
+            # 空表格保存视为解绑意图：软删已有数据源记录并清空步骤指针
+            unbound = await _unbind_empty_data_source(services, data_source_in, has_ds_locator)
+            return SuccessResponse(message="数据源场景数据为空, 尝试解绑该步骤的数据源", data={"unbound": unbound}, total=1)
+
         if parsed:
             data_source_in = data_source_in.model_copy(update=parsed)
-
         async with in_transaction():
             if has_ds_locator:
                 existing = await resolve_enabled_data_source(
@@ -392,7 +398,6 @@ async def save_or_update_data_source(
                 file_name=instance.file_name,
                 file_desc=instance.file_desc,
             )
-
         data = await _serialize_data_source(instance)
         return SuccessResponse(message="保存成功", data=data, total=1)
     except NotFoundException as e:
@@ -410,6 +415,46 @@ async def save_or_update_data_source(
     except Exception as e:
         LOGGER.error(f"保存或更新数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"保存失败，异常描述: {e}")
+
+
+async def _unbind_empty_data_source(
+        services: AutoTestApiServices,
+        data_source_in: AutoTestDataSourceSaveOrUpdate,
+        has_ds_locator: bool,
+) -> bool:
+    """
+    空表格保存时的解绑处理：定位已绑定记录则软删并清空步骤指针。
+
+    :param services: 自动化测试CRUD依赖聚合
+    :param data_source_in: 数据源入参(用于定位用例/步骤)
+    :param has_ds_locator: 入参是否携带data_source_id或data_source_code
+    :return: 是否实际执行了解绑(定位到并软删了记录)
+    """
+    kwargs: Dict[str, Any] = {"services": services, "on_error": True}
+    if has_ds_locator:
+        kwargs.update({
+            "data_source_id": data_source_in.data_source_id,
+            "data_source_code": data_source_in.data_source_code,
+        })
+    else:
+        kwargs.update({
+            "case_id": data_source_in.case_id,
+            "case_code": data_source_in.case_code,
+            "step_id": data_source_in.step_id,
+            "step_code": data_source_in.step_code,
+        })
+    instance: Optional[AutoTestDataSourceModel] = await resolve_enabled_data_source(**kwargs)
+    if instance is None:
+        return False
+    async with in_transaction():
+        await services.data_source_curd.soft_delete(id=instance.id)
+        await clear_step_data_source_meta(
+            services,
+            case_id=instance.case_id,
+            step_code=instance.step_code,
+        )
+        LOGGER.info(f"数据源[id={instance.id}, case_id={instance.case_id}, step_id={instance.step_id}]解绑成功")
+    return True
 
 
 @autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵")
