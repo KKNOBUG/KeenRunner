@@ -108,23 +108,24 @@ find_pid_by_name() {
     pgrep -f "$pattern" 2>/dev/null || true
 }
 
+# 精确匹配当前项目的进程（通过工作目录验证）
+pgrep_project() {
+    local pattern=$1
+    pgrep -f "$pattern" 2>/dev/null | while read -r pid; do
+        local cwd
+        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
+        if [ "$cwd" = "$PROJECT_ROOT" ]; then
+            echo "$pid"
+        fi
+    done
+}
+
 # 强制清理进程（精确匹配当前项目）
 force_kill() {
     local pattern=$1
     local name=$2
     local pids
-    
-    # 查找匹配进程，并验证工作目录是否为当前项目
-    pids=$(pgrep -f "$pattern" 2>/dev/null | while read -r pid; do
-        # 获取进程的工作目录
-        local cwd
-        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
-        # 只返回当前项目目录下的进程
-        if [ "$cwd" = "$PROJECT_ROOT" ]; then
-            echo "$pid"
-        fi
-    done)
-    
+    pids=$(pgrep_project "$pattern")
     if [ -n "$pids" ]; then
         print_warn "强制终止 ${name}: $pids"
         echo "$pids" | xargs -r kill -9 2>/dev/null || true
@@ -254,13 +255,7 @@ fastapi_status() {
 
     # 检查进程（精确匹配当前项目）
     local gunicorn_pids
-    gunicorn_pids=$(pgrep -f "gunicorn.*backend_main" 2>/dev/null | while read -r pid; do
-        local cwd
-        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
-        if [ "$cwd" = "$PROJECT_ROOT" ]; then
-            echo "$pid"
-        fi
-    done)
+    gunicorn_pids=$(pgrep_project "gunicorn.*backend_main")
 
     if [ -n "$gunicorn_pids" ]; then
         print_info "[✓] FastAPI: 运行中"
@@ -458,21 +453,9 @@ celery_status() {
 
     # 检查进程（精确匹配当前项目）
     local worker_pids
-    worker_pids=$(pgrep -f "celery.*worker" 2>/dev/null | while read -r pid; do
-        local cwd
-        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
-        if [ "$cwd" = "$PROJECT_ROOT" ]; then
-            echo "$pid"
-        fi
-    done)
+    worker_pids=$(pgrep_project "celery.*worker")
     local beat_pids
-    beat_pids=$(pgrep -f "celery.*beat" 2>/dev/null | while read -r pid; do
-        local cwd
-        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
-        if [ "$cwd" = "$PROJECT_ROOT" ]; then
-            echo "$pid"
-        fi
-    done)
+    beat_pids=$(pgrep_project "celery.*beat")
 
     if [ -n "$worker_pids" ]; then
         print_info "[✓] Celery Worker: 运行中"
