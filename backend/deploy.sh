@@ -105,9 +105,6 @@ print(','.join(sorted(queues)))
     echo "$queues"
 }
 
-# 动态获取 Celery 队列名（从 Python 配置）
-CELERY_WORKER_QUEUES=$(get_celery_queues)
-
 # 检查进程是否运行（通过 PID 文件）
 is_running() {
     local pid_file=$1
@@ -390,7 +387,11 @@ celery_start_beat() {
 
 celery_start_worker() {
     local concurrency=${1:-$CELERY_DEFAULT_CONCURRENCY}
-    print_info "启动 Celery Worker (并发: $concurrency, 队列: $CELERY_WORKER_QUEUES)..."
+    
+    # 动态获取 Celery 队列名（从 Python 配置）
+    local queues
+    queues=$(get_celery_queues)
+    print_info "启动 Celery Worker (并发: $concurrency, 队列: $queues)..."
 
     if is_running "$CELERY_WORKER_PID_FILE"; then
         local pid
@@ -412,7 +413,7 @@ celery_start_worker() {
         --concurrency="$concurrency" \
         --prefetch-multiplier="$CELERY_WORKER_PREFETCH_MULTIPLIER" \
         --max-tasks-per-child="$CELERY_WORKER_MAX_TASKS_PER_CHILD" \
-        --queues="$CELERY_WORKER_QUEUES" \
+        --queues="$queues" \
         --logfile="$CELERY_WORKER_LOG" \
         --pidfile="$CELERY_WORKER_PID_FILE" \
         --pool="$CELERY_WORKER_POOL" \

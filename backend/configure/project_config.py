@@ -243,7 +243,8 @@ class ProjectConfig(BaseSettings):
                 "CELERY_BROKER_DB", "CELERY_BACKEND_DB", "CELERY_REDBEAT_DB",
                 "DEV_CELERY_BROKER_DB", "DEV_CELERY_BACKEND_DB", "DEV_CELERY_REDBEAT_DB",
         ):
-            if not getattr(self, field_name):
+            value = getattr(self, field_name)
+            if value is None or (isinstance(value, str) and not value):
                 raise ValueError(f"配置[{field_name}]不允许为空")
 
         return self.assemble_connection_urls()
