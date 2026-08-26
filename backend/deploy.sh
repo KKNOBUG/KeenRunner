@@ -13,7 +13,7 @@ cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; 
 # ==================== 环境检测与适配 ====================
 CPU_CORES=$(nproc 2>/dev/null || echo "4")
 GUNICORN_WORKERS=$((CPU_CORES * 2 + 1))
-[ "$GUNICORN_WORKERS" -gt 4 ] && GUNICORN_WORKERS=4
+[ "$GUNICORN_WORKERS" -gt 8 ] && GUNICORN_WORKERS=8
 CELERY_DEFAULT_CONCURRENCY=$CPU_CORES
 
 # ==================== 路径配置 ====================
@@ -41,7 +41,7 @@ CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
 GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
 CELERY_APP="backend.celery_scheduler.celery_worker:celery"
-CELERY_WORKER_POOL="prefork"
+CELERY_WORKER_POOL="solo"
 CELERY_WORKER_QUEUES="default,autotest_queue"
 CELERY_BEAT_SCHEDULER="redbeat.schedulers:RedBeatScheduler"
 CELERY_WORKER_PREFETCH_MULTIPLIER=1
@@ -108,12 +108,23 @@ find_pid_by_name() {
     pgrep -f "$pattern" 2>/dev/null || true
 }
 
-# 强制清理进程
+# 强制清理进程（精确匹配当前项目）
 force_kill() {
     local pattern=$1
     local name=$2
     local pids
-    pids=$(find_pid_by_name "$pattern")
+    
+    # 查找匹配进程，并验证工作目录是否为当前项目
+    pids=$(pgrep -f "$pattern" 2>/dev/null | while read -r pid; do
+        # 获取进程的工作目录
+        local cwd
+        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
+        # 只返回当前项目目录下的进程
+        if [ "$cwd" = "$PROJECT_ROOT" ]; then
+            echo "$pid"
+        fi
+    done)
+    
     if [ -n "$pids" ]; then
         print_warn "强制终止 ${name}: $pids"
         echo "$pids" | xargs -r kill -9 2>/dev/null || true
@@ -241,9 +252,15 @@ fastapi_status() {
     echo "日志文件: $FASTAPI_LOG_FILE"
     echo ""
 
-    # 检查进程（与你的手动流程一致）
+    # 检查进程（精确匹配当前项目）
     local gunicorn_pids
-    gunicorn_pids=$(pgrep -f "gunicorn.*backend_main" || true)
+    gunicorn_pids=$(pgrep -f "gunicorn.*backend_main" 2>/dev/null | while read -r pid; do
+        local cwd
+        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
+        if [ "$cwd" = "$PROJECT_ROOT" ]; then
+            echo "$pid"
+        fi
+    done)
 
     if [ -n "$gunicorn_pids" ]; then
         print_info "[✓] FastAPI: 运行中"
@@ -439,11 +456,23 @@ celery_status() {
     echo "日志目录: $CELERY_LOG_DIR"
     echo ""
 
-    # 检查进程（与你的手动流程一致）
+    # 检查进程（精确匹配当前项目）
     local worker_pids
-    worker_pids=$(pgrep -f "celery.*worker" || true)
+    worker_pids=$(pgrep -f "celery.*worker" 2>/dev/null | while read -r pid; do
+        local cwd
+        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
+        if [ "$cwd" = "$PROJECT_ROOT" ]; then
+            echo "$pid"
+        fi
+    done)
     local beat_pids
-    beat_pids=$(pgrep -f "celery.*beat" || true)
+    beat_pids=$(pgrep -f "celery.*beat" 2>/dev/null | while read -r pid; do
+        local cwd
+        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
+        if [ "$cwd" = "$PROJECT_ROOT" ]; then
+            echo "$pid"
+        fi
+    done)
 
     if [ -n "$worker_pids" ]; then
         print_info "[✓] Celery Worker: 运行中"
@@ -487,7 +516,7 @@ full_deploy() {
     print_info "Celery 并发: $CELERY_DEFAULT_CONCURRENCY"
     echo ""
 
-    # 1. 停止服务（与你的手动流程一致：先停 FastAPI，再停 Celery）
+    # 1. 停止服务
     fastapi_stop
     celery_stop
     sleep 2
@@ -501,7 +530,7 @@ full_deploy() {
     # 4. 启动 FastAPI
     fastapi_start
 
-    # 5. 检查状态（与你的手动流程一致：ps aux | grep）
+    # 5. 检查状态
     echo ""
     fastapi_status
     echo ""
