@@ -18,13 +18,13 @@ from typing_extensions import Self
 
 from backend.common import FileUtils, ShellUtils
 
-_BACKEND_PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-_BACKEND_PROJECT_CONF: str = os.path.join(_BACKEND_PROJECT_ROOT, ".env")
+_PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+_PROJECT_CONF: str = os.path.join(_PROJECT_ROOT, ".env")
 
 
 class ProjectConfig(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=_BACKEND_PROJECT_CONF,
+        env_file=_PROJECT_CONF,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -58,41 +58,42 @@ class ProjectConfig(BaseSettings):
     SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
     SERVER_DELAY: int = 5
 
-    # 安全认证配置（须在 backend/.env 或环境变量中配置）
-    AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥，建议: openssl rand -hex 32")
+    # 安全认证配置
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
-    AUTH_JWT_TEMPORARY_TOKEN: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicGFzc3dvcmQiOm51bGwsImFsaWFzIjpudWxsLCJlbWFpbCI6bnVsbCwicGhvbmUiOm51bGwsImF2YXRhciI6bnVsbCwic3RhdGUiOjAsImlzX2FjdGl2ZSI6bnVsbCwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJsYXN0X2xvZ2luIjpudWxsLCJhY2Nlc3NfdG9rZW4iOm51bGwsImV4cCI6MTgxNzQzMzM5NCwidG9rZW5fdmVyc2lvbiI6MH0.k6ue_ZpEvsaDx9LrBHjDTaSpzS0dfGPsZif3r4ArK2Y"
+    AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
+    AUTH_TEMPORARY_TOKEN: str = Field(..., min_length=128, description="临时令牌")
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
     # 大小轮转："200 MB"
     # 日期轮转："1 day"、"1 week"、"1 month"
     # 时间轮转："HH:MM:SS"、"00:00"、"00:00:00"
-    LOGGER_ROTATION: str = "1 MB"
+    LOGGER_ROTATION: str = "100 MB"
     # 大小轮转后保留的备份文件个数（单文件多进程模式）
     LOGGER_ROTATION_BACKUP_COUNT: int = 30
 
     # 项目路径相关配置
-    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "applications"))
-    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "celery_scheduler"))
-    COMMON_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "common"))
-    CONFIGURE_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "configure"))
-    CORE_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "core"))
-    ENUMS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "enums"))
-    OUTPUT_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "output"))
-    OUTPUT_LOGS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "logs"))
-    OUTPUT_UPLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "upload"))
-    OUTPUT_DOWNLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "download"))
-    OUTPUT_MEDIA_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "media"))
+    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "applications"))
+    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "celery_scheduler"))
+    COMMON_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "common"))
+    CONFIGURE_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "configure"))
+    CORE_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "core"))
+    ENUMS_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "enums"))
+    OUTPUT_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "output"))
     OUTPUT_DATAGRAM_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "datagram"))
-    OUTPUT_JMX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "jmx"))
-    OUTPUT_XLSX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
     OUTPUT_DOCS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "docs"))
-    SERVICES_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "services"))
-    STATIC_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "static"))
-    STATIC_IMG_DIR: str = os.path.abspath(os.path.join(STATIC_DIR, "image"))
-    MIGRATION_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "migrations"))
+    OUTPUT_DOWNLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "download"))
+    OUTPUT_JMX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "jmx"))
+    OUTPUT_LOGS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "logs"))
+    OUTPUT_TEMPLATE_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "template"))
+    OUTPUT_UPLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "upload"))
+    OUTPUT_MEDIA_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "media"))
+    OUTPUT_XLSX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
+    SERVICES_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "services"))
+    STATIC_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "static"))
+    STATIC_IMG_DIR: str = os.path.abspath(os.path.join(STATIC_DIR, "avatar"))
+    MIGRATION_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "migrations"))
 
     # # 允许访问的源（域名）列表
     CORS_ORIGINS: List[str] = [
@@ -199,19 +200,32 @@ class ProjectConfig(BaseSettings):
     # 数据库配置
     DATABASE_AUTO_MIGRATION: bool = True
     DATABASE_CONNECTIONS: Dict[str, Any] = {}
-    DATABASE_URL: str = Field(default="", description="数据库地址")
-    DATABASE_HOST: str = Field(..., min_length=1, description="数据库主机")
-    DATABASE_PORT: str = Field(..., min_length=1, description="数据库端口")
-    DATABASE_NAME: str = Field(..., min_length=1, description="数据库名称")
-    DATABASE_USERNAME: str = Field(..., min_length=1, description="数据库用户名")
-    DATABASE_PASSWORD: str = Field(..., min_length=1, description="数据库密码")
+    DATABASE_URL: str = Field("", description="数据库地址")
+    DATABASE_HOST: str = Field(..., description="数据库主机")
+    DATABASE_PORT: str = Field(..., description="数据库端口")
+    DATABASE_NAME: str = Field(..., description="数据库名称")
+    DATABASE_USERNAME: str = Field(..., description="数据库账户")
+    DATABASE_PASSWORD: str = Field(..., description="数据库密码")
+    DEV_DATABASE_HOST: str = Field(..., description="数据库主机(开发环境)")
+    DEV_DATABASE_PORT: str = Field(..., description="数据库端口(开发环境)")
+    DEV_DATABASE_NAME: str = Field(..., description="数据库名称(开发环境)")
+    DEV_DATABASE_USERNAME: str = Field(..., description="数据库账户(开发环境)")
+    DEV_DATABASE_PASSWORD: str = Field(..., description="数据库密码(开发环境)")
 
     # Redis 配置（仅 requirepass 时用户名留空；密码含 @/: 等会在连接 URL 中做编码）
-    REDIS_URL: str = ""
-    REDIS_HOST: str = Field(..., min_length=1, description="Redis主机")
-    REDIS_PORT: str = Field(..., min_length=1, description="Redis端口")
-    REDIS_USERNAME: str = Field(default="", description="Redis用户名")
-    REDIS_PASSWORD: str = Field(..., min_length=1, description="Redis密码")
+    REDIS_URL: str = Field("", description="Redis地址(开发/测试)")
+    REDIS_HOST: str = Field(..., description="Redis主机(开发/测试)")
+    REDIS_PORT: str = Field(..., description="Redis端口(开发/测试)")
+    REDIS_USERNAME: str = Field("", description="Redis账户(开发/测试)")
+    REDIS_PASSWORD: str = Field(..., description="Redis密码(开发/测试)")
+
+    # Celery Redis 数据库编号配置
+    CELERY_BROKER_DB: int = Field(..., description="消息代理")
+    CELERY_BACKEND_DB: int = Field(..., description="结果存储")
+    CELERY_REDBEAT_DB: int = Field(..., description="任务持久")
+    DEV_CELERY_BROKER_DB: int = Field(..., description="消息代理(开发环境)")
+    DEV_CELERY_BACKEND_DB: int = Field(..., description="结果存储(开发环境)")
+    DEV_CELERY_REDBEAT_DB: int = Field(..., description="任务持久(开发环境)")
 
     # 自动化模块：数据库操作中Oracle连接模式，空值按thick；thin不兼容11g/部分12.1
     ORACLE_CLIENT_MODE: str = Field(default="", description="Oracle Instant 连接模式，仅允许：thick/thin")
@@ -220,24 +234,40 @@ class ProjectConfig(BaseSettings):
     @model_validator(mode="after")
     def validate_env_and_assemble_urls(self) -> Self:
         if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 64:
-            raise ValueError("AUTH_SECRET_KEY 配置为空或长度少于64位，请检查.env文件或环境变量")
+            raise ValueError("配置[AUTH_SECRET_KEY]不允许为空或少于64位")
 
-        for field_name in ("DATABASE_USERNAME", "DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "REDIS_HOST", "REDIS_PORT"):
+        for field_name in (
+                "DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "DATABASE_USERNAME", "DATABASE_PASSWORD",
+                "DEV_DATABASE_HOST", "DEV_DATABASE_PORT", "DEV_DATABASE_NAME", "DEV_DATABASE_USERNAME", "DEV_DATABASE_PASSWORD",
+                "REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD",
+                "CELERY_BROKER_DB", "CELERY_BACKEND_DB", "CELERY_REDBEAT_DB",
+                "DEV_CELERY_BROKER_DB", "DEV_CELERY_BACKEND_DB", "DEV_CELERY_REDBEAT_DB",
+        ):
             if not getattr(self, field_name):
-                raise ValueError(f"{field_name} 配置为空，请请检查.env文件或环境变量")
+                raise ValueError(f"配置[{field_name}]不允许为空")
 
         return self.assemble_connection_urls()
 
     def assemble_connection_urls(self) -> Self:
-        database_username: str = quote_plus(self.DATABASE_USERNAME)
-        database_password: str = quote_plus(self.DATABASE_PASSWORD)
-        database_host: str = self.DATABASE_HOST
+        # 根据环境选择数据库配置
         if self.SERVER_DEBUG:
-            # 添加测试环境数据库连接地址
-            ...
+            # 开发环境
+            database_username = quote_plus(self.DEV_DATABASE_USERNAME)
+            database_password = quote_plus(self.DEV_DATABASE_PASSWORD)
+            database_host = self.DEV_DATABASE_HOST
+            database_port = self.DEV_DATABASE_PORT
+            database_name = self.DEV_DATABASE_NAME
+        else:
+            # 生产环境
+            database_username = quote_plus(self.DATABASE_USERNAME)
+            database_password = quote_plus(self.DATABASE_PASSWORD)
+            database_host = self.DATABASE_HOST
+            database_port = self.DATABASE_PORT
+            database_name = self.DATABASE_NAME
+
         self.DATABASE_URL = (
             f"mysql://{database_username}:{database_password}@{database_host}:"
-            f"{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+            f"{database_port}/{database_name}"
             f"?charset=utf8mb4&time_zone=+08:00"
         )
         self.DATABASE_CONNECTIONS = {
@@ -246,10 +276,10 @@ class ProjectConfig(BaseSettings):
                 "db_url": self.DATABASE_URL,
                 "credentials": {
                     "host": database_host,
-                    "port": self.DATABASE_PORT,
-                    "user": self.DATABASE_USERNAME,
-                    "password": self.DATABASE_PASSWORD,
-                    "database": self.DATABASE_NAME,
+                    "port": database_port,
+                    "user": database_username,
+                    "password": database_password,
+                    "database": database_name,
                     "minsize": 10,
                     "maxsize": 40,
                     "pool_recycle": 3600,
@@ -271,7 +301,7 @@ class ProjectConfig(BaseSettings):
         if password:
             auth += quote_plus(password)
         auth += "@"
-        return f"redis://{auth}{host or '127.0.0.1'}:{port or '6379'}/{db}"
+        return f"redis://{auth}{host}:{port}/{db}"
 
     def build_redis_url(self, db: int = 0) -> str:
         return self.format_redis_url(

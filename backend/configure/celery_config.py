@@ -33,9 +33,25 @@ class CeleryConfig(BaseSettings):
     @model_validator(mode="after")
     def assemble_celery_settings(self) -> Self:
         project = PROJECT_CONFIG
-        self.CELERY_BROKER_URL = project.build_redis_url(db=1)
-        self.CELERY_RESULT_BACKEND = project.build_redis_url(db=2)
-        self.CELERY_REDBEAT_REDIS_URL = project.build_redis_url(db=3)
+        if project.SERVER_DEBUG:
+            # 开发环境
+            broker_db = project.DEV_CELERY_BROKER_DB
+            backend_db = project.DEV_CELERY_BACKEND_DB
+            redbeat_db = project.DEV_CELERY_REDBEAT_DB
+        else:
+            # 生产环境
+            broker_db = project.CELERY_BROKER_DB
+            backend_db = project.CELERY_BACKEND_DB
+            redbeat_db = project.CELERY_REDBEAT_DB
+
+        self.CELERY_BROKER_URL = project.build_redis_url(db=broker_db)
+        self.CELERY_RESULT_BACKEND = project.build_redis_url(db=backend_db)
+        self.CELERY_REDBEAT_REDIS_URL = project.build_redis_url(db=redbeat_db)
+
+        # 队列名使用端口号拼接，确保多项目隔离
+        server_port = project.SERVER_PORT
+        default_queue = f"{server_port}_default"
+        autotest_queue = f"{server_port}_autotest"
 
         self.CELERY_LOG_DIR = os.path.join(project.OUTPUT_LOGS_DIR, "celery_logs")
         os.makedirs(self.CELERY_LOG_DIR, exist_ok=True)
@@ -69,16 +85,16 @@ class CeleryConfig(BaseSettings):
             "result_persistent": True,
             "task_routes": {
                 "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
-                    "queue": "autotest_queue"
+                    "queue": autotest_queue
                 },
                 "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
-                    "queue": "autotest_queue"
+                    "queue": autotest_queue
                 },
             },
-            "task_default_queue": "default",
-            "task_default_exchange": "default",
+            "task_default_queue": default_queue,
+            "task_default_exchange": default_queue,
             "task_default_exchange_type": "direct",
-            "task_default_routing_key": "default",
+            "task_default_routing_key": default_queue,
             "worker_max_tasks_per_child": 1000,
             "worker_disable_rate_limits": False,
             "task_acks_on_failure_or_timeout": False,
@@ -95,7 +111,7 @@ class CeleryConfig(BaseSettings):
                         ".scan_and_dispatch_autotest_tasks"
                     ),
                     "schedule": 60.0,
-                    "options": {"queue": "default"},
+                    "options": {"queue": default_queue},
                 },
             },
             "worker_log_format": (

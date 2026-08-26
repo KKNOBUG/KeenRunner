@@ -42,7 +42,6 @@ GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
 CELERY_APP="backend.celery_scheduler.celery_worker:celery"
 CELERY_WORKER_POOL="solo"
-CELERY_WORKER_QUEUES="default,autotest_queue"
 CELERY_BEAT_SCHEDULER="redbeat.schedulers:RedBeatScheduler"
 CELERY_WORKER_PREFETCH_MULTIPLIER=1
 CELERY_WORKER_MAX_TASKS_PER_CHILD=200
@@ -70,7 +69,7 @@ check_command() {
 check_venv() {
     if [ ! -f "$PYTHON_BIN" ]; then
         print_error "虚拟环境不存在: $VENV_PATH"
-        print_info "请先创建虚拟环境: python3 -m venv .venv"
+        print_info "请创建虚拟环境..."
         return 1
     fi
     return 0
@@ -86,6 +85,28 @@ activate_venv() {
         return 1
     fi
 }
+
+# 从 Python 配置获取 Celery 队列名
+get_celery_queues() {
+    local queues
+    queues=$("$PYTHON_BIN" -c "
+from configure.celery_config import CELERY_CONFIG
+# 从 CELERY_CONFIG 字典中提取队列名
+config = CELERY_CONFIG.CELERY_CONFIG
+queues = set()
+if 'task_default_queue' in config:
+    queues.add(config['task_default_queue'])
+if 'task_routes' in config:
+    for route in config['task_routes'].values():
+        if 'queue' in route:
+            queues.add(route['queue'])
+print(','.join(sorted(queues)))
+" 2>/dev/null || echo "default,autotest_queue")
+    echo "$queues"
+}
+
+# 动态获取 Celery 队列名（从 Python 配置）
+CELERY_WORKER_QUEUES=$(get_celery_queues)
 
 # 检查进程是否运行（通过 PID 文件）
 is_running() {
@@ -326,11 +347,45 @@ EOF
 }
 
 # ==================== Celery 服务控制 ====================
-celery_start() {
-    local concurrency=${1:-$CELERY_DEFAULT_CONCURRENCY}
-    print_step "启动 Celery 服务 (并发: $concurrency)"
-    celery_start_worker "$concurrency"
-    celery_start_beat
+celery_start_beat() {
+    print_info "启动 Celery Beat (调度器: $CELERY_BEAT_SCHEDULER)..."
+
+    if is_running "$CELERY_BEAT_PID_FILE"; then
+        local pid
+        pid=$(cat "$CELERY_BEAT_PID_FILE")
+        print_warn "Celery Beat 已在运行 (PID: $pid)"
+        return 0
+    fi
+
+    check_venv || return 1
+    activate_venv || return 1
+    check_command "$CELERY_BIN" || { print_error "celery 未安装"; return 1; }
+
+    export CELERY_LOGFILE="$CELERY_BEAT_LOG"
+    export CELERY_BEAT_LOGFILE="$CELERY_BEAT_LOG"
+
+    nohup "$CELERY_BIN" -A "$CELERY_APP" beat \
+        --loglevel="INFO" \
+        --scheduler="$CELERY_BEAT_SCHEDULER" \
+        --logfile="$CELERY_BEAT_LOG" \
+        --pidfile="$CELERY_BEAT_PID_FILE" \
+        >> "$CELERY_BEAT_LOG" 2>&1 &
+
+    local beat_pid=$!
+    echo "$beat_pid" > "$CELERY_BEAT_PID_FILE"
+
+    local count=0
+    while [ $count -lt 10 ]; do
+        if is_running "$CELERY_BEAT_PID_FILE"; then
+            print_info "Celery Beat 启动成功 (PID: $beat_pid)"
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    print_error "Celery Beat 启动失败，查看日志: tail -n 50 $CELERY_BEAT_LOG"
+    return 1
 }
 
 celery_start_worker() {
@@ -380,51 +435,16 @@ celery_start_worker() {
     return 1
 }
 
-celery_start_beat() {
-    print_info "启动 Celery Beat (调度器: $CELERY_BEAT_SCHEDULER)..."
-
-    if is_running "$CELERY_BEAT_PID_FILE"; then
-        local pid
-        pid=$(cat "$CELERY_BEAT_PID_FILE")
-        print_warn "Celery Beat 已在运行 (PID: $pid)"
-        return 0
-    fi
-
-    check_venv || return 1
-    activate_venv || return 1
-    check_command "$CELERY_BIN" || { print_error "celery 未安装"; return 1; }
-
-    export CELERY_LOGFILE="$CELERY_BEAT_LOG"
-    export CELERY_BEAT_LOGFILE="$CELERY_BEAT_LOG"
-
-    nohup "$CELERY_BIN" -A "$CELERY_APP" beat \
-        --loglevel="INFO" \
-        --scheduler="$CELERY_BEAT_SCHEDULER" \
-        --logfile="$CELERY_BEAT_LOG" \
-        --pidfile="$CELERY_BEAT_PID_FILE" \
-        >> "$CELERY_BEAT_LOG" 2>&1 &
-
-    local beat_pid=$!
-    echo "$beat_pid" > "$CELERY_BEAT_PID_FILE"
-
-    local count=0
-    while [ $count -lt 10 ]; do
-        if is_running "$CELERY_BEAT_PID_FILE"; then
-            print_info "Celery Beat 启动成功 (PID: $beat_pid)"
-            return 0
-        fi
-        sleep 1
-        count=$((count + 1))
-    done
-
-    print_error "Celery Beat 启动失败，查看日志: tail -n 50 $CELERY_BEAT_LOG"
-    return 1
+celery_start() {
+    local concurrency=${1:-$CELERY_DEFAULT_CONCURRENCY}
+    print_step "启动 Celery 服务 (并发: $concurrency)"
+    celery_start_worker "$concurrency"
+    celery_start_beat
 }
 
-celery_stop() {
-    print_step "停止 Celery 服务"
-    celery_stop_beat
-    celery_stop_worker
+celery_stop_beat() {
+    stop_process "$CELERY_BEAT_PID_FILE" "Celery Beat" 10
+    force_kill "celery.*beat" "Celery Beat"
 }
 
 celery_stop_worker() {
@@ -432,9 +452,10 @@ celery_stop_worker() {
     force_kill "celery.*worker" "Celery Worker"
 }
 
-celery_stop_beat() {
-    stop_process "$CELERY_BEAT_PID_FILE" "Celery Beat" 10
-    force_kill "celery.*beat" "Celery Beat"
+celery_stop() {
+    print_step "停止 Celery 服务"
+    celery_stop_beat
+    celery_stop_worker
 }
 
 celery_restart() {

@@ -68,7 +68,7 @@ async def auth_middleware(request: Request, call_next):
     request_method: str = request.method.upper()
     request_path: str = _normalize_path(request.url.path)
     # 临时放行策略
-    is_enabled: bool = request.headers.get("token") == PROJECT_CONFIG.AUTH_JWT_TEMPORARY_TOKEN
+    is_enabled: bool = request.headers.get("token") == PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN
     # 允许CORS前置请求
     if request_method == "OPTIONS":
         return await call_next(request)

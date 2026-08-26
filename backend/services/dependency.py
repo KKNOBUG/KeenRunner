@@ -22,7 +22,7 @@ class AuthControl:
     @classmethod
     async def is_authed(cls, token: str = Header(..., description="token验证")) -> Optional["User"]:
         try:
-            if token == PROJECT_CONFIG.AUTH_JWT_TEMPORARY_TOKEN:
+            if token == PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN:
                 user_id: int = 1
                 user = await User.filter(id=user_id, state__not=1).first()
             else:
