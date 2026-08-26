@@ -12,9 +12,8 @@ cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; 
 
 # ==================== 环境检测与适配 ====================
 CPU_CORES=$(nproc 2>/dev/null || echo "4")
-GUNICORN_WORKERS=$((CPU_CORES * 2 + 1))
-[ "$GUNICORN_WORKERS" -gt 8 ] && GUNICORN_WORKERS=8
 CELERY_DEFAULT_CONCURRENCY=$CPU_CORES
+[ "$CELERY_DEFAULT_CONCURRENCY" -gt 4 ] && CELERY_DEFAULT_CONCURRENCY=4
 
 # ==================== 路径配置 ====================
 VENV_PATH="${PROJECT_ROOT}/.venv"
@@ -220,7 +219,7 @@ fastapi_start() {
         return 1
     fi
 
-    print_info "Workers: $GUNICORN_WORKERS, 配置: $GUNICORN_CONFIG_FILE"
+    print_info "配置: $GUNICORN_CONFIG_FILE"
     print_info "日志: $FASTAPI_LOG_FILE"
 
     nohup "$GUNICORN_BIN" -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
@@ -517,7 +516,6 @@ full_deploy() {
     print_step "完整部署流程"
     print_info "项目路径: $PROJECT_ROOT"
     print_info "CPU 核心: $CPU_CORES"
-    print_info "Gunicorn Workers: $GUNICORN_WORKERS"
     print_info "Celery 并发: $CELERY_DEFAULT_CONCURRENCY"
     echo ""
 
