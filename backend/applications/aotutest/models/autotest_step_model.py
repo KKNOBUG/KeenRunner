@@ -36,8 +36,8 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     case_id = fields.BigIntField(null=True, index=True, description="所属用例")
     # 父级步骤ID（普通字段，不设外键，避免自关联导致的ORM循环引用问题）
     parent_step_id = fields.BigIntField(null=True, index=True, description="父级步骤ID")
-    # 引用公共脚本ID（普通字段，不设外键，业务层验证）
-    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
+    # 引用公共脚本/接口ID（普通字段，不设外键，业务层验证）
+    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本/接口ID")
     # 跳过/注释：执行时当作不存在该步骤（不写明细、不计入统计）；默认不跳过
     step_is_skipped = fields.BooleanField(default=False, description="是否跳过执行")
 

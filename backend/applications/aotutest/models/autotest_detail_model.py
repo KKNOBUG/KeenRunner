@@ -29,7 +29,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_id = fields.BigIntField(index=True, description="用例ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
     report_code = fields.CharField(max_length=64, index=True, description="报告标识代码")
-    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本ID")
+    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本/接口ID")
 
     # 步骤明细相关(指向步骤树结构中的具体步骤)
     step_id = fields.BigIntField(description="步骤ID")

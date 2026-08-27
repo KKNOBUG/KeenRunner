@@ -405,7 +405,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             if not quote_case:
                 error_message: str = (
                     f"根据(case_id={quote_case_id})条件检查用例信息失败, "
-                    f"步骤序号(step_no={step_no})引用公共脚本(case_id={quote_case_id})不存在"
+                    f"步骤序号(step_no={step_no})引用公共脚本/接口(case_id={quote_case_id})不存在"
                 )
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)

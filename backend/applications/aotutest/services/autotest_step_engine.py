@@ -2465,7 +2465,7 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
 class QuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本执行器：加载引用用例根步骤树，根据step_no顺序执行并挂到result.children。
+    引用公共脚本/接口执行器：加载引用用例根步骤树，根据step_no顺序执行并挂到result.children。
 
     本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
     """
@@ -2481,7 +2481,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
-                raise StepExecutionError("【引用公共脚本】缺少必要配置: quote_case_id")
+                raise StepExecutionError("【引用公共脚本/接口】缺少必要配置: quote_case_id")
 
             database_crud_services = await self.get_services()
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
@@ -2495,9 +2495,9 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     state__not=1,
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(f"【引用公共脚本】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
+                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
             except Exception as e:
-                raise StepExecutionError(f"【引用公共脚本】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
+                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
@@ -2509,17 +2509,17 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(
-                        f"【引用公共脚本】用例(id={quote_case_id})暂无任何可执行步骤数据",
+                        f"【引用公共脚本/接口】用例(id={quote_case_id})暂无任何可执行步骤数据",
                         step_code=self.step_code
                     )
                     return
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共脚本】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
+                    f"【引用公共脚本/接口】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
 
             self.context.log(
-                f"【引用公共脚本】执行用例(id={quote_case_id}, name={quote_case_name})开始",
+                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
             )
             ordered_steps = sorted(
@@ -2559,7 +2559,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     )
                     result.append_child(failed_result)
             self.context.log(
-                f"【引用公共脚本】执行用例(id={quote_case_id}, name={quote_case_name})结束",
+                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})结束",
                 step_code=self.step_code
             )
         except StepExecutionError:

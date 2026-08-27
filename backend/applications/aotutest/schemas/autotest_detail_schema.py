@@ -292,7 +292,7 @@ class AutoTestApiDetailVarBase(BaseModel):
 class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, AutoTestApiDetailResBase):
     """步骤执行明细公共字段。"""
 
-    quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本ID")
+    quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本/接口ID")
     step_st_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行开始时间")
     step_ed_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行结束时间")
     step_elapsed: Optional[str] = Field(default=None, max_length=16, description="步骤执行消耗时间")
@@ -352,7 +352,7 @@ class AutoTestApiDetailSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
-    quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
 
     step_id: Optional[int] = Field(None, description="步骤ID")

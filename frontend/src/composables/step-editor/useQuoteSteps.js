@@ -29,7 +29,7 @@ export const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
 }
 
 /**
- * 引用公共脚本管理：加载、展示、暂存/恢复、删除
+ * 引用公共脚本/接口管理：加载、展示、暂存/恢复、删除
  *
  * @param {object} deps
  * @param {import('vue').Ref<Array>} deps.steps - 前端步骤树
