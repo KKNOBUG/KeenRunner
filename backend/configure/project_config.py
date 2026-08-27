@@ -253,15 +253,15 @@ class ProjectConfig(BaseSettings):
         # 根据环境选择数据库配置
         if self.SERVER_DEBUG:
             # 开发环境
-            database_username = quote_plus(self.DEV_DATABASE_USERNAME)
-            database_password = quote_plus(self.DEV_DATABASE_PASSWORD)
+            database_username = self.DEV_DATABASE_USERNAME
+            database_password = self.DEV_DATABASE_PASSWORD
             database_host = self.DEV_DATABASE_HOST
             database_port = self.DEV_DATABASE_PORT
             database_name = self.DEV_DATABASE_NAME
         else:
             # 生产环境
-            database_username = quote_plus(self.DATABASE_USERNAME)
-            database_password = quote_plus(self.DATABASE_PASSWORD)
+            database_username = self.DATABASE_USERNAME
+            database_password = self.DATABASE_PASSWORD
             database_host = self.DATABASE_HOST
             database_port = self.DATABASE_PORT
             database_name = self.DATABASE_NAME
