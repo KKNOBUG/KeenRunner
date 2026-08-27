@@ -116,7 +116,7 @@ _FORM_RAGS_TYPE = {
     AutoTestReqArgsType.PARAMS.value: "request_params",
 }
 # 模板文件路径
-_SCRIPT_TEMPLATE = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口导入导出模板.xlsx")
+_SCRIPT_TEMPLATE = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口模板.xlsx")
 
 
 # ---------------------------------------------------------------------------
