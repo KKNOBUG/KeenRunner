@@ -38,7 +38,7 @@ const backendTypeToLocal = (step_type) => {
       return 'wait'
     case '循环结构':
       return 'loop'
-    case '引用公共脚本':
+    case '引用公共脚本/接口':
       return 'quote'
     case '数据库请求':
       return 'database'
@@ -226,7 +226,7 @@ export function mapBackendStep(step) {
   } else if (localType === 'quote') {
     base.config = {
       quote_case_id: step.quote_case_id ?? null,
-      step_name: step.step_name || (step.quote_case?.case_name || '引用公共脚本'),
+      step_name: step.step_name || (step.quote_case?.case_name || '引用公共脚本/接口'),
     }
   } else if (localType === 'database') {
     const ops = Array.isArray(step.database_operates) ? step.database_operates : []

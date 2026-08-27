@@ -16,7 +16,7 @@ export const VALID_STEP_TYPES = new Set([
   '代码请求(Python)',
   '数据库请求',
   'Redis请求',
-  '引用公共脚本',
+  '引用公共脚本/接口',
   '断言',
 ])
 
@@ -190,8 +190,8 @@ export function validateStepTreeStructure(stepsData) {
     }
   }
 
-    if (stepType === '引用公共脚本' && (step.quote_case_id == null || step.quote_case_id === '')) {
-      return { ok: false, message: `${loc} 引用公共脚本须填写 quote_case_id` }
+    if (stepType === '引用公共脚本/接口' && (step.quote_case_id == null || step.quote_case_id === '')) {
+      return { ok: false, message: `${loc} 引用公共脚本/接口须填写 quote_case_id` }
     }
 
     const stepId = step.step_id

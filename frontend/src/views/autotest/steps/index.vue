@@ -330,7 +330,7 @@ const stepDefinitions = {
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'ph:file-py'},
   database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
   redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:file-rs'},
-  quote: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
+  quote: {label: '引用公共脚本/接口', allowChildren: false, icon: 'gravity-ui:link'},
   assert: {label: '断言', allowChildren: false, icon: 'material-symbols:rule'},
 }
 
@@ -444,7 +444,7 @@ const editorProjectLoading = computed(() => {
   return p?.value ?? p ?? false
 })
 
-/** 当前用例是否属于「公共家族」（公共脚本/公共接口：禁用树内「引用公共脚本」入口、不支持数据源） */
+/** 当前用例是否属于「公共家族」（公共脚本/公共接口：禁用树内「引用公共脚本/接口」入口、不支持数据源） */
 const isPublicFamilyCase = computed(() => ['公共脚本', '公共接口'].includes(caseInfoPanelRef.value?.caseForm?.case_type))
 
 /** 当前用例是否为「公共接口」（仅允许 1 个 HTTP/TCP 请求步骤） */
@@ -505,7 +505,7 @@ const snapshotQuoteCaseFromScriptRow = (row) => {
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
   const quoteCaseSnapshot = snapshotQuoteCaseFromScriptRow(row)
-  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本' }
+  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本/接口' }
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
@@ -784,9 +784,9 @@ const onCaseTypeChange = ({ newType, oldType }) => {
     if (removedCount > 0) {
       if (fromUserScript) {
         stashedQuoteStepsWhenPublic.value = toStash
-        window.$message?.warning?.(`切换为公共脚本，已临时移除${removedCount}个引用公共脚本步骤，若误操作可切回用户脚本恢复`)
+        window.$message?.warning?.(`切换为公共脚本，已临时移除${removedCount}个引用公共脚本/接口步骤，若误操作可切回用户脚本恢复`)
       } else {
-        window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本步骤，公共脚本不允许引用其他脚本`)
+        window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本/接口步骤，公共脚本不允许引用其他脚本`)
       }
     } else {
       window.$message?.info?.('已切换为公共脚本')
@@ -809,7 +809,7 @@ const onCaseTypeChange = ({ newType, oldType }) => {
     const restoredCount = stashedQuoteStepsWhenPublic.value.length > 0 ? restoreStashedQuoteSteps() : 0
     restoreStashedDataSourceBindings()
     window.$message?.info?.(restoredCount > 0
-        ? `已切换为用户脚本，并恢复${restoredCount}个引用公共脚本步骤`
+        ? `已切换为用户脚本，并恢复${restoredCount}个引用公共脚本/接口步骤`
         : '已切换为用户脚本')
   }
 }
@@ -1770,7 +1770,7 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
           : type === 'user_variables'
               ? {step_name: '用户定义变量'}
               : type === 'quote'
-                  ? {quote_case_id: null, step_name: '引用公共脚本'}
+                  ? {quote_case_id: null, step_name: '引用公共脚本/接口'}
                   : type === 'database'
                       ? {
                         step_name: '数据库请求',
@@ -2150,7 +2150,7 @@ const updateStepConfig = (id, config) => {
       }
     } else if (step.type === 'quote' || step.type === 'quote_public_script') {
       if (config.step_name !== undefined && config.step_name !== null) {
-        step.name = String(config.step_name).trim() || '引用公共脚本'
+        step.name = String(config.step_name).trim() || '引用公共脚本/接口'
       }
     }
     // 条件分支仅改 branch_items 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
