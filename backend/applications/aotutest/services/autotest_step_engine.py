@@ -1300,6 +1300,9 @@ class BaseStepExecutor:
         :param num_cycles: 循环第几轮（非循环步骤可为None）
         :return: None
         """
+        # 引用公共脚本/接口的步骤本身不保存明细，由引用用例中的步骤各自保存
+        if self.quote_case_id:
+            return
         step_end_time: datetime = datetime.now()
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
