@@ -228,6 +228,13 @@ class PlaceholderResolver:
         if "${" not in xml_text:
             return xml_text
         try:
+            # 使用iterparse保留默认命名空间，避免序列化时产生ns0:前缀
+            from io import BytesIO
+            ns_map: List[Tuple[str, str]] = []
+            for event, elem in ElementTree.iterparse(BytesIO(xml_text.encode("utf-8")), events=("start-ns",)):
+                ns_map.append(elem)
+            for prefix, uri in ns_map:
+                ElementTree.register_namespace(prefix, uri)
             root = ElementTree.fromstring(xml_text.encode("utf-8"))
             cls._resolve_xml_element_placeholders(
                 element=root,
