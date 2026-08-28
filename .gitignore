@@ -18,6 +18,7 @@ backend/output/logs/*.log
 backend/output/logs/*.lock
 backend/output/logs/*.zip
 backend/output/datagram/*.zip
+backend/output/download/*.xlsx
 backend/migrations/models/*.py
 
 frontend/.idea
