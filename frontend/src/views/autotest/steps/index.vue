@@ -1686,7 +1686,7 @@ const currentEditorNeedsProject = computed(() => {
 
 const currentEditorNeedsVarAssist = computed(() => {
   const t = currentStep.value?.type
-  return t === 'http' || t === 'user_variables'
+  return t === 'http' || t === 'tcp' || t === 'user_variables'
 })
 
 /** 右侧动态编辑器 props（引用步骤才传 reselectHandler，避免 HTTP 等多根节点组件透传警告） */

@@ -183,6 +183,7 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
 
             backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+            backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
 
             backendStep.data_source_id = config.data_source_id !== undefined
                 ? (config.data_source_id || null)

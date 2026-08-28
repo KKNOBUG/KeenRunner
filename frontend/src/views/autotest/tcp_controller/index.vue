@@ -153,6 +153,21 @@
             />
           </div>
         </n-tab-pane>
+        <n-tab-pane name="defined_variables" tab="变量">
+          <template #tab>
+            <n-badge :value="state.form.defined_variables.length" :max="99" show-zero>
+              <span>变量</span>
+            </n-badge>
+          </template>
+          <KeyValueEditor
+              v-model:items="state.form.defined_variables"
+              :body-type="'none'"
+              :is-for-body="false"
+              :available-variable-list="props.availableVariableList"
+              :assist-functions="props.assistFunctions"
+              :disabled="props.readonly"
+          />
+        </n-tab-pane>
         <n-tab-pane name="extract_variables" tab="提取">
           <template #tab>
             <n-badge :value="extractCount" :max="99" show-zero>
@@ -364,6 +379,7 @@ import MonacoEditor from '@/components/monaco/index.vue'
 import StepExtractPanel from '@/components/autotest/StepExtractPanel.vue'
 import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
 import StepDataSourcePanel from '@/components/autotest/StepDataSourcePanel.vue'
+import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
 import api from '@/api'
 import {
   ASSERT_MODE_RESPONSE,
@@ -397,6 +413,8 @@ const props = defineProps({
   caseName: { type: String, default: null },
   /** 外部布局变化触发器，透传给数据源面板 */
   layoutVersion: { type: Number, default: 0 },
+  availableVariableList: { type: Array, default: () => [] },
+  assistFunctions: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:config'])
 
@@ -648,6 +666,7 @@ const buildConfigFromState = () => {
     data_source_id: state.form.data_source_id ?? null,
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
+    defined_variables: Array.isArray(state.form.defined_variables) ? state.form.defined_variables : [],
     extract_variables: buildExtractForBackend(),
     assert_validators: buildValidatorsForBackend(),
   }
@@ -711,6 +730,8 @@ const hydrateTcpForm = (p) => {
     data_source_id: cfg.data_source_id ?? original.data_source_id ?? null,
     data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
     data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
+    // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
+    defined_variables: Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []),
     extract_variables: hydrateExtractDictFromBackend(
         normalizeBackendList(cfg.extract_variables ?? original.extract_variables),
         EXTRACT_MODE_RESPONSE
@@ -737,6 +758,7 @@ const { form, syncFromExternal } = useStepEditorForm({
     data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
+    defined_variables: [],
     extract_variables: {},
     assert_validators: {},
   }),
@@ -747,7 +769,7 @@ const { form, syncFromExternal } = useStepEditorForm({
     f.request_project_id, f.request_config_name,
     f.bodyType, f.xmlBody, f.jsonBody, f.rawBody,
     f.data_source_id, f.data_source_name, f.data_source_desc,
-    f.extract_variables, f.assert_validators
+    f.defined_variables, f.extract_variables, f.assert_validators
   ],
   debounceMs: 300,
 })
@@ -1270,6 +1292,10 @@ const doDebugRequest = async (env_id) => {
       if (bodyText != null && String(bodyText) !== '') {
         debugPayload.request_text = String(bodyText)
       }
+    }
+    const dv = Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null
+    if (dv) {
+      debugPayload.defined_variables = dv
     }
     const ev = buildExtractForBackend()
     if (ev.length > 0) {
