@@ -355,7 +355,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         LOGGER.info(f"多用例步骤树拼接完成: 用例数={len(targets)}, 拼接节点数={len(details)}, 步骤总数={total_steps}")
         return {"details": details, "indexes": indexes}, total_steps
 
-    async def get_request_step_project_ids(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> List[int]:
+    async def get_step_usage_projects(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> List[int]:
         """
         从步骤树提取请求相关步骤所选应用ID并去重。
 

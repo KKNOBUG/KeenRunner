@@ -448,7 +448,7 @@ async def get_request_step_selected_project_ids(
     :return: 统一HTTP响应
     """
     try:
-        project_ids: List[int] = await services.step_curd.get_request_step_project_ids(
+        project_ids: List[int] = await services.step_curd.get_step_usage_projects(
             case_id=case_id,
             case_code=case_code,
         )
