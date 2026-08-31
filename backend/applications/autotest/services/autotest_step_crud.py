@@ -267,66 +267,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             case_only_when_no_steps=case_only,
         )
 
-    async def get_request_step_project_ids(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> List[int]:
-        """
-        从步骤树提取请求相关步骤所选应用ID并去重。
-
-        :param case_id: 用例主键ID，与case_code二选一
-        :param case_code: 用例标识代码，与case_id二选一
-        :return: 去重后的project_id列表(升序)
-        """
-        load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
-        project_ids: Set[int] = set()
-
-        def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
-            """将原始step_type规范为枚举；非法则返回None。"""
-            if st is None:
-                return None
-            if isinstance(st, AutoTestStepType):
-                return st
-            try:
-                return AutoTestStepType(st)
-            except (ValueError, TypeError):
-                return None
-
-        def recursive_require_project_ids(step: AutoTestStepTreeUpdateItem) -> None:
-            """
-            递归收集HTTP/TCP/DB/Redis步骤上的project_id到外层集合。
-            """
-            st_e = _norm_step_type(step.step_type)
-            if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
-                request_project_id = step.request_project_id
-                if request_project_id:
-                    try:
-                        project_ids.add(int(request_project_id))
-                    except Exception:
-                        pass
-            elif st_e == AutoTestStepType.DATABASE:
-                for db_operate in step.database_operates or []:
-                    project_id = db_operate.project_id
-                    if project_id:
-                        try:
-                            project_ids.add(int(project_id))
-                        except Exception:
-                            pass
-            elif st_e == AutoTestStepType.REDIS:
-                for redis_operate in step.redis_operates or []:
-                    project_id = redis_operate.project_id
-                    if project_id:
-                        try:
-                            project_ids.add(int(project_id))
-                        except Exception:
-                            pass
-            for child in step.children or []:
-                recursive_require_project_ids(child)
-            for quote_step in step.quote_steps or []:
-                recursive_require_project_ids(quote_step)
-
-        for node in load.root_steps:
-            recursive_require_project_ids(node)
-
-        return sorted(project_ids)
-
     async def get_copy_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> Dict[str, Any]:
         """
         获取用例步骤树完整副本，用于复制后编辑且尚未落库。
@@ -414,6 +354,66 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
         LOGGER.info(f"多用例步骤树拼接完成: 用例数={len(targets)}, 拼接节点数={len(details)}, 步骤总数={total_steps}")
         return {"details": details, "indexes": indexes}, total_steps
+
+    async def get_request_step_project_ids(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> List[int]:
+        """
+        从步骤树提取请求相关步骤所选应用ID并去重。
+
+        :param case_id: 用例主键ID，与case_code二选一
+        :param case_code: 用例标识代码，与case_id二选一
+        :return: 去重后的project_id列表(升序)
+        """
+        load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
+        project_ids: Set[int] = set()
+
+        def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
+            """将原始step_type规范为枚举；非法则返回None。"""
+            if st is None:
+                return None
+            if isinstance(st, AutoTestStepType):
+                return st
+            try:
+                return AutoTestStepType(st)
+            except (ValueError, TypeError):
+                return None
+
+        def recursive_require_project_ids(step: AutoTestStepTreeUpdateItem) -> None:
+            """
+            递归收集HTTP/TCP/DB/Redis步骤上的project_id到外层集合。
+            """
+            st_e = _norm_step_type(step.step_type)
+            if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+                request_project_id = step.request_project_id
+                if request_project_id:
+                    try:
+                        project_ids.add(int(request_project_id))
+                    except Exception:
+                        pass
+            elif st_e == AutoTestStepType.DATABASE:
+                for db_operate in step.database_operates or []:
+                    project_id = db_operate.project_id
+                    if project_id:
+                        try:
+                            project_ids.add(int(project_id))
+                        except Exception:
+                            pass
+            elif st_e == AutoTestStepType.REDIS:
+                for redis_operate in step.redis_operates or []:
+                    project_id = redis_operate.project_id
+                    if project_id:
+                        try:
+                            project_ids.add(int(project_id))
+                        except Exception:
+                            pass
+            for child in step.children or []:
+                recursive_require_project_ids(child)
+            for quote_step in step.quote_steps or []:
+                recursive_require_project_ids(quote_step)
+
+        for node in load.root_steps:
+            recursive_require_project_ids(node)
+
+        return sorted(project_ids)
 
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestStepModel:
         """
