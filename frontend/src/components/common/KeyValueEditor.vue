@@ -100,7 +100,7 @@
                       </template>
                     </n-button>
                   </template>
-                  使用全局变量或调用内置函数
+                  使用全局变量、内置变量或调用内置函数
                 </n-tooltip>
               </template>
               <div class="association-menu">
@@ -120,6 +120,14 @@
                         @click="associationTab = 'variables'"
                     >
                       全局变量({{ availableVariableList.length }}个)
+                    </div>
+                    <div
+                        v-if="builtinVariableList.length > 0"
+                        class="association-sidebar-item"
+                        :class="{ active: associationTab === 'builtin' }"
+                        @click="associationTab = 'builtin'"
+                    >
+                      内置变量({{ builtinVariableList.length }}个)
                     </div>
                     <div
                         v-if="assistFunctions.length > 0"
@@ -146,6 +154,21 @@
                           {{ associationSearch ? '无匹配的全局变量' : '暂无全局变量' }}
                         </div>
                       </template>
+                      <template v-else-if="associationTab === 'builtin'">
+                        <div
+                            v-for="(bv, i) in filteredBuiltinVariables"
+                            :key="'b-' + i"
+                            class="association-list-item association-list-item-fn"
+                            :class="{ selected: associationPreview === wrapPlaceholder(bv.name) }"
+                            @click="selectAssociationVariable(bv.name)"
+                        >
+                          <div class="association-list-item-name">{{ bv.name }}</div>
+                          <pre v-if="bv.desc" class="association-list-item-desc">{{ bv.desc }}</pre>
+                        </div>
+                        <div v-if="!filteredBuiltinVariables.length" class="association-empty">
+                          {{ associationSearch ? '无匹配的内置变量' : '暂无内置变量' }}
+                        </div>
+                      </template>
                       <template v-else-if="associationTab === 'functions'">
                         <div
                             v-for="(fn, i) in filteredAssistFunctions"
@@ -162,7 +185,7 @@
                         </div>
                       </template>
                       <div
-                          v-else-if="!availableVariableList.length && !assistFunctions.length"
+                          v-else-if="!availableVariableList.length && !builtinVariableList.length && !assistFunctions.length"
                           class="association-empty"
                       >
                         暂无可用变量或内置函数
@@ -290,6 +313,11 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  // 当前步骤的内置环境变量列表 [{ name, desc }]（运行时注入，不落库），用于“关联数据”插入 ${xxx}
+  builtinVariableList: {
+    type: Array,
+    default: () => []
+  },
   // 内置函数列表 [{ name, desc }]，desc 为后端完整 docstring（含参数说明）
   assistFunctions: {
     type: Array,
@@ -309,7 +337,7 @@ const isBatchAddModalVisible = ref(false);
 const batchInput = ref('');
 // 当前打开“关联数据”弹层的行索引，-1 表示未打开
 const associationTargetIndex = ref(-1);
-// 关联菜单：variables | functions
+// 关联菜单：variables | builtin | functions
 const associationTab = ref('variables');
 const associationSearch = ref('');
 const associationPreview = ref('');
@@ -326,6 +354,12 @@ const filteredVariableList = computed(() =>
     props.availableVariableList.filter((name) => matchAssociationSearch(name, associationSearch.value))
 );
 
+const filteredBuiltinVariables = computed(() =>
+    props.builtinVariableList.filter((bv) =>
+        matchAssociationSearch(bv?.name, associationSearch.value)
+        || matchAssociationSearch(bv?.desc, associationSearch.value))
+);
+
 const filteredAssistFunctions = computed(() =>
     props.assistFunctions.filter((fn) => {
       const name = fn?.name ?? fn ?? '';
@@ -338,8 +372,9 @@ const filteredAssistFunctions = computed(() =>
 const resetAssociationMenuState = (index) => {
   associationSearch.value = '';
   const hasVars = props.availableVariableList.length > 0;
+  const hasBuiltin = props.builtinVariableList.length > 0;
   const hasFns = props.assistFunctions.length > 0;
-  associationTab.value = hasVars ? 'variables' : (hasFns ? 'functions' : 'variables');
+  associationTab.value = hasVars ? 'variables' : (hasBuiltin ? 'builtin' : (hasFns ? 'functions' : 'variables'));
   const cur = props.items[index]?.value ?? '';
   associationPreview.value = typeof cur === 'string' ? cur : '';
 };

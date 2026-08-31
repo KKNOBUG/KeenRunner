@@ -164,6 +164,7 @@
               :body-type="'none'"
               :is-for-body="false"
               :available-variable-list="props.availableVariableList"
+              :builtin-variable-list="props.builtinVariableList"
               :assist-functions="props.assistFunctions"
               :disabled="props.readonly"
           />
@@ -414,6 +415,7 @@ const props = defineProps({
   /** 外部布局变化触发器，透传给数据源面板 */
   layoutVersion: { type: Number, default: 0 },
   availableVariableList: { type: Array, default: () => [] },
+  builtinVariableList: { type: Array, default: () => [] },
   assistFunctions: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:config'])

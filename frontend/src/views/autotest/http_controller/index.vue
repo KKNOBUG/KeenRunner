@@ -158,6 +158,7 @@
               :body-type="'none'"
               :is-for-body="false"
               :available-variable-list="props.availableVariableList"
+              :builtin-variable-list="props.builtinVariableList"
               :assist-functions="props.assistFunctions"
               :disabled="props.readonly"
           />
@@ -185,6 +186,7 @@
                 :body-type="'none'"
                 :is-for-body="true"
                 :available-variable-list="props.availableVariableList"
+                :builtin-variable-list="props.builtinVariableList"
                 :assist-functions="props.assistFunctions"
                 :disabled="props.readonly"
             />
@@ -196,6 +198,7 @@
                 :enableFile="true"
                 :is-for-body="true"
                 :available-variable-list="props.availableVariableList"
+                :builtin-variable-list="props.builtinVariableList"
                 :assist-functions="props.assistFunctions"
                 :disabled="props.readonly"
             />
@@ -206,6 +209,7 @@
                 :body-type="state.form.bodyType"
                 :is-for-body="true"
                 :available-variable-list="props.availableVariableList"
+                :builtin-variable-list="props.builtinVariableList"
                 :assist-functions="props.assistFunctions"
                 :disabled="props.readonly"
             />
@@ -253,6 +257,7 @@
               :body-type="'none'"
               :is-for-body="false"
               :available-variable-list="props.availableVariableList"
+              :builtin-variable-list="props.builtinVariableList"
               :assist-functions="props.assistFunctions"
               :disabled="props.readonly"
           />
@@ -597,6 +602,10 @@ const props = defineProps({
     default: false
   },
   availableVariableList: {
+    type: Array,
+    default: () => []
+  },
+  builtinVariableList: {
     type: Array,
     default: () => []
   },

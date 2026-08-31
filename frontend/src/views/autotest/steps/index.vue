@@ -1102,6 +1102,8 @@ const availableVariableList = computed(() => {
 })
 
 const assistFunctionsList = ref([])
+// 内置环境变量提示列表（SERVER_*、TARGET_*），后端接口为唯一数据源
+const builtinVariableList = ref([])
 
 const buildSourceJsonFromMemoryTree = () => stringifyStepTreePayload(buildUpdateOrCreateTreePayload())
 
@@ -1689,6 +1691,12 @@ const currentEditorNeedsVarAssist = computed(() => {
   return t === 'http' || t === 'tcp' || t === 'user_variables'
 })
 
+/** 内置环境变量（SERVER_*、TARGET_*）仅HTTP/TCP请求步骤运行时注入 */
+const currentEditorNeedsBuiltinVars = computed(() => {
+  const t = currentStep.value?.type
+  return t === 'http' || t === 'tcp'
+})
+
 /** 右侧动态编辑器 props（引用步骤才传 reselectHandler，避免 HTTP 等多根节点组件透传警告） */
 const editorComponentProps = computed(() => {
   const step = currentStep.value
@@ -1699,6 +1707,7 @@ const editorComponentProps = computed(() => {
     projectOptions: currentEditorNeedsProject.value ? editorProjectOptions.value : [],
     projectLoading: currentEditorNeedsProject.value ? editorProjectLoading.value : false,
     availableVariableList: currentEditorNeedsVarAssist.value ? availableVariableList.value : [],
+    builtinVariableList: currentEditorNeedsBuiltinVars.value ? builtinVariableList.value : [],
     assistFunctions: currentEditorNeedsVarAssist.value ? assistFunctionsList.value : [],
     readonly: !!step.isQuoteInner,
   }
@@ -2304,6 +2313,15 @@ onMounted(async () => {
   } catch (e) {
     console.warn('获取辅助函数列表失败', e)
     assistFunctionsList.value = []
+  }
+  // 内置环境变量列表（HTTP/TCP请求步骤「关联数据」提示）
+  try {
+    const res = await api.getBuiltinVariableList()
+    const data = res?.data ?? res
+    builtinVariableList.value = Array.isArray(data) ? data : (data?.data ?? [])
+  } catch (e) {
+    console.warn('获取内置环境变量列表失败', e)
+    builtinVariableList.value = []
   }
 })
 

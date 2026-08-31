@@ -92,6 +92,8 @@ export default {
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
   /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type；响应env_id=绑定主键 */
   getEnvPage: (params = {}) => request.get('/autotest/env/page', { params }),
+  /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
+  queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/env/query', data),
   /** 全部启用应用（环境侧）。Query: page/page_size */
   getAllApps: (params = {}) => request.get('/autotest/env/get_all_app', { params }),
 
@@ -121,8 +123,6 @@ export default {
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
   /** Query: project_id、env_id(绑定主键)、env_type 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
-  /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
-  queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/config/query', data),
   /** 数据库连通性测试。Body: { config_id, project_id, env_name, config_name, database_name } */
   testDbConnection: (data = {}) => request.post('/autotest/config/database/test_connection', data),
 
@@ -250,6 +250,8 @@ export default {
   ),
   // 辅助函数列表（用户变量/占位符解析）
   getAssistFuncList: (params = {}) => request.get('/autotest/tool/get', { params }),
+  // 内置环境变量列表（HTTP/TCP请求步骤「关联数据」提示，后端为唯一数据源）
+  getBuiltinVariableList: () => request.get('/autotest/tool/builtin_variables'),
   // 环境相关：查询环境名称列表(去重)，用于执行/调试时选择执行环境
   getApiEnvNames: () => request.get('/autotest/env/get_names'),
 
