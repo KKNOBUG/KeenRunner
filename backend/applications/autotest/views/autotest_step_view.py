@@ -30,6 +30,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeExecute,
     AutoTestPythonCodeDebugRequest,
     AutoTestRedisDebugRequest,
+    AutoTestStepTreeSplice,
     StepVariablesBase,
     StepsExecuteConfigBase,
 )
@@ -332,6 +333,38 @@ async def copy_step_tree(
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
 
 
+@autotest_step.post("/splice_tree", summary="查询拼接步骤树结构", description="根据用例id或code列表批量查询并拼接步骤树结构")
+async def splice_step_tree(
+        splice_in: AutoTestStepTreeSplice = Body(..., description="拼接查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    批量查询多用例步骤树并拼接为一个列表。
+
+    data.details: 所有用例拼接后的步骤节点, 结构与/tree接口data一致;
+    data.groups: case_id到details中对应步骤索引的映射。
+
+    :param splice_in: 拼接查询入参(case_ids与case_codes二选一)
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        if not splice_in.case_ids and not splice_in.case_codes:
+            return BadReqResponse(message="参数[case_ids, case_codes]不允许同时为空")
+        data, total = await services.step_curd.get_case_splice_tree(
+            case_ids=splice_in.case_ids,
+            case_codes=splice_in.case_codes,
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"根据用例id或code列表查询拼接步骤树结构失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
 @autotest_step.post("/update_or_create_tree", summary="更新步骤树结构", description="更新或创建用例级步骤树结构")
 async def batch_update_steps_tree(
         tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
@@ -402,9 +435,9 @@ async def batch_update_steps_tree(
                 if current_names is None:
                     continue
                 step_label = (
-                    step_label_by_code.get(ds.step_code)
-                    or step_label_by_ds_id.get(ds.id)
-                    or f"步骤ID:{ds.step_id}"
+                        step_label_by_code.get(ds.step_code)
+                        or step_label_by_ds_id.get(ds.id)
+                        or f"步骤ID:{ds.step_id}"
                 )
                 # 同一数据源内场景列名称重复：先拒绝，再做跨步骤一致性比对
                 duplicate_names = data_source_duplicate_scene_names(ds)

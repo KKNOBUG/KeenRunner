@@ -591,6 +591,13 @@ class AutoTestBatchExecuteCases(BaseModel):
     initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="初始变量池(列表项为key/value/desc)")
 
 
+class AutoTestStepTreeSplice(BaseModel):
+    """批量拼接多用例步骤树入参：case_ids与case_codes二选一，同时传递时以case_ids为准。"""
+
+    case_ids: Optional[List[int]] = Field(None, min_length=1, description="用例ID列表")
+    case_codes: Optional[List[str]] = Field(None, min_length=1, description="用例标识代码列表")
+
+
 def step_variables_list_from_storage(raw: Any) -> List[StepVariablesBase]:
     """ORM/JSON 边界：将存库的变量列表转为StepVariablesBase列表。"""
     if raw is None:

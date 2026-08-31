@@ -375,6 +375,46 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
         return {"case": case_info or {}, "steps": steps}
 
+    async def get_case_splice_tree(self, case_ids: Optional[List[int]] = None, case_codes: Optional[List[str]] = None) -> Tuple[Dict[str, Any], int]:
+        """
+        批量查询多用例步骤树并按用例顺序拼接为一个列表。
+
+        逐用例复用 /tree 接口的步骤树加载逻辑(get_by_case_id)，
+        保证拼接内容与 /tree 接口的 data 结构完全一致。
+
+        :param case_ids: 用例主键ID列表，与case_codes二选一(同时传递时以case_ids为准)
+        :param case_codes: 用例标识代码列表，与case_ids二选一
+        :return: (拼接结果, 所有用例步骤总数)
+        """
+        if not case_ids and not case_codes:
+            error_message: str = "参数[case_ids, case_codes]不允许同时为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        if case_ids:
+            targets: List[Tuple[Optional[int], Optional[str]]] = [(tid, None) for tid in dict.fromkeys(case_ids)]
+        else:
+            targets: List[Tuple[Optional[int], Optional[str]]] = [(None, tcd) for tcd in dict.fromkeys(case_codes)]
+        total_steps: int = 0
+        indexes: Dict[str, List[int]] = {}
+        details: List[Dict[str, Any]] = []
+        for target_id, target_code in targets:
+            load = await self.get_by_case_id(case_id=target_id, case_code=target_code)
+            start_index: int = len(details)
+            if load.root_steps:
+                details.extend(s.model_dump(mode="json") for s in load.root_steps)
+                resolved_case_id: Optional[int] = load.root_steps[0].case_id
+            elif load.case_only_when_no_steps is not None:
+                details.append({"case": load.case_only_when_no_steps.model_dump(mode="json")})
+                resolved_case_id = load.case_only_when_no_steps.case_id
+            else:
+                resolved_case_id = target_id
+            indexes[str(resolved_case_id)] = list(range(start_index, len(details)))
+            total_steps += load.step_counter.total_steps
+
+        LOGGER.info(f"多用例步骤树拼接完成: 用例数={len(targets)}, 拼接节点数={len(details)}, 步骤总数={total_steps}")
+        return {"details": details, "indexes": indexes}, total_steps
+
     async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestStepModel:
         """
         创建单条步骤，校验用例存在、父步骤存在且同用例，若同用例下step_no已存在则恢复并更新。
