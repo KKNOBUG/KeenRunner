@@ -2541,7 +2541,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             )
             quote_case_name: str = quote_case_dict["case_name"]
             try:
-                load = await database_crud_services.step_curd.get_by_case_id(case_id=quote_case_id)
+                load = await database_crud_services.step_curd.get_case_tree(case_id=quote_case_id)
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(

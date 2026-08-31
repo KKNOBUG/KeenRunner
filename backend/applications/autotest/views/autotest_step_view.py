@@ -287,7 +287,7 @@ async def get_step_tree(
     :return: 统一HTTP响应
     """
     try:
-        load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
+        load = await services.step_curd.get_case_tree(case_id=case_id, case_code=case_code)
         if load.root_steps:
             data = [s.model_dump(mode="json") for s in load.root_steps]
         elif load.case_only_when_no_steps is not None:

@@ -484,7 +484,7 @@ class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
 
 
 class StepTreeCounter(BaseModel):
-    """步骤树统计：与历史 get_by_case_id 末尾元数据字段一致。"""
+    """步骤树统计：与历史 get_case_tree 末尾元数据字段一致。"""
     direct_steps: int = 0
     child_steps: int = 0
     quote_steps: int = 0

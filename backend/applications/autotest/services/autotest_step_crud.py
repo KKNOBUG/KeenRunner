@@ -100,7 +100,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_case_id(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseStepTreeLoadResult:
+    async def get_case_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseStepTreeLoadResult:
         """
         根据用例ID或case_code获取该用例的步骤树(含引用脚本步骤及统计)。
 
@@ -275,7 +275,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :param case_code: 用例标识代码，与case_id二选一
         :return: {"case": {...}, "steps": [...]}，case中case_id/case_code置空
         """
-        load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
+        load = await self.get_case_tree(case_id=case_id, case_code=case_code)
 
         def strip_step_for_copy_model(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
             """
@@ -319,7 +319,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         """
         批量查询多用例步骤树并按用例顺序拼接为一个列表。
 
-        逐用例复用 /tree 接口的步骤树加载逻辑(get_by_case_id)，
+        逐用例复用 /tree 接口的步骤树加载逻辑(get_case_tree)，
         保证拼接内容与 /tree 接口的 data 结构完全一致。
 
         :param case_ids: 用例主键ID列表，与case_codes二选一(同时传递时以case_ids为准)
@@ -339,7 +339,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         indexes: Dict[str, List[int]] = {}
         details: List[Dict[str, Any]] = []
         for target_id, target_code in targets:
-            load = await self.get_by_case_id(case_id=target_id, case_code=target_code)
+            load = await self.get_case_tree(case_id=target_id, case_code=target_code)
             start_index: int = len(details)
             if load.root_steps:
                 details.extend(s.model_dump(mode="json") for s in load.root_steps)
@@ -363,7 +363,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :param case_code: 用例标识代码，与case_id二选一
         :return: 去重后的project_id列表(升序)
         """
-        load = await self.get_by_case_id(case_id=case_id, case_code=case_code)
+        load = await self.get_case_tree(case_id=case_id, case_code=case_code)
         project_ids: Set[int] = set()
 
         def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
@@ -1214,7 +1214,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         LOGGER.info(f"查询用例[id={case_id}]成功, 结果: {case_dict}")
 
         # 2. 查询步骤树数据（边界层已 model_validate）
-        load: AutoTestCaseStepTreeLoadResult = await self.get_by_case_id(case_id)
+        load: AutoTestCaseStepTreeLoadResult = await self.get_case_tree(case_id)
         tree_data_count: Dict[str, int] = load.step_counter.model_dump()
         if load.step_counter.total_steps == 0:
             error_message: str = f"查询步骤为空, 用例[id={case_id}]没有任何可执行的根步骤"

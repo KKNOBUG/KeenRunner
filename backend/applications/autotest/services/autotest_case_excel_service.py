@@ -210,7 +210,7 @@ async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[Li
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "非公共接口用例"})
             continue
         try:
-            load = await services.step_curd.get_by_case_id(case_id=case_id)
+            load = await services.step_curd.get_case_tree(case_id=case_id)
         except NotFoundException as e:
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": str(e.message)})
             continue
