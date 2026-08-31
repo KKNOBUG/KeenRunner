@@ -351,7 +351,7 @@ async def splice_step_tree(
     try:
         if not splice_in.case_ids and not splice_in.case_codes:
             return BadReqResponse(message="参数[case_ids, case_codes]不允许同时为空")
-        data, total = await services.step_curd.get_case_splice_tree(
+        data, total = await services.step_curd.get_cases_splice_tree(
             case_ids=splice_in.case_ids,
             case_codes=splice_in.case_codes,
         )

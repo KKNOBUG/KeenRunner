@@ -315,7 +315,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
         return {"case": case_info or {}, "steps": steps}
 
-    async def get_case_splice_tree(self, case_ids: Optional[List[int]] = None, case_codes: Optional[List[str]] = None) -> Tuple[Dict[str, Any], int]:
+    async def get_cases_splice_tree(self, case_ids: Optional[List[int]] = None, case_codes: Optional[List[str]] = None) -> Tuple[Dict[str, Any], int]:
         """
         批量查询多用例步骤树并按用例顺序拼接为一个列表。
 
