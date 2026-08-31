@@ -146,7 +146,7 @@ async def get_scheduled_tasks(task_type: Any) -> List[Any]:
     type_val = getattr(task_type, "value", task_type)
     if not type_val:
         return []
-    from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
+    from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
 
     q = (
             Q(state=0)

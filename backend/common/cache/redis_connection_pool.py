@@ -97,8 +97,8 @@ class RedisConnPoolFromConfig:
 
         try:
             # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
-            from backend.applications.aotutest.models.autotest_env_config_model import AutoTestEnvBindModel
-            from backend.applications.aotutest.models.autotest_env_model import AutoTestEnvModel
+            from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
+            from backend.applications.autotest.models.autotest_env_model import AutoTestEnvModel
             from backend.enums import AutoTestConfigNodeType
         except ImportError as e:
             error_message = f"无法导入自动化测试环境模型或枚举: {e}"
@@ -447,6 +447,6 @@ def get_app_redis_pool() -> "RedisConnPoolFromConfig":
 
     :return: RedisConnPoolFromConfig单例
     """
-    from backend.applications.aotutest.models.autotest_env_config_model import AutoTestEnvConfigModel
+    from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvConfigModel
 
     return RedisConnPoolFromConfig(config_model=AutoTestEnvConfigModel)

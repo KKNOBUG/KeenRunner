@@ -12,8 +12,8 @@ import datetime
 import uuid
 from typing import Any, Dict, List, Optional
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+from backend.applications.autotest.schemas.autotest_step_schema import StepVariablesBase
+from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
 from backend.configure import LOGGER

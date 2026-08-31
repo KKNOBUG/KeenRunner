@@ -10,18 +10,18 @@ from typing import List
 
 from fastapi import FastAPI
 
-from backend.applications.aotutest.models.autotest_tag_model import AutoTestTagModel
-from backend.applications.aotutest.schemas.autotest_env_config_schema import (
+from backend.applications.autotest.models.autotest_tag_model import AutoTestTagModel
+from backend.applications.autotest.schemas.autotest_env_config_schema import (
     APPEnvConfigCreate,
     DBEnvConfigCreate,
     FILEEnvConfigCreate,
 )
-from backend.applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
-from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
-from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestEnvCrud
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestTagCrud
+from backend.applications.autotest.schemas.autotest_project_schema import AutoTestApiProjectCreate
+from backend.applications.autotest.schemas.autotest_tag_schema import AutoTestApiTagCreate
+from backend.applications.autotest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
+from backend.applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
+from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
+from backend.applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.menu_schema import MenuCreate

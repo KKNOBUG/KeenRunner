@@ -186,8 +186,8 @@ async def _create_task_record(
     :param request_kwargs: Celery任务入参快照
     :return: None
     """
-    from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
-    from backend.applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
+    from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
+    from backend.applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
     from backend.celery_scheduler.celery_task_contract import resolve_task_meta
     from backend.enums import AutoTestTaskStatus
 
@@ -302,7 +302,7 @@ async def _update_task_record_on_end(
     """
     if not celery_id:
         return
-    from backend.applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
+    from backend.applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
     from backend.celery_scheduler.celery_task_contract import normalize_task_summary
     from backend.enums import AutoTestTaskStatus
 

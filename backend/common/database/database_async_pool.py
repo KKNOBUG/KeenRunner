@@ -221,4 +221,5 @@ class DatabaseAsyncPool:
             raise RuntimeError(f"执行SQL时发生错误: {e}") from e
 
 
-DATABASE_ASYNC_POOL = DatabaseAsyncPool(DATABASES)
+def get_app_database_pool() -> "DatabaseAsyncPool":
+    return DatabaseAsyncPool(DATABASES)

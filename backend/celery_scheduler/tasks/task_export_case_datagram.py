@@ -11,8 +11,8 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from backend.applications.aotutest.dependencies import get_autotest_api_services
-from backend.applications.aotutest.services.autotest_case_excel_service import (
+from backend.applications.autotest.dependencies import get_autotest_api_services
+from backend.applications.autotest.services.autotest_case_excel_service import (
     prepare_export_cases,
     build_export_workbook,
     build_export_file_name,

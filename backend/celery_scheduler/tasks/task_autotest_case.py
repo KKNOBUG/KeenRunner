@@ -12,8 +12,8 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from backend.applications.aotutest.models.autotest_task_model import AutoTestTaskModel
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
+from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from backend.celery_scheduler.celery_base import (
     check_task_expired,
     get_scheduled_tasks,

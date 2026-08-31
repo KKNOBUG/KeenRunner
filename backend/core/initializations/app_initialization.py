@@ -222,7 +222,7 @@ def register_routers(app: FastAPI) -> None:
     from backend.applications.department.views.department_view import dept
     from backend.applications.user.views.user_view import user_public, user_secure
     from backend.applications.toolbox.views import toolbox
-    from backend.applications.aotutest.views import autotest
+    from backend.applications.autotest.views import autotest
 
     # 挂在路由蓝图
     app.include_router(router=base_public, prefix="/base", tags=["系统管理:认证"])
