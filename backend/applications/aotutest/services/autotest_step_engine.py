@@ -41,7 +41,7 @@ from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import
     tcp_body_source_for_assert
 )
 from backend.applications.aotutest.services.autotest_runtime.datagram.datagram_diff import compare_messages
-
+from backend.applications.aotutest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
 from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from backend.applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
@@ -1087,6 +1087,30 @@ class BaseStepExecutor:
             return None
         return cfg
 
+    def collect_builtin_variables(self) -> List[StepVariablesBase]:
+        """
+        采集当前步骤的内置环境变量；默认无，HTTP/TCP执行器覆写提供SERVER_*/TARGET_*。
+
+        :return: 内置变量列表；无内置变量时返回空列表
+        """
+        return []
+
+    def existing_variable_keys(self) -> Set[str]:
+        """
+        用户已定义的变量key集合（本步骤局部+会话累积），供内置变量同名跳过判定。
+
+        :return: 变量key集合
+        """
+        keys: Set[str] = {
+            item.key for item in (self.step.defined_variables or [])
+            if isinstance(item, StepVariablesBase) and item.key
+        }
+        keys |= {
+            item.key for item in (self.context.session_variables or [])
+            if isinstance(item, StepVariablesBase) and item.key
+        }
+        return keys
+
     def apply_extract_and_assert(
             self,
             result: StepExecutionResult,
@@ -1217,12 +1241,24 @@ class BaseStepExecutor:
         # 设置当前步骤标识（先保存上一级 step_code 以便 finally 恢复）
         previous_step_code: Optional[str] = self.context.current_step_code
         self.context.set_current_step_code(self.step_code)
+        # 先注入内置环境变量（SERVER_HOST/SERVER_PORT/TARGET_HOST/TARGET_PORT/TARGET_PATH），
+        # 使用户定义变量的值中也可引用内置变量；占位符解析完成后再拼接回变量池末尾，
+        # 保证同名查找时用户变量优先命中（内置变量不覆盖用户主动定义的变量）
+        builtin_variables: List[StepVariablesBase] = self.collect_builtin_variables()
+        self.context.defined_variables = builtin_variables
         # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
         step_defined_variables: List[StepVariablesBase] = self.step.defined_variables
-        self.context.defined_variables = self.context.resolve_placeholders(
+        resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
             variables=step_defined_variables,
             step_code=self.step_code
         ) or []
+        resolved_keys: Set[str] = {
+            item.key for item in resolved_defined_variables
+            if isinstance(item, StepVariablesBase) and item.key
+        }
+        self.context.defined_variables = resolved_defined_variables + [
+            item for item in builtin_variables if item.key not in resolved_keys
+        ]
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -2595,6 +2631,28 @@ class TcpStepExecutor(BaseStepExecutor):
             - tcp_response_type 取 "json"、"xml"、"text" 或 "bytes"（默认 text，json/xml 失败会降级为 text）。
     """
 
+    def collect_builtin_variables(self) -> List[StepVariablesBase]:
+        """
+        采集TCP步骤内置环境变量：SERVER_*/TARGET_*（TARGET_PATH固定为空字符串）。
+        目标HOST/PORT取自执行配置，未命中时TARGET_*不注入并记录内置数据获取失败日志。
+
+        :return: 内置变量列表
+        """
+        current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+            expected_config_type=AutoTestConfigNodeType.APP,
+        )
+        target_host: Optional[str] = current_step_config.config_host if current_step_config else None
+        target_port: Optional[str] = (
+            str(current_step_config.config_port) if current_step_config and current_step_config.config_port else None
+        )
+        return collect_builtin_step_variables(
+            target_host=target_host,
+            target_port=target_port,
+            target_path="",
+            existing_keys=self.existing_variable_keys(),
+            log=lambda msg: self.context.log(msg, step_code=self.step_code),
+        )
+
     async def _execute(self, result: StepExecutionResult) -> None:
         """
         解析执行环境与报文，发送TCP请求并完成变量提取与断言。
@@ -3324,6 +3382,28 @@ class HttpStepExecutor(BaseStepExecutor):
     HTTP 步骤执行器：发请求、解析占位符、根据request_project_id取项目下环境补全 URL，并执行变量提取与断言。
     参数化驱动仅在此执行器内处理：根据dataset_name + case_id/step_code查AutoTestDataSourceModel取数。
     """
+
+    def collect_builtin_variables(self) -> List[StepVariablesBase]:
+        """
+        采集HTTP步骤内置环境变量：SERVER_*/TARGET_*（TARGET_URL为步骤request_url原值，未拼装）。
+        目标HOST/PORT取自执行配置，未命中时TARGET_*不注入并记录内置数据获取失败日志。
+
+        :return: 内置变量列表
+        """
+        current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+            expected_config_type=AutoTestConfigNodeType.APP,
+        )
+        target_host: Optional[str] = current_step_config.config_host if current_step_config else None
+        target_port: Optional[str] = (
+            str(current_step_config.config_port) if current_step_config and current_step_config.config_port else None
+        )
+        return collect_builtin_step_variables(
+            target_host=target_host,
+            target_port=target_port,
+            target_path=(self.step.request_url or "").strip(),
+            existing_keys=self.existing_variable_keys(),
+            log=lambda msg: self.context.log(msg, step_code=self.step_code),
+        )
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """

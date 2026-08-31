@@ -36,6 +36,10 @@ from backend.applications.aotutest.services.autotest_runtime.protocol_tcp import
     resolve_tcp_debug_request_extract_sources,
     select_tcp_debug_payload,
 )
+from backend.applications.aotutest.services.autotest_runtime.builtin_variables import (
+    collect_builtin_step_variables,
+    strip_host_scheme,
+)
 from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from backend.common import AioTcpClient, TcpFrameMode
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
@@ -142,6 +146,39 @@ class StepDebugService:
             if isinstance(item, StepVariablesBase) and item.key:
                 merged_lookup[item.key] = item.value
         return finished_variables
+
+    @staticmethod
+    def inject_builtin_variables_for_debug(
+            initial_models: List[StepVariablesBase],
+            merged_lookup: Dict[str, Any],
+            *,
+            target_host: Optional[str] = None,
+            target_port: Optional[str] = None,
+            target_path: Optional[str] = None,
+            log: Callable[[str], None],
+    ) -> None:
+        """
+        向调试变量池追加内置环境变量（SERVER_*/TARGET_*），与执行模式保持一致。
+        同名时跳过：内置变量不覆盖用户主动定义的变量；获取失败项记录日志由前端反馈。
+
+        :param initial_models: 占位符解析用初始变量列表（就地追加）
+        :param merged_lookup: 提取/断言用查找字典（就地补充）
+        :param target_host: 目标应用主机；None表示未解析到环境配置（如HTTP绝对URL）
+        :param target_port: 目标应用端口；None表示未解析到环境配置
+        :param target_path: 目标URL（等同request_url原值）；TCP调试传空字符串
+        :param log: 日志回调
+        :return: None
+        """
+        builtin_variables = collect_builtin_step_variables(
+            target_host=target_host,
+            target_port=target_port,
+            target_path=target_path,
+            existing_keys=set(merged_lookup.keys()),
+            log=log,
+        )
+        initial_models.extend(builtin_variables)
+        for item in builtin_variables:
+            merged_lookup.setdefault(item.key, item.value)
 
     @classmethod
     async def resolve_env_config(
@@ -383,6 +420,10 @@ class StepDebugService:
         logger = cls.make_debug_logger(step_name)
         log = logger.append
 
+        # 内置变量TARGET_PATH：等同用户填写的request_url原值（绝对/相对均原样），须在URL拼装前捕获
+        target_path_raw: str = request_url
+        builtin_target_host: Optional[str] = None
+        builtin_target_port: Optional[str] = None
         if not is_absolute_http_url(request_url):
             endpoint = await cls.resolve_env_config(
                 services,
@@ -397,6 +438,8 @@ class StepDebugService:
                 raise NotFoundException(
                     message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不完整"
                 )
+            builtin_target_host = host
+            builtin_target_port = endpoint.config_port
             request_url = build_absolute_http_url(host, endpoint.config_port, request_url)
 
         log(
@@ -406,6 +449,16 @@ class StepDebugService:
             f"配置名称: {request_config_name}\n\t"
             f"请求方法: {request_method}\n\t"
             f"请求地址: {request_url}"
+        )
+
+        # 注入内置环境变量（SERVER_*/TARGET_*）：绝对URL时无环境配置，TARGET_*不注入并记录获取失败日志
+        cls.inject_builtin_variables_for_debug(
+            initial_models,
+            merged_lookup,
+            target_host=builtin_target_host,
+            target_port=builtin_target_port,
+            target_path=target_path_raw,
+            log=log,
         )
 
         finished_variables = cls.resolve_placeholders_into_pool(initial_models, merged_lookup, log)
@@ -607,24 +660,8 @@ class StepDebugService:
             f"请求体类型: {request_args_type}\n\t"
             f"目标地址: 由环境配置解析(config_host/config_port)"
         )
-        log("【参数替换】开始: ")
 
-        finished_variables = cls.resolve_placeholders_into_pool(initial_models, merged_lookup, log)
-        if request_args_type == AutoTestReqArgsType.JSON:
-            request_body = AutoTestToolService.resolve_placeholders(
-                value=request_body, logger_object=log, finished_variables=finished_variables
-            )
-        elif request_text is not None:
-            if request_args_type == AutoTestReqArgsType.XML:
-                request_text = AutoTestToolService.resolve_xml_placeholders(
-                    xml_text=request_text, logger_object=log, finished_variables=finished_variables
-                )
-            else:
-                request_text = AutoTestToolService.resolve_placeholders(
-                    value=request_text, logger_object=log, finished_variables=finished_variables
-                )
-        log("【参数替换】结束")
-
+        # 严格对齐执行模式：先解析环境配置，再进行参数占位符替换（内置变量TARGET_*依赖配置解析结果）
         try:
             endpoint = await cls.resolve_env_config(
                 services,
@@ -644,7 +681,7 @@ class StepDebugService:
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise StepDebugException(message=error_message) from e
 
-        host = (endpoint.config_host or "").strip().replace("http://", "").replace("https://", "")
+        host = strip_host_scheme(endpoint.config_host) or ""
         port = (endpoint.config_port or "").strip()
         log(f"解析请求信息(host={host}, port={port})成功")
         if not host or not port:
@@ -654,6 +691,34 @@ class StepDebugService:
                     "(请检查该环境下的API环境配置中的config_host/config_port)"
                 )
             )
+
+        # 注入内置环境变量（SERVER_*/TARGET_*），TCP的TARGET_PATH固定为空字符串；供请求体占位符替换与提取断言使用
+        cls.inject_builtin_variables_for_debug(
+            initial_models,
+            merged_lookup,
+            target_host=host,
+            target_port=port,
+            target_path="",
+            log=log,
+        )
+
+        log("【参数替换】开始: ")
+
+        finished_variables = cls.resolve_placeholders_into_pool(initial_models, merged_lookup, log)
+        if request_args_type == AutoTestReqArgsType.JSON:
+            request_body = AutoTestToolService.resolve_placeholders(
+                value=request_body, logger_object=log, finished_variables=finished_variables
+            )
+        elif request_text is not None:
+            if request_args_type == AutoTestReqArgsType.XML:
+                request_text = AutoTestToolService.resolve_xml_placeholders(
+                    xml_text=request_text, logger_object=log, finished_variables=finished_variables
+                )
+            else:
+                request_text = AutoTestToolService.resolve_placeholders(
+                    value=request_text, logger_object=log, finished_variables=finished_variables
+                )
+        log("【参数替换】结束")
 
         payload = select_tcp_debug_payload(
             request_args_type, request_text=request_text, request_body=request_body

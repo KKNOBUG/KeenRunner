@@ -240,7 +240,7 @@ async def search_environments(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env.post("/query", summary="查询环境配置并分类", description="按id列表查询环境配置并分类返回")
+@autotest_env.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
 async def classify_environment_configs(
         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

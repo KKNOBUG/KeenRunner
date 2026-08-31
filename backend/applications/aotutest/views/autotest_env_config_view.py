@@ -424,34 +424,34 @@ async def search_env_configs(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
-async def classify_env_configs(
-        env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    根据应用列表查询环境配置并分类。
-
-    :param env_config_in: 含project_ids的查询入参
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        data = await services.env_config_curd.query_classified_by_project_ids(
-            project_ids=env_config_in.project_ids,
-        )
-        total_configs: int = sum(
-            len(names)
-            for envs in data.values()
-            for buckets in envs.values()
-            for names in buckets.values()
-        )
-        return SuccessResponse(message="查询成功", data=data, total=total_configs)
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+# @autotest_env_config.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
+# async def classify_env_configs(
+#         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+#         services: AutoTestApiServices = Depends(get_autotest_api_services),
+# ):
+#     """
+#     根据应用列表查询环境配置并分类。
+#
+#     :param env_config_in: 含project_ids的查询入参
+#     :param services: 自动化测试CRUD依赖聚合
+#     :return: 统一HTTP响应
+#     """
+#     try:
+#         data = await services.env_config_curd.query_classified_by_project_ids(
+#             project_ids=env_config_in.project_ids,
+#         )
+#         total_configs: int = sum(
+#             len(names)
+#             for envs in data.values()
+#             for buckets in envs.values()
+#             for names in buckets.values()
+#         )
+#         return SuccessResponse(message="查询成功", data=data, total=total_configs)
+#     except ParameterException as e:
+#         return ParameterResponse(message=str(e.message))
+#     except Exception as e:
+#         LOGGER.error(f"根据应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
+#         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
 @autotest_env_config.get("/config_names", summary="查询配置名称", description="获取去重后的配置名称列表")
