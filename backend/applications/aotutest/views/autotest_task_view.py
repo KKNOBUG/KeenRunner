@@ -287,7 +287,6 @@ async def run_task(
                 "report_type": AutoTestReportType.ASYNC_EXEC,
                 "created_user": get_current_username(),
             },
-            queue="autotest_queue",
             __task_id=task_id
         )
         LOGGER.info(f"下发执行任务成功，task_id={task_id}")

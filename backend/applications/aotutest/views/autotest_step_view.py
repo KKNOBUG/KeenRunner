@@ -842,7 +842,6 @@ async def execute_step_tree(
                         "steps_execute_config": steps_execute_config_payload,
                         "created_user": get_current_username(),
                     },
-                    queue="autotest_queue",
                 )
                 LOGGER.info(
                     f"参数化执行任务已下发Celery: case_id={case_id}, batch_code={batch_code}, "

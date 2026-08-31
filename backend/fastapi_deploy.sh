@@ -11,7 +11,10 @@ GUNICORN_PID_FILE="${PROJECT_ROOT}/gunicorn.pid"
 # 配置Celery应用路径
 CELERY_APP="celery_scheduler.celery_worker:celery"
 CELERY_WORKER_CONCURRENCY=4
-CELERY_WORKER_QUEUES="autotest_queue,default"
+# 队列名与 celery_config.py 端口前缀隔离保持一致（{port}_default,{port}_autotest），从.env读取端口避免漂移
+SERVER_PORT="$(grep -E '^SERVER_PORT=' "${PROJECT_ROOT}/.env" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
+SERVER_PORT="${SERVER_PORT:-8519}"
+CELERY_WORKER_QUEUES="${SERVER_PORT}_default,${SERVER_PORT}_autotest"
 CELERY_BEAT_SCHEDULER="redbeat.schedulers:RedBeatScheduler"
 
 # Celery日志和PID文件
