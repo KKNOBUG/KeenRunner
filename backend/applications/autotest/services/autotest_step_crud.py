@@ -6,6 +6,7 @@
 @Module  : autotest_step_crud.py
 @DateTime: 2025/4/28
 """
+import asyncio
 import datetime
 import traceback
 import uuid
@@ -110,19 +111,64 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         """
         case_crud = AutoTestCaseCrud()
         if case_id:
-            case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
+            case_instance: Optional[AutoTestCaseModel] = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
-            case_instance = await case_crud.get_by_code(case_code=case_code, on_error=True, state__not=1)
+            case_instance: Optional[AutoTestCaseModel] = await case_crud.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id: int = case_instance.id
 
-        # 获取所有根步骤（没有父步骤的步骤）
-        root_steps: List[AutoTestStepModel] = await self.model.filter(
-            case_id=case_id,
-            parent_step_id__isnull=True,
-            state__not=1
-        ).order_by("step_no").all()
+        from collections import defaultdict
+        roots_by_case: Dict[int, List[AutoTestStepModel]] = defaultdict(list)
+        children_by_parent: Dict[int, List[AutoTestStepModel]] = defaultdict(list)
+        loaded_case_ids: Set[int] = set()
+
+        async def ensure_case_steps_loaded(target_case_id: int) -> None:
+            """懒加载指定用例的全部启用步骤并入内存分组(嵌套引用一同加载)。"""
+            if target_case_id in loaded_case_ids:
+                return
+            loaded_case_ids.add(target_case_id)
+            case_steps: List[AutoTestStepModel] = await self.model.filter(case_id=target_case_id, state__not=1).all()
+            for s in case_steps:
+                if s.parent_step_id is None:
+                    roots_by_case[target_case_id].append(s)
+                else:
+                    children_by_parent[s.parent_step_id].append(s)
+
+        await ensure_case_steps_loaded(case_id)
+        root_steps: List[AutoTestStepModel] = sorted(roots_by_case.get(case_id, []), key=lambda s: s.step_no)
         root_index = [step.step_no for step in root_steps]
         LOGGER.info(f"获取用例[case_id={case_id}]根步骤成功, 共计: {len(root_steps)}个, 根步骤序号: {root_index}")
+
+        # 用例字典缓存：同用例下所有步骤共用同一份用例信息，避免逐步骤重复查询
+        case_dict_cache: Dict[int, Dict[str, Any]] = {
+            case_id: await case_instance.to_dict(
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
+                replace_fields={"id": "case_id"}
+            )
+        }
+
+        async def get_case_dict(target_case_id: int, on_error: bool) -> Optional[Dict[str, Any]]:
+            """按case_id获取用例字典(缓存优先)，未命中时查库并回填缓存；出口返回副本避免多步骤共享同一字典对象。"""
+            if target_case_id in case_dict_cache:
+                return dict(case_dict_cache[target_case_id])
+            case: Optional[AutoTestCaseModel] = await case_crud.get_by_id(case_id=target_case_id, on_error=on_error, state__not=1)
+            if not case:
+                return None
+            case_dict = await case.to_dict(
+                exclude_fields={
+                    "state",
+                    "created_user", "updated_user",
+                    "created_time", "updated_time",
+                    "reserve_1", "reserve_2", "reserve_3"
+                },
+                replace_fields={"id": "case_id"}
+            )
+            case_dict_cache[target_case_id] = case_dict
+            return dict(case_dict)
 
         # 步骤计数器：用于统计该用例拥有的步骤总数
         # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id为None）
@@ -138,22 +184,17 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
         # 递归构建步骤树
         async def build_step_tree(step: AutoTestStepModel, is_quote: bool = False) -> Dict[str, Any]:
-            """递归构建单步及其子步骤、引用脚本步骤的树形字典。"""
-            # 统计步骤数量
+            """递归构建单步及其子步骤、引用脚本步骤的树形字典并统计各类步骤数量。"""
             step_counter["total_steps"] += 1
             if is_quote:
-                # 引用步骤及其所有子步骤都计入 quote_steps
                 step_counter["quote_steps"] += 1
             else:
-                # 非引用步骤：根据是否有父步骤判断是根步骤还是子步骤
                 if step.parent_step_id is None:
-                    # 根步骤（parent_step_id 为 None）
                     step_counter["direct_steps"] += 1
                 else:
-                    # 子步骤（parent_step_id 不为 None）
                     step_counter["child_steps"] += 1
 
-            # 获取步骤基本信息
+            # 获取步骤基本信息(内存序列化, 无DB查询)
             step_dict = await step.to_dict(
                 exclude_fields={
                     "state",
@@ -163,28 +204,16 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 },
                 replace_fields={"id": "step_id"}
             )
-            LOGGER.info(f"获取步骤[step_id={step.id}, step_no={step.step_no}]基本信息完成")
-            # 获取用例信息（业务层手动查询）
+            # 获取用例信息（同用例缓存复用，不再逐步骤查库）
             if step.case_id:
-                case = await case_crud.get_by_id(case_id=step.case_id, on_error=True, state__not=1)
-                step_dict["case"] = await case.to_dict(
-                    exclude_fields={
-                        "state",
-                        "created_user", "updated_user",
-                        "created_time", "updated_time",
-                        "reserve_1", "reserve_2", "reserve_3"
-                    },
-                    replace_fields={"id": "case_id"}
-                )
-                LOGGER.info(f"获取步骤[step_id={step.id}, step_no={step.step_no}]所属用例信息完成")
+                step_dict["case"] = await get_case_dict(step.case_id, on_error=True)
 
-            # 获取子步骤（递归构建）
-            children: List[AutoTestStepModel] = await self.model.filter(
-                parent_step_id=step.id,
-                state__not=1
-            ).order_by("branch_index", "step_no").all()
+            # 获取子步骤（内存分组读取，递归构建）
+            children: List[AutoTestStepModel] = sorted(
+                children_by_parent.get(step.id, []),
+                key=lambda s: (s.branch_index is not None, s.branch_index or 0, s.step_no)
+            )
             if step.step_type == AutoTestStepType.IF and step.branch_items:
-                from collections import defaultdict
                 grouped = defaultdict(list)
                 for child in children:
                     grouped[child.branch_index if child.branch_index is not None else 0].append(child)
@@ -197,9 +226,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 step_dict["branch_items"] = branches_with_children
                 step_dict["children"] = []
             elif children:
-                LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]所有子步骤(递归构建)开始 ==*==")
                 step_dict["children"] = [await build_step_tree(child, is_quote=is_quote) for child in children]
-                LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]所有子步骤(递归构建)完成 ==*==")
             else:
                 step_dict["children"] = []
 
@@ -208,36 +235,24 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 step_dict["quote_case"] = None
                 return step_dict
 
-            quote_case = await case_crud.get_by_id(case_id=step.quote_case_id, on_error=False, state__not=1)
-            if not quote_case:
+            quote_case_dict = await get_case_dict(step.quote_case_id, on_error=False)
+            if not quote_case_dict:
                 step_dict["quote_steps"] = []
                 step_dict["quote_case"] = None
                 return step_dict
 
             # 获取引用的公共脚本的所有步骤(包含子步骤, 递归构建)
-            quote_case_root_steps: List[AutoTestStepModel] = await self.model.filter(
-                case_id=step.quote_case_id,
-                parent_step_id__isnull=True,
-                state__not=1
-            ).order_by("step_no").all()
-            LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]引用脚本的所有步骤(包含子步骤, 递归构建)开始 ==*==")
-            step_dict["quote_steps"] = [await build_step_tree(quote, is_quote=True) for quote in quote_case_root_steps]
-            step_dict["quote_case"] = await quote_case.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_user", "updated_user",
-                    "created_time", "updated_time",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
-                replace_fields={"id": "case_id"}
+            await ensure_case_steps_loaded(step.quote_case_id)
+            quote_case_root_steps: List[AutoTestStepModel] = sorted(
+                roots_by_case.get(step.quote_case_id, []), key=lambda s: s.step_no
             )
-            LOGGER.info(f"==*== 获取步骤[step_id={step.id}, step_no={step.step_no}]引用脚本的所有步骤(包含子步骤, 递归构建)完成 ==*==")
+            step_dict["quote_steps"] = [await build_step_tree(quote, is_quote=True) for quote in quote_case_root_steps]
+            step_dict["quote_case"] = quote_case_dict
             return step_dict
 
         # 构建所有根步骤的树
         result = []
         for root_id, root_step in enumerate(root_steps, start=1):
-            LOGGER.info(f"==> 构建第{root_id}个根步骤树结构: ")
             result.append(await build_step_tree(root_step))
 
         # 没有测试步骤明细时将测试用例本身添加到返回结果（历史：单节点仅含case）
@@ -319,9 +334,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         """
         批量查询多用例步骤树并按用例顺序拼接为一个列表。
 
-        逐用例复用 /tree 接口的步骤树加载逻辑(get_case_tree)，
-        保证拼接内容与 /tree 接口的 data 结构完全一致。
-
         :param case_ids: 用例主键ID列表，与case_codes二选一(同时传递时以case_ids为准)
         :param case_codes: 用例标识代码列表，与case_ids二选一
         :return: (拼接结果, 所有用例步骤总数)
@@ -335,11 +347,19 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             targets: List[Tuple[Optional[int], Optional[str]]] = [(tid, None) for tid in dict.fromkeys(case_ids)]
         else:
             targets: List[Tuple[Optional[int], Optional[str]]] = [(None, tcd) for tcd in dict.fromkeys(case_codes)]
+
+        # 各用例步骤树相互独立，并发加载以摊薄逐步骤查询的往返开销；
+        # gather结果与targets顺序严格一致，保证拼接顺序稳定；
+        # 任一用例查询异常(如不存在)直接抛出并取消其余任务，语义与串行一致。
+        loads = await asyncio.gather(*[
+            self.get_case_tree(case_id=target_id, case_code=target_code)
+            for target_id, target_code in targets
+        ])
+
         total_steps: int = 0
         indexes: Dict[str, List[int]] = {}
         details: List[Dict[str, Any]] = []
-        for target_id, target_code in targets:
-            load = await self.get_case_tree(case_id=target_id, case_code=target_code)
+        for (target_id, target_code), load in zip(targets, loads):
             start_index: int = len(details)
             if load.root_steps:
                 details.extend(s.model_dump(mode="json") for s in load.root_steps)
