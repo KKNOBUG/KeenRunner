@@ -188,11 +188,10 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             step_counter["total_steps"] += 1
             if is_quote:
                 step_counter["quote_steps"] += 1
+            elif step.parent_step_id is None:
+                step_counter["direct_steps"] += 1
             else:
-                if step.parent_step_id is None:
-                    step_counter["direct_steps"] += 1
-                else:
-                    step_counter["child_steps"] += 1
+                step_counter["child_steps"] += 1
 
             # 获取步骤基本信息(内存序列化, 无DB查询)
             step_dict = await step.to_dict(
