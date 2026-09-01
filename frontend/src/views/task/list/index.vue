@@ -21,6 +21,7 @@ import TaskFormModal from '@/views/task/list/components/TaskFormModal.vue'
 import TaskHistoryModal from '@/views/task/list/components/TaskHistoryModal.vue'
 
 import {formatDateTime, renderIcon} from '@/utils'
+import {formatScheduleSummary} from '@/utils/common/schedule'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
@@ -439,6 +440,17 @@ const columns = computed(() => {
     },
   },
   {
+    title: '定时配置',
+    key: 'task_schedule_expr',
+    width: 260,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      const summary = formatScheduleSummary(row.task_periodic_expr, row.task_schedule_expr)
+      return h('span', summary || '-')
+    },
+  },
+  {
     title: '关联用例数',
     key: 'task_kwargs',
     width: 100,
@@ -648,7 +660,7 @@ onMounted(() => {
         :columns="columns"
         :get-data="api.getApiTaskList"
         row-key="task_id"
-        :scroll-x="2100"
+        :scroll-x="2360"
         :single-line="true"
         @query-bar-create="openAdd"
         @query-bar-delete="handleBatchDelete"

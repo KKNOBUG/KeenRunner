@@ -3,9 +3,11 @@
  * 新增/编辑任务 — 三步向导
  * 0 任务与调度信息配置 → 1 脚本与执行次数配置 → 2 环境与数据源信息配置
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   NButton,
+  NCard,
+  NCollapseTransition,
   NDrawer,
   NDrawerContent,
   NDynamicTags,
@@ -16,11 +18,22 @@ import {
   NSpace,
   NStep,
   NSteps,
+  NTooltip,
 } from 'naive-ui'
+import TheIcon from '@/components/icon/TheIcon.vue'
 import { useUserStore } from '@/store'
 import api from '@/api'
+import {
+  CYCLE_MONTH,
+  CYCLE_WEEK,
+  PERIODIC_ONLY_ONCE,
+  buildSchedulePayload,
+  createEmptyScheduleState,
+  hasScheduleConfig,
+  scheduleStateFromExpr,
+} from '@/utils/common/schedule'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
-import CronGenerator from './CronGenerator.vue'
+import ScheduleConfig from './ScheduleConfig.vue'
 import ScriptSelectModal from './ScriptSelectModal.vue'
 import SelectedScriptTable from './SelectedScriptTable.vue'
 
@@ -42,9 +55,17 @@ const isEdit = computed(() => props.taskId != null && props.taskId !== '')
 const STEP_TITLES = ['任务与调度信息配置', '脚本与执行次数配置', '环境与数据源信息配置']
 const LAST_STEP = STEP_TITLES.length - 1
 
+const EXEC_MODE_OPTIONS = [
+  { label: '并行执行', value: '并行执行' },
+  { label: '串行执行', value: '串行执行' },
+]
+const EXEC_MODE_TIP =
+  '并行执行：多个脚本同时执行；串行执行：按照任务中脚本的序号依次执行，前一个脚本完成后才会执行下一个'
+
 const taskForm = ref(createEmptyForm())
-const cronRunMode = ref('once')
-const cronGeneratorRef = ref(null)
+const basicCollapsed = ref(false)
+const scheduleState = ref(createEmptyScheduleState())
+const scheduleOpen = ref(true)
 
 const selectedScripts = ref([]) // row objects
 const casesExecuteConfig = ref({})
@@ -61,8 +82,7 @@ function createEmptyForm() {
     task_notify: null,
     task_notifier: [],
     task_kwargs: {},
-    task_crontabs_expr: '',
-    task_periodic_expr: '执行1次',
+    execute_mode: '并行执行',
   }
 }
 
@@ -85,13 +105,38 @@ watch(currentStep, (step) => {
   if (step !== 1) scriptPickerRef.value?.collapse?.()
 })
 
-function onCronGeneratorChange(result) {
-  if (!result?.ok) return
-  taskForm.value.task_crontabs_expr = result.task_crontabs_expr || ''
-  if (result.task_periodic_expr) {
-    taskForm.value.task_periodic_expr = result.task_periodic_expr
+/** 定时设置校验：周期模式恒有默认值；无任何实质配置允许通过，已配置则各必输项齐全 */
+function validateSchedule() {
+  const st = scheduleState.value
+  const hasDays = (st.monthDays || []).length
+  const hasWeeks = (st.weeks || []).length
+  const times = st.times || []
+  const hasTimes = times.some((t) => t)
+  if (!hasDays && !hasWeeks && !hasTimes && !st.cycle) return true
+  if (st.periodic === PERIODIC_ONLY_ONCE) {
+    if (!hasDays) {
+      window.$message?.warning?.('请选择触发日期')
+      return false
+    }
+  } else {
+    if (!st.cycle) {
+      window.$message?.warning?.('请选择周期类型')
+      return false
+    }
+    if (st.cycle === CYCLE_WEEK && !hasWeeks) {
+      window.$message?.warning?.('请选择触发星期')
+      return false
+    }
+    if (st.cycle === CYCLE_MONTH && !hasDays) {
+      window.$message?.warning?.('请选择触发日期')
+      return false
+    }
   }
-  if (result.runMode) cronRunMode.value = result.runMode
+  if (!times.length || times.some((t) => !t) || !buildSchedulePayload(st)) {
+    window.$message?.warning?.('请完善定时设置的触发时间')
+    return false
+  }
+  return true
 }
 
 async function checkTaskNameUnique() {
@@ -134,21 +179,7 @@ async function validateStep0() {
     return false
   }
   if (!(await checkTaskNameUnique())) return false
-
-  const resolved = cronGeneratorRef.value?.resolveSchedule?.()
-  if (resolved?.ok) {
-    taskForm.value.task_crontabs_expr = resolved.task_crontabs_expr || ''
-    if (resolved.task_periodic_expr) {
-      taskForm.value.task_periodic_expr = resolved.task_periodic_expr
-    }
-    if (resolved.runMode) cronRunMode.value = resolved.runMode
-    return true
-  }
-  if (!taskForm.value.task_crontabs_expr?.trim()) {
-    window.$message?.warning?.(resolved?.error || '请配置 Crontab 表达式')
-    return false
-  }
-  return true
+  return validateSchedule()
 }
 
 function validateStep1() {
@@ -228,11 +259,12 @@ function removeScript(caseId) {
 function resetState() {
   currentStep.value = 0
   taskForm.value = createEmptyForm()
-  cronRunMode.value = 'once'
+  basicCollapsed.value = false
+  scheduleState.value = createEmptyScheduleState()
+  scheduleOpen.value = true
   selectedScripts.value = []
   casesExecuteConfig.value = {}
   scriptPickerRef.value?.collapse?.()
-  cronGeneratorRef.value?.reset?.()
 }
 
 async function loadTaskDetail(taskId) {
@@ -268,24 +300,12 @@ async function loadTaskDetail(taskId) {
           ? { initial_variables: taskKwargs.initial_variables }
           : {}),
       },
-      task_crontabs_expr: d.task_crontabs_expr || '',
-      task_periodic_expr: d.task_periodic_expr || '执行N次',
+      execute_mode: taskKwargs.execute_mode === '串行执行' ? '串行执行' : '并行执行',
     }
 
-    if (d.task_periodic_expr === '执行1次') {
-      cronRunMode.value = 'once'
-    } else if (d.task_periodic_expr === '执行N次') {
-      cronRunMode.value = 'repeat'
-    } else {
-      // 兼容旧数据：曾用 datetime 表示执行1次
-      cronRunMode.value = d.task_scheduler === 'datetime' ? 'once' : 'repeat'
-      taskForm.value.task_periodic_expr =
-        cronRunMode.value === 'once' ? '执行1次' : '执行N次'
-    }
-    if (d.task_crontabs_expr) {
-      await nextTick()
-      cronGeneratorRef.value?.applyFromExpr?.(d.task_crontabs_expr)
-    }
+    // 定时设置回显：已有定时信息默认展开，否则收起
+    scheduleState.value = scheduleStateFromExpr(d.task_periodic_expr, d.task_schedule_expr)
+    scheduleOpen.value = hasScheduleConfig(scheduleState.value)
 
     if (caseIds.length) {
       try {
@@ -381,11 +401,13 @@ async function handleSubmit() {
         : {}
     const taskKwargsPayload = {
       case_ids: caseIds,
+      execute_mode: taskForm.value.execute_mode || '并行执行',
     }
     if (Array.isArray(prevKwargs.initial_variables)) {
       taskKwargsPayload.initial_variables = prevKwargs.initial_variables
     }
 
+    const schedulePayload = buildSchedulePayload(scheduleState.value)
     const payload = {
       task_name: taskForm.value.task_name.trim(),
       task_desc: taskForm.value.task_desc || null,
@@ -395,8 +417,8 @@ async function handleSubmit() {
       task_notifier: Array.isArray(taskForm.value.task_notifier) ? taskForm.value.task_notifier : null,
       task_kwargs: taskKwargsPayload,
       cases_execute_config: casesCfgPayload,
-      task_crontabs_expr: taskForm.value.task_crontabs_expr || null,
-      task_periodic_expr: taskForm.value.task_periodic_expr || '执行N次',
+      task_periodic_expr: schedulePayload?.periodic ?? null,
+      task_schedule_expr: schedulePayload?.schedule ?? null,
     }
 
     const currentUser = userStore.username || ''
@@ -451,60 +473,87 @@ const modalTitle = computed(() => (isEdit.value ? '编辑任务' : '新增任务
         <div class="task-wizard-main">
           <!-- Step 0: 任务与调度信息配置 -->
           <div v-show="currentStep === 0" class="task-wizard-pane task-wizard-merged">
-            <section class="merge-section">
-              <header class="merge-section-head">
-                <span class="merge-section-title">基本信息</span>
-              </header>
-              <div class="merge-section-body">
-                <NForm label-placement="left" label-width="88" size="small" class="basic-form">
-                  <div class="basic-form-grid">
-                    <NFormItem label="任务名称" required class="basic-form-item">
-                      <NInput
-                        v-model:value="taskForm.task_name"
-                        placeholder="请输入任务名称"
-                        clearable
-                      />
-                    </NFormItem>
-                    <NFormItem label="所属应用" required class="basic-form-item">
-                      <NSelect
-                        v-model:value="taskForm.task_project"
-                        :options="projectOptions"
-                        :loading="projectLoading"
-                        clearable
-                        filterable
-                        placeholder="请选择所属应用"
-                      />
-                    </NFormItem>
+            <NCard :bordered="false" class="step-editor-card basic-card" :class="{ 'is-collapsed': basicCollapsed }">
+              <template #header>
+                <div class="card-header-row">
+                  <div
+                    class="panel-title panel-title-wrap"
+                    role="button"
+                    tabindex="0"
+                    @click="basicCollapsed = !basicCollapsed"
+                    @keydown.enter.prevent="basicCollapsed = !basicCollapsed"
+                  >
+                    <TheIcon
+                      class="panel-collapse-icon"
+                      :icon="basicCollapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+                      :size="20"
+                    />
+                    基本信息
                   </div>
-                  <div class="basic-form-grid">
-                    <NFormItem label="任务描述" class="basic-form-item">
-                      <NInput
-                        v-model:value="taskForm.task_desc"
-                        placeholder="请输入任务描述（可选）"
-                        clearable
-                      />
-                    </NFormItem>
-                    <NFormItem label="任务通知" class="basic-form-item">
-                      <NDynamicTags v-model:value="taskForm.task_notifier" />
-                    </NFormItem>
+                  <div class="card-header-actions">
+                    <NButton text size="tiny" class="collapse-tiny-btn" @click="basicCollapsed = !basicCollapsed">
+                      <template #icon>
+                        <TheIcon
+                          :icon="basicCollapsed ? 'material-symbols:expand-more' : 'material-symbols:expand-less'"
+                          :size="18"
+                        />
+                      </template>
+                      {{ basicCollapsed ? '展开' : '收起' }}
+                    </NButton>
+                  </div>
+                </div>
+              </template>
+              <NCollapseTransition :show="!basicCollapsed">
+                <NForm class="step-editor-form basic-form" label-placement="left" label-width="80px" size="small">
+                  <div class="basic-field-rows">
+                    <div class="basic-field-row basic-field-row--cols3">
+                      <NFormItem label="任务名称" required class="basic-fi-fill">
+                        <NInput v-model:value="taskForm.task_name" placeholder="请输入任务名称" clearable />
+                      </NFormItem>
+                      <NFormItem label="所属应用" required class="basic-fi-fill">
+                        <NSelect
+                          v-model:value="taskForm.task_project"
+                          :options="projectOptions"
+                          :loading="projectLoading"
+                          clearable
+                          filterable
+                          placeholder="请选择所属应用"
+                        />
+                      </NFormItem>
+                      <NFormItem label="执行方式" required class="basic-fi-fill">
+                        <NTooltip trigger="hover" :delay="300">
+                          <template #trigger>
+                            <NSelect
+                              v-model:value="taskForm.execute_mode"
+                              :options="EXEC_MODE_OPTIONS"
+                              placeholder="请选择执行方式"
+                            />
+                          </template>
+                          {{ EXEC_MODE_TIP }}
+                        </NTooltip>
+                      </NFormItem>
+                    </div>
+                    <div class="basic-field-row basic-field-row--cols1">
+                      <NFormItem label="任务描述" class="basic-fi-fill">
+                        <NInput
+                          v-model:value="taskForm.task_desc"
+                          type="textarea"
+                          :autosize="{ minRows: 1, maxRows: 4 }"
+                          placeholder="请输入任务描述（可选）"
+                        />
+                      </NFormItem>
+                    </div>
+                    <div class="basic-field-row basic-field-row--cols1">
+                      <NFormItem label="任务通知" class="basic-fi-fill">
+                        <NDynamicTags v-model:value="taskForm.task_notifier" />
+                      </NFormItem>
+                    </div>
                   </div>
                 </NForm>
-              </div>
-            </section>
+              </NCollapseTransition>
+            </NCard>
 
-            <section class="merge-section merge-section--schedule">
-              <header class="merge-section-head">
-                <span class="merge-section-title">调度配置</span>
-              </header>
-              <div class="merge-section-body merge-section-body--cron">
-                <CronGenerator
-                  ref="cronGeneratorRef"
-                  v-model="taskForm.task_crontabs_expr"
-                  v-model:run-mode="cronRunMode"
-                  @change="onCronGeneratorChange"
-                />
-              </div>
-            </section>
+            <ScheduleConfig v-model="scheduleState" v-model:open="scheduleOpen" />
           </div>
 
           <!-- Step 1: 添加脚本 -->
@@ -618,72 +667,54 @@ const modalTitle = computed(() => (isEdit.value ? '编辑任务' : '新增任务
   gap: 12px;
 }
 
-.merge-section {
-  border: 1px solid var(--n-border-color);
-  border-radius: 8px;
-  background: var(--n-color);
-  overflow: hidden;
-}
-
-.merge-section-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.02);
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.merge-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--n-text-color-1);
-}
-
-.merge-section-body {
-  padding: 12px 14px 4px;
-}
-
-.merge-section--schedule {
-  border: none;
-  background: transparent;
-  overflow: visible;
-}
-
-.merge-section--schedule .merge-section-head {
-  padding: 2px 2px 8px;
-  background: transparent;
-  border-bottom: none;
-}
-
-.merge-section-body--cron {
-  padding: 0;
+/* 基本信息折叠卡片：行高/间距对齐「数据库请求」步骤页配置项（.db-op-* 同款） */
+.basic-card :deep(.n-card__content) {
+  padding: 12px 16px;
 }
 
 .basic-form :deep(.n-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .basic-form :deep(.n-form-item-label) {
+  padding-bottom: 0;
   white-space: nowrap;
 }
 
-.basic-form :deep(.n-form-item-label__text) {
-  white-space: nowrap;
+.basic-field-rows {
+  display: flex;
+  flex-direction: column;
 }
 
-.basic-form-grid {
+.basic-field-row {
+  width: 100%;
+}
+
+.basic-field-row--cols3 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 
-.basic-form-item {
+.basic-field-row--cols1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.basic-field-rows .basic-field-row + .basic-field-row {
+  margin-top: 12px;
+}
+
+.basic-field-row :deep(.n-form-item) {
   min-width: 0;
 }
 
-.basic-form-item :deep(.n-form-item-blank) {
-  min-width: 0;
+.basic-fi-fill :deep(.n-input),
+.basic-fi-fill :deep(.n-select) {
+  width: 100%;
 }
 
 .task-wizard-script {
@@ -720,7 +751,7 @@ const modalTitle = computed(() => (isEdit.value ? '编辑任务' : '新增任务
 }
 
 @media (max-width: 860px) {
-  .basic-form-grid {
+  .basic-field-row--cols3 {
     grid-template-columns: 1fr;
   }
 }

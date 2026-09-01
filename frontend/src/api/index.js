@@ -238,6 +238,8 @@ export default {
   startApiTask: (data = {}) => request.post('/autotest/task/start', data),
   // 停止任务（关闭调度，task_enabled=false）
   stopApiTask: (data = {}) => request.post('/autotest/task/stop', data),
+  // 定时执行预览（近10次触发时间）
+  previewTaskSchedule: (data = {}) => request.post('/autotest/task/schedule_preview', data),
   // 任务执行记录
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
   /** params：record_id、key —— 下载执行记录附件（blob） */
