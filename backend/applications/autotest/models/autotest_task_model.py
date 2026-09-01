@@ -19,7 +19,7 @@ from backend.applications.base.services.scaffold import (
 from backend.enums import (
     AutoTestTaskStatus,
     AutoTestTaskType,
-    AutoTestTaskPeriodicSwitch,
+    AutoTestTaskPeriodicMode,
 )
 
 
@@ -41,10 +41,13 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     related_cases_env_id = fields.JSONField(default=list, null=True, description="涉及环境ID列表(由cases_execute_config汇总)")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
-    task_crontabs_expr = fields.CharField(max_length=255, null=True, description="Cron 触发表达式")
+    # task_schedule_expr数据格式：
+    # ONLY_ONCE(执行1次): {"trigger_dates": ["YYYY-MM-DD HH:MM:SS", ...]} 触发日期时间列表, 逐点触发, 全部到期后关闭调度
+    # UNBOUNDED(执行N次): {"trigger_cycle": "日/周/月", "trigger_weeks": [1-7, 周必输], "trigger_month": [1-31, 月必输], "trigger_times": ["HH:MM:SS", 最多3个]}
+    task_schedule_expr = fields.JSONField(default=None, null=True, description="结构化定时表达式(时效×周期×时间点)")
     task_periodic_expr = fields.CharEnumField(
-        AutoTestTaskPeriodicSwitch,
-        default=AutoTestTaskPeriodicSwitch.INFINITY,
+        AutoTestTaskPeriodicMode,
+        default=AutoTestTaskPeriodicMode.UNBOUNDED,
         null=True,
         description="周期表达式(执行1次/执行N次)",
     )

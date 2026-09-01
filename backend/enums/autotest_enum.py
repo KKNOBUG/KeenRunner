@@ -98,24 +98,31 @@ class AutoTestTaskType(StringEnum):
     SCHEDULE_SCAN = "调度扫描"  # Beat 扫描派发（通常不写 Record）
 
 
-class AutoTestTaskTriggerType(StringEnum):
-    """任务触发来源：记录表用于区分手动执行与定时扫描。"""
-    MANUAL = "手动执行"
-    SCHEDULE = "定时执行"
-
-
-class AutoTestTaskPeriodicSwitch(StringEnum):
-    """任务周期表达式：配合 crontab 控制调度触发次数（字段 task_periodic_expr）。"""
-    ONLY_ONCE = "执行1次"
-    INFINITY = "执行N次"
-
-
 class AutoTestTaskStatus(StringEnum):
     PENDING = "等待执行"
     RUNNING = "正在执行"
     SUCCESS = "成功"
     FAILURE = "失败"
     PARTIAL_SUCCESS = "部分成功"
+
+
+class AutoTestTaskTriggerType(StringEnum):
+    """任务触发来源：记录表用于区分手动执行与定时扫描。"""
+    MANUAL = "手动执行"
+    SCHEDULE = "定时执行"
+
+
+class AutoTestTaskPeriodicMode(StringEnum):
+    """任务时效：控制调度触发次数语义。"""
+    ONLY_ONCE = "执行1次"
+    UNBOUNDED = "执行N次"
+
+
+class AutoTestTaskCycleType(StringEnum):
+    """任务调度周期。"""
+    DAY = "日"
+    WEEK = "周"
+    MONTH = "月"
 
 
 class AutoTestReqArgsType(StringEnum):

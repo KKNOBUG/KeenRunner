@@ -18,8 +18,13 @@ from backend.applications.autotest.dependencies import AutoTestApiServices, get_
 from backend.applications.autotest.schemas.autotest_record_schema import AutoTestApiRecordSelect
 from backend.applications.autotest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
+    AutoTestApiTaskSchedulePreview,
     AutoTestApiTaskSelect,
     AutoTestApiTaskUpdate,
+)
+from backend.applications.autotest.services.autotest_task_schedule import (
+    TaskSchedule,
+    normalize_schedule,
 )
 from backend.celery_scheduler.celery_task_contract import (
     list_attachments_from_summary,
@@ -372,6 +377,33 @@ async def stop_task(
     except Exception as e:
         LOGGER.error(f"关闭任务调度失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"停止失败，异常描述: {e}")
+
+
+@autotest_task.post("/schedule_preview", summary="定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
+async def preview_task_schedule(
+        preview_in: AutoTestApiTaskSchedulePreview = Body(..., description="预览条件"),
+):
+    """
+    定时执行预览：按时效与定时表达式正推即将到来的触发日期时间，供新增/编辑页展示。
+
+    :param preview_in: 预览入参
+    :return: 统一HTTP响应，data为升序触发日期时间列表
+    """
+    try:
+        schedule = normalize_schedule(
+            periodic=preview_in.task_periodic_expr,
+            schedule=preview_in.task_schedule_expr.model_dump() if preview_in.task_schedule_expr else None,
+        )
+        if not schedule:
+            return ParameterResponse(message="参数[task_schedule_expr]不允许为空")
+        schedule_obj = TaskSchedule.from_expr(preview_in.task_periodic_expr, schedule)
+        data = schedule_obj.preview_fire_times() if schedule_obj else []
+        return SuccessResponse(message="预览成功", data=data, total=len(data))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"定时执行预览失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"预览失败，异常描述: {str(e)}")
 
 
 @autotest_task.post("/record/search", summary="查询执行记录", description="根据条件分页查询任务执行记录(Body)")

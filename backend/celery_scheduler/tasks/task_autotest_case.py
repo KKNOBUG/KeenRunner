@@ -14,9 +14,11 @@ from typing import Any, Dict, Optional
 
 from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
 from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
+from backend.applications.autotest.services.autotest_task_schedule import (
+    fetch_schedulable_tasks,
+    is_task_due,
+)
 from backend.celery_scheduler.celery_base import (
-    check_task_expired,
-    get_scheduled_tasks,
     get_span_id_for_log,
     run_async,
 )
@@ -24,7 +26,6 @@ from backend.celery_scheduler.celery_worker import celery
 from backend.configure import LOGGER
 from backend.enums import (
     AutoTestReportType,
-    AutoTestTaskPeriodicSwitch,
     AutoTestTaskStatus,
     AutoTestTaskType,
 )
@@ -32,16 +33,19 @@ from backend.enums import (
 _LOG_PREFIX = "【Celery-Worker】"
 
 
-def _is_only_once(task: Any) -> bool:
+def _should_close_schedule(task: Any) -> bool:
     """
-    判断任务周期策略是否为ONLY_ONCE。
+    判断调度执行结束后是否应关闭调度：ONLY_ONCE且全部触发日期时间均已到期。
 
     :param task: 自动化任务模型实例
-    :return: 为ONLY_ONCE时返回True
+    :return: 应关闭为True
     """
-    expr = getattr(task, "task_periodic_expr", None)
-    value = getattr(expr, "value", None) or expr
-    return (str(value).strip() if value is not None else "") == AutoTestTaskPeriodicSwitch.ONLY_ONCE.value
+    from backend.applications.autotest.services.autotest_task_schedule import TaskSchedule
+    schedule_obj = TaskSchedule.from_expr(
+        periodic=getattr(task, "task_periodic_expr", None),
+        schedule=getattr(task, "task_schedule_expr", None),
+    )
+    return schedule_obj is not None and schedule_obj.is_completed(datetime.now())
 
 
 async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None) -> Dict[str, Any]:
@@ -112,11 +116,11 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         else:
             task.last_execute_state = AutoTestTaskStatus.FAILURE
         await task.save(update_fields=["last_execute_state"])
-        if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _is_only_once(task):
+        if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _should_close_schedule(task):
             task.task_enabled = False
             await task.save(update_fields=["task_enabled"])
             LOGGER.info(
-                f"{_LOG_PREFIX}【span_id={span_id}】执行1次任务已关闭调度: "
+                f"{_LOG_PREFIX}【span_id={span_id}】执行1次任务已全部触发并关闭调度: "
                 f"task_id={task_id}, task_code={task_code}"
             )
         LOGGER.info(
@@ -141,7 +145,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         )
         task.last_execute_state = AutoTestTaskStatus.FAILURE
         await task.save(update_fields=["last_execute_state"])
-        if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _is_only_once(task):
+        if exec_report_type == AutoTestReportType.SCHEDULE_EXEC and _should_close_schedule(task):
             task.task_enabled = False
             await task.save(update_fields=["task_enabled"])
         # 重新抛出，让 Celery on_failure 将执行记录从「正在执行」更新为「失败」
@@ -155,7 +159,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     :return: {"scanned": int, "dispatched": int}扫描与下发统计
     """
     span_id = get_span_id_for_log()
-    tasks = await get_scheduled_tasks(task_type=AutoTestTaskType.AUTOTEST_API)
+    tasks = await fetch_schedulable_tasks(task_type=AutoTestTaskType.AUTOTEST_API)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={span_id}】开始扫描定时任务: "
         f"task_type={AutoTestTaskType.AUTOTEST_API.value}, candidate_count={len(tasks)}"
@@ -163,21 +167,21 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     dispatched = 0
     for task in tasks:
         try:
-            if check_task_expired(task):
+            if is_task_due(task):
                 run_autotest_task.apply_async(args=[task.id], __task_id=task.id)
                 dispatched += 1
                 LOGGER.info(
                     f"{_LOG_PREFIX}【span_id={span_id}】扫描下发: "
                     f"task_id={task.id}, task_code={getattr(task, 'task_code', None)}, "
                     f"task_name={getattr(task, 'task_name', None)}, "
-                    f"crontab={task.task_crontabs_expr}, "
+                    f"schedule={task.task_schedule_expr}, "
                     f"periodic={task.task_periodic_expr}"
                 )
             else:
                 LOGGER.debug(
                     f"{_LOG_PREFIX}【span_id={span_id}】扫描未到期: "
                     f"task_id={task.id}, task_code={getattr(task, 'task_code', None)}, "
-                    f"crontab={task.task_crontabs_expr}, "
+                    f"schedule={task.task_schedule_expr}, "
                     f"last_execute_time={task.last_execute_time}"
                 )
         except Exception as e:
@@ -197,7 +201,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
 @celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
 def scan_and_dispatch_autotest_tasks():
     """
-    Beat入口，扫描启用中的Cron任务，到期则下发run_autotest_task。
+    Beat入口，扫描启用中的定时任务，到期则下发run_autotest_task。
 
     :return: 扫描与下发统计字典
     """

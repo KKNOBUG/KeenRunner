@@ -9,14 +9,11 @@
 from __future__ import annotations
 
 import threading
-import traceback
 from contextvars import ContextVar
-from datetime import datetime
-from typing import Any, Awaitable, Coroutine, Dict, List, Union
+from typing import Any, Awaitable, Coroutine, Dict, Union
 
 from tortoise import Tortoise, connections
 from tortoise.exceptions import DBConnectionError
-from tortoise.expressions import Q
 
 from backend.configure import PROJECT_CONFIG, LOGGER
 
@@ -126,85 +123,12 @@ def get_span_id_for_log() -> str:
 
     :return: span_id字符串；不可用时返回空串
     """
-    from backend.common.request_context import get_span_id as _get
+    from backend.common.request_context import get_span_id
 
-    sid = _get()
+    sid = get_span_id()
     if sid and sid != "-":
         return sid
     return getattr(LOCAL_CONTEXT_VAR, "span_id", None) or ""
-
-
-async def get_scheduled_tasks(task_type: Any) -> List[Any]:
-    """
-    拉取未删除、已启用且配置了Cron表达式的自动化任务。
-
-    :param task_type: 任务类型枚举或字符串(如AutoTestTaskType.AUTOTEST_API)
-    :return: 满足条件的AutoTestTaskModel列表；参数无效时返回空列表
-    """
-    if not task_type:
-        return []
-    type_val = getattr(task_type, "value", task_type)
-    if not type_val:
-        return []
-    from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
-
-    q = (
-            Q(state=0)
-            & Q(task_enabled=True)
-            & Q(task_type=type_val)
-            & ~Q(task_crontabs_expr__isnull=True)
-            & ~Q(task_crontabs_expr="")
-    )
-    return list(await AutoTestTaskModel.filter(q).all())
-
-
-def check_task_expired(task: Any) -> bool:
-    """
-    仅基于task_crontabs_expr判断任务是否已到执行时间。
-
-    :param task: 任务模型实例(需含task_crontabs_expr / last_execute_time等字段)
-    :return: 到期为True，否则为False；Cron解析失败时返回False
-    """
-    expr = (getattr(task, "task_crontabs_expr", None) or "").strip()
-    if not expr:
-        return False
-
-    now = datetime.now()
-    last_run = getattr(task, "last_execute_time", None) or getattr(task, "created_time", None)
-    if last_run and getattr(last_run, "tzinfo", None):
-        last_run = last_run.replace(tzinfo=None)
-    if isinstance(last_run, str):
-        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
-            try:
-                last_run = (
-                    datetime.strptime(last_run[:26], fmt)
-                    if "." in last_run
-                    else datetime.strptime(last_run[:19], "%Y-%m-%d %H:%M:%S")
-                )
-                break
-            except ValueError:
-                continue
-        else:
-            last_run = None
-
-    task_id = getattr(task, "id", None)
-    try:
-        from croniter import croniter
-
-        prev_run = croniter(expr, now).get_prev(datetime)
-        due = True if last_run is None else (last_run < prev_run)
-        LOGGER.debug(
-            f"【Celery-Worker】cron到期判断 task_id={task_id} expr={expr} "
-            f"now={now} prev={prev_run} last_run={last_run} due={due}"
-        )
-        return due
-    except Exception as e:
-        LOGGER.warning(
-            f"【Celery-Worker】【span_id={get_span_id_for_log()}】Cron 解析失败: "
-            f"task_id={task_id}, 错误类型: {type(e).__name__}, 错误描述: {e}\n"
-            f"{traceback.format_exc()}"
-        )
-        return False
 
 
 class LocalContextVar:

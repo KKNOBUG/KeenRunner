@@ -11,7 +11,24 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestTaskPeriodicSwitch, AutoTestTaskStatus, AutoTestTaskType
+from backend.enums import AutoTestTaskPeriodicMode, AutoTestTaskCycleType, AutoTestTaskStatus, AutoTestTaskType
+
+
+class AutoTestTaskSchedule(BaseModel):
+    """结构化定时表达式：ONLY_ONCE使用trigger_dates；UNBOUNDED使用trigger_cycle×(trigger_weeks/trigger_month)×trigger_times。"""
+
+    trigger_dates: Optional[List[str]] = Field(None, min_length=1, description="ONLY_ONCE触发日期时间列表(YYYY-MM-DD HH:MM:SS)")
+    trigger_cycle: Optional[AutoTestTaskCycleType] = Field(None, description="UNBOUNDED调度周期(日/周/月)")
+    trigger_weeks: Optional[List[int]] = Field(None, min_length=1, description="UNBOUNDED星期多选(1=周一~7=周日, 周期=周时必输)")
+    trigger_month: Optional[List[int]] = Field(None, min_length=1, description="UNBOUNDED日期多选(1~31, 周期=月时必输)")
+    trigger_times: Optional[List[str]] = Field(None, min_length=1, max_length=3, description="UNBOUNDED触发时间点列表(HH:MM:SS, 最多3个)")
+
+
+class AutoTestApiTaskSchedulePreview(BaseModel):
+    """定时执行预览入参：按时效与定时表达式正推即将到来的触发日期时间。"""
+
+    task_periodic_expr: AutoTestTaskPeriodicMode = Field(..., description="时效(执行1次/执行N次)")
+    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
 
 
 class AutoTestApiTaskCreate(BaseModel):
@@ -23,8 +40,8 @@ class AutoTestApiTaskCreate(BaseModel):
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
     cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="根据用例ID的执行配置")
-    task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="Cron 触发表达式")
-    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(AutoTestTaskPeriodicSwitch.INFINITY, description="周期表达式(执行1次/执行N次)")
+    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
+    task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(AutoTestTaskPeriodicMode.UNBOUNDED, description="时效(执行1次/执行N次)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(False, description="是否启动调度(True/False)")
@@ -44,8 +61,8 @@ class AutoTestApiTaskUpdate(BaseModel):
     cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="根据用例ID的执行配置")
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
-    task_crontabs_expr: Optional[str] = Field(None, max_length=255, description="Cron 触发表达式")
-    task_periodic_expr: Optional[AutoTestTaskPeriodicSwitch] = Field(None, description="周期表达式(执行1次/执行N次)")
+    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
+    task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(None, description="时效(执行1次/执行N次)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
