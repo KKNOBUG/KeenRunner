@@ -87,7 +87,7 @@ async def create_menu(
     """
     try:
         instance = await menu_crud.create_menu(menu_in=menu_in)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "menu_id"})
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -113,7 +113,7 @@ async def delete_menu(
         return FailureResponse(message="不能删除带有子菜单的菜单")
     try:
         instance = await menu_crud.delete_menu(menu_id=id)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "menu_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -138,7 +138,7 @@ async def update_menu(
     """
     try:
         instance = await menu_crud.update_menu(menu_in=menu_in)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "menu_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -173,7 +173,7 @@ async def list_menu(
         if not menu:
             return NotFoundResponse(message=f"记录[id={menu_id}]信息不存在")
 
-        menu_dict = await menu.to_dict()
+        menu_dict = await menu.to_dict(replace_fields={"id": "menu_id"})
         child_menus = await menu_crud.model.filter(parent_id=menu_id).order_by("order")
         menu_dict["children"] = [await get_menu_with_children(child.id) for child in child_menus]
         return menu_dict

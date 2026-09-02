@@ -116,11 +116,11 @@ async def get_user_menu():
                 parent_menus.append(menu)
         res = []
         for parent_menu in parent_menus:
-            parent_menu_dict = await parent_menu.to_dict()
+            parent_menu_dict = await parent_menu.to_dict(replace_fields={"id": "menu_id"})
             parent_menu_dict["children"] = []
             for menu in menus:
                 if menu.parent_id == parent_menu.id:
-                    parent_menu_dict["children"].append(await menu.to_dict())
+                    parent_menu_dict["children"].append(await menu.to_dict(replace_fields={"id": "menu_id"}))
             res.append(parent_menu_dict)
         LOGGER.info(f"查询当前用户菜单成功, user_id: {user_id}, 数量: {len(res)}")
         return SuccessResponse(message="查询成功", data=res)
@@ -142,7 +142,7 @@ async def get_user_info(
     try:
         user_id = CTX_USER_ID.get()
         user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
-        data = await user_obj.to_dict(exclude_fields=["password"])
+        data = await user_obj.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="查询成功", data=data)
     except Exception as e:
         LOGGER.error(f"查询当前用户信息失败，异常描述: {e}\n{traceback.format_exc()}")

@@ -56,7 +56,7 @@ async def create_role(
     """
     try:
         instance = await role_crud.create_role(role_in=role_in)
-        data: dict = await instance.to_dict()
+        data: dict = await instance.to_dict(replace_fields={"id": "role_id"})
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -79,7 +79,7 @@ async def delete_role(
     """
     try:
         instance = await role_crud.delete_role(role_id=role_id)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "role_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -128,7 +128,7 @@ async def update_role(
     """
     try:
         instance = await role_crud.update_role(role_in=role_in)
-        data: dict = await instance.to_dict()
+        data: dict = await instance.to_dict(replace_fields={"id": "role_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -170,7 +170,7 @@ async def get_role(
             instance = await role_crud.get_by_code(role_code=code, on_error=True)
         else:
             instance = await role_crud.get_by_name(role_name=name, on_error=True)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "role_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -206,7 +206,7 @@ async def search_roles(
         total, role_objs = await role_crud.list(
             page=page, page_size=page_size, search=q, order=order
         )
-        data = [await obj.to_dict() for obj in role_objs]
+        data = [await obj.to_dict(replace_fields={"id": "role_id"}) for obj in role_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据角色name查询角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -237,7 +237,7 @@ async def search_roles_by_body(
         total, role_objs = await role_crud.list(
             page=role_in.page, page_size=role_in.page_size, search=q, order=role_in.order
         )
-        data = [await obj.to_dict() for obj in role_objs]
+        data = [await obj.to_dict(replace_fields={"id": "role_id"}) for obj in role_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询角色列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -258,7 +258,7 @@ async def get_role_authorized(
     """
     try:
         role_obj = await role_crud.get_or_error(id=id)
-        data = await role_obj.to_dict(m2m=True)
+        data = await role_obj.to_dict(m2m=True, replace_fields={"id": "role_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据角色id查询角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
