@@ -313,7 +313,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         """
         查询全部启用应用。
 
-        :return: ([{id, project_name, project_mark}], total)；project_mark取project_code
+        :return: ([{env_id, project_name, project_mark}], total)；env_id为应用主键id，project_mark取project_code
         """
         query = self.model.filter(state=0)
         total = await query.count()
