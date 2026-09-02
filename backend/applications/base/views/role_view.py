@@ -258,7 +258,14 @@ async def get_role_authorized(
     """
     try:
         role_obj = await role_crud.get_or_error(id=id)
-        data = await role_obj.to_dict(m2m=True, replace_fields={"id": "role_id"})
+        data = await role_obj.to_dict(
+            m2m=True,
+            replace_fields={"id": "role_id"},
+            m2m_replace_fields={
+                "menus": {"id": "menu_id"},
+                "routers": {"id": "router_id"}
+            }
+        )
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据角色id查询角色权限失败，异常描述: {e}\n{traceback.format_exc()}")

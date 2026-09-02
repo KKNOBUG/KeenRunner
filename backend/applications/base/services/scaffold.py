@@ -155,6 +155,7 @@ class ScaffoldModel(models.Model):
             m2m: bool = False,
             m2m_include_fields: Optional[Union[List[str], Set[str]]] = None,
             m2m_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
+            m2m_replace_fields: Optional[Dict[str, Dict[str, str]]] = None,
             fk: bool = False,
             fk_include_fields: Optional[Union[List[str], Set[str]]] = None,
             fk_exclude_fields: Optional[Union[List[str], Set[str]]] = None,
@@ -175,6 +176,7 @@ class ScaffoldModel(models.Model):
         :param m2m: 是否获取多对多关系字段的数据，默认为False
         :param m2m_include_fields: 多对多关系中需要引入的字段列表
         :param m2m_exclude_fields: 多对多关系中需要排除的字段列表
+        :param m2m_replace_fields: 多对多关联对象的字段别名映射，按m2m字段名指定，如 {"menus": {"id": "menu_id"}}
         :param fk: 是否获取外键字段对应的数据，默认为False
         :param fk_include_fields: 外键关系中需要引入的字段列表
         :param fk_exclude_fields: 外键关系中需要排除的字段列表
@@ -223,7 +225,7 @@ class ScaffoldModel(models.Model):
         # 如果m2m为True，异步获取多对多关系字段的数据
         if m2m:
             tasks = [
-                self.__fetch_m2m_field(field, m2m_include_fields, m2m_exclude_fields, cache)
+                self.__fetch_m2m_field(field, m2m_include_fields, m2m_exclude_fields, m2m_replace_fields, cache)
                 for field in self._meta.m2m_fields
                 if field not in exclude_fields
             ]
@@ -283,13 +285,14 @@ class ScaffoldModel(models.Model):
             )
         return field, None
 
-    async def __fetch_m2m_field(self, field, m2m_include_fields, m2m_exclude_fields, cache):
+    async def __fetch_m2m_field(self, field, m2m_include_fields, m2m_exclude_fields, m2m_replace_fields, cache):
         """
         获取多对多关系字段的数据，并将其转换为字典列表。
 
         :param field: 多对多字段名
         :param m2m_include_fields: 需要引入的多对多表字段列表
         :param m2m_exclude_fields: 需要排除的多对多表字段列表
+        :param m2m_replace_fields: 按m2m字段名指定的关联对象字段别名映射
         :param cache: 缓存字典，避免重复查询
         :return: (字段名, 关联对象字典列表)
         """
@@ -299,6 +302,8 @@ class ScaffoldModel(models.Model):
             value = await instance.to_dict(
                 include_fields=m2m_include_fields,
                 exclude_fields=m2m_exclude_fields,
+                # 透传该m2m字段的别名映射，保证嵌套关联对象与顶层一样以*_id形式返回主键
+                replace_fields=(m2m_replace_fields or {}).get(field),
                 m2m=False,  # 避免无限递归
                 fk=False,  # 根据需求调整
                 _cache=cache  # 传递缓存

@@ -152,7 +152,12 @@ async def get_user(
         instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
         if not instance:
             return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
-        data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"})
+        data: dict = await instance.to_dict(
+            m2m=True,
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"},
+            m2m_replace_fields={"roles": {"id": "role_id"}}
+        )
         dept_id = data.pop("dept_id", None)
         if dept_id:
             department_instance = await dept_crud.get_or_error(id=dept_id)
@@ -249,7 +254,8 @@ async def search_users(
         total, user_objs = await user_crud.list(
             page=page, page_size=page_size, order=order, search=q
         )
-        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"}) for obj in user_objs]
+        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"},
+                                  m2m_replace_fields={"roles": {"id": "role_id"}}) for obj in user_objs]
         for item in data:
             dept_id = item.pop("dept_id", None)
             if dept_id:
@@ -310,7 +316,8 @@ async def list_users(
         total, instances = await user_crud.list(
             page=user_in.page, page_size=user_in.page_size, search=q, order=user_in.order
         )
-        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"}) for obj in instances]
+        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"},
+                                  m2m_replace_fields={"roles": {"id": "role_id"}}) for obj in instances]
         for item in data:
             dept_id = item.pop("dept_id", None)
             if dept_id:
