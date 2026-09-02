@@ -100,7 +100,8 @@ async def _serialize_audit_list(audit_log_objs) -> list:
                 "request_params",
                 "response_header",
                 "response_params",
-            }
+            },
+            replace_fields={"id": "audit_id"}
         )
         for audit_log in audit_log_objs
     ]
@@ -207,7 +208,7 @@ async def get_audit(
     """
     try:
         instance = await audit_crud.get_by_id(audit_id=audit_id)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "audit_id"})
         return SuccessResponse(message="查询成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -311,7 +312,7 @@ async def delete_audit(
     """
     try:
         instance = await audit_crud.delete_by_id(audit_id=audit_id)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "audit_id"})
         return SuccessResponse(message="删除成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
