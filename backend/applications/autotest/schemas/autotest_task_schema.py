@@ -125,4 +125,5 @@ class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
     date_from: Optional[str] = Field(None, description="最后执行时间-起")
     date_to: Optional[str] = Field(None, description="最后执行时间-止")
-    env_id: Optional[int] = Field(None, ge=1, description="涉及环境ID")
+    env_id: Optional[int] = Field(None, ge=1, description="涉及环境ID(环境绑定主键，与env_name二选一)")
+    env_name: Optional[str] = Field(None, max_length=64, description="涉及环境名称(优先于env_id匹配；task_involve_envs即按名称存储)")

@@ -228,7 +228,10 @@ async def search_tasks(
             q &= Q(created_user=task_in.created_user)
         if task_in.updated_user:
             q &= Q(updated_user=task_in.updated_user)
-        if task_in.env_id:
+        if task_in.env_name:
+            # task_involve_envs存储环境名称：前端执行环境下拉已按名称去重，直接按名称匹配
+            q &= Q(task_involve_envs__contains=[task_in.env_name])
+        elif task_in.env_id:
             # task_involve_envs存储环境名称：将入参env_id(环境绑定ID)转换为环境名称再匹配
             env_bind = await AutoTestEnvBindModel.get_or_none(id=task_in.env_id)
             env_name = None
