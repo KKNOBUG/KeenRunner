@@ -208,6 +208,18 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             exclude_unset=True,
             exclude={"task_id", "task_code"}
         )
+        # 定时表达式允许显式清空：exclude_none会剔除前端传null的两键，
+        # 按model_fields_set检测显式清空意图，还原为None以便覆盖旧定时；
+        # 原有定时被清空时同步停用调度，避免残留“已启动但永不触发”的误导状态
+        _schedule_keys = ("task_periodic_expr", "task_schedule_expr")
+        _clearing_schedule = any(
+            key in task_in.model_fields_set and getattr(task_in, key, None) is None
+            for key in _schedule_keys
+        )
+        if _clearing_schedule and (instance.task_periodic_expr or instance.task_schedule_expr):
+            update_dict["task_periodic_expr"] = None
+            update_dict["task_schedule_expr"] = None
+            update_dict["task_enabled"] = False
         update_dict = self._dump_enum_fields(update_dict)
         if "task_periodic_expr" in update_dict or "task_schedule_expr" in update_dict:
             # 时效与定时表达式联动校验：以合并后的时效校验合并后的定时，防止单改时效后存量定时失配
@@ -269,8 +281,14 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         :param task_id: 任务主键ID
         :param enabled: 是否启用
         :return: 更新后的任务实例
+        :raises ParameterException: 启用调度时任务尚无定时表达式
         """
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
+        # 无定时表达式的任务启用后永不触发，误导为“已启动”；启动前强制校验
+        if enabled and not instance.task_schedule_expr:
+            error_message: str = "任务未配置定时表达式，请先在编辑中配置定时后再启动"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         instance.task_enabled = enabled
         await instance.save(update_fields=["task_enabled"])
         return instance
