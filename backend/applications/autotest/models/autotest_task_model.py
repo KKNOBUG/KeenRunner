@@ -32,8 +32,7 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         AutoTestTaskType,
         default=AutoTestTaskType.AUTOTEST_API,
         index=True,
-        description="任务业务类型(扫描过滤)",
-    )
+        description="任务业务类型(扫描过滤)")
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
     task_execute_mode = fields.CharEnumField(
         AutoTestTaskExecuteMode,
@@ -66,6 +65,8 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     )
     task_notify = fields.JSONField(default=None, null=True, description="任务执行明细反馈(预留)")
     task_notifier = fields.JSONField(default=None, null=True, description="任务执行通知人员(预留)")
+    # dataset_enabled为任务级全局控制开关：启用后各绑定脚本执行时自动纳入其全部数据场景(总执行轮次=执行次数×场景数)
+    dataset_enabled = fields.BooleanField(default=False, description="是否启用数据源(任务级全局控制)")
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
 
     class Meta:

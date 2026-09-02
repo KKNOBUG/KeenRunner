@@ -81,7 +81,8 @@ from backend.enums import (
     PUBLIC_CASE_TYPES,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
-    AutoTestConfigNodeType, HTTPMethod
+    AutoTestConfigNodeType,
+    HTTPMethod,
 )
 from backend.services import get_current_username
 

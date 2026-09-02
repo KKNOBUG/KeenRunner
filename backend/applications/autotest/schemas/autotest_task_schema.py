@@ -48,11 +48,10 @@ class AutoTestTaskCaseExecuteConfig(BaseModel):
         default_factory=dict,
         description="步骤执行环境配置：key为step_id或step_id_@@op_index",
     )
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据源名称列表")
 
 
 class AutoTestTaskCasesExecuteConfig(BaseModel):
-    """任务级用例执行配置：顶层环境信息 + 动态case_id键(指向AutoTestTaskCaseExecuteConfig)。"""
+    """任务级用例执行配置：顶层环境配置(env_mode/env_name) + 动态case_id键(指向AutoTestTaskCaseExecuteConfig)。"""
 
     model_config = ConfigDict(extra="allow")
 
@@ -80,6 +79,7 @@ class AutoTestApiTaskCreate(BaseModel):
     task_execute_mode: AutoTestTaskExecuteMode = Field(AutoTestTaskExecuteMode.PARALLEL, description="执行模式(并行执行/串行执行)")
     task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
+    dataset_enabled: bool = Field(False, description="是否启用数据源(任务级全局控制，启用后各脚本自动纳入全部数据场景执行)")
     cases_execute_config: Optional[AutoTestTaskCasesExecuteConfig] = Field(None, description="任务级用例执行配置")
     task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
     task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(AutoTestTaskPeriodicMode.UNBOUNDED, description="时效(执行1次/执行N次)")
@@ -101,6 +101,7 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_execute_mode: Optional[AutoTestTaskExecuteMode] = Field(None, description="执行模式(并行执行/串行执行)")
     task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
+    dataset_enabled: Optional[bool] = Field(None, description="是否启用数据源(任务级全局控制，启用后各脚本自动纳入全部数据场景执行)")
     cases_execute_config: Optional[AutoTestTaskCasesExecuteConfig] = Field(None, description="任务级用例执行配置")
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")

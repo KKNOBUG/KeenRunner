@@ -17,6 +17,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
+from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from backend.applications.autotest.schemas.autotest_step_schema import (
@@ -50,6 +51,26 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
     "loop_conditions",
 )
+
+
+async def _load_case_dataset_names(case_id: int) -> List[str]:
+    """
+    加载用例下所有数据源的数据场景名称(去重并保持出现顺序)。
+
+    :param case_id: 用例主键ID
+    :return: 数据场景名称列表；无数据源时返回空列表
+    """
+    rows = await AutoTestDataSourceModel.filter(case_id=case_id, state__not=1).order_by("created_time").all()
+    merged: List[str] = []
+    seen: Set[str] = set()
+    for row in rows:
+        if isinstance(row.dataset_names, list):
+            for name in row.dataset_names:
+                name_str = str(name).strip()
+                if name_str and name_str not in seen:
+                    seen.add(name_str)
+                    merged.append(name_str)
+    return merged
 
 
 class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
@@ -1354,6 +1375,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = None,
             cases_execute_config: Optional[Dict[str, Any]] = None,
             task_code: Optional[str] = None,
+            dataset_enabled: bool = False,
     ) -> Dict[str, Any]:
         """
         批量执行多个用例并汇总成功失败与明细。
@@ -1364,6 +1386,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :param steps_execute_config: 全部用例共用的执行配置
         :param cases_execute_config: 根据case_id的执行配置，优先于steps_execute_config
         :param task_code: 任务标识代码，可选
+        :param dataset_enabled: 任务级数据源全局开关；启用时各用例自动纳入其全部数据场景执行
         :return: 批次汇总字典
         """
         if not initial_variables or not isinstance(initial_variables, list):
@@ -1384,7 +1407,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 if not isinstance(case_cfg, dict):
                     case_cfg = {}
                 per_steps_cfg = case_cfg.get("steps_execute_config") or steps_execute_config
-                dataset_names = case_cfg.get("selected_dataset_names") or []
+                # dataset_enabled为任务级全局开关(独立字段)：启用时各用例自动纳入其全部数据场景(去重，保持出现顺序)
+                dataset_names = await _load_case_dataset_names(case_id) if dataset_enabled else []
                 if not isinstance(dataset_names, list):
                     dataset_names = []
                 dataset_names = [str(x) for x in dataset_names if x is not None and str(x).strip()]

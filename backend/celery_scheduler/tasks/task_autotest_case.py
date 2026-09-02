@@ -105,6 +105,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
             initial_variables=initial_variables,
             cases_execute_config=cases_execute_config if isinstance(cases_execute_config, dict) else {},
             task_code=task_code,
+            dataset_enabled=bool(getattr(task, "dataset_enabled", False)),
         )
         elapsed = (datetime.now() - started).total_seconds()
         total_cases = int(result.get("total_cases") or 0)

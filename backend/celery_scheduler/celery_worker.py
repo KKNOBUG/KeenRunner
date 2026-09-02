@@ -254,6 +254,7 @@ async def _create_task_record(
                     "task_schedule_expr": getattr(task_instance, "task_schedule_expr", None),
                     "task_periodic_expr": getattr(periodic, "value", periodic),
                     "task_enabled": getattr(task_instance, "task_enabled", None),
+                    "dataset_enabled": bool(getattr(task_instance, "dataset_enabled", False)),
                 }),
             })
     elif req_kwargs:
