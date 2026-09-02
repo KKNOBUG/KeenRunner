@@ -444,6 +444,32 @@ const columns = computed(() => {
     width: 300,
     align: 'center',
     ellipsis: {tooltip: true},
+    // 任务名称超链接：点击直接进入编辑（对齐测试用例页面样式）
+    render(row) {
+      const name = row.task_name || ''
+      return h(
+          'a',
+          {
+            href: 'javascript:void(0)',
+            title: name,
+            style: {
+              display: 'inline-block',
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: '#2080f0',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            },
+            onClick: (e) => {
+              e.preventDefault()
+              openEdit(row)
+            },
+          },
+          name
+      )
+    },
   },
   {
     title: '任务描述',

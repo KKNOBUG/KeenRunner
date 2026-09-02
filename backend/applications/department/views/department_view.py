@@ -50,7 +50,7 @@ async def create_department(
     """
     try:
         instance = await dept_crud.create_department(department_in=department_in)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -75,7 +75,7 @@ async def delete_department(
     """
     try:
         instance = await dept_crud.delete_department(department_id)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -120,7 +120,7 @@ async def update_department(
     """
     try:
         instance = await dept_crud.update_department(department_in=department_in)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -148,7 +148,7 @@ async def get_department(
         if not instance:
             return NotFoundResponse(message=f"记录[id={department_id}]不存在")
 
-        data: dict = await instance.to_dict()
+        data: dict = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据id查询部门信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -211,7 +211,7 @@ async def search_departments(
             q &= Q(updated_user=updated_user)
         q &= Q(state=0)
         total, instances = await dept_crud.list(page=page, page_size=page_size, search=q, order=order)
-        data = [await obj.to_dict() for obj in instances]
+        data = [await obj.to_dict(replace_fields={"id": "dept_id"}) for obj in instances]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询部门列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
