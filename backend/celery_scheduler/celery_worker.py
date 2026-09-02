@@ -224,13 +224,9 @@ async def _create_task_record(
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
         task_instance = await AutoTestTaskModel.filter(id=task_id).first()
         if task_instance:
-            kwargs = getattr(task_instance, "task_kwargs", None) or {}
-            if not isinstance(kwargs, dict):
-                kwargs = {}
-            case_ids = kwargs.get("case_ids") if isinstance(kwargs.get("case_ids"), list) else []
+            case_ids = getattr(task_instance, "task_case_ids", None) or []
             cases_cfg = getattr(task_instance, "cases_execute_config", None) or {}
-            if not cases_cfg and isinstance(kwargs, dict):
-                cases_cfg = kwargs.get("cases_execute_config") or {}
+            task_kwargs = getattr(task_instance, "task_kwargs", None) or {}
             periodic = getattr(task_instance, "task_periodic_expr", None)
             # Worker 无登录上下文：优先用触发方传入的用户；否则回退任务创建人
             if not username:
@@ -249,8 +245,8 @@ async def _create_task_record(
                     "task_kwargs": {
                         "case_ids": case_ids,
                         **(
-                            {"initial_variables": kwargs["initial_variables"]}
-                            if isinstance(kwargs.get("initial_variables"), list)
+                            {"initial_variables": task_kwargs["initial_variables"]}
+                            if isinstance(task_kwargs.get("initial_variables"), list)
                             else {}
                         ),
                     },

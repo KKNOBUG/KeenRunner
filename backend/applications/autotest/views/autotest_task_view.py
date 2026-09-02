@@ -15,6 +15,8 @@ from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
 from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
+from backend.applications.autotest.models.autotest_env_model import AutoTestEnvModel
 from backend.applications.autotest.schemas.autotest_record_schema import AutoTestApiRecordSelect
 from backend.applications.autotest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
@@ -227,7 +229,14 @@ async def search_tasks(
         if task_in.updated_user:
             q &= Q(updated_user=task_in.updated_user)
         if task_in.env_id:
-            q &= Q(related_cases_env_id__contains=[task_in.env_id])
+            # task_involve_envs存储环境名称：将入参env_id(环境绑定ID)转换为环境名称再匹配
+            env_bind = await AutoTestEnvBindModel.get_or_none(id=task_in.env_id)
+            env_name = None
+            if env_bind:
+                env_enum = await AutoTestEnvModel.get_or_none(id=env_bind.env_enum_id)
+                env_name = env_enum.env_name if env_enum else None
+            # 环境不存在时返回空结果集
+            q &= Q(task_involve_envs__contains=[env_name]) if env_name else Q(pk=0)
         if task_in.date_from:
             date_from = task_in.date_from.strip()
             if len(date_from) == 10:

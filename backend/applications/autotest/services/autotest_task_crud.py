@@ -27,38 +27,24 @@ from backend.core.exceptions import (
 )
 
 
-def extract_related_cases_env_ids(cases_execute_config: Any) -> List[int]:
+def extract_task_involve_envs(cases_execute_config: Any) -> List[str]:
     """
-    从cases_execute_config汇总去重后的环境ID列表。
+    累积各用例involve_envs并去重，生成task级涉及环境名称列表。
 
-    :param cases_execute_config: 用例执行配置字典
-    :return: 升序环境ID列表
+    :param cases_execute_config: 任务级用例执行配置字典
+    :return: 排序后的环境名称列表
     """
     if not isinstance(cases_execute_config, dict):
         return []
-    env_ids: Set[int] = set()
-    for case_cfg in cases_execute_config.values():
-        if not isinstance(case_cfg, dict):
+    env_names: Set[str] = set()
+    for case_key, case_cfg in cases_execute_config.items():
+        # 跳过顶层全局键(env_mode/env_name)，仅累积case_id配置的involve_envs
+        if case_key in ("env_mode", "env_name"):
             continue
-        global_env_id = case_cfg.get("global_env_id")
-        if global_env_id is not None:
-            try:
-                env_ids.add(int(global_env_id))
-            except (TypeError, ValueError):
-                pass
-        steps_cfg = case_cfg.get("steps_execute_config") or {}
-        if not isinstance(steps_cfg, dict):
-            continue
-        for step_cfg in steps_cfg.values():
-            if not isinstance(step_cfg, dict):
-                continue
-            step_env_id = step_cfg.get("env_id")
-            if step_env_id is not None:
-                try:
-                    env_ids.add(int(step_env_id))
-                except (TypeError, ValueError):
-                    pass
-    return sorted(env_ids)
+        involve_envs = case_cfg.get("involve_envs") if isinstance(case_cfg, dict) else None
+        if isinstance(involve_envs, list):
+            env_names.update(str(x) for x in involve_envs if x not in (None, ""))
+    return sorted(env_names)
 
 
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -66,22 +52,15 @@ def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str
     解析用例执行配置。
 
     :param task_dict: 任务字段字典
-    :return: cases_execute_config或None
+    :return: cases_execute_config字典或None
     """
     cases_cfg = task_dict.get("cases_execute_config")
-    if isinstance(cases_cfg, dict) and cases_cfg:
-        return cases_cfg
-    kwargs = task_dict.get("task_kwargs")
-    if isinstance(kwargs, dict):
-        nested = kwargs.get("cases_execute_config")
-        if isinstance(nested, dict):
-            return nested
     return cases_cfg if isinstance(cases_cfg, dict) else None
 
 
 def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     """
-    压缩task_kwargs：保留case_ids/initial_variables及未知扩展键，剔除cases_execute_config。
+    规范化task_kwargs：仅承载initial_variables及未知扩展键。
 
     :param task_kwargs: 原始task_kwargs
     :return: 清洗后的字典；输入None时返回None
@@ -90,8 +69,7 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
         return None
     if not isinstance(task_kwargs, dict):
         return {}
-    cleaned = {k: v for k, v in task_kwargs.items() if k != "cases_execute_config"}
-    return cleaned
+    return dict(task_kwargs)
 
 
 class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
@@ -107,15 +85,21 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         :param data: 任务字段字典
         :return: 原地转换后的字典
         """
-        for key in ("task_type", "task_periodic_expr", "last_execute_state"):
+        for key in ("task_type", "task_execute_mode", "task_periodic_expr", "last_execute_state"):
             if key in data and data[key] is not None and hasattr(data[key], "value"):
                 data[key] = data[key].value
+        # cases_execute_config顶层env_mode枚举转值
+        cases_cfg = data.get("cases_execute_config")
+        if isinstance(cases_cfg, dict) and hasattr(cases_cfg.get("env_mode"), "value"):
+            cases_cfg["env_mode"] = cases_cfg["env_mode"].value
         return data
 
     @staticmethod
-    def _apply_related_env_ids(task_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_task_fields(task_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
-        根据cases_execute_config汇总related_cases_env_id，并规范化task_kwargs。
+        应用任务字段处理：
+        1. 规范化task_kwargs
+        2. 根据cases_execute_config累积task_involve_envs
 
         :param task_dict: 任务字段字典
         :return: 原地处理后的字典
@@ -124,12 +108,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             task_dict["task_kwargs"] = normalize_task_kwargs(task_dict.get("task_kwargs"))
         cases_cfg = resolve_cases_execute_config(task_dict)
         if cases_cfg is not None:
-            task_dict["cases_execute_config"] = cases_cfg
-            task_dict["related_cases_env_id"] = extract_related_cases_env_ids(cases_cfg)
-            # 若仅从旧嵌套读取到配置，写回顶层后从 kwargs 去掉嵌套
-            kwargs = task_dict.get("task_kwargs")
-            if isinstance(kwargs, dict) and "cases_execute_config" in kwargs:
-                task_dict["task_kwargs"] = normalize_task_kwargs(kwargs)
+            task_dict["task_involve_envs"] = extract_task_involve_envs(cases_cfg)
         return task_dict
 
     async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestTaskModel]:
@@ -201,7 +180,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
                 )
             if task_dict.get("created_user") and not task_dict.get("updated_user"):
                 task_dict["updated_user"] = task_dict["created_user"]
-            task_dict = self._apply_related_env_ids(task_dict)
+            task_dict = self._apply_task_fields(task_dict)
             instance = await self.create(task_dict)
             return instance
         except IntegrityError as e:
@@ -238,17 +217,9 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             )
         if "task_kwargs" in update_dict:
             update_dict["task_kwargs"] = normalize_task_kwargs(update_dict.get("task_kwargs"))
-        merged_for_env = {
-            "task_kwargs": update_dict.get("task_kwargs", instance.task_kwargs),
-            "cases_execute_config": update_dict.get(
-                "cases_execute_config", instance.cases_execute_config
-            ),
-        }
-        cases_cfg = resolve_cases_execute_config(merged_for_env)
-        if cases_cfg is not None:
-            if "task_kwargs" in update_dict or "cases_execute_config" in update_dict:
-                update_dict["cases_execute_config"] = cases_cfg
-            update_dict["related_cases_env_id"] = extract_related_cases_env_ids(cases_cfg)
+        # 提交了cases_execute_config时，同步累积task_involve_envs
+        if "cases_execute_config" in update_dict:
+            update_dict["task_involve_envs"] = extract_task_involve_envs(update_dict.get("cases_execute_config"))
         task_name = update_dict.get("task_name", instance.task_name)
         task_project = update_dict.get("task_project", instance.task_project)
         existing_task = await self.model.filter(

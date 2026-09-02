@@ -98,6 +98,18 @@ class AutoTestTaskType(StringEnum):
     SCHEDULE_SCAN = "调度扫描"  # Beat 扫描派发（通常不写 Record）
 
 
+class AutoTestTaskExecuteMode(StringEnum):
+    """任务执行模式：存储值与存量数据中文文案保持一致。"""
+    PARALLEL = "并行执行"
+    SERIAL = "串行执行"
+
+
+class AutoTestEnvMode(StringEnum):
+    """任务环境模式：cases_execute_config.env_mode存储枚举。"""
+    SINGLE = "single"
+    MULTIPLE = "multiple"
+
+
 class AutoTestTaskStatus(StringEnum):
     PENDING = "等待执行"
     RUNNING = "正在执行"

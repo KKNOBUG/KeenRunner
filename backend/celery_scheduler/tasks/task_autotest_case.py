@@ -65,8 +65,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
 
     task_code = getattr(task, "task_code", None)
     task_name = getattr(task, "task_name", None)
-    task_kwargs = getattr(task, "task_kwargs", None) or {}
-    case_ids = task_kwargs.get("case_ids") if isinstance(task_kwargs, dict) else []
+    case_ids = getattr(task, "task_case_ids", None) or []
     if not case_ids:
         task.last_execute_time = datetime.now()
         task.last_execute_state = AutoTestTaskStatus.FAILURE
@@ -96,13 +95,14 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
 
     try:
         cases_execute_config = getattr(task, "cases_execute_config", None) or {}
-        if not cases_execute_config and isinstance(task_kwargs, dict):
-            cases_execute_config = task_kwargs.get("cases_execute_config") or {}
+        # 获取initial_variables
+        task_kwargs = getattr(task, "task_kwargs", None) or {}
+        initial_variables = (task_kwargs.get("initial_variables") or []) if isinstance(task_kwargs, dict) else []
         started = datetime.now()
         result = await AutoTestStepCrud().batch_execute_cases(
             case_ids=case_ids,
             report_type=exec_report_type,
-            initial_variables=(task_kwargs.get("initial_variables") or []) if isinstance(task_kwargs, dict) else [],
+            initial_variables=initial_variables,
             cases_execute_config=cases_execute_config if isinstance(cases_execute_config, dict) else {},
             task_code=task_code,
         )

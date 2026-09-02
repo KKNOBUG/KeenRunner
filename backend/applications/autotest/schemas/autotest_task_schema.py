@@ -8,10 +8,18 @@
 """
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.applications.autotest.schemas.autotest_step_schema import StepsExecuteConfigBase
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestTaskPeriodicMode, AutoTestTaskCycleType, AutoTestTaskStatus, AutoTestTaskType
+from backend.enums import (
+    AutoTestTaskPeriodicMode,
+    AutoTestTaskCycleType,
+    AutoTestTaskStatus,
+    AutoTestTaskType,
+    AutoTestTaskExecuteMode,
+    AutoTestEnvMode,
+)
 
 
 class AutoTestTaskSchedule(BaseModel):
@@ -31,6 +39,37 @@ class AutoTestApiTaskSchedulePreview(BaseModel):
     task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
 
 
+class AutoTestTaskCaseExecuteConfig(BaseModel):
+    """用例级执行配置：cases_execute_config中case_id键对应对象结构。"""
+
+    execute_count: int = Field(1, ge=1, le=9999, description="执行次数")
+    involve_envs: List[str] = Field(default_factory=list, description="用例级涉及环境名称列表(步骤绑定环境去重)")
+    steps_execute_config: Dict[str, StepsExecuteConfigBase] = Field(
+        default_factory=dict,
+        description="步骤执行环境配置：key为step_id或step_id_@@op_index",
+    )
+    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据源名称列表")
+
+
+class AutoTestTaskCasesExecuteConfig(BaseModel):
+    """任务级用例执行配置：顶层环境信息 + 动态case_id键(指向AutoTestTaskCaseExecuteConfig)。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    env_mode: AutoTestEnvMode = Field(AutoTestEnvMode.SINGLE, description="环境模式(单环境/多环境)")
+    env_name: Optional[str] = Field(None, max_length=128, description="全局环境名称")
+
+    @model_validator(mode="after")
+    def validate_case_configs(self):
+        """校验动态case_id键对应对象必须符合用例级执行配置结构。"""
+        extra = getattr(self, "__pydantic_extra__", None) or {}
+        for case_key, case_cfg in extra.items():
+            if not str(case_key).isdigit():
+                raise ValueError(f"cases_execute_config存在非法键[{case_key}]，应为用例ID")
+            AutoTestTaskCaseExecuteConfig.model_validate(case_cfg)
+        return self
+
+
 class AutoTestApiTaskCreate(BaseModel):
     """创建自动化测试任务入参。"""
 
@@ -38,8 +77,10 @@ class AutoTestApiTaskCreate(BaseModel):
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[AutoTestTaskType] = Field(AutoTestTaskType.AUTOTEST_API, description="任务业务类型")
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
+    task_execute_mode: AutoTestTaskExecuteMode = Field(AutoTestTaskExecuteMode.PARALLEL, description="执行模式(并行执行/串行执行)")
+    task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
-    cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="根据用例ID的执行配置")
+    cases_execute_config: Optional[AutoTestTaskCasesExecuteConfig] = Field(None, description="任务级用例执行配置")
     task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
     task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(AutoTestTaskPeriodicMode.UNBOUNDED, description="时效(执行1次/执行N次)")
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
@@ -57,8 +98,10 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_type: Optional[AutoTestTaskType] = Field(None, description="任务业务类型")
     task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
+    task_execute_mode: Optional[AutoTestTaskExecuteMode] = Field(None, description="执行模式(并行执行/串行执行)")
+    task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
-    cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="根据用例ID的执行配置")
+    cases_execute_config: Optional[AutoTestTaskCasesExecuteConfig] = Field(None, description="任务级用例执行配置")
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
     task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")

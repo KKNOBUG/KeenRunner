@@ -20,6 +20,7 @@ from backend.enums import (
     AutoTestTaskStatus,
     AutoTestTaskType,
     AutoTestTaskPeriodicMode,
+    AutoTestTaskExecuteMode,
 )
 
 
@@ -34,11 +35,23 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         description="任务业务类型(扫描过滤)",
     )
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")
-    # case_ids、initial_variables 及未来扩展键；不含 cases_execute_config
-    task_kwargs = fields.JSONField(default=dict, null=True, description="轻量扩展参数")
-    # cases_execute_config字段数据格式：{case_id: {steps_execute_config, selected_dataset_names, global_env_id, env_mode, env_name, execute_count}}
+    task_execute_mode = fields.CharEnumField(
+        AutoTestTaskExecuteMode,
+        default=AutoTestTaskExecuteMode.PARALLEL,
+        description="执行模式(并行执行/串行执行)",
+    )
+    task_case_ids = fields.JSONField(default=list, null=True, description="关联用例ID列表")
+    # task_kwargs: 当前仅承载任务执行入参initial_variables(初始变量列表)，随调度透传给用例执行；
+    task_kwargs = fields.JSONField(default=dict, null=True, description="扩展参数(当前仅承载initial_variables)")
+    # cases_execute_config字段数据格式：
+    # {
+    #     "env_mode": "single/multiple",
+    #     "env_name": "SIT1",
+    #     "<case_id>": {"execute_count": 1, "involve_envs": ["SIT1", "..."], "steps_execute_config": {"<step_id|step_id_@@op_index>": {env_name, config_type, config_name, config_host, config_port, database_name}}}
+    # }
     cases_execute_config = fields.JSONField(default=dict, null=True, description="根据用例执行配置")
-    related_cases_env_id = fields.JSONField(default=list, null=True, description="涉及环境ID列表(由cases_execute_config汇总)")
+    # task_involve_envs: 任务级涉及环境名称列表(去重)，累积自各用例的cases_execute_config.{case_id}.involve_envs，由绑定脚本后解析回填
+    task_involve_envs = fields.JSONField(default=list, null=True, description="任务级涉及环境名称列表(各用例involve_envs累积)")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     # task_schedule_expr数据格式：
