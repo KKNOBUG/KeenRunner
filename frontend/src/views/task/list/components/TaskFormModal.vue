@@ -300,6 +300,8 @@ function resetState() {
   selectedScripts.value = []
   casesExecuteConfig.value = {}
   datasetEnabled.value = false
+  editOriginalName = ''
+  editOriginalProject = null
   scriptPickerRef.value?.collapse?.()
 }
 
@@ -333,6 +335,9 @@ async function loadTaskDetail(taskId) {
       task_execute_mode: d.task_execute_mode === '串行执行' ? '串行执行' : '并行执行',
       task_case_ids: caseIds,
     }
+    // 记录编辑加载时的原始名称/应用，供唯一性预检判断是否可跳过
+    editOriginalName = d.task_name || ''
+    editOriginalProject = d.task_project ?? null
 
     // 定时设置回显：已有定时信息默认展开，否则收起
     scheduleState.value = scheduleStateFromExpr(d.task_periodic_expr, d.task_schedule_expr)

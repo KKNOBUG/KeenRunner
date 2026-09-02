@@ -154,7 +154,11 @@ async def get_user(
             return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
         data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"})
         dept_id = data.pop("dept_id", None)
-        data["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+        if dept_id:
+            department_instance = await dept_crud.get_or_error(id=dept_id)
+            data["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
+        else:
+            data["dept"] = {}
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据id查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -248,7 +252,11 @@ async def search_users(
         data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"}) for obj in user_objs]
         for item in data:
             dept_id = item.pop("dept_id", None)
-            item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+            if dept_id:
+                department_instance = await dept_crud.get_or_error(id=dept_id)
+                item["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
+            else:
+                item["dept"] = {}
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询用户列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -305,7 +313,11 @@ async def list_users(
         data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"}) for obj in instances]
         for item in data:
             dept_id = item.pop("dept_id", None)
-            item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
+            if dept_id:
+                department_instance = await dept_crud.get_or_error(id=dept_id)
+                item["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
+            else:
+                item["dept"] = {}
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询用户列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
