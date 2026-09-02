@@ -178,6 +178,8 @@ export default {
     if (data.case_code) params.push(`case_code=${data.case_code}`)
     return request.get(`/autotest/step/tree${params.length ? '?' + params.join('&') : ''}`)
   },
+  /** Body: { case_ids?: number[], case_codes?: string[] } —— 批量查询多用例步骤树并拼接为一个列表 */
+  spliceStepTree: (data = {}) => request.post('/autotest/step/splice_tree', data),
   /**
    * 复制用例步骤树（返回未保存的副本，不含 step_id/step_code 等更新必填项）
    * 后端接口：GET /autotest/step/copy_tree?case_id=X 或 ?case_code=X

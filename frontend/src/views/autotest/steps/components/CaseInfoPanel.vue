@@ -160,19 +160,19 @@
                   trigger="click"
                   placement="bottom-start"
                   :style="{ width: '400px' }"
-                  :disabled="isPublicFamilyCase"
+                  :disabled="isTagForbiddenCase"
               >
                 <template #trigger>
                   <n-input
                       :value="getSelectedTagNames()"
-                      :clearable="!isPublicFamilyCase"
+                      :clearable="!isTagForbiddenCase"
                       readonly
-                      :placeholder="isPublicFamilyCase ? '' : '请选择所属标签'"
+                      :placeholder="isTagForbiddenCase ? '' : '请选择所属标签'"
                       size="small"
                       class="case-field-input"
-                      :disabled="isPublicFamilyCase"
+                      :disabled="isTagForbiddenCase"
                       @clear="caseForm.case_tags = []"
-                      @click="!isPublicFamilyCase && (tagPopoverShow = !tagPopoverShow)"
+                      @click="!isTagForbiddenCase && (tagPopoverShow = !tagPopoverShow)"
                   />
                 </template>
                 <template #default>
@@ -285,8 +285,8 @@ const caseForm = reactive({
   case_type: '',
 })
 
-/** 公共脚本/公共接口：不允许打标签，仅用户脚本需要所属标签 */
-const isPublicFamilyCase = computed(() => ['公共脚本', '公共接口'].includes(caseForm.case_type))
+/** 标签管控：公共接口不允许打标签；用户脚本必选，公共脚本可选 */
+const isTagForbiddenCase = computed(() => caseForm.case_type === '公共接口')
 
 const projectOptions = ref([])
 const projectLoading = ref(false)
@@ -455,7 +455,7 @@ const validateCaseForm = () => {
   if (!caseForm.case_name || !String(caseForm.case_name).trim()) {
     return { valid: false, message: '请输入用例名称' }
   }
-  // 所属标签：仅用户脚本必填；公共脚本/公共接口禁止打标
+  // 所属标签：用户脚本必选；公共脚本可选；公共接口禁止打标
   if (caseForm.case_type === '用户脚本' && (!Array.isArray(caseForm.case_tags) || caseForm.case_tags.length === 0)) {
     return { valid: false, message: '请选择所属标签' }
   }
@@ -509,8 +509,8 @@ const hydrateFromCasePayload = (caseInfo) => {
 const getCasePayload = () => ({
   case_name: caseForm.case_name || '',
   case_project: caseForm.case_project || null,
-  // 公共类型强制不传标签；用户脚本快照拷贝（payload 构建到 axios 序列化之间存在 await 窗口）
-  case_tags: isPublicFamilyCase.value
+  // 公共接口强制不传标签；用户脚本/公共脚本快照拷贝（payload 构建到 axios 序列化之间存在 await 窗口）
+  case_tags: isTagForbiddenCase.value
       ? null
       : (Array.isArray(caseForm.case_tags) ? [...caseForm.case_tags] : []),
   case_type: caseForm.case_type || null,
@@ -538,14 +538,12 @@ watch(
     { immediate: true },
 )
 
-// 公共接口：锁定正案例；公共脚本/公共接口：清空标签（与后端口径一致）
+// 公共接口：锁定正案例并清空标签（与后端口径一致）；公共脚本允许编辑标签
 watch(
     () => caseForm.case_type,
     (caseType) => {
       if (caseType === '公共接口') {
         caseForm.case_attr = '正案例'
-      }
-      if (['公共脚本', '公共接口'].includes(caseType)) {
         caseForm.case_tags = []
         tagPopoverShow.value = false
       }

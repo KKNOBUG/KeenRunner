@@ -21,7 +21,7 @@
   --step-editor-font-size: 13px;
   --step-editor-title-size: 13px;
   --step-editor-meta-size: 12px;
-  --step-editor-accent: #F4511E;
+  --step-editor-accent: rgba(244, 81, 30, 0.92);
   --step-editor-card-radius: 12px;
   --step-editor-card-margin: 8px 0;
   --step-editor-card-shadow: 0 0 15px color-mix(in srgb, var(--n-border-color) 45%, transparent);
@@ -35,6 +35,7 @@
   border-radius: var(--step-editor-card-radius);
   box-shadow: var(--step-editor-card-shadow);
   border-left: 2px solid var(--step-editor-accent);
+  border-right: 0.5px solid var(--step-editor-accent);
   font-size: var(--step-editor-font-size);
   font-weight: 400;
   color: var(--n-text-color);

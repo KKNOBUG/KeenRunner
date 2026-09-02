@@ -13,20 +13,9 @@
             <template #checked>已开启</template>
             <template #unchecked>未开启</template>
           </n-switch>
-          <span v-if="panel.debugExecDataSourceEnabled && panel.debugExecDatasetLoading" class="exec-config-datasource-tip">
-            正在查询数据源…
-          </span>
-          <span
-              v-else-if="panel.debugExecDataSourceEnabled && panel.debugExecDatasetSelectedCount > 0"
-              class="exec-config-datasource-tip"
-          >
-            已自动纳入 {{ panel.debugExecDatasetSelectedCount }} 个数据源
-          </span>
-          <span
-              v-else-if="panel.debugExecDataSourceEnabled && !panel.debugExecDatasetLoading"
-              class="exec-config-datasource-tip is-warn"
-          >
-            未查询到可用数据源
+          <!-- 任务向导仅开关控制数据源：执行时各脚本按自身条件查询全部数据源，不展示/选择具体场景 -->
+          <span v-if="panel.debugExecDataSourceEnabled" class="exec-config-datasource-tip">
+            开启后执行时各脚本自动纳入其全部数据场景
           </span>
         </div>
         <span class="exec-config-global-env-label">全局环境：</span>

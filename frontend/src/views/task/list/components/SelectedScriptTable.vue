@@ -133,6 +133,41 @@ function renderCaseTagsCompact(row) {
   })
 }
 
+function renderInvolveEnvs(row) {
+  const envs = Array.isArray(row.involve_envs) ? row.involve_envs.filter((e) => e) : []
+  if (!envs.length) return h('span', '-')
+  const trigger = h(
+    'div',
+    {
+      class: 'case-tags-cell-trigger',
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+        maxWidth: '100%',
+        minHeight: '22px',
+      },
+    },
+    [
+      h(NTag, { type: 'success', size: 'small', bordered: true }, { default: () => envs[0] }),
+      envs.length > 1 ? h('span', { class: 'case-tags-more' }, `+${envs.length - 1}`) : null,
+    ].filter(Boolean),
+  )
+  if (envs.length === 1) return trigger
+  return h(NTooltip, { placement: 'top', trigger: 'hover', showArrow: true }, {
+    trigger: () => trigger,
+    default: () =>
+      h(
+        'div',
+        { class: 'case-tags-tooltip-inner' },
+        envs.map((env) =>
+          h(NTag, { type: 'success', size: 'small', bordered: true, style: { margin: '2px' } }, { default: () => env }),
+        ),
+      ),
+  })
+}
+
 function renderExecuteCount(row) {
   const caseId = Number(row.case_id)
   const isEditing = Number(editingCaseId.value) === caseId
@@ -220,6 +255,15 @@ const columns = computed(() => {
       align: 'center',
       render(row) {
         return renderCaseTagsCompact(row)
+      },
+    },
+    {
+      title: '涉及环境',
+      key: 'involve_envs',
+      width: 120,
+      align: 'center',
+      render(row) {
+        return renderInvolveEnvs(row)
       },
     },
     {
@@ -327,7 +371,7 @@ const columns = computed(() => {
         :get-data="getData"
         :query-bar-props="queryBarProps"
         :row-key="'case_id'"
-        :scroll-x="1200"
+        :scroll-x="1320"
         :single-line="true"
         @pagination-meta="onListPaginationMeta"
       />

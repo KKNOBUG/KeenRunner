@@ -112,7 +112,7 @@ onMounted(async () => {
     const res = await api.getAllApps({ page: 1, page_size: 10000 })
     projectOptions.value = (res?.data || []).map((p) => ({
       label: p.project_name || p.project_mark,
-      value: p.id,
+      value: p.env_id,
     }))
   } catch (_) {
     projectOptions.value = []

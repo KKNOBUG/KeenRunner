@@ -92,12 +92,7 @@ function formatElapsed(seconds) {
 function resolveCasesExecuteConfig(taskRow) {
   if (!taskRow || typeof taskRow !== 'object') return {}
   const top = taskRow.cases_execute_config
-  if (top && typeof top === 'object') return top
-  const kwargs = taskRow.task_kwargs
-  if (kwargs && typeof kwargs === 'object' && kwargs.cases_execute_config) {
-    return kwargs.cases_execute_config
-  }
-  return {}
+  return top && typeof top === 'object' ? top : {}
 }
 
 function getCaseCfg(caseId) {
@@ -107,9 +102,11 @@ function getCaseCfg(caseId) {
 }
 
 function resolveEnvDisplay(caseId) {
+  const cfg = resolveCasesExecuteConfig(props.taskRow)
   const caseCfg = getCaseCfg(caseId)
   const names = new Set()
-  if (caseCfg.env_name) names.add(String(caseCfg.env_name).trim())
+  // 新结构：env_name为顶层全局环境；步骤级env_name一并纳入
+  if (cfg.env_name) names.add(String(cfg.env_name).trim())
   const steps = caseCfg.steps_execute_config
   if (steps && typeof steps === 'object') {
     for (const stepCfg of Object.values(steps)) {
@@ -172,24 +169,32 @@ async function loadHistory() {
 /**
  * 将同一脚本下的多次报告标注轮次 / 数据源。
  * 执行顺序与 batch_execute_cases 一致：外层 execute_count，内层 dataset。
+ * 数据源为任务级 dataset_enabled 开关，配置中不再存场景名称列表；从报告自身收集去重场景名(保持出现顺序)。
  */
-function annotateRunsForCase(reports, caseId) {
+function annotateRunsForCase(reports) {
   const sorted = [...(reports || [])].sort((a, b) =>
     String(a.case_st_time || '').localeCompare(String(b.case_st_time || '')),
   )
-  const caseCfg = getCaseCfg(caseId)
-  const cfgDatasets = Array.isArray(caseCfg.selected_dataset_names)
-    ? caseCfg.selected_dataset_names.map((x) => String(x).trim()).filter(Boolean)
-    : []
+  const knownDatasets = []
+  const seenDs = new Set()
+  sorted.forEach((r) => {
+    const name = r.dataset_name != null && String(r.dataset_name).trim()
+      ? String(r.dataset_name).trim()
+      : null
+    if (name && !seenDs.has(name)) {
+      seenDs.add(name)
+      knownDatasets.push(name)
+    }
+  })
 
   return sorted.map((r, index) => {
     let datasetName = r.dataset_name != null && String(r.dataset_name).trim()
       ? String(r.dataset_name).trim()
       : null
-    if (!datasetName && cfgDatasets.length) {
-      datasetName = cfgDatasets[index % cfgDatasets.length] || null
+    if (!datasetName && knownDatasets.length) {
+      datasetName = knownDatasets[index % knownDatasets.length] || null
     }
-    const dsCount = cfgDatasets.length || (datasetName ? 1 : 0)
+    const dsCount = knownDatasets.length || (datasetName ? 1 : 0)
     const roundNo = dsCount > 0 ? Math.floor(index / dsCount) + 1 : index + 1
     return {
       ...r,
@@ -213,15 +218,13 @@ function buildScriptGroups(reports) {
   const groups = []
   for (const [key, list] of map) {
     const caseId = list[0]?.case_id
-    const runs = annotateRunsForCase(list, caseId)
+    const runs = annotateRunsForCase(list)
     const passCount = runs.filter((r) => isCaseSuccess(r.case_state)).length
     const caseCfg = getCaseCfg(caseId)
-    const cfgDatasets = Array.isArray(caseCfg.selected_dataset_names)
-      ? caseCfg.selected_dataset_names.map((x) => String(x).trim()).filter(Boolean)
-      : []
     const cfgExecCount = Math.max(1, Number(caseCfg.execute_count) || 1)
-    const planLabel = cfgDatasets.length
-      ? `配置 ${cfgExecCount} 次 × ${cfgDatasets.length} 个数据源`
+    // 数据源为任务级 dataset_enabled 开关：场景数量执行时动态纳入，配置中不再存列表
+    const planLabel = props.taskRow?.dataset_enabled
+      ? `配置 ${cfgExecCount} 次 × 已启用数据源`
       : `配置执行 ${cfgExecCount} 次`
 
     const allOk = passCount === runs.length && runs.length > 0

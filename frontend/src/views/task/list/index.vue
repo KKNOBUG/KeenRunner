@@ -12,6 +12,7 @@ import {
   NSelect,
   NSpin,
   NTag,
+  NTooltip,
 } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -387,6 +388,41 @@ watch(
     }
 )
 
+/** 任务级涉及环境紧凑展示：首个环境 + N，悬停展示全部 */
+function renderTaskInvolveEnvs(row) {
+  const envs = Array.isArray(row.task_involve_envs) ? row.task_involve_envs.filter((e) => e) : []
+  if (!envs.length) return h('span', '-')
+  const trigger = h(
+    'div',
+    {
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+        maxWidth: '100%',
+        minHeight: '22px',
+      },
+    },
+    [
+      h(NTag, { type: 'success', size: 'small', bordered: true }, { default: () => envs[0] }),
+      envs.length > 1 ? h('span', null, `+${envs.length - 1}`) : null,
+    ].filter(Boolean),
+  )
+  if (envs.length === 1) return trigger
+  return h(NTooltip, { placement: 'top', trigger: 'hover', showArrow: true }, {
+    trigger: () => trigger,
+    default: () =>
+      h(
+        'div',
+        { style: { display: 'flex', flexWrap: 'wrap', gap: '2px' } },
+        envs.map((env) =>
+          h(NTag, { type: 'success', size: 'small', bordered: true, style: { margin: '2px' } }, { default: () => env }),
+        ),
+      ),
+  })
+}
+
 const columns = computed(() => {
   const { page, page_size } = listPaginationMeta.value
   const seqBase = (page - 1) * page_size
@@ -452,13 +488,22 @@ const columns = computed(() => {
   },
   {
     title: '关联用例数',
-    key: 'task_kwargs',
+    key: 'task_case_ids',
     width: 100,
     align: 'center',
     render(row) {
-      const ids = row.task_kwargs?.case_ids
+      const ids = row.task_case_ids
       const count = Array.isArray(ids) ? ids.length : 0
       return h('span', `${count} 个`)
+    },
+  },
+  {
+    title: '任务涉及环境',
+    key: 'task_involve_envs',
+    width: 130,
+    align: 'center',
+    render(row) {
+      return renderTaskInvolveEnvs(row)
     },
   },
   {

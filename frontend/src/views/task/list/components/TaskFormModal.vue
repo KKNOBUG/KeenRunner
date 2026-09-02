@@ -69,7 +69,14 @@ const scheduleOpen = ref(true)
 
 const selectedScripts = ref([]) // row objects
 const casesExecuteConfig = ref({})
+// 任务级数据源开关(AutoTestTaskModel.dataset_enabled 独立字段)：ExecConfigModal 内开关变化时同步
+const datasetEnabled = ref(false)
 const scriptPickerRef = ref(null)
+// 第三环节环境配置实例：提交前调用其暴露的 validateConfigPayload 做行级完整性校验（防静默丢失修改）
+const execConfigRef = ref(null)
+/** 编辑加载时的原始名称/应用：用于判断唯一性预检是否可跳过 */
+let editOriginalName = ''
+let editOriginalProject = null
 
 function createEmptyForm() {
   return {
@@ -82,7 +89,8 @@ function createEmptyForm() {
     task_notify: null,
     task_notifier: [],
     task_kwargs: {},
-    execute_mode: '并行执行',
+    task_execute_mode: '并行执行',
+    task_case_ids: [],
   }
 }
 
@@ -96,6 +104,8 @@ watch(selectedCaseIds, (ids) => {
   const cfg = { ...casesExecuteConfig.value }
   const idSet = new Set(ids.map(String))
   for (const key of Object.keys(cfg)) {
+    // 顶层全局配置(env_mode/env_name)不属于用例键，清理时必须跳过，否则编辑回显与保存均丢失全局环境
+    if (key === 'env_mode' || key === 'env_name') continue
     if (!idSet.has(key)) delete cfg[key]
   }
   casesExecuteConfig.value = cfg
@@ -143,6 +153,8 @@ async function checkTaskNameUnique() {
   const name = taskForm.value.task_name?.trim()
   const projectId = taskForm.value.task_project
   if (!name || projectId == null) return true
+  // 编辑模式：名称与所属应用均未修改时唯一性状态不变，跳过search预检，避免每进入第二环节都发请求
+  if (isEdit.value && name === editOriginalName && Number(projectId) === Number(editOriginalProject)) return true
   try {
     const res = await api.getApiTaskList({
       page: 1,
@@ -191,9 +203,19 @@ function validateStep1() {
 }
 
 function validateStep2() {
+  // 行级完整性校验（环境/配置名/IP端口等缺失时给出具体明细提示）；失败时 handleSubmit 自动跳回第三环节
+  if (execConfigRef.value?.validateConfigPayload && !execConfigRef.value.validateConfigPayload({ actionLabel: '保存' })) {
+    return false
+  }
+  // 新结构：顶层携带全局环境配置，各用例仅含 execute_count/involve_envs/steps_execute_config
+  const cfgRoot = casesExecuteConfig.value || {}
+  if (!cfgRoot.env_name) {
+    window.$message?.warning?.('请完善环境与数据源配置（全局环境与步骤配置）')
+    return false
+  }
   for (const cid of selectedCaseIds.value) {
-    const cfg = casesExecuteConfig.value[String(cid)]
-    if (!cfg?.global_env_id || !cfg?.steps_execute_config) {
+    const cfg = cfgRoot[String(cid)]
+    if (!cfg?.steps_execute_config) {
       window.$message?.warning?.('请完善环境与数据源配置（全局环境与步骤配置）')
       return false
     }
@@ -216,8 +238,19 @@ function goPrev() {
 
 function onCasesExecConfigsUpdate(configsMap) {
   if (!configsMap || typeof configsMap !== 'object') return
+  
+  // 新结构：configsMap 顶层包含环境配置(env_mode/env_name)；数据源开关为任务表独立字段
   const next = { ...casesExecuteConfig.value }
+  
+  // 保存顶层的全局配置：env_mode/env_name；数据源开关为任务表独立字段，不在 cases_execute_config 中
+  if (configsMap.env_mode) next.env_mode = configsMap.env_mode
+  if (configsMap.env_name) next.env_name = configsMap.env_name
+  
+  // 处理每个用例的配置
   for (const [key, cfg] of Object.entries(configsMap)) {
+    // 跳过顶层字段
+    if (key === 'env_mode' || key === 'env_name') continue
+    
     const prev = next[key] || {}
     const script = selectedScripts.value.find((r) => Number(r.case_id) === Number(key))
     const executeCount = normalizeExecuteCount(
@@ -227,6 +260,8 @@ function onCasesExecConfigsUpdate(configsMap) {
       ...cfg,
       execute_count: executeCount,
     }
+    // 同步用例级涉及环境到已选脚本行，供表格“涉及环境”列展示
+    if (script) script.involve_envs = Array.isArray(cfg?.involve_envs) ? cfg.involve_envs : []
   }
   casesExecuteConfig.value = next
 }
@@ -264,6 +299,7 @@ function resetState() {
   scheduleOpen.value = true
   selectedScripts.value = []
   casesExecuteConfig.value = {}
+  datasetEnabled.value = false
   scriptPickerRef.value?.collapse?.()
 }
 
@@ -273,17 +309,12 @@ async function loadTaskDetail(taskId) {
     const res = await api.getApiTask({ task_id: taskId })
     const d = res?.data || {}
     const taskKwargs = d.task_kwargs && typeof d.task_kwargs === 'object' ? d.task_kwargs : {}
-    const caseIds = Array.isArray(taskKwargs.case_ids) ? taskKwargs.case_ids : []
+    const caseIds = Array.isArray(d.task_case_ids) ? d.task_case_ids : []
 
-    const topCfg = d.cases_execute_config
-    const nestedCfg = taskKwargs.cases_execute_config
-    const rawCfg =
-      topCfg && typeof topCfg === 'object' && Object.keys(topCfg).length
-        ? topCfg
-        : nestedCfg && typeof nestedCfg === 'object'
-          ? nestedCfg
-          : {}
+    const rawCfg = d.cases_execute_config && typeof d.cases_execute_config === 'object' ? d.cases_execute_config : {}
     casesExecuteConfig.value = { ...rawCfg }
+    // 任务级数据源开关回显
+    datasetEnabled.value = !!d.dataset_enabled
 
     taskForm.value = {
       task_id: d.task_id,
@@ -295,12 +326,12 @@ async function loadTaskDetail(taskId) {
       task_notify: Array.isArray(d.task_notify) ? d.task_notify : null,
       task_notifier: Array.isArray(d.task_notifier) ? d.task_notifier : [],
       task_kwargs: {
-        case_ids: caseIds,
         ...(Array.isArray(taskKwargs.initial_variables)
           ? { initial_variables: taskKwargs.initial_variables }
           : {}),
       },
-      execute_mode: taskKwargs.execute_mode === '串行执行' ? '串行执行' : '并行执行',
+      task_execute_mode: d.task_execute_mode === '串行执行' ? '串行执行' : '并行执行',
+      task_case_ids: caseIds,
     }
 
     // 定时设置回显：已有定时信息默认展开，否则收起
@@ -309,6 +340,7 @@ async function loadTaskDetail(taskId) {
 
     if (caseIds.length) {
       try {
+        // 编辑模式：根据 task_case_ids 查询所有用例信息，回显到已选脚本表格
         const listRes = await api.getApiTestcaseList({
           page: 1,
           page_size: Math.min(Math.max(caseIds.length * 2, 50), 500),
@@ -328,6 +360,7 @@ async function loadTaskDetail(taskId) {
           return {
             ...row,
             execute_count: normalizeExecuteCount(cfg.execute_count ?? row.execute_count ?? 1),
+            involve_envs: Array.isArray(cfg.involve_envs) ? cfg.involve_envs : [],
           }
         })
       } catch (e) {
@@ -338,10 +371,12 @@ async function loadTaskDetail(taskId) {
             case_id: id,
             case_name: `用例 ${id}`,
             execute_count: normalizeExecuteCount(cfg.execute_count ?? 1),
+            involve_envs: Array.isArray(cfg.involve_envs) ? cfg.involve_envs : [],
           }
         })
       }
     } else {
+      // 新增模式或无绑定脚本：初始化为空数组
       selectedScripts.value = []
     }
   } catch (error) {
@@ -361,6 +396,8 @@ watch(
       return
     }
     resetState()
+    // 编辑模式：加载任务详情并回显已选脚本
+    // 新增模式：初始化状态，暂未绑定脚本，无须回显已选脚本
     if (props.taskId != null && props.taskId !== '') {
       await loadTaskDetail(props.taskId)
     }
@@ -383,13 +420,32 @@ async function handleSubmit() {
 
   const caseIds = selectedCaseIds.value
   const casesCfgPayload = {}
+  
+  // 新结构：顶层包含全局配置 env_mode/env_name；数据源开关为任务表独立字段 dataset_enabled
+  const cfgRoot = casesExecuteConfig.value || {}
+  casesCfgPayload.env_mode = cfgRoot.env_mode || 'single'
+  casesCfgPayload.env_name = cfgRoot.env_name || ''
+  
+  // 每个用例的配置
   for (const cid of caseIds) {
     const key = String(cid)
     const base = casesExecuteConfig.value[key]
     const script = selectedScripts.value.find((r) => Number(r.case_id) === Number(cid))
+    
+    // 提取该用例涉及的所有环境名称（去重）
+    const involveEnvs = new Set()
+    if (base?.steps_execute_config) {
+      Object.values(base.steps_execute_config).forEach((stepCfg) => {
+        if (stepCfg && stepCfg.env_name) {
+          involveEnvs.add(stepCfg.env_name)
+        }
+      })
+    }
+    
     casesCfgPayload[key] = {
-      ...(base && typeof base === 'object' ? base : {}),
       execute_count: normalizeExecuteCount(script?.execute_count ?? base?.execute_count ?? 1),
+      involve_envs: Array.from(involveEnvs),
+      steps_execute_config: base?.steps_execute_config || {},
     }
   }
 
@@ -399,10 +455,7 @@ async function handleSubmit() {
       taskForm.value.task_kwargs && typeof taskForm.value.task_kwargs === 'object'
         ? taskForm.value.task_kwargs
         : {}
-    const taskKwargsPayload = {
-      case_ids: caseIds,
-      execute_mode: taskForm.value.execute_mode || '并行执行',
-    }
+    const taskKwargsPayload = {}
     if (Array.isArray(prevKwargs.initial_variables)) {
       taskKwargsPayload.initial_variables = prevKwargs.initial_variables
     }
@@ -415,7 +468,10 @@ async function handleSubmit() {
       task_project: taskForm.value.task_project,
       task_notify: Array.isArray(taskForm.value.task_notify) ? taskForm.value.task_notify : null,
       task_notifier: Array.isArray(taskForm.value.task_notifier) ? taskForm.value.task_notifier : null,
+      task_execute_mode: taskForm.value.task_execute_mode || '并行执行',
+      task_case_ids: caseIds,
       task_kwargs: taskKwargsPayload,
+      dataset_enabled: datasetEnabled.value,
       cases_execute_config: casesCfgPayload,
       task_periodic_expr: schedulePayload?.periodic ?? null,
       task_schedule_expr: schedulePayload?.schedule ?? null,
@@ -524,7 +580,7 @@ const modalTitle = computed(() => (isEdit.value ? '编辑任务' : '新增任务
                         <NTooltip trigger="hover" :delay="300">
                           <template #trigger>
                             <NSelect
-                              v-model:value="taskForm.execute_mode"
+                              v-model:value="taskForm.task_execute_mode"
                               :options="EXEC_MODE_OPTIONS"
                               placeholder="请选择执行方式"
                             />
@@ -578,12 +634,16 @@ const modalTitle = computed(() => (isEdit.value ? '编辑任务' : '新增任务
             <div v-if="!selectedCaseIds.length" class="exec-empty">请先在「脚本与执行次数配置」步骤选择至少一个脚本</div>
             <div v-else class="exec-config-wrap">
               <ExecConfigModal
+                ref="execConfigRef"
                 :key="selectedCaseIds.join(',')"
                 embedded
                 :case-ids="selectedCaseIds"
                 :project-options="projectOptions"
                 :saved-configs="casesExecuteConfig"
+                :current-step="currentStep"
+                :dataset-enabled="datasetEnabled"
                 @update:configs="onCasesExecConfigsUpdate"
+                @update:dataset-enabled="(v) => (datasetEnabled = v)"
               />
             </div>
           </div>

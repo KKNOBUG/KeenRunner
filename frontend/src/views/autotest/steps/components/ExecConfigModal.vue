@@ -83,9 +83,13 @@ const props = defineProps({
   savedConfig: { type: Object, default: null },
   /** 多脚本回填：{ [caseId]: config } */
   savedConfigs: { type: Object, default: null },
+  /** 任务向导当前步骤：进入第三步骤(2)时才初始化 */
+  currentStep: { type: Number, default: 0 },
+  /** 任务级数据源开关初始状态(AutoTestTaskModel.dataset_enabled 独立字段) */
+  datasetEnabled: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:config', 'update:configs'])
+const emit = defineEmits(['update:config', 'update:configs', 'update:dataset-enabled'])
 
 const runLoading = defineModel('runLoading', { type: Boolean, default: false })
 const debugLoading = defineModel('debugLoading', { type: Boolean, default: false })
@@ -225,6 +229,8 @@ const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
   const walk = Array.isArray(sourceSteps) ? sourceSteps : []
   forEachStepWithQuote(walk, (step) => {
     if (!step) return
+    // 从步骤数据中获取环境名称（编辑模式时由 splice_tree 接口返回）
+    const stepEnvName = step.env_name || step.original?.env_name || null
     if (step.type === 'http' || step.type === 'tcp') {
       const cfg = step.config || {}
       const orig = step.original || {}
@@ -242,7 +248,7 @@ const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
             key: `api:${groupKey}`,
             project_id,
             request_config_name: normalizedName || null,
-            env_id: null,
+            env_id: stepEnvName, // 使用步骤中的环境名称
             targets: [],
           }),
           makeTarget({ local_step_id: step.id, backend_key }),
@@ -704,17 +710,8 @@ const validateExecDatasetSelection = (silent = false) => {
     if (!silent) window.$message?.warning?.('数据集列表加载中，请稍候')
     return false
   }
-  // 任务向导：开启后自动纳入全部数据源，无需手工勾选
+  // 任务向导：数据源仅开关控制，不选择具体场景；执行时各脚本按自身条件查询全部数据源，无可用数据源不阻断
   if (isAggregatedEmbedded.value) {
-    const any = Object.values(debugExecDatasetNamesByCase.value || {}).some(
-      (names) => Array.isArray(names) && names.length > 0,
-    )
-    if (!any) {
-      if (!silent) {
-        window.$message?.warning?.('所选脚本暂无可用数据源，请先上传数据源或关闭数据源开关')
-      }
-      return false
-    }
     return true
   }
   if (!debugExecDatasetRows.value.length) {
@@ -749,12 +746,17 @@ watch(debugExecDataSourceEnabled, (on) => {
   if (!isAggregatedEmbedded.value && !execConfigCollapseExpanded.value.includes('dataset')) {
     execConfigCollapseExpanded.value = [...execConfigCollapseExpanded.value, 'dataset']
   }
-  fetchDebugExecDatasetNames({ force: true })
+  // 任务向导仅开关控制数据源，无需拉取数据集名称列表
+  if (!isAggregatedEmbedded.value) fetchDebugExecDatasetNames({ force: true })
 })
 
 watch(() => debugGlobalEnvId.value, (envId) => {
   const apply = (rows) => {
-    rows.forEach((r) => { r.env_id = envId ?? null })
+    rows.forEach((r) => {
+      // multi 模式下已由 savedConfigs 还原的行级环境不被全局环境覆盖
+      if (debugEnvMode.value === 'multi' && r.env_id) return
+      r.env_id = envId ?? null
+    })
   }
   apply(debugRows.value.apiRows || [])
   apply(debugRows.value.dbRows || [])
@@ -859,8 +861,15 @@ const collectExecConfigMissingRows = () => {
   return missing
 }
 
-const formatExecConfigMissingMessage = (missing, actionLabel) =>
-    `存在${missing.length}条配置未完成，请补全后再${actionLabel}`
+const formatExecConfigMissingMessage = (missing, actionLabel) => {
+  const typeLabel = { app: 'API', database: '数据库', redis: 'Redis', file: '文件' }
+  const detail = missing
+      .slice(0, 3)
+      .map((m) => `${typeLabel[m.type] || m.type}:${m.text}`)
+      .join('；')
+  const more = missing.length > 3 ? ` 等${missing.length}条` : ''
+  return `存在${missing.length}条配置未完成：${detail}${more}，请补全后再${actionLabel}`
+}
 
 const applyDebugConfigToSteps = () => {
   const findStep = execCtx.value?.findStep
@@ -922,8 +931,8 @@ const applyDebugConfigToSteps = () => {
   })
 }
 
-/** 根据弹窗表格与环境配置字典，生成后端 steps_execute_config 对象；caseIdFilter 用于多脚本拆分 */
-const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
+/** 根据弹窗表格与环境配置字典，生成后端 steps_execute_config 对象；caseIdFilter 用于多脚本拆分。每行 env_name/env_id 按行实际环境（single=全局，multi=行选或全局兜底） */
+const buildStepExecConfigMap = (caseIdFilter = null) => {
   const map = {}
   const targetBelongs = (t) => {
     if (caseIdFilter == null) return true
@@ -951,15 +960,17 @@ const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
 
   debugRows.value.apiRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
+    const rowEnvName = resolveEnvName(envId)
     const bucket = getBucket({ ...r, env_id: envId }, 'app')
     const name = r.request_config_name
     const info = name ? bucket?.[name] : null
-    if (!env_name || !name || !info) return
+    if (!rowEnvName || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       if (!targetBelongs(t)) return
       map[String(t.backend_key)] = {
-        env_name,
+        env_id: envId,
+        env_name: rowEnvName,
         config_type: 'app',
         config_name: name,
         config_host: info.config_host,
@@ -971,18 +982,20 @@ const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
 
   debugRows.value.dbRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
+    const rowEnvName = resolveEnvName(envId)
     const bucketKey = 'database'
     const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
     const name = r.config_name
     const info = name ? bucket?.[name] : null
-    if (!env_name || !name || !info) return
+    if (!rowEnvName || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       if (!targetBelongs(t)) return
       const opIdx = t.op_index
       if (opIdx == null || opIdx < 0) return
       map[`${String(t.backend_key)}_@@${opIdx}`] = {
-        env_name,
+        env_id: envId,
+        env_name: rowEnvName,
         config_type: bucketKey,
         config_name: name,
         config_host: info.config_host,
@@ -994,18 +1007,20 @@ const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
 
   debugRows.value.redisRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
+    const rowEnvName = resolveEnvName(envId)
     const bucketKey = 'redis'
     const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
     const name = r.config_name
     const info = name ? bucket?.[name] : null
-    if (!env_name || !name || !info) return
+    if (!rowEnvName || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       if (!targetBelongs(t)) return
       const opIdx = t.op_index
       if (opIdx == null || opIdx < 0) return
       map[`${String(t.backend_key)}_@@${opIdx}`] = {
-        env_name,
+        env_id: envId,
+        env_name: rowEnvName,
         config_type: bucketKey,
         config_name: name,
         config_host: info.config_host,
@@ -1017,15 +1032,17 @@ const buildStepExecConfigMap = (env_name, caseIdFilter = null) => {
 
   debugRows.value.fileRows.forEach((r) => {
     const envId = getEffectiveEnvIdForRow(r)
+    const rowEnvName = resolveEnvName(envId)
     const bucket = getBucket({ ...r, env_id: envId }, 'file')
     const name = r.config_name
     const info = name ? bucket?.[name] : null
-    if (!env_name || !name || !info) return
+    if (!rowEnvName || !name || !info) return
     const targets = Array.isArray(r.targets) ? r.targets : []
     targets.forEach((t) => {
       if (!targetBelongs(t)) return
       map[String(t.backend_key)] = {
-        env_name,
+        env_id: envId,
+        env_name: rowEnvName,
         config_type: 'file',
         config_name: name,
         config_host: info.config_host,
@@ -1062,7 +1079,7 @@ const confirmExecConfigBeforeRun = async (actionLabel, runAction) => {
     return
   }
   showModel.value = false
-  const step_exec_config_map = buildStepExecConfigMap(env_name)
+  const step_exec_config_map = buildStepExecConfigMap()
   await runAction(env_name, step_exec_config_map)
 }
 
@@ -1189,29 +1206,78 @@ provide(
 
 const applySavedConfig = (cfg) => {
   if (!cfg || typeof cfg !== 'object') return
-  if (cfg.global_env_id != null) {
-    // 选项 value 已改为环境名；兼容历史缓存里的 bind env_id
-    debugGlobalEnvId.value = resolveEnvName(cfg.global_env_id) || cfg.global_env_id
+  
+  // 新结构：从顶层提取 env_mode 和 env_name
+  if (cfg.env_name != null) {
+    debugGlobalEnvId.value = resolveEnvName(cfg.env_name) || cfg.env_name
   }
-  if (cfg.env_mode === 'multi' || cfg.env_mode === 'single') debugEnvMode.value = cfg.env_mode
-  const names = cfg.selected_dataset_names
-  if (Array.isArray(names) && names.length) {
-    debugExecDataSourceEnabled.value = true
-    debugExecDatasetSelectedIds.value = names.map(String)
+  if (cfg.env_mode === 'multiple' || cfg.env_mode === 'single') {
+    // 存储枚举为 single/multiple；UI 内部值为 single/multi，需映射
+    debugEnvMode.value = cfg.env_mode === 'single' ? 'single' : 'multi'
   }
+}
+
+/** 多脚本：按 savedConfigs 中各 case 的 steps_execute_config 还原行级环境（multi 模式） */
+const applySavedStepsEnv = () => {
+  const map = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : null
+  if (!map) return
+  
+  const rowEnvByKey = new Map()
+  
+  // 新结构：跳过顶层的 env_mode 和 env_name，只处理用例配置
+  Object.entries(map).forEach(([key, cfg]) => {
+    // 跳过顶层字段
+    if (key === 'env_mode' || key === 'env_name') return
+    
+    const steps = cfg?.steps_execute_config
+    if (!steps || typeof steps !== 'object') return
+    
+    Object.values(steps).forEach((sc) => {
+      if (!sc || typeof sc !== 'object') return
+      const envKey = sc.env_id ?? sc.env_name
+      const envName = resolveEnvName(envKey) || (typeof envKey === 'string' ? envKey : null)
+      if (!envName) return
+      ;['app', 'database', 'redis', 'file'].forEach((ct) => {
+        if (sc.config_type === ct && sc.config_name) {
+          const k = `${ct}|${String(sc.config_name)}`
+          if (!rowEnvByKey.has(k)) rowEnvByKey.set(k, envName)
+        }
+      })
+    })
+  })
+  
+  if (!rowEnvByKey.size) return
+  const applyTo = (rows, ct, nameOf) => {
+    ;(rows || []).forEach((r) => {
+      const k = `${ct}|${String(nameOf(r) || '')}`
+      if (rowEnvByKey.has(k)) r.env_id = rowEnvByKey.get(k)
+    })
+  }
+  applyTo(debugRows.value.apiRows, 'app', (r) => r.request_config_name)
+  applyTo(debugRows.value.dbRows, 'database', (r) => r.config_name)
+  applyTo(debugRows.value.redisRows, 'redis', (r) => r.config_name)
+  applyTo(debugRows.value.fileRows, 'file', (r) => r.config_name)
 }
 
 const pickSavedConfigForCases = (ids) => {
   const map = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : null
   if (map) {
+    // 新结构：从顶层提取环境配置(env_mode/env_name)；数据源开关为任务表独立字段，不在cases_execute_config中
+    const topLevelConfig = {
+      env_mode: map.env_mode,
+      env_name: map.env_name,
+    }
+    
+    // 查找第一个匹配的用例配置
     for (const cid of ids) {
       const cfg = map[String(cid)]
-      if (cfg && typeof cfg === 'object' && (cfg.global_env_id != null || cfg.env_mode || Array.isArray(cfg.selected_dataset_names))) {
-        return cfg
+      if (cfg && typeof cfg === 'object') {
+        // 合并顶层配置和用例配置
+        return {
+          ...topLevelConfig,
+          ...cfg,
+        }
       }
-    }
-    for (const cid of ids) {
-      if (map[String(cid)]) return map[String(cid)]
     }
   }
   if (ids.length === 1 && props.savedConfig) return props.savedConfig
@@ -1221,7 +1287,7 @@ const pickSavedConfigForCases = (ids) => {
 const buildConfigPayload = () => {
   const env_name = resolveEnvName(debugGlobalEnvId.value)
   const payload = {
-    steps_execute_config: buildStepExecConfigMap(env_name),
+    steps_execute_config: buildStepExecConfigMap(),
     global_env_id: debugGlobalEnvId.value,
     env_mode: debugEnvMode.value,
     env_name,
@@ -1232,29 +1298,38 @@ const buildConfigPayload = () => {
   return payload
 }
 
-/** 多脚本：共享全局环境；数据源按脚本自动纳入各自全部数据集 */
+/** 多脚本：共享全局环境与全局数据源配置 */
 const buildConfigsPayload = () => {
   const env_name = resolveEnvName(debugGlobalEnvId.value)
   const ids = resolveEmbeddedCaseIds()
-  const shared = {
-    global_env_id: debugGlobalEnvId.value,
-    env_mode: debugEnvMode.value,
-    env_name,
+  
+  // 顶层结构：环境配置(env_mode/env_name)（存储枚举：single/multiple，UI 内部值为 single/multi）；数据源开关为任务表独立字段dataset_enabled
+  const out = {
+    env_mode: debugEnvMode.value === 'multi' ? 'multiple' : 'single',
+    env_name: env_name,            // 全局环境名称
   }
-  const out = {}
+  
+  // 每个用例的配置
   for (const cid of ids) {
-    const cfg = {
-      ...shared,
-      steps_execute_config: buildStepExecConfigMap(env_name, cid),
-    }
-    if (debugExecDataSourceEnabled.value) {
-      const names = debugExecDatasetNamesByCase.value[String(cid)] || []
-      if (names.length) {
-        cfg.selected_dataset_names = [...names]
+    const stepsConfig = buildStepExecConfigMap(cid)
+    
+    // 提取该用例涉及的所有环境名称（去重）
+    const involveEnvs = new Set()
+    Object.values(stepsConfig).forEach((stepCfg) => {
+      if (stepCfg && stepCfg.env_name) {
+        involveEnvs.add(stepCfg.env_name)
       }
+    })
+    
+    const cfg = {
+      execute_count: 1,  // 默认执行次数，后续由 TaskFormModal 覆盖
+      involve_envs: Array.from(involveEnvs),  // 用例级别涉及的环境名称列表
+      steps_execute_config: stepsConfig,
     }
+    
     out[String(cid)] = cfg
   }
+  
   return out
 }
 
@@ -1279,7 +1354,7 @@ const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) 
 
 const emitEmbeddedConfigIfReady = () => {
   if (!props.embedded || embeddedLoading.value || embeddedSkipConfigEmit) return
-  if (!validateConfigPayload({ silent: true })) return
+  // 不做完整性校验直接回传：配置更新必须实时同步到父组件，否则提交时会静默写入旧值；完整性校验由父组件提交时调用暴露的 validateConfigPayload 执行
   if (isAggregatedEmbedded.value) {
     emit('update:configs', buildConfigsPayload())
   } else {
@@ -1296,15 +1371,62 @@ const initEmbeddedCases = async () => {
   try {
     const bags = []
     const quoteStepsMapAll = {}
+    
+    // 使用 /splice_tree 接口批量获取多用例步骤树
+    const res = await api.spliceStepTree({ case_ids: ids })
+    const { details, indexes } = res?.data || {}
+    
+    if (!details || !indexes) {
+      throw new Error('splice_tree 接口返回数据格式异常')
+    }
+    
+    // 编辑模式：将保存的环境信息插入到对应步骤中
+    const savedConfigsMap = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : {}
+    const stepEnvMap = new Map() // key: `${case_id}_${step_id}`, value: env_name
+    
+    // 遍历保存的配置，提取每个步骤的环境信息
+    Object.entries(savedConfigsMap).forEach(([key, cfg]) => {
+      // 跳过顶层字段
+      if (key === 'env_mode' || key === 'env_name') return
+      
+      if (!cfg || typeof cfg !== 'object') return
+      const stepsConfig = cfg.steps_execute_config || {}
+      Object.entries(stepsConfig).forEach(([stepKey, stepCfg]) => {
+        if (!stepCfg || typeof stepCfg !== 'object') return
+        const envName = stepCfg.env_name
+        if (!envName) return
+        // stepKey 格式：step_id 或 step_id_@@op_index
+        const stepId = stepKey.split('_@@')[0]
+        stepEnvMap.set(`${key}_${stepId}`, envName)
+      })
+    })
+    
+    // 根据 indexes 拆分各用例的步骤树，并插入环境信息
     for (const cid of ids) {
-      const res = await api.getAutoTestStepTree({ case_id: cid })
-      const data = Array.isArray(res?.data) ? res.data : []
-      const execSourceSteps = data.map(mapBackendStep).filter(Boolean)
+      const caseIndexes = indexes[String(cid)] || []
+      const caseSteps = caseIndexes.map(idx => {
+        const step = details[idx]
+        if (!step) return null
+        
+        // 插入环境信息到步骤数据中
+        const stepId = step.step_id || step.id
+        if (stepId != null) {
+          const envName = stepEnvMap.get(`${cid}_${stepId}`)
+          if (envName) {
+            // 在步骤数据中添加 env_name 字段
+            step.env_name = envName
+          }
+        }
+        return step
+      }).filter(Boolean)
+      
+      const execSourceSteps = caseSteps.map(mapBackendStep).filter(Boolean)
       const quoteStepsMap = {}
       await loadQuoteStepsForList(execSourceSteps, quoteStepsMap)
       Object.assign(quoteStepsMapAll, quoteStepsMap)
       bags.push(collectDebugRows(execSourceSteps, quoteStepsMap, cid))
     }
+    
     execCtx.value = {
       sourceSteps: [],
       quoteStepsMap: { ...quoteStepsMapAll },
@@ -1324,11 +1446,17 @@ const initEmbeddedCases = async () => {
     const project_ids = debugApps.value.map((x) => Number(x.project_id)).filter((x) => !Number.isNaN(x))
     if (project_ids.length) await loadEnvConfigByProjects(project_ids)
     applySavedConfig(pickSavedConfigForCases(ids))
+    applySavedStepsEnv()
+    // 任务级数据源开关(任务表独立字段dataset_enabled)：初始状态由父组件传入；suppressDatasetAutoFetch期间不触发watcher，由init末尾统一拉取数据集
+    if (props.datasetEnabled !== debugExecDataSourceEnabled.value) {
+      debugExecDataSourceEnabled.value = props.datasetEnabled
+    }
     if (debugExecDataSourceEnabled.value) {
       if (!isAggregatedEmbedded.value && !execConfigCollapseExpanded.value.includes('dataset')) {
         execConfigCollapseExpanded.value = [...execConfigCollapseExpanded.value, 'dataset']
       }
-      await fetchDebugExecDatasetNames({ force: true })
+      // 任务向导仅开关控制数据源，无需拉取数据集名称列表
+      if (!isAggregatedEmbedded.value) await fetchDebugExecDatasetNames({ force: true })
     }
   } catch (e) {
     console.error('加载用例执行配置失败', e)
@@ -1348,7 +1476,19 @@ watch(
       if (!props.embedded || !key) return
       if (embeddedInitCaseId.value === key) return
       embeddedInitCaseId.value = key
-      initEmbeddedCases()
+      // 不立即初始化，等待父组件通过 currentStep 触发
+    },
+    { immediate: true },
+  )
+
+// 监听父组件的 currentStep，进入第三步骤时才初始化
+watch(
+    () => props.currentStep,
+    (step) => {
+      if (!props.embedded) return
+      if (step === 2 && embeddedInitCaseId.value) {
+        initEmbeddedCases()
+      }
     },
     { immediate: true },
   )
@@ -1361,18 +1501,32 @@ watch(debugEnvMode, () => {
   if (props.embedded) emitEmbeddedConfigIfReady()
 })
 
-watch(debugExecDataSourceEnabled, () => {
-  if (props.embedded) emitEmbeddedConfigIfReady()
+watch(debugExecDataSourceEnabled, (on) => {
+  if (props.embedded) {
+    // 数据源开关变化回传父组件，保存时写入任务表 dataset_enabled 字段
+    emit('update:dataset-enabled', on)
+    emitEmbeddedConfigIfReady()
+  }
 })
 
 watch(debugExecDatasetSelectedIds, () => {
   if (props.embedded) emitEmbeddedConfigIfReady()
 })
 
-/** 父组件 index.vue：execConfigModalRef.value?.openRun / openDebug */
+/* 多环境：行级 env_id 变更需重新生成 steps_execute_config（深度监听聚合行） */
+watch(
+  debugRows,
+  () => {
+    if (props.embedded) emitEmbeddedConfigIfReady()
+  },
+  { deep: true },
+)
+
+/* 父组件 index.vue：execConfigModalRef.value?.openRun / openDebug；任务向导父组件提交前调用 validateConfigPayload 校验配置完整性 */
 defineExpose({
   openDebug,
   openRun,
+  validateConfigPayload,
 })
 </script>
 
