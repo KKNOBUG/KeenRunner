@@ -41,7 +41,7 @@ async def create_router(
     """
     try:
         instance = await router_crud.create_router(router_in=router_in)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "router_id"})
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -64,7 +64,7 @@ async def delete_router(
     """
     try:
         instance = await router_crud.delete_router(router_id)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "router_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -87,7 +87,7 @@ async def update_router(
     """
     try:
         instance = await router_crud.update_router(router_in)
-        data = await instance.to_dict()
+        data = await instance.to_dict(replace_fields={"id": "router_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -113,7 +113,7 @@ async def get_router(
         if not instance:
             return NotFoundResponse(message=f"记录[id={router_id}]信息不存在")
 
-        data: dict = await instance.to_dict()
+        data: dict = await instance.to_dict(replace_fields={"id": "router_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据id查询路由信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -154,7 +154,7 @@ async def get_routers(
             q &= Q(tags__contains=tags)
 
         total, instances = await router_crud.list(page=page, page_size=page_size, search=q, order=order)
-        data = [await obj.to_dict() for obj in instances]
+        data = [await obj.to_dict(replace_fields={"id": "router_id"}) for obj in instances]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询路由列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -194,7 +194,7 @@ async def list_router(
         total, router_objs = await router_crud.list(
             page=page, page_size=page_size, search=q, order=order
         )
-        data = [await obj.to_dict() for obj in router_objs]
+        data = [await obj.to_dict(replace_fields={"id": "router_id"}) for obj in router_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询路由列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
