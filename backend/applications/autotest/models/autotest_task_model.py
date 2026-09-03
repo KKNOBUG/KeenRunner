@@ -26,7 +26,8 @@ from backend.enums import (
 
 
 class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    task_name = fields.CharField(max_length=255, index=True, description="任务名称")
+    # task_name不再单独建索引：(task_name, task_project)联合唯一的最左前缀已覆盖同名查询
+    task_name = fields.CharField(max_length=255, description="任务名称")
     task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
     task_type = fields.CharEnumField(
@@ -78,7 +79,6 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         table_description = "自动化测试-任务信息表"
         unique_together = (
             ("task_name", "task_project"),
-            ("task_project", "state", "updated_time"),
         )
         ordering = ["-last_execute_time", "-updated_time"]
 

@@ -134,13 +134,12 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
 
     async def create_project(self, project_in: AutoTestApiProjectCreate) -> AutoTestProjectModel:
         """
-        创建应用；若同名记录已存在则恢复并更新。
+        创建应用；同名软删记录恢复并更新，活跃同名报错。
 
         :param project_in: 应用创建schema
         :return: 创建或恢复后的应用实例
         """
         project_name: str = project_in.project_name
-
         existing_project: Optional[AutoTestProjectModel] = await self.model.filter(project_name=project_name).first()
         project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
         for owner_field in (
@@ -160,6 +159,12 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
                 error_message: str = f"新增应用信息异常, 违反约束规则: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
+
+        # 仅软删同名可启用并覆盖；活跃同名报错，禁止静默覆盖已有应用
+        if existing_project.state != 1:
+            error_message: str = f"应用[project_name={project_name}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
         try:
             project_dict["state"] = 0

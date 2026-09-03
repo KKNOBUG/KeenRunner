@@ -19,6 +19,7 @@ from backend.applications.autotest.schemas.autotest_task_schema import AutoTestA
 from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
 from backend.applications.autotest.services.autotest_task_schedule import normalize_schedule
 from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.enums import AutoTestTaskPeriodicMode
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -154,7 +155,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
 
     async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestTaskModel:
         """
-        创建任务，校验应用存在及(task_name, task_project)唯一。
+        创建应用；同名软删记录恢复并更新，活跃同名报错。
 
         :param task_in: 任务创建schema
         :return: 创建后的任务实例
@@ -165,9 +166,9 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         # 业务层验证：检查应用是否存在
         await AutoTestProjectCrud().get_by_id(project_id=task_project, on_error=True, state__not=1)
 
-        # 业务层验证：检查 (task_name, task_project) 唯一
-        existing_task = await self.model.filter(task_name=task_name, task_project=task_project, state__not=1).first()
-        if existing_task:
+        # 业务层验证：(task_name, task_project)数据库唯一
+        existing_task = await self.model.filter(task_name=task_name, task_project=task_project).first()
+        if existing_task and existing_task.state != 1:
             error_message: str = f"任务[task_name={task_name}, task_project={task_project}]已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
@@ -182,7 +183,20 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             if task_dict.get("created_user") and not task_dict.get("updated_user"):
                 task_dict["updated_user"] = task_dict["created_user"]
             task_dict = self._apply_task_fields(task_dict)
-            instance = await self.create(task_dict)
+            if existing_task and existing_task.state == 1:
+                LOGGER.info(f"复活软删任务: id={existing_task.id}, task_name={task_name}, task_project={task_project}")
+                task_dict.update({
+                    "state": 0,
+                    "last_execute_time": None,
+                    "last_execute_state": None,
+                    "last_execute_user": None,
+                })
+                if "task_schedule_expr" not in task_dict:
+                    task_dict["task_schedule_expr"] = None
+                    task_dict.setdefault("task_periodic_expr", AutoTestTaskPeriodicMode.UNBOUNDED.value)
+                instance = await self.update(id=existing_task.id, obj_in=task_dict)
+            else:
+                instance = await self.create(task_dict)
             return instance
         except IntegrityError as e:
             error_message: str = f"新增任务信息失败, 违反约束规则: {e}"
