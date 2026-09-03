@@ -685,36 +685,30 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         """
         递归软删除步骤：可根据step_id/step_code删单步及其子步骤，或根据parent_step_id/case_id批量删。
 
+        先后序收集待删子树再单次批量软删，避免逐节点软删的3N次数据库往返(收集N次查询+批量1次更新)，
+        批量软删语义与delete_case的步骤清理一致。
+
         :param step_id: 单步主键ID，与step_code二选一时删除该步及所有子步骤
         :param step_code: 单步标识代码，与step_id二选一
         :param parent_step_id: 指定父步骤ID时，删除该父步骤下所有子步骤
         :param case_id: 指定用例ID时，删除该用例下所有根步骤(及子步骤)
-        :param exclude_step: 不删除的 (step_id, step_code) 集合
+        :param exclude_step: 不删除的 (step_id, step_code) 集合(仅跳过节点自身，不阻断其子树收集)
         :return: 实际软删除的步骤数量
         """
-        deleted_count: int = 0
         if exclude_step is None:
             exclude_step = set()
         # 记录本次软删除的步骤，根据用例归类，事务提交后同步清理其数据源
         deleted_by_case: Dict[int, List[str]] = {}
+        # 后序收集待删步骤(先子后父，与原逐条软删顺序一致)，exclude_step仅跳过节点自身
+        pending_steps: List[AutoTestStepModel] = []
 
-        async def delete_step_and_children(step_instance: AutoTestStepModel) -> int:
-            """递归软删除当前步骤及其所有子步骤，返回本次删除数量。"""
-            deleted: int = 0
-            # 先删除所有子步骤（软删除）
+        async def collect_step_and_children(step_instance: AutoTestStepModel) -> None:
+            """后序收集当前步骤及其所有子步骤(先子后父)，exclude_step仅跳过节点自身、不阻断子树收集。"""
             children = await self.model.filter(parent_step_id=step_instance.id, state__not=1).all()
             for child in children:
-                deleted += await delete_step_and_children(step_instance=child)
-            # 然后删除当前步骤（软删除）
+                await collect_step_and_children(step_instance=child)
             if (step_instance.id, step_instance.step_code) not in exclude_step:
-                await self.soft_delete(id=step_instance.id)
-                deleted += 1
-                deleted_by_case.setdefault(step_instance.case_id, []).append(step_instance.step_code)
-                LOGGER.warning(
-                    f"警告: 删除步骤(step_id={step_instance.id}, "
-                    f"step_no={step_instance.step_no}, step_code={step_instance.step_code})成功"
-                )
-            return deleted
+                pending_steps.append(step_instance)
 
         async with in_transaction():
             # 根据参数类型执行不同的删除逻辑
@@ -729,7 +723,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 step = await self.get_by_conditions(only_one=True, on_error=True, **conditions)
                 if step:
                     LOGGER.warning("单个步骤删除: ")
-                    deleted_count = await delete_step_and_children(step_instance=step)
+                    await collect_step_and_children(step_instance=step)
 
             elif parent_step_id is not None:
                 # 删除指定父步骤下的所有子步骤
@@ -740,7 +734,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 LOGGER.warning("删除指定父级步骤下所有的子级步骤: ")
                 for step in existing_steps:
                     if (step.id, step.step_code) not in exclude_step:
-                        deleted_count += await delete_step_and_children(step_instance=step)
+                        await collect_step_and_children(step_instance=step)
 
             elif case_id is not None:
                 # 删除指定用例下的所有根步骤（parent_step_id为None的步骤）
@@ -752,7 +746,19 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 LOGGER.warning("删除指定用例下的所有根步骤(parent_step_id为None的步骤): ")
                 for step in existing_steps:
                     if (step.id, step.step_code) not in exclude_step:
-                        deleted_count += await delete_step_and_children(step_instance=step)
+                        await collect_step_and_children(step_instance=step)
+
+            # 子树收集完成后单次批量软删，与delete_case的步骤批量软删语义一致
+            deleted_count: int = 0
+            if pending_steps:
+                await self.soft_delete_batch(ids=[step.id for step in pending_steps])
+                deleted_count = len(pending_steps)
+                for step_instance in pending_steps:
+                    deleted_by_case.setdefault(step_instance.case_id, []).append(step_instance.step_code)
+                    LOGGER.warning(
+                        f"警告: 删除步骤(step_id={step_instance.id}, "
+                        f"step_no={step_instance.step_no}, step_code={step_instance.step_code})成功"
+                    )
 
         # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源与数据生成记录
         if deleted_by_case:
