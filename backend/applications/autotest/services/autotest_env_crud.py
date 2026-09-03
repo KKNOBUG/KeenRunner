@@ -385,17 +385,41 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
+        # 单次批量定位并按入参顺序收集，首个缺失(或空参)按单条查询原文案抛出，替代循环逐条查询
         targets: List[AutoTestEnvBindModel] = []
         if env_ids:
+            id_map: Dict[int, AutoTestEnvBindModel] = {
+                obj.id: obj for obj in await self.model.filter(id__in=env_ids, state__not=1)
+            }
             for eid in env_ids:
-                targets.append(await self.get_by_id(env_id=eid, on_error=True, state__not=1))
+                if not eid:
+                    error_message: str = "查询环境绑定信息失败, 参数[env_id]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = id_map.get(eid)
+                if not instance:
+                    error_message: str = f"查询环境绑定信息失败, 记录[id={eid}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
         else:
+            code_map: Dict[str, AutoTestEnvBindModel] = {
+                obj.env_code: obj for obj in await self.model.filter(env_code__in=env_codes, state__not=1)
+            }
             for ecode in env_codes:
-                targets.append(await self.get_by_code(env_code=ecode, on_error=True, state__not=1))
+                if not ecode:
+                    error_message: str = "查询环境绑定信息失败, 参数[env_code]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = code_map.get(ecode)
+                if not instance:
+                    error_message: str = f"查询环境绑定信息失败, 记录[code={ecode}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
 
-        for instance in targets:
-            await self.soft_delete(id=instance.id)
-
+        # 删除无逐项前置校验，收敛为单次批量软删
+        await self.soft_delete_batch(ids=[instance.id for instance in targets])
         return len(targets)
 
     async def select_envs(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestEnvBindModel]]:

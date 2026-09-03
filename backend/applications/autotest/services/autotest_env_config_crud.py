@@ -248,17 +248,41 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
+        # 单次批量定位并按入参顺序收集，首个缺失(或空参)按单条查询原文案抛出，替代循环逐条查询
         targets: List[AutoTestEnvConfigModel] = []
         if config_ids:
+            id_map: Dict[int, AutoTestEnvConfigModel] = {
+                obj.id: obj for obj in await self.model.filter(id__in=config_ids, state__not=1)
+            }
             for cid in config_ids:
-                targets.append(await self.get_by_id(config_id=cid, on_error=True, state__not=1))
+                if not cid:
+                    error_message: str = "查询配置信息失败, 参数[config_id]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = id_map.get(cid)
+                if not instance:
+                    error_message: str = f"查询配置信息失败, 记录[id={cid}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
         else:
+            code_map: Dict[str, AutoTestEnvConfigModel] = {
+                obj.config_code: obj for obj in await self.model.filter(config_code__in=config_codes, state__not=1)
+            }
             for ccode in config_codes:
-                targets.append(await self.get_by_code(config_code=ccode, on_error=True, state__not=1))
+                if not ccode:
+                    error_message: str = "查询配置信息失败, 参数[config_code]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = code_map.get(ccode)
+                if not instance:
+                    error_message: str = f"查询配置信息失败, 记录[code={ccode}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
 
-        for instance in targets:
-            await self.soft_delete(id=instance.id)
-
+        # 删除无逐项前置校验，收敛为单次批量软删
+        await self.soft_delete_batch(ids=[instance.id for instance in targets])
         return len(targets)
 
     async def select_config(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestEnvConfigModel]]:

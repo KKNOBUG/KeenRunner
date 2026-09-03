@@ -231,17 +231,49 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
+        # 单次批量定位并按入参顺序收集，首个缺失(或空参)按单条查询原文案抛出，替代循环逐条查询
         targets: List[AutoTestTagModel] = []
         if tag_ids:
+            id_map: Dict[int, AutoTestTagModel] = {
+                obj.id: obj for obj in await self.model.filter(id__in=tag_ids, state__not=1)
+            }
             for tid in tag_ids:
-                targets.append(await self.get_by_id(tag_id=tid, on_error=True, state__not=1))
+                if not tid:
+                    error_message: str = "查询标签信息失败, 参数[tag_id]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = id_map.get(tid)
+                if not instance:
+                    error_message: str = f"查询标签信息失败, 记录[id={tid}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
         else:
+            code_map: Dict[str, AutoTestTagModel] = {
+                obj.tag_code: obj for obj in await self.model.filter(tag_code__in=tag_codes, state__not=1)
+            }
             for tcode in tag_codes:
-                targets.append(await self.get_by_code(tag_code=tcode, on_error=True, state__not=1))
+                if not tcode:
+                    error_message: str = "查询标签信息失败, 参数[tag_code]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = code_map.get(tcode)
+                if not instance:
+                    error_message: str = f"查询标签信息失败, 记录[code={tcode}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
 
+        # 逐条复用单删关联校验(校验与软删逐项交错，保持失败时前序项已删的原行为)；
+        # 软删走批量入口消除单条soft_delete内部的冗余SELECT
+        from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
         for instance in targets:
-            await self.delete_tag(tag_id=instance.id)
-
+            cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
+            if cases_count > 0:
+                error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
+            await self.soft_delete_batch(ids=[instance.id])
         return len(targets)
 
     async def select_tags(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestTagModel]]:

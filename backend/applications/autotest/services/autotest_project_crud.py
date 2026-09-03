@@ -284,17 +284,64 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
+        # 单次批量定位并按入参顺序收集，首个缺失(或空参)按单条查询原文案抛出，替代循环逐条查询
         targets: List[AutoTestProjectModel] = []
         if project_ids:
+            id_map: Dict[int, AutoTestProjectModel] = {
+                obj.id: obj for obj in await self.model.filter(id__in=project_ids, state__not=1)
+            }
             for pid in project_ids:
-                targets.append(await self.get_by_id(project_id=pid, on_error=True, state__not=1))
+                if not pid:
+                    error_message: str = "查询应用信息失败, 参数[project_id]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = id_map.get(pid)
+                if not instance:
+                    error_message: str = f"查询应用信息失败, 记录[id={pid}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
         else:
+            code_map: Dict[str, AutoTestProjectModel] = {
+                obj.project_code: obj for obj in await self.model.filter(project_code__in=project_codes, state__not=1)
+            }
             for pcode in project_codes:
-                targets.append(await self.get_by_code(project_code=pcode, on_error=True, state__not=1))
+                if not pcode:
+                    error_message: str = "查询应用信息失败, 参数[project_code]不允许为空"
+                    LOGGER.error(error_message)
+                    raise ParameterException(message=error_message)
+                instance = code_map.get(pcode)
+                if not instance:
+                    error_message: str = f"查询应用信息失败, 记录[code={pcode}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
 
+        # 逐条复用单删关联校验(校验与软删逐项交错，保持失败时前序项已删的原行为)；
+        # 软删走批量入口消除单条soft_delete内部的冗余SELECT
         for instance in targets:
-            await self.delete_project(project_id=instance.id)
-
+            pid: int = instance.id
+            cases_count = await AutoTestCaseCrud().model.filter(case_project=pid, state__not=1).count()
+            if cases_count > 0:
+                msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
+                LOGGER.error(msg)
+                raise DataBaseStorageException(message=msg)
+            config_count = 0
+            env_bind_ids = await AutoTestEnvBindModel.filter(project_id=pid, state__not=1).values_list("id", flat=True)
+            if env_bind_ids:
+                config_count = await AutoTestEnvConfigModel.filter(
+                    env_bind_id__in=list(env_bind_ids), state__not=1
+                ).count()
+            if config_count > 0:
+                msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
+                LOGGER.error(msg)
+                raise DataBaseStorageException(message=msg)
+            tag_count = await AutoTestTagCrud().model.filter(tag_project=pid, state__not=1).count()
+            if tag_count > 0:
+                msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"
+                LOGGER.error(msg)
+                raise DataBaseStorageException(message=msg)
+            await self.soft_delete_batch(ids=[pid])
         return len(targets)
 
     async def select_projects(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestProjectModel]]:
