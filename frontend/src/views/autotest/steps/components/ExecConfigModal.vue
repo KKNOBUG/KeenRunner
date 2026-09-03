@@ -1365,7 +1365,8 @@ const buildConfigsPayload = () => {
 }
 
 const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) => {
-  if (!debugGlobalEnvId.value) {
+  // 多环境模式下行级环境独立生效（缺失由 collectExecConfigMissingRows 拦截），且全局环境已置灰可能为空，不在此强制
+  if (debugEnvMode.value !== 'multi' && !debugGlobalEnvId.value) {
     if (!silent) window.$message?.warning?.('请选择全局环境')
     return false
   }

@@ -25,7 +25,7 @@ const pad2 = (n) => String(n).padStart(2, '0')
 const asc = (arr) => [...arr].sort((a, b) => a - b)
 
 export function createEmptyScheduleState() {
-  // 周期模式必输、默认「仅执行一次」；预置一行空触发时间便于直接滚轮选择
+  // 周期模式必输、默认「仅执行一次」；预置一行空触发时间便于直接选择
   return { periodic: PERIODIC_ONLY_ONCE, cycle: null, monthDays: [], weeks: [], times: [''] }
 }
 
@@ -130,4 +130,17 @@ export function formatScheduleSummary(periodic, expr) {
     return `执行N次 | 月 ${days} ${times}`
   }
   return `执行N次 | 日 ${times}`
+}
+
+/**
+ * 定时配置模式标签：仅执行一次→「执行一次」，周期→「永久有效」，无实质配置返回空。
+ * 任务列表「定时配置」列使用，与定时设置面板周期开关文案对齐；明细仍由点击弹窗查看。
+ */
+export function getScheduleModeLabel(periodic, expr) {
+  if (!periodic || !expr || typeof expr !== 'object') return ''
+  if (periodic === PERIODIC_ONLY_ONCE) {
+    const dates = Array.isArray(expr.trigger_dates) ? expr.trigger_dates : []
+    return dates.length ? '执行一次' : ''
+  }
+  return expr.trigger_cycle ? '永久有效' : ''
 }

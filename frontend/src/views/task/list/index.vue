@@ -24,7 +24,7 @@ import TaskHistoryModal from '@/views/task/list/components/TaskHistoryModal.vue'
 
 import {formatDateTime, formatJsonBrief, renderIcon, resultPayloadOf} from '@/utils'
 import {
-  formatScheduleSummary,
+  getScheduleModeLabel,
   formatFireTime,
   WEEK_LABELS,
   PERIODIC_ONLY_ONCE,
@@ -378,19 +378,19 @@ const openScheduleModal = (row) => {
   previewShow.value = true
 }
 
-/** 定时配置单元格：摘要截断展示，点击弹框查看完整明细 */
+/** 定时配置单元格：只显示模式标签，点击弹框查看明细 */
 function renderScheduleCell(row) {
-  const summary = formatScheduleSummary(row.task_periodic_expr, row.task_schedule_expr)
-  if (!summary) return h('span', '-')
-  const brief = summary.length > 60 ? `${summary.slice(0, 60)}...` : summary
+  // 列内只显示模式标签（执行一次/永久有效，与面板周期开关文案对齐），明细点击后弹窗查看
+  const label = getScheduleModeLabel(row.task_periodic_expr, row.task_schedule_expr)
+  if (!label) return h('span', '-')
   return h(
     'span',
     {
       class: 'schedule-cell-trigger',
-      title: '点击查看完整定时配置',
+      title: '点击查看定时配置明细',
       onClick: () => openScheduleModal(row),
     },
-    brief,
+    label,
   )
 }
 

@@ -19,10 +19,12 @@
           </span>
         </div>
         <span class="exec-config-global-env-label">全局环境：</span>
+        <!-- 多环境模式下行级环境独立生效，全局环境不参与环境更新，置灰避免无效交互 -->
         <n-select
             v-model:value="panel.debugGlobalEnvId"
             :options="panel.debugEnvOptions"
             :loading="panel.envLoading"
+            :disabled="panel.debugEnvMode === 'multi'"
             placeholder="全局环境"
             size="small"
             clearable
@@ -69,10 +71,12 @@
             </n-switch>
             <div class="exec-config-env-header-controls">
               <span class="exec-config-global-env-label">全局环境：</span>
+              <!-- 多环境模式下行级环境独立生效，全局环境不参与环境更新，置灰避免无效交互 -->
               <n-select
                   v-model:value="panel.debugGlobalEnvId"
                   :options="panel.debugEnvOptions"
                   :loading="panel.envLoading"
+                  :disabled="panel.debugEnvMode === 'multi'"
                   placeholder="全局环境"
                   size="small"
                   clearable

@@ -7,7 +7,7 @@
  * 卡片壳与折叠交互对齐步骤编辑器 .step-editor-card（参考 database_controller 请求配置项）。
  */
 import { computed, ref, watch } from 'vue'
-import { NButton, NCard, NCollapseTransition, NRadio, NRadioGroup, NSwitch } from 'naive-ui'
+import { NButton, NCard, NCollapseTransition, NRadio, NRadioGroup, NTimePicker } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api'
 import {
@@ -21,7 +21,6 @@ import {
   formatFireTime,
   formatScheduleSummary,
 } from '@/utils/common/schedule'
-import TimeWheelPicker from './TimeWheelPicker.vue'
 
 const props = defineProps({
   /** 编辑状态：{ periodic, cycle, monthDays, weeks, times } */
@@ -39,7 +38,7 @@ const showMonthDays = computed(
 )
 const showWeeks = computed(() => isUnbounded.value && state.value.cycle === CYCLE_WEEK)
 
-/** 收起态右侧摘要：与任务列表table「定时配置」列同一渲染 */
+/** 收起态右侧摘要：详细摘要（任务列表「定时配置」列仅显示模式标签） */
 const summary = computed(() => {
   const payload = buildSchedulePayload(state.value)
   return payload ? formatScheduleSummary(payload.periodic, payload.schedule) : ''
@@ -51,14 +50,6 @@ function updateState(patch) {
 
 function toggleOpen() {
   emit('update:open', !props.open)
-}
-
-/** 周期模式开关样式：执行一次=主题主色，永久有效=信息色 */
-const periodicRailStyle = ({ checked }) =>
-  checked ? { background: 'var(--primary-color)' } : { background: 'var(--info-color, #2080f0)' }
-
-function setPeriodicBySwitch(v) {
-  setPeriodic(v ? PERIODIC_ONLY_ONCE : PERIODIC_UNBOUNDED)
 }
 
 function setPeriodic(v) {
@@ -79,13 +70,19 @@ function toggleIn(field, value) {
   updateState({ [field]: list })
 }
 
-/** 触发日期：全选 / 取消已选 */
+/** 触发日期：全选 / 取消 / 反选 */
 function selectAllMonthDays() {
   updateState({ monthDays: Array.from({ length: 31 }, (_, i) => i + 1) })
 }
 
 function clearMonthDays() {
   updateState({ monthDays: [] })
+}
+
+/** 反选：1~31 号中未选中的日期 */
+function invertMonthDays() {
+  const selected = new Set(state.value.monthDays || [])
+  updateState({ monthDays: Array.from({ length: 31 }, (_, i) => i + 1).filter((d) => !selected.has(d)) })
 }
 
 function setTime(idx, v) {
@@ -117,15 +114,18 @@ function handleClear() {
 
 const previewTimes = ref([])
 let previewTimer = null
+let latestPreviewSig = null
 
 const payloadSignature = computed(() => JSON.stringify(buildSchedulePayload(state.value) || null))
 
 watch(payloadSignature, (sig) => {
+  // 连续点选/微调触发时间不立即请求：800ms 防抖合并连续变更，降低 schedule_preview 调用频率
   clearTimeout(previewTimer)
-  previewTimer = setTimeout(() => fetchPreview(sig), 300)
+  previewTimer = setTimeout(() => fetchPreview(sig), 800)
 })
 
 async function fetchPreview(sig) {
+  latestPreviewSig = sig
   const payload = sig ? JSON.parse(sig) : null
   if (!payload) {
     previewTimes.value = []
@@ -136,8 +136,11 @@ async function fetchPreview(sig) {
       task_periodic_expr: payload.periodic,
       task_schedule_expr: payload.schedule,
     })
+    // 响应返回前配置又发生变化时丢弃旧响应，避免预览回跳
+    if (sig !== latestPreviewSig) return
     previewTimes.value = Array.isArray(res?.data) ? res.data.slice(0, 10) : []
   } catch (e) {
+    if (sig !== latestPreviewSig) return
     previewTimes.value = []
   }
 }
@@ -181,15 +184,14 @@ fetchPreview(payloadSignature.value)
       <div class="schedule-body">
         <div class="schedule-row">
           <label class="schedule-label is-required">周期模式</label>
-          <NSwitch
-            class="periodic-switch"
-            :value="state.periodic === PERIODIC_ONLY_ONCE"
-            :rail-style="periodicRailStyle"
-            @update:value="setPeriodicBySwitch"
-          >
-            <template #checked>执行一次</template>
-            <template #unchecked>永久有效</template>
-          </NSwitch>
+          <NRadioGroup :value="state.periodic" @update:value="setPeriodic">
+            <NRadio :value="PERIODIC_ONLY_ONCE">
+              执行1次(每个触发时间各单次有效)
+            </NRadio>
+            <NRadio :value="PERIODIC_UNBOUNDED">
+              执行N次(每个触发时间永久有效)
+            </NRadio>
+          </NRadioGroup>
         </div>
 
         <div v-if="isUnbounded" class="schedule-row">
@@ -215,7 +217,8 @@ fetchPreview(payloadSignature.value)
               {{ d }}号
             </button>
             <button type="button" class="chip chip--action" @click="selectAllMonthDays">全选</button>
-            <button type="button" class="chip chip--action" @click="clearMonthDays">取消已选</button>
+            <button type="button" class="chip chip--action" @click="clearMonthDays">取消</button>
+            <button type="button" class="chip chip--action" @click="invertMonthDays">反选</button>
           </div>
         </div>
 
@@ -239,7 +242,15 @@ fetchPreview(payloadSignature.value)
           <label class="schedule-label is-required">触发时间</label>
           <div class="time-list">
             <div v-for="(t, idx) in state.times" :key="idx" class="time-item">
-              <TimeWheelPicker :value="t" @update:value="(v) => setTime(idx, v)" />
+              <NTimePicker
+                  :formatted-value="t || null"
+                  value-format="HH:mm:ss"
+                  format="HH:mm:ss"
+                  size="small"
+                  style="width: 116px"
+                  placeholder="点击选择"
+                  @update:formatted-value="(v) => setTime(idx, v || '')"
+              />
               <span class="time-actions">
                 <button
                   v-if="(state.times || []).length > 1"
@@ -251,10 +262,11 @@ fetchPreview(payloadSignature.value)
                   <TheIcon icon="material-symbols:cancel" :size="16" />
                 </button>
                 <button
-                  v-if="idx === (state.times || []).length - 1 && (state.times || []).length < 3"
+                  v-if="idx === (state.times || []).length - 1"
                   type="button"
                   class="icon-btn icon-btn--add"
-                  title="新增时间"
+                  :title="(state.times || []).length >= 3 ? '最多3个触发时间' : '新增时间'"
+                  :disabled="(state.times || []).length >= 3"
                   @click="addTime"
                 >
                   <TheIcon icon="material-symbols:add-circle" :size="16" />
@@ -365,30 +377,32 @@ fetchPreview(payloadSignature.value)
   color: #fff;
 }
 
-/* 触发日期选中样式与执行预览一致：信息色浅底 */
+/* 触发日期选中样式与执行预览一致：主题主色浅底（跟随系统换肤） */
 .chip-grid .chip:hover {
-  border-color: var(--info-color, #2080f0);
-  color: var(--info-color, #2080f0);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .chip-grid .chip.active {
-  border-color: var(--info-color, #2080f0);
-  background: color-mix(in srgb, var(--info-color, #2080f0) 8%, transparent);
-  color: var(--info-color, #2080f0);
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
 }
 
-.periodic-switch {
-  margin-top: 4px;
+.periodic-radio-hint {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 
-/* 全选/取消已选：与日期 chip 同格同高，仅文字提示色区分 */
+/* 全选/取消/反选：与日期 chip 同格同高，仅文字提示色区分 */
 .chip--action {
   color: var(--n-text-color-3);
 }
 
 .chip--action:hover {
-  border-color: var(--info-color, #2080f0);
-  color: var(--info-color, #2080f0);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 /* 触发时间：横向排列、每行 5 个；新增/删除按钮悬停对应时间项时再显示 */
@@ -433,7 +447,12 @@ fetchPreview(payloadSignature.value)
 }
 
 .icon-btn--add {
-  color: var(--info-color, #2080f0);
+  color: var(--primary-color);
+}
+
+.icon-btn--add:disabled {
+  color: var(--n-text-color-3);
+  cursor: not-allowed;
 }
 
 .preview-wrap {
@@ -450,8 +469,8 @@ fetchPreview(payloadSignature.value)
 .preview-chip {
   padding: 4px 10px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--info-color, #2080f0) 8%, transparent);
-  color: var(--info-color, #2080f0);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
