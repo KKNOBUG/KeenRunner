@@ -11,6 +11,7 @@ import { NButton, NCard, NCollapseTransition, NRadio, NRadioGroup, NTimePicker }
 import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api'
 import {
+  CYCLE_DAY,
   CYCLE_MONTH,
   CYCLE_WEEK,
   PERIODIC_ONLY_ONCE,
@@ -184,22 +185,20 @@ fetchPreview(payloadSignature.value)
       <div class="schedule-body">
         <div class="schedule-row">
           <label class="schedule-label is-required">周期模式</label>
-          <NRadioGroup :value="state.periodic" @update:value="setPeriodic">
-            <NRadio :value="PERIODIC_ONLY_ONCE">
-              执行1次(每个触发时间各单次有效)
-            </NRadio>
-            <NRadio :value="PERIODIC_UNBOUNDED">
-              执行N次(每个触发时间永久有效)
-            </NRadio>
-          </NRadioGroup>
+          <div class="schedule-mode">
+            <NRadioGroup :value="state.periodic" @update:value="setPeriodic">
+              <NRadio :value="PERIODIC_ONLY_ONCE">执行1次(每个触发时间单次有效)</NRadio>
+              <NRadio :value="PERIODIC_UNBOUNDED">执行N次(每个触发时间永久有效)</NRadio>
+            </NRadioGroup>
+          </div>
         </div>
 
         <div v-if="isUnbounded" class="schedule-row">
           <label class="schedule-label is-required">周期类型</label>
           <NRadioGroup :value="state.cycle" @update:value="setCycle">
-            <NRadio value="日">日</NRadio>
-            <NRadio value="周">周</NRadio>
-            <NRadio value="月">月</NRadio>
+            <NRadio :value="CYCLE_DAY">日</NRadio>
+            <NRadio :value="CYCLE_WEEK">周</NRadio>
+            <NRadio :value="CYCLE_MONTH">月</NRadio>
           </NRadioGroup>
         </div>
 
@@ -216,9 +215,18 @@ fetchPreview(payloadSignature.value)
             >
               {{ d }}号
             </button>
-            <button type="button" class="chip chip--action" @click="selectAllMonthDays">全选</button>
-            <button type="button" class="chip chip--action" @click="clearMonthDays">取消</button>
-            <button type="button" class="chip chip--action" @click="invertMonthDays">反选</button>
+            <button type="button" class="chip chip--action" @click="selectAllMonthDays">
+              <TheIcon icon="material-symbols:select-check-box" :size="13" />
+              全选
+            </button>
+            <button type="button" class="chip chip--action" @click="invertMonthDays">
+              <TheIcon icon="material-symbols:difference" :size="13" />
+              反选
+            </button>
+            <button type="button" class="chip chip--action" @click="clearMonthDays">
+              <TheIcon icon="ic:sharp-check-box-outline-blank" :size="13" />
+              取消
+            </button>
           </div>
         </div>
 
@@ -389,14 +397,20 @@ fetchPreview(payloadSignature.value)
   color: var(--primary-color);
 }
 
-.periodic-radio-hint {
-  margin-left: 4px;
-  font-size: 12px;
-  color: var(--n-text-color-3);
+/* 周期模式单选组：min-height 与 label 行高平齐保证水平对齐 */
+.schedule-mode {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
 }
 
-/* 全选/取消/反选：与日期 chip 同格同高，仅文字提示色区分 */
+/* 全选/反选/取消：与日期 chip 同款样式，以 icon 区分于纯文字日期选项；
+   inline-flex 后 UA 的 text-align 居中失效，需 justify-content 补回水平居中 */
 .chip--action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   color: var(--n-text-color-3);
 }
 

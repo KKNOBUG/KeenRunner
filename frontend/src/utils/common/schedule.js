@@ -1,13 +1,14 @@
-// 结构化定时表达式(task_schedule_expr)前端工具：编辑状态⇄后端契约转换、摘要与预览格式化
+// 结构化定时表达式(task_schedule_expr)前端工具：编辑状态⇄后端契约转换、摘要与预览格式化、任务列表标签流展示
 // 后端契约：ONLY_ONCE={"trigger_dates":[...]}；UNBOUNDED={"trigger_cycle","trigger_weeks"/"trigger_month","trigger_times"}
 import dayjs from 'dayjs'
 
 export const PERIODIC_ONLY_ONCE = '执行1次'
 export const PERIODIC_UNBOUNDED = '执行N次'
 
-export const CYCLE_DAY = '日'
-export const CYCLE_WEEK = '周'
-export const CYCLE_MONTH = '月'
+/** 周期类型常量：与后端 AutoTestTaskCycleType 枚举值(daily/weekly/monthly)对齐，随 task_schedule_expr.trigger_cycle 落库 */
+export const CYCLE_DAY = 'daily'
+export const CYCLE_WEEK = 'weekly'
+export const CYCLE_MONTH = 'monthly'
 
 /** 星期多选标签：1=星期一~7=星期日，与后端 isoweekday 对齐 */
 export const WEEK_LABELS = {
@@ -23,6 +24,9 @@ export const WEEK_LABELS = {
 const TIME_RE = /^\d{2}:\d{2}:\d{2}$/
 const pad2 = (n) => String(n).padStart(2, '0')
 const asc = (arr) => [...arr].sort((a, b) => a - b)
+
+// 标签流展示：数值标签超过该数量时截断并追加「等 N 个」汇总标签，明细点击弹窗兜底
+const TAG_VALUE_LIMIT = 6
 
 export function createEmptyScheduleState() {
   // 周期模式必输、默认「仅执行一次」；预置一行空触发时间便于直接选择
@@ -133,14 +137,39 @@ export function formatScheduleSummary(periodic, expr) {
 }
 
 /**
- * 定时配置模式标签：仅执行一次→「执行一次」，周期→「永久有效」，无实质配置返回空。
- * 任务列表「定时配置」列使用，与定时设置面板周期开关文案对齐；明细仍由点击弹窗查看。
+ * 后端表达式 → 任务列表「定时配置」列标签流：[{ label, kind }]
+ * kind: cycle=周期标签(信息色：仅一次/每日/每周/每月) / value=数值标签(橙色：日期/星期/几号/时间) / more=溢出汇总
+ * 执行1次 → 「仅一次」+ trigger_dates 逐点「YYYY-MM-DD HH:mm」；执行N次 → 周期标签 + 星期/几号/时间标签
+ * @returns {Array<{label: string, kind: 'cycle'|'value'|'more'}>} 表达式为空或不完整时返回空数组
  */
-export function getScheduleModeLabel(periodic, expr) {
-  if (!periodic || !expr || typeof expr !== 'object') return ''
+export function buildScheduleTags(periodic, expr) {
+  if (!periodic || !expr || typeof expr !== 'object') return []
   if (periodic === PERIODIC_ONLY_ONCE) {
     const dates = Array.isArray(expr.trigger_dates) ? expr.trigger_dates : []
-    return dates.length ? '执行一次' : ''
+    if (!dates.length) return []
+    // 触发日期时间截去秒位，对齐需求截图「2026-08-10 22:00」
+    const values = dates.map((raw) => ({ label: String(raw || '').slice(0, 16), kind: 'value' }))
+    return [{ label: '仅一次', kind: 'cycle' }, ...truncateScheduleTags(values)]
   }
-  return expr.trigger_cycle ? '永久有效' : ''
+  const cycle = expr.trigger_cycle
+  if (!cycle) return []
+  const values = []
+  if (cycle === CYCLE_WEEK) {
+    // 标签流用「周一」短标签对齐需求截图（WEEK_LABELS 为面板全称）
+    for (const w of expr.trigger_weeks || []) {
+      values.push({ label: (WEEK_LABELS[w] || w).replace('星期', '周'), kind: 'value' })
+    }
+  } else if (cycle === CYCLE_MONTH) {
+    for (const d of expr.trigger_month || []) values.push({ label: `${d}号`, kind: 'value' })
+  }
+  for (const t of expr.trigger_times || []) values.push({ label: String(t || '').slice(0, 5), kind: 'value' })
+  if (!values.length) return []
+  const cycleLabel = cycle === CYCLE_DAY ? '每日' : cycle === CYCLE_WEEK ? '每周' : cycle === CYCLE_MONTH ? '每月' : cycle
+  return [{ label: cycleLabel, kind: 'cycle' }, ...truncateScheduleTags(values)]
+}
+
+/** 数值标签超过 TAG_VALUE_LIMIT 时截断，追加「等 N 个」汇总标签引导点击明细弹窗 */
+function truncateScheduleTags(values) {
+  if (values.length <= TAG_VALUE_LIMIT) return values
+  return [...values.slice(0, TAG_VALUE_LIMIT), { label: `等 ${values.length} 个`, kind: 'more' }]
 }

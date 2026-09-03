@@ -24,7 +24,7 @@ import TaskHistoryModal from '@/views/task/list/components/TaskHistoryModal.vue'
 
 import {formatDateTime, formatJsonBrief, renderIcon, resultPayloadOf} from '@/utils'
 import {
-  getScheduleModeLabel,
+  buildScheduleTags,
   formatFireTime,
   WEEK_LABELS,
   PERIODIC_ONLY_ONCE,
@@ -378,19 +378,28 @@ const openScheduleModal = (row) => {
   previewShow.value = true
 }
 
-/** 定时配置单元格：只显示模式标签，点击弹框查看明细 */
+/** 定时配置单元格：标签流展示（周期=信息色/数值=橙色，对齐需求截图），点击弹框查看明细 */
 function renderScheduleCell(row) {
-  // 列内只显示模式标签（执行一次/永久有效，与面板周期开关文案对齐），明细点击后弹窗查看
-  const label = getScheduleModeLabel(row.task_periodic_expr, row.task_schedule_expr)
-  if (!label) return h('span', '-')
+  const tags = buildScheduleTags(row.task_periodic_expr, row.task_schedule_expr)
+  if (!tags.length) return h('span', '-')
   return h(
-    'span',
+    'div',
     {
-      class: 'schedule-cell-trigger',
+      class: 'schedule-cell-tags',
       title: '点击查看定时配置明细',
       onClick: () => openScheduleModal(row),
     },
-    label,
+    tags.map((tag) =>
+      h(
+        NTag,
+        {
+          type: tag.kind === 'cycle' ? 'info' : tag.kind === 'value' ? 'warning' : 'default',
+          size: 'small',
+          bordered: true,
+        },
+        { default: () => tag.label },
+      ),
+    ),
   )
 }
 
@@ -512,7 +521,6 @@ const columns = computed(() => {
     key: 'task_schedule_expr',
     width: 260,
     align: 'center',
-    ellipsis: {tooltip: true},
     render(row) {
       return renderScheduleCell(row)
     },
@@ -572,6 +580,16 @@ const columns = computed(() => {
         return h('span', formatted || '-')
       },
     },
+  {
+    title: '最后执行人',
+    key: 'last_execute_user',
+    width: 150,
+    align: 'center',
+    ellipsis: {tooltip: true},
+    render(row) {
+      return h('span', row.last_execute_user || '-')
+    },
+  },
   {
     title: '更新人员',
     key: 'updated_user',
@@ -899,10 +917,12 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-/* 定时配置单元格：对齐执行记录页“执行参数”交互 */
-.schedule-cell-trigger {
-  color: #2080f0;
+/* 定时配置单元格：标签流布局，整格可点击查看明细（对齐执行记录页“执行参数”交互） */
+.schedule-cell-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
   cursor: pointer;
-  word-break: break-all;
 }
 </style>
