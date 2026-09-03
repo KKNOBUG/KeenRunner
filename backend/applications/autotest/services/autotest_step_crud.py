@@ -1244,7 +1244,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             LOGGER.info(f"初始化变量[initial_variables]为空或非列表类型")
             initial_variables = []
 
-        # 1. 查询用例信息
+        # 1.查询用例信息
         case_crud = AutoTestCaseCrud()
         case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
         case_dict = await case_instance.to_dict(
@@ -1253,7 +1253,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         )
         LOGGER.info(f"查询用例[id={case_id}]成功, 结果: {case_dict}")
 
-        # 2. 查询步骤树数据（边界层已 model_validate）
+        # 2.查询步骤树数据
         load: AutoTestCaseStepTreeLoadResult = await self.get_case_tree(case_id)
         tree_data_count: Dict[str, int] = load.step_counter.model_dump()
         if load.step_counter.total_steps == 0:
@@ -1272,6 +1272,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                         merged[it.key] = it
             return list(merged.values())
 
+        # 3.聚合会话变量
         merge_all_variables: List[StepVariablesBase] = _merge_session_variables(
             step_variables_list_from_storage(getattr(case_instance, "session_variables", None)),
             AutoTestToolService.collect_session_variables(load.root_steps),
@@ -1279,14 +1280,14 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         )
         LOGGER.info(f"检查用例[id={case_id}]步骤树数据规范成功, 收集会话变量成功")
 
-        # 5. 获取根步骤（执行前在引擎内统一 prepare）
+        # 4.获取根步骤
         root_steps: List[AutoTestStepTreeUpdateItem] = [s for s in load.root_steps if s.parent_step_id is None]
         if not root_steps:
             error_message: str = f"获取用例[id={case_id}]根步骤失败, 没有任何可执行的根步骤"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 6. 执行用例（延后落库）：执行阶段不持事务，落库阶段单事务，保证「要么全部成功要么全部失败」且不长时间占锁
+        # 5.执行用例，延迟落库: 执行阶段不保持事务，落库阶段单持事务；保证「要么全部成功要么全部失败」且不长时间占锁
         engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code)
         results, logs, _, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
             case=case_dict,
@@ -1298,8 +1299,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         )
         async with in_transaction():
             report_instance = await AutoTestReportCrud().create_report(report_in=defer_create_report)
-            for detail_create in (pending_create_details or []):
-                await AutoTestDetailCrud().create_detail(detail_in=detail_create)
+            await AutoTestDetailCrud().create_details(details_in=list(pending_create_details or []))
             case_state = statistics.get("failed_steps", 0) == 0
             case_last_time = defer_create_report.case_ed_time
             await case_crud.update_case(AutoTestApiCaseUpdate(
@@ -1307,7 +1307,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                 case_state=case_state,
                 case_last_time=case_last_time,
             ))
-        # 单次用例结果：步骤级指标用 *_steps / passed_ratio；success 表示本轮用例是否通过
         return {
             "success": statistics.get("failed_steps", 0) == 0,
             "total_steps": statistics.get("total_steps", 0),

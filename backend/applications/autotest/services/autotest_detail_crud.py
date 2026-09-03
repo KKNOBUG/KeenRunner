@@ -117,6 +117,34 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
+    async def create_details(self, details_in: List[AutoTestApiDetailCreate]) -> List[AutoTestDetailModel]:
+        """
+        批量创建执行明细，仅供落库事务内使用(不校验用例与报告存在性，调用方(执行/调试落库事务)在调用前已完成用例校验，并在同一事务内创建了与明细)。
+        report_code同源的报告，故跳过存在性校验；唯一约束(report_code+case_code+step_code+loop_cycles)
+        冲突时整批失败，由外层事务统一回滚，与逐条创建的事务语义一致。
+
+        :param details_in: 明细创建schema列表
+        :return: 创建后的明细实例列表(自增主键不回填)
+        """
+        if not details_in:
+            return []
+        try:
+            instances: List[AutoTestDetailModel] = []
+            for detail in details_in:
+                detail_dict = detail.model_dump(exclude_none=True, exclude_unset=True)
+                self.fill_created_user(detail_dict)
+                instances.append(self.model(**detail_dict))
+            await self.model.bulk_create(instances)
+            return instances
+        except IntegrityError as e:
+            error_message: str = f"批量新增明细信息失败, 违反约束规则: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataBaseStorageException(message=error_message) from e
+        except Exception as e:
+            error_message: str = f"批量新增明细信息异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataBaseStorageException(message=error_message) from e
+
     async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestDetailModel:
         """
         更新明细，需提供detail_id或(report_code, step_code)定位。
