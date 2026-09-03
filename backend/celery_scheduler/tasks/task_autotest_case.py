@@ -35,7 +35,7 @@ _LOG_PREFIX = "【Celery-Worker】"
 
 def _should_close_schedule(task: Any) -> bool:
     """
-    判断调度执行结束后是否应关闭调度：ONLY_ONCE且全部触发日期时间均已到期。
+    判断调度执行结束后是否应关闭调度：ONLY_ONCE且全部触发日期时间均已被派发执行。
 
     :param task: 自动化任务模型实例
     :return: 应关闭为True
@@ -45,7 +45,17 @@ def _should_close_schedule(task: Any) -> bool:
         periodic=getattr(task, "task_periodic_expr", None),
         schedule=getattr(task, "task_schedule_expr", None),
     )
-    return schedule_obj is not None and schedule_obj.is_completed(datetime.now())
+    if schedule_obj is None or not schedule_obj.is_only_once:
+        return False
+    # 以“本次执行启动时刻(last_execute_time)”为基准判定：触发点由扫描逐点派发，
+    # worker启动执行时已先回填该时刻，若其已越过最后一个触发点，说明全部触发点均已消费；
+    # 若用墙钟now判断，单次执行耗时跨越下一个未触发触发点时会把未派发的触发点一并误杀
+    last_run = getattr(task, "last_execute_time", None)
+    if last_run is None:
+        return False
+    if getattr(last_run, "tzinfo", None):
+        last_run = last_run.replace(tzinfo=None)
+    return schedule_obj.is_completed(last_run)
 
 
 async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None) -> Dict[str, Any]:

@@ -347,14 +347,16 @@ class TaskSchedule:
                         return [item.strftime(FIRE_TIME_FORMAT) for item in preview]
         return [item.strftime(FIRE_TIME_FORMAT) for item in preview]
 
-    def is_completed(self, now: datetime) -> bool:
+    def is_completed(self, moment: datetime) -> bool:
         """
         判断ONLY_ONCE任务的全部触发日期时间是否均已到期(供执行后关闭调度)。
 
-        :param now: 当前时间
+        :param moment: 判定基准时刻；调用方应传“上一次执行启动时刻(last_execute_time)”
+            而非墙钟——触发点由扫描逐点派发，仅当上次执行启动时已越过最后一个触发点，
+            才能确认全部触发点均已被派发，避免单次执行跨越后续触发点时误关调度
         :return: ONLY_ONCE且全部trigger_dates已到期为True；UNBOUNDED恒为False
         """
-        return self.is_only_once and bool(self._trigger_dates) and now >= self._trigger_dates[-1]
+        return self.is_only_once and bool(self._trigger_dates) and moment >= self._trigger_dates[-1]
 
 
 # ==================== 扫描链路入口 ====================
