@@ -215,11 +215,16 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         LOGGER.error(error_message)
         raise DataAlreadyExistsException(message=error_message)
 
-    async def update_data_source(self, data_source_in: AutoTestDataSourceUpdate) -> AutoTestDataSourceModel:
+    async def update_data_source(
+            self,
+            data_source_in: AutoTestDataSourceUpdate,
+            located_instance: Optional[AutoTestDataSourceModel] = None,
+    ) -> AutoTestDataSourceModel:
         """
         更新数据源，根据id/code或用例步骤组合定位。
 
         :param data_source_in: 更新schema
+        :param located_instance: 调用方已定位的实例，传入时跳过定位查询
         :return: 更新后的数据源实例
         """
         case_id: Optional[int] = data_source_in.case_id
@@ -229,7 +234,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         data_source_id: Optional[int] = data_source_in.data_source_id
         data_source_code: Optional[str] = data_source_in.data_source_code
 
-        if data_source_id:
+        if located_instance is not None:
+            instance: Optional[AutoTestDataSourceModel] = located_instance
+        elif data_source_id:
             instance: Optional[AutoTestDataSourceModel] = await self.get_by_id(
                 data_source_id=data_source_id,
                 on_error=True,
@@ -263,16 +270,17 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         if not update_dict:
             return instance
 
+        # 实例已定位，直接按基类update的写入序列落库，省去重复的存在性查询
+        self.fill_updated_user(update_dict)
+        updated_instance: AutoTestDataSourceModel = instance.update_from_dict(update_dict)
         try:
-            return await self.update(id=instance.id, obj_in=update_dict)
-        except DoesNotExist as e:
-            error_message: str = f"更新数据源失败, 记录[id={instance.id}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise NotFoundException(message=error_message) from e
+            await updated_instance.save()
         except IntegrityError as e:
             error_message: str = f"更新数据源异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
+        LOGGER.info(f"更新成功: {self.model.__name__}(id={instance.id}), 字段: {list(update_dict.keys())}")
+        return updated_instance
 
     async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestDataSourceModel]]:
         """
@@ -306,6 +314,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             dataframe: Optional[List[Any]] = None,
             axis: int = 0,
             created_user: Optional[str] = None,
+            existing: Optional[AutoTestDataSourceModel] = None,
     ) -> AutoTestDataSourceModel:
         """
         上传解析场景：根据case_id+step_id+step_code若已存在则更新，否则创建。
@@ -323,6 +332,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         :param dataframe: 原始二维矩阵
         :param axis: 数据矩阵方向(0:水平模式, 1:垂直模式)
         :param created_user: 创建人(更新路径会映射为updated_user)
+        :param existing: 调用方已定位的现有数据源实例，传入时跳过定位查询
         :return: 数据源实例
         """
         if not parsed_data:
@@ -338,13 +348,14 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             for scene_name, scene_data in parsed_data.items()
         }
 
-        existing = await self.get_by_case_step(
-            case_id=case_id,
-            step_id=step_id,
-            step_code=step_code,
-            on_error=False,
-            state__not=1
-        )
+        if existing is None:
+            existing = await self.get_by_case_step(
+                case_id=case_id,
+                step_id=step_id,
+                step_code=step_code,
+                on_error=False,
+                state__not=1
+            )
         cache_key = make_cache_key(case_id, step_code)
         if existing:
             return await self.update_data_source(
@@ -365,6 +376,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
                     axis=axis,
                     updated_user=created_user,
                 ),
+                located_instance=existing,
             )
 
         return await self.create_data_source(

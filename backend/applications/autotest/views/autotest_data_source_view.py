@@ -12,7 +12,7 @@ import os.path
 import re
 import traceback
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Set, Union
+from typing import Optional, List, Dict, Any, Set, Tuple, Union
 from urllib.parse import quote
 
 import aiofiles.os as aos
@@ -77,6 +77,9 @@ from backend.services import get_current_username
 from backend.services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
+
+# 步骤定位查询仅加载的轻量字段(步骤名/编码匹配与映射所需，不拉取请求报文等大JSON字段)
+STEP_LOCATOR_FIELDS: Tuple[str, ...] = ("id", "step_code", "step_name", "step_type")
 
 
 async def _serialize_data_source(instance: AutoTestDataSourceModel) -> Dict[str, Any]:
@@ -662,7 +665,7 @@ async def get_dataset_names(
     data_source_instances = await services.data_source_curd.model.filter(
         case_id=case_id,
         state__not=1
-    ).order_by("created_time").all()
+    ).only("dataset_names").order_by("created_time").all()
     merged_names: List[str] = []
     seen: Set[str] = set()
     for ds in data_source_instances:
@@ -1141,7 +1144,7 @@ async def batch_step_dataset_upload(
 
     # 获取用例全部步骤（含子步骤），根据步骤名建立HTTP/TCP请求步骤映射
     try:
-        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1).only(*STEP_LOCATOR_FIELDS)
     except Exception as e:
         LOGGER.error(f"查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询步骤树失败，异常描述: {e}")
@@ -1236,6 +1239,15 @@ async def batch_step_dataset_upload(
     created_user = get_current_username()
     created: List[Dict[str, Any]] = []
     try:
+        # 单次批量预载各步骤现有数据源，事务内循环不再逐sheet定位(与get_by_case_step同条件取首条)
+        existing_list = await services.data_source_curd.model.filter(
+            case_id=case_id,
+            step_code__in=[info["step_code"] for info in step_map.values()],
+            state__not=1
+        )
+        existing_map: Dict[str, AutoTestDataSourceModel] = {}
+        for existing_item in existing_list:
+            existing_map.setdefault(existing_item.step_code, existing_item)
         async with in_transaction():
             for sheet_name, step_data in full_parsed.items():
                 step_info: Dict[str, Any] = step_map[sheet_name]
@@ -1255,6 +1267,7 @@ async def batch_step_dataset_upload(
                     dataframe=sheet_dataframes[sheet_name],
                     axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
                     created_user=created_user,
+                    existing=existing_map.get(step_code),
                 )
                 created.append(await _serialize_data_source(instance))
                 await sync_step_data_source_meta(
@@ -1297,7 +1310,7 @@ async def batch_step_dataset_download(
             return BadReqResponse(message="该用例下没有可导出的数据源")
 
         # 获取用例全部步骤，创建step_code/step_id -> step_name映射
-        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1).only(*STEP_LOCATOR_FIELDS)
         step_name_map: Dict[Union[str, int], str] = {}
         for step in all_steps:
             step_id: int = step.id

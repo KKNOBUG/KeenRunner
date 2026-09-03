@@ -605,10 +605,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def batch_create(self, obj_list: List[Union[CreateSchemaType, Dict]]) -> List[ModelType]:
         """
-        批量创建记录。
+        批量创建记录(单次批量INSERT)。
 
         :param obj_list: 创建数据列表，每个元素可以是Pydantic Schema实例或字典
-        :return: 创建成功的数据库对象列表
+        :return: 创建成功的数据库对象列表(仅含传入字段值与模型默认值，数据库生成的主键不回填)
         """
         if not obj_list:
             return []
@@ -620,10 +620,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             else:
                 obj_dict = obj_in.model_dump(warnings=False)
             self.fill_created_user(obj_dict)
-            obj = self.model(**obj_dict)
-            await obj.save()
-            instances.append(obj)
+            instances.append(self.model(**obj_dict))
 
+        await self.model.bulk_create(instances)
         LOGGER.info(f"批量创建成功: {self.model.__name__}, 数量={len(instances)}")
         return instances
 
