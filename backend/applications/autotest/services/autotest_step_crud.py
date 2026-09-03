@@ -73,6 +73,29 @@ async def _load_case_dataset_names(case_id: int) -> List[str]:
     return merged
 
 
+async def _get_case_cached(
+        case_cache: Dict[int, AutoTestCaseModel],
+        case_crud: AutoTestCaseCrud,
+        case_id: int,
+        on_error: bool,
+) -> Optional[AutoTestCaseModel]:
+    """
+    按case_id获取用例并缓存，同一保存调用内复用已查实例，减少长事务内重复查询。
+
+    :param case_cache: 用例实例缓存(由调用方创建并递归传递共享，未命中不缓存None)
+    :param case_crud: 用例CRUD实例
+    :param case_id: 用例主键ID
+    :param on_error: 未找到时是否抛出异常
+    :return: 用例实例或None
+    """
+    if case_id in case_cache:
+        return case_cache[case_id]
+    instance = await case_crud.get_by_id(case_id=case_id, on_error=on_error, state__not=1)
+    if instance:
+        case_cache[case_id] = instance
+    return instance
+
+
 class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
 
     def __init__(self):
@@ -832,6 +855,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             steps_data: List[AutoTestStepTreeUpdateItem],
             parent_step_id: Optional[int] = None,
             branch_index: Optional[int] = None,
+            parent_step_instance: Optional[AutoTestStepModel] = None,
+            case_cache: Optional[Dict[int, AutoTestCaseModel]] = None,
     ) -> Dict[str, Any]:
         """
         批量新增或更新步骤树：无step_id/step_code则新增，有则更新；递归处理children/branch_items。
@@ -839,6 +864,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :param steps_data: 步骤树项列表，每项可为AutoTestStepTreeUpdateItem
         :param parent_step_id: 当前层级的父步骤ID，用于新增时挂载
         :param branch_index: 当前层级所属分支序号(条件分支子步骤使用)
+        :param parent_step_instance: 当前层级父步骤实例(递归时由上层传入，命中时复用免重复查询)
+        :param case_cache: 用例实例缓存(根级调用自动创建，递归共享，同一用例整树只查一次)
         :return: 包含created_count、updated_count、process_detail、success_detail的字典
         """
         created_count: int = 0
@@ -847,6 +874,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         processed_step_codes: Dict[int, Set[str]] = {}
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}
         case_crud = AutoTestCaseCrud()
+        # 同一保存调用内同一用例只查一次，降低整树保存长事务内的重复查询
+        case_cache: Dict[int, AutoTestCaseModel] = {} if case_cache is None else case_cache
 
         # 公共家族约束（仅根级调用校验）：公共脚本/公共接口均不可引用其他脚本、全树不可绑定数据源；
         # 公共接口另有形态约束（有且仅有 1 个 HTTP/TCP 根步骤）。
@@ -854,7 +883,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         if parent_step_id is None and branch_index is None and steps_data:
             root_case_id: Optional[int] = steps_data[0].case_id
             if root_case_id:
-                root_case = await case_crud.get_by_id(case_id=root_case_id, on_error=False, state__not=1)
+                root_case = await _get_case_cached(
+                    case_cache=case_cache,
+                    case_crud=case_crud,
+                    case_id=root_case_id,
+                    on_error=False,
+                )
                 if root_case and root_case.case_type in PUBLIC_CASE_TYPES:
                     self._validate_public_family_tree(steps_data, root_case.case_type, root_case.case_project)
 
@@ -891,7 +925,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 
-                case_instance = await case_crud.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
+                case_instance = await _get_case_cached(
+                    case_cache=case_cache,
+                    case_crud=case_crud,
+                    case_id=step_data.case_id,
+                    on_error=True,
+                )
 
                 existing_step_instance: Optional[AutoTestStepModel] = await self.get_by_conditions(
                     only_one=True,
@@ -911,12 +950,17 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                     raise DataAlreadyExistsException(message=error_message)
 
                 final_parent_step_id = parent_step_id if parent_step_id is not None else step_data.parent_step_id
+                parent_step: Optional[AutoTestStepModel] = None
                 if final_parent_step_id:
-                    parent_step = await self.get_by_id(
-                        step_id=final_parent_step_id,
-                        on_error=False,
-                        state__not=1,
-                    )
+                    # 递归调用时父实例已由上层传入，命中即复用，避免每个子节点重复查询同一父步骤
+                    if parent_step_instance is not None and final_parent_step_id == parent_step_instance.id:
+                        parent_step = parent_step_instance
+                    else:
+                        parent_step = await self.get_by_id(
+                            step_id=final_parent_step_id,
+                            on_error=False,
+                            state__not=1,
+                        )
                     if not parent_step:
                         error_message: str = (
                             f"第{sid}步骤新增失败, "
@@ -1011,6 +1055,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                                 steps_data=branch.branch_children,
                                 parent_step_id=new_step_instance.id,
                                 branch_index=bi,
+                                parent_step_instance=new_step_instance,
+                                case_cache=case_cache,
                             )
                             created_count += child_result["created_count"]
                             updated_count += child_result["updated_count"]
@@ -1022,6 +1068,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                         child_result = await self.batch_update_or_create_steps(
                             steps_data=children,
                             parent_step_id=new_step_instance.id,
+                            parent_step_instance=new_step_instance,
+                            case_cache=case_cache,
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
@@ -1079,10 +1127,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
                 if "case_id" in update_dict:
                     case_id: int = update_dict.get("case_id", step_instance.case_id)
-                    case: Optional[AutoTestCaseModel] = await case_crud.get_by_id(
+                    case: Optional[AutoTestCaseModel] = await _get_case_cached(
+                        case_cache=case_cache,
+                        case_crud=case_crud,
                         case_id=case_id,
                         on_error=False,
-                        state__not=1
                     )
                     if not case:
                         error_message: str = (
@@ -1095,7 +1144,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
                 if "parent_step_id" in update_dict and update_dict["parent_step_id"]:
                     parent_step_id: int = update_dict["parent_step_id"]
-                    parent_step = await self.get_by_id(step_id=parent_step_id, on_error=False, state__not=1)
+                    # 目标父与递归传入的父实例一致时直接复用，避免每个子节点重复查询同一父步骤
+                    if parent_step_instance is not None and parent_step_id == parent_step_instance.id:
+                        parent_step = parent_step_instance
+                    else:
+                        parent_step = await self.get_by_id(step_id=parent_step_id, on_error=False, state__not=1)
                     if not parent_step:
                         error_message: str = (
                             f"第{sid}步骤更新失败, "
@@ -1156,10 +1209,18 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
                 if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
                     quote_case_id: int = update_dict["quote_case_id"]
-                    await case_crud.get_by_id(case_id=quote_case_id, on_error=True, state__not=1)
+                    await _get_case_cached(
+                        case_cache=case_cache,
+                        case_crud=case_crud,
+                        case_id=quote_case_id,
+                        on_error=True,
+                    )
 
                 try:
-                    updated_instance = await self.update(id=step_id, obj_in=update_dict)
+                    # step_instance 已在本层定位时查得，复用实例完成更新，避免scaffold.update内部重复SELECT
+                    self.fill_updated_user(update_dict)
+                    updated_instance = step_instance.update_from_dict(update_dict)
+                    await updated_instance.save()
                 except Exception as e:
                     error_message: str = f"第{sid}步骤更新失败, 错误描述: {e}"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
@@ -1194,6 +1255,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                                 steps_data=branch.branch_children,
                                 parent_step_id=step_id,
                                 branch_index=bi,
+                                parent_step_instance=updated_instance,
+                                case_cache=case_cache,
                             )
                             created_count += child_result["created_count"]
                             updated_count += child_result["updated_count"]
@@ -1205,6 +1268,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
                         child_result = await self.batch_update_or_create_steps(
                             steps_data=children,
                             parent_step_id=step_id,
+                            parent_step_instance=updated_instance,
+                            case_cache=case_cache,
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
