@@ -7,6 +7,7 @@
 @DateTime: 2026/1/31 12:42
 """
 import traceback
+from datetime import datetime
 from typing import Optional, Dict, Any, List, Set, Tuple
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
@@ -274,12 +275,13 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         await instance.save(update_fields=["task_enabled"])
         return instance
 
-    async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestTaskModel:
+    async def set_task_enabled(self, task_id: int, enabled: bool = True, updated_user: Optional[str] = None) -> AutoTestTaskModel:
         """
         设置任务是否启用调度(仅切换task_enabled，触发依赖task_schedule_expr)。
 
         :param task_id: 任务主键ID
         :param enabled: 是否启用
+        :param updated_user: 操作人员账号(启停调度视为任务修改，刷新维护人；调度触发执行的执行人归因到该人)
         :return: 更新后的任务实例
         :raises ParameterException: 启用调度时任务尚无定时表达式
         """
@@ -290,7 +292,13 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         instance.task_enabled = enabled
-        await instance.save(update_fields=["task_enabled"])
+        update_fields = ["task_enabled"]
+        if updated_user:
+            # 启停调度视为任务修改：刷新维护人，调度触发的执行人归因到最后操作者
+            instance.updated_user = updated_user
+            instance.updated_time = datetime.now()
+            update_fields.extend(["updated_user", "updated_time"])
+        await instance.save(update_fields=update_fields)
         return instance
 
     async def select_tasks(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestTaskModel]]:

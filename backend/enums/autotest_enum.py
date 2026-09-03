@@ -128,16 +128,16 @@ class AutoTestTaskTriggerType(StringEnum):
 
 
 class AutoTestTaskPeriodicMode(StringEnum):
-    """任务时效：控制调度触发次数语义。"""
+    """任务时效。"""
     ONLY_ONCE = "执行1次"
     UNBOUNDED = "执行N次"
 
 
 class AutoTestTaskCycleType(StringEnum):
     """任务调度周期。"""
-    DAY = "日"
-    WEEK = "周"
-    MONTH = "月"
+    DAY = "daily"
+    WEEK = "weekly"
+    MONTH = "monthly"
 
 
 class AutoTestReqArgsType(StringEnum):

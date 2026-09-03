@@ -26,7 +26,7 @@ class AutoTestTaskSchedule(BaseModel):
     """结构化定时表达式：ONLY_ONCE使用trigger_dates；UNBOUNDED使用trigger_cycle×(trigger_weeks/trigger_month)×trigger_times。"""
 
     trigger_dates: Optional[List[str]] = Field(None, min_length=1, description="ONLY_ONCE触发日期时间列表(YYYY-MM-DD HH:MM:SS)")
-    trigger_cycle: Optional[AutoTestTaskCycleType] = Field(None, description="UNBOUNDED调度周期(日/周/月)")
+    trigger_cycle: Optional[AutoTestTaskCycleType] = Field(None, description="UNBOUNDED调度周期(daily/weekly/monthly)")
     trigger_weeks: Optional[List[int]] = Field(None, min_length=1, description="UNBOUNDED星期多选(1=周一~7=周日, 周期=周时必输)")
     trigger_month: Optional[List[int]] = Field(None, min_length=1, description="UNBOUNDED日期多选(1~31, 周期=月时必输)")
     trigger_times: Optional[List[str]] = Field(None, min_length=1, max_length=3, description="UNBOUNDED触发时间点列表(HH:MM:SS, 最多3个)")

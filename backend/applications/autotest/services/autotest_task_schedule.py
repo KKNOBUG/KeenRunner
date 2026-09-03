@@ -158,7 +158,7 @@ def normalize_schedule(periodic: Any, schedule: Any) -> Optional[Dict[str, Any]]
 
     cycle_value = _enum_value(schedule.get("trigger_cycle"))
     if cycle_value not in _LOOKBACK_DAYS:
-        raise ParameterException(message="执行N次模式下参数[task_schedule_expr.trigger_cycle]必选, 可选值: 日/周/月")
+        raise ParameterException(message="执行N次模式下参数[task_schedule_expr.trigger_cycle]必选, 可选值: daily/weekly/monthly")
     raw_times = schedule.get("trigger_times")
     if not isinstance(raw_times, list) or not raw_times:
         raise ParameterException(message="执行N次模式下参数[task_schedule_expr.trigger_times]不允许为空")

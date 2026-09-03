@@ -58,12 +58,13 @@ def _should_close_schedule(task: Any) -> bool:
     return schedule_obj.is_completed(last_run)
 
 
-async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None) -> Dict[str, Any]:
+async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None, execute_user: Optional[str] = None) -> Dict[str, Any]:
     """
     执行单个自动化任务的核心逻辑，区分手动与扫描触发并写回执行状态。
 
     :param task_id: 自动化任务主键ID
     :param report_type: 报告类型；为ASYNC_EXEC或异步执行时根据手动执行处理
+    :param execute_user: 手动触发人账号；定时触发时为空，回退取任务维护人(配置即触发)
     :return: 含success、task_id及批次执行汇总的字典
     :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """
@@ -75,11 +76,14 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
 
     task_code = getattr(task, "task_code", None)
     task_name = getattr(task, "task_name", None)
+    # 执行人归因链：手动执行取触发人；调度触发回退维护人(启停调度会刷新维护人，最近操作者即归因对象)
+    last_execute_user = execute_user or getattr(task, "updated_user", None) or None
     case_ids = getattr(task, "task_case_ids", None) or []
     if not case_ids:
         task.last_execute_time = datetime.now()
         task.last_execute_state = AutoTestTaskStatus.FAILURE
-        await task.save(update_fields=["last_execute_time", "last_execute_state"])
+        task.last_execute_user = last_execute_user
+        await task.save(update_fields=["last_execute_time", "last_execute_state", "last_execute_user"])
         LOGGER.warning(
             f"{_LOG_PREFIX}【span_id={span_id}】关联用例列表为空: "
             f"task_id={task_id}, task_code={task_code}, task_name={task_name}"
@@ -88,7 +92,8 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
 
     task.last_execute_time = datetime.now()
     task.last_execute_state = AutoTestTaskStatus.RUNNING
-    await task.save(update_fields=["last_execute_time", "last_execute_state"])
+    task.last_execute_user = last_execute_user
+    await task.save(update_fields=["last_execute_time", "last_execute_state", "last_execute_user"])
 
     exec_report_type = AutoTestReportType.SCHEDULE_EXEC
     if report_type == AutoTestReportType.ASYNC_EXEC or (
@@ -233,6 +238,5 @@ def run_autotest_task(
     :param created_user: 触发用户账号(可选)
     :return: 任务执行结果字典
     """
-    # created_user 随kwargs传到Worker，供task_prerun写入执行记录；此处不参与业务执行
-    _ = created_user
-    return run_async(_run_autotest_task_impl(task_id, report_type=report_type))
+    # created_user 随kwargs传到Worker：task_prerun写入执行记录，并回填任务表last_execute_user(定时触发为空时由impl回退维护人)
+    return run_async(_run_autotest_task_impl(task_id, report_type=report_type, execute_user=created_user))

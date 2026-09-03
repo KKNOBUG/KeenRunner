@@ -333,7 +333,9 @@ async def start_task(
         task_id = task_in.get("task_id")
         if task_id is None:
             return ParameterResponse(message="参数[task_id]不允许为空")
-        instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=True)
+        from backend.services.ctx import get_current_username
+        # 启停调度视为任务修改刷新维护人：调度触发的执行，执行人归因到最后操作者
+        instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=True, updated_user=get_current_username())
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -370,7 +372,9 @@ async def stop_task(
         task_id = task_in.get("task_id")
         if task_id is None:
             return ParameterResponse(message="参数[task_id]不允许为空")
-        instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=False)
+        from backend.services.ctx import get_current_username
+        # 停用调度同样视为任务修改，刷新维护人保持“最后修改人”语义一致
+        instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=False, updated_user=get_current_username())
         data = await instance.to_dict(
             exclude_fields={
                 "state",
