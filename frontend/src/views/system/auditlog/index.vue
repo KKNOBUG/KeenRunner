@@ -204,7 +204,7 @@ async function openDetail(row) {
   detailVisible.value = true
   detailLoading.value = true
   try {
-    const res = await api.getAuditLog({ audit_id: row.id })
+    const res = await api.getAuditLog({ audit_id: row.audit_id })
     if (res?.data) detailRow.value = res.data
   } catch {
     // 详情拉取失败时保留列表行数据展示
@@ -328,7 +328,7 @@ const columns = computed(() => {
         :get-data="api.getAuditLogList"
         :single-line="true"
         :scroll-x="1320"
-        row-key="id"
+        row-key="audit_id"
         @query-bar-delete="handleBatchDelete"
         @pagination-meta="onListPaginationMeta"
     >

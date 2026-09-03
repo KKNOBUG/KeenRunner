@@ -350,10 +350,12 @@ async function resolveRowsAndEmitAdd(ids) {
 
   if (missing.length) {
     try {
+      // 跨页已选行不在当前页缓存时按 ids 精确补全，避免全量拉取后前端遍历过滤
       const res = await api.getApiTestcaseList({
         page: 1,
-        page_size: Math.min(Math.max(missing.length * 2, 50), 200),
+        page_size: Math.max(missing.length, 10),
         state: 0,
+        case_ids: missing,
       })
       ;(Array.isArray(res?.data) ? res.data : []).forEach((r) => {
         if (idSet.has(Number(r.case_id))) found.set(Number(r.case_id), r)

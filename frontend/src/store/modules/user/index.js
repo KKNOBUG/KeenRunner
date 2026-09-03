@@ -54,7 +54,8 @@ export const useUserStore = defineStore('user', {
           this.logout()
           return
         }
-        const { id, username, alias, email, phone, avatar, state, is_superuser, is_active, last_login, dept_id } = res.data
+        // 接口主键已改为user_id返回，内部仍映射为id，保证getter(userId)与下游消费不变
+        const { user_id: id, username, alias, email, phone, avatar, state, is_superuser, is_active, last_login, dept_id } = res.data
         this.userInfo = { id, username, alias, email, phone, avatar, state, is_superuser, is_active, last_login, dept_id }
         return res.data
       } catch (error) {

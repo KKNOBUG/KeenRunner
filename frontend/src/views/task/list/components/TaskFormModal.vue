@@ -41,6 +41,8 @@ const props = defineProps({
   show: { type: Boolean, default: false },
   /** null=新增；传 task_id 则编辑 */
   taskId: { type: [Number, String], default: null },
+  /** 编辑模式的列表行数据：列表接口与详情接口同构序列化，直接初始化免二次查询 */
+  taskRow: { type: Object, default: null },
   projectOptions: { type: Array, default: () => [] },
   projectLoading: { type: Boolean, default: false },
 })
@@ -101,6 +103,8 @@ const selectedCaseIds = computed(() =>
 )
 
 watch(selectedCaseIds, (ids) => {
+  // 编辑加载中（modalLoading）配置回填与脚本列表尚未对齐：此时清理会误删已保存的用例配置，导致“涉及环境”列与第三环节环境全部丢失回显
+  if (modalLoading.value) return
   const cfg = { ...casesExecuteConfig.value }
   const idSet = new Set(ids.map(String))
   for (const key of Object.keys(cfg)) {
@@ -305,11 +309,15 @@ function resetState() {
   scriptPickerRef.value?.collapse?.()
 }
 
-async function loadTaskDetail(taskId) {
+async function loadTaskDetail() {
+  const d = props.taskRow || {}
+  if (!d.task_id) {
+    window.$message?.error?.('任务行数据缺失，请刷新列表后重试')
+    emit('update:show', false)
+    return
+  }
   modalLoading.value = true
   try {
-    const res = await api.getApiTask({ task_id: taskId })
-    const d = res?.data || {}
     const taskKwargs = d.task_kwargs && typeof d.task_kwargs === 'object' ? d.task_kwargs : {}
     const caseIds = Array.isArray(d.task_case_ids) ? d.task_case_ids : []
 
@@ -345,18 +353,15 @@ async function loadTaskDetail(taskId) {
 
     if (caseIds.length) {
       try {
-        // 编辑模式：根据 task_case_ids 查询所有用例信息，回显到已选脚本表格
+        // 编辑模式：按 task_case_ids 精确查询用例信息回显，避免全量拉取后前端遍历过滤
         const listRes = await api.getApiTestcaseList({
           page: 1,
-          page_size: Math.min(Math.max(caseIds.length * 2, 50), 500),
+          page_size: Math.max(caseIds.length, 10),
           state: 0,
+          case_ids: caseIds,
         })
-        const idSet = new Set(caseIds.map(Number))
-        const found = (Array.isArray(listRes?.data) ? listRes.data : []).filter((r) =>
-          idSet.has(Number(r.case_id)),
-        )
         const map = {}
-        found.forEach((r) => {
+        ;(Array.isArray(listRes?.data) ? listRes.data : []).forEach((r) => {
           map[String(r.case_id)] = r
         })
         selectedScripts.value = caseIds.map((id) => {
@@ -404,7 +409,7 @@ watch(
     // 编辑模式：加载任务详情并回显已选脚本
     // 新增模式：初始化状态，暂未绑定脚本，无须回显已选脚本
     if (props.taskId != null && props.taskId !== '') {
-      await loadTaskDetail(props.taskId)
+      await loadTaskDetail()
     }
   },
 )

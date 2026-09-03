@@ -91,7 +91,7 @@ const menuOptions = ref([])
 const columns = [
   {
     title: 'ID',
-    key: 'id',
+    key: 'menu_id',
     width: 100,
     ellipsis: {tooltip: true},
     align: 'center'
@@ -205,7 +205,7 @@ const columns = [
                   type: 'primary',
                   style: `display: ${row.children && row.menu_type !== 'menu' ? '' : 'none'};`,
                   onClick: () => {
-                    initForm.parent_id = row.id
+                    initForm.parent_id = row.menu_id
                     initForm.menu_type = 'menu'
                     showMenuType.value = false
                     handleAdd()
@@ -225,6 +225,8 @@ const columns = [
                   onClick: () => {
                     showMenuType.value = false
                     handleEdit(row)
+                    // MenuUpdate入参主键仍为id必填：行对象主键已改为menu_id，提交前回填id
+                    modalForm.value.id = row.menu_id
                   },
                 },
                 {
@@ -237,7 +239,7 @@ const columns = [
         h(
             NPopconfirm,
             {
-              onPositiveClick: () => handleDelete({id: row.id}, false),
+              onPositiveClick: () => handleDelete({id: row.menu_id}, false),
             },
             {
               trigger: () =>
@@ -267,20 +269,22 @@ const columns = [
 
 // 修改是否keepalive
 async function handleUpdateKeepalive(row) {
-  if (!row.id) return
+  if (!row.menu_id) return
   row.publishing = true
   row.keepalive = row.keepalive === false
-  await api.updateMenu(row)
+  // MenuUpdate入参主键仍为id必填：回填id后提交
+  await api.updateMenu({...row, id: row.menu_id})
   row.publishing = false
   $message?.success(row.keepalive ? '已开启' : '已关闭')
 }
 
 // 修改是否隐藏
 async function handleUpdateHidden(row) {
-  if (!row.id) return
+  if (!row.menu_id) return
   row.publishing = true
   row.is_hidden = row.is_hidden === false
-  await api.updateMenu(row)
+  // MenuUpdate入参主键仍为id必填：回填id后提交
+  await api.updateMenu({...row, id: row.menu_id})
   row.publishing = false
   $message?.success(row.is_hidden ? '已隐藏' : '已取消隐藏')
 }
@@ -298,7 +302,7 @@ function handleClickAdd() {
 
 async function getTreeSelect() {
   const { data } = await api.getMenus({ page: 1, page_size: 9999 })
-  const menu = { id: 0, name: '根目录', children: [] }
+  const menu = { menu_id: 0, name: '根目录', children: [] }
   menu.children = data || []
   menuOptions.value = [menu]
 }
@@ -365,7 +369,7 @@ async function getTreeSelect() {
         <NFormItem label="上级菜单" path="parent_id">
           <NTreeSelect
               v-model:value="modalForm.parent_id"
-              key-field="id"
+              key-field="menu_id"
               label-field="name"
               :options="menuOptions"
               :default-expand-all="true"

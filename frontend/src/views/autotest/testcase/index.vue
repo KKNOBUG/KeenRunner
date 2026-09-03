@@ -745,6 +745,18 @@ const columns = computed(() => {
     },
 
     {
+      title: '最后执行结果',
+      key: 'case_state',
+      width: 110,
+      align: 'center',
+      render(row) {
+        // case_state: null=未执行过, true=成功, false=失败
+        if (row.case_state == null) return h('span', '-')
+        return h(NTag, {type: row.case_state ? 'success' : 'error', size: 'small', round: true}, () => (row.case_state ? '成功' : '失败'))
+      },
+    },
+
+    {
       title: '更新人员',
       key: 'updated_user',
       width: 150,
@@ -909,7 +921,7 @@ const columns = computed(() => {
         :columns="columns"
         :get-data="fetchCaseList"
         :row-key="'case_id'"
-        :scroll-x="2100"
+        :scroll-x="2210"
         :single-line="true"
         @pagination-meta="onListPaginationMeta"
         @query-bar-create="customHandleAdd"

@@ -225,7 +225,6 @@ export default {
 
   // 任务相关
   getApiTaskList: (data = {}) => request.post('/autotest/task/search', data),
-  getApiTask: (params = {}) => request.get('/autotest/task/get', { params }),
   createApiTaskList: (data = {}) => request.post('/autotest/task/create', data),
   updateApiTaskList: (data = {}) => request.post('/autotest/task/update', data),
   deleteApiTaskList: (data = {}) => {

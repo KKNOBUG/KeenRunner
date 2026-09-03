@@ -138,7 +138,7 @@
                       <div class="col env">
                         <n-select
                             v-model:value="row.env_id"
-                            :options="panel.debugEnvOptions"
+                            :options="panel.getRowEnvOptions(row)"
                             size="small"
                             :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
                             placeholder="请先选择全局环境"
@@ -180,7 +180,7 @@
                       <div class="col env">
                         <n-select
                             v-model:value="row.env_id"
-                            :options="panel.debugEnvOptions"
+                            :options="panel.getRowEnvOptions(row)"
                             size="small"
                             :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
                             placeholder="请先选择全局环境"
@@ -230,7 +230,7 @@
                       <div class="col env">
                         <n-select
                             v-model:value="row.env_id"
-                            :options="panel.debugEnvOptions"
+                            :options="panel.getRowEnvOptions(row)"
                             size="small"
                             :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
                             placeholder="请先选择全局环境"
@@ -279,7 +279,7 @@
                       <div class="col env">
                         <n-select
                             v-model:value="row.env_id"
-                            :options="panel.debugEnvOptions"
+                            :options="panel.getRowEnvOptions(row)"
                             size="small"
                             :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
                             placeholder="请先选择全局环境"

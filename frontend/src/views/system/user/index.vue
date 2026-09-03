@@ -113,7 +113,7 @@ onMounted(() => {
 
 /** 所属角色筛选下拉选项 */
 const roleSelectOptions = computed(() =>
-  (roleOption.value || []).map((r) => ({ label: r.name, value: r.id }))
+  (roleOption.value || []).map((r) => ({ label: r.name, value: r.role_id }))
 )
 
 /**
@@ -128,10 +128,10 @@ async function fetchUsers(params = {}) {
   if (username) list = list.filter((u) => (u.username || '').includes(username))
   if (alias) list = list.filter((u) => (u.alias || '').includes(alias))
   if (params.dept_id != null) {
-    list = list.filter((u) => Number(u.dept?.id) === Number(params.dept_id))
+    list = list.filter((u) => Number(u.dept?.dept_id) === Number(params.dept_id))
   }
   if (params.role_id != null) {
-    list = list.filter((u) => (u.roles || []).some((r) => Number(r.id) === Number(params.role_id)))
+    list = list.filter((u) => (u.roles || []).some((r) => Number(r.role_id) === Number(params.role_id)))
   }
   return { data: list, total: list.length }
 }
@@ -245,8 +245,8 @@ const columns = computed(() => {
                     type: 'info',
                     onClick: () => {
                       handleEdit(row)
-                      modalForm.value.dept_id = row.dept?.id
-                      modalForm.value.role_ids = row.roles.map((e) => (e = e.id))
+                      modalForm.value.dept_id = row.dept?.dept_id
+                      modalForm.value.role_ids = row.roles.map((e) => (e = e.role_id))
                       delete modalForm.value.dept
                     },
                   },
@@ -260,7 +260,7 @@ const columns = computed(() => {
           h(
               NPopconfirm,
               {
-                onPositiveClick: () => handleDelete({user_id: row.id}, false),
+                onPositiveClick: () => handleDelete({user_id: row.user_id}, false),
                 onNegativeClick: () => {
                 },
               },
@@ -289,7 +289,7 @@ const columns = computed(() => {
               {
                 onPositiveClick: async () => {
                   try {
-                    await api.resetPassword({user_id: row.id});
+                    await api.resetPassword({user_id: row.user_id});
                     $message.success('重置密码成功');
                     await $table.value?.handleSearch();
                   } catch (error) {
@@ -331,12 +331,12 @@ let lastClickedNodeId = null
 const nodeProps = ({option}) => {
   return {
     onClick() {
-      if (lastClickedNodeId === option.id) {
+      if (lastClickedNodeId === option.dept_id) {
         queryItems.value.dept_id = null
         lastClickedNodeId = null
       } else {
-        queryItems.value.dept_id = option.id
-        lastClickedNodeId = option.id
+        queryItems.value.dept_id = option.dept_id
+        lastClickedNodeId = option.dept_id
       }
       $table.value?.handleSearch()
     },
@@ -420,7 +420,7 @@ const validateAddUser = {
       <NTree
           block-line
           :data="deptOption"
-          key-field="id"
+          key-field="dept_id"
           label-field="name"
           default-expand-all
           :node-props="nodeProps"
@@ -444,7 +444,7 @@ const validateAddUser = {
             :get-data="fetchUsers"
             :single-line="true"
             :scroll-x="1500"
-            row-key="id"
+            row-key="user_id"
             @query-bar-create="handleAdd"
             @query-bar-delete="handleBatchDelete"
             @pagination-meta="onListPaginationMeta"
@@ -475,7 +475,7 @@ const validateAddUser = {
                   v-model:value="queryItems.dept_id"
                   style="width: 180px"
                   :options="deptOption"
-                  key-field="id"
+                  key-field="dept_id"
                   label-field="name"
                   placeholder="请选择部门"
                   clearable
@@ -540,8 +540,8 @@ const validateAddUser = {
                 <NSpace item-style="display: flex;">
                   <NCheckbox
                       v-for="item in roleOption"
-                      :key="item.id"
-                      :value="item.id"
+                      :key="item.role_id"
+                      :value="item.role_id"
                       :label="item.name"/>
                 </NSpace>
               </NCheckboxGroup>
@@ -557,7 +557,7 @@ const validateAddUser = {
               <NTreeSelect
                   v-model:value="modalForm.dept_id"
                   :options="deptOption"
-                  key-field="id"
+                  key-field="dept_id"
                   label-field="name"
                   placeholder="请选择部门"
                   clearable

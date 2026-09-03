@@ -97,10 +97,10 @@ const {
 const deptTree = ref([])
 const isDisabled = ref(false)
 
-/** 父级下拉：仅允许选择根目录或顶级部门（最多两级） */
+/** 父级下拉：仅允许选择根目录或顶级部门（最多两级）；根节点dept_id=0与接口返回字段名对齐 */
 const parentDeptOptions = computed(() => {
-  const root = { id: 0, name: '根目录', children: [] }
-  root.children = (deptTree.value || []).map(({ id, name }) => ({ id, name }))
+  const root = { dept_id: 0, name: '根目录', children: [] }
+  root.children = (deptTree.value || []).map(({ dept_id, name }) => ({ dept_id, name }))
   return [root]
 })
 
@@ -133,7 +133,7 @@ async function getTreeSelect() {
 const columns = [
   {
     title: 'ID',
-    key: 'id',
+    key: 'dept_id',
     width: 100,
     ellipsis: { tooltip: true },
     align: 'center'
@@ -200,7 +200,7 @@ const columns = [
                   type: 'primary',
                   style: `display: ${row.parent_id === 0 ? '' : 'none'};`,
                   onClick: () => {
-                    initForm.parent_id = row.id
+                    initForm.parent_id = row.dept_id
                     isDisabled.value = true
                     handleAdd()
                   },
@@ -223,6 +223,8 @@ const columns = [
                       isDisabled.value = false
                     }
                     handleEdit(row)
+                    // DepartmentUpdate入参主键仍为id必填：行对象主键已改为dept_id，提交前回填id
+                    modalForm.value.id = row.dept_id
                   },
                 },
                 {
@@ -235,7 +237,7 @@ const columns = [
         h(
             NPopconfirm,
             {
-              onPositiveClick: () => handleDelete({ department_id: row.id }, false),
+              onPositiveClick: () => handleDelete({ department_id: row.dept_id }, false),
             },
             {
               trigger: () =>
@@ -278,7 +280,7 @@ const columns = [
         :get-data="fetchDeptList"
         :single-line="true"
         :scroll-x="1200"
-        row-key="id"
+        row-key="dept_id"
         @query-bar-create="handleClickAdd"
     >
       <template #queryBar>
@@ -327,7 +329,7 @@ const columns = [
           <NTreeSelect
               v-model:value="modalForm.parent_id"
               :options="parentDeptOptions"
-              key-field="id"
+              key-field="dept_id"
               label-field="name"
               placeholder="请选择父级部门"
               :default-expand-all="true"

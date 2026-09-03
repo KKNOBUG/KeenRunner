@@ -255,6 +255,7 @@ async def classify_environment_configs(
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
             project_ids=env_config_in.project_ids,
+            config_names=env_config_in.config_names,
         )
         total_configs: int = sum(
             len(names)

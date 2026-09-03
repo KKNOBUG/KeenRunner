@@ -281,11 +281,13 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
     async def query_classified_by_project_ids(
             self,
             project_ids: List[int],
+            config_names: Optional[List[str]] = None,
     ) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
         按应用ID列表查询未删除配置并分类。
 
         :param project_ids: 应用ID列表
+        :param config_names: 配置名称列表(可选)；非空时仅返回这些配置所在的环境及其配置
         :return: project_id -> env_name -> api|file|database|redis -> config_name -> 主机信息
         """
         if not project_ids:
@@ -313,10 +315,14 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
             for row in bind_rows
         }
         env_bind_ids = list(bind_meta.keys())
-        env_config_instances: List[AutoTestEnvConfigModel] = await self.model.filter(
-            env_bind_id__in=env_bind_ids,
-            state__not=1,
-        ).all()
+        # 配置名称过滤：非空时仅返回这些配置所在的环境及其配置（去重去空白）
+        distinct_config_names: List[str] = [
+            str(n).strip() for n in (config_names or []) if n is not None and str(n).strip()
+        ]
+        config_filter: Dict[str, Any] = {"env_bind_id__in": env_bind_ids, "state__not": 1}
+        if distinct_config_names:
+            config_filter["config_name__in"] = list(dict.fromkeys(distinct_config_names))
+        env_config_instances: List[AutoTestEnvConfigModel] = await self.model.filter(**config_filter).all()
         if not env_config_instances:
             return classified_config_result
 

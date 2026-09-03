@@ -325,6 +325,9 @@ async def search_cases(
         q = Q()
         if case_in.case_id:
             q &= Q(id=case_in.case_id)
+        if case_in.case_ids:
+            # 用例ID集合精确过滤：供已选脚本回显/补全等按 ids 查询场景
+            q &= Q(id__in=case_in.case_ids)
         if case_in.case_code:
             q &= Q(case_code=case_in.case_code)
         if case_in.case_name:

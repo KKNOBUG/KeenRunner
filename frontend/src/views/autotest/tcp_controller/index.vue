@@ -330,7 +330,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedDebugEnvId"
+          v-model:value="selectedDebugEnvName"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -341,7 +341,7 @@
     </div>
     <template #action>
       <n-button @click="debugModalVisible = false">取消</n-button>
-      <n-button type="primary" :disabled="selectedDebugEnvId == null || selectedDebugEnvId === ''" @click="confirmDebugModal">确定</n-button>
+      <n-button type="primary" :disabled="selectedDebugEnvName == null || selectedDebugEnvName === ''" @click="confirmDebugModal">确定</n-button>
     </template>
   </n-modal>
 </template>
@@ -1197,21 +1197,31 @@ const validatorColumns = [
 
 const envOptions = ref([])
 const envLoading = ref(false)
-/** 调试所选环境枚举 ID（与 HTTP 控制器、后端 schema 的 env_id 一致） */
-const selectedDebugEnvId = ref(null)
+/** 调试所选环境名称（与后端 /tcp_debugging schema 的 env_name 对齐） */
+const selectedDebugEnvName = ref(null)
 const debugModalVisible = ref(false)
 
 const loadEnvNames = async () => {
+  const pid = Number(state.form.request_project_id)
+  if (!pid) {
+    envOptions.value = []
+    selectedDebugEnvName.value = null
+    return
+  }
   envLoading.value = true
   try {
-    const res = await api.getEnvList()
-    const list = res?.data ?? []
-    envOptions.value = list.map((row) => ({
-      label: row.env_name != null ? String(row.env_name) : String(row.env_id),
-      value: row.env_id
-    }))
-    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
-      selectedDebugEnvId.value = envOptions.value[0].value
+    // { project_id: { app|file|database|redis: env_name[] } }：与HTTP控制器/脚本执行配置弹框同源，类型键摊平去重
+    const res = await api.listEnvNames({ project_id: [pid] })
+    const byProject = res?.data || {}
+    const byType = byProject[pid] || byProject[String(pid)] || {}
+    const names = new Set()
+    Object.values(byType).forEach((arr) => {
+      if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
+    })
+    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    envOptions.value = sorted.map((n) => ({ label: n, value: n }))
+    if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
+      selectedDebugEnvName.value = envOptions.value[0].value
     }
   } catch (e) {
     console.error('加载环境列表失败', e)
@@ -1222,14 +1232,24 @@ const loadEnvNames = async () => {
 }
 
 const openDebugModal = () => {
-  selectedDebugEnvId.value = null
+  const pid = Number(state.form.request_project_id)
+  if (!pid) {
+    window.$message?.warning?.('请先选择所属应用')
+    return
+  }
+  selectedDebugEnvName.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
+  const envName = selectedDebugEnvName.value
+  if (!envName || !String(envName).trim()) {
+    window.$message?.warning?.('请选择执行环境')
+    return
+  }
   debugModalVisible.value = false
-  doDebugRequest(selectedDebugEnvId.value)
+  doDebugRequest(String(envName).trim())
 }
 
 const debugging = async () => {
@@ -1242,7 +1262,7 @@ const debugging = async () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_id) => {
+const doDebugRequest = async (env_name) => {
   // 语法校验：JSON 或 XML 有语法错误时阻止调试
   if (jsonBodyError.value) {
     window.$message?.error?.(jsonBodyError.value)
@@ -1281,7 +1301,7 @@ const doDebugRequest = async (env_id) => {
 
     /** @type {Record<string, unknown>} */
     const debugPayload = {
-      env_id: Number(env_id),
+      env_name: env_name,
       step_name: state.form.step_name || original.step_name || 'TCP 调试',
       request_project_id: Number(cfg.request_project_id ?? original.request_project_id),
       request_config_name: requestConfigName,

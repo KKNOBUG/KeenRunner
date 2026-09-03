@@ -225,7 +225,9 @@ const columns = computed(() => {
                     type: 'info',
                     onClick: () => {
                       handleEdit(row)
-                      modalForm.value.roles = (row.roles || []).map((e) => (typeof e === 'object' && e != null ? e.id : e))
+                      // RouterUpdate入参主键仍为id必填：行对象主键已改为router_id，提交前回填id
+                      modalForm.value.id = row.router_id
+                      modalForm.value.roles = (row.roles || []).map((e) => (typeof e === 'object' && e != null ? e.role_id : e))
                     },
                   },
                   {
@@ -238,7 +240,7 @@ const columns = computed(() => {
           h(
               NPopconfirm,
               {
-                onPositiveClick: () => handleDelete({ router_id: row.id }),
+                onPositiveClick: () => handleDelete({ router_id: row.router_id }),
                 onNegativeClick: () => {},
               },
               {
@@ -283,7 +285,7 @@ const columns = computed(() => {
         :scroll-x="1620"
         :columns="columns"
         :get-data="api.searchRouterList"
-        row-key="id"
+        row-key="router_id"
         @query-bar-create="handleAdd"
         @query-bar-delete="handleBatchDelete"
         @pagination-meta="onListPaginationMeta"

@@ -18,12 +18,20 @@ import {
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
+import TextPreviewModal from '@/components/common/TextPreviewModal.vue'
 import TaskFormModal from '@/views/task/list/components/TaskFormModal.vue'
 import TaskHistoryModal from '@/views/task/list/components/TaskHistoryModal.vue'
 
-import {formatDateTime, renderIcon} from '@/utils'
-import {formatScheduleSummary} from '@/utils/common/schedule'
-import { useCRUD } from '@/composables'
+import {formatDateTime, formatJsonBrief, renderIcon, resultPayloadOf} from '@/utils'
+import {
+  formatScheduleSummary,
+  formatFireTime,
+  WEEK_LABELS,
+  PERIODIC_ONLY_ONCE,
+  CYCLE_WEEK,
+  CYCLE_MONTH,
+} from '@/utils/common/schedule'
+import { useCRUD, useTaskRecordLogModal } from '@/composables'
 import api from '@/api'
 
 defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
@@ -51,6 +59,7 @@ const taskTableCheckedRowKeys = ref([])
 /** 新增/编辑任务四步向导 */
 const taskFormVisible = ref(false)
 const taskFormEditId = ref(null)
+const taskFormEditRow = ref(null)
 
 const queryBarProps = {
   addReset: true,
@@ -100,35 +109,20 @@ const openHistory = (row) => {
 }
 
 // 日志（执行记录）弹框：数据来源与任务记录页面一致，按 task_id 请求，弹框大小与新增/编辑任务一致
-const logModalVisible = ref(false)
-const logTaskName = ref('')
-const logTaskId = ref(null)
-const logRecordList = ref([])
-const logRecordLoading = ref(false)
-const logPage = ref(1)
-const logPageSize = ref(10)
-const logTotal = ref(0)
+const {
+  logModalVisible,
+  logTaskName,
+  logRecordList,
+  logRecordLoading,
+  logPage,
+  logPageSize,
+  logTotal,
+  openLog,
+  onLogPageChange,
+  onLogPageSizeChange,
+} = useTaskRecordLogModal()
 const logPageSizes = [10, 20, 50, 100]
 const logTableScrollX = 2000
-const formatJsonBrief = (val, maxLen = 50) => {
-  if (val == null) return '-'
-  if (typeof val === 'string') {
-    try {
-      const o = JSON.parse(val)
-      const s = JSON.stringify(o)
-      return s.length > maxLen ? s.slice(0, maxLen) + '...' : s
-    } catch {
-      return val.length > maxLen ? val.slice(0, maxLen) + '...' : val
-    }
-  }
-  const s = JSON.stringify(val)
-  return s.length > maxLen ? s.slice(0, maxLen) + '...' : s
-}
-
-/** 信封展示 raw；旧记录整包展示 */
-const resultPayloadOf = (summary) => (
-  summary && typeof summary === 'object' && 'raw' in summary ? summary.raw : summary
-)
 const logRecordColumns = [
   { title: '记录ID', key: 'record_id', width: 80, align: 'center', ellipsis: { tooltip: true }, render: (row) => h('span', row.record_id ?? row.id ?? '-') },
   { title: '任务标识', key: 'task_code', width: 160, ellipsis: { tooltip: true } },
@@ -185,45 +179,6 @@ const logRecordColumns = [
   { title: '耗时', key: 'celery_duration', width: 80, align: 'center', ellipsis: { tooltip: true } },
 ]
 
-const loadLogRecords = async () => {
-  const id = logTaskId.value
-  if (id == null) return
-  logRecordLoading.value = true
-  try {
-    const res = await api.getApiTaskRecordList({
-      task_id: id,
-      page: logPage.value,
-      page_size: logPageSize.value,
-      order: ['-celery_start_time', '-id']
-    })
-    logRecordList.value = res?.data ?? []
-    logTotal.value = res?.total ?? 0
-  } catch (e) {
-    window.$message?.error?.(e?.message || e?.data?.message || '加载执行记录失败')
-  } finally {
-    logRecordLoading.value = false
-  }
-}
-
-const openLog = async (row) => {
-  logTaskName.value = row.task_name ?? ''
-  logTaskId.value = row.task_id
-  logPage.value = 1
-  logModalVisible.value = true
-  await loadLogRecords()
-}
-
-const onLogPageChange = (page) => {
-  logPage.value = page
-  loadLogRecords()
-}
-
-const onLogPageSizeChange = (pageSize) => {
-  logPageSize.value = pageSize
-  logPage.value = 1
-  loadLogRecords()
-}
-
 // 历史/日志弹窗样式
 const taskModalStyle = {
   width: '80%',
@@ -237,11 +192,13 @@ const taskModalStyle = {
 
 const openAdd = () => {
   taskFormEditId.value = null
+  taskFormEditRow.value = null
   taskFormVisible.value = true
 }
 
 const openEdit = (row) => {
   taskFormEditId.value = row?.task_id ?? null
+  taskFormEditRow.value = row || null
   taskFormVisible.value = true
 }
 
@@ -318,35 +275,27 @@ const loadProjects = async () => {
   }
 }
 
-/** 执行环境下拉：无应用时全量环境；有应用时仅该应用下已配置的环境（去重） */
+/** 执行环境下拉：与环境配置弹框同源(listEnvNames聚合)，按环境名称去重；有应用时仅该应用下已配置的环境 */
 const loadEnvOptions = async (projectId = null) => {
   try {
     envLoading.value = true
-    const allRes = await api.getEnvList({ page: 1, page_size: 9999, state: 0 })
-    const allEnvs = Array.isArray(allRes?.data) ? allRes.data : []
-    let list = allEnvs
-    if (projectId != null) {
-      const cfgRes = await api.searchEnvConfig({
-        page: 1,
-        page_size: 9999,
-        state: 0,
-        project_id: projectId,
+    // { project_id: { app|file|database|redis: env_name[] } }：类型键摊平去重，value/label均为环境名称
+    const res = await api.listEnvNames({ project_id: projectId != null ? [Number(projectId)] : [] })
+    const byProject = res?.data || {}
+    const names = new Set()
+    Object.values(byProject).forEach((byType) => {
+      if (!byType || typeof byType !== 'object') return
+      Object.values(byType).forEach((arr) => {
+        if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
       })
-      const envIdSet = new Set(
-          (Array.isArray(cfgRes?.data) ? cfgRes.data : [])
-              .map((row) => Number(row.env_id))
-              .filter((id) => Number.isFinite(id) && id > 0)
-      )
-      list = allEnvs.filter((row) => envIdSet.has(Number(row.env_id)))
-    }
-    envOptions.value = list.map((item) => ({
-      label: item.env_name,
-      value: item.env_id,
-    }))
+    })
+    envOptions.value = [...names]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+        .map((n) => ({ label: n, value: n }))
     // 当前选中环境不在新选项中时清空
-    const cur = queryItems.value.env_id
+    const cur = queryItems.value.env_name
     if (cur != null && !envOptions.value.some((o) => o.value === cur)) {
-      queryItems.value.env_id = null
+      queryItems.value.env_name = null
     }
   } catch (error) {
     console.error('加载环境列表失败:', error)
@@ -387,6 +336,63 @@ watch(
       if (from == null && to == null) dateRange.value = null
     }
 )
+
+/** 定时配置弹框状态：触发点多时单元格摘要无法完整阅读，点击弹框查看明细（对齐执行记录页“执行参数”交互） */
+/** 定时配置明细查看弹框（共用 TextPreviewModal） */
+const previewShow = ref(false)
+const previewContent = ref('')
+
+/** 结构化定时表达式 → 多行明细文本：触发点逐行列出，便于大量触发点时阅读 */
+function buildScheduleDetailText(periodic, expr) {
+  if (!periodic || !expr || typeof expr !== 'object') return ''
+  const lines = [`执行时效：${periodic}`]
+  if (periodic === PERIODIC_ONLY_ONCE) {
+    const dates = Array.isArray(expr.trigger_dates) ? expr.trigger_dates : []
+    lines.push(`触发日期时间（共 ${dates.length} 个）：`)
+    dates.forEach((d) => lines.push(`  ${formatFireTime(d)}`))
+    return lines.join('\n')
+  }
+  const cycle = expr.trigger_cycle
+  if (!cycle) return ''
+  lines.push(`周期类型：${cycle}`)
+  if (cycle === CYCLE_WEEK) {
+    const weeks = (expr.trigger_weeks || []).map((w) => WEEK_LABELS[w] || w).join('、')
+    lines.push(`触发星期：${weeks || '-'}`)
+  } else if (cycle === CYCLE_MONTH) {
+    const days = (expr.trigger_month || []).map((d) => `${d}号`).join('、')
+    lines.push(`触发日期：${days || '-'}`)
+  }
+  const times = Array.isArray(expr.trigger_times) ? expr.trigger_times : []
+  lines.push(`触发时间点（共 ${times.length} 个）：`)
+  times.forEach((t) => lines.push(`  ${t}`))
+  return lines.join('\n')
+}
+
+const openScheduleModal = (row) => {
+  const text = buildScheduleDetailText(row.task_periodic_expr, row.task_schedule_expr)
+  if (!text) {
+    window.$message?.warning?.('暂无定时配置')
+    return
+  }
+  previewContent.value = text
+  previewShow.value = true
+}
+
+/** 定时配置单元格：摘要截断展示，点击弹框查看完整明细 */
+function renderScheduleCell(row) {
+  const summary = formatScheduleSummary(row.task_periodic_expr, row.task_schedule_expr)
+  if (!summary) return h('span', '-')
+  const brief = summary.length > 60 ? `${summary.slice(0, 60)}...` : summary
+  return h(
+    'span',
+    {
+      class: 'schedule-cell-trigger',
+      title: '点击查看完整定时配置',
+      onClick: () => openScheduleModal(row),
+    },
+    brief,
+  )
+}
 
 /** 任务级涉及环境紧凑展示：首个环境 + N，悬停展示全部 */
 function renderTaskInvolveEnvs(row) {
@@ -508,8 +514,7 @@ const columns = computed(() => {
     align: 'center',
     ellipsis: {tooltip: true},
     render(row) {
-      const summary = formatScheduleSummary(row.task_periodic_expr, row.task_schedule_expr)
-      return h('span', summary || '-')
+      return renderScheduleCell(row)
     },
   },
   {
@@ -780,7 +785,7 @@ onMounted(() => {
         </QueryBarItem>
         <QueryBarItem label="执行环境：">
           <NSelect
-              v-model:value="queryItems.env_id"
+              v-model:value="queryItems.env_name"
               :options="envOptions"
               :loading="envLoading"
               clearable
@@ -795,6 +800,7 @@ onMounted(() => {
     <TaskFormModal
         v-model:show="taskFormVisible"
         :task-id="taskFormEditId"
+        :task-row="taskFormEditRow"
         :project-options="projectOptions"
         :project-loading="projectLoading"
         @success="onTaskFormSuccess"
@@ -839,6 +845,15 @@ onMounted(() => {
         </div>
       </NSpin>
     </NModal>
+
+    <!-- 定时配置明细弹框：触发点逐行列出，共用 TextPreviewModal（monaco 只读 + 复制） -->
+    <TextPreviewModal
+        v-model:show="previewShow"
+        title="定时配置明细"
+        :content="previewContent"
+        lang="plaintext"
+        width="min(560px, 92vw)"
+    />
   </CommonPage>
 </template>
 
@@ -882,5 +897,12 @@ onMounted(() => {
 .log-modal-pagination {
   display: flex;
   justify-content: flex-end;
+}
+
+/* 定时配置单元格：对齐执行记录页“执行参数”交互 */
+.schedule-cell-trigger {
+  color: #2080f0;
+  cursor: pointer;
+  word-break: break-all;
 }
 </style>

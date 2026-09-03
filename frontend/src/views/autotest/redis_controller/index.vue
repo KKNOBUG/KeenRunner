@@ -344,7 +344,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedDebugEnvId"
+          v-model:value="selectedDebugEnvName"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -754,20 +754,27 @@ const validatorColumns = [
 
 const envOptions = ref([])
 const envLoading = ref(false)
-const selectedDebugEnvId = ref(null)
+/** 调试所选环境名称（与后端 /redis_debugging schema 的 env_name 对齐） */
+const selectedDebugEnvName = ref(null)
 const debugModalVisible = ref(false)
 
 const loadEnvNames = async () => {
   envLoading.value = true
   try {
-    const res = await api.getEnvList()
-    const list = res?.data ?? []
-    envOptions.value = list.map((row) => ({
-      label: row.env_name != null ? String(row.env_name) : String(row.env_id),
-      value: row.env_id
-    }))
-    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
-      selectedDebugEnvId.value = envOptions.value[0].value
+    // { project_id: { app|file|database|redis: env_name[] } }：与HTTP/TCP控制器同源，类型键摊平去重
+    const res = await api.listEnvNames({ project_id: [] })
+    const byProject = res?.data || {}
+    const names = new Set()
+    Object.values(byProject).forEach((byType) => {
+      if (!byType || typeof byType !== 'object') return
+      Object.values(byType).forEach((arr) => {
+        if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
+      })
+    })
+    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    envOptions.value = sorted.map((n) => ({ label: n, value: n }))
+    if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
+      selectedDebugEnvName.value = envOptions.value[0].value
     }
   } catch (e) {
     console.error('加载环境列表失败', e)
@@ -809,18 +816,18 @@ const validateBeforeDebug = () => {
 }
 
 const openDebugModal = () => {
-  selectedDebugEnvId.value = null
+  selectedDebugEnvName.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
-  if (selectedDebugEnvId.value == null || selectedDebugEnvId.value === '') {
+  if (selectedDebugEnvName.value == null || String(selectedDebugEnvName.value).trim() === '') {
     window.$message?.warning?.('请选择执行环境')
     return false
   }
   debugModalVisible.value = false
-  doDebugRequest(selectedDebugEnvId.value)
+  doDebugRequest(String(selectedDebugEnvName.value).trim())
   return true
 }
 
@@ -829,7 +836,7 @@ const debugging = () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_id) => {
+const doDebugRequest = async (env_name) => {
   const ev = buildExtractForBackend()
   const av = buildValidatorsForBackend()
   const extractCheck = validateExtractList(ev)
@@ -849,7 +856,7 @@ const doDebugRequest = async (env_id) => {
     const cfg = buildConfigFromState()
     const original = props.step?.original || {}
     const debugPayload = {
-      env_id: Number(env_id),
+      env_name: env_name,
       step_name: state.form.step_name || original.step_name || 'Redis 调试',
       redis_searched: !!cfg.redis_searched,
       redis_operates: cfg.redis_operates || []

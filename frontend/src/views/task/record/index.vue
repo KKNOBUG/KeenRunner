@@ -92,44 +92,36 @@
       </template>
     </CrudTable>
 
-    <NModal
-      v-model:show="jsonModalShow"
-      preset="card"
-      :title="jsonModalTitle"
-      :mask-closable="true"
-      :close-on-esc="true"
-      style="width: min(720px, 92vw)"
-      @update:show="(v) => { if (!v) closeJsonModal() }"
-    >
-      <pre class="json-modal-pre">{{ jsonModalContent }}</pre>
-      <template #footer>
-        <div class="json-modal-footer">
-          <NButton size="small" type="primary" @click="copyJsonContent">复制</NButton>
-        </div>
-      </template>
-    </NModal>
+    <!-- 结果摘要/JSON 只读查看弹框（共用 TextPreviewModal：monaco 只读 + 复制） -->
+    <TextPreviewModal
+        v-model:show="previewShow"
+        :title="previewTitle"
+        :content="previewContent"
+    />
   </CommonPage>
 </template>
 
 <script setup>
 import { h, ref } from 'vue'
-import { NButton, NDropdown, NInput, NModal, NSelect, NTag } from 'naive-ui'
+import { NButton, NDropdown, NInput, NSelect, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
+import TextPreviewModal from '@/components/common/TextPreviewModal.vue'
 
 import api from '@/api'
-import { formatDateTime } from '@/utils'
+import { formatDateTime, formatJsonBrief, resultPayloadOf, toPrettyJson } from '@/utils'
 
 defineOptions({ name: '执行记录' })
 
 const $table = ref(null)
 const queryItems = ref({})
 
-const jsonModalShow = ref(false)
-const jsonModalTitle = ref('')
-const jsonModalContent = ref('')
+/** 结果摘要查看弹框（共用 TextPreviewModal） */
+const previewShow = ref(false)
+const previewTitle = ref('')
+const previewContent = ref('')
 
 const celeryStatusOptions = [
   { label: '等待执行', value: '等待执行' },
@@ -148,68 +140,16 @@ const getTaskRecordList = async (params = {}) => {
   return api.getApiTaskRecordList(params)
 }
 
-const toPrettyJson = (val) => {
-  if (val == null || val === '') return ''
-  if (typeof val === 'string') {
-    try {
-      return JSON.stringify(JSON.parse(val), null, 2)
-    } catch {
-      return val
-    }
-  }
-  try {
-    return JSON.stringify(val, null, 2)
-  } catch {
-    return String(val)
-  }
-}
-
-const formatJsonBrief = (val, maxLen = 48) => {
-  if (val == null || val === '') return '-'
-  const s = typeof val === 'string' ? val : JSON.stringify(val)
-  return s.length > maxLen ? `${s.slice(0, maxLen)}...` : s
-}
-
-const openJsonModal = (title, val) => {
+/** 打开查看弹框：格式化后为空则提示不弹框 */
+const openPreview = (title, val) => {
   const pretty = toPrettyJson(val)
   if (!pretty) {
     window.$message?.warning?.('暂无内容')
     return
   }
-  jsonModalTitle.value = title
-  jsonModalContent.value = pretty
-  jsonModalShow.value = true
-}
-
-const closeJsonModal = () => {
-  jsonModalShow.value = false
-  jsonModalTitle.value = ''
-  jsonModalContent.value = ''
-}
-
-const copyJsonContent = async () => {
-  const text = jsonModalContent.value || ''
-  if (!text) {
-    window.$message?.warning?.('暂无内容可复制')
-    return
-  }
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.style.position = 'fixed'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-    }
-    window.$message?.success?.('已复制到剪贴板')
-  } catch (e) {
-    window.$message?.error?.('复制失败，请手动选择复制')
-  }
+  previewTitle.value = title
+  previewContent.value = pretty
+  previewShow.value = true
 }
 
 const renderJsonCell = (title, val) => {
@@ -220,16 +160,11 @@ const renderJsonCell = (title, val) => {
     {
       class: 'json-cell-trigger',
       title: '点击查看完整内容',
-      onClick: () => openJsonModal(title, val),
+      onClick: () => openPreview(title, val),
     },
     formatJsonBrief(val),
   )
 }
-
-/** 列展示用：信封取 raw（任务原文），旧数据直接展示整包 */
-const resultPayloadOf = (summary) => (
-  summary && typeof summary === 'object' && 'raw' in summary ? summary.raw : summary
-)
 
 /** 附件列表：信封 attachments，或旧格式顶层 file_path/file_name */
 const attachmentsOf = (summary) => {
@@ -427,22 +362,6 @@ const columns = [
 <style scoped>
 .query-input {
   width: 200px;
-}
-.json-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-}
-.json-modal-pre {
-  margin: 0;
-  max-height: 60vh;
-  overflow: auto;
-  padding: 12px;
-  border-radius: 6px;
-  background: #f7f8fa;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 12px;
-  line-height: 1.45;
 }
 </style>
 

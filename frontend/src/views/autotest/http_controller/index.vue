@@ -1262,14 +1262,17 @@ const loadEnvNames = async () => {
   }
   envLoading.value = true
   try {
-    // { project_id: { api|file|database|redis: env_name[] } }
+    // { project_id: { app|file|database|redis: env_name[] } }：与脚本执行配置弹框同源；
+    // 节点类型枚举无api值，需摊平所有类型键去重，避免下拉为空
     const res = await api.listEnvNames({ project_id: [pid] })
     const byProject = res?.data || {}
     const byType = byProject[pid] || byProject[String(pid)] || {}
-    const names = Array.isArray(byType.api) ? byType.api : []
-    envOptions.value = names
-        .filter((n) => n != null && String(n).trim() !== '')
-        .map((n) => ({ label: String(n), value: String(n) }))
+    const names = new Set()
+    Object.values(byType).forEach((arr) => {
+      if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
+    })
+    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    envOptions.value = sorted.map((n) => ({ label: n, value: n }))
     if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
       selectedDebugEnvName.value = envOptions.value[0].value
     }

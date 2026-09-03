@@ -101,3 +101,86 @@ export function debounce(method, wait, immediate) {
         }
     }
 }
+
+/**
+ * @desc  任意值转格式化 JSON 文本：对象直接美化；字符串尝试解析后美化，解析失败原样返回
+ * @param {*} val 任意值
+ * @returns {string}
+ */
+export function toPrettyJson(val) {
+    if (val == null || val === '') return ''
+    if (typeof val === 'string') {
+        try {
+            return JSON.stringify(JSON.parse(val), null, 2)
+        } catch {
+            return val
+        }
+    }
+    try {
+        return JSON.stringify(val, null, 2)
+    } catch {
+        return String(val)
+    }
+}
+
+/**
+ * @desc  JSON 摘要截断展示：字符串先规范化再截断，超长以省略号结尾
+ * @param {*} val 任意值
+ * @param {number} maxLen 最大长度
+ * @returns {string}
+ */
+export function formatJsonBrief(val, maxLen = 50) {
+    if (val == null || val === '') return '-'
+    let s
+    if (typeof val === 'string') {
+        try {
+            s = JSON.stringify(JSON.parse(val))
+        } catch {
+            s = val
+        }
+    } else {
+        s = JSON.stringify(val)
+    }
+    return s.length > maxLen ? `${s.slice(0, maxLen)}...` : s
+}
+
+/**
+ * @desc  任务结果摘要取信封 raw；旧记录无信封时整包展示
+ * @param {*} summary 任务结果摘要
+ * @returns {*}
+ */
+export function resultPayloadOf(summary) {
+    return summary && typeof summary === 'object' && 'raw' in summary ? summary.raw : summary
+}
+
+/**
+ * @desc  复制文本到剪贴板：clipboard API 优先，降级隐藏 textarea + execCommand
+ * @param {string} text 待复制文本
+ * @param {string} [successMsg] 复制成功提示，传空串则不提示
+ * @returns {Promise<boolean>} 是否复制成功
+ */
+export async function copyTextToClipboard(text, successMsg = '已复制到剪贴板') {
+    if (!text) {
+        window.$message?.warning?.('暂无内容可复制')
+        return false
+    }
+    try {
+        if (navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text)
+        } else {
+            const ta = document.createElement('textarea')
+            ta.value = text
+            ta.style.position = 'fixed'
+            ta.style.left = '-9999px'
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+        }
+        if (successMsg) window.$message?.success?.(successMsg)
+        return true
+    } catch {
+        window.$message?.error?.('复制失败，请手动选择复制')
+        return false
+    }
+}

@@ -116,7 +116,7 @@ function buildApiTree(data) {
     }
 
     groupedData[path].children.push({
-      id: item['id'],
+      id: item['router_id'],
       path: item['path'],
       method: item['method'],
       summary: item['summary'],
@@ -211,6 +211,8 @@ const columns = computed(() => {
                     type: 'info',
                     onClick: () => {
                       handleEdit(row)
+                      // RoleUpdate入参主键仍为id必填：行对象主键已改为role_id，提交前回填id
+                      modalForm.value.id = row.role_id
                     },
                   },
                   {
@@ -233,14 +235,14 @@ const columns = computed(() => {
                         const [menusResponse, apisResponse, roleAuthorizedResponse] = await Promise.all([
                           api.getMenus({ page: 1, page_size: 9999 }),
                           api.getRouters({ page: 1, page_size: 9999 }),
-                          api.getRoleAuthorized({ id: row.id }),
+                          api.getRoleAuthorized({ id: row.role_id }),
                         ])
 
                         const authPayload = roleAuthorizedResponse.data || {}
                         // 后端 to_dict(m2m=True) 字段名为 menus / routers，不是 apis
                         menuOption.value = menusResponse.data || []
                         apiOption.value = buildApiTree(apisResponse.data || [])
-                        menu_ids.value = (authPayload.menus || []).map((v) => v.id)
+                        menu_ids.value = (authPayload.menus || []).map((v) => v.menu_id)
                         api_ids.value = (authPayload.routers || []).map((v) => {
                           const m = String(v.method ?? '').toLowerCase()
                           const p = v.path ?? ''
@@ -248,7 +250,7 @@ const columns = computed(() => {
                         })
 
                         active.value = true
-                        role_id.value = row.id
+                        role_id.value = row.role_id
                       } catch (error) {
                         console.error('Error loading data:', error)
                         $message?.error?.(error?.message || '加载权限数据失败')
@@ -266,7 +268,7 @@ const columns = computed(() => {
           h(
               NPopconfirm,
               {
-                onPositiveClick: () => handleDelete({role_id: row.id}, false),
+                onPositiveClick: () => handleDelete({role_id: row.role_id}, false),
                 onNegativeClick: () => {
                 },
               },
@@ -321,7 +323,7 @@ async function updateRoleAuthorized() {
     $message?.success?.('设置成功')
     const result = await api.getRoleAuthorized({ id: role_id.value })
     const payload = result.data || {}
-    menu_ids.value = (payload.menus || []).map((v) => v.id)
+    menu_ids.value = (payload.menus || []).map((v) => v.menu_id)
     api_ids.value = (payload.routers || []).map((v) => {
       const m = String(v.method ?? '').toLowerCase()
       const p = v.path ?? ''
@@ -347,7 +349,7 @@ async function updateRoleAuthorized() {
         :get-data="api.searchRoleList"
         :single-line="true"
         :scroll-x="1320"
-        row-key="id"
+        row-key="role_id"
         @query-bar-create="handleAdd"
         @query-bar-delete="handleBatchDelete"
         @pagination-meta="onListPaginationMeta"
@@ -456,7 +458,7 @@ async function updateRoleAuthorized() {
                 :checked-keys="menu_ids"
                 :pattern="pattern"
                 :show-irrelevant-nodes="false"
-                key-field="id"
+                key-field="menu_id"
                 label-field="name"
                 checkable
                 cascade
