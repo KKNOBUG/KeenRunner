@@ -31,6 +31,18 @@ from backend.core.exceptions import (
 )
 from backend.enums import AutoTestTaskStatus
 
+# 批次聚合查询仅加载的轻量字段(批次分组与结果判定所需, 不拉取涉及环境等大字段)
+REPORT_BATCH_AGGREGATE_FIELDS: Tuple[str, ...] = (
+    "id",
+    "batch_code",
+    "case_id",
+    "case_state",
+    "case_st_time",
+    "created_user",
+    "case_elapsed",
+    "report_code",
+)
+
 
 class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
 
@@ -237,6 +249,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
         """
         按task_code拉取报告，按batch_code聚合并计算执行结果，再按批次分页。
 
+        两段式查询控制内存：第一段仅加载聚合所需轻量字段完成全量聚合与分页，
+        第二段仅按当前页批次的成员主键回查明细全字段，避免全量实例化与全量序列化。
+
         :param batch_in: 批次查询入参
         :return: (批次总数, 当前页批次列表)
         """
@@ -245,15 +260,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             raise ParameterException(message="参数[task_code]不允许为空")
 
         state = 0 if batch_in.state is None else batch_in.state
-        instances: List[AutoTestReportModel] = await self.model.filter(
+        aggregate_instances: List[AutoTestReportModel] = await self.model.filter(
             task_code=task_code,
             state=state,
-        ).order_by("case_st_time").all()
-
-        if not instances:
+        ).order_by("case_st_time").only(*REPORT_BATCH_AGGREGATE_FIELDS)
+        if not aggregate_instances:
             return 0, []
 
-        case_ids = list({obj.case_id for obj in instances if obj.case_id is not None})
+        case_ids = list({obj.case_id for obj in aggregate_instances if obj.case_id is not None})
         case_name_map: Dict[int, str] = {}
         if case_ids:
             case_name_map = dict(
@@ -264,26 +278,28 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             )
 
         exclude_fields = {"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"}
-        report_dicts: List[Dict[str, Any]] = []
-        for obj in instances:
-            item = await obj.to_dict(exclude_fields=exclude_fields, replace_fields={"id": "report_id"})
-            item["case_name"] = case_name_map.get(item.get("case_id"), "")
-            report_dicts.append(item)
-
         grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        for row in report_dicts:
+        for obj in aggregate_instances:
+            row = await obj.to_dict(
+                include_fields=list(REPORT_BATCH_AGGREGATE_FIELDS),
+                replace_fields={"id": "report_id"},
+            )
+            row["case_name"] = case_name_map.get(row.get("case_id"), "")
             bc = row.get("batch_code")
             bc_text = str(bc).strip() if bc is not None else ""
             key = bc_text if bc_text else f"single:{row.get('report_code') or row.get('report_id')}"
             grouped[key].append(row)
 
         batches: List[AutoTestApiReportBatchItem] = []
+        batch_keys: List[str] = []
+        member_ids: Dict[str, List[int]] = {}
         for key, rows in grouped.items():
             pass_count = sum(1 for r in rows if self._is_case_success(r.get("case_state")))
             total = len(rows)
             times = sorted(t for t in (r.get("case_st_time") for r in rows) if t)
             users = [u for u in (r.get("created_user") for r in rows) if u]
             result = self._resolve_batch_execute_result(rows)
+            member_ids[key] = [r.get("report_id") for r in rows]
             batches.append(
                 AutoTestApiReportBatchItem(
                     batch_code=None if key.startswith("single:") else key,
@@ -294,11 +310,28 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
                     created_user=str(users[0]) if users else None,
                     execute_time=times[0] if times else None,
                     elapsed_seconds=round(sum(self._parse_elapsed_seconds(r.get("case_elapsed")) for r in rows), 3),
-                    reports=rows if batch_in.include_reports else [],
+                    reports=[],
                 )
             )
+            batch_keys.append(key)
 
-        batches.sort(key=lambda b: b.execute_time or "", reverse=True)
+        ordered: List[Tuple[AutoTestApiReportBatchItem, str]] = list(zip(batches, batch_keys))
+        ordered.sort(key=lambda pair: pair[0].execute_time or "", reverse=True)
         start = (batch_in.page - 1) * batch_in.page_size
         end = start + batch_in.page_size
-        return len(batches), batches[start:end]
+        page_pairs = ordered[start:end]
+        page_batches: List[AutoTestApiReportBatchItem] = [item for item, _ in page_pairs]
+
+        # 第二段仅当前页批次按成员主键回查明细, 组内顺序沿用聚合时的case_st_time升序
+        if batch_in.include_reports and page_pairs:
+            page_report_ids = [rid for _, key in page_pairs for rid in member_ids[key]]
+            detail_instances = await self.model.filter(id__in=page_report_ids).order_by("case_st_time")
+            row_map: Dict[int, Dict[str, Any]] = {}
+            for obj in detail_instances:
+                item = await obj.to_dict(exclude_fields=exclude_fields, replace_fields={"id": "report_id"})
+                item["case_name"] = case_name_map.get(item.get("case_id"), "")
+                row_map[item["report_id"]] = item
+            for item, key in page_pairs:
+                item.reports = [row_map[rid] for rid in member_ids[key] if rid in row_map]
+
+        return len(ordered), page_batches
