@@ -74,7 +74,7 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
-    case_ids: Optional[List[int]] = Field(None, description="用例ID集合(精确过滤)")
+    case_ids: Optional[List[int]] = Field(None, description="用例ID集合(精确过滤, 返回保持入参顺序)")
 
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
