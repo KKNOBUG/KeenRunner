@@ -494,7 +494,7 @@ async def export_case_datagram_sync(
             return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
         workbook = build_export_workbook(cases_data=cases_data)
         # 先落临时文件再以FileResponse分块流式返回，避免整文件驻留内存OOM；发送后自动清理
-        temp = tempfile.NamedTemporaryFile(prefix="krun_export_", suffix=".xlsx", delete=False)
+        temp = tempfile.NamedTemporaryFile(prefix="temp_export_", suffix=".xlsx", delete=False)
         temp_path = temp.name
         temp.close()
         workbook.save(temp_path)
@@ -579,7 +579,7 @@ async def export_case_scripts_sync(
             return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
         workbook = build_script_workbook(rows)
         # 先落临时文件再以 FileResponse 分块流式返回，避免整文件驻留内存OOM；发送后自动清理
-        temp = tempfile.NamedTemporaryFile(prefix="krun_export_", suffix=".xlsx", delete=False)
+        temp = tempfile.NamedTemporaryFile(prefix="temp_export_", suffix=".xlsx", delete=False)
         temp_path = temp.name
         temp.close()
         workbook.save(temp_path)
