@@ -23,14 +23,7 @@ import TaskFormModal from '@/views/task/list/components/TaskFormModal.vue'
 import TaskHistoryModal from '@/views/task/list/components/TaskHistoryModal.vue'
 
 import {formatDateTime, formatJsonBrief, renderIcon, resultPayloadOf} from '@/utils'
-import {
-  buildScheduleTags,
-  formatFireTime,
-  WEEK_LABELS,
-  PERIODIC_ONLY_ONCE,
-  CYCLE_WEEK,
-  CYCLE_MONTH,
-} from '@/utils/common/schedule'
+import { buildScheduleTags } from '@/utils/common/schedule'
 import { useCRUD, useTaskRecordLogModal } from '@/composables'
 import api from '@/api'
 
@@ -337,44 +330,21 @@ watch(
     }
 )
 
-/** 定时配置弹框状态：触发点多时单元格摘要无法完整阅读，点击弹框查看明细（对齐执行记录页“执行参数”交互） */
 /** 定时配置明细查看弹框（共用 TextPreviewModal） */
 const previewShow = ref(false)
 const previewContent = ref('')
 
-/** 结构化定时表达式 → 多行明细文本：触发点逐行列出，便于大量触发点时阅读 */
-function buildScheduleDetailText(periodic, expr) {
-  if (!periodic || !expr || typeof expr !== 'object') return ''
-  const lines = [`执行时效：${periodic}`]
-  if (periodic === PERIODIC_ONLY_ONCE) {
-    const dates = Array.isArray(expr.trigger_dates) ? expr.trigger_dates : []
-    lines.push(`触发日期时间（共 ${dates.length} 个）：`)
-    dates.forEach((d) => lines.push(`  ${formatFireTime(d)}`))
-    return lines.join('\n')
-  }
-  const cycle = expr.trigger_cycle
-  if (!cycle) return ''
-  lines.push(`周期类型：${cycle}`)
-  if (cycle === CYCLE_WEEK) {
-    const weeks = (expr.trigger_weeks || []).map((w) => WEEK_LABELS[w] || w).join('、')
-    lines.push(`触发星期：${weeks || '-'}`)
-  } else if (cycle === CYCLE_MONTH) {
-    const days = (expr.trigger_month || []).map((d) => `${d}号`).join('、')
-    lines.push(`触发日期：${days || '-'}`)
-  }
-  const times = Array.isArray(expr.trigger_times) ? expr.trigger_times : []
-  lines.push(`触发时间点（共 ${times.length} 个）：`)
-  times.forEach((t) => lines.push(`  ${t}`))
-  return lines.join('\n')
-}
-
 const openScheduleModal = (row) => {
-  const text = buildScheduleDetailText(row.task_periodic_expr, row.task_schedule_expr)
-  if (!text) {
+  if (!row.task_periodic_expr && !row.task_schedule_expr) {
     window.$message?.warning?.('暂无定时配置')
     return
   }
-  previewContent.value = text
+  // 直接将时效与定时表达式两字段组成对象展示 JSON
+  previewContent.value = JSON.stringify(
+    { task_periodic_expr: row.task_periodic_expr, task_schedule_expr: row.task_schedule_expr },
+    null,
+    2,
+  )
   previewShow.value = true
 }
 
@@ -389,7 +359,7 @@ function renderScheduleCell(row) {
       title: '点击查看定时配置明细',
       onClick: () => openScheduleModal(row),
     },
-    tags.map((tag) =>
+    tags.flatMap((tag) => [
       h(
         NTag,
         {
@@ -399,7 +369,8 @@ function renderScheduleCell(row) {
         },
         { default: () => tag.label },
       ),
-    ),
+      ' ',
+    ]),
   )
 }
 
@@ -456,7 +427,7 @@ const columns = computed(() => {
   {
     title: '任务名称',
     key: 'task_name',
-    width: 300,
+    width: 200,
     align: 'center',
     ellipsis: {tooltip: true},
     // 任务名称超链接：点击直接进入编辑（对齐测试用例页面样式）
@@ -519,14 +490,14 @@ const columns = computed(() => {
   {
     title: '定时配置',
     key: 'task_schedule_expr',
-    width: 260,
+    width: 400,
     align: 'center',
     render(row) {
       return renderScheduleCell(row)
     },
   },
   {
-    title: '关联用例数',
+    title: '用例数量',
     key: 'task_case_ids',
     width: 100,
     align: 'center',
@@ -537,7 +508,7 @@ const columns = computed(() => {
     },
   },
   {
-    title: '任务涉及环境',
+    title: '任务环境',
     key: 'task_involve_envs',
     width: 130,
     align: 'center',
@@ -864,12 +835,12 @@ onMounted(() => {
       </NSpin>
     </NModal>
 
-    <!-- 定时配置明细弹框：触发点逐行列出，共用 TextPreviewModal（monaco 只读 + 复制） -->
+    <!-- 定时配置明细弹框：时效+定时表达式两字段对象 JSON，共用 TextPreviewModal（monaco 只读 + 复制） -->
     <TextPreviewModal
         v-model:show="previewShow"
         title="定时配置明细"
         :content="previewContent"
-        lang="plaintext"
+        lang="json"
         width="min(560px, 92vw)"
     />
   </CommonPage>
@@ -917,12 +888,10 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-/* 定时配置单元格：标签流布局，整格可点击查看明细（对齐执行记录页“执行参数”交互） */
+/* 定时配置单元格：标签流布局(标签间以一个空格分隔)，整格可点击查看明细 */
 .schedule-cell-tags {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
+  text-align: center;
   cursor: pointer;
+  line-height: 2;
 }
 </style>

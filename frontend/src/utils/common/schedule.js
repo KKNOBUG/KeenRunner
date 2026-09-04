@@ -25,8 +25,8 @@ const TIME_RE = /^\d{2}:\d{2}:\d{2}$/
 const pad2 = (n) => String(n).padStart(2, '0')
 const asc = (arr) => [...arr].sort((a, b) => a - b)
 
-// 标签流展示：数值标签超过该数量时截断并追加「等 N 个」汇总标签，明细点击弹窗兜底
-const TAG_VALUE_LIMIT = 6
+// 标签流展示：各分组数值标签(日期/星期/几号/时间)分别截取前 TAG_VALUE_LIMIT 个展示，溢出合并为「等 N 个」汇总标签
+const TAG_VALUE_LIMIT = 2
 
 export function createEmptyScheduleState() {
   // 周期模式必输、默认「仅执行一次」；预置一行空触发时间便于直接选择
@@ -138,8 +138,8 @@ export function formatScheduleSummary(periodic, expr) {
 
 /**
  * 后端表达式 → 任务列表「定时配置」列标签流：[{ label, kind }]
- * kind: cycle=周期标签(信息色：仅一次/每日/每周/每月) / value=数值标签(橙色：日期/星期/几号/时间) / more=溢出汇总
- * 执行1次 → 「仅一次」+ trigger_dates 逐点「YYYY-MM-DD HH:mm」；执行N次 → 周期标签 + 星期/几号/时间标签
+ * kind: cycle=周期标签(信息色：执行1次/执行N次/每日/每周/每月) / value=数值标签(橙色：日期/星期/几号/时间) / more=溢出汇总
+ * 执行1次 → 「执行1次」+ trigger_dates 逐点「YYYY-MM-DD HH:mm」；执行N次 → 「执行N次」+ 周期标签 + 星期/几号/时间标签
  * @returns {Array<{label: string, kind: 'cycle'|'value'|'more'}>} 表达式为空或不完整时返回空数组
  */
 export function buildScheduleTags(periodic, expr) {
@@ -149,27 +149,37 @@ export function buildScheduleTags(periodic, expr) {
     if (!dates.length) return []
     // 触发日期时间截去秒位，对齐需求截图「2026-08-10 22:00」
     const values = dates.map((raw) => ({ label: String(raw || '').slice(0, 16), kind: 'value' }))
-    return [{ label: '仅一次', kind: 'cycle' }, ...truncateScheduleTags(values)]
+    return [{ label: PERIODIC_ONLY_ONCE, kind: 'cycle' }, ...truncateScheduleTagGroups([values])]
   }
   const cycle = expr.trigger_cycle
   if (!cycle) return []
-  const values = []
+  const groups = []
   if (cycle === CYCLE_WEEK) {
     // 标签流用「周一」短标签对齐需求截图（WEEK_LABELS 为面板全称）
-    for (const w of expr.trigger_weeks || []) {
-      values.push({ label: (WEEK_LABELS[w] || w).replace('星期', '周'), kind: 'value' })
-    }
+    groups.push((expr.trigger_weeks || []).map((w) => ({ label: (WEEK_LABELS[w] || w).replace('星期', '周'), kind: 'value' })))
   } else if (cycle === CYCLE_MONTH) {
-    for (const d of expr.trigger_month || []) values.push({ label: `${d}号`, kind: 'value' })
+    groups.push((expr.trigger_month || []).map((d) => ({ label: `${d}号`, kind: 'value' })))
   }
-  for (const t of expr.trigger_times || []) values.push({ label: String(t || '').slice(0, 5), kind: 'value' })
-  if (!values.length) return []
+  groups.push((expr.trigger_times || []).map((t) => ({ label: String(t || '').slice(0, 5), kind: 'value' })))
+  if (!groups.some((g) => g.length)) return []
   const cycleLabel = cycle === CYCLE_DAY ? '每日' : cycle === CYCLE_WEEK ? '每周' : cycle === CYCLE_MONTH ? '每月' : cycle
-  return [{ label: cycleLabel, kind: 'cycle' }, ...truncateScheduleTags(values)]
+  return [
+    { label: PERIODIC_UNBOUNDED, kind: 'cycle' },
+    { label: cycleLabel, kind: 'cycle' },
+    ...truncateScheduleTagGroups(groups),
+  ]
 }
 
-/** 数值标签超过 TAG_VALUE_LIMIT 时截断，追加「等 N 个」汇总标签引导点击明细弹窗 */
-function truncateScheduleTags(values) {
-  if (values.length <= TAG_VALUE_LIMIT) return values
-  return [...values.slice(0, TAG_VALUE_LIMIT), { label: `等 ${values.length} 个`, kind: 'more' }]
+/**
+ * 各分组数值标签分别截取前 TAG_VALUE_LIMIT 个，溢出数量合并为单个「等 N 个」汇总标签引导点击明细弹窗
+ * @param {Array<Array<{label: string, kind: string}>>} groups 按类别分组的数值标签(如[星期组, 时间组]d)
+ */
+function truncateScheduleTagGroups(groups) {
+  const shown = []
+  let hidden = 0
+  for (const values of groups) {
+    if (values.length > TAG_VALUE_LIMIT) hidden += values.length - TAG_VALUE_LIMIT
+    shown.push(...values.slice(0, TAG_VALUE_LIMIT))
+  }
+  return hidden > 0 ? [...shown, { label: `等 ${hidden} 个`, kind: 'more' }] : shown
 }
