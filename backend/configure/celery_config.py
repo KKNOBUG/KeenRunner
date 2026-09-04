@@ -102,6 +102,9 @@ class CeleryConfig(BaseSettings):
             "task_soft_time_limit": 3300,
             "beat_scheduler": self.CELERY_BEAT_SCHEDULER,
             "redbeat_redis_url": self.CELERY_REDBEAT_REDIS_URL,
+            # 显式置空阻断redbeat对broker_transport_options的回退透传：redbeat默认把该选项全量传给
+            # redis-py连接构造，而visibility_timeout是kombu QoS层专有参数，redis-py不接受会导致beat启动崩溃
+            "redbeat_redis_options": {},
             "redbeat_lock_timeout": 600,
             "redbeat_lock_renewal_interval": 420,
             "beat_schedule": {
@@ -130,6 +133,11 @@ class CeleryConfig(BaseSettings):
             "task_store_eager_result": False,
             "worker_send_task_events": True,
             "broker_connection_retry_on_startup": True,
+            "broker_transport_options": {
+                # 显式声明可见性超时：需大于全部任务硬时限最大值(run_autotest_task任务级28800)，
+                # 防止长任务执行期间unacked消息被判失联重投导致重复执行
+                "visibility_timeout": 36000,
+            },
         }
         return self
 

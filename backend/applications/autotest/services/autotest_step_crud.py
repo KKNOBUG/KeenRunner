@@ -44,7 +44,7 @@ from backend.core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, PUBLIC_CASE_TYPES
+from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, AutoTestTaskExecuteMode, PUBLIC_CASE_TYPES
 
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
@@ -1298,6 +1298,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
+            preloaded_case: Optional[AutoTestCaseModel] = None,
+            preloaded_tree: Optional[AutoTestCaseStepTreeLoadResult] = None,
     ) -> Dict[str, Any]:
         """
         执行单个用例：创建报告、拉取步骤树、调用执行引擎并写明细。
@@ -1309,23 +1311,30 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :param task_code: 任务标识代码，可选
         :param batch_code: 批次标识代码，可选
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由HTTP步骤执行器内查表获取
+        :param preloaded_case: 调用方已查询的用例实例，传入时跳过用例查询(多轮执行复用)
+        :param preloaded_tree: 调用方已加载的步骤树数据，传入时跳过步骤树查询(多轮执行复用)
         :return: 含success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code等
         """
         if not initial_variables or not isinstance(initial_variables, list):
             LOGGER.info(f"初始化变量[initial_variables]为空或非列表类型")
             initial_variables = []
 
-        # 1.查询用例信息
+        # 1.查询用例信息(调用方已预载时直接复用，多轮执行不重复查询)
         case_crud = AutoTestCaseCrud()
-        case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
+        case_instance = (
+            preloaded_case if preloaded_case is not None
+            else await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
+        )
         case_dict = await case_instance.to_dict(
             include_fields={"id", "case_code", "case_name"},
             replace_fields={"id": "case_id"}
         )
         LOGGER.info(f"查询用例[id={case_id}]成功, 结果: {case_dict}")
 
-        # 2.查询步骤树数据
-        load: AutoTestCaseStepTreeLoadResult = await self.get_case_tree(case_id)
+        # 2.查询步骤树数据(调用方已预载时直接复用，多轮执行不重复查询)
+        load: AutoTestCaseStepTreeLoadResult = (
+            preloaded_tree if preloaded_tree is not None else await self.get_case_tree(case_id)
+        )
         tree_data_count: Dict[str, int] = load.step_counter.model_dump()
         if load.step_counter.total_steps == 0:
             error_message: str = f"查询步骤为空, 用例[id={case_id}]没有任何可执行的根步骤"
@@ -1446,6 +1455,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             cases_execute_config: Optional[Dict[str, Any]] = None,
             task_code: Optional[str] = None,
             dataset_enabled: bool = False,
+            execute_mode: Optional[AutoTestTaskExecuteMode] = None,
     ) -> Dict[str, Any]:
         """
         批量执行多个用例并汇总成功失败与明细。
@@ -1457,6 +1467,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :param cases_execute_config: 根据case_id的执行配置，优先于steps_execute_config
         :param task_code: 任务标识代码，可选
         :param dataset_enabled: 任务级数据源全局开关；启用时各用例自动纳入其全部数据场景执行
+        :param execute_mode: 任务执行模式(并行执行/串行执行)；为空或串行时用例间顺序执行，并行时用例间并发执行(用例内多轮仍串行)
         :return: 批次汇总字典
         """
         if not initial_variables or not isinstance(initial_variables, list):
@@ -1471,96 +1482,40 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         batch_code: str = f"{int(datetime.datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
         cases_cfg_map: Dict[str, Any] = cases_execute_config if isinstance(cases_execute_config, dict) else {}
 
-        for case_id in case_ids:
-            try:
-                case_cfg = (cases_cfg_map.get(str(case_id)) or cases_cfg_map.get(case_id) or {})
-                if not isinstance(case_cfg, dict):
-                    case_cfg = {}
-                per_steps_cfg = case_cfg.get("steps_execute_config") or steps_execute_config
-                # dataset_enabled为任务级全局开关(独立字段)：启用时各用例自动纳入其全部数据场景(去重，保持出现顺序)
-                dataset_names = await _load_case_dataset_names(case_id) if dataset_enabled else []
-                if not isinstance(dataset_names, list):
-                    dataset_names = []
-                dataset_names = [str(x) for x in dataset_names if x is not None and str(x).strip()]
-
-                raw_exec_count = case_cfg.get("execute_count", 1)
-                try:
-                    execute_count = int(raw_exec_count)
-                except (TypeError, ValueError):
-                    execute_count = 1
-                execute_count = max(1, min(execute_count, 9999))
-
-                LOGGER.info(
-                    f"==> 执行[id={case_id}]开始: "
-                    f"[execute_count={execute_count}, datasets={len(dataset_names)}]"
-                )
-                case_results: List[Dict[str, Any]] = []
-                if dataset_names:
-                    # 总轮次 = 执行次数 × 数据源数
-                    total_runs = execute_count * len(dataset_names)
-                    run_idx = 0
-                    for _ in range(execute_count):
-                        for ds_name in dataset_names:
-                            run_idx += 1
-                            one = await self.execute_single_case(
-                                case_id=case_id,
-                                initial_variables=initial_variables,
-                                steps_execute_config=per_steps_cfg,
-                                report_type=report_type,
-                                task_code=task_code,
-                                batch_code=batch_code,
-                                dataset_name=ds_name,
-                            )
-                            case_results.append(one)
-                            LOGGER.info(
-                                f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
-                                f"[dataset={ds_name}, success={one.get('success', False)}]"
-                            )
-                    empty_error = "未执行任何数据集"
-                elif execute_count > 1:
-                    for run_idx in range(execute_count):
-                        one = await self.execute_single_case(
-                            case_id=case_id,
-                            initial_variables=initial_variables,
-                            steps_execute_config=per_steps_cfg,
-                            report_type=report_type,
-                            task_code=task_code,
-                            batch_code=batch_code,
-                        )
-                        case_results.append(one)
-                        LOGGER.info(
-                            f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
-                            f"[success={one.get('success', False)}]"
-                        )
-                    empty_error = "未执行任何次数"
-                else:
-                    case_results.append(await self.execute_single_case(
-                        case_id=case_id,
-                        initial_variables=initial_variables,
-                        steps_execute_config=per_steps_cfg,
-                        report_type=report_type,
-                        task_code=task_code,
-                        batch_code=batch_code,
-                    ))
-                    empty_error = "未执行"
-
-                case_ok = bool(case_results) and all(r.get("success") for r in case_results)
-                result = self._aggregate_case_runs(
-                    case_id, case_results, case_ok=case_ok, empty_error=empty_error,
-                )
-                results.append(result)
-                if result.get("success"):
-                    success_cases += 1
-                else:
-                    failed_cases += 1
-            except Exception as e:
-                error_message: str = f"执行用例[id={case_id}]异常, 错误描述: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-                failed_cases += 1
-                results.append(self._aggregate_case_runs(
-                    case_id, [], case_ok=False, empty_error=error_message,
+        # 并行执行模式判定：StringEnum继承str，枚举与存量字符串值等价比较；为空时视为串行(历史调用兼容)
+        is_parallel: bool = execute_mode == AutoTestTaskExecuteMode.PARALLEL
+        if is_parallel:
+            # 用例间无先后依赖时并行执行：单次并发派发全部用例，gather保序使汇总结果顺序与串行一致
+            results = list(await asyncio.gather(*[
+                self._execute_one_case(
+                    case_id=case_id,
+                    report_type=report_type,
+                    initial_variables=initial_variables,
+                    steps_execute_config=steps_execute_config,
+                    cases_cfg_map=cases_cfg_map,
+                    task_code=task_code,
+                    batch_code=batch_code,
+                    dataset_enabled=dataset_enabled,
+                ) for case_id in case_ids
+            ]))
+        else:
+            for case_id in case_ids:
+                results.append(await self._execute_one_case(
+                    case_id=case_id,
+                    report_type=report_type,
+                    initial_variables=initial_variables,
+                    steps_execute_config=steps_execute_config,
+                    cases_cfg_map=cases_cfg_map,
+                    task_code=task_code,
+                    batch_code=batch_code,
+                    dataset_enabled=dataset_enabled,
                 ))
-            LOGGER.info(f"==> 执行用例[id={case_id}]结束")
+        for result in results:
+            if result.get("success"):
+                success_cases += 1
+            else:
+                failed_cases += 1
+
         LOGGER.info(f"{'= ' * 20}批量执行结束{'= ' * 20}")
         success_rate = round(success_cases / total_cases * 100, 2) if total_cases > 0 else 0.0
         return {
@@ -1571,3 +1526,123 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             "success_rate": success_rate,
             "results": results,
         }
+
+    async def _execute_one_case(
+            self,
+            case_id: int,
+            report_type: AutoTestReportType,
+            initial_variables: List[StepVariablesBase],
+            steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]],
+            cases_cfg_map: Dict[str, Any],
+            task_code: Optional[str],
+            batch_code: str,
+            dataset_enabled: bool,
+    ) -> Dict[str, Any]:
+        """
+        执行单个用例的全部轮次(执行次数×数据场景)并聚合为统一结果。
+
+        用例与步骤树仅预载一次供多轮复用；单用例异常兜底转失败结果，不中断批次内其他用例。
+
+        :param case_id: 用例主键ID
+        :param report_type: 报告类型枚举
+        :param initial_variables: 初始变量列表，每项含key、value、desc
+        :param steps_execute_config: 全部用例共用的执行配置
+        :param cases_cfg_map: 根据case_id的执行配置映射，优先于steps_execute_config
+        :param task_code: 任务标识代码，可选
+        :param batch_code: 批次标识代码
+        :param dataset_enabled: 任务级数据源全局开关
+        :return: 单用例聚合结果字典
+        """
+        try:
+            case_cfg = (cases_cfg_map.get(str(case_id)) or cases_cfg_map.get(case_id) or {})
+            if not isinstance(case_cfg, dict):
+                case_cfg = {}
+            per_steps_cfg = case_cfg.get("steps_execute_config") or steps_execute_config
+            # dataset_enabled为任务级全局开关(独立字段)：启用时各用例自动纳入其全部数据场景(去重，保持出现顺序)
+            dataset_names = await _load_case_dataset_names(case_id) if dataset_enabled else []
+            if not isinstance(dataset_names, list):
+                dataset_names = []
+            dataset_names = [str(x) for x in dataset_names if x is not None and str(x).strip()]
+
+            raw_exec_count = case_cfg.get("execute_count", 1)
+            try:
+                execute_count = int(raw_exec_count)
+            except (TypeError, ValueError):
+                execute_count = 1
+            execute_count = max(1, min(execute_count, 9999))
+
+            # 预载用例与步骤树各一次：同一用例多轮执行(执行次数×数据场景)复用，不再每轮重复加载
+            preloaded_case = await AutoTestCaseCrud().get_by_id(case_id=case_id, on_error=True, state__not=1)
+            preloaded_tree = await self.get_case_tree(case_id)
+
+            LOGGER.info(
+                f"==> 执行[id={case_id}]开始: "
+                f"[execute_count={execute_count}, datasets={len(dataset_names)}]"
+            )
+            case_results: List[Dict[str, Any]] = []
+            if dataset_names:
+                # 总轮次 = 执行次数 × 数据源数
+                run_idx = 0
+                for _ in range(execute_count):
+                    for ds_name in dataset_names:
+                        run_idx += 1
+                        one = await self.execute_single_case(
+                            case_id=case_id,
+                            initial_variables=initial_variables,
+                            steps_execute_config=per_steps_cfg,
+                            report_type=report_type,
+                            task_code=task_code,
+                            batch_code=batch_code,
+                            dataset_name=ds_name,
+                            preloaded_case=preloaded_case,
+                            preloaded_tree=preloaded_tree,
+                        )
+                        case_results.append(one)
+                        LOGGER.info(
+                            f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                            f"[dataset={ds_name}, success={one.get('success', False)}]"
+                        )
+                empty_error = "未执行任何数据集"
+            elif execute_count > 1:
+                for run_idx in range(execute_count):
+                    one = await self.execute_single_case(
+                        case_id=case_id,
+                        initial_variables=initial_variables,
+                        steps_execute_config=per_steps_cfg,
+                        report_type=report_type,
+                        task_code=task_code,
+                        batch_code=batch_code,
+                        preloaded_case=preloaded_case,
+                        preloaded_tree=preloaded_tree,
+                    )
+                    case_results.append(one)
+                    LOGGER.info(
+                        f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                        f"[success={one.get('success', False)}]"
+                    )
+                empty_error = "未执行任何次数"
+            else:
+                case_results.append(await self.execute_single_case(
+                    case_id=case_id,
+                    initial_variables=initial_variables,
+                    steps_execute_config=per_steps_cfg,
+                    report_type=report_type,
+                    task_code=task_code,
+                    batch_code=batch_code,
+                    preloaded_case=preloaded_case,
+                    preloaded_tree=preloaded_tree,
+                ))
+                empty_error = "未执行"
+
+            case_ok = bool(case_results) and all(r.get("success") for r in case_results)
+            result = self._aggregate_case_runs(
+                case_id, case_results, case_ok=case_ok, empty_error=empty_error,
+            )
+        except Exception as e:
+            error_message: str = f"执行用例[id={case_id}]异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            result = self._aggregate_case_runs(
+                case_id, [], case_ok=False, empty_error=error_message,
+            )
+        LOGGER.info(f"==> 执行用例[id={case_id}]结束")
+        return result

@@ -121,6 +121,8 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
             cases_execute_config=cases_execute_config if isinstance(cases_execute_config, dict) else {},
             task_code=task_code,
             dataset_enabled=bool(getattr(task, "dataset_enabled", False)),
+            # 执行模式取自任务配置(并行执行/串行执行)：造数依赖类任务配置串行以保持用例先后顺序
+            execute_mode=getattr(task, "task_execute_mode", None),
         )
         elapsed = (datetime.now() - started).total_seconds()
         total_cases = int(result.get("total_cases") or 0)
@@ -224,7 +226,16 @@ def scan_and_dispatch_autotest_tasks():
     return run_async(_scan_and_dispatch_impl())
 
 
-@celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task")
+@celery.task(
+    name="backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task",
+    # 失败/超时即ack终结消息：失败结果已落record并回填任务状态，重新执行只会重复写记录且依旧失败；
+    # worker进程崩溃/硬时限杀进程(WorkerLostError)由task_reject_on_worker_lost重投，优先于本参数
+    acks_on_failure_or_timeout=True,
+    # 任务级时限覆盖全局(3300/3600)：整批任务绑定多脚本串行数小时为正常场景；软时限向任务抛出
+    # SoftTimeLimitExceeded后会被单用例兜底捕获(信号仅发一次)，整批的强制停止依赖硬时限兜底
+    soft_time_limit=25200,
+    time_limit=28800,
+)
 def run_autotest_task(
         task_id: int,
         report_type: Optional[AutoTestReportType] = None,
