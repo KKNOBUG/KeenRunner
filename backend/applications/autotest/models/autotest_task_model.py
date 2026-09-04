@@ -50,7 +50,7 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     #     "env_name": "SIT1",
     #     "<case_id>": {"execute_count": 1, "involve_envs": ["SIT1", "..."], "steps_execute_config": {"<step_id|step_id_@@op_index>": {env_name, config_type, config_name, config_host, config_port, database_name}}}
     # }
-    cases_execute_config = fields.JSONField(default=dict, null=True, description="根据用例执行配置")
+    cases_execute_config = fields.JSONField(default=dict, null=True, description="用例执行配置")
     # task_involve_envs: 任务级涉及环境名称列表(去重)，累积绑定的各个用例下的涉及环境(cases_execute_config.{case_id}.involve_envs)；
     task_involve_envs = fields.JSONField(default=list, null=True, description="任务级涉及环境名称列表(各用例involve_envs累积)")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
