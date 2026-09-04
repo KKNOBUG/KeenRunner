@@ -118,8 +118,8 @@ async def _locate_request_step_name(services: AutoTestApiServices, *, case_id: i
     return (step.step_name if step else "") or step_code
 
 
-async def _collect_report_original(services: AutoTestApiServices, instance: AutoTestDataSourceModel) -> Dict[str, Any]:
-    """按数据源绑定的步骤实时采集报文原始值映射，供前端本地插入正交易场景；步骤缺失或非请求步骤时返回空映射。"""
+async def _collect_report_original(services: AutoTestApiServices, instance: AutoTestDataSourceModel) -> Dict[str, Dict[str, Any]]:
+    """按数据源绑定的步骤实时采集报文原始值映射(HEAD/BODY分区隔离同名字段)，供前端本地插入正交易场景；步骤缺失或非请求步骤时返回空映射。"""
     try:
         step = await services.step_curd.model.filter(
             case_id=instance.case_id, step_code=instance.step_code, state__not=1
@@ -539,7 +539,7 @@ async def update_data_source_fields(
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵，并附带报文原始值映射")
+@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵，并附带按HEAD/BODY分区隔离的报文原始值映射")
 async def build_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),

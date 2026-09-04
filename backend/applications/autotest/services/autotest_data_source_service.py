@@ -464,32 +464,35 @@ def build_vertical_matrix_from_step(step: AutoTestStepModel) -> List[List[Any]]:
     return matrix
 
 
-def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Any]:
+def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Dict[str, Any]]:
     """
-    采集步骤报文字段路径→原始值映射(HEAD/BODY分区)，值保持报文原类型。
+    采集步骤报文原始值映射，按HEAD/BODY分区隔离，值保持报文原类型。
 
     路径规则与字段同步一致：请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key；
-    HEAD在前BODY在后，同路径时BODY值覆盖；逐值经json_safe_value兑底保证JSON可序列化。
+    HEAD与BODY分区独立存放，同路径互不覆盖；逐值经json_safe_value兑底保证JSON可序列化。
 
     :param step: 步骤实例(取request_args_type与报文)
-    :return: 字段路径→原始值映射
+    :return: 分区名->字段路径->原始值映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": 1}}
     """
-    originals: Dict[str, Any] = {}
-    originals.update(_kv_originals(getattr(step, "request_header", None)))
+    originals: Dict[str, Dict[str, Any]] = {"HEAD": {}, "BODY": {}}
+    originals["HEAD"].update(_kv_originals(getattr(step, "request_header", None)))
     args = _enum_value(getattr(step, "request_args_type", None))
     if args == AutoTestReqArgsType.JSON.value:
         payload = _parse_json_body(getattr(step, "request_body", None))
         if payload is not None:
-            originals.update(_flatten_json_leaf_values(payload))
+            originals["BODY"].update(_flatten_json_leaf_values(payload))
     elif args == AutoTestReqArgsType.XML.value:
-        originals.update(_flatten_xml_xpath_values(getattr(step, "request_text", None) or ""))
+        originals["BODY"].update(_flatten_xml_xpath_values(getattr(step, "request_text", None) or ""))
     elif args == AutoTestReqArgsType.PARAMS.value:
-        originals.update(_kv_originals(getattr(step, "request_params", None)))
+        originals["BODY"].update(_kv_originals(getattr(step, "request_params", None)))
     elif args == AutoTestReqArgsType.FORM_DATA.value:
-        originals.update(_kv_originals(getattr(step, "request_form_data", None), skip_file=True))
+        originals["BODY"].update(_kv_originals(getattr(step, "request_form_data", None), skip_file=True))
     elif args == AutoTestReqArgsType.X_WWW_FORM_URLENCODED.value:
-        originals.update(_kv_originals(getattr(step, "request_form_urlencoded", None)))
-    return {path: json_safe_value(value) for path, value in originals.items()}
+        originals["BODY"].update(_kv_originals(getattr(step, "request_form_urlencoded", None)))
+    return {
+        section: {path: json_safe_value(value) for path, value in mapping.items()}
+        for section, mapping in originals.items()
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +553,8 @@ def _rebuild_scene_values(
         old_values: Optional[List[Any]],
         empty: List[Any],
         normal_index: int,
-        originals: Optional[Dict[str, Any]],
+        originals: Optional[Dict[str, Dict[str, Any]]],
+        section: str,
         path: str,
 ) -> List[Any]:
     """
@@ -559,7 +563,8 @@ def _rebuild_scene_values(
     :param old_values: 原矩阵中该字段的场景值行/列，字段不存在时为None
     :param empty: 补空基准(与场景数等长)
     :param normal_index: 正交易场景在场景维度中的序号，-1表示未导入
-    :param originals: 报文原始值映射
+    :param originals: 报文原始值映射，按HEAD/BODY分区隔离同名字段
+    :param section: 当前字段所属分区(HEAD/BODY)
     :param path: 字段路径
     :return: 该字段同步后的场景值
     """
@@ -567,7 +572,7 @@ def _rebuild_scene_values(
         return list(old_values)
     values = list(empty)
     if normal_index >= 0 and originals:
-        value = originals.get(path)
+        value = originals.get(section, {}).get(path)
         values[normal_index] = "" if value is None else value
     return values
 
@@ -587,7 +592,7 @@ def _rebuild_vertical_matrix(
     :param matrix: 原垂直矩阵
     :param head_paths: 报文最新HEAD路径
     :param body_paths: 报文最新BODY路径
-    :param originals: 报文原始值映射，供正交易场景列回填新增字段值
+    :param originals: 报文原始值映射(按HEAD/BODY分区)，供正交易场景列回填新增字段值
     :return: 重建后的垂直矩阵
     """
     scene_names = extract_scene_names_from_matrix(matrix, AXIS_VERTICAL)
@@ -616,10 +621,10 @@ def _rebuild_vertical_matrix(
     result: List[List[Any]] = [header_row]
     result.append(["HEAD", *empty])
     for path in head_paths:
-        result.append([path, *_rebuild_scene_values(old_values.get(("HEAD", path)), empty, normal_col, originals, path)])
+        result.append([path, *_rebuild_scene_values(old_values.get(("HEAD", path)), empty, normal_col, originals, "HEAD", path)])
     result.append(["BODY", *empty])
     for path in body_paths:
-        result.append([path, *_rebuild_scene_values(old_values.get(("BODY", path)), empty, normal_col, originals, path)])
+        result.append([path, *_rebuild_scene_values(old_values.get(("BODY", path)), empty, normal_col, originals, "BODY", path)])
     result.extend(assert_rows)
     return result
 
@@ -639,7 +644,7 @@ def _rebuild_horizontal_matrix(
     :param matrix: 原水平矩阵
     :param head_paths: 报文最新HEAD路径
     :param body_paths: 报文最新BODY路径
-    :param originals: 报文原始值映射，供正交易场景行回填新增字段值
+    :param originals: 报文原始值映射(按HEAD/BODY分区)，供正交易场景行回填新增字段值
     :return: 重建后的水平矩阵
     """
     scene_names = extract_scene_names_from_matrix(matrix, AXIS_HORIZONTAL)
@@ -692,7 +697,7 @@ def _rebuild_horizontal_matrix(
             elif isinstance(src, int):
                 new_row.append(row[src] if src < len(row) else "")
             elif row_idx == normal_row:
-                value = originals.get(src[1])
+                value = originals.get(src[0], {}).get(src[1])
                 new_row.append("" if value is None else value)
             else:
                 new_row.append("")
