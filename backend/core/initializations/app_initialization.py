@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.staticfiles import StaticFiles
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist, OperationalError
@@ -203,6 +204,8 @@ def register_middlewares(app: FastAPI):
     app.middleware('http')(logging_middleware)
     # 后做日志追溯链
     app.middleware('http')(request_context_middleware)
+    # GZip压缩置于最外层：大JSON响应(执行明细/报告等)传输量压缩8~15倍，浏览器经Content-Encoding自动解压
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 def register_routers(app: FastAPI) -> None:
