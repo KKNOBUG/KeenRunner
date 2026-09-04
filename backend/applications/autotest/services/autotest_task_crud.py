@@ -179,7 +179,8 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             task_dict = self._dump_enum_fields(task_dict)
             if "task_schedule_expr" in task_dict:
                 task_dict["task_schedule_expr"] = normalize_schedule(
-                    periodic=task_dict.get("task_periodic_expr"), schedule=task_dict.get("task_schedule_expr")
+                    periodic=task_dict.get("task_periodic_expr"),
+                    schedule=task_dict.get("task_schedule_expr"),
                 )
             if task_dict.get("created_user") and not task_dict.get("updated_user"):
                 task_dict["updated_user"] = task_dict["created_user"]
