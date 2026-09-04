@@ -42,7 +42,7 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         description="执行模式(并行执行/串行执行)",
     )
     task_case_ids = fields.JSONField(default=list, null=True, description="关联用例ID列表")
-    # task_kwargs 存储为Dict[str, Any]格式, 当前仅接受任务执行入参initial_variables(初始变量列表)，随调度透传给用例执行；
+    # task_kwargs 存储为Dict[str, Any]格式, 当前仅接受任务执行时给定的入参initial_variables(初始变量列表)，随任务调度透传给用例执行；
     task_kwargs = fields.JSONField(default=dict, null=True, description="扩展参数(当前仅承载initial_variables)")
     # cases_execute_config 存储为Dict[str, Any]格式, 如下：
     # {
@@ -51,16 +51,16 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     #     "<case_id>": {"execute_count": 1, "involve_envs": ["SIT1", "..."], "steps_execute_config": {"<step_id|step_id_@@op_index>": {env_name, config_type, config_name, config_host, config_port, database_name}}}
     # }
     cases_execute_config = fields.JSONField(default=dict, null=True, description="根据用例执行配置")
-    # task_involve_envs: 任务级涉及环境名称列表(去重)，累积自各用例的cases_execute_config.{case_id}.involve_envs，由绑定脚本后解析回填
+    # task_involve_envs: 任务级涉及环境名称列表(去重)，累积绑定的各个用例下的涉及环境(cases_execute_config.{case_id}.involve_envs)；
     task_involve_envs = fields.JSONField(default=list, null=True, description="任务级涉及环境名称列表(各用例involve_envs累积)")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     # last_execute_user与updated_user语义分离：updated_user记录最后修改人(配置修改与启停调度均刷新)，
     # last_execute_user记录真实触发执行人(手动执行=点击执行者；调度触发=回退维护人(最近修改/启停者))
     last_execute_user = UpperCharField(max_length=16, default=None, null=True, description="最后执行人员")
-    # task_schedule_expr数据格式：
-    # ONLY_ONCE(执行1次): {"trigger_dates": ["YYYY-MM-DD HH:MM:SS", ...]} 触发日期时间列表, 逐点触发, 全部到期后关闭调度
-    # UNBOUNDED(执行N次): {"trigger_cycle": "daily/weekly/monthly", "trigger_weeks": [1-7, 周必输], "trigger_month": [1-31, 月必输], "trigger_times": ["HH:MM:SS", 最多3个]}
+    # task_schedule_expr 存储为Dict[str, Any]格式, 如下：
+    # ONLY_ONCE(执行1次)模式: {"trigger_dates": ["YYYY-MM-DD HH:MM:SS", ...], "trigger_month": [1-31], "trigger_times": ["HH:MM:SS", 最多3个]}
+    # UNBOUNDED(执行N次)模式: {"trigger_cycle": "daily/weekly/monthly", "trigger_weeks": [1-7, 周必输], "trigger_month": [1-31, 月必输], "trigger_times": ["HH:MM:SS", 最多3个]}
     task_schedule_expr = fields.JSONField(default=None, null=True, description="结构化定时表达式(时效×周期×时间点)")
     task_periodic_expr = fields.CharEnumField(
         AutoTestTaskPeriodicMode,
@@ -70,7 +70,7 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     )
     task_notify = fields.JSONField(default=None, null=True, description="任务执行明细反馈(预留)")
     task_notifier = fields.JSONField(default=None, null=True, description="任务执行通知人员(预留)")
-    # dataset_enabled: 启用后绑定的各个脚本执行时自动收集其全部数据场景(总执行轮次=执行次数×场景数)
+    # dataset_enabled: 启用后，绑定的各个用例在执行环节时自动收集其全部数据场景(总执行轮次=执行次数×场景数)
     dataset_enabled = fields.BooleanField(default=False, description="是否启用数据源(任务级全局控制)")
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
 
