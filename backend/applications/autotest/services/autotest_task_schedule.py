@@ -19,22 +19,19 @@ from backend.core.exceptions import ParameterException
 from backend.enums import AutoTestTaskPeriodicMode, AutoTestTaskCycleType
 
 # ==================== 常量与格式 ====================
-
-# 触发日期时间/时间点格式，与前端定时设置交互对齐
-FIRE_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-TIME_OF_DAY_FORMAT = "%H:%M:%S"
-# UNBOUNDED模式时间点上限(需求: 时间支持多个, 最多3个)
-MAX_TRIGGER_TIMES = 3
-# 执行预览条数上限(需求: 近10次)
-PREVIEW_LIMIT = 10
-# UNBOUNDED最近触发点回溯窗口(天): 日=2(今/昨), 周=8(7天内必命中), 月=62(覆盖仅选31号时相邻命中月最大61天间隔)
-_LOOKBACK_DAYS: Dict[str, int] = {
-    AutoTestTaskCycleType.DAY.value: 2,
-    AutoTestTaskCycleType.WEEK.value: 8,
-    AutoTestTaskCycleType.MONTH.value: 62,
+# 触发日期时间点格式
+TIME_FORMAT: str = "%H:%M:%S"
+DATETIME_FORMAT: str = "%Y-%m-%d %H:%M:%S"
+# AutoTestTaskPeriodicMode.UNBOUNDED模式: 时间点上限时间支持多个, 但最多3个
+MAX_TRIGGER_TIMES: int = 3
+# 执行预览条数上限
+MAX_PREVIEW_LIMIT: int = 10
+# 推演触发时刻表：AutoTestTaskPeriodicMode.UNBOUNDED模式
+DEDUCE_TRIGGER_TIMETABLE: Dict[str, int] = {
+    AutoTestTaskCycleType.DAY.value: 2,  # 每天都命中。含“今天+昨天”：今天的时间点未到时(如现在00:30、触发08:00)，今天无候选，回看昨天才能给出“最近应触发点”；同时给跨天宕机漏扫留1天容错；
+    AutoTestTaskCycleType.WEEK.value: 8,  # 任意连续7天必包含每个星期几各一次；+1是为了“今天恰好是所选星期但时间点未到”时，还能回看到上周同一天；
+    AutoTestTaskCycleType.MONTH.value: 62,  # 最稀疏配置是仅选31号，只有大月命中，相邻两个大月最大间隔61天，如1/31 ～ 3/31；保证最坏配置也能在窗口内命中；
 }
-# UNBOUNDED执行预览前推窗口(天): 仅选31号时一年命中7次, 10条预览约需1.5年
-_PREVIEW_LOOKAHEAD_DAYS = 800
 
 
 # ==================== 解析工具 ====================
@@ -62,7 +59,7 @@ def parse_fire_time(raw: Any) -> Optional[datetime]:
     if not isinstance(raw, str):
         return None
     try:
-        return datetime.strptime(raw.strip(), FIRE_TIME_FORMAT)
+        return datetime.strptime(raw.strip(), DATETIME_FORMAT)
     except ValueError:
         return None
 
@@ -77,7 +74,7 @@ def parse_time_of_day(raw: Any) -> Optional[time]:
     if not isinstance(raw, str):
         return None
     try:
-        return datetime.strptime(raw.strip(), TIME_OF_DAY_FORMAT).time()
+        return datetime.strptime(raw.strip(), TIME_FORMAT).time()
     except ValueError:
         return None
 
@@ -102,10 +99,9 @@ def _normalize_int_set(raw: Any, low: int, high: int, field_name: str) -> List[i
         except (TypeError, ValueError):
             raise ParameterException(message=f"参数[task_schedule_expr.{field_name}]存在非法元素: {item}")
         if not low <= number <= high:
-            raise ParameterException(
-                message=f"参数[task_schedule_expr.{field_name}]元素越界: {item}(允许{low}~{high})"
-            )
+            raise ParameterException(message=f"参数[task_schedule_expr.{field_name}]元素越界: {item}(允许{low}~{high})")
         values.add(number)
+
     return sorted(values)
 
 
@@ -123,13 +119,37 @@ def _defensive_int_set(raw: Any) -> Set[int]:
 
 # ==================== 规范化校验(落库单一入口) ====================
 
+def _normalize_trigger_times(schedule: Dict[str, Any], mode_label: str) -> List[str]:
+    """
+    校验并规范化trigger_times：去重升序、最多MAX_TRIGGER_TIMES个、格式HH:MM:SS，两种周期模式共用。
+
+    :param schedule: 原始定时表达式字典
+    :param mode_label: 报错信息中的模式前缀(执行1次模式下/执行N次模式下)
+    :return: 规范化后的触发时间点列表
+    :raises ParameterException: 缺失、超量或格式非法
+    """
+    raw_times = schedule.get("trigger_times")
+    if not isinstance(raw_times, list) or not raw_times:
+        raise ParameterException(message=f"{mode_label}参数[task_schedule_expr.trigger_times]不允许为空")
+    if len(raw_times) > MAX_TRIGGER_TIMES:
+        raise ParameterException(message=f"参数[task_schedule_expr.trigger_times]最多支持{MAX_TRIGGER_TIMES}个时间点")
+    parsed_of_day: Set[time] = set()
+    for raw in raw_times:
+        of_day = parse_time_of_day(raw)
+        if of_day is None:
+            raise ParameterException(message=f"参数[task_schedule_expr.trigger_times]存在非法时间: {raw}(格式HH:MM:SS)")
+        parsed_of_day.add(of_day)
+    return [of_day.strftime(TIME_FORMAT) for of_day in sorted(parsed_of_day)]
+
+
 def normalize_schedule(periodic: Any, schedule: Any) -> Optional[Dict[str, Any]]:
     """
     校验并规范化结构化定时表达式，创建/更新任务落库前的唯一入口。
 
-    ONLY_ONCE模式仅保留trigger_dates(触发日期时间列表, 去重升序)；
-    UNBOUNDED模式保留trigger_cycle、trigger_times(去重升序, 最多3个)，
-    周模式追加trigger_weeks(1=周一~7=周日)，月模式追加trigger_month(1~31)。
+    两种模式均保留trigger_month(月内日期多选1~31)与trigger_times(去重升序, 最多3个)，
+    供编辑任务抽屉无损回显(trigger_dates为二者展开产物, 当月不存在的日期展开时被跳过无法反推)；
+    ONLY_ONCE额外保留trigger_dates(触发日期时间列表, 去重升序)，运行时扫描仅消费该字段；
+    UNBOUNDED额外保留trigger_cycle，周模式追加trigger_weeks(1=周一~7=周日)。
 
     :param periodic: 时效枚举或字符串(执行1次/执行N次)
     :param schedule: 原始定时表达式字典
@@ -154,25 +174,19 @@ def normalize_schedule(periodic: Any, schedule: Any) -> Optional[Dict[str, Any]]
                     message=f"参数[task_schedule_expr.trigger_dates]存在非法日期时间: {raw}(格式YYYY-MM-DD HH:MM:SS)"
                 )
             parsed_dates.add(fired_at)
-        return {"trigger_dates": [fired_at.strftime(FIRE_TIME_FORMAT) for fired_at in sorted(parsed_dates)]}
+        return {
+            "trigger_dates": [fired_at.strftime(DATETIME_FORMAT) for fired_at in sorted(parsed_dates)],
+            # 月内日期多选与触发时间点随表达式落库，编辑抽屉回显直读(trigger_dates展开产物无法无损反推)
+            "trigger_month": _normalize_int_set(schedule.get("trigger_month"), 1, 31, "trigger_month"),
+            "trigger_times": _normalize_trigger_times(schedule, "执行1次模式下"),
+        }
 
     cycle_value = _enum_value(schedule.get("trigger_cycle"))
-    if cycle_value not in _LOOKBACK_DAYS:
+    if cycle_value not in DEDUCE_TRIGGER_TIMETABLE:
         raise ParameterException(message="执行N次模式下参数[task_schedule_expr.trigger_cycle]必选, 可选值: daily/weekly/monthly")
-    raw_times = schedule.get("trigger_times")
-    if not isinstance(raw_times, list) or not raw_times:
-        raise ParameterException(message="执行N次模式下参数[task_schedule_expr.trigger_times]不允许为空")
-    if len(raw_times) > MAX_TRIGGER_TIMES:
-        raise ParameterException(message=f"参数[task_schedule_expr.trigger_times]最多支持{MAX_TRIGGER_TIMES}个时间点")
-    parsed_of_day: Set[time] = set()
-    for raw in raw_times:
-        of_day = parse_time_of_day(raw)
-        if of_day is None:
-            raise ParameterException(message=f"参数[task_schedule_expr.trigger_times]存在非法时间: {raw}(格式HH:MM:SS)")
-        parsed_of_day.add(of_day)
     normalized: Dict[str, Any] = {
         "trigger_cycle": cycle_value,
-        "trigger_times": [of_day.strftime(TIME_OF_DAY_FORMAT) for of_day in sorted(parsed_of_day)],
+        "trigger_times": _normalize_trigger_times(schedule, "执行N次模式下"),
     }
     if cycle_value == AutoTestTaskCycleType.WEEK.value:
         normalized["trigger_weeks"] = _normalize_int_set(schedule.get("trigger_weeks"), 1, 7, "trigger_weeks")
@@ -236,8 +250,8 @@ class TaskSchedule:
             return None
         periodic_value = _enum_value(periodic) or AutoTestTaskPeriodicMode.UNBOUNDED.value
         if periodic_value not in (
-            AutoTestTaskPeriodicMode.ONLY_ONCE.value,
-            AutoTestTaskPeriodicMode.UNBOUNDED.value,
+                AutoTestTaskPeriodicMode.ONLY_ONCE.value,
+                AutoTestTaskPeriodicMode.UNBOUNDED.value,
         ):
             LOGGER.warning(f"定时表达式解析失败: 非法时效[{periodic}], 该任务将不参与扫描")
             return None
@@ -252,7 +266,7 @@ class TaskSchedule:
             return cls(periodic_value, trigger_dates, None, [], set(), set())
 
         cycle = _enum_value(schedule.get("trigger_cycle"))
-        if cycle not in _LOOKBACK_DAYS:
+        if cycle not in DEDUCE_TRIGGER_TIMETABLE:
             LOGGER.warning(f"定时表达式解析失败: 非法trigger_cycle[{schedule.get('trigger_cycle')}], 该任务将不参与扫描")
             return None
         times = sorted(
@@ -308,7 +322,7 @@ class TaskSchedule:
                     break
             return latest
 
-        for back in range(_LOOKBACK_DAYS[self._cycle] + 1):
+        for back in range(DEDUCE_TRIGGER_TIMETABLE[self._cycle] + 1):
             target_day = now.date() - timedelta(days=back)
             if not self._match_day(target_day):
                 continue
@@ -321,7 +335,7 @@ class TaskSchedule:
                 return max(candidates)
         return None
 
-    def preview_fire_times(self, now: Optional[datetime] = None, limit: int = PREVIEW_LIMIT) -> List[str]:
+    def preview_fire_times(self, now: Optional[datetime] = None, limit: int = MAX_PREVIEW_LIMIT) -> List[str]:
         """
         正推即将到来的触发日期时间列表，供新增/编辑页执行预览(近10次)。
 
@@ -332,10 +346,11 @@ class TaskSchedule:
         now = now or datetime.now()
         if self.is_only_once:
             upcoming = [fired_at for fired_at in self._trigger_dates if fired_at >= now]
-            return [fired_at.strftime(FIRE_TIME_FORMAT) for fired_at in upcoming[:limit]]
+            return [fired_at.strftime(DATETIME_FORMAT) for fired_at in upcoming[:limit]]
 
         preview: List[datetime] = []
-        for ahead in range(_PREVIEW_LOOKAHEAD_DAYS + 1):
+        # 仅选31号时一年命中7次, 10条预览约需1.5年; 因此假设800天， 如凑不满10条则返回已收集的部分
+        for ahead in range(800):
             target_day = now.date() + timedelta(days=ahead)
             if not self._match_day(target_day):
                 continue
@@ -344,8 +359,8 @@ class TaskSchedule:
                 if fired_at >= now:
                     preview.append(fired_at)
                     if len(preview) >= limit:
-                        return [item.strftime(FIRE_TIME_FORMAT) for item in preview]
-        return [item.strftime(FIRE_TIME_FORMAT) for item in preview]
+                        return [item.strftime(DATETIME_FORMAT) for item in preview]
+        return [item.strftime(DATETIME_FORMAT) for item in preview]
 
     def is_completed(self, moment: datetime) -> bool:
         """
